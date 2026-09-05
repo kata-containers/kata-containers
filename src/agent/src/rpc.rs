@@ -146,8 +146,8 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
 
-/// This mask is applied to parent directories implicitly created for CopyFile requests.
-const IMPLICIT_DIRECTORY_PERMISSION_MASK: u32 = 0o777;
+/// This mask is applied when creating directories for CopyFile requests.
+const DIRECTORY_CREATION_PERMISSION_MASK: u32 = 0o777;
 
 /// This mask is applied to files and directories created for CopyFile requests.
 /// In addition to the permissions, it allows setuid/setgid/sticky bits.
@@ -2307,10 +2307,6 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
 /// directory need to consider whether they trust the host, or handle the directory with the same
 /// care as do_copy_file.
 ///
-/// Parent directories are created, if they don't exist already. For these implicit operations, the
-/// permissions are set with req.dir_mode. The actual target is created with permissions from
-/// req.file_mode, even if it's a directory.
-///
 /// If req.file_mode requests a symbolic link, the link is created pointing to the path in
 /// req.data. In that case, req.file_mode is ignored because symlinks don't have permissions on
 /// Linux.
@@ -2331,26 +2327,6 @@ fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
     std::fs::create_dir_all(shared_dir)?;
     let root = pathrs::Root::open(shared_dir)?;
 
-    // Create parent directories if missing
-    if let Some(parent) = path.parent() {
-        let dir = root
-            .mkdir_all(
-                parent,
-                &std::fs::Permissions::from_mode(req.dir_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK),
-            )
-            .context("mkdir_all parent")?
-            .reopen(OpenFlags::O_DIRECTORY)
-            .context("reopen parent")?;
-
-        // TODO(burgerdev): why are we only applying this to the immediate parent?
-        unistd::fchown(
-            dir,
-            Some(Uid::from_raw(req.uid as u32)),
-            Some(Gid::from_raw(req.gid as u32)),
-        )
-        .context("fchown parent")?
-    }
-
     let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
 
     if sflag.contains(stat::SFlag::S_IFDIR) {
@@ -2366,16 +2342,22 @@ fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
             _ => Err(e),
         })?;
 
-        // mkdir_all does not support the setuid/setgid/sticky bits, so we first create the
-        // directory with the stricter mask and then change permissions with the correct mask.
+        // Create the directory if needed.
+        root.create(
+            path,
+            &pathrs::InodeType::Directory(std::fs::Permissions::from_mode(
+                req.file_mode & DIRECTORY_CREATION_PERMISSION_MASK,
+            )),
+        )
+        .or_else(|e| match e.kind() {
+            pathrs::error::ErrorKind::OsError(Some(errno)) if errno == libc::EEXIST => Ok(()),
+            _ => Err(e),
+        })
+        .context("create dir")?;
+
         let dir = root
-            .mkdir_all(
-                path,
-                &std::fs::Permissions::from_mode(
-                    req.file_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK,
-                ),
-            )
-            .context("mkdir_all dir")?
+            .resolve(path)
+            .context("resolve dir")?
             .reopen(OpenFlags::O_DIRECTORY)
             .context("reopen dir")?;
         dir.set_permissions(std::fs::Permissions::from_mode(
@@ -3913,11 +3895,32 @@ COMMIT
                 }),
             },
             TestCase {
-                name: "Creating a file implicitly creates parent directories".into(),
+                name: "Copy file into non-existent directory fails".into(),
                 request: CopyFileRequest {
                     path: base.join("a/b").to_string_lossy().into(),
                     dir_mode: 0o755 | libc::S_IFDIR,
                     file_mode: 0o644 | libc::S_IFREG,
+                    ..Default::default()
+                },
+                should_fail: true,
+                assertions: Box::new(|_| Ok(())),
+            },
+            TestCase {
+                name: "Create directory in non-existent directory fails".into(),
+                request: CopyFileRequest {
+                    path: base.join("x/y").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o755 | libc::S_IFDIR,
+                    ..Default::default()
+                },
+                should_fail: true,
+                assertions: Box::new(|_| Ok(())),
+            },
+            TestCase {
+                name: "Create a top-level directory".into(),
+                request: CopyFileRequest {
+                    path: base.join("a").to_string_lossy().into(),
+                    file_mode: 0o755 | libc::S_IFDIR,
                     ..Default::default()
                 },
                 should_fail: false,
@@ -3925,9 +3928,6 @@ COMMIT
                     let a_stat = fs::metadata(base.join("a")).context("stat ./a failed")?;
                     ensure!(a_stat.is_dir());
                     ensure!(0o755 == a_stat.permissions().mode() & 0o777);
-                    let b_stat = fs::metadata(base.join("a/b")).context("stat ./a/b failed")?;
-                    ensure!(b_stat.is_file());
-                    ensure!(0o644 == b_stat.permissions().mode() & 0o777);
                     Ok(())
                 }),
             },
@@ -4042,19 +4042,14 @@ COMMIT
             TestCase {
                 name: "Create a directory with setgid and sticky bit".into(),
                 request: CopyFileRequest {
-                    path: base.join("x/y").to_string_lossy().into(),
+                    path: base.join("a/y").to_string_lossy().into(),
                     dir_mode: 0o3755 | libc::S_IFDIR,
                     file_mode: 0o3770 | libc::S_IFDIR,
                     ..Default::default()
                 },
                 should_fail: false,
                 assertions: Box::new(|base| -> Result<()> {
-                    // Implicitly created directories should not get a sticky bit.
-                    let x_stat = fs::metadata(base.join("x")).context("stat ./x failed")?;
-                    ensure!(x_stat.is_dir());
-                    ensure!(0o755 == x_stat.permissions().mode() & 0o7777);
-                    // Explicitly created directories should.
-                    let y_stat = fs::metadata(base.join("x/y")).context("stat ./x/y failed")?;
+                    let y_stat = fs::metadata(base.join("a/y")).context("stat ./a/y failed")?;
                     ensure!(y_stat.is_dir());
                     ensure!(0o3770 == y_stat.permissions().mode() & 0o7777);
                     Ok(())
@@ -4063,7 +4058,7 @@ COMMIT
             TestCase {
                 name: "Chunked upload 1".into(),
                 request: CopyFileRequest {
-                    path: base.join("x/chunked").to_string_lossy().into(),
+                    path: base.join("a/chunked").to_string_lossy().into(),
                     dir_mode: 0o755 | libc::S_IFDIR,
                     file_mode: 0o644 | libc::S_IFREG,
                     offset: 0,
@@ -4074,8 +4069,8 @@ COMMIT
                 should_fail: false,
                 assertions: Box::new(|base| -> Result<()> {
                     ensure!(
-                        !(fs::exists(base.join("x/chunked"))
-                            .context("exists ./x/chunked failed")?)
+                        !(fs::exists(base.join("a/chunked"))
+                            .context("exists ./a/chunked failed")?)
                     );
                     Ok(())
                 }),
@@ -4083,7 +4078,7 @@ COMMIT
             TestCase {
                 name: "Chunked upload 2".into(),
                 request: CopyFileRequest {
-                    path: base.join("x/chunked").to_string_lossy().into(),
+                    path: base.join("a/chunked").to_string_lossy().into(),
                     dir_mode: 0o755 | libc::S_IFDIR,
                     file_mode: 0o644 | libc::S_IFREG,
                     offset: 6,
@@ -4093,7 +4088,7 @@ COMMIT
                 },
                 should_fail: false,
                 assertions: Box::new(|base| -> Result<()> {
-                    let content = std::fs::read(base.join("x/chunked"))?;
+                    let content = std::fs::read(base.join("a/chunked"))?;
                     println!("{:?}", content);
                     ensure!(b"Hello World".to_vec() == content);
                     Ok(())
@@ -4214,6 +4209,41 @@ COMMIT
             }
             (tc.assertions)(&base).context(tc.name).unwrap()
         }
+    }
+
+    #[test]
+    fn test_do_copy_file_does_not_change_parent_ownership() {
+        skip_if_not_root!();
+
+        let temp_dir = tempdir().expect("creating temp dir failed");
+        let base = temp_dir.path().join("shared");
+        let parent = base.join("parent");
+        std::fs::create_dir_all(&parent).unwrap();
+        nix::unistd::chown(
+            &parent,
+            Some(Uid::from_raw(1000)),
+            Some(Gid::from_raw(1000)),
+        )
+        .unwrap();
+
+        do_copy_file(
+            &CopyFileRequest {
+                path: parent.join("file").to_string_lossy().into(),
+                dir_mode: 0o755 | libc::S_IFDIR,
+                file_mode: 0o644 | libc::S_IFREG,
+                uid: 0,
+                gid: 0,
+                file_size: 4,
+                data: b"data".to_vec(),
+                ..Default::default()
+            },
+            &base,
+        )
+        .unwrap();
+
+        let parent_stat = nix::sys::stat::lstat(&parent).unwrap();
+        assert_eq!(parent_stat.st_uid, 1000);
+        assert_eq!(parent_stat.st_gid, 1000);
     }
 
     #[test]
