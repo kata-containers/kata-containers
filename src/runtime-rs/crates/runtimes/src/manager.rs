@@ -18,8 +18,8 @@ use common::{
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::{
     utils::{
-        create_dir_all_with_inherit_owner, create_vmm_user, remove_dir_all_if_exists,
-        remove_vmm_user, vmm_user_runtime_dir,
+        authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user,
+        remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
     },
     Param,
 };
@@ -52,7 +52,7 @@ use std::{
     collections::HashMap,
     env,
     ops::Deref,
-    os::unix::fs::{chown, MetadataExt},
+    os::unix::fs::chown,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -1028,11 +1028,15 @@ impl Drop for RootlessSetupGuard {
 }
 
 fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
-    let user_name = create_vmm_user().context("failed to create vmm user")?;
-    let mut guard = RootlessSetupGuard::new(user_name.clone());
+    let vmm_user_name = create_vmm_user().context("failed to create vmm user")?;
+    let mut guard = RootlessSetupGuard::new(vmm_user_name.clone());
 
-    let user = User::from_name(&user_name)?
-        .ok_or_else(|| anyhow!("failed to get user by name {}, user not found", user_name))?;
+    let user = User::from_name(&vmm_user_name)?.ok_or_else(|| {
+        anyhow!(
+            "failed to get user by name {}, user not found",
+            vmm_user_name
+        )
+    })?;
 
     let uid = user.uid.as_raw();
     let gid = user.gid.as_raw();
@@ -1063,16 +1067,18 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     // Update the rootless dir prefix for guest_swap_path
     config.memory_info.guest_swap_path = prefix_with_rootless_dir("/run/kata-containers/swap");
 
-    let kvm_path = PathBuf::from("/dev/kvm");
-    let metadata = std::fs::metadata(&kvm_path)?;
-    let kvm_gid = metadata.gid();
-
-    config.security_info.rootless_user = Some(RootlessUser {
+    let mut rootless_vmm_credentials = RootlessUser {
         uid,
         gid,
-        groups: vec![kvm_gid],
-        user_name,
-    });
+        groups: Vec::new(),
+        user_name: vmm_user_name,
+    };
+    // The VMM opens /dev/kvm after dropping credentials. QEMU inherits vhost
+    // network and vsock FDs at exec; Cloud Hypervisor receives network tap FDs
+    // over its API.
+    authorize_rootless_device(Path::new("/dev/kvm"), &mut rootless_vmm_credentials, 0o6)?;
+
+    config.security_info.rootless_user = Some(rootless_vmm_credentials);
 
     Ok(guard)
 }
