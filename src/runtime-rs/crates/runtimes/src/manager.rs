@@ -8,11 +8,11 @@ use anyhow::{anyhow, Context, Result};
 use common::{
     message::{Action, Message},
     types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+        ContainerProcess, PlatformInfo, ProcessExitStatus, ProcessType, SandboxConfig,
+        SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest,
+        TaskResponse, DEFAULT_SHM_SIZE,
     },
-    RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
+    RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv, should_stop_vm_on_missing_task,
 };
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
@@ -690,6 +690,13 @@ impl RuntimeHandlerManager {
             }
             TaskRequest::KillProcess(req) => {
                 cm.kill_process(&req).await.context("kill process")?;
+                if should_stop_vm_on_missing_task(
+                    req.process.process_type == ProcessType::Container,
+                    cm.has_guest_container(&req.process).await,
+                    cm.guest_map_is_empty().await,
+                ) {
+                    sandbox.stop().await.context("stop sandbox on missing-task kill")?;
+                }
                 Ok(TaskResponse::KillProcess)
             }
             TaskRequest::ShutdownContainer(req) => {
@@ -704,8 +711,29 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::ShutdownContainer)
             }
             TaskRequest::WaitProcess(process_id) => {
-                let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
-                if cm.is_sandbox_container(&process_id).await {
+                // A leftover CRI task that never entered the guest map will
+                // never report an exit; the only remaining work for it is to
+                // stop the VM.
+                let missing_task = should_stop_vm_on_missing_task(
+                    process_id.process_type == ProcessType::Container,
+                    cm.has_guest_container(&process_id).await,
+                    cm.guest_map_is_empty().await,
+                );
+                let exit_status = match cm.wait_process(&process_id).await {
+                    Ok(status) => status,
+                    Err(err) if missing_task => {
+                        warn!(
+                            sl!(),
+                            "wait container missing ({:#}); stopping VM and reporting exit 137",
+                            err
+                        );
+                        let mut status = ProcessExitStatus::new();
+                        status.update_exit_code(137);
+                        status
+                    }
+                    Err(err) => return Err(err).context("wait process"),
+                };
+                if missing_task || cm.is_sandbox_container(&process_id).await {
                     sandbox.stop().await.context("stop sandbox")?;
 
                     // Release sandbox resources (cgroup, network, mounts, ...)

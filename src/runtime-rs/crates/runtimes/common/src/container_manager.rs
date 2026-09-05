@@ -37,4 +37,56 @@ pub trait ContainerManager: Send + Sync {
     async fn pid(&self) -> Result<PID>;
     async fn need_shutdown_sandbox(&self, req: &ShutdownRequest) -> bool;
     async fn is_sandbox_container(&self, process_id: &ContainerProcess) -> bool;
+    async fn has_guest_container(&self, process_id: &ContainerProcess) -> bool;
+    async fn guest_map_is_empty(&self) -> bool;
+}
+
+/// Whether a Kill/Wait of a task the shim has no guest container for may
+/// stop the VM.
+///
+/// After a sandbox is left over (e.g. by a node reboot), kubelet first
+/// `StopContainer`s a CRI id that never entered the shim guest map — a
+/// container whose `CreateContainer` never reached the guest (an init
+/// stuck in `Unknown`). `KillProcess` then returns success without
+/// signalling anything ("Signal ignored due to container not existing")
+/// and `WaitProcess` returns `ContainerNotFound`, so the CRI stop times
+/// out and `StopPodSandbox` never reaches the sandbox id.
+///
+/// When the guest map holds no workload container, only the pause task
+/// and the VM remain, so stopping the VM is safe: return a synthetic
+/// Wait exit 137 so the CRI wait completes. Do not stop when another
+/// guest container is still in the map (an init crash-loop retry would
+/// otherwise fail its next `CreateContainer` with "sandbox already
+/// stopped"), and never stop for non-container (exec) processes.
+pub fn should_stop_vm_on_missing_task(
+    is_container_process: bool,
+    container_in_map: bool,
+    guest_map_empty: bool,
+) -> bool {
+    is_container_process && !container_in_map && guest_map_empty
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_stop_vm_on_missing_task;
+
+    #[test]
+    fn leftover_unknown_init_with_empty_map_stops() {
+        assert!(should_stop_vm_on_missing_task(true, false, true));
+    }
+
+    #[test]
+    fn leftover_unknown_init_with_sibling_guest_does_not_stop() {
+        assert!(!should_stop_vm_on_missing_task(true, false, false));
+    }
+
+    #[test]
+    fn existing_guest_container_does_not_stop() {
+        assert!(!should_stop_vm_on_missing_task(true, true, false));
+    }
+
+    #[test]
+    fn exec_process_does_not_stop() {
+        assert!(!should_stop_vm_on_missing_task(false, false, true));
+    }
 }
