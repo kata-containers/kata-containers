@@ -11,16 +11,19 @@ mod qmp;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
-use crate::{Hypervisor, MemoryConfig};
+use crate::utils::SocketAddress;
+use crate::{Hypervisor, MemoryConfig, TdxConfig};
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
+use kata_types::config::hypervisor::RootlessUser;
 use persist::sandbox_persist::Persist;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, Mutex};
@@ -120,6 +123,23 @@ impl Hypervisor for Qemu {
     async fn update_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.update_device(device).await
+    }
+
+    async fn set_rootless_user(&self, user: RootlessUser) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        let mut config = inner.hypervisor_config();
+        config.security_info.rootless_user = Some(user);
+        inner.set_hypervisor_config(config);
+        Ok(())
+    }
+
+    async fn tdx_quote_socket_path(&self, config: &TdxConfig) -> Result<Option<PathBuf>> {
+        // QEMU's TDX guest object consumes TdxConfig::qgs_port through its
+        // `quote-generation-socket` property. Other hypervisor backends do not
+        // currently consume qgs_port when adding a TDX protection device, so
+        // for the time being endpoint selection remains VMM-specific.
+        let socket = SocketAddress::new(config.qgs_port);
+        Ok((socket.typ == "unix").then(|| PathBuf::from(socket.path)))
     }
 
     async fn get_agent_socket(&self) -> Result<String> {

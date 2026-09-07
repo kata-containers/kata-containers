@@ -83,9 +83,10 @@ qemu_rootless_skip_reason() {
 		return 0
 	fi
 
-	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
-	# actual confidential handlers excluded until rootless QEMU can access
-	# resources such as /dev/sev and the configured TDX QGS endpoint.
+	# CoCo-dev does not enable a TEE and remains covered. Runtime-rs now
+	# validates access required by real confidential handlers, but CI hosts do
+	# not yet have deployment-provisioned /dev/sev and QGS permissions. Keep
+	# those handlers excluded until deployment provides that access contract.
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
 		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
 		echo "rootless QEMU confidential host-resource access is not enabled yet"

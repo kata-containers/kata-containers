@@ -539,6 +539,7 @@ endif
     DEFSTATICRESOURCEMGMT_NV := true
     DEFVFIOMODE_NV := guest-kernel
     DEFSECCOMPSANDBOXPARAM_NV := on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny
+    DEFROOTLESS_NV := true
     DEFKUBELETROOTDIR := /var/lib/kubelet
     DEFPODRESOURCEAPISOCK_NV := "$(DEFKUBELETROOTDIR)/pod-resources/kubelet.sock"
     # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
@@ -931,6 +932,7 @@ USER_VARS += DEFENABLEVCPUSPINNING_NV
 USER_VARS += DEFSTATICRESOURCEMGMT_NV
 USER_VARS += DEFVFIOMODE_NV
 USER_VARS += DEFSECCOMPSANDBOXPARAM_NV
+USER_VARS += DEFROOTLESS_NV
 USER_VARS += DEFKUBELETROOTDIR
 USER_VARS += DEFPODRESOURCEAPISOCK_NV
 USER_VARS += DEFROOTFSTYPE_NV
