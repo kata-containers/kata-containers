@@ -183,6 +183,8 @@ impl RuntimeHandler for VirtContainer {
             agent,
             hypervisor,
             resource_manager,
+            sandbox.io_cancel_token(),
+            sandbox.io_tasks.clone(),
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),

@@ -25,13 +25,14 @@ use oci_spec::runtime as oci;
 use resource::ResourceManager;
 use runtime_spec as spec;
 use tokio::sync::{OnceCell, RwLock};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::instrument;
 
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
 
 use crate::container_manager::is_termination_signal;
 
-use super::{logger_with_process, Container};
+use super::{container::IoLifecycle, logger_with_process, Container};
 
 pub struct VirtContainerManager {
     sid: String,
@@ -41,6 +42,8 @@ pub struct VirtContainerManager {
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
+    io_cancel: CancellationToken,
+    io_tasks: TaskTracker,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -66,6 +69,8 @@ impl VirtContainerManager {
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
+        io_cancel: CancellationToken,
+        io_tasks: TaskTracker,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -75,6 +80,8 @@ impl VirtContainerManager {
             agent,
             hypervisor,
             vmm_master_tid: OnceCell::new(),
+            io_cancel,
+            io_tasks,
         }
     }
 
@@ -99,6 +106,10 @@ impl ContainerManager for VirtContainerManager {
             self.agent.clone(),
             self.resource_manager.clone(),
             self.hypervisor.get_passfd_listener_addr().await.ok(),
+            IoLifecycle {
+                cancel: self.io_cancel.child_token(),
+                tasks: self.io_tasks.clone(),
+            },
         )
         .await
         .context("new container")?;
@@ -164,6 +175,8 @@ impl ContainerManager for VirtContainerManager {
                 let c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+                // Signal only; never join I/O tasks while holding this registry lock.
+                c.cancel_io();
 
                 // Poststop Hooks:
                 // * should be run in runtime namespace
@@ -193,6 +206,7 @@ impl ContainerManager for VirtContainerManager {
                 let c = containers
                     .get(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+                c.cancel_exec_io(&process.exec_id).await;
                 let state = c.state_process(process).await.context("state process");
                 c.delete_exec_process(process)
                     .await
@@ -270,7 +284,9 @@ impl ContainerManager for VirtContainerManager {
         // agent returns ProcessAlreadyTerminated error.
         // For SIGKILL/SIGTERM, we should treat these as success since the
         // container is effectively terminated.
-        c.kill_process(&req.process, req.signal, req.all)
+        let mut io_cancel = None;
+        let result = c
+            .kill_process(&req.process, req.signal, req.all, &mut io_cancel)
             .await
             .or_else(|err| {
                 let is_term_signal = is_termination_signal(req.signal);
@@ -293,7 +309,15 @@ impl ContainerManager for VirtContainerManager {
                 } else {
                     Err(err)
                 }
-            })
+            });
+        // SIGTERM is catchable and must retain normal output draining. Only
+        // abandon output after SIGKILL was accepted (or the target is gone).
+        if req.signal == libc::SIGKILL as u32 && result.is_ok() {
+            if let Some(io_cancel) = io_cancel {
+                io_cancel.cancel();
+            }
+        }
+        result
     }
 
     #[instrument]
