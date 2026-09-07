@@ -1,0 +1,102 @@
+#!/usr/bin/env bats
+#
+# Copyright (c) 2026 Kata Containers contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Verify that mixed Kata hypervisors can use the shared immutable rootfs image
+# concurrently, independent of sandbox startup order.
+
+load "${BATS_TEST_DIRNAME}/../../common.bash"
+repo_root_dir="${BATS_TEST_DIRNAME}/../../../"
+load "${repo_root_dir}/tests/gha-run-k8s-common.sh"
+
+source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
+
+MIXED_POD_LABEL="kata-deploy-mixed-shims"
+
+cleanup_mixed_pods() {
+	kubectl delete pods -l "test=${MIXED_POD_LABEL}" \
+		--ignore-not-found=true --wait=true --timeout=180s
+}
+
+create_mixed_pod() {
+	local scenario="$1"
+	local shim="$2"
+	local node_name="$3"
+	local pod_name="mixed-${scenario}-${shim}"
+
+	cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod_name}
+  labels:
+    test: ${MIXED_POD_LABEL}
+spec:
+  nodeName: ${node_name}
+  runtimeClassName: kata-${shim}
+  restartPolicy: Never
+  containers:
+    - name: hold
+      image: quay.io/kata-containers/alpine-bash-curl:latest
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "infinity"]
+EOF
+
+	if ! kubectl wait --for=condition=Ready "pod/${pod_name}" --timeout=180s; then
+		kubectl describe pod "${pod_name}" >&3 || true
+		kubectl get events --sort-by=.lastTimestamp >&3 || true
+		return 1
+	fi
+}
+
+exercise_startup_order() {
+	local scenario="$1"
+	shift
+	local node_name
+	node_name=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+	local shim
+
+	for shim in "$@"; do
+		create_mixed_pod "${scenario}" "${shim}" "${node_name}"
+	done
+
+	for shim in "$@"; do
+		kubectl exec "mixed-${scenario}-${shim}" -- true
+	done
+
+	cleanup_mixed_pods
+}
+
+setup_file() {
+	ensure_helm
+
+	local mixed_values
+	mixed_values=$(mktemp)
+	cat > "${mixed_values}" <<EOF
+shims:
+  disableAll: true
+  qemu:
+    enabled: true
+  qemu-runtime-rs:
+    enabled: true
+  clh:
+    enabled: true
+defaultShim:
+  amd64: qemu
+EOF
+
+	deploy_kata "${mixed_values}"
+	rm -f "${mixed_values}"
+}
+
+@test "Mixed shims share the Kata rootfs in either startup order" {
+	exercise_startup_order forward clh qemu qemu-runtime-rs
+	exercise_startup_order reverse qemu qemu-runtime-rs clh
+}
+
+teardown_file() {
+	cleanup_mixed_pods || true
+	uninstall_kata
+}

@@ -104,3 +104,48 @@ jobs:
       - name: Report tests
         if: always()
         run: bash tests/functional/kata-deploy/gha-run.sh report-tests
+
+  run-kata-deploy-mixed-shims:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-26.04
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_DEPLOY_TEST_UNION: kata-deploy-mixed-shims.bats
+      KATA_HYPERVISOR: qemu
+      KUBERNETES: k3s
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy k3s
+        run: bash tests/functional/kata-deploy/gha-run.sh deploy-k8s
+
+      - name: Install `bats`
+        run: bash tests/functional/kata-deploy/gha-run.sh install-bats
+
+      - name: Run mixed-shim test
+        run: bash tests/functional/kata-deploy/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/functional/kata-deploy/gha-run.sh report-tests
+
+      - name: Clean up mixed-shim deployment
+        if: always()
+        run: |
+          kubectl delete pods -l test=kata-deploy-mixed-shims --ignore-not-found=true --wait=true --timeout=180s || true
+          helm uninstall kata-deploy -n kube-system --ignore-not-found --wait --timeout 10m || true
