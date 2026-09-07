@@ -35,9 +35,27 @@ directory. Use a numeric prefix to control the order of application.
 **Reserved prefixes** (used by kata-deploy):
 
 - `10-*`: Core kata-deploy settings
+- `15-*`: Fallbacks for settings the host does not support
 - `20-*`: Debug settings
 - `30-*`: Kernel parameters
 - `50-*`: Settings from the helm chart
+
+!!! note "Host capability fallbacks"
+
+    A base configuration file is the same on every node, but not every node can
+    run every setting in it. kata-deploy checks for those cases at install time
+    and writes a `15-*` drop-in holding a value that works, so that the setting
+    does not fail later, when a sandbox starts.
+
+    `block_device_aio` is the only such setting today. The QEMU configurations
+    ask for the `io_uring` engine, which RHEL 10 and its rebuilds disable by
+    default (`kernel.io_uring_disabled = 2`). On those nodes, kata-deploy writes
+    `15-block-device-aio.toml` to select the `threads` engine instead.
+
+    To get `io_uring` back, enable it on the node and redeploy: kata-deploy
+    deletes the drop-in once the node accepts it. To choose the engine yourself,
+    set it in a `50-*` drop-in, which is applied after `15-*` and therefore
+    takes precedence.
 
 **Recommended prefixes for custom settings**: `50-89`
 
