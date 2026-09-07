@@ -162,6 +162,18 @@ scheduling:
 {{- end }}
 {{- end }}
 {{- end }}
+{{- /* Tolerations: global runtimeClasses.tolerations plus per-shim runtimeClass.tolerations (appended). */ -}}
+{{- $tolerations := list -}}
+{{- with .root.Values.runtimeClasses.tolerations -}}
+{{- $tolerations = concat $tolerations . -}}
+{{- end -}}
+{{- if and .shimConfig.runtimeClass .shimConfig.runtimeClass.tolerations -}}
+{{- $tolerations = concat $tolerations .shimConfig.runtimeClass.tolerations -}}
+{{- end -}}
+{{- if $tolerations }}
+  tolerations:
+{{ toYaml $tolerations | indent 4 }}
+{{- end }}
 {{- end -}}
 
 {{- if .Values.runtimeClasses.enabled }}
