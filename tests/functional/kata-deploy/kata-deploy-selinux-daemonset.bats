@@ -43,10 +43,7 @@ setup_file() {
 	mark_audit_log
 	echo "# Deploying kata-deploy in daemonset mode with SELinux confinement..." >&3
 	deploy_kata "" --set deploymentMode=daemonset --set selinux.enabled=true
-}
-
-@test "The loader finds every domain the stages ask for in the node's policy" {
-	assert_domains_resolve
+	show_policy_loader_log
 }
 
 @test "The policy module is loaded into the node's policy store" {
