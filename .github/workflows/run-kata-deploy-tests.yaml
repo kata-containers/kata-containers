@@ -104,3 +104,42 @@ jobs:
       - name: Report tests
         if: always()
         run: bash tests/functional/kata-deploy/gha-run.sh report-tests
+
+  # This runner is a cluster on an enforcing node.
+  run-kata-deploy-selinux-tests:
+    name: run-kata-deploy-selinux-tests
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    runs-on: kata-deploy-selinux
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: qemu-runtime-rs
+      KUBERNETES: rke2
+      # The rest of the suite is not SELinux-specific and stays on the hosted runners.
+      KATA_DEPLOY_TEST_UNION: >-
+        kata-deploy-selinux-job.bats
+        kata-deploy-selinux-daemonset.bats
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Run tests
+        timeout-minutes: 60
+        run: bash tests/functional/kata-deploy/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/functional/kata-deploy/gha-run.sh report-tests

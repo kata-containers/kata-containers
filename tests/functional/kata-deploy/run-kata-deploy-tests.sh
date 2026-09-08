@@ -16,7 +16,7 @@ source "${kata_deploy_dir}/../../common.bash"
 export BATS_TEST_FAIL_FAST="${BATS_TEST_FAIL_FAST:-no}"
 
 if [[ -n "${KATA_DEPLOY_TEST_UNION:-}" ]]; then
-	KATA_DEPLOY_TEST_UNION=("${KATA_DEPLOY_TEST_UNION}")
+	read -r -a KATA_DEPLOY_TEST_UNION <<< "${KATA_DEPLOY_TEST_UNION}"
 else
 	KATA_DEPLOY_TEST_UNION=()
 
