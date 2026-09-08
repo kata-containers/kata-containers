@@ -185,9 +185,13 @@ get_pod_sandbox_id() {
 	exec_host "${node}" "command -v crictl >/dev/null" || \
 		die "crictl is required on Kubernetes node ${node}"
 
+	# The lookup goes through the pod name label rather than --name, which
+	# matches substrings: --name of a pod whose name is a prefix of another
+	# pod's would happily return that other pod's sandbox.
 	exec_host "${node}" \
 		"crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
-		pods --name \"${pod_name}\" --state ready -q | head -1"
+		pods --label \"io.kubernetes.pod.name=${pod_name}\" --state ready -q \
+		| head -1"
 }
 
 # Return the VMM PID for a running pod.

@@ -17,11 +17,11 @@ This guide walks through the full setup end-to-end: host inspection,
 Kubernetes configuration, Kata configuration, pod deployment, and
 verification.
 
-> **Note:**
->
-> NUMA support is currently available only for the **Go runtime** with the
-> **QEMU hypervisor** on **amd64** and **arm64** architectures. The Rust
-> runtime (`runtime-rs`) does not yet support NUMA topology.
+!!! note
+
+    NUMA support is currently available only for the **Go runtime** with the
+    **QEMU hypervisor** on **amd64** and **arm64** architectures. The Rust
+    runtime (`runtime-rs`) does not yet support NUMA topology.
 
 ## Step 1: Inspect the Host NUMA Topology
 
@@ -65,26 +65,39 @@ the runtime detects one node and skips multi-NUMA topology.
 
 ## Step 2: Kubernetes CPU Manager Policy
 
-Kata's NUMA-aware vCPU pinning works **without** `cpuManagerPolicy: static`.
-The recommended policy is the default (`none`):
+The kubelet CPU manager policy decides whether a pod owns host CPUs, and that
+in turn decides how tightly Kata can place the sandbox's vCPU threads:
 
-```yaml
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cpuManagerPolicy: "none"
-```
+| `cpuManagerPolicy` | Sandbox CPUSet | vCPU thread placement |
+|--------------------|----------------|-----------------------|
+| `none` (default) | none — the pod shares the node's CPUs | each vCPU thread is confined to the host CPUs of its guest NUMA node |
+| `static` (Guaranteed pods) | an exclusive set of host CPUs | each vCPU thread is pinned to a host CPU of its own within that set, and any vCPU beyond the set's size is confined to its node |
 
-> **Why not `static`?**
->
-> With `cpuManagerPolicy: static`, Kubernetes assigns dedicated CPUs to
-> Guaranteed QoS pods. On a multi-NUMA host, those CPUs are often all from
-> a **single** NUMA node (depending on the topology manager policy). This
-> causes the sandbox CPUSet to cover only one NUMA node, which defeats the
-> purpose of multi-NUMA guest topology.
->
-> With `cpuManagerPolicy: none` (the default), the pod inherits the full
-> node CPUSet spanning all NUMA nodes, and Kata's NUMA-aware pinning
-> distributes vCPU threads proportionally across host NUMA nodes.
+Either way the guest's vCPUs and memory stay on the right host NUMA node,
+which is what NUMA support is about. What differs is the placement *within*
+the node: under `none` the host scheduler may move a vCPU thread between the
+CPUs of its node, under `static` the vCPU threads the reserved set can back
+keep a CPU each and the few left over — see the note on `default_vcpus`
+below — stay spread over their node.
+
+!!! warning "Why one thread per CPU needs `static`"
+
+    A sandbox cannot see which host CPUs the other sandboxes are using. If
+    Kata pinned vCPUs to individual CPUs of a shared pool, every sandbox on
+    the node would pick the same ones and stack its vCPU threads on top of
+    theirs, and each of them would get a fraction of a CPU while other CPUs
+    stayed idle. Kata therefore pins one thread per CPU only when Kubernetes
+    has reserved those CPUs for the pod, and confines the threads to their
+    NUMA node otherwise.
+
+!!! note "What `static` costs"
+
+    On a multi-NUMA host, the CPUs the static CPU manager hands out often
+    come from a single host NUMA node (depending on the topology manager
+    policy), so the sandbox CPUSet covers one node and the guest topology
+    right-sizes to it. Choose `static` when per-vCPU pinning matters more
+    than a multi-node guest, and `none` when you want the guest to span
+    several host nodes.
 
 ### 2.1 Check the current policy
 
@@ -92,23 +105,30 @@ cpuManagerPolicy: "none"
 $ grep cpuManagerPolicy /var/lib/kubelet/config.yaml
 ```
 
-If it shows `static`, switch to `none`:
+To change it, edit the kubelet configuration, drop the stale CPU manager
+state and restart the kubelet. For example, to opt into per-vCPU pinning:
 
 ```bash
-$ sudo sed -i 's/cpuManagerPolicy:.*/cpuManagerPolicy: "none"/' /var/lib/kubelet/config.yaml
+$ sudo sed -i 's/cpuManagerPolicy:.*/cpuManagerPolicy: "static"/' /var/lib/kubelet/config.yaml
 $ sudo rm -f /var/lib/kubelet/cpu_manager_state
 $ sudo systemctl restart kubelet
 ```
 
+!!! note
+
+    The `static` policy requires a non-zero `kubeReserved` or
+    `systemReserved` CPU quantity in the kubelet configuration; without it
+    the kubelet refuses to start.
+
 ## Step 3: Configure Kata Containers for NUMA
 
-> **Note:**
->
-> If you are using the NVIDIA GPU runtime classes
-> (`kata-qemu-nvidia-gpu`, `kata-qemu-nvidia-gpu-snp`,
-> `kata-qemu-nvidia-gpu-tdx`), NUMA is already enabled by default in their
-> configuration templates. You only need the steps below for the base
-> `kata-qemu` runtime class or custom configurations.
+!!! note
+
+    If you are using the NVIDIA GPU runtime classes
+    (`kata-qemu-nvidia-gpu`, `kata-qemu-nvidia-gpu-snp`,
+    `kata-qemu-nvidia-gpu-tdx`), NUMA is already enabled by default in their
+    configuration templates. You only need the steps below for the base
+    `kata-qemu` runtime class or custom configurations.
 
 Never edit the base `configuration-qemu.toml` directly — use a
 **configuration drop-in** so your customizations survive upgrades.
@@ -195,11 +215,11 @@ The drop-in is merged on top of the base `configuration-qemu.toml`
 automatically. No restart is needed — the shim reads the configuration
 at pod creation time.
 
-> **Note:**
->
-> For details on the drop-in mechanism, reserved prefix ranges, and
-> additional Helm examples, see the
-> [Helm configuration guide](../../docs/helm-configuration.md).
+!!! note
+
+    For details on the drop-in mechanism, reserved prefix ranges, and
+    additional Helm examples, see the
+    [Helm configuration guide](../../docs/helm-configuration.md).
 
 ### 3.3 Verify the effective configuration
 
@@ -242,13 +262,29 @@ spec:
 EOF
 ```
 
-> **Note:**
->
-> Kata sizes the VM based on `limits` (not `requests`). Using different
-> values for `requests` and `limits` makes the pod **Burstable** QoS,
-> which avoids Kubernetes CPU manager interference with NUMA-aware
-> pinning. The large `limits.cpu` value tells Kata to create a VM with
-> that many vCPUs distributed across NUMA nodes.
+!!! note
+
+    Kata sizes the VM based on `limits`, not `requests`: the `limits.cpu`
+    value above tells Kata to create a VM with that many vCPUs distributed
+    across NUMA nodes.
+
+    QoS class only matters under `cpuManagerPolicy: static`, where a pod
+    needs Guaranteed QoS — integer `cpu`, with `requests` equal to `limits`
+    for both CPU and memory — to be given host CPUs of its own, and with them
+    a host CPU each for as many vCPU threads as those CPUs can back. Under
+    `cpuManagerPolicy: none` no pod gets an exclusive CPUSet, so every QoS
+    class ends up with per-node affinity.
+
+!!! note "`default_vcpus` and the pod's CPU limit"
+
+    Static sizing boots the guest with `default_vcpus` *on top of* the pod's
+    `limits.cpu`, while the kubelet reserves only the limit, so the guest
+    always holds a few more vCPUs than the pod holds host CPUs. There is no
+    CPU left for those extra vCPU threads to own, so they are confined to
+    their NUMA node and share its CPUs with the pinned ones. With
+    `default_vcpus = 1`, the pod above runs an 81 vCPU guest on the 80 CPUs
+    it owns: 80 threads with a CPU each, one floating over its node. Raising
+    `limits.cpu` does not change that, as it raises the vCPU count with it.
 
 ### 4.2 GPU passthrough pod with NUMA
 
@@ -351,27 +387,49 @@ Node 1 MemTotal:     2097152 kB
 
 ## Step 6: Verify NUMA on the Host
 
-### 6.1 Check vCPU pinning
+### 6.1 Check vCPU placement
 
-From the host, find the QEMU process and check its thread affinities:
+From the host, list the CPUs each vCPU thread of the QEMU process may run
+on:
 
 ```bash
 $ QEMU_PID=$(pgrep -f "qemu.*numa-test")
-$ ls /proc/${QEMU_PID}/task/ | while read tid; do
-    echo "TID ${tid}: $(taskset -p ${tid} 2>/dev/null)"
+$ for task in /proc/${QEMU_PID}/task/*; do
+    grep -q '^CPU .*/KVM' "${task}/comm" || continue
+    echo "$(cat "${task}/comm"): $(grep Cpus_allowed_list "${task}/status" | cut -f2)"
   done
 ```
 
-With NUMA pinning enabled, you should see vCPU threads pinned to specific
-CPUs (not the full CPU mask). For example, on a 2-NUMA-node host with
-CPUs 0-7 on node 0 and CPUs 8-15 on node 1:
+On a 2-NUMA-node host with CPUs 0-7 on node 0 and 8-15 on node 1, a sandbox
+holding an exclusive CPUSet of CPUs 0,1,8,9 shows one CPU per thread for as
+many threads as that set can back, and the CPUs its own node holds in the set
+for whatever is left over — here the fifth vCPU that static sizing adds on top
+of the pod's CPU limit:
 
 ```
-TID 12345: pid 12345's current affinity mask: 1    # CPU 0
-TID 12346: pid 12346's current affinity mask: 2    # CPU 1
-TID 12347: pid 12347's current affinity mask: 100  # CPU 8
-TID 12348: pid 12348's current affinity mask: 200  # CPU 9
+CPU 0/KVM: 0
+CPU 1/KVM: 1
+CPU 2/KVM: 8
+CPU 3/KVM: 9
+CPU 4/KVM: 0,1
 ```
+
+Without an exclusive CPUSet, every thread shows the CPU list of its guest
+node instead:
+
+```
+CPU 0/KVM: 0-7
+CPU 1/KVM: 0-7
+CPU 2/KVM: 8-15
+CPU 3/KVM: 8-15
+```
+
+Both are correct placements (see [Step 2](#step-2-kubernetes-cpu-manager-policy)).
+What should never appear is two threads pinned to the same single CPU. A thread
+whose list spans both host nodes means its guest node maps to host CPUs the
+sandbox was not given: the runtime warns about that node
+(`its vCPUs lose host NUMA locality`) and leaves its threads on the whole
+CPUSet, which is all such a node has left.
 
 ### 6.2 Check the shim logs for NUMA configuration
 
@@ -490,10 +548,14 @@ When a VM is created with NUMA enabled, the runtime:
    `cores = ceil(maxvcpus / num_NUMA_nodes)` so QEMU groups vCPUs by socket
    per NUMA node.
 
-5. **Pins vCPUs** (when enabled): Each vCPU thread is pinned to a host CPU
-   belonging to the same NUMA node. Right-sized single-node sandboxes
-   also go through this NUMA-aware path, so all vCPUs land on the chosen
-   host NUMA node's CPUs.
+5. **Places vCPU threads** (when enabled): Each vCPU thread is bound to host
+   CPUs of the NUMA node its guest node maps to. When the sandbox holds a
+   CPUSet of its own, the vCPUs that CPUSet can back get a host CPU each,
+   their own node's first, and whichever vCPUs are left over get their node's
+   CPU list instead — so a guest with more vCPUs than the pod reserved CPUs
+   comes out part pinned, part masked. Without a CPUSet of its own every vCPU
+   gets its node's CPU list. Right-sized single-node sandboxes also go through
+   this NUMA-aware path, so all vCPUs land on the chosen host NUMA node's CPUs.
 
 6. **Validates VFIO devices**: Checks each cold-plugged device's host NUMA
    node against the guest topology and logs placement status.
@@ -550,34 +612,69 @@ EOF
 
 ### vCPU pinning is skipped (empty CPUSet)
 
-**Symptom:** The shim logs show:
+**Symptom:** The shim logs show one of:
 
 ```
 sandbox CPUSet is empty; skipping vCPU pinning
+sandbox CPUSet is empty and cannot derive from NUMA HostCPUs; skipping vCPU pinning
 ```
 
-**Cause:** The runtime could not determine a CPUSet for pinning. With
-`cpuManagerPolicy: none` and multi-NUMA enabled, the runtime derives the
-CPUSet from the guest NUMA nodes' `HostCPUs`. This message indicates no
-NUMA topology was built (e.g., the host has only one NUMA node).
+**Cause:** The sandbox has no CPUSet of its own, and no guest NUMA topology
+to fall back on either — the first message means no guest NUMA nodes were
+built at all, the second that the nodes carry no usable host CPUs. There is
+nothing left to constrain the vCPU threads to, so they keep the affinity they
+started with.
 
 **Fix:** Verify:
 
-1. The host has multiple NUMA nodes (`numactl --hardware`)
-2. `enable_numa = true` is set in the Kata configuration
-3. `enable_vcpus_pinning = true` is set in the Kata configuration
-4. `static_sandbox_resource_mgmt = true` is set (so all vCPUs boot at start)
+1. `enable_numa = true` is set in the Kata configuration
+2. `enable_vcpus_pinning = true` is set in the Kata configuration
+3. `static_sandbox_resource_mgmt = true` is set (so all vCPUs boot at start)
+4. The guest topology was actually built — see
+   [Step 6.2](#62-check-the-shim-logs-for-numa-configuration)
 
-### NUMA pinning fallback warning
+### vCPU threads share their NUMA node instead of a CPU each
 
 **Symptom:** The shim logs show:
 
 ```
-NUMA node HostCPUs do not intersect sandbox CPUSet; falling back to full cpuset
+cannot give every vCPU a host CPU of its own; constraining the remaining vCPU threads to their NUMA node instead
+```
+
+and some vCPU threads' `Cpus_allowed_list` is a range rather than a single
+CPU. The `dedicated-cpus` log field says how many threads did get a CPU of
+their own.
+
+**Cause:** Either the sandbox has no exclusive CPUSet (`exclusive-cpuset` is
+`false` in the log fields, meaning `cpuManagerPolicy` is not `static` or the
+pod is not Guaranteed), in which case `dedicated-cpus` is `0`, or its CPUSet
+holds fewer CPUs than the VM has vCPUs, in which case the vCPUs the CPUSet
+can back keep a CPU each and the rest are confined to their node. Pinning
+two vCPU threads to one host CPU would make them time-share it for good, so
+the surplus threads are left to the host scheduler, which can move them to
+whichever CPU of the node has slack.
+
+**Fix:** For most sandboxes there is nothing to fix. A Guaranteed pod under
+`cpuManagerPolicy: static` is normally short by exactly `default_vcpus`,
+which static sizing adds on top of `limits.cpu` while the kubelet reserves
+only the limit, so `default_vcpus` threads float and the rest are pinned.
+Lowering `default_vcpus` shrinks the overhang but cannot remove it, as `0`
+means one vCPU. If `dedicated-cpus` is far below the vCPU count instead, the
+CPUSet itself is small: check that the pod is Guaranteed with an integer
+`cpu` (see [Step 2](#step-2-kubernetes-cpu-manager-policy)) and that CPU
+manager reservations (`reservedSystemCPUs`) left enough CPUs in the pool.
+NUMA locality is preserved either way.
+
+### NUMA node lost its host locality
+
+**Symptom:** The shim logs show:
+
+```
+NUMA node HostCPUs do not intersect sandbox CPUSet; its vCPUs lose host NUMA locality
 ```
 
 **Cause:** The CPUs Kubernetes assigned to the pod do not overlap with the
-host CPUs on the NUMA node. This means NUMA locality is lost for that node.
+host CPUs of that NUMA node, so its vCPUs have to run on CPUs of other nodes.
 
 **Fix:** Verify that your `numa_mapping` matches the actual host topology:
 
@@ -612,7 +709,7 @@ EOF
 | `enable_numa` | `[hypervisor.qemu]` | `false` | Enable guest NUMA topology |
 | `numa_mapping` | `[hypervisor.qemu]` | `[]` | Map guest NUMA nodes to host nodes. Empty = auto-discover with right-sizing (small sandboxes collapse to one node); non-empty = honored verbatim |
 | `static_sandbox_resource_mgmt` | `[runtime]` | varies | Size VM at boot (required for NUMA) |
-| `enable_vcpus_pinning` | `[runtime]` | `false` | Pin vCPU threads to host CPUs (NUMA-aware when NUMA enabled) |
+| `enable_vcpus_pinning` | `[runtime]` | `false` | Bind vCPU threads to host CPUs (NUMA-aware when NUMA enabled) |
 
 ## Limitations
 
@@ -622,9 +719,13 @@ EOF
   CPU/memory hotplug).
 - The VM needs at least as many vCPUs as NUMA nodes. If fewer vCPUs are
   available, multi-NUMA is silently skipped.
-- vCPU pinning with NUMA works best with `cpuManagerPolicy: none` (the
-  default). Using `static` may restrict the pod's CPUSet to a single NUMA
-  node, preventing balanced pinning across nodes.
+- One host CPU per vCPU thread requires the pod to hold an exclusive CPUSet,
+  that is Guaranteed QoS under `cpuManagerPolicy: static`. Without one, the
+  vCPU threads are confined to their host NUMA node and share its CPUs; with
+  one that holds fewer CPUs than the guest has vCPUs, the vCPUs it can back
+  get a CPU each and the rest are confined to their node. `static` in turn
+  tends to restrict the CPUSet to a single host NUMA node, so a multi-node
+  guest and per-vCPU pinning rarely come together.
 - Confidential guests (SEV-SNP, TDX) with NUMA require a QEMU patch
   ([accel/kvm: Fix kvm_convert_memory calls crossing memory regions](https://github.com/AMDESE/qemu/commit/6b0eaa20))
   to handle page conversions that span multiple NUMA memory backends.
