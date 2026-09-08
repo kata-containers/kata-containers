@@ -30,6 +30,7 @@ use resource::{
     cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
 };
 use tokio::sync::RwLock;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use super::{
     process::{Process, ProcessWatcher},
@@ -42,6 +43,11 @@ pub struct Exec {
     pub(crate) oci_process: OCIProcess,
 }
 
+pub struct IoLifecycle {
+    pub(super) cancel: CancellationToken,
+    pub(super) tasks: TaskTracker,
+}
+
 pub struct Container {
     pid: u32,
     pub container_id: ContainerID,
@@ -52,6 +58,7 @@ pub struct Container {
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
+    io: IoLifecycle,
 }
 
 fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) -> Result<bool> {
@@ -75,11 +82,12 @@ impl Container {
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
         passfd_listener_addr: Option<(String, u32)>,
+        io: IoLifecycle,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
         let logger = sl!().new(o!("container_id" => config.container_id.clone()));
         let process = ContainerProcess::new(&config.container_id, "")?;
-        let init_process = Process::new(
+        let mut init_process = Process::new(
             &process,
             pid,
             &config.bundle,
@@ -88,6 +96,8 @@ impl Container {
             config.stderr.clone(),
             config.terminal,
         );
+        init_process.io_cancel = io.cancel.child_token();
+        init_process.io_tasks = io.tasks.clone();
         let linux_resources = spec
             .linux()
             .as_ref()
@@ -108,6 +118,7 @@ impl Container {
             resource_manager,
             logger,
             passfd_listener_addr,
+            io,
         })
     }
 
@@ -475,6 +486,7 @@ impl Container {
         container_process: &ContainerProcess,
         signal: u32,
         all: bool,
+        io_cancel: &mut Option<CancellationToken>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
 
@@ -502,6 +514,19 @@ impl Container {
             return Ok(());
         }
 
+        // Capture only after the stopped-process no-op check, even for all=true.
+        // Keep the exact instance: the exec ID can be reused after this guard.
+        if signal == libc::SIGKILL as u32 {
+            *io_cancel = if all || container_process.exec_id.is_empty() {
+                Some(inner.init_process.io_cancel.clone())
+            } else {
+                inner
+                    .exec_processes
+                    .get(&container_process.exec_id)
+                    .map(|exec| exec.process.io_cancel.clone())
+            };
+        }
+
         match inner.signal_process(container_process, signal, all).await {
             Ok(()) => Ok(()),
             Err(e) if is_term_signal && is_no_such_process_error(&e) => {
@@ -515,6 +540,17 @@ impl Container {
                 Ok(())
             }
             Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn cancel_io(&self) {
+        self.io.cancel.cancel();
+    }
+
+    pub(crate) async fn cancel_exec_io(&self, exec_id: &str) {
+        let inner = self.inner.read().await;
+        if let Some(exec) = inner.exec_processes.get(exec_id) {
+            exec.process.io_cancel.cancel();
         }
     }
 
@@ -532,7 +568,7 @@ impl Container {
             oci_process.set_selinux_label(None);
         }
 
-        let process = Process::new(
+        let mut process = Process::new(
             container_process,
             self.pid,
             &self.config.bundle,
@@ -541,6 +577,8 @@ impl Container {
             stderr,
             terminal,
         );
+        process.io_cancel = self.io.cancel.child_token();
+        process.io_tasks = self.io.tasks.clone();
         let exec = Exec {
             process,
             oci_process,
