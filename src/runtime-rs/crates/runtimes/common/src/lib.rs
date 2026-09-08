@@ -5,7 +5,7 @@
 //
 
 mod container_manager;
-pub use container_manager::ContainerManager;
+pub use container_manager::{should_stop_vm_on_missing_task, ContainerManager};
 pub mod error;
 pub mod message;
 mod runtime_handler;
