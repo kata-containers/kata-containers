@@ -61,14 +61,14 @@ kernel_params = "@KERNELPARAMS_OPENVMM@"
 # < 0                             --> will be set to the actual number of physical cores
 # > 0 <= number of physical cores --> will be set to the specified number
 # > number of physical cores      --> will be set to the actual number of physical cores
-default_vcpus = @DEFVCPUS@
+default_vcpus = @DEFVCPUS_OPENVMM_AZURE@
 
 # Guest-side vCPU overhead budget (fractional) used with static_sandbox_resource_mgmt.
 # When a workload CPU limit is present, vm_vcpus = requested_vcpus + overhead_vcpus
 # (rounded up at boot, minimum 1). When it is not, default_vcpus is used instead,
 # regardless of whether a memory limit was set.
 # See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
-overhead_vcpus = @DEFOVERHEADVCPUS_OPENVMM@
+overhead_vcpus = @DEFOVERHEADVCPUS_OPENVMM_AZURE@
 
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
@@ -84,18 +84,18 @@ overhead_vcpus = @DEFOVERHEADVCPUS_OPENVMM@
 # `default_maxvcpus = 8` the memory footprint will be small, but 8 will be the maximum number of
 # vCPUs supported by the SB/VM. In general, we recommend that you do not edit this variable,
 # unless you know what are you doing.
-default_maxvcpus = @DEFMAXVCPUS@
+default_maxvcpus = @DEFMAXVCPUS_OPENVMM_AZURE@
 
 # Default memory size in MiB for SB/VM.
-# If unspecified then it will be set @DEFMEMSZ@ MiB.
-default_memory = @DEFMEMSZ@
+# If unspecified then it will be set @DEFMEMSZ_OPENVMM_AZURE@ MiB.
+default_memory = @DEFMEMSZ_OPENVMM_AZURE@
 
 # Guest-side memory overhead budget (MiB) used with static_sandbox_resource_mgmt.
 # When a workload memory limit is present, vm_memory = requested_memory + overhead_memory.
 # When it is not, default_memory is used instead, regardless of whether a CPU limit
 # was set.
 # See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
-overhead_memory = @DEFOVERHEADMEMSZ_OPENVMM@
+overhead_memory = @DEFOVERHEADMEMSZ_OPENVMM_AZURE@
 
 # Shared file system type:
 #   - virtio-fs
