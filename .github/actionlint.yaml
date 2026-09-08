@@ -16,6 +16,7 @@ self-hosted-runner:
     - garm-ubuntu-2304
     - garm-ubuntu-2304-smaller
     - garm-ubuntu-2204-smaller
+    - kata-deploy-selinux
     - ppc64le
     - ppc64le-k8s
     - ppc64le-small
