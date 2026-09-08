@@ -24,11 +24,13 @@ HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
 # Run a command against the host node's filesystem, mounted at /host inside a
 # short-lived privileged pod.
 # Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
+#        run_on_host "chroot /host /usr/sbin/semodule -r kata-deploy" false
 #
 # We avoid `kubectl run --rm -i` because rke2 injects session-recording banners
 # into interactive pods, polluting stdout. Instead: create, wait, fetch logs, delete.
 run_on_host() {
 	local cmd="$1"
+	local read_only="${2:-true}"
 	local node_name
 	node_name=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -1)
 	local pod_name="host-exec-${RANDOM}"
@@ -47,7 +49,7 @@ run_on_host() {
 					\"imagePullPolicy\": \"IfNotPresent\",
 					\"command\": [\"sh\", \"-c\", \"${cmd}\"],
 					\"securityContext\": {\"privileged\": true},
-					\"volumeMounts\": [{\"name\": \"host\", \"mountPath\": \"/host\", \"readOnly\": true}]
+					\"volumeMounts\": [{\"name\": \"host\", \"mountPath\": \"/host\", \"readOnly\": ${read_only}}]
 				}],
 				\"volumes\": [{\"name\": \"host\", \"hostPath\": {\"path\": \"/\"}}]
 			}
