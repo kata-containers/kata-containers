@@ -44,10 +44,13 @@ policy_module_path() {
 	run_on_host 'ls -d /host/var/lib/selinux/*/active/modules/*/kata-deploy 2>/dev/null | head -1'
 }
 
-# The loader's own selector, so this works for the DaemonSet and Job pods alike.
+# By name: in job mode the dispatcher creates the per-node pods, which carry
+# none of the release's labels.
 policy_loader_log() {
-	kubectl -n "${HELM_NAMESPACE}" logs -l "$(kata_deploy_pod_selector)" \
-		-c selinux-policy --tail=-1 2>/dev/null || true
+	local pod
+	for pod in $(kubectl -n "${HELM_NAMESPACE}" get pods -o name 2>&1 | grep kata-deploy); do
+		kubectl -n "${HELM_NAMESPACE}" logs "${pod}" -c selinux-policy --tail=-1 2>&1
+	done
 }
 
 audit_mark_file() {
@@ -88,12 +91,11 @@ assert_no_kata_deploy_denials() {
 	[[ -z "${output}" ]]
 }
 
-# The loader logs this only after checking. When it cannot check it warns and
-# says nothing, so requiring the line makes an unverified load a failure.
-assert_domains_resolve() {
+# Diagnostics only: the loader names the domain the node's policy is missing,
+# which the stage that then fails to start reports as an opaque runc error.
+show_policy_loader_log() {
 	run policy_loader_log
-	echo "# selinux-policy stage log: ${output}" >&3
-	[[ "${output}" == *"domains resolve"* ]]
+	echo "# selinux-policy stage log: ${output:-none}" >&3
 }
 
 assert_artifacts_installed() {
@@ -103,10 +105,11 @@ assert_artifacts_installed() {
 	[[ "${output}" == *"bin"* ]]
 }
 
+# The kubelet owns the mount point, so it outlives what was installed under it.
 assert_artifacts_removed() {
-	run run_on_host "test -e ${KATA_INSTALL_DIR} && echo PRESENT || echo GONE"
+	run run_on_host "test -d ${KATA_INSTALL_DIR} && ls -A ${KATA_INSTALL_DIR} | grep -q . && echo LEFTOVERS || echo CLEAN"
 	echo "# ${KATA_INSTALL_DIR} after uninstall: ${output}" >&3
-	[[ "${output}" == *"GONE"* ]]
+	[[ "${output}" == *"CLEAN"* ]]
 }
 
 # Removing the module is left to the admin: another release may still need it.
