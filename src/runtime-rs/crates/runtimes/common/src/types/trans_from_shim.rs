@@ -155,6 +155,15 @@ impl TryFrom<sandbox_api::ShutdownSandboxRequest> for SandboxRequest {
     }
 }
 
+impl TryFrom<sandbox_api::SandboxMetricsRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::SandboxMetricsRequest) -> Result<Self> {
+        Ok(SandboxRequest::SandboxMetrics(SandboxID {
+            sandbox_id: from.sandbox_id,
+        }))
+    }
+}
+
 impl TryFrom<api::CreateTaskRequest> for TaskRequest {
     type Error = anyhow::Error;
     fn try_from(from: api::CreateTaskRequest) -> Result<Self> {

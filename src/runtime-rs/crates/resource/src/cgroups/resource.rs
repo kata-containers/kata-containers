@@ -16,7 +16,7 @@ use tokio::sync::RwLock;
 
 use crate::cgroups::cgroup_persist::CgroupState;
 use crate::cgroups::resource_inner::CgroupsResourceInner;
-use crate::cgroups::{CgroupArgs, CgroupConfig};
+use crate::cgroups::{CgroupArgs, CgroupConfig, SandboxCgroupStats};
 use crate::ResourceUpdateOp;
 
 /// CgroupsResource manages sandbox cgroup and overhead cgroup.
@@ -46,6 +46,10 @@ impl CgroupsResource {
 }
 
 impl CgroupsResource {
+    pub async fn stats(&self) -> Result<SandboxCgroupStats> {
+        self.inner.read().await.stats()
+    }
+
     pub async fn delete(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.delete().await

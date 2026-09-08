@@ -5,7 +5,7 @@
 //
 
 use crate::{
-    types::{ContainerProcess, SandboxExitInfo, SandboxStatus},
+    types::{ContainerProcess, SandboxExitInfo, SandboxStatus, StatsInfo},
     ContainerManager,
 };
 
@@ -37,6 +37,7 @@ pub trait Sandbox: Send + Sync {
     async fn shutdown(&self) -> Result<()>;
     async fn status(&self) -> Result<SandboxStatus>;
     async fn wait(&self) -> Result<SandboxExitInfo>;
+    async fn metrics(&self) -> Result<StatsInfo>;
 
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;

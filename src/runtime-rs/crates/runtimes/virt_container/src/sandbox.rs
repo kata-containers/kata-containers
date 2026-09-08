@@ -14,7 +14,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::error::is_normal_oom_shutdown_error;
 use common::types::utils::option_system_time_into;
-use common::types::ContainerProcess;
+use common::types::{ContainerProcess, StatsInfo};
 use common::{
     message::{Action, Message},
     types::DEFAULT_SHM_SIZE,
@@ -23,6 +23,7 @@ use common::{
     types::{SandboxConfig, SandboxExitInfo, SandboxStatus},
     ContainerManager, Sandbox, SandboxNetworkEnv,
 };
+use std::convert::TryFrom;
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 #[cfg(all(
@@ -1523,6 +1524,11 @@ impl Sandbox for VirtSandbox {
 
     async fn hypervisor_metrics(&self) -> Result<String> {
         self.hypervisor.get_hypervisor_metrics().await
+    }
+
+    async fn metrics(&self) -> Result<StatsInfo> {
+        StatsInfo::try_from(self.resource_manager.sandbox_cgroup_stats().await?)
+            .context("convert sandbox cgroup metrics")
     }
 
     async fn set_policy(&self, policy: &str) -> Result<()> {
