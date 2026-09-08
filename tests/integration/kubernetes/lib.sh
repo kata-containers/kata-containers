@@ -179,14 +179,22 @@ exec_host() {
 get_pod_sandbox_id() {
 	local pod_name="$1"
 	local node
+	local runtime
+	local runtime_endpoint
 
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
 	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
 	exec_host "${node}" "command -v crictl >/dev/null" || \
 		die "crictl is required on Kubernetes node ${node}"
 
+	runtime="$(exec_host "${node}" "crictl version | grep 'RuntimeName:' | awk '{print  \$2}'")"
+	if [[ "${runtime}" == "cri-o" ]]; then
+		runtime_endpoint="unix:///run/crio/crio.sock"
+	else
+		runtime_endpoint="unix:///run/containerd/containerd.sock"
+	fi
 	exec_host "${node}" \
-		"crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
+		"crictl --runtime-endpoint ${runtime_endpoint} \
 		pods --name \"${pod_name}\" --state ready -q | head -1"
 }
 

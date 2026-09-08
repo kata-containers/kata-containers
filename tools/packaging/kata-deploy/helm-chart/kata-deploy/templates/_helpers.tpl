@@ -770,13 +770,14 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: CONTAINERD_CONFIG_FILE_NAME
   value: {{ .Values.containerd.configFileName | trim | quote }}
 {{- end }}
-{{- if not (.Values.containerd.configDir | trim) }}
-{{- /* This value picks the host directory mounted at /etc/containerd, while the
-       install detects the runtime itself and picks the file written within it, so
-       the install needs it to refuse a directory its runtime does not read.
-       Omitted when configDir overrides the derivation being checked. */}}
+{{- /* Passed whatever else is set: it decides more than the containerd
+       directory below, the kubelet's root directory among it, and the install
+       works out for itself what a pinned directory takes out of its hands. */}}
 - name: K8S_DISTRIBUTION
   value: {{ .Values.k8sDistribution | quote }}
+{{- if .Values.containerd.configDir | trim }}
+- name: CONTAINERD_CONFIG_DIR
+  value: {{ .Values.containerd.configDir | trim | quote }}
 {{- end }}
 {{- if .Values.containerd.userDropIn | trim }}
 - name: CONTAINERD_USER_DROP_IN_SOURCE_FILE

@@ -38,6 +38,9 @@ runtime-spec = { workspace = true }
 persist = { workspace = true }
 resource = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [features]
 default = ["cloud-hypervisor"]
 

@@ -30,6 +30,7 @@ use tracing::instrument;
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
 
 use crate::container_manager::is_termination_signal;
+use crate::oom::CrioOomNotifier;
 
 use super::{logger_with_process, Container};
 
@@ -41,6 +42,7 @@ pub struct VirtContainerManager {
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
+    oom_notifier: Arc<CrioOomNotifier>,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -66,6 +68,7 @@ impl VirtContainerManager {
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
+        oom_notifier: Arc<CrioOomNotifier>,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -75,6 +78,7 @@ impl VirtContainerManager {
             agent,
             hypervisor,
             vmm_master_tid: OnceCell::new(),
+            oom_notifier,
         }
     }
 
@@ -128,11 +132,16 @@ impl ContainerManager for VirtContainerManager {
             }
         }
 
+        self.oom_notifier
+            .track(&config.container_id, &config.bundle, &spec)
+            .await;
+
         let mut containers = self.containers.write().await;
         if let Err(e) = container.create(spec).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }
+            self.oom_notifier.forget(&config.container_id).await;
 
             return Err(e);
         }
@@ -212,6 +221,11 @@ impl ContainerManager for VirtContainerManager {
 
         oci_process.set_apparmor_profile(None);
         oci_process.set_capabilities(None);
+
+        // CRI-O derives an exec's process from the container's, so a container
+        // declaring tty: true asks for a terminal the exec never wanted. Only
+        // req.terminal says how the streams are copied, so it decides here too.
+        oci_process.set_terminal(Some(req.terminal));
 
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;

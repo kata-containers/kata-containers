@@ -226,20 +226,21 @@ function get_nodes_and_pods_info() {
 	kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
+function setup_crio() {
+	local k0s_latest_url
+	k0s_latest_url=$(curl -sI -L -o /dev/null -w '%{url_effective}' https://github.com/k0sproject/k0s/releases/latest)
+	local k0s_version=${k0s_latest_url##*/}
+	local crio_version=${k0s_version%.*+*}
+	crio_version=${crio_version#v}
+
+	install_crio "${crio_version}"
+	overwrite_crio_config
+
+	install_cri_tools
+}
+
 function deploy_k0s() {
-	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
-		url=$(get_from_kata_deps ".externals.k0s.url")
-
-		k0s_version_param=""
-		version=$(get_from_kata_deps ".externals.k0s.version")
-		if [[ -n "${version}" ]]; then
-			k0s_version_param="K0S_VERSION=${version}"
-		fi
-
-		curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
-	else
-		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
-	fi
+	curl -sSLf https://get.k0s.sh | sudo sh
 
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.

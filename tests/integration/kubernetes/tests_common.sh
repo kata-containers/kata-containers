@@ -226,6 +226,7 @@ is_arm64_host() {
 get_kubelet_data_dir() {
 	case "${KUBERNETES:-}" in
 		k0s) echo "/var/lib/k0s/kubelet" ;;
+		microk8s) echo "/var/snap/microk8s/common/var/lib/kubelet" ;;
 		*) echo "/var/lib/kubelet" ;;
 	esac
 }

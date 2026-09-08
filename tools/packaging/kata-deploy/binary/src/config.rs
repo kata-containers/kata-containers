@@ -240,12 +240,16 @@ pub struct Config {
     /// of the install, and the less they can reach the better. Absent (the
     /// DaemonSet), the value is read from the Node.
     pub container_runtime_version: Option<String>,
-    /// The Kubernetes flavour the chart was configured for (`K8S_DISTRIBUTION`),
-    /// which is what chose the host directory mounted at /etc/containerd.
+    /// The Kubernetes flavour the chart was configured for (`K8S_DISTRIBUTION`).
     ///
-    /// Absent when the operator pinned that directory themselves, or when this
-    /// process was not started by the chart.
+    /// Absent when this process was not started by the chart.
     pub k8s_distribution: Option<String>,
+    /// The host directory holding containerd's configuration, when the operator
+    /// pinned it themselves (`CONTAINERD_CONFIG_DIR`). Its presence means the
+    /// flavour above no longer chose that directory, so the two cannot be
+    /// cross-checked against each other. Never used as a path: it is mounted at
+    /// /etc/containerd in this pod either way.
+    pub containerd_config_dir: Option<String>,
 }
 
 impl Config {
@@ -458,6 +462,11 @@ impl Config {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        let containerd_config_dir = env::var("CONTAINERD_CONFIG_DIR")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let config = Config {
             node_name,
             debug,
@@ -493,6 +502,7 @@ impl Config {
             startup_taints,
             container_runtime_version,
             k8s_distribution,
+            containerd_config_dir,
         };
 
         // Validate the configuration
@@ -765,6 +775,8 @@ impl Config {
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
+        info!("* K8S_DISTRIBUTION: {:?}", self.k8s_distribution);
+        info!("* CONTAINERD_CONFIG_DIR: {:?}", self.containerd_config_dir);
         info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
         info!(
             "* CONTAINERD_USER_DROP_IN_SOURCE_FILE: {:?}",
