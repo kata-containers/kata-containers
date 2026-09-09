@@ -210,7 +210,7 @@ async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>
         h.vm_template.device_state_path = template_device_state_path(&hypervisor_name, path)
             .to_string_lossy()
             .to_string();
-        let _ = VmConfig::validate_hypervisor_config(h);
+        let _ = VmConfig::validate_hypervisor_config(&hypervisor_name, h);
     } else {
         return Err(anyhow!("hypervisor '{}' not found", hypervisor_name));
     }
