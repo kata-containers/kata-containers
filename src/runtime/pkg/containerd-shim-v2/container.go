@@ -19,26 +19,27 @@ import (
 )
 
 type container struct {
-	s           *service
-	ttyio       *ttyIO
-	spec        *specs.Spec
-	exitTime    time.Time
-	execsMu     sync.RWMutex
-	execs       map[string]*exec
-	exitIOch    chan struct{}
-	stdinPipe   io.WriteCloser
-	stdinCloser chan struct{}
-	exitCh      chan uint32
-	id          string
-	stdin       string
-	stdout      string
-	stderr      string
-	bundle      string
-	cType       vc.ContainerType
-	exit        uint32
-	status      task.Status
-	terminal    bool
-	mounted     bool
+	s            *service
+	ttyio        *ttyIO
+	spec         *specs.Spec
+	exitTime     time.Time
+	execsMu      sync.RWMutex
+	execs        map[string]*exec
+	exitIOch     chan struct{}
+	stdinPipe    io.WriteCloser
+	stdinCloser  chan struct{}
+	exitCh       chan uint32
+	id           string
+	stdin        string
+	stdout       string
+	stderr       string
+	bundle       string
+	cType        vc.ContainerType
+	exit         uint32
+	status       task.Status
+	terminal     bool
+	mounted      bool
+	teardownDone chan struct{}
 }
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
