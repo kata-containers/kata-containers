@@ -582,6 +582,14 @@ install_kata() {
 
 	if [[ ${gpu_vendor} != "" ]]; then
 		suffix="-${gpu_vendor}-gpu${suffix}"
+	elif [[ ${conf_guest} != "" ]]; then
+		# CCA kernel on arm64 needs a -confidential suffix to coexist
+		# with the unified kernel; the regular kernel with -x does not
+		# get the suffix (matching x86_64/s390x unified kernel behavior).
+		# CCA builds are identified by -H (linux_headers) being set.
+		if [[ "${arch_target}" == "arm64" ]] && [[ -n "${linux_headers}" ]]; then
+			suffix="-${conf_guest}${suffix}"
+		fi
 	fi
 
 	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then

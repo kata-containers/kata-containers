@@ -138,6 +138,7 @@ options:
 	kata-ctl
 	kata-manager
 	kernel
+	kernel-cca-confidential
 	kernel-debug
 	kernel-dragonball-experimental
 	kernel-experimental
@@ -147,7 +148,9 @@ options:
 	ovmf
 	ovmf-sev
 	ovmf-tdx
+	ovmf-cca
 	qemu
+	qemu-cca-experimental
 	qemu-no-shared-fs
 	qemu-snp-experimental
 	qemu-tdx-experimental
@@ -305,11 +308,11 @@ install_cached_tarball_component() {
 
 	oras pull "${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-$(sanitize_tag_component "${TARGET_BRANCH}")-$(uname -m)" || return 1
 
-	cached_version="$(cat "${component}"-version)"
-	cached_image_version="$(cat "${component}"-builder-image-version)"
+	cached_version="$(cat "${build_target}"-version)"
+	cached_image_version="$(cat "${build_target}"-builder-image-version)"
 
-	rm -f "${component}"-version
-	rm -f "${component}"-builder-image-version
+	rm -f "${build_target}"-version
+	rm -f "${build_target}"-builder-image-version
 
 	if [[ "${cached_image_version}" != "${current_image_version}" ]]; then
 		cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"
@@ -319,7 +322,7 @@ install_cached_tarball_component() {
 		cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"
 		return 1
 	fi
-	sha256sum -c "${component}-sha256sum" || { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return 1; }
+	sha256sum -c "${build_target}-sha256sum" || { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return 1; }
 
 	if [[ "${MEASURED_ROOTFS}" = "yes" ]] && \
 		{ [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; }; then
@@ -600,6 +603,20 @@ get_latest_kernel_artefact_and_builder_image_version() {
 	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
 }
 
+get_latest_kernel_cca_artefact_and_builder_image_version() {
+	local kernel_version
+	local kernel_kata_config_version
+	local latest_kernel_artefact
+	local latest_kernel_builder_image
+
+	kernel_version=$(get_from_kata_deps ".assets.kernel-cca-confidential.version")
+	kernel_kata_config_version="$(cat "${repo_root_dir}"/tools/packaging/kernel/kata_config_version)"
+	latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
+	latest_kernel_builder_image="$(get_kernel_image_name)"
+
+	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
+}
+
 get_latest_kernel_nvidia_artefact_and_builder_image_version() {
 	local kernel_version
 	local kernel_kata_config_version
@@ -691,7 +708,9 @@ install_image() {
 	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
-		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
+		if [[ "${build_target}" == "rootfs-cca-confidential-image" ]]; then
+			latest_artefact+="-$(get_latest_kernel_cca_artefact_and_builder_image_version)"
+		elif [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 			latest_artefact+="-$(get_latest_nvidia_driver_version)"
@@ -1037,7 +1056,9 @@ install_initrd() {
 	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
-		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
+		if [[ "${build_target}" == "rootfs-cca-confidential-initrd" ]]; then
+			latest_artefact+="-$(get_latest_kernel_cca_artefact_and_builder_image_version)"
+		elif [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 			latest_artefact+="-$(get_latest_nvidia_driver_version)"
@@ -1243,13 +1264,13 @@ install_cached_kernel_tarball_component() {
 			modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
 
 			mkdir -p "${modules_dir}" || true
-			tar --strip-components=1 --zstd -xvf "${workdir}/kata-static-${kernel_name}-modules.tar.zst" -C "${modules_dir}" || return 1
+			tar --strip-components=1 --zstd -xvf "${workdir}/kata-static-${build_target}-modules.tar.zst" -C "${modules_dir}" || return 1
 			;;
 		"kernel"*"-confidential")
 			local modules_dir
 			modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
 			mkdir -p "${modules_dir}" || true
-			tar --zstd -xvf "${workdir}/kata-static-${kernel_name}-modules.tar.zst" -C "${modules_dir}" || return 1
+			tar --zstd -xvf "${workdir}/kata-static-${build_target}-modules.tar.zst" -C "${modules_dir}" || return 1
 			;;
 	esac
 
@@ -1279,7 +1300,7 @@ install_kernel_helper() {
 
 	case ${kernel_name} in
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental|kernel*-confidential)
-			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
+			local kernel_modules_tarball_name="kata-static-${build_target}-modules.tar.zst"
 			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 			extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
 			;;
@@ -1331,6 +1352,16 @@ install_kernel_debug() {
 		"assets.kernel" \
 		"kernel-debug" \
 		""
+}
+
+install_kernel_cca_confidential() {
+	export CONFIDENTIAL_GUEST="yes"
+	export MEASURED_ROOTFS="yes"
+
+	install_kernel_helper \
+		"assets.kernel-cca-confidential" \
+		"kernel-confidential" \
+		"-x -H deb"
 }
 
 install_kernel_dragonball_experimental() {
@@ -1404,6 +1435,20 @@ install_qemu_no_shared_fs() {
 	install_qemu_helper \
 		"assets.hypervisor.qemu.url" \
 		"assets.hypervisor.qemu.version" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_flavour_builder}"
+}
+
+# Experimental ARM CCA QEMU flavour.  This is not wired into kata-deploy (no
+# runtime class, no shim, not part of the shipped payload); it exists so the
+# unmaintained CCA stack can still be built and cached on demand.
+install_qemu_cca_experimental() {
+	export qemu_suffix="cca-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
 		"qemu-${qemu_suffix}" \
 		"${qemu_flavour_builder}"
 }
@@ -1675,13 +1720,16 @@ install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 	if [[ "${ARCH}" == "aarch64" ]]; then
-		ovmf_type="arm64"
-		tarball_name="edk2-arm64.tar.gz"
+	  if [[ "${ovmf_type}" != "cca" ]]; then
+		  ovmf_type="arm64"
+		  tarball_name="edk2-arm64.tar.gz"
+		fi
 	fi
 
 	local component_name="ovmf"
 	[[ "${ovmf_type}" == "sev" ]] && component_name="ovmf-sev"
 	[[ "${ovmf_type}" == "tdx" ]] && component_name="ovmf-tdx"
+	[[ "${ovmf_type}" == "cca" ]] && component_name="ovmf-cca"
 
 	latest_artefact="$(get_from_kata_deps ".externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -1706,6 +1754,11 @@ install_ovmf_sev() {
 # Install OVMF TDX
 install_ovmf_tdx() {
 	install_ovmf "tdx" "edk2-tdx.tar.gz"
+}
+
+# Install OVMF CCA
+install_ovmf_cca() {
+	install_ovmf "cca" "edk2-cca.tar.gz"
 }
 
 install_busybox() {
@@ -1953,6 +2006,7 @@ handle_build() {
 		install_kata_ctl
 		install_kata_manager
 		install_kernel
+		install_kernel_cca_confidential
 		install_kernel_dragonball_experimental
 		install_log_parser_rs
 		install_nydus
@@ -1998,6 +2052,8 @@ handle_build() {
 
 	kernel-debug) install_kernel_debug ;;
 
+	kernel-cca-confidential) install_kernel_cca_confidential ;;
+
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
@@ -2012,11 +2068,15 @@ handle_build() {
 
 	ovmf-tdx) install_ovmf_tdx ;;
 
+	ovmf-cca) install_ovmf_cca ;;
+
 	pause-image) install_pause_image ;;
 
 	qemu) install_qemu ;;
 
 	qemu-no-shared-fs) install_qemu_no_shared_fs ;;
+
+	qemu-cca-experimental) install_qemu_cca_experimental ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
@@ -2045,6 +2105,10 @@ handle_build() {
 	rootfs-image-nvidia) install_image_nvidia ;;
 
 	rootfs-image-nvidia-gpu-extension) install_image_nvidia_gpu_extension ;;
+
+	rootfs-cca-confidential-image) install_image_confidential ;;
+
+	rootfs-cca-confidential-initrd) install_initrd_confidential ;;
 
 	shim-v2-go) install_shim_v2_go ;;
 
