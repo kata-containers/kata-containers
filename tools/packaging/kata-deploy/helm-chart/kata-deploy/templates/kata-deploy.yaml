@@ -99,6 +99,9 @@ spec:
         - {{ $logLevel | quote }}
         {{- end }}
         - install
+        {{- /* kata-deploy writes why it failed to /dev/termination-log, which
+               this pod's next restart cannot scroll past. */}}
+        terminationMessagePolicy: FallbackToLogsOnError
         env:
 {{- include "kata-deploy.commonEnv" . | nindent 8 }}
 {{- $healthDefaults := dict

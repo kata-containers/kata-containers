@@ -236,7 +236,7 @@ rbac_doc() {
 	cleanup=$(render_job_mode kata-deploy-cleanup-job.yaml)
 
 	for rendered in "${install}" "${cleanup}"; do
-		echo "${rendered}" | grep -q 'image: ghcr.io/kata-containers/k8s-job-dispatcher:0.2.0'
+		echo "${rendered}" | grep -q 'image: ghcr.io/kata-containers/k8s-job-dispatcher:0.3.0'
 		echo "${rendered}" | grep -q -- '/usr/bin/k8s-job-dispatcher'
 		echo "${rendered}" | grep -q -- '--tracking-label-prefix=kata-deploy-job-dispatcher'
 		echo "${rendered}" | grep -q -- '--node-label-key=katacontainers.io/kata-runtime'

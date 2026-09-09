@@ -87,7 +87,8 @@ rules:
 # Enumerating nodes is inherently cluster-scoped. `get` re-reads one node (its
 # readiness, and the label back after patching it); `patch` sets the
 # katacontainers.io/kata-runtime label and lifts start-up taints, which is the
-# work the per-node Jobs used to do with a token of their own.
+# work the per-node Jobs used to do with a token of their own, and records what
+# the run made of the node under kata-deploy-job-dispatcher/result.
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["list", "get", "patch"]
@@ -123,16 +124,20 @@ rules:
 - apiGroups: ["batch"]
   resources: ["jobs"]
   verbs: ["create", "get", "list", "delete"]
-{{- if (.Values.job.reconcile | default dict).enabled }}
-# A scheduled run cannot know the name of the Job the CronJob made for it, so it
-# reads its own pod to find it and own the per-node Jobs with it.
+# A Job's status says that it failed and nothing else; the pod it left behind
+# holds the stage, the exit code and the termination message. Read before
+# job.ttlSecondsAfterFinished takes it away.
 - apiGroups: [""]
   resources: ["pods"]
-  verbs: ["get"]
-# And uninstall takes the schedule away before it starts reverting nodes.
+{{- if (.Values.job.reconcile | default dict).enabled }}
+  # A tick reads its own pod to find the Job that owns it.
+  verbs: ["get", "list"]
+# Uninstall takes the schedule away before it starts reverting nodes.
 - apiGroups: ["batch"]
   resources: ["cronjobs"]
   verbs: ["get", "delete"]
+{{- else }}
+  verbs: ["list"]
 {{- end }}
 ---
 kind: RoleBinding
@@ -144,6 +149,34 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ .Chart.Name }}-dispatcher-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "kata-deploy.dispatcherServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The answer is also published as an Event against the Node, which is what
+# `kubectl describe node` shows. Not in the release namespace: a Node has no
+# namespace, and the apiserver only accepts an Event about a cluster-scoped
+# object in "default" - where the kubelet's own Node events go.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-dispatcher-events-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-dispatcher-events-rb{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Chart.Name }}-dispatcher-events-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
 subjects:
 - kind: ServiceAccount
   name: {{ include "kata-deploy.dispatcherServiceAccountName" . }}
