@@ -114,8 +114,11 @@ pub async fn new_factory(
     if !config.template {
         anyhow::bail!("template must be enabled");
     } else {
-        VmConfig::validate_hypervisor_config(&mut config.vm_config.hypervisor_config)
-            .context("validate hypervisor config")?;
+        VmConfig::validate_hypervisor_config(
+            &config.vm_config.hypervisor_name,
+            &mut config.vm_config.hypervisor_config,
+        )
+        .context("validate hypervisor config")?;
 
         let path: PathBuf = config.template_path.clone().into();
         if fetch_only {
