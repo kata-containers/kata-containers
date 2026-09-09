@@ -9,6 +9,7 @@ use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -230,14 +231,26 @@ fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -
     Ok(())
 }
 
+fn containerd_runtimes_table(pluginid: &str) -> String {
+    format!(".plugins.{pluginid}.containerd.runtimes")
+}
+
+fn containerd_runtime_platform_table(handler: &str) -> String {
+    format!(
+        ".plugins.{}.runtime_platforms.\"{}\"",
+        CONTAINERD_CRI_IMAGES_PLUGIN_ID, handler
+    )
+}
+
 fn write_containerd_runtime_config(
     config_file: &Path,
     pluginid: &str,
     params: &ContainerdRuntimeParams,
 ) -> Result<()> {
     let runtime_table = format!(
-        ".plugins.{}.containerd.runtimes.{}",
-        pluginid, params.runtime_name
+        "{}.{}",
+        containerd_runtimes_table(pluginid),
+        params.runtime_name
     );
     let runtime_options_table = format!("{runtime_table}.options");
     let runtime_type = format!("\"io.containerd.{}.v2\"", params.runtime_name);
@@ -292,8 +305,8 @@ fn write_containerd_runtime_config(
             toml_utils::set_toml_value(
                 config_file,
                 &format!(
-                    ".plugins.{}.runtime_platforms.\"{}\".snapshotter",
-                    CONTAINERD_CRI_IMAGES_PLUGIN_ID, params.runtime_name
+                    "{}.snapshotter",
+                    containerd_runtime_platform_table(&params.runtime_name)
                 ),
                 snapshotter,
             )?;
@@ -447,6 +460,76 @@ pub async fn configure_custom_containerd_runtime(
     Ok(())
 }
 
+fn configured_containerd_handlers(config: &Config) -> HashSet<String> {
+    let mut handlers: HashSet<String> = config.shim_handlers().into_iter().collect();
+    if config.custom_runtimes_enabled {
+        handlers.extend(config.custom_runtimes.iter().map(|r| r.handler.clone()));
+    }
+    handlers
+}
+
+/// The file is not always exclusively ours: without conf.d the handlers sit in
+/// the node's own containerd config, and k0s and K3s share one drop-in path
+/// between installations. The trailing separator keeps /opt/kata off the
+/// handlers of /opt/kata-dev.
+fn containerd_handler_is_ours(
+    config_file: &Path,
+    pluginid: &str,
+    handler: &str,
+    dest_dir: &str,
+) -> bool {
+    let runtime_table = format!("{}.\"{}\"", containerd_runtimes_table(pluginid), handler);
+    let owned_prefix = format!("{}/", dest_dir.trim_end_matches('/'));
+
+    [
+        format!("{runtime_table}.runtime_path"),
+        format!("{runtime_table}.options.ConfigPath"),
+    ]
+    .iter()
+    .any(|path| {
+        toml_utils::get_toml_value(config_file, path)
+            .is_ok_and(|value| value.starts_with(&owned_prefix))
+    })
+}
+
+/// Installs only ever add handlers, so one dropped between two installs stays
+/// registered and advertised with the config its ConfigPath names deleted, and
+/// pods aimed at it hang in ContainerCreating.
+fn reconcile_containerd_runtimes(
+    config_file: &Path,
+    pluginid: &str,
+    dest_dir: &str,
+    configured: &HashSet<String>,
+) -> Result<()> {
+    let runtimes_table = containerd_runtimes_table(pluginid);
+
+    for handler in toml_utils::get_toml_table_keys(config_file, &runtimes_table)? {
+        if configured.contains(&handler)
+            || !containerd_handler_is_ours(config_file, pluginid, &handler, dest_dir)
+        {
+            continue;
+        }
+
+        info!(
+            "Removing stale containerd runtime handler '{}' from {}",
+            handler,
+            config_file.display()
+        );
+        toml_utils::delete_toml_value(config_file, &format!("{runtimes_table}.\"{handler}\""))?;
+
+        // The images plugin registers the handler a second time, for snapshotter
+        // selection.
+        if is_containerd_v3_config(pluginid) {
+            toml_utils::delete_toml_value(
+                config_file,
+                &containerd_runtime_platform_table(&handler),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> {
     info!("Add Kata Containers as a supported runtime for containerd");
 
@@ -537,6 +620,18 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
             );
         }
     }
+
+    let configuration_file = get_containerd_output_path(&paths);
+    let pluginid = match paths.plugin_id.as_deref() {
+        Some(plugin_id) => plugin_id,
+        None => get_containerd_pluginid(&paths.config_file, runtime)?,
+    };
+    reconcile_containerd_runtimes(
+        &configuration_file,
+        pluginid,
+        &config.dest_dir,
+        &configured_containerd_handlers(config),
+    )?;
 
     configure_user_containerd_drop_in(config, &paths)?;
 
@@ -1196,6 +1291,99 @@ mod tests {
             version,
             expected_error
         );
+    }
+
+    const DEST_DIR: &str = "/opt/kata";
+
+    fn write_handler(path: &Path, pluginid: &str, handler: &str, dest_dir: &str) {
+        let mut params = make_params(handler, Some("\"nydus\""));
+        params.runtime_path = format!("\"{dest_dir}/bin/containerd-shim-kata-v2\"");
+        params.config_path = format!(
+            "\"{dest_dir}/share/defaults/kata-containers/custom-runtimes/{handler}/configuration-qemu.toml\""
+        );
+        write_containerd_runtime_config(path, pluginid, &params).unwrap();
+    }
+
+    fn handler_exists(path: &Path, pluginid: &str, handler: &str) -> bool {
+        toml_utils::get_toml_value(
+            path,
+            &format!(
+                "{}.\"{}\".runtime_type",
+                containerd_runtimes_table(pluginid),
+                handler
+            ),
+        )
+        .is_ok()
+    }
+
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
+    fn stale_kata_handlers_are_removed(#[case] pluginid: &str) {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "").unwrap();
+
+        write_handler(path, pluginid, "kata-qemu", DEST_DIR);
+        write_handler(path, pluginid, "kata-qemu-debug", DEST_DIR);
+        write_handler(path, pluginid, "kata-qemu-devkit", DEST_DIR);
+
+        let configured = HashSet::from(["kata-qemu".to_string()]);
+        reconcile_containerd_runtimes(path, pluginid, DEST_DIR, &configured).unwrap();
+
+        assert!(handler_exists(path, pluginid, "kata-qemu"));
+        assert!(!handler_exists(path, pluginid, "kata-qemu-debug"));
+        assert!(!handler_exists(path, pluginid, "kata-qemu-devkit"));
+
+        if !is_containerd_v3_config(pluginid) {
+            return;
+        }
+
+        let snapshotter_of = |handler: &str| {
+            toml_utils::get_toml_value(
+                path,
+                &format!("{}.snapshotter", containerd_runtime_platform_table(handler)),
+            )
+        };
+        assert_eq!(snapshotter_of("kata-qemu").unwrap(), "nydus");
+        assert!(snapshotter_of("kata-qemu-debug").is_err());
+        assert!(snapshotter_of("kata-qemu-devkit").is_err());
+    }
+
+    #[test]
+    fn handlers_of_others_are_left_alone() {
+        let pluginid = CONTAINERD_V3_RUNTIME_PLUGIN_ID;
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "").unwrap();
+
+        write_handler(path, pluginid, "kata-qemu-debug", "/opt/kata-dev");
+        let mut runc = make_params("runc", None);
+        runc.runtime_path = "\"/usr/bin/runc\"".to_string();
+        runc.config_path = "\"/etc/runc/config.toml\"".to_string();
+        write_containerd_runtime_config(path, pluginid, &runc).unwrap();
+
+        reconcile_containerd_runtimes(path, pluginid, DEST_DIR, &HashSet::new()).unwrap();
+
+        assert!(handler_exists(path, pluginid, "kata-qemu-debug"));
+        assert!(handler_exists(path, pluginid, "runc"));
+    }
+
+    #[test]
+    fn reconcile_containerd_runtimes_without_handlers_is_noop() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "version = 3\n").unwrap();
+
+        reconcile_containerd_runtimes(
+            path,
+            CONTAINERD_V3_RUNTIME_PLUGIN_ID,
+            DEST_DIR,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "version = 3\n");
     }
 
     const LEGACY_IMPORT: &str = "/opt/kata/containerd/config.d/kata-deploy.toml";
