@@ -44,7 +44,7 @@ type VMConfig struct {
 }
 
 func (c *VMConfig) Valid() error {
-	return validateHypervisorConfig(&c.HypervisorConfig)
+	return validateHypervisorConfig(&c.HypervisorConfig, c.HypervisorType)
 }
 
 // ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.
