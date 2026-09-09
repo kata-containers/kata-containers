@@ -356,7 +356,11 @@ EOF
 
     run python3 "${HOME}"/.cicd/venv/langchain_nim.py
 
-    [[ "${status}" -eq 0 ]]
+    [[ "${status}" -eq 0 ]] || {
+        echo "# LangChain subprocess output:" >&3
+        echo "${output}" >&3
+        false
+    }
     [[ "${output}" == *"Paris"* ]]
 
     echo "# QUESTION: ${QUESTION}" >&3
@@ -515,7 +519,11 @@ print("#"+ result.get("answer"))
 EOF
 
     run python3 "${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
-    [[ "${status}" -eq 0 ]]
+    [[ "${status}" -eq 0 ]] || {
+        echo "# RAG subprocess output:" >&3
+        echo "${output}" >&3
+        false
+    }
 
     ANSWER=$(echo "${output}" | cut -d '#' -f2)
     [[ -n "${ANSWER}" ]]
