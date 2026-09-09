@@ -127,11 +127,11 @@ const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
 /// or /usr/sbin, we need to check both of them
 const USR_IPTABLES_SAVE: &str = "/usr/sbin/iptables-save";
 const IPTABLES_SAVE: &str = "/sbin/iptables-save";
-const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-store";
+const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-restore";
 const IPTABLES_RESTORE: &str = "/sbin/iptables-restore";
 const USR_IP6TABLES_SAVE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
-const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-save";
+const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-restore";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
 const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
@@ -3556,19 +3556,15 @@ OtherField:other
     async fn test_ip_tables() {
         skip_if_not_root!();
 
-        let iptables_cmd_list = [
-            USR_IPTABLES_SAVE,
-            USR_IP6TABLES_SAVE,
-            USR_IPTABLES_RESTORE,
-            USR_IP6TABLES_RESTORE,
-            IPTABLES_SAVE,
-            IP6TABLES_SAVE,
-            IPTABLES_RESTORE,
-            IP6TABLES_RESTORE,
+        let iptables_cmd_pairs = [
+            (USR_IPTABLES_SAVE, IPTABLES_SAVE),
+            (USR_IP6TABLES_SAVE, IP6TABLES_SAVE),
+            (USR_IPTABLES_RESTORE, IPTABLES_RESTORE),
+            (USR_IP6TABLES_RESTORE, IP6TABLES_RESTORE),
         ];
 
-        for cmd in iptables_cmd_list {
-            if !check_command(cmd) {
+        for (usr_sbin_cmd, sbin_cmd) in iptables_cmd_pairs {
+            if !check_command(usr_sbin_cmd) && !check_command(sbin_cmd) {
                 warn!(
                     sl(),
                     "one or more commands for ip tables test are missing, skip it"
