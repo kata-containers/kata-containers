@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Ant Group
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "kata-monitor-rs"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.44", features = ["full"] }
+
+# HTTP server and Unix Socket client
+hyper = { version = "1.9", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto", "client-legacy", "http1"] }
+http-body-util = "0.1"
+bytes = "1"
+hyperlocal = "0.9"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Filesystem watching
+notify = "8.0"
+
+# Metrics
+prometheus = { version = "0.14", features = ["process"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Compression
+flate2 = "1.0"
