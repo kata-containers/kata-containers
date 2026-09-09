@@ -162,6 +162,43 @@ pub fn delete_toml_value(file_path: &Path, path: &str) -> Result<()> {
     Ok(())
 }
 
+/// The keys of the table at `path`, or an empty Vec if it does not exist.
+pub fn get_toml_table_keys(file_path: &Path, path: &str) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
+
+    let (_header, toml_content) = split_non_toml_header(&content);
+    let doc = toml_content
+        .parse::<DocumentMut>()
+        .context("Failed to parse TOML")?;
+
+    let parts = parse_toml_path(path)?;
+
+    let mut current_table = doc.as_table();
+    for (i, part) in parts.iter().enumerate() {
+        let Some(item) = current_table.get(part.as_str()) else {
+            return Ok(Vec::new());
+        };
+
+        if i == parts.len() - 1 {
+            return match item {
+                Item::Table(table) => Ok(table.iter().map(|(key, _)| key.to_string()).collect()),
+                Item::Value(Value::InlineTable(table)) => {
+                    Ok(table.iter().map(|(key, _)| key.to_string()).collect())
+                }
+                _ => Err(anyhow::anyhow!("Path '{path}' is not a table")),
+            };
+        }
+
+        match item {
+            Item::Table(table) => current_table = table,
+            _ => return Ok(Vec::new()),
+        }
+    }
+
+    Ok(Vec::new())
+}
+
 /// Get a TOML value at a given path
 pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
     let content = std::fs::read_to_string(file_path)
@@ -1754,6 +1791,50 @@ imports = ["/etc/containerd/conf.d/*.toml", "/opt/kata/containerd/config.d/kata-
         )
         .unwrap();
         assert_eq!(runtime_type, "io.containerd.kata-qemu.v2");
+    }
+
+    #[test]
+    fn test_get_toml_table_keys() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        std::fs::write(
+            temp_path,
+            concat!(
+                "[plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu]\n",
+                "runtime_type = \"io.containerd.kata-qemu.v2\"\n",
+                "[plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.options]\n",
+                "ConfigPath = \"/opt/kata/configuration.toml\"\n",
+                "[plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.runc]\n",
+                "runtime_type = \"io.containerd.runc.v2\"\n",
+            ),
+        )
+        .unwrap();
+
+        let keys = get_toml_table_keys(
+            temp_path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes",
+        )
+        .unwrap();
+        assert_eq!(keys, vec!["kata-qemu", "runc"]);
+
+        assert!(get_toml_table_keys(temp_path, ".plugins.\"nope\".runtimes")
+            .unwrap()
+            .is_empty());
+        assert!(get_toml_table_keys(
+            temp_path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.runc.runtime_type"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_get_toml_table_keys_inline_table() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        std::fs::write(temp_path, "runtimes = { kata-qemu = {}, runc = {} }\n").unwrap();
+
+        let keys = get_toml_table_keys(temp_path, ".runtimes").unwrap();
+        assert_eq!(keys, vec!["kata-qemu", "runc"]);
     }
 
     #[test]
