@@ -12,6 +12,9 @@
 
 SCRIPT_DIR=$(dirname "$0")
 
+# shellcheck disable=SC1091 # import based on variable
+source "${SCRIPT_DIR}/cluster/selinux_helpers.sh"
+
 ##################
 # Helper functions
 ##################
@@ -156,6 +159,12 @@ az network vnet subnet update \
 # Label the nodes
 for NODE_NAME in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do [[ "${NODE_NAME}" =~ 'worker' ]] && kubectl label node "${NODE_NAME}" node.kubernetes.io/worker=; done
 
+WORKER_NODES=$(oc get nodes | awk '{if ($3 == "worker") { print $1 } }')
+NUM_NODES=$(echo "${WORKER_NODES}" | wc -w)
+
+# Selinux context is currently not handled by kata-deploy
+apply_relabel_selinux "${SCRIPT_DIR}/cluster/deployments" "${NUM_NODES}"
+
 # CAA artifacts
 if [[ -z "${CAA_TAG}" ]]; then
 	if [[ -n "${CAA_IMAGE}" ]]; then
@@ -234,6 +243,7 @@ SECONDS=0
 ( while [[ "${SECONDS}" -lt 360 ]]; do
     kubectl get runtimeclass | grep -q kata-remote && exit 0
 done; exit 1 ) || { echo "kata-remote runtimeclass not initialized in 60s"; kubectl -n confidential-containers-system get all; echo; echo "kubectl -n confidential-containers-system describe all"; kubectl -n confidential-containers-system describe all; echo; echo CAA; kubectl -n confidential-containers-system logs daemonset.apps/cloud-api-adaptor-daemonset; echo pre-install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-pre-install-daemon; echo install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-daemon-install; exit 1; }
+rerun_relabel_selinux "${NUM_NODES}"
 
 
 ################
