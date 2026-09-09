@@ -904,7 +904,7 @@ func setupInitdata(clh *cloudHypervisor, hypervisorConfig *HypervisorConfig) err
 }
 
 // StartVM will start the VMM and boot the virtual machine for the given sandbox.
-func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
+func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) (retErr error) {
 	span, ctx := katatrace.Trace(ctx, clh.Logger(), "StartVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
 	defer span.End()
 
@@ -933,7 +933,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 	defer func() {
-		if err == nil {
+		if retErr == nil {
 			return
 		}
 
