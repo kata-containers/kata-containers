@@ -18,7 +18,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
@@ -471,21 +470,21 @@ func getHostCPUs() uint32 {
 	return uint32(cores)
 }
 
-// Current cpu number should not larger than defaultMaxVCPUs()
-func getCurrentCpuNum() uint32 {
+// Current CPU count must not exceed the hypervisor's maximum.
+func getCurrentCpuNum(hypervisorType vc.HypervisorType) uint32 {
 	var cpu uint32
 	h := hypervisor{}
 
 	cpu = getHostCPUs()
-	if cpu > h.defaultMaxVCPUs() {
-		cpu = h.defaultMaxVCPUs()
+	if cpu > h.defaultMaxVCPUs(hypervisorType) {
+		cpu = h.defaultMaxVCPUs(hypervisorType)
 	}
 
 	return cpu
 }
 
-func (h hypervisor) defaultVCPUs() float32 {
-	numCPUs := float32(getCurrentCpuNum())
+func (h hypervisor) defaultVCPUs(hypervisorType vc.HypervisorType) float32 {
+	numCPUs := float32(getCurrentCpuNum(hypervisorType))
 
 	if h.NumVCPUs < 0 || h.NumVCPUs > numCPUs {
 		return numCPUs
@@ -497,9 +496,9 @@ func (h hypervisor) defaultVCPUs() float32 {
 	return h.NumVCPUs
 }
 
-func (h hypervisor) defaultMaxVCPUs() uint32 {
+func (h hypervisor) defaultMaxVCPUs(hypervisorType vc.HypervisorType) uint32 {
 	numcpus := getHostCPUs()
-	maxvcpus := govmm.MaxVCPUs()
+	maxvcpus := vc.MaxVCPUs(hypervisorType)
 	reqVCPUs := h.DefaultMaxVCPUs
 
 	//don't exceed the number of physical CPUs. If a default is not provided, use the
@@ -883,8 +882,8 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		FirmwarePath:          firmware,
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:    h.kernelVerityParams(),
-		NumVCPUsF:             h.defaultVCPUs(),
-		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
+		NumVCPUsF:             h.defaultVCPUs(vc.FirecrackerHypervisor),
+		DefaultMaxVCPUs:       h.defaultMaxVCPUs(vc.FirecrackerHypervisor),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
 		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
@@ -1061,8 +1060,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelVerityParams:            h.kernelVerityParams(),
 		HypervisorMachineType:         machineType,
 		QgsPort:                       h.qgsPort(),
-		NumVCPUsF:                     h.defaultVCPUs(),
-		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),
+		NumVCPUsF:                     h.defaultVCPUs(vc.QemuHypervisor),
+		DefaultMaxVCPUs:               h.defaultMaxVCPUs(vc.QemuHypervisor),
 		MemorySize:                    h.defaultMemSz(),
 		MemSlots:                      h.defaultMemSlots(),
 		MemOffset:                     h.defaultMemOffset(),
@@ -1251,8 +1250,8 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelParams:                   vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:             h.kernelVerityParams(),
 		HypervisorMachineType:          machineType,
-		NumVCPUsF:                      h.defaultVCPUs(),
-		DefaultMaxVCPUs:                h.defaultMaxVCPUs(),
+		NumVCPUsF:                      h.defaultVCPUs(vc.ClhHypervisor),
+		DefaultMaxVCPUs:                h.defaultMaxVCPUs(vc.ClhHypervisor),
 		MemorySize:                     h.defaultMemSz(),
 		MemSlots:                       h.defaultMemSlots(),
 		MemOffset:                      h.defaultMemOffset(),
@@ -1330,8 +1329,8 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:         rootfsType,
 		KernelParams:       vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams: h.kernelVerityParams(),
-		NumVCPUsF:          h.defaultVCPUs(),
-		DefaultMaxVCPUs:    h.defaultMaxVCPUs(),
+		NumVCPUsF:          h.defaultVCPUs(vc.DragonballHypervisor),
+		DefaultMaxVCPUs:    h.defaultMaxVCPUs(vc.DragonballHypervisor),
 		MemorySize:         h.defaultMemSz(),
 		MemSlots:           h.defaultMemSlots(),
 		EntropySource:      h.GetEntropySource(),
@@ -1426,8 +1425,8 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelParams:                  vc.DeserializeParams(strings.Fields(kernelParams)),
 		KernelVerityParams:            h.kernelVerityParams(),
 		HypervisorMachineType:         machineType,
-		NumVCPUsF:                     h.defaultVCPUs(),
-		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),
+		NumVCPUsF:                     h.defaultVCPUs(vc.StratovirtHypervisor),
+		DefaultMaxVCPUs:               h.defaultMaxVCPUs(vc.StratovirtHypervisor),
 		MemorySize:                    h.defaultMemSz(),
 		MemSlots:                      h.defaultMemSlots(),
 		MemOffset:                     h.defaultMemOffset(),

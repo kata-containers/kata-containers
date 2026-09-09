@@ -166,7 +166,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		HypervisorMachineType: machineType,
 		NumVCPUsF:             float32(defaultVCPUCount),
-		DefaultMaxVCPUs:       getCurrentCpuNum(),
+		DefaultMaxVCPUs:       getCurrentCpuNum(vc.QemuHypervisor),
 		MemorySize:            defaultMemSize,
 		DefaultMaxMemorySize:  maxMemory,
 		DisableBlockDeviceUse: disableBlockDevice,
@@ -973,13 +973,13 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 func TestHypervisorDefaults(t *testing.T) {
 	assert := assert.New(t)
 
-	numCPUs := getCurrentCpuNum()
+	numCPUs := getCurrentCpuNum(vc.QemuHypervisor)
 
 	h := hypervisor{}
 
 	assert.Equal(h.machineType(), defaultMachineType, "default hypervisor machine type wrong")
-	assert.Equal(h.defaultVCPUs(), float32(defaultVCPUCount), "default vCPU number is wrong")
-	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(vc.QemuHypervisor), float32(defaultVCPUCount), "default vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(vc.QemuHypervisor), numCPUs, "default max vCPU number is wrong")
 	assert.Equal(h.defaultMemSz(), defaultMemSize, "default memory size is wrong")
 
 	machineType := "foo"
@@ -988,26 +988,59 @@ func TestHypervisorDefaults(t *testing.T) {
 
 	// auto inferring
 	h.NumVCPUs = -1
-	assert.Equal(h.defaultVCPUs(), float32(numCPUs), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(vc.QemuHypervisor), float32(numCPUs), "default vCPU number is wrong")
 
 	h.NumVCPUs = 2
-	assert.Equal(h.defaultVCPUs(), float32(2), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(vc.QemuHypervisor), float32(2), "default vCPU number is wrong")
 
 	h.NumVCPUs = float32(numCPUs + 1)
-	assert.Equal(h.defaultVCPUs(), float32(numCPUs), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(vc.QemuHypervisor), float32(numCPUs), "default vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = 2
-	assert.Equal(h.defaultMaxVCPUs(), uint32(2), "default max vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(vc.QemuHypervisor), uint32(2), "default max vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = numCPUs + 1
-	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(vc.QemuHypervisor), numCPUs, "default max vCPU number is wrong")
 
 	maxvcpus := govmm.MaxVCPUs()
 	h.DefaultMaxVCPUs = maxvcpus + 1
-	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(vc.QemuHypervisor), numCPUs, "default max vCPU number is wrong")
 
 	h.MemorySize = 1024
 	assert.Equal(h.defaultMemSz(), uint32(1024), "default memory size is wrong")
+}
+
+func TestCloudHypervisorCPUDefaults(t *testing.T) {
+	if goruntime.GOARCH != "amd64" {
+		t.Skip("512-vCPU guests require x86_64 Cloud Hypervisor")
+	}
+	if _, err := os.Stat("/dev/mshv"); err == nil {
+		t.Skip("512-vCPU guests require the KVM backend")
+	}
+
+	savedCPUInfo := procCPUInfo
+	t.Cleanup(func() { procCPUInfo = savedCPUInfo })
+	procCPUInfo = filepath.Join(t.TempDir(), "cpuinfo")
+
+	for _, tc := range []struct {
+		name                                     string
+		hostCPUs, requested, clhVCPUs, qemuVCPUs uint32
+	}{
+		{"host limit", 128, 512, 128, 128},
+		{"512 vCPUs", 1024, 512, 512, govmm.MaxVCPUs()},
+		{"hypervisor limit", 1024, 513, 512, govmm.MaxVCPUs()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(procCPUInfo, []byte(strings.Repeat("processor : 0\n", int(tc.hostCPUs))), 0600); err != nil {
+				t.Fatal(err)
+			}
+			h := hypervisor{NumVCPUs: float32(tc.requested), DefaultMaxVCPUs: tc.requested}
+			assert.Equal(t, tc.clhVCPUs, h.defaultMaxVCPUs(vc.ClhHypervisor))
+			assert.Equal(t, float32(tc.clhVCPUs), h.defaultVCPUs(vc.ClhHypervisor))
+			assert.Equal(t, tc.qemuVCPUs, h.defaultMaxVCPUs(vc.QemuHypervisor))
+			assert.Equal(t, float32(tc.qemuVCPUs), h.defaultVCPUs(vc.QemuHypervisor))
+		})
+	}
 }
 
 func TestHypervisorDefaultsHypervisor(t *testing.T) {

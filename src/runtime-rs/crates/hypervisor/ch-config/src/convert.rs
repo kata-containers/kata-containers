@@ -1339,17 +1339,17 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: 1.0,
-                    default_maxvcpus: 256,
+                    default_vcpus: 512.0,
+                    default_maxvcpus: 512,
                     ..Default::default()
                 },
                 guest_protection: GuestProtection::NoProtection,
                 result: Ok(CpusConfig {
-                    boot_vcpus: 1,
-                    max_vcpus: 256,
+                    boot_vcpus: 512,
+                    max_vcpus: 512,
                     nested: cpu_nested_config(None),
                     topology: Some(CpuTopology {
-                        cores_per_die: 256,
+                        cores_per_die: 512,
 
                         ..topology
                     }),

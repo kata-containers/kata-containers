@@ -729,7 +729,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		s.Logger().WithError(err).Debug("restore sandbox failed")
 	}
 
-	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
+	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig, sandboxConfig.HypervisorType); err != nil {
 		return nil, err
 	}
 

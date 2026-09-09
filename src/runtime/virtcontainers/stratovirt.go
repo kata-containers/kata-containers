@@ -575,7 +575,7 @@ func (s *stratovirt) setVMConfig(id string, hypervisorConfig *HypervisorConfig) 
 	span, _ := katatrace.Trace(s.ctx, s.Logger(), "setStratoVirtUp", stratovirtTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	if err := validateHypervisorConfig(hypervisorConfig); err != nil {
+	if err := validateHypervisorConfig(hypervisorConfig, StratovirtHypervisor); err != nil {
 		return err
 	}
 
