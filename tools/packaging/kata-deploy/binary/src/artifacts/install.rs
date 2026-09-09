@@ -2050,7 +2050,7 @@ async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use rstest::rstest;
 
@@ -2610,7 +2610,9 @@ mod tests {
         assert!(content.contains("debug_console_enabled = true"));
     }
 
-    fn test_config(shim: &str, dest_dir: &str) -> crate::config::Config {
+    /// Shared with other modules' tests: Config has no Default, and one
+    /// hand-built literal is enough to keep in step with its fields.
+    pub(crate) fn test_config(shim: &str, dest_dir: &str) -> crate::config::Config {
         crate::config::Config {
             node_name: "test".to_string(),
             debug: true,
