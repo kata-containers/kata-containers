@@ -20,6 +20,11 @@ setup() {
 	maxsyspath="/sys/fs/cgroup/cpu.max"
 
 	total_cpus=2
+	# A static sandbox boots ceil(overhead_vcpus + limit) vCPUs, and the *azure-runtime-rs
+	# classes set overhead_vcpus = 0, so the 1 vCPU limit is not rounded up.
+	if [[ "${KATA_HYPERVISOR}" == *azure-runtime-rs ]]; then
+		total_cpus=1
+	fi
 	# https://github.com/containers/crun/blob/main/crun.1.md#cgroup-v2
 	# The weight is calculated by the:
 	# weight = (1 + ((request - 2) * 9999) / 262142)

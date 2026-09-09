@@ -31,8 +31,14 @@ setup() {
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
 	local -r retries="10"
-	local -r max_number_cpus="2"
+	local max_number_cpus="2"
 	local number_cpus=""
+
+	# A static sandbox boots ceil(overhead_vcpus + limit) vCPUs, and the *azure-runtime-rs
+	# classes set overhead_vcpus = 0, so the 1 vCPU (500m + 500m) limit is not rounded up.
+	if [[ "${KATA_HYPERVISOR}" == *azure-runtime-rs ]]; then
+		max_number_cpus="1"
+	fi
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
