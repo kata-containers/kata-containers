@@ -13,7 +13,7 @@ import (
 
 	"github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/types/task"
-	"github.com/containerd/containerd/mount"
+	"github.com/containerd/containerd/v2/core/mount"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
