@@ -948,6 +948,29 @@ function load_dm_verity_modules() {
 		die "the dm_verity kernel module is not available after modprobe"
 }
 
+# Gives the node what only kata-deploy's per-node Jobs would have brought it.
+#
+# The job pipeline stages erofs-utils onto the node (nodeBinaries) and has a
+# privileged stage that loads the modules EROFS needs. The DaemonSet does
+# neither - it is one container with no such ordering - so a node it installs
+# has to arrive with both, and the install's host check fails it if it does not.
+#
+# Which mode this applies to is the caller's to decide. Nothing is prepared for
+# job mode, deliberately: doing so would hide its own stages failing to.
+function prepare_host_for_erofs() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] || return 0
+
+	# Also loads the erofs module.
+	install_erofs_utils
+
+	# EROFS mounts its layer blobs through loop devices.
+	sudo modprobe loop
+
+	if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
+		load_dm_verity_modules
+	fi
+}
+
 # Points containerd at the erofs differ and snapshotter, as a conf.d drop-in.
 #
 # This is the non-Kubernetes counterpart of what kata-deploy writes on the k8s

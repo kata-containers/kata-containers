@@ -577,19 +577,17 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		kubeadm|vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				# No erofs-utils is installed on the node on purpose: these
-				# runners package nothing new enough, which is the very case
-				# nodeBinaries exists for, so the install has to bring its
-				# own.
-
 				# fsverity is only needed here because, unlike
 				# the docker and nerdctl jobs, these do enable
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# erofs, loop and the dm-verity targets are left unloaded on
-				# purpose: kata-deploy's own privileged stage loads and persists
-				# them, and pre-loading them here would hide it failing to.
+				# erofs-utils and the modules EROFS needs are deliberately not
+				# prepared here. What the node needs depends on the mode being
+				# deployed, and this single cluster serves both: the erofs leg
+				# runs the job-mode host-module suite alongside the daemonset
+				# ones. prepare_host_for_erofs does it per deploy instead, so
+				# job mode still faces a bare node and has to load its own.
 
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
@@ -904,10 +902,18 @@ function helm_helper() {
 			done
 		fi
 
-		# The node has no erofs-utils of its own; see deploy_k8s.
+		# The node has none of its own; see deploy_k8s. Job mode stages them
+		# from an image, which is the case nodeBinaries exists for. The
+		# DaemonSet cannot stage anything, so there the node is given
+		# erofs-utils directly and asking for nodeBinaries would fail the
+		# render.
 		if [[ "${SNAPSHOTTER}" == "erofs" ]]; then
-			yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
-			yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
+			if [[ "${deployment_mode}" == "job" ]]; then
+				yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
+				yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
+			else
+				prepare_host_for_erofs
+			fi
 		fi
 
 		if [[ -n "${EROFS_SNAPSHOTTER_MODE}" ]]; then

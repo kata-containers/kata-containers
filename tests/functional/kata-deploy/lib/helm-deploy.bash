@@ -5,6 +5,9 @@
 #
 # Shared helm deployment helpers for kata-deploy tests
 #
+# Expects tests/common.bash to have been loaded: the EROFS host preparation
+# below calls install_erofs_utils and load_dm_verity_modules from it.
+#
 # Required environment variables:
 #   DOCKER_REGISTRY - Container registry for kata-deploy image
 #   DOCKER_REPO     - Repository name for kata-deploy image
@@ -16,7 +19,8 @@
 #   EROFS_SNAPSHOTTER_MODE      - "disk" or "memory"
 #   EROFS_DMVERITY              - Set to "dmverity" to enable dm-verity
 #   EROFS_MERGE_MODE            - "merged" or "unmerged"
-#   EROFS_UTILS_IMAGE           - Image kata-deploy takes erofs-utils from
+#   EROFS_UTILS_IMAGE           - Image kata-deploy takes erofs-utils from, in
+#                                 job mode
 
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
@@ -127,14 +131,47 @@ get_chart_path() {
 	echo "${script_dir}/../../../../tools/packaging/kata-deploy/helm-chart/kata-deploy"
 }
 
+# The mode the deploy about to happen will install: what the caller asked for,
+# or the chart's own default. The host preparation and the values differ by mode,
+# so a guess would prepare the node for a release that is not coming.
+#
+# Arguments:
+#   $1 - (Optional) the caller's extra values file
+#   $@ - (Optional) the caller's extra helm arguments
+requested_deployment_mode() {
+	local extra_values_file="${1:-}"
+	shift || true
+	local arg mode
+
+	# --set wins over any values file, in whichever order helm was given them.
+	for arg in "$@"; do
+		case "${arg}" in
+			*deploymentMode=*)
+				echo "${arg##*deploymentMode=}" | cut -d, -f1
+				return
+				;;
+		esac
+	done
+
+	if [[ -n "${extra_values_file}" && -f "${extra_values_file}" ]]; then
+		mode="$(yq -r '.deploymentMode // ""' "${extra_values_file}")"
+		if [[ -n "${mode}" ]]; then
+			echo "${mode}"
+			return
+		fi
+	fi
+
+	yq -r '.deploymentMode' "$(get_chart_path)/values.yaml"
+}
+
 # Generate base values YAML that disables all shims except the specified one
 # Arguments:
 #   $1 - Output file path
-#   $2 - (Optional) Additional values file to merge
+#   $2 - Deployment mode the values are for ("daemonset" or "job")
 # shellcheck disable=SC2154
 generate_base_values() {
 	local output_file="$1"
-	local extra_values_file="${2:-}"
+	local deployment_mode="${2:-daemonset}"
 
 	local k8s_distribution="${KUBERNETES}"
 	if [[ "${k8s_distribution}" == "kubeadm" ]]; then
@@ -149,6 +186,20 @@ generate_base_values() {
 			erofs_dmverity="true"
 		fi
 
+		# Job mode takes erofs-utils from an image, covering the path a node
+		# packaging none of its own actually takes. The DaemonSet cannot stage
+		# binaries at all, so there prepare_host_for_erofs puts them on the node
+		# instead and asking for them here would only fail the render.
+		local node_binaries_values=""
+		if [[ "${deployment_mode}" == "job" ]]; then
+			node_binaries_values="
+nodeBinaries:
+  erofs-utils:
+    image: \"${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}\"
+    binaries: [mkfs.erofs]
+"
+		fi
+
 		shim_snapshotter_values="    containerd:
       snapshotter: erofs"
 		snapshotter_values="snapshotter:
@@ -156,13 +207,7 @@ generate_base_values() {
   erofsSnapshotterMode: \"${EROFS_SNAPSHOTTER_MODE:-}\"
   erofsDmverity: ${erofs_dmverity}
   erofsMergeMode: \"${EROFS_MERGE_MODE:-}\"
-
-# The node has no erofs-utils of its own; see deploy_k8s.
-nodeBinaries:
-  erofs-utils:
-    image: \"${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}\"
-    binaries: [mkfs.erofs]
-
+${node_binaries_values}
 # fs-verity would also need the backing filesystem prepared for it, and these
 # tests only care about dm-verity.
 containerd:
@@ -209,12 +254,22 @@ deploy_kata() {
 
 	local chart_path
 	local values_yaml
+	local deployment_mode
 
 	chart_path="$(get_chart_path)"
 	values_yaml=$(mktemp)
 
+	deployment_mode="$(requested_deployment_mode "${extra_values_file}" \
+		"${extra_helm_args[@]}")"
+
+	# The DaemonSet stages no binaries and loads no modules, so the node has to
+	# arrive with what EROFS needs. Job mode brings its own, and is left alone.
+	if [[ "${deployment_mode}" == "daemonset" ]]; then
+		prepare_host_for_erofs
+	fi
+
 	# Generate base values
-	generate_base_values "${values_yaml}"
+	generate_base_values "${values_yaml}" "${deployment_mode}"
 
 	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
