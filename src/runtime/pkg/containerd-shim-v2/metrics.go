@@ -8,8 +8,8 @@ package containerdshim
 import (
 	"context"
 
-	cgroupsv1 "github.com/containerd/cgroups/stats/v1"
-	cgroupsv2 "github.com/containerd/cgroups/v2/stats"
+	cgroupsv1 "github.com/containerd/cgroups/v3/cgroup1/stats"
+	cgroupsv2 "github.com/containerd/cgroups/v3/cgroup2/stats"
 	"github.com/containerd/containerd/protobuf"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
