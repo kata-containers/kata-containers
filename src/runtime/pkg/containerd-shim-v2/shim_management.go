@@ -21,7 +21,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 
-	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+	cdshim "github.com/containerd/containerd/v2/pkg/shim"
 	mutils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -279,7 +279,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	}
 
 	// write metrics address to filesystem
-	if err := cdshim.WriteAddress("monitor_address", metricsAddress); err != nil {
+	if err := os.WriteFile("monitor_address", []byte(metricsAddress), 0o644); err != nil {
 		shimMgtLog.WithError(err).Errorf("failed to write metrics address")
 		return
 	}

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
+	ctrAnnotations "github.com/kata-containers/kata-containers/src/runtime/pkg/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
