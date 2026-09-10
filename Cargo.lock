@@ -3603,6 +3603,7 @@ dependencies = [
  "rstest",
  "rtnetlink 0.14.1",
  "runtime-spec",
+ "rustix 0.38.44",
  "rustjail",
  "s390_pv_core",
  "safe-path",
