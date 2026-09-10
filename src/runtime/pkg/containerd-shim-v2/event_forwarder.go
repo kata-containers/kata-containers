@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/v2/core/events"
 )
 
 type forwarderType string
