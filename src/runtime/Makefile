@@ -324,6 +324,10 @@ DEFKUBELETROOTDIR := /var/lib/kubelet
 DEFPODRESOURCEAPISOCK := ""
 DEFPODRESOURCEAPISOCK_NV := "$(DEFKUBELETROOTDIR)/pod-resources/kubelet.sock"
 
+# PodResources sources consulted for device cold plug. Same default for
+# every flavor/hypervisor target (no _NV split).
+DEFPODRESOURCEDEVICESOURCES := [\"device-plugin\"]
+
 SED = sed
 
 CLI_DIR = cmd
@@ -837,6 +841,7 @@ USER_VARS += DEFDISABLEIMAGENVDIMM_NV
 USER_VARS += DEFDISABLEIMAGENVDIMM_CLH
 USER_VARS += DEFPODRESOURCEAPISOCK
 USER_VARS += DEFPODRESOURCEAPISOCK_NV
+USER_VARS += DEFPODRESOURCEDEVICESOURCES
 
 V              = @
 Q              = $(V:1=)
