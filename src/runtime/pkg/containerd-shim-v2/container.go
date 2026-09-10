@@ -12,7 +12,8 @@ import (
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	"github.com/containerd/containerd/api/types/task"
-	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/errdefs"
+	"github.com/containerd/errdefs/pkg/errgrpc"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -43,7 +44,7 @@ type container struct {
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
 	if r == nil {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, " CreateTaskRequest points to nil")
+		return nil, errgrpc.ToGRPCf(errdefs.ErrInvalidArgument, " CreateTaskRequest points to nil")
 	}
 
 	// in order to avoid deferencing a nil pointer in test
