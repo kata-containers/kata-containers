@@ -18,13 +18,13 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 byte-unit = "5.1.6"
 cgroups.workspace = true
-futures = "0.3.11"
+futures = { workspace = true }
 lazy_static = { workspace = true }
 libc = { workspace = true }
 netns-rs = { workspace = true }
 nix = { workspace = true }
 rand = { workspace = true }
-scopeguard = "1.0.0"
+scopeguard = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
@@ -36,7 +36,7 @@ oci-spec = { workspace = true }
 inotify = "0.11.0"
 walkdir = "2.5.0"
 flate2 = "1.1"
-tempfile = "3.19.1"
+tempfile = { workspace = true }
 hex = "0.4"
 base64 = { workspace = true }
 bytes = { workspace = true }
@@ -48,9 +48,9 @@ hyperlocal = { workspace = true }
 ## Dependencies from `rust-netlink`
 ## 0.30+ parses IFLA_INET6_CONF on kernels 6.17+ (240-byte blob; DEVCONF_FORCE_FORWARDING).
 futures-lite = "2"
-netlink-packet-core = "0.8"
-netlink-packet-route = "0.30"
-rtnetlink = "0.21"
+netlink-packet-core = { workspace = true }
+netlink-packet-route = { workspace = true }
+rtnetlink = { workspace = true }
 
 # Local dependencies
 agent = { workspace = true }
