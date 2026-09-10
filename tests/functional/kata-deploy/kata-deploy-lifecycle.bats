@@ -153,10 +153,6 @@ EOF
 	uninstall_kata
 	echo "# Uninstall complete, verifying cleanup..." >&3
 
-	# Wait for node to recover — containerd restart during cleanup may
-	# cause brief unavailability (especially on k3s/rke2/microk8s).
-	kubectl wait nodes --timeout=300s --all --for condition=Ready=True
-
 	# RuntimeClasses must be gone (filter out AKS-managed ones)
 	local rc_count
 	rc_count=$(kubectl get runtimeclasses --no-headers 2>/dev/null | grep -v "kata-mshv-vm-isolation" | grep -c "kata" || true)

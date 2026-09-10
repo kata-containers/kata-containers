@@ -76,6 +76,42 @@ wait_for_api_and_retry_uninstall() {
 		--ignore-not-found --wait --timeout 5m || true
 }
 
+# True when every node reports Ready. An unreachable API answers nothing, so
+# that counts as false here and leaves the caller to ask again.
+all_nodes_ready() {
+	local ready
+
+	ready="$(kubectl get nodes -o json --request-timeout=10s 2>/dev/null |
+		jq -r '.items[].status.conditions[] | select(.type == "Ready") | .status')" ||
+		return 1
+
+	[[ -n "${ready}" ]] || return 1
+
+	! grep -qv '^True$' <<< "${ready}"
+}
+
+# Wait for every node to report Ready, which after an uninstall means waiting
+# for the API to come back too.
+#
+# `kubectl wait` is a single watch and gives up when its connection breaks,
+# which is exactly what a control plane restarting under it does - and on
+# microk8s the control plane runs on the very containerd the SIGTERM cleanup
+# restarts. Polling makes an API that is still on its way back a retry rather
+# than a verdict.
+# Arguments:
+#   $1 - (Optional) seconds to wait, default 300
+wait_for_nodes_ready() {
+	local timeout="${1:-300}"
+
+	if waitForProcess "${timeout}" 5 all_nodes_ready; then
+		return 0
+	fi
+
+	echo "not every node became Ready within ${timeout}s" >&2
+	kubectl get nodes || true
+	return 1
+}
+
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
 		small)

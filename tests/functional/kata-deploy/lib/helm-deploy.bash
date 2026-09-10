@@ -5,8 +5,7 @@
 #
 # Shared helm deployment helpers for kata-deploy tests
 #
-# Expects tests/common.bash to have been loaded: the EROFS host preparation
-# below calls install_erofs_utils and load_dm_verity_modules from it.
+# Expects tests/common.bash and tests/gha-run-k8s-common.sh to have been loaded.
 #
 # Required environment variables:
 #   DOCKER_REGISTRY - Container registry for kata-deploy image
@@ -122,6 +121,36 @@ kata_deploy_pod_selector() {
 	else
 		echo "app.kubernetes.io/name=kata-deploy"
 	fi
+}
+
+# Whether the DaemonSet and its pods are gone. An unreachable API answers
+# nothing, so that counts as "still there".
+kata_deploy_ds_gone() {
+	local leftovers
+
+	leftovers="$(kubectl -n "${HELM_NAMESPACE}" get daemonset,pod \
+		-l name=kata-deploy -o name --request-timeout=10s 2>/dev/null)" || return 1
+
+	[[ -z "${leftovers}" ]]
+}
+
+# helm's uninstall can return while the deletion is still in flight, and the
+# next install then creates a DaemonSet the old cascade deletes again.
+# The default outlasts terminationGracePeriodSeconds (600).
+# Arguments:
+#   $1 - (Optional) seconds to wait, default 660
+wait_for_kata_deploy_ds_gone() {
+	local timeout="${1:-660}"
+
+	if waitForProcess "${timeout}" 5 kata_deploy_ds_gone; then
+		return 0
+	fi
+
+	echo "the kata-deploy DaemonSet was still there ${timeout}s after the uninstall" >&2
+	kubectl -n "${HELM_NAMESPACE}" get daemonset,pod -l name=kata-deploy || true
+	kubectl -n "${HELM_NAMESPACE}" logs -l name=kata-deploy --tail=100 \
+		--prefix --timestamps || true
+	return 1
 }
 
 # Get the path to the helm chart
@@ -323,4 +352,12 @@ uninstall_kata() {
 		--ignore-not-found --wait --cascade foreground --timeout 10m || true
 
 	wait_for_api_and_retry_uninstall "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}"
+
+	local ret=0
+
+	wait_for_kata_deploy_ds_gone || ret=1
+	# errexit would skip this after the wait above fails.
+	wait_for_nodes_ready || ret=1
+
+	return "${ret}"
 }
