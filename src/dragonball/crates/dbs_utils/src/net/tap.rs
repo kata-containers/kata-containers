@@ -104,6 +104,8 @@ impl Tap {
     /// # Arguments
     ///
     /// * `if_name` - the name of the interface.
+    /// * `multi_vq` - create a multiqueue TAP if true. If false, create a
+    ///   single-queue TAP or attach one queue to an existing multiqueue TAP.
     /// # Example
     ///
     /// ```no_run
@@ -131,7 +133,12 @@ impl Tap {
                 }) as c_short;
         }
 
-        Tap::create_tap_with_ifreq(&mut ifreq)
+        match Self::create_tap_with_ifreq(&mut ifreq) {
+            Err(Error::CreateTap(err)) if !multi_vq && err.raw_os_error() == Some(libc::EINVAL) => {
+                Self::open_named(if_name, true)
+            }
+            result => result,
+        }
     }
 
     fn create_tap_with_ifreq(ifreq: &mut net_gen::ifreq) -> Result<Tap> {
@@ -386,6 +393,35 @@ mod tests {
         str::from_utf8(&tap.if_name[..null_pos])
             .unwrap()
             .to_string()
+    }
+
+    #[test]
+    #[ignore = "requires /dev/net/tun and CAP_NET_ADMIN"]
+    fn test_open_named_existing_multiqueue() {
+        let index = NEXT_IP.fetch_add(1, Ordering::SeqCst);
+        let name = format!("dbs_mq{index}");
+        let original = Tap::open_named(&name, true).unwrap();
+        let mut ifreq = original.get_ifreq();
+        // Only the flags field of the union is accessed.
+        unsafe {
+            *ifreq.ifr_ifru.ifru_flags.as_mut() &= !(net_gen::IFF_MULTI_QUEUE as c_short);
+        }
+        assert!(matches!(
+            Tap::create_tap_with_ifreq(&mut ifreq),
+            Err(Error::CreateTap(err)) if err.raw_os_error() == Some(libc::EINVAL)
+        ));
+        let tap = Tap::open_named(&name, false).unwrap();
+        assert_ne!(tap.if_flags() & net_gen::IFF_MULTI_QUEUE, 0);
+        assert_eq!(tap.into_mq_taps(1).unwrap().len(), 1);
+
+        let name = format!("dbs_sq{index}");
+        let tap = Tap::open_named(&name, false).unwrap();
+        assert_eq!(tap.if_flags() & net_gen::IFF_MULTI_QUEUE, 0);
+        assert!(matches!(
+            Tap::open_named(&name, true),
+            Err(Error::CreateTap(err)) if err.raw_os_error() == Some(libc::EINVAL)
+        ));
+        assert!(tap.into_mq_taps(2).is_err());
     }
 
     #[test]

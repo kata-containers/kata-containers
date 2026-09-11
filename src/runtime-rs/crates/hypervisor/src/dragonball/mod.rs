@@ -297,7 +297,14 @@ pub(crate) fn build_dragonball_network_config(
 
     // `config.num_queues` is a queue *pair* count (1 RX + 1 TX per pair).
     // Convert pairs into the actual queue count.
-    let num_queues = nconfig.queue_num.max(1) * 2;
+    let queue_pairs = if hconfig.network_info.disable_vhost_net {
+        1
+    } else {
+        nconfig
+            .queue_num
+            .clamp(1, hconfig.network_queue_limit() as usize)
+    };
+    let num_queues = queue_pairs * 2;
     DragonballNetworkConfig {
         num_queues: Some(num_queues),
         queue_size: Some(nconfig.queue_size as u16),
@@ -308,5 +315,44 @@ pub(crate) fn build_dragonball_network_config(
         }),
         use_shared_irq: nconfig.use_shared_irq,
         use_generic_irq: nconfig.use_generic_irq,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_network_config_caps_queue_pairs() {
+        for (cpus, requested, expected) in [
+            (0.0, 0, 1),
+            (1.0, 16, 1),
+            (4.0, 0, 1),
+            (4.0, 2, 2),
+            (4.0, 16, 4),
+            (3.5, 16, 4),
+            (512.0, usize::MAX, 256),
+        ] {
+            for disable_vhost_net in [false, true] {
+                let mut hconfig = HypervisorConfig::default();
+                hconfig.cpu_info.default_vcpus = cpus;
+                hconfig.network_info.disable_vhost_net = disable_vhost_net;
+                let nconfig = NetworkConfig {
+                    queue_num: requested,
+                    queue_size: 256,
+                    ..Default::default()
+                };
+
+                let config = build_dragonball_network_config(&hconfig, &nconfig);
+                let expected = if disable_vhost_net { 1 } else { expected };
+                assert_eq!(config.num_queues, Some(expected * 2));
+                assert_eq!(config.queue_sizes(), vec![256; expected * 2]);
+                assert_eq!(nconfig.queue_num, requested);
+                assert_eq!(
+                    matches!(config.backend, DragonballBackend::Virtio(_)),
+                    disable_vhost_net
+                );
+            }
+        }
     }
 }
