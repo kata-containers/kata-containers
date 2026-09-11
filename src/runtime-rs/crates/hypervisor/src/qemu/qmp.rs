@@ -1016,7 +1016,7 @@ impl Qmp {
                     fd: None,
                     // Logic in cmdline_generator::Netdev::new() seems to
                     // guarantee that there will always be at least one fd.
-                    fds: Some(fd_names.join(",")),
+                    fds: Some(fd_names.join(":")),
                     helper: None,
                     ifname: None,
                     poll_us: None,
@@ -1032,7 +1032,7 @@ impl Qmp {
                     vhostfds: if vhostfd_names.is_empty() {
                         None
                     } else {
-                        Some(vhostfd_names.join(","))
+                        Some(vhostfd_names.join(":"))
                     },
                     vhostforce: None,
                     vnet_hdr: None,

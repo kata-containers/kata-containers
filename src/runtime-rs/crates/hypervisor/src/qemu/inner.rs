@@ -832,7 +832,12 @@ impl QemuInner {
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
         info!(sl!(), "QemuInner::hypervisor_config()");
-        self.config.clone()
+        let mut config = self.config.clone();
+        config.network_info.network_queues = config
+            .network_info
+            .network_queues
+            .clamp(1, config.network_queue_limit());
+        config
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
@@ -1128,6 +1133,12 @@ use crate::vfio_device::VfioDeviceType;
 impl QemuInner {
     pub(crate) async fn add_device(&mut self, mut device: DeviceType) -> Result<DeviceType> {
         info!(sl!(), "QemuInner::add_device() {}", device);
+        if let DeviceType::Network(net) = &mut device {
+            net.config.queue_num = net
+                .config
+                .queue_num
+                .clamp(1, self.config.network_queue_limit() as usize);
+        }
         let is_qemu_ready_to_hotplug = self.qmp.is_some();
         if is_qemu_ready_to_hotplug {
             // hypervisor is running already
@@ -1451,7 +1462,7 @@ impl Persist for QemuInner {
         Ok(HypervisorState {
             hypervisor_type: HYPERVISOR_QEMU.to_string(),
             id: self.id.clone(),
-            config: self.hypervisor_config(),
+            config: self.config.clone(),
             ..Default::default()
         })
     }
@@ -1477,6 +1488,61 @@ mod tests {
 
     use super::*;
     use rstest::rstest;
+
+    #[tokio::test]
+    async fn test_network_queue_limit() {
+        for (cpus, requested, expected) in [
+            (1.0, 16, 1),
+            (4.0, 16, 4),
+            (1.5, 16, 2),
+            (4.0, 0, 1),
+            (4.0, 1, 1),
+            (4.0, 2, 2),
+            (8.0, 256, 8),
+            (512.0, 512, 256),
+        ] {
+            let (exit_notify, _) = mpsc::channel(1);
+            let mut qemu = QemuInner::new(exit_notify.clone());
+            qemu.config.cpu_info.default_vcpus = cpus;
+            qemu.config.network_info.network_queues = requested;
+            assert_eq!(
+                qemu.hypervisor_config().network_info.network_queues,
+                expected
+            );
+
+            let state = qemu.save().await.unwrap();
+            assert_eq!(state.config.network_info.network_queues, requested);
+            let restored = QemuInner::restore(exit_notify, state).await.unwrap();
+            assert_eq!(
+                restored.hypervisor_config().network_info.network_queues,
+                expected
+            );
+        }
+
+        let (exit_notify, _) = mpsc::channel(1);
+        let mut qemu = QemuInner::new(exit_notify);
+        qemu.config.cpu_info.default_vcpus = 4.0;
+        qemu.config.network_info.network_queues = 2;
+        for (requested, expected) in [(0, 1), (1, 1), (2, 2), (16, 4), (usize::MAX, 4)] {
+            let device = crate::NetworkDevice {
+                config: crate::NetworkConfig {
+                    queue_num: requested,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let DeviceType::Network(device) =
+                qemu.add_device(DeviceType::Network(device)).await.unwrap()
+            else {
+                panic!("expected network device");
+            };
+            assert_eq!(device.config.queue_num, expected);
+            let DeviceType::Network(pending) = qemu.devices.last().unwrap() else {
+                panic!("expected pending network device");
+            };
+            assert_eq!(pending.config.queue_num, expected);
+        }
+    }
 
     #[tokio::test]
     async fn test_network_device_hotplug_capability() {
