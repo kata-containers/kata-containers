@@ -86,11 +86,9 @@ cpu_features = "@CPUFEATURES@"
 default_vcpus = @DEFVCPUS_QEMU@
 
 # Guest-side vCPU overhead budget (fractional) used with static_sandbox_resource_mgmt.
-# When workload limits are present, vm_vcpus = requested_vcpus + overhead_vcpus
-# (rounded up at boot). If a workload limit is set on another dimension (for example
-# memory) but CPU is missing, requested_vcpus is treated as 0 and vm_vcpus equals
-# overhead_vcpus (minimum 1 at boot). When no workload limits are present,
-# default_vcpus is used instead.
+# When a workload CPU limit is present, vm_vcpus = requested_vcpus + overhead_vcpus
+# (rounded up at boot, minimum 1). When it is not, default_vcpus is used instead,
+# regardless of whether a memory limit was set.
 # See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
 overhead_vcpus = @DEFOVERHEADVCPUS_QEMU@
 
@@ -138,10 +136,9 @@ reclaim_guest_freed_memory = false
 default_memory = @DEFMEMSZ@
 
 # Guest-side memory overhead budget (MiB) used with static_sandbox_resource_mgmt.
-# When workload limits are present, vm_memory = requested_memory + overhead_memory.
-# If a workload limit is set on another dimension (for example CPU) but memory is
-# missing, requested_memory is treated as 0, so vm_memory equals overhead_memory.
-# When no workload limits are present, default_memory is used instead.
+# When a workload memory limit is present, vm_memory = requested_memory + overhead_memory.
+# When it is not, default_memory is used instead, regardless of whether a CPU limit
+# was set.
 # See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
 overhead_memory = @DEFOVERHEADMEMSZ_QEMU@
 #
