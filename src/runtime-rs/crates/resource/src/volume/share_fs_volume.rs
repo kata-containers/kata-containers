@@ -6,8 +6,6 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    fs::File,
-    io::Read,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
@@ -25,6 +23,7 @@ use nix::sys::stat::SFlag;
 use rand::rng;
 use rand::Rng;
 use tokio::{
+    fs::File,
     io::AsyncReadExt,
     sync::{Mutex, RwLock},
     task::JoinHandle,
@@ -40,6 +39,7 @@ use kata_types::{
 };
 use oci_spec::runtime as oci;
 
+const MAX_CHUNK_SIZE: usize = 1 << 20;
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
 const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
@@ -598,30 +598,45 @@ impl ShareFsVolume {
             .with_context(|| format!("Failed to read metadata from file: {src:?}"))?;
 
         // Open file
-        let mut file = File::open(src).with_context(|| format!("Failed to open file: {src:?}"))?;
+        let mut file = File::open(src)
+            .await
+            .with_context(|| format!("Failed to open file: {src:?}"))?;
 
-        // Open read file contents to buffer
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)
-            .with_context(|| format!("Failed to read file: {src:?}"))?;
+        let mut remaining = file_metadata.len() as i64;
+        let mut offset: i64 = 0;
 
-        // Create gRPC request
-        let r = agent::CopyFileRequest {
-            path: guest_path.to_owned(),
-            file_size: file_metadata.len() as i64,
-            uid: file_metadata.uid() as i32,
-            gid: file_metadata.gid() as i32,
-            file_mode: file_metadata.mode(),
-            data: buffer,
-            ..Default::default()
-        };
+        while remaining > 0 || offset == 0 {
+            let chunk_size = std::cmp::min(remaining as usize, MAX_CHUNK_SIZE);
+            let mut chunk = vec![0u8; chunk_size];
+            file.read_exact(&mut chunk)
+                .await
+                .with_context(|| format!("Failed to read chunk from file: {src:?}"))?;
+
+            let r = agent::CopyFileRequest {
+                path: guest_path.to_owned(),
+                file_size: file_metadata.len() as i64,
+                uid: file_metadata.uid() as i32,
+                gid: file_metadata.gid() as i32,
+                file_mode: file_metadata.mode(),
+                data: chunk,
+                offset,
+                ..Default::default()
+            };
+            agent.copy_file(r).await.with_context(|| {
+                format!(
+                    "copy file request failed: src: {src:?}, dest: {guest_path:?}, offset: {offset}, chunk_size: {chunk_size}"
+                )
+            })?;
+
+            offset += chunk_size as i64;
+            remaining -= chunk_size as i64;
+            if remaining <= 0 {
+                break;
+            }
+        }
 
         debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, guest_path);
 
-        // Issue gRPC request to agent
-        agent.copy_file(r).await.with_context(|| {
-            format!("copy file request failed: src: {src:?}, dest: {guest_path:?}")
-        })?;
         Ok(())
     }
 
@@ -863,31 +878,11 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 // push back the sub-dir into queue to handle it in time
                 queue.push_back((entry_path, dest_path));
             } else if metadata.is_file() {
-                // async read file
-                let mut file = tokio::fs::File::open(&entry_path)
+                ShareFsVolume::copy_file_to_guest(&entry_path, &dest_path, agent)
                     .await
-                    .context(format!("open file: {entry_path:?}"))?;
-
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)
-                    .await
-                    .context(format!("read file: {entry_path:?}"))?;
-
-                let file_request = agent::CopyFileRequest {
-                    path: dest_path.clone(),
-                    file_size: metadata.len() as i64,
-                    uid: metadata.uid() as i32,
-                    gid: metadata.gid() as i32,
-                    file_mode: metadata.mode(),
-                    data: buffer,
-                    ..Default::default()
-                };
-
-                info!(sl!(), "copy file {:?} to guest", dest_path.clone());
-                agent
-                    .copy_file(file_request)
-                    .await
-                    .context(format!("copy file: {entry_path:?} -> {dest_path:?}"))?;
+                    .context(format!(
+                        "copy file: {entry_path:?} -> {dest_path:?}"
+                    ))?;
             }
         }
     }
