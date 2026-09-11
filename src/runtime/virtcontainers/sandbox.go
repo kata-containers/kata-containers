@@ -1327,14 +1327,20 @@ const (
 
 	// pty type of console.
 	consoleProtoPty = "pty"
+
+	consoleWatcherRetryInterval = 50 * time.Millisecond
+	consoleWatcherDrainTimeout  = time.Second
 )
 
 // console watcher is designed to monitor guest console output.
 type consoleWatcher struct {
+	sync.Mutex
 	conn       net.Conn
 	ptyConsole *os.File
 	proto      string
 	consoleURL string
+	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
 func newConsoleWatcher(ctx context.Context, s *Sandbox) (*consoleWatcher, error) {
@@ -1351,72 +1357,176 @@ func newConsoleWatcher(ctx context.Context, s *Sandbox) (*consoleWatcher, error)
 	return &cw, nil
 }
 
-// start the console watcher
-func (cw *consoleWatcher) start(s *Sandbox) (err error) {
+// start launches the console watcher before the hypervisor starts. The watcher
+// retries until QEMU creates the console socket, so early boot output is not
+// lost while the runtime waits for QMP.
+func (cw *consoleWatcher) start(s *Sandbox) error {
+	cw.Lock()
+	defer cw.Unlock()
+
 	if cw.consoleWatched() {
 		return fmt.Errorf("console watcher has already watched for sandbox %s", s.id)
 	}
-
-	var scanner *bufio.Scanner
-
-	switch cw.proto {
-	case consoleProtoUnix:
-		cw.conn, err = net.Dial("unix", cw.consoleURL)
-		if err != nil {
-			return err
-		}
-		scanner = bufio.NewScanner(cw.conn)
-	case consoleProtoPty:
-		// read-only
-		cw.ptyConsole, _ = os.Open(cw.consoleURL)
-		scanner = bufio.NewScanner(cw.ptyConsole)
-	default:
+	if cw.proto != consoleProtoUnix && cw.proto != consoleProtoPty {
 		return fmt.Errorf("unknown console proto %s", cw.proto)
 	}
 
-	go func() {
-		for scanner.Scan() {
-			text := scanner.Text()
-			if text != "" {
-				s.Logger().WithFields(logrus.Fields{
-					"console-protocol": cw.proto,
-					"console-url":      cw.consoleURL,
-					"sandbox":          s.id,
-					"vmconsole":        text,
-				}).Debug("reading guest console")
-			}
-		}
+	ctx, cancel := context.WithCancel(context.Background())
+	cw.cancel = cancel
+	cw.done = make(chan struct{})
 
-		if err := scanner.Err(); err != nil {
-			s.Logger().WithError(err).WithFields(logrus.Fields{
-				"console-protocol": cw.proto,
-				"console-url":      cw.consoleURL,
-				"sandbox":          s.id,
-			}).Error("Failed to read guest console logs")
-		} else { // The error is `nil` in case of io.EOF
-			s.Logger().Info("console watcher quits")
-		}
-	}()
+	go cw.watch(ctx, s, cw.done)
 
 	return nil
 }
 
+func (cw *consoleWatcher) watch(ctx context.Context, s *Sandbox, done chan struct{}) {
+	defer close(done)
+
+	scanner, err := cw.connect(ctx)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			s.Logger().WithError(err).WithFields(logrus.Fields{
+				"console-protocol": cw.proto,
+				"console-url":      cw.consoleURL,
+				"sandbox":          s.id,
+			}).Warn("Failed to connect to guest console")
+		}
+		return
+	}
+
+	for scanner.Scan() {
+		text := scanner.Text()
+		if text != "" {
+			s.Logger().WithFields(logrus.Fields{
+				"console-protocol": cw.proto,
+				"console-url":      cw.consoleURL,
+				"sandbox":          s.id,
+				"vmconsole":        text,
+			}).Debug("reading guest console")
+		}
+	}
+
+	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+		s.Logger().WithError(err).WithFields(logrus.Fields{
+			"console-protocol": cw.proto,
+			"console-url":      cw.consoleURL,
+			"sandbox":          s.id,
+		}).Error("Failed to read guest console logs")
+	} else {
+		s.Logger().Info("console watcher quits")
+	}
+}
+
+func (cw *consoleWatcher) connect(ctx context.Context) (*bufio.Scanner, error) {
+	retry := time.NewTicker(consoleWatcherRetryInterval)
+	defer retry.Stop()
+
+	for {
+		scanner, err := cw.tryConnect(ctx)
+		if err == nil {
+			return scanner, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-retry.C:
+		}
+	}
+}
+
+func (cw *consoleWatcher) tryConnect(ctx context.Context) (*bufio.Scanner, error) {
+	var scanner *bufio.Scanner
+
+	switch cw.proto {
+	case consoleProtoUnix:
+		conn, err := (&net.Dialer{}).DialContext(ctx, "unix", cw.consoleURL)
+		if err != nil {
+			return nil, err
+		}
+
+		cw.Lock()
+		if ctx.Err() != nil {
+			cw.Unlock()
+			conn.Close()
+			return nil, ctx.Err()
+		}
+		cw.conn = conn
+		cw.Unlock()
+		scanner = bufio.NewScanner(conn)
+	case consoleProtoPty:
+		// read-only
+		ptyConsole, err := os.Open(cw.consoleURL)
+		if err != nil {
+			return nil, err
+		}
+
+		cw.Lock()
+		if ctx.Err() != nil {
+			cw.Unlock()
+			ptyConsole.Close()
+			return nil, ctx.Err()
+		}
+		cw.ptyConsole = ptyConsole
+		cw.Unlock()
+		scanner = bufio.NewScanner(ptyConsole)
+	default:
+		return nil, fmt.Errorf("unknown console proto %s", cw.proto)
+	}
+
+	return scanner, nil
+}
+
 // Check if the console watcher has already watched the vm console.
 func (cw *consoleWatcher) consoleWatched() bool {
-	return cw.conn != nil || cw.ptyConsole != nil
+	return cw.cancel != nil
 }
 
 // stop the console watcher.
 func (cw *consoleWatcher) stop() {
+	cw.Lock()
+	cancel := cw.cancel
+	done := cw.done
+	connected := cw.conn != nil || cw.ptyConsole != nil
+	cw.Unlock()
+
+	if done == nil {
+		return
+	}
+
+	if connected {
+		timer := time.NewTimer(consoleWatcherDrainTimeout)
+		select {
+		case <-done:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		case <-timer.C:
+		}
+	} else if cancel != nil {
+		// Cancel immediately if the console endpoint has not appeared yet.
+		cancel()
+	}
+
+	cw.Lock()
+	if cancel != nil {
+		cancel()
+	}
 	if cw.conn != nil {
 		cw.conn.Close()
 		cw.conn = nil
 	}
-
 	if cw.ptyConsole != nil {
 		cw.ptyConsole.Close()
 		cw.ptyConsole = nil
 	}
+	cw.Unlock()
+
+	<-done
 }
 
 func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*config.BlockDrive, error) {
@@ -1565,6 +1675,9 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 			// Log error, otherwise nobody might see it - StopVM could kill this process.
 			s.Logger().WithError(err).Error("Cannot start VM")
 			s.hypervisor.StopVM(ctx, false)
+			if s.cw != nil {
+				s.cw.stop()
+			}
 		}
 	}()
 
@@ -1583,6 +1696,13 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 			if _, err := s.network.AddEndpoints(ctx, s, nil, false); err != nil {
 				return err
 			}
+		}
+	}
+
+	if s.cw != nil {
+		s.Logger().Debug("console watcher starts")
+		if err := s.cw.start(s); err != nil {
+			return err
 		}
 	}
 
@@ -1627,14 +1747,6 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 	}
 
 	s.Logger().Info("VM started")
-
-	if s.cw != nil {
-		s.Logger().Debug("console watcher starts")
-		if err := s.cw.start(s); err != nil {
-			s.cw.stop()
-			return err
-		}
-	}
 
 	// Once the hypervisor is done starting the sandbox,
 	// we want to guarantee that it is manageable.
