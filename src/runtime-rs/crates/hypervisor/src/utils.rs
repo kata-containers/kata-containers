@@ -497,6 +497,9 @@ pub fn uses_native_ccw_bus() -> bool {
 /// (Cloud Hypervisor uses the prefix "vcpu", OpenVMM uses "vp-"). Threads whose
 /// name does not start with `prefix` are ignored. The returned map may be empty;
 /// callers decide whether that is an error.
+///
+/// A missing `comm` file is treated as transient: threads can exit while
+/// `/proc` is being scanned. Other I/O errors still fail the scan.
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub(crate) fn get_vcpu_tids(proc_path: &str, prefix: &str) -> Result<HashMap<u32, u32>> {
     let src = std::fs::canonicalize(proc_path)
@@ -520,11 +523,15 @@ pub(crate) fn get_vcpu_tids(proc_path: &str, prefix: &str) -> Result<HashMap<u32
 
         let comm_path = tid_path.join(&tid_str).join("comm");
 
-        if !comm_path.exists() {
-            return Err(anyhow!("comm path was not found."));
-        }
-
-        let p_name = std::fs::read_to_string(comm_path)?;
+        // Threads can exit while iterating /proc; missing comm is transient.
+        let p_name = match std::fs::read_to_string(&comm_path) {
+            Ok(name) => name,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                return Err(anyhow!(err)
+                    .context(format!("failed to read comm from {}", comm_path.display())));
+            }
+        };
 
         if !p_name.starts_with(prefix) {
             continue;
@@ -945,5 +952,31 @@ mod tests {
             let got = first_valid_executable_path(&slice).expect("should find executable");
             assert_eq!(got, expect_path, "should return the second executable path");
         }
+    }
+
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    #[test]
+    fn test_get_vcpu_tids_missing_comm() {
+        let tmp_dir = Builder::new().prefix("fake-proc-pid").tempdir().unwrap();
+        let task_dir = tmp_dir.path().join("task");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        let vcpu_tid_dir = task_dir.join("3001");
+        fs::create_dir_all(&vcpu_tid_dir).unwrap();
+        fs::write(vcpu_tid_dir.join("comm"), "vcpu0\n").unwrap();
+
+        // Simulates a thread that exited mid-scan.
+        let missing_comm_dir = task_dir.join("9999");
+        fs::create_dir_all(&missing_comm_dir).unwrap();
+
+        let proc_path = tmp_dir.path().to_str().unwrap();
+        let vcpus = super::get_vcpu_tids(proc_path, "vcpu").unwrap();
+
+        assert_eq!(
+            vcpus.len(),
+            1,
+            "only vcpu threads with comm should be mapped"
+        );
+        assert_eq!(vcpus[&0], 3001);
     }
 }
