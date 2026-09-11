@@ -21,6 +21,7 @@ flate2 = "1.1"
 glob = "0.3.0"
 gpt = "4.1.0"
 lazy_static = "1.4.0"
+libc = { workspace = true }
 nix = { workspace = true }
 num_cpus = "1.13.1"
 oci-spec = { workspace = true }
