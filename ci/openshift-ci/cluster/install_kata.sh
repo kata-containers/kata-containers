@@ -13,6 +13,8 @@ configs_dir=${scripts_dir}/configs
 
 # shellcheck disable=SC1091 # import based on variable
 source "${scripts_dir}/../lib.sh"
+# shellcheck disable=SC1091 # import based on variable
+source "${scripts_dir}/selinux_helpers.sh"
 
 # Set your katacontainers repo dir location
 [[ -z "${katacontainers_repo_dir}" ]] && echo "Please set katacontainers_repo_dir variable to your kata repo"
@@ -160,52 +162,6 @@ debug_pod() {
         oc logs "${pod}"
 }
 
-# Wait for all pods of the app label to contain expected message
-#
-# Params:
-#   $1 - app labela
-#   $2 - expected pods count (>=1)
-#   $3 - message to be present in the logs
-#   $4 - timeout (60)
-#   $5 - namespace (the current one)
-wait_for_app_pods_message() {
-	local app="$1"
-	local pod_count="$2"
-	local message="$3"
-	local timeout="$4"
-	local namespace="$5"
-	[[ -z "${pod_count}" ]] && pod_count=1
-	[[ -z "${timeout}" ]] && timeout=60
-	[[ -n "${namespace}" ]] && namespace=("-n" "${namespace}")
-	local pod
-	local pods
-	local i
-	SECONDS=0
-	while :; do
-		mapfile -t pods < <(oc get pods -l app="${app}" --no-headers=true "${namespace[@]}" | awk '{print $1}')
-		[[ "${#pods}" -ge "${pod_count}" ]] && break
-		if [[ "${SECONDS}" -gt "${timeout}" ]]; then
-			printf "Unable to find ${pod_count} pods for '-l app=\"${app}\"' in ${SECONDS}s (%s)" "${pods[@]}"
-			return 1
-		fi
-	done
-	local log
-	for pod in "${pods[@]}"; do
-		while :; do
-			log=$(oc logs "${namespace[@]}" "${pod}")
-			echo "${log}" | grep "${message}" -q && echo "Found $(echo "${log}" | grep "${message}") in ${pod}'s log (${SECONDS})" && break;
-			if [[ "${SECONDS}" -gt "${timeout}" ]]; then
-				echo -n "Message '${message}' not present in '${pod}' pod of the '-l app=\"${app}\"' "
-				printf "pods after ${SECONDS}s :(%s)\n" "${pods[@]}"
-				echo "Pod ${pod}'s output so far:"
-				echo "${log}"
-				return 1
-			fi
-			sleep 1;
-		done
-	done
-}
-
 oc config set-context --current --namespace=default
 
 worker_nodes=$(oc get nodes |  awk '{if ($3 == "worker") { print $1 } }')
@@ -223,18 +179,13 @@ if [[ "${KATA_WITH_HOST_KERNEL}" == "yes" ]]; then
 	oc apply -f "${deployments_dir}/configmap_installer_kernel.yaml"
 fi
 
-# Kata and selinux handling requires privileged pods
-oc label --overwrite ns kube-system pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/warn=baseline pod-security.kubernetes.io/audit=baseline
-
 # Selinux context is currently not handled by kata-deploy
-oc apply -f "${deployments_dir}/relabel_selinux.yaml"
-wait_for_app_pods_message restorecon "${num_nodes}" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to configure selinux, proceeding anyway..."
+apply_relabel_selinux "${deployments_dir}" "${num_nodes}"
 
 apply_kata_deploy
 
 # Kata-deploy runs without selinux, we need to re-lable the /opt and /var
-oc delete -n kube-system -l app=restorecon pods --wait
-wait_for_app_pods_message restorecon "${num_nodes}" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to relable selinux after deployment, proceeding anyway..."
+rerun_relabel_selinux "${num_nodes}"
 
 # Set SELinux to permissive mode
 if [[ ${SELINUX_PERMISSIVE} == "yes" ]]; then
