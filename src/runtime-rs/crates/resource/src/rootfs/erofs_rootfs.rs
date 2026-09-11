@@ -375,8 +375,10 @@ pub(crate) struct ErofsMultiLayerRootfs {
     rwlayer_storage: Option<Storage>,
     // Read-only EROFS layer storages (lower layers), one per partition in GPT mode
     erofs_storages: Vec<Storage>,
-    // Paths to generated GPT metadata files (head, padding) for cleanup
-    gpt_metadata_paths: Vec<PathBuf>,
+    // Temporary host files used by VMDK-backed rootfs layouts (GPT
+    // leading-metadata image, padding images, and descriptor), removed after
+    // device teardown.
+    generated_file_paths: Vec<PathBuf>,
     // Container-scoped runtime directory that may only contain generated helper artifacts.
     generated_artifacts_dir: PathBuf,
 }
@@ -398,7 +400,7 @@ impl ErofsMultiLayerRootfs {
         let mut device_ids = Vec::new();
         let mut rwlayer_storage: Option<Storage> = None;
         let mut erofs_storages: Vec<Storage> = Vec::new();
-        let mut gpt_metadata_paths: Vec<PathBuf> = Vec::new();
+        let mut generated_file_paths: Vec<PathBuf> = Vec::new();
         // Track whether GPT+VMDK erofs layers have already been processed in bulk.
         let mut gpt_erofs_processed = false;
 
@@ -577,9 +579,9 @@ impl ErofsMultiLayerRootfs {
                             generate_gpt_vmdk_with_layout(sid, cid, erofs_layers)
                                 .context("gptdisk: failed to generate GPT VMDK")?;
 
-                        // Track GPT metadata files (head + padding) for cleanup
-                        gpt_metadata_paths.push(gpt_files.head_path.clone());
-                        gpt_metadata_paths.extend(gpt_files.pad_paths.iter().cloned());
+                        // Track every generated file backing this VMDK for cleanup.
+                        generated_file_paths.push(gpt_files.head_path.clone());
+                        generated_file_paths.extend(gpt_files.pad_paths.iter().cloned());
                         for idx in 0..layout.partitions.len() {
                             if idx > 0 {
                                 // Check for padding files (only created when there are gaps)
@@ -589,10 +591,15 @@ impl ErofsMultiLayerRootfs {
                                     .unwrap()
                                     .join(format!("pad-{}.img", idx));
                                 if pad_path.exists() {
-                                    gpt_metadata_paths.push(pad_path);
+                                    generated_file_paths.push(pad_path);
                                 }
                             }
                         }
+                        // GPT assembly always produces a structured VMDK layout.
+                        // `erofs_path` is its reserved descriptor path. QEMU leaves
+                        // no file there, so cleanup is a no-op until a VMM
+                        // materializes the descriptor.
+                        generated_file_paths.push(PathBuf::from(&erofs_path));
 
                         info!(
                             sl!(),
@@ -753,6 +760,14 @@ impl ErofsMultiLayerRootfs {
                             vmdk.is_some()
                         );
 
+                        // Only a multi-device result has a structured VMDK layout
+                        // and reserves `erofs_path` for its descriptor. A
+                        // single-device result is raw EROFS, whose source path must
+                        // not be tracked as a generated temporary file.
+                        if vmdk.is_some() {
+                            generated_file_paths.push(PathBuf::from(&erofs_path));
+                        }
+
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
                             vmdk,
@@ -852,7 +867,7 @@ impl ErofsMultiLayerRootfs {
             device_ids,
             rwlayer_storage,
             erofs_storages,
-            gpt_metadata_paths,
+            generated_file_paths,
             generated_artifacts_dir: PathBuf::from(kata_types::prefix_with_rootless_dir(
                 DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
             ))
@@ -913,9 +928,9 @@ impl Rootfs for ErofsMultiLayerRootfs {
             dm.try_remove_device(device_id).await?;
         }
 
-        // Clean up GPT metadata files (head, padding).
-        for metadata_path in &self.gpt_metadata_paths {
-            safely_remove_file(metadata_path, &self.generated_artifacts_dir)?;
+        // Remove temporary VMDK files (GPT leading metadata, padding, descriptor).
+        for file_path in &self.generated_file_paths {
+            safely_remove_file(file_path, &self.generated_artifacts_dir)?;
         }
 
         Ok(())
