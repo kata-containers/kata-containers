@@ -1,48 +1,48 @@
 [package]
-name = "dbs-pci"
-version = "0.1.0"
 authors = ["Alibaba Dragonball Team"]
-license = "Apache-2.0"
-edition = "2018"
 description = "dbs-pci is a crate for emulating pci device"
+edition = "2018"
 homepage = "https://github.com/openanolis/dragonball-sandbox"
-repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-pci"
-keywords = ["dragonball", "secure-sandbox", "devices", "pci"]
+keywords = ["devices", "dragonball", "pci", "secure-sandbox"]
+license = "Apache-2.0"
+name = "dbs-pci"
 readme = "README.md"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-pci"
+version = "0.1.0"
 
 [dependencies]
-log = "0.4.14"
-thiserror = { workspace = true }
+byteorder = "1.4.3"
+dbs-address-space = { workspace = true }
 dbs-allocator = { workspace = true }
 dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
-dbs-address-space = { workspace = true }
+dbs-interrupt = { features = [
+  "kvm-irq",
+  "kvm-legacy-irq",
+  "kvm-msi-irq",
+], workspace = true }
 dbs-virtio-devices = { workspace = true }
-dbs-interrupt = { workspace = true, features = [
-    "kvm-irq",
-    "kvm-legacy-irq",
-    "kvm-msi-irq",
-] }
-byteorder = "1.4.3"
+log = "0.4.14"
 serde = "1.0.27"
+thiserror = { workspace = true }
 
-vm-memory = { workspace = true }
-kvm-ioctls = { workspace = true }
-kvm-bindings = { workspace = true }
-vfio-ioctls = { workspace = true }
-vfio-bindings = { workspace = true }
-libc = "0.2.39"
-virtio-queue = { workspace = true }
 dbs-utils = { workspace = true }
+kvm-bindings = { workspace = true }
+kvm-ioctls = { workspace = true }
+libc = "0.2.39"
+vfio-bindings = { workspace = true }
+vfio-ioctls = { workspace = true }
+virtio-queue = { workspace = true }
+vm-memory = { workspace = true }
 
 
 [dev-dependencies]
 dbs-arch = { workspace = true }
 kvm-ioctls = { workspace = true }
-test-utils = { workspace = true }
 nix = { workspace = true }
+test-utils = { workspace = true }
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(feature, values("test-mock"))',
-] }
+unexpected_cfgs = { check-cfg = [
+  'cfg(feature, values("test-mock"))',
+], level = "warn" }

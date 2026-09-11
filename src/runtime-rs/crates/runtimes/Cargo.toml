@@ -1,9 +1,9 @@
 [package]
-name = "runtimes"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name = "runtimes"
+version = "0.1.0"
 
 [dev-dependencies]
 rstest = { workspace = true }
@@ -11,54 +11,54 @@ tempfile = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-lazy_static = { workspace = true }
-netns-rs = { workspace = true }
-slog = { workspace = true }
-slog-scope = { workspace = true }
-containerd-shim-protos = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
-tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true }
-opentelemetry = { version = "0.18.0", features = [
-    "rt-tokio-current-thread",
-    "trace",
-    "rt-tokio",
-] }
-opentelemetry-jaeger = { version = "0.17.0", features = [
-    "rt-tokio",
-    "hyper_collector_client",
-    "collector_client",
-] }
-tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
 bytes = { workspace = true }
+containerd-shim-protos = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
-serde_json = { workspace = true }
+lazy_static = { workspace = true }
+netns-rs = { workspace = true }
 nix = { workspace = true }
-url = { workspace = true }
-procfs = "0.12.0"
-prometheus = { version = "0.14.0", features = ["process"] }
 oci-spec = { workspace = true }
+opentelemetry = { features = [
+  "rt-tokio",
+  "rt-tokio-current-thread",
+  "trace",
+], version = "0.18.0" }
+opentelemetry-jaeger = { features = [
+  "collector_client",
+  "hyper_collector_client",
+  "rt-tokio",
+], version = "0.17.0" }
+procfs = "0.12.0"
+prometheus = { features = ["process"], version = "0.14.0" }
+serde_json = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
+tokio = { features = ["rt-multi-thread"], workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { features = ["registry", "std"], version = "0.3" }
+url = { workspace = true }
 
 # Local dependencies
 agent = { workspace = true }
 common = { workspace = true }
-kata-types = { workspace = true }
-protocols = { workspace = true }
-protobuf = { workspace = true }
+hypervisor = { workspace = true }
 kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
 logging = { workspace = true }
+persist = { workspace = true }
+protobuf = { workspace = true }
+protocols = { workspace = true }
+resource = { workspace = true }
 runtime-spec = { workspace = true }
 shim-interface = { workspace = true }
-persist = { workspace = true }
-hypervisor = { workspace = true }
-resource = { workspace = true }
 
 # Local dependencies: runtime handler
-linux_container = { workspace = true, optional = true }
-virt_container = { workspace = true, optional = true }
-wasm_container = { workspace = true, optional = true }
+linux_container = { optional = true, workspace = true }
+virt_container = { optional = true, workspace = true }
+wasm_container = { optional = true, workspace = true }
 
 [features]
 default = ["virt"]
@@ -66,6 +66,6 @@ linux = ["linux_container"]
 virt = ["virt_container"]
 wasm = ["wasm_container"]
 
-dragonball = ["virt_container/dragonball"]
 cloud-hypervisor = ["virt_container/cloud-hypervisor"]
+dragonball = ["virt_container/dragonball"]
 openvmm = ["virt_container/openvmm"]

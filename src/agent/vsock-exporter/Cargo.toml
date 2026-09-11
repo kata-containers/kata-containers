@@ -1,21 +1,21 @@
 [package]
-name = "vsock-exporter"
-version = "0.1.0"
 authors = ["James O. D. Hunt <james.o.hunt@intel.com>"]
 edition.workspace = true
 license.workspace = true
+name = "vsock-exporter"
+version = "0.1.0"
 
 [dependencies]
-libc.workspace = true
-thiserror.workspace = true
-opentelemetry = { workspace = true, features = ["serialize"] }
-tokio-vsock.workspace = true
-serde_json = "1.0"
-byteorder = "1.4.3"
-slog = { workspace = true, features = [
-    "dynamic-keys",
-    "max_level_trace",
-    "release_max_level_debug",
-] }
 async-trait.workspace = true
+byteorder = "1.4.3"
+libc.workspace = true
+opentelemetry = { features = ["serialize"], workspace = true }
+serde_json = "1.0"
+slog = { features = [
+  "dynamic-keys",
+  "max_level_trace",
+  "release_max_level_debug",
+], workspace = true }
+thiserror.workspace = true
 tokio.workspace = true
+tokio-vsock.workspace = true

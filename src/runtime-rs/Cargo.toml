@@ -1,12 +1,12 @@
 [package]
-name = "runtime-rs"
-version = "0.1.0"
 authors = { workspace = true }
 description = "Containerd shim runtime for Kata Containers"
-keywords = ["kata-containers", "shim"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-license = { workspace = true }
 edition = { workspace = true }
+keywords = ["kata-containers", "shim"]
+license = { workspace = true }
+name = "runtime-rs"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [[bin]]
 name = "containerd-shim-kata-v2"
@@ -17,16 +17,16 @@ name = "shim-ctl"
 path = "crates/shim-ctl/src/main.rs"
 
 [features]
-dragonball = ["runtimes/dragonball"]
 cloud-hypervisor = ["runtimes/cloud-hypervisor"]
+dragonball = ["runtimes/dragonball"]
 openvmm = ["runtimes/openvmm"]
 
 [dependencies]
 anyhow = { workspace = true }
+common = { workspace = true }
 containerd-shim-protos = { workspace = true }
 go-flag = { workspace = true }
 nix = { workspace = true }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
-shim = { path = "crates/shim" }
-common = { workspace = true }
 runtimes = { workspace = true }
+shim = { path = "crates/shim" }
+tokio = { features = ["rt", "rt-multi-thread"], workspace = true }

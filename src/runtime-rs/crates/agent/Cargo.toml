@@ -1,29 +1,29 @@
 [package]
-name = "agent"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name = "agent"
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+nix = { workspace = true }
+oci-spec = { workspace = true }
 protobuf = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
-ttrpc = { workspace = true }
-tokio = { workspace = true, features = ["fs", "rt"] }
+tokio = { features = ["fs", "rt"], workspace = true }
 tracing = { workspace = true }
+ttrpc = { workspace = true }
 url = { workspace = true }
-nix = { workspace = true }
-oci-spec = { workspace = true }
 
 # Local dependencies
 kata-types = { workspace = true }
 logging = { workspace = true }
-protocols = { workspace = true, features = ["async"] }
+protocols = { features = ["async"], workspace = true }
 
 [features]
 default = []

@@ -1,28 +1,28 @@
 [package]
-name = "dbs-arch"
-version = "0.2.3"
 authors = ["Alibaba Dragonball Team"]
-license = "Apache-2.0 AND BSD-3-Clause"
-edition = "2018"
 description = "A collection of CPU architecture specific constants and utilities."
+edition = "2018"
 homepage = "https://github.com/openanolis/dragonball-sandbox"
-repository = "https://github.com/openanolis/dragonball-sandbox"
-keywords = ["dragonball", "secure-sandbox", "arch", "ARM64", "x86"]
+keywords = ["ARM64", "arch", "dragonball", "secure-sandbox", "x86"]
+license = "Apache-2.0 AND BSD-3-Clause"
+name = "dbs-arch"
 readme = "README.md"
+repository = "https://github.com/openanolis/dragonball-sandbox"
+version = "0.2.3"
 
 [dependencies]
+kvm-bindings = { features = ["fam-wrappers"], workspace = true }
+kvm-ioctls = { workspace = true }
+libc = ">=0.2.39"
 memoffset = "0.6"
-kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
-kvm-ioctls = {workspace = true}
 thiserror = { workspace = true }
 vm-memory = { workspace = true }
-vmm-sys-util = {workspace = true}
-libc = ">=0.2.39"
+vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
-vm-memory = { workspace = true, features = ["backend-mmap"] }
-test-utils = { workspace = true }
 nix = { workspace = true }
+test-utils = { workspace = true }
+vm-memory = { features = ["backend-mmap"], workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
