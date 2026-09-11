@@ -35,8 +35,8 @@ func getSandboxCPUFunc(c, m uint64) func() (vc.SandboxStats, error) {
 	}
 }
 
-func getStatsContainerCPUFunc(fooCPU, barCPU, fooMem, barMem uint64) func(contID string) (vc.ContainerStats, error) {
-	return func(contID string) (vc.ContainerStats, error) {
+func getStatsContainerCPUFunc(fooCPU, barCPU, fooMem, barMem uint64) func(context.Context, string) (vc.ContainerStats, error) {
+	return func(_ context.Context, contID string) (vc.ContainerStats, error) {
 		vCPU := fooCPU
 		vMem := fooMem
 		if contID == "bar" {

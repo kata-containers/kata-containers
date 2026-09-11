@@ -247,7 +247,10 @@ type Sandbox struct {
 	sandboxController  resCtrl.ResourceController
 	overheadController resCtrl.ResourceController
 
-	containers map[string]*Container
+	// containersLock protects container lookups that may overlap with lifecycle
+	// updates while a blocking operation runs without the shim service mutex.
+	containersLock sync.RWMutex
+	containers     map[string]*Container
 
 	id string
 
@@ -404,6 +407,9 @@ func (s *Sandbox) configureGuestNetwork(ctx context.Context) error {
 
 // GetAllContainers returns all containers.
 func (s *Sandbox) GetAllContainers() []VCContainer {
+	s.containersLock.RLock()
+	defer s.containersLock.RUnlock()
+
 	ifa := make([]VCContainer, len(s.containers))
 
 	i := 0
@@ -417,6 +423,9 @@ func (s *Sandbox) GetAllContainers() []VCContainer {
 
 // GetContainer returns the container named by the containerID.
 func (s *Sandbox) GetContainer(containerID string) VCContainer {
+	s.containersLock.RLock()
+	defer s.containersLock.RUnlock()
+
 	if c, ok := s.containers[containerID]; ok {
 		return c
 	}
@@ -1054,6 +1063,9 @@ func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 		return nil, types.ErrNeedContainerID
 	}
 
+	s.containersLock.RLock()
+	defer s.containersLock.RUnlock()
+
 	if c, ok := s.containers[containerID]; ok {
 		return c, nil
 	}
@@ -1072,6 +1084,9 @@ func (s *Sandbox) removeContainer(containerID string) error {
 	if containerID == "" {
 		return types.ErrNeedContainerID
 	}
+
+	s.containersLock.Lock()
+	defer s.containersLock.Unlock()
 
 	if _, ok := s.containers[containerID]; !ok {
 		return errors.Wrapf(types.ErrNoSuchContainer, "Could not remove the container %q from the sandbox %q containers list",
@@ -1673,6 +1688,9 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 }
 
 func (s *Sandbox) addContainer(c *Container) error {
+	s.containersLock.Lock()
+	defer s.containersLock.Unlock()
+
 	if _, ok := s.containers[c.id]; ok {
 		return fmt.Errorf("Duplicated container: %s", c.id)
 	}

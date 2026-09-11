@@ -804,7 +804,17 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *empt
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Kill() start")
 	defer shimLog.WithField("container", r.ID).Debug("Kill() end")
-	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Kill", shimTracingTags)
+
+	// Preserve the sandbox-lifetime trace parent while deriving cancellation,
+	// deadlines, and request values from the incoming RPC context.
+	traceCtx := ctx
+	if s.rootCtx != nil {
+		rootSpan := otelTrace.SpanFromContext(s.rootCtx)
+		if rootSpan.SpanContext().IsValid() {
+			traceCtx = otelTrace.ContextWithSpan(ctx, rootSpan)
+		}
+	}
+	span, spanCtx := katatrace.Trace(traceCtx, shimLog, "Kill", shimTracingTags)
 	defer span.End()
 
 	start := time.Now()
@@ -814,34 +824,39 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *emptypb.
 	}()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	signum := syscall.Signal(r.Signal)
+	all := r.All
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 
+	sandbox := s.sandbox
+	containerID := c.id
 	processStatus := c.status
-	processID := c.id
+	processID := containerID
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
+			s.mu.Unlock()
 			return nil, err
 		}
 		processID = execs.id
 		if processID == "" {
 			shimLog.WithFields(logrus.Fields{
-				"sandbox":   s.sandbox.ID(),
-				"container": c.id,
+				"sandbox":   sandbox.ID(),
+				"container": containerID,
 				"exec-id":   r.ExecID,
 			}).Debug("Id of exec process to be signalled is empty")
+			s.mu.Unlock()
 			return empty, errors.New("The exec process does not exist")
 		}
 		processStatus = execs.status
 	} else {
-		r.All = true
+		all = true
 	}
 
 	// According to CRI specs, kubelet will call StopPodSandbox()
@@ -853,14 +868,20 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *emptypb.
 	// and return directly.
 	if (signum == syscall.SIGKILL || signum == syscall.SIGTERM) && processStatus == task.Status_STOPPED {
 		shimLog.WithFields(logrus.Fields{
-			"sandbox":   s.sandbox.ID(),
-			"container": c.id,
+			"sandbox":   sandbox.ID(),
+			"container": containerID,
 			"exec-id":   r.ExecID,
 		}).Debug("process has already stopped")
+		s.mu.Unlock()
 		return empty, nil
 	}
 
-	return empty, s.sandbox.SignalProcess(spanCtx, c.id, processID, signum, r.All)
+	// Only immutable values from the container and exec are retained after
+	// unlocking. They may be stopped or removed while the agent RPC is in
+	// flight.
+	s.mu.Unlock()
+
+	return empty, sandbox.SignalProcess(spanCtx, containerID, processID, signum, all)
 }
 
 // Pids returns all pids inside the container
@@ -1028,7 +1049,17 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAPI.StatsResponse, err error) {
 	shimLog.WithField("container", r.ID).Debug("Stats() start")
 	defer shimLog.WithField("container", r.ID).Debug("Stats() end")
-	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Stats", shimTracingTags)
+
+	// Preserve the sandbox-lifetime trace parent while deriving cancellation,
+	// deadlines, and request values from the incoming RPC context.
+	traceCtx := ctx
+	if s.rootCtx != nil {
+		rootSpan := otelTrace.SpanFromContext(s.rootCtx)
+		if rootSpan.SpanContext().IsValid() {
+			traceCtx = otelTrace.ContextWithSpan(ctx, rootSpan)
+		}
+	}
+	span, spanCtx := katatrace.Trace(traceCtx, shimLog, "Stats", shimTracingTags)
 	defer span.End()
 
 	start := time.Now()
@@ -1038,14 +1069,21 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 	}()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 
-	data, err := marshalMetrics(spanCtx, s, c.id)
+	// StatsContainer can block on an agent or cgroup read. Retain only immutable
+	// values after unlocking so a slow stats request cannot starve lifecycle
+	// operations that also need the service mutex.
+	sandbox := s.sandbox
+	containerID := c.id
+	s.mu.Unlock()
+
+	data, err := marshalMetrics(spanCtx, sandbox, containerID)
 	if err != nil {
 		return nil, err
 	}
