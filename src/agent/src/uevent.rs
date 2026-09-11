@@ -10,7 +10,7 @@ use crate::AGENT_CONFIG;
 use slog::Logger;
 
 use anyhow::{anyhow, Result};
-use netlink_sys::{protocols, SocketAddr, TokioSocket};
+use netlink_sys::{protocols, AsyncSocket, AsyncSocketExt, SocketAddr, TokioSocket};
 use std::fmt::Debug;
 use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
@@ -184,7 +184,7 @@ pub async fn watch_uevents(
         socket = TokioSocket::from_raw_fd(fd);
     }
 
-    socket.bind(&SocketAddr::new(0, 1))?;
+    socket.socket_mut().bind(&SocketAddr::new(0, 1))?;
 
     loop {
         select! {
