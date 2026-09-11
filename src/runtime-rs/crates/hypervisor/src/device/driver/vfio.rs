@@ -761,16 +761,28 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
     override_driver(bdf, host_driver).context("override driver")?;
 
-    // echo bdf > /sys/bus/pci/drivers/vfio-pci/unbind"
-    std::fs::write(VFIO_PCI_DRIVER_UNBIND, bdf)
-        .with_context(|| format!("echo {bdf}> {VFIO_PCI_DRIVER_UNBIND}"))?;
-    info!(sl!(), "echo {} > {}", bdf, VFIO_PCI_DRIVER_UNBIND);
+    unbind_pci_device_if_bound(
+        is_equal_driver(bdf, VFIO_PCI_DRIVER),
+        Path::new(VFIO_PCI_DRIVER_UNBIND),
+        bdf,
+    )?;
 
     // echo bdf > /sys/bus/pci/drivers_probe
     std::fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
         .with_context(|| format!("echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"))?;
     info!(sl!(), "echo {} > {}", bdf, SYS_BUS_PCI_DRIVER_PROBE);
 
+    Ok(())
+}
+
+fn unbind_pci_device_if_bound(bound_to_vfio: bool, unbind_path: &Path, bdf: &str) -> Result<()> {
+    if !bound_to_vfio {
+        return Ok(());
+    }
+
+    fs::write(unbind_path, bdf)
+        .with_context(|| format!("echo {bdf} > {}", unbind_path.display()))?;
+    info!(sl!(), "echo {} > {}", bdf, unbind_path.display());
     Ok(())
 }
 
@@ -901,4 +913,36 @@ pub fn get_vfio_device(device: String) -> Result<String> {
     }
 
     Ok(vfio_device)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unbind_pci_device_if_bound;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn unbind_bound_pci_device() {
+        let temp_dir = TempDir::new().expect("create temp directory");
+        let unbind_path = temp_dir.path().join("unbind");
+
+        unbind_pci_device_if_bound(true, &unbind_path, "0000:03:00.1")
+            .expect("unbind bound PCI device");
+
+        assert_eq!(
+            fs::read_to_string(unbind_path).expect("read unbind file"),
+            "0000:03:00.1"
+        );
+    }
+
+    #[test]
+    fn accept_unbound_pci_device() {
+        let temp_dir = TempDir::new().expect("create temp directory");
+        let unbind_path = temp_dir.path().join("unbind");
+
+        unbind_pci_device_if_bound(false, &unbind_path, "0000:03:00.1")
+            .expect("accept unbound PCI device");
+
+        assert!(!unbind_path.exists());
+    }
 }

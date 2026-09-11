@@ -378,7 +378,7 @@ func BindDevicetoHost(bdf, hostDriver string) error {
 		"driver-path": unbindDriverPath,
 	}).Info("Unbinding device from driver")
 
-	if err := utils.WriteToFile(unbindDriverPath, []byte(bdf)); err != nil {
+	if err := unbindPCIDeviceIfBound(unbindDriverPath, bdf); err != nil {
 		return err
 	}
 
@@ -390,4 +390,12 @@ func BindDevicetoHost(bdf, hostDriver string) error {
 	// Invoke drivers_probe so that the driver matching driver_override, in this case
 	// the previous host driver will probe the device.
 	return utils.WriteToFile(driversProbePath, []byte(bdf))
+}
+
+func unbindPCIDeviceIfBound(unbindPath, bdf string) error {
+	if err := utils.WriteToFile(unbindPath, []byte(bdf)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
 }
