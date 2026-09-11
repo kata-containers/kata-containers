@@ -125,9 +125,7 @@
       "storages": [
         {
           "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"redis\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/opstree/redis\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"redis\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
+          "driver_options": [],
           "fs_group": null,
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",

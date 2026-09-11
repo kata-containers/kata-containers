@@ -149,9 +149,6 @@ func TestShareRootFilesystem(t *testing.T) {
 					Source:     "test-image-name",
 					MountPoint: "/run/kata-containers/container-id-abc/test-suffix",
 					Driver:     "image_guest_pull",
-					DriverOptions: []string{
-						"image_guest_pull={\"metadata\":{\"io.kubernetes.cri.image-name\":\"test-image-name\"}}",
-					},
 				}},
 				guestPath: "/run/kata-containers/container-id-abc/test-suffix",
 			},
