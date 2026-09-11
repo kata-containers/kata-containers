@@ -332,10 +332,27 @@ func BindDevicetoVFIO(bdf, hostDriver string) (string, error) {
 	// Invoke drivers_probe so that the driver matching driver_override, in our case
 	// the vfio-pci driver will probe the device.
 	if err := utils.WriteToFile(driversProbePath, []byte(bdf)); err != nil {
+		restoreHostDriverAfterVFIO(bdf, hostDriver, "vfio probe")
 		return "", err
 	}
 
-	return GetVFIODevPath(bdf)
+	vfioPath, err := GetVFIODevPath(bdf)
+	if err != nil {
+		restoreHostDriverAfterVFIO(bdf, hostDriver, "vfio path lookup")
+		return "", err
+	}
+
+	return vfioPath, nil
+}
+
+func restoreHostDriverAfterVFIO(bdf, hostDriver, cause string) {
+	if err := BindDevicetoHost(bdf, hostDriver); err != nil {
+		deviceLogger().WithFields(logrus.Fields{
+			"device-bdf":  bdf,
+			"host-driver": hostDriver,
+			"cause":       cause,
+		}).WithError(err).Error("failed to restore host driver after VFIO bind failure")
+	}
 }
 
 // BindDevicetoHost unbinds the device from vfio-pci driver and binds it to the
@@ -361,7 +378,7 @@ func BindDevicetoHost(bdf, hostDriver string) error {
 		"driver-path": unbindDriverPath,
 	}).Info("Unbinding device from driver")
 
-	if err := utils.WriteToFile(unbindDriverPath, []byte(bdf)); err != nil {
+	if err := unbindPCIDeviceIfBound(unbindDriverPath, bdf); err != nil {
 		return err
 	}
 
@@ -373,4 +390,12 @@ func BindDevicetoHost(bdf, hostDriver string) error {
 	// Invoke drivers_probe so that the driver matching driver_override, in this case
 	// the previous host driver will probe the device.
 	return utils.WriteToFile(driversProbePath, []byte(bdf))
+}
+
+func unbindPCIDeviceIfBound(unbindPath, bdf string) error {
+	if err := utils.WriteToFile(unbindPath, []byte(bdf)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
 }

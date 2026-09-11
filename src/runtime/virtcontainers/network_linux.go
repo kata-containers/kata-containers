@@ -243,6 +243,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		if rxRateLimiterMaxRate > 0 {
 			networkLogger().Info("Add Rx Rate Limiter")
 			if err := addRxRateLimiter(endpoint, rxRateLimiterMaxRate); err != nil {
+				n.detachEndpointBestEffort(ctx, s, endpoint, hotplug)
 				return nil, err
 			}
 		}
@@ -250,6 +251,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		if txRateLimiterMaxRate > 0 {
 			networkLogger().Info("Add Tx Rate Limiter")
 			if err := addTxRateLimiter(endpoint, txRateLimiterMaxRate); err != nil {
+				n.detachEndpointBestEffort(ctx, s, endpoint, hotplug)
 				return nil, err
 			}
 		}
@@ -258,6 +260,18 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 	n.eps = append(n.eps, endpoint)
 
 	return endpoint, nil
+}
+
+func (n *LinuxNetwork) detachEndpointBestEffort(ctx context.Context, s *Sandbox, endpoint Endpoint, hotplug bool) {
+	var err error
+	if hotplug && s != nil {
+		err = endpoint.HotDetach(ctx, s, n.netNSCreated, n.netNSPath)
+	} else {
+		err = endpoint.Detach(ctx, n.netNSCreated, n.netNSPath)
+	}
+	if err != nil {
+		networkLogger().WithField("endpoint", endpoint.Name()).WithError(err).Warn("failed to detach endpoint after a later attach failure")
+	}
 }
 
 func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, endpoint Endpoint, hotplug bool) error {
@@ -429,7 +443,7 @@ func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath
 	for _, link := range linkList {
 		netInfo, err := networkInfoFromLink(netlinkHandle, link)
 		if err != nil {
-			// No rollback needed — no endpoints were added in this iteration yet.
+			n.rollbackScanEndpoints(ctx, s, hotplug, epsBefore)
 			return nil, err
 		}
 
@@ -459,14 +473,26 @@ func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath
 			}
 			return addErr
 		}); err != nil {
-			// Rollback: remove any endpoints added during this scan
-			// so that a failed scan does not leave partial side effects.
-			n.eps = n.eps[:epsBefore]
+			// Detach endpoints added during this scan before forgetting
+			// them. Physical endpoints have already rebound the VF to
+			// vfio-pci; dropping them from n.eps without Detach leaks
+			// that binding.
+			n.rollbackScanEndpoints(ctx, s, hotplug, epsBefore)
 			return nil, err
 		}
 	}
 
 	return added, nil
+}
+
+func (n *LinuxNetwork) rollbackScanEndpoints(ctx context.Context, s *Sandbox, hotplug bool, epsBefore int) {
+	if epsBefore > len(n.eps) {
+		return
+	}
+	for _, ep := range n.eps[epsBefore:] {
+		n.detachEndpointBestEffort(ctx, s, ep, hotplug)
+	}
+	n.eps = n.eps[:epsBefore]
 }
 
 // detectHypervisorNetns checks whether the hypervisor process is running in a
