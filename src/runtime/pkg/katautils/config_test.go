@@ -968,6 +968,12 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	if config.DiskRateLimiterOpsOneTimeBurst != 0 {
 		t.Errorf("Expected value for disk operations one time burst %v, got %v", diskRateLimiterOpsOneTimeBurst, config.DiskRateLimiterOpsOneTimeBurst)
 	}
+
+	assert.False(config.DisableNestedVirtualization)
+	hypervisor.DisableNestedVirtualization = true
+	config, err = newClhHypervisorConfig(hypervisor)
+	assert.NoError(err)
+	assert.True(config.DisableNestedVirtualization)
 }
 
 func TestHypervisorDefaults(t *testing.T) {
