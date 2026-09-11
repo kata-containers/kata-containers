@@ -86,7 +86,10 @@ NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64
 
 setup_langchain_flow() {
-    ensure_cicd_python_venv
+    # Keep FAISS and the older NIM LangChain stack away from the shared CI
+    # virtualenv. Runners are long-lived and other suites use incompatible
+    # FAISS distributions that install the same Python module.
+    ensure_cicd_python_venv "${HOME}/.cicd/venv-nim"
 
     pip install --upgrade pip
     [[ "$(pip show langchain 2>/dev/null | awk '/^Version:/{print $2}')" = "0.2.5" ]] || pip install langchain==0.2.5
@@ -356,7 +359,11 @@ EOF
 
     run python3 "${HOME}"/.cicd/venv/langchain_nim.py
 
-    [[ "${status}" -eq 0 ]]
+    [[ "${status}" -eq 0 ]] || {
+        echo "# LangChain subprocess output:" >&3
+        echo "${output}" >&3
+        false
+    }
     [[ "${output}" == *"Paris"* ]]
 
     echo "# QUESTION: ${QUESTION}" >&3
@@ -515,7 +522,11 @@ print("#"+ result.get("answer"))
 EOF
 
     run python3 "${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
-    [[ "${status}" -eq 0 ]]
+    [[ "${status}" -eq 0 ]] || {
+        echo "# RAG subprocess output:" >&3
+        echo "${output}" >&3
+        false
+    }
 
     ANSWER=$(echo "${output}" | cut -d '#' -f2)
     [[ -n "${ANSWER}" ]]
