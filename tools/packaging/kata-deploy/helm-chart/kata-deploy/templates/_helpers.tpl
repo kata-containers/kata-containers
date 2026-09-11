@@ -179,6 +179,37 @@ Returns the namespace where node-feature-discovery is found, or empty string if 
 {{- end -}}
 
 {{/*
+Every enabled shim declares an architecture it can be installed on.
+
+What the install lays down is the per-architecture shim list, built below from
+each shim's supportedArches, while the RuntimeClasses are created for whatever is
+enabled, architecture or no architecture. A shim enabled without the field is
+therefore installed nowhere and still gets a RuntimeClass, naming a handler
+containerd is never told about - which surfaces much later, as a pod that stays
+in ContainerCreating. Only the generic shims are in values.yaml, so this is how
+enabling one of the shims that ship as a try-kata-*.values.yaml profile goes
+wrong.
+*/}}
+{{- define "kata-deploy.validateShimArches" -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- if and $shimEnabled (not $shimConfig.supportedArches) -}}
+{{- fail (printf "\n\nERROR: shim %q is enabled but its supportedArches is empty.\n\nA shim is only installed on an architecture its own supportedArches lists, so this one would be installed nowhere while still getting a RuntimeClass no pod can run on. values.yaml carries the generic shims only; %q comes from one of the try-kata-*.values.yaml profiles, so install with that profile (helm install ... -f try-kata-<flavour>.values.yaml), or copy the shim's whole block out of it - its snapshotter and guest-pull settings live there too.\n" $shimName $shimName) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Get enabled shims for a specific architecture from structured config.
 Uses null-based defaults for disableAll support:
 - enabled: ~ (null) + disableAll: false → enabled
