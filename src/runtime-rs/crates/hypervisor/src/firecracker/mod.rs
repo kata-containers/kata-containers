@@ -110,7 +110,10 @@ impl Hypervisor for Firecracker {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
+    async fn add_device(&self, mut device: DeviceType) -> Result<DeviceType> {
+        if let DeviceType::Network(network) = &mut device {
+            network.config.queue_num = 1;
+        }
         let mut inner = self.inner.write().await;
         match inner.add_device(device.clone()).await {
             Ok(_) => Ok(device),
@@ -242,5 +245,53 @@ impl Persist for Firecracker {
             inner: Arc::new(RwLock::new(inner)),
             exit_waiter: Mutex::new((exit_waiter, 0)),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{NetworkConfig, NetworkDevice};
+
+    #[tokio::test]
+    async fn network_queues_use_one_pair_and_preserve_request() {
+        for requested in [0, 1, 16, 256] {
+            let firecracker = Firecracker::new();
+            let mut config = HypervisorConfig::default();
+            config.cpu_info.default_vcpus = 16.0;
+            config.network_info.network_queues = requested;
+            firecracker.set_hypervisor_config(config).await;
+            let effective = firecracker.hypervisor_config().await;
+            assert_eq!(effective.network_info.network_queues, 1);
+
+            let device = firecracker
+                .add_device(DeviceType::Network(NetworkDevice::new(
+                    "eth0".to_string(),
+                    &NetworkConfig {
+                        queue_num: requested as usize,
+                        ..Default::default()
+                    },
+                )))
+                .await
+                .unwrap();
+            let DeviceType::Network(network) = device else {
+                panic!("expected network device")
+            };
+            assert_eq!(network.config.queue_num, 1);
+            let inner = firecracker.inner.read().await;
+            let DeviceType::Network(pending) = &inner.pending_devices[0] else {
+                panic!("expected pending network device")
+            };
+            assert_eq!(pending.config.queue_num, 1);
+            drop(inner);
+
+            let state = firecracker.save().await.unwrap();
+            assert_eq!(state.config.network_info.network_queues, requested);
+            let restored = Firecracker::restore((), state).await.unwrap();
+            let effective = restored.hypervisor_config().await;
+            assert_eq!(effective.network_info.network_queues, 1);
+            let state = restored.save().await.unwrap();
+            assert_eq!(state.config.network_info.network_queues, requested);
+        }
     }
 }
