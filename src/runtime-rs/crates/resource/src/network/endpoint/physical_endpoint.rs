@@ -70,39 +70,74 @@ pub struct PhysicalEndpoint {
     /// QEMU device ID for the cold-plugged VF (e.g. "physical_nic__346_0").
     /// Stored during attach() for use in QMP-based path resolution.
     hostdev_id: std::sync::Mutex<Option<String>>,
+    /// False for DAN, where the CNI plugin owns the host driver binding.
+    rebind_on_detach: bool,
+}
+
+fn pci_device_properties(bdf: &str) -> Result<(String, VendorDevice)> {
+    let sys_pci_devices_path = Path::new(SYS_PCI_DEVICES_PATH);
+    // get driver by following symlink /sys/bus/pci/devices/$bdf/driver
+    let driver_path = sys_pci_devices_path.join(bdf).join("driver");
+    let link = driver_path.read_link().context("read link")?;
+    let driver = link
+        .file_name()
+        .map_or(String::new(), |v| v.to_str().unwrap().to_owned());
+
+    // get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
+    let iface_device_path = sys_pci_devices_path.join(bdf).join("device");
+    let device_id = std::fs::read_to_string(&iface_device_path)
+        .with_context(|| format!("read device path {:?}", &iface_device_path))?;
+
+    let iface_vendor_path = sys_pci_devices_path.join(bdf).join("vendor");
+    let vendor_id = std::fs::read_to_string(&iface_vendor_path)
+        .with_context(|| format!("read vendor path {:?}", &iface_vendor_path))?;
+
+    let vendor_device_id =
+        VendorDevice::new(&vendor_id, &device_id).context("new vendor device")?;
+
+    Ok((driver, vendor_device_id))
 }
 
 impl PhysicalEndpoint {
     pub fn new(name: &str, hardware_addr: &[u8], d: Arc<RwLock<DeviceManager>>) -> Result<Self> {
         let driver_info = link::get_driver_info(name).context("get driver info")?;
         let bdf = driver_info.bus_info;
-        let sys_pci_devices_path = Path::new(SYS_PCI_DEVICES_PATH);
-        // get driver by following symlink /sys/bus/pci/devices/$bdf/driver
-        let driver_path = sys_pci_devices_path.join(&bdf).join("driver");
-        let link = driver_path.read_link().context("read link")?;
-        let driver = link
-            .file_name()
-            .map_or(String::new(), |v| v.to_str().unwrap().to_owned());
-
-        // get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
-        let iface_device_path = sys_pci_devices_path.join(&bdf).join("device");
-        let device_id = std::fs::read_to_string(&iface_device_path)
-            .with_context(|| format!("read device path {:?}", &iface_device_path))?;
-
-        let iface_vendor_path = sys_pci_devices_path.join(&bdf).join("vendor");
-        let vendor_id = std::fs::read_to_string(&iface_vendor_path)
-            .with_context(|| format!("read vendor path {:?}", &iface_vendor_path))?;
+        let (driver, vendor_device_id) = pci_device_properties(&bdf)?;
 
         Ok(Self {
             iface_name: name.to_string(),
             hard_addr: utils::get_mac_addr(hardware_addr).context("get mac addr")?,
-            vendor_device_id: VendorDevice::new(&vendor_id, &device_id)
-                .context("new vendor device")?,
+            vendor_device_id,
             driver,
             bdf,
             d,
             guest_pci_path: std::sync::Mutex::new(None),
             hostdev_id: std::sync::Mutex::new(None),
+            rebind_on_detach: true,
+        })
+    }
+
+    /// Unlike [`PhysicalEndpoint::new`], there is no host netdev to inspect:
+    /// the BDF comes from the DAN config, and the name and MAC are the ones the
+    /// NIC will have inside the guest.
+    pub fn new_dan(
+        name: &str,
+        guest_mac: &str,
+        bdf: &str,
+        d: Arc<RwLock<DeviceManager>>,
+    ) -> Result<Self> {
+        let (driver, vendor_device_id) = pci_device_properties(bdf)?;
+
+        Ok(Self {
+            iface_name: name.to_string(),
+            hard_addr: guest_mac.to_string(),
+            vendor_device_id,
+            driver,
+            bdf: bdf.to_string(),
+            d,
+            guest_pci_path: std::sync::Mutex::new(None),
+            hostdev_id: std::sync::Mutex::new(None),
+            rebind_on_detach: false,
         })
     }
 }
@@ -173,6 +208,8 @@ impl Endpoint for PhysicalEndpoint {
         // The topology-computed guest_pci_path from do_add_pcie_endpoint() is
         // WRONG for physical endpoints (root port has no explicit addr so QEMU
         // auto-assigns its slot; the correct path requires QMP after VM boot).
+        // Hot-plugged devices are no different: QEMU does report the real path
+        // from device_add, but VfioDevice::attach() drops it.
         if let hypervisor::device::DeviceType::Vfio(vfio_dev) = device_type {
             if let Some(hostdev) = vfio_dev.devices.first() {
                 if let Ok(mut guard) = self.hostdev_id.lock() {
@@ -187,6 +224,11 @@ impl Endpoint for PhysicalEndpoint {
     // detach for physical endpoint unbinds the physical network interface from vfio-pci
     // and binds it back to the saved host driver.
     async fn detach(&self, _hypervisor: &dyn Hypervisor) -> Result<()> {
+        // For DAN, the CNI plugin undoes its own vfio-pci binding.
+        if !self.rebind_on_detach {
+            return Ok(());
+        }
+
         // bind back the physical network interface to host.
         // we need to do this even if a new network namespace has not
         // been created by virt-containers.

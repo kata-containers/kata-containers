@@ -125,6 +125,24 @@ impl DeviceManager {
         self.pcie_topology.clone()
     }
 
+    /// QEMU only creates root ports from its command line, so ports for
+    /// devices hot-plugged later must be reserved before the VM is launched.
+    pub fn reserve_pcie_root_ports(&mut self, count: u32) -> Result<()> {
+        if count == 0 {
+            return Ok(());
+        }
+
+        // Failing here beats silently dropping the reservation and letting the
+        // hot-plug land on a bus the guest does not have.
+        let topology = self
+            .pcie_topology
+            .as_mut()
+            .ok_or_else(|| anyhow!("no PCIe topology to reserve {} root port(s) in", count))?;
+        topology.pcie_root_ports += count;
+
+        Ok(())
+    }
+
     async fn get_block_device_info(&self) -> BlockDeviceInfo {
         self.hypervisor.hypervisor_config().await.blockdev_info
     }
