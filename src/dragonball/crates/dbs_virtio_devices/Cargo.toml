@@ -16,9 +16,10 @@ byteorder = "1.4.3"
 caps = "0.5.3"
 dbs-device = { workspace = true }
 dbs-interrupt = { workspace = true, features = [
-    "kvm-legacy-irq",
-    "kvm-msi-irq",
-    "split-legacy-irq",
+    "kvm-irq",
+    "split-irq",
+    "legacy-irq",
+    "msi-irq",
 ] }
 dbs-utils = { workspace = true }
 dbs-address-space = { workspace = true }

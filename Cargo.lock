@@ -1592,7 +1592,9 @@ name = "dbs-legacy-devices"
 version = "0.1.1"
 dependencies = [
  "dbs-device",
+ "dbs-interrupt",
  "dbs-utils",
+ "kvm-ioctls",
  "libc",
  "log",
  "serde",

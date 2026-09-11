@@ -270,10 +270,10 @@ mod test {
         let routing = KvmIrqRouting::new(vmfd.clone());
 
         // this would ok on 4.9 kernel
-        assert!(routing.initialize().is_err());
+        assert!(routing.initialize(false).is_err());
 
         vmfd.create_irq_chip().unwrap();
-        routing.initialize().unwrap();
+        routing.initialize(false).unwrap();
 
         let routes = &routing.routes.lock().unwrap();
         assert_eq!(routes.len(), MASTER_PIC + SLAVE_PIC + IOAPIC);
@@ -286,10 +286,10 @@ mod test {
         let routing = KvmIrqRouting::new(vmfd.clone());
 
         // this would ok on 4.9 kernel
-        assert!(routing.initialize().is_err());
+        assert!(routing.initialize(false).is_err());
 
         vmfd.create_irq_chip().unwrap();
-        routing.initialize().unwrap();
+        routing.initialize(false).unwrap();
 
         let mut entry = kvm_irq_routing_entry {
             gsi: 8,
@@ -318,10 +318,10 @@ mod test {
         let routing = KvmIrqRouting::new(vmfd.clone());
 
         // this would ok on 4.9 kernel
-        assert!(routing.initialize().is_err());
+        assert!(routing.initialize(false).is_err());
 
         vmfd.create_irq_chip().unwrap();
-        routing.initialize().unwrap();
+        routing.initialize(false).unwrap();
 
         let mut entry = kvm_irq_routing_entry {
             gsi: 8,

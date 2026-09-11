@@ -30,16 +30,16 @@ use kvm_ioctls::VmFd;
 
 use super::*;
 
-#[cfg(feature = "kvm-legacy-irq")]
+#[cfg(feature = "legacy-irq")]
 use legacy_irq::LegacyIrq;
-#[cfg(feature = "kvm-msi-irq")]
+#[cfg(feature = "msi-irq")]
 use msi_irq::MsiIrq;
 
-#[cfg(feature = "kvm-legacy-irq")]
+#[cfg(feature = "legacy-irq")]
 mod legacy_irq;
-#[cfg(feature = "kvm-msi-generic")]
+#[cfg(feature = "msi-irq")]
 mod msi_generic;
-#[cfg(feature = "kvm-msi-irq")]
+#[cfg(feature = "msi-irq")]
 mod msi_irq;
 
 /// Maximum number of global interrupt sources.
@@ -71,6 +71,24 @@ impl KvmIrqManager {
                 groups: HashMap::new(),
                 routes: Arc::new(KvmIrqRouting::new(vmfd)),
                 max_msi_irqs: DEFAULT_MAX_MSI_IRQS_PER_DEVICE,
+                kvm_legacy_disabled: false,
+            }),
+        }
+    }
+
+    /// Create a new KVM interrupt manager that only handles MSI interrupt, usually
+    /// used for VM with split irqchip
+    ///
+    /// # Arguments
+    /// * `vmfd`: The KVM VM file descriptor, which will be used to access the KVM subsystem.
+    pub fn new_with_kvm_legacy_disabled(vmfd: Arc<VmFd>) -> Self {
+        KvmIrqManager {
+            mgr: Mutex::new(KvmIrqManagerObj {
+                vmfd: vmfd.clone(),
+                groups: HashMap::new(),
+                routes: Arc::new(KvmIrqRouting::new(vmfd)),
+                max_msi_irqs: DEFAULT_MAX_MSI_IRQS_PER_DEVICE,
+                kvm_legacy_disabled: true,
             }),
         }
     }
@@ -112,11 +130,12 @@ struct KvmIrqManagerObj {
     routes: Arc<KvmIrqRouting>,
     groups: HashMap<InterruptIndex, Arc<Box<dyn InterruptSourceGroup>>>,
     max_msi_irqs: InterruptIndex,
+    kvm_legacy_disabled: bool,
 }
 
 impl KvmIrqManagerObj {
     fn initialize(&self) -> Result<()> {
-        self.routes.initialize()?;
+        self.routes.initialize(self.kvm_legacy_disabled)?;
         Ok(())
     }
 
@@ -128,14 +147,14 @@ impl KvmIrqManagerObj {
     ) -> Result<Arc<Box<dyn InterruptSourceGroup>>> {
         #[allow(unreachable_patterns)]
         let group: Arc<Box<dyn InterruptSourceGroup>> = match ty {
-            #[cfg(feature = "kvm-legacy-irq")]
+            #[cfg(feature = "legacy-irq")]
             InterruptSourceType::LegacyIrq => Arc::new(Box::new(LegacyIrq::new(
                 base,
                 count,
                 self.vmfd.clone(),
                 self.routes.clone(),
             )?)),
-            #[cfg(feature = "kvm-msi-irq")]
+            #[cfg(feature = "msi-irq")]
             InterruptSourceType::MsiIrq => Arc::new(Box::new(MsiIrq::new(
                 base,
                 count,
@@ -161,7 +180,7 @@ impl KvmIrqManagerObj {
 // interrupt source on x86 platforms. The PIC and IOAPIC may share the same GSI on x86 platforms.
 fn hash_key(entry: &kvm_irq_routing_entry) -> u64 {
     let type1 = match entry.type_ {
-        #[cfg(feature = "kvm-legacy-irq")]
+        #[cfg(feature = "legacy-irq")]
         kvm_bindings::KVM_IRQ_ROUTING_IRQCHIP => unsafe { entry.u.irqchip.irqchip },
         _ => 0u32,
     };
@@ -181,13 +200,15 @@ impl KvmIrqRouting {
         }
     }
 
-    pub(super) fn initialize(&self) -> Result<()> {
+    pub(super) fn initialize(&self, kvm_legacy_disabled: bool) -> Result<()> {
         // Safe to unwrap because there's no legal way to break the mutex.
         #[allow(unused_mut)]
         let mut routes = self.routes.lock().unwrap();
 
-        #[cfg(feature = "kvm-legacy-irq")]
-        LegacyIrq::initialize_legacy(&mut routes)?;
+        #[cfg(feature = "legacy-irq")]
+        if !kvm_legacy_disabled {
+            LegacyIrq::initialize_legacy(&mut routes)?;
+        }
 
         self.set_routing(&routes)?;
 
@@ -213,7 +234,7 @@ impl KvmIrqRouting {
     }
 }
 
-#[cfg(feature = "kvm-msi-generic")]
+#[cfg(feature = "msi-irq")]
 impl KvmIrqRouting {
     pub(super) fn add(&self, entries: &[kvm_irq_routing_entry]) -> Result<()> {
         // Safe to unwrap because there's no legal way to break the mutex.

@@ -20,8 +20,8 @@ dbs-address-space = { workspace = true }
 dbs-virtio-devices = { workspace = true }
 dbs-interrupt = { workspace = true, features = [
     "kvm-irq",
-    "kvm-legacy-irq",
-    "kvm-msi-irq",
+    "legacy-irq",
+    "msi-irq",
 ] }
 byteorder = "1.4.3"
 serde = "1.0.27"

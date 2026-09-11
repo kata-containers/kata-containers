@@ -248,7 +248,7 @@ mod tests {
         assert!(notifier.notifier().is_none());
     }
 
-    #[cfg(feature = "kvm-legacy-irq")]
+    #[cfg(feature = "legacy-irq")]
     #[test]
     fn test_create_legacy_notifier() {
         skip_if_kvm_unaccessable!();
@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(clone.as_any().type_id(), notifier.as_any().type_id());
     }
 
-    #[cfg(feature = "kvm-msi-irq")]
+    #[cfg(feature = "msi-irq")]
     #[test]
     fn test_virtio_msi_notifier() {
         skip_if_kvm_unaccessable!();
