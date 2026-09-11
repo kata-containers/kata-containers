@@ -29,7 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	cri "github.com/containerd/containerd/pkg/cri/annotations"
+	cri "github.com/kata-containers/kata-containers/src/runtime/pkg/annotations"
 	crio "github.com/cri-o/cri-o/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"

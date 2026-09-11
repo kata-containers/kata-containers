@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/containerd/containerd/mount"
-	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+	"github.com/containerd/containerd/v2/core/mount"
+	cdshim "github.com/containerd/containerd/v2/pkg/shim"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -101,7 +101,7 @@ func getAddress(ctx context.Context, bundlePath, address, id string) (string, er
 		if err != nil {
 			return "", err
 		}
-		address, err := cdshim.SocketAddress(ctx, address, sandboxID)
+		address, err := cdshim.SocketAddress(ctx, address, sandboxID, false)
 		if err != nil {
 			return "", err
 		}

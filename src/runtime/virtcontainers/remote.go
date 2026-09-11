@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	cri "github.com/containerd/containerd/pkg/cri/annotations"
+	cri "github.com/kata-containers/kata-containers/src/runtime/pkg/annotations"
 	"github.com/containerd/ttrpc"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"

@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
-	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"

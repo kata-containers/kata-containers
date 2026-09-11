@@ -10,7 +10,7 @@ import (
 	"path"
 
 	"github.com/containerd/containerd/api/types/task"
-	"github.com/containerd/containerd/mount"
+	"github.com/containerd/containerd/v2/core/mount"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
