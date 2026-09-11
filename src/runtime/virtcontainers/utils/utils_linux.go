@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -113,6 +114,14 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 		return
 	}
 
+	// Mounting resolves symlinks in the target path, so /proc/mounts records
+	// the resolved path. Resolve the requested path before comparing, or fall
+	// back to the original path if resolution fails.
+	resolvedMountPoint, resolveErr := filepath.EvalSymlinks(mountPoint)
+	if resolveErr != nil {
+		resolvedMountPoint = mountPoint
+	}
+
 	var file *os.File
 
 	file, err = os.Open(procMountsFile)
@@ -138,7 +147,7 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 			return
 		}
 
-		if mountPoint == fields[procPathIndex] {
+		if resolvedMountPoint == fields[procPathIndex] {
 			devicePath = fields[procDeviceIndex]
 			fsType = fields[procTypeIndex]
 			fsOptions = strings.Split(fields[procOptionIndex], ",")

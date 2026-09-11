@@ -4,11 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufRead, BufReader},
-};
+use std::collections::HashMap;
 
 use super::{Volume, BIND};
 use crate::share_fs::ephemeral_path;
@@ -19,7 +15,7 @@ use byte_unit::{Byte, Unit};
 use hypervisor::{device::device_manager::DeviceManager, HUGETLBFS};
 use kata_sys_util::{
     fs::get_base_name,
-    mount::{get_mount_path, PROC_MOUNTS_FILE},
+    mount::{get_linux_mount_info, get_mount_path, Error as MountError},
 };
 use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
 use oci_spec::runtime as oci;
@@ -113,21 +109,13 @@ pub(crate) fn get_huge_page_option(m: &oci::Mount) -> Result<Option<Vec<String>>
     if m.source().is_none() {
         return Err(anyhow!("empty mount source"));
     }
-    let file = File::open(PROC_MOUNTS_FILE).context("failed open file")?;
-    let reader = BufReader::new(file);
-    for line in reader.lines().map_while(Result::ok) {
-        let items: Vec<&str> = line.split(' ').collect();
-        if get_mount_path(m.source()).as_str() == items[1] && items[2] == HUGETLBFS {
-            let fs_options: Vec<&str> = items[3].split(',').collect();
-            return Ok(Some(
-                fs_options
-                    .iter()
-                    .map(|&s| s.to_string())
-                    .collect::<Vec<String>>(),
-            ));
-        }
+
+    let mount_path = get_mount_path(m.source());
+    match get_linux_mount_info(&mount_path) {
+        Ok(info) if info.fs_type == HUGETLBFS => Ok(Some(info.options)),
+        Ok(_) | Err(MountError::NoMountEntry(_)) => Ok(None),
+        Err(err) => Err(err.into()),
     }
-    Ok(None)
 }
 
 // TODO add hugepage limit to sandbox memory once memory hotplug is enabled

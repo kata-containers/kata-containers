@@ -66,6 +66,7 @@ const PROC_FIELDS_PER_LINE: usize = 6;
 const PROC_DEVICE_INDEX: usize = 0;
 const PROC_PATH_INDEX: usize = 1;
 const PROC_TYPE_INDEX: usize = 2;
+const PROC_OPTIONS_INDEX: usize = 3;
 
 lazy_static! {
     static ref MAX_MOUNT_PARAM_SIZE: usize =
@@ -129,10 +130,21 @@ pub struct LinuxMountInfo {
     pub path: String,
     /// Filesystem type of mount, third field of records from `/proc/mounts`.
     pub fs_type: String,
+    /// Mount options, fourth field of records from `/proc/mounts`.
+    pub options: Vec<String>,
 }
 
-/// Get the device and file system type of a mount point by parsing `/proc/mounts`.
+/// Get mount information for a mount point by parsing `/proc/mounts`.
 pub fn get_linux_mount_info(mount_point: &str) -> Result<LinuxMountInfo> {
+    // Mounting resolves symlinks in the target path, so `/proc/mounts` records
+    // the resolved path. In case `mount_point` contains a symlink, resolve it
+    // before comparing, or fall back to the original path if resolution fails.
+    // If resolution fails, compare the original path and let the scan determine
+    // whether a matching mount exists.
+    let requested_path = Path::new(mount_point);
+    let resolved_path =
+        fs::canonicalize(requested_path).unwrap_or_else(|_| requested_path.to_path_buf());
+
     let mount_file = fs::File::open(PROC_MOUNTS_FILE)?;
     let reader = io::BufReader::new(mount_file);
 
@@ -148,11 +160,15 @@ pub fn get_linux_mount_info(mount_point: &str) -> Result<LinuxMountInfo> {
             ));
         }
 
-        if mount_point == fields[PROC_PATH_INDEX] {
+        if resolved_path == Path::new(fields[PROC_PATH_INDEX]) {
             return Ok(LinuxMountInfo {
                 device: fields[PROC_DEVICE_INDEX].to_string(),
                 path: fields[PROC_PATH_INDEX].to_string(),
                 fs_type: fields[PROC_TYPE_INDEX].to_string(),
+                options: fields[PROC_OPTIONS_INDEX]
+                    .split(',')
+                    .map(str::to_string)
+                    .collect(),
             });
         }
     }
@@ -834,6 +850,7 @@ pub fn get_mount_type(m: &oci::Mount) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::symlink;
     use std::path::PathBuf;
 
     #[test]
@@ -843,6 +860,7 @@ mod tests {
         assert_eq!(&info.device, "tmpfs");
         assert_eq!(&info.fs_type, "tmpfs");
         assert_eq!(&info.path, "/dev/shm");
+        assert!(!info.options.is_empty());
 
         assert!(matches!(
             get_linux_mount_info(""),
@@ -852,6 +870,21 @@ mod tests {
             get_linux_mount_info("/sys/fs/cgroup/do_not_exist/____hi"),
             Err(Error::NoMountEntry(_))
         ));
+    }
+
+    #[test]
+    fn test_get_linux_mount_info_through_symlinked_parent() {
+        let direct_options = get_linux_mount_info("/dev/shm").unwrap().options;
+        let tmpdir = tempfile::tempdir().unwrap();
+        let symlinked_dev = tmpdir.path().join("dev");
+        symlink("/dev", &symlinked_dev).unwrap();
+
+        let info = get_linux_mount_info(symlinked_dev.join("shm").to_str().unwrap()).unwrap();
+
+        assert_eq!(&info.device, "tmpfs");
+        assert_eq!(&info.fs_type, "tmpfs");
+        assert_eq!(&info.path, "/dev/shm");
+        assert_eq!(info.options, direct_options);
     }
 
     #[test]
