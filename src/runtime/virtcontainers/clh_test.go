@@ -77,6 +77,18 @@ type clhClientMock struct {
 	vmInfo          chclient.VmInfo
 	restoreRequest  *chclient.RestoreConfig
 	snapshotRequest *chclient.VmSnapshotConfig
+
+	// resizeVCPUsResponses drives VmResizePut for the retry tests: every call
+	// pops the next queued response, and once the queue is drained the call
+	// succeeds. resizeVCPUsCalls counts the invocations so a test can assert
+	// that an unrecoverable error is not retried.
+	resizeVCPUsResponses []resizeVCPUsResp
+	resizeVCPUsCalls     int
+}
+
+type resizeVCPUsResp struct {
+	statusCode int
+	err        error
 }
 
 func (c *clhClientMock) VmmPingGet(ctx context.Context) (chclient.VmmPingResponse, *http.Response, error) {
@@ -104,7 +116,20 @@ func (c *clhClientMock) BootVM(ctx context.Context) (*http.Response, error) {
 
 //nolint:golint
 func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
-	return nil, nil
+	c.resizeVCPUsCalls++
+	if len(c.resizeVCPUsResponses) == 0 {
+		return nil, nil
+	}
+	r := c.resizeVCPUsResponses[0]
+	c.resizeVCPUsResponses = c.resizeVCPUsResponses[1:]
+	if r.err == nil {
+		return nil, nil
+	}
+	var resp *http.Response
+	if r.statusCode != 0 {
+		resp = &http.Response{StatusCode: r.statusCode}
+	}
+	return resp, r.err
 }
 
 //nolint:golint
@@ -738,6 +763,59 @@ func TestCloudHypervisorResizeMemory(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCloudHypervisorResizeVCPUs429Retry guards the retry classification in
+// ResizeVCPUs. CLH answers 429 while a previous vCPU hot-unplug is still
+// pending (CpuManager::VcpuPendingRemovedVcpu), a transient condition the
+// retry loop exists to absorb. Since micro_http emits a status line with an
+// empty reason phrase ("HTTP/1.1 429 "), the generated client stringifies the
+// error as a bare "429", so a strings.Contains(err, "Too Many Requests") guard
+// never matched and the 429 escaped as an unrecoverable error. The guard has
+// to key off the HTTP status code.
+func TestCloudHypervisorResizeVCPUs429Retry(t *testing.T) {
+	clhConfig, err := newClhConfig()
+	assert.NoError(t, err)
+
+	newVCPUsMock := func() *clhClientMock {
+		m := &clhClientMock{}
+		m.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewPayloadConfig())
+		m.vmInfo.Config.Cpus = chclient.NewCpusConfig(1, 8)
+		return m
+	}
+
+	t.Run("429 without a reason phrase is retried", func(t *testing.T) {
+		assert := assert.New(t)
+		clh := cloudHypervisor{config: clhConfig}
+		mock := newVCPUsMock()
+		// The error stringifies to "429", not to "Too Many Requests", just
+		// like the real CLH response does.
+		mock.resizeVCPUsResponses = []resizeVCPUsResp{
+			{statusCode: http.StatusTooManyRequests, err: errors.New("429")},
+			{statusCode: http.StatusTooManyRequests, err: errors.New("429")},
+		}
+		clh.APIClient = mock
+
+		_, newVCPUs, err := clh.ResizeVCPUs(context.Background(), 4)
+		assert.NoError(err)
+		assert.Equal(uint32(4), newVCPUs)
+		assert.Equal(3, mock.resizeVCPUsCalls) // two 429s plus one success
+	})
+
+	t.Run("non-429 error is unrecoverable", func(t *testing.T) {
+		assert := assert.New(t)
+		clh := cloudHypervisor{config: clhConfig}
+		mock := newVCPUsMock()
+		mock.resizeVCPUsResponses = []resizeVCPUsResp{
+			{statusCode: http.StatusInternalServerError, err: errors.New("500")},
+			{statusCode: http.StatusInternalServerError, err: errors.New("500")},
+		}
+		clh.APIClient = mock
+
+		_, _, err := clh.ResizeVCPUs(context.Background(), 4)
+		assert.Error(err)
+		assert.Equal(1, mock.resizeVCPUsCalls) // a single attempt, no retry
+	})
 }
 
 func TestCloudHypervisorHotplugAddBlockDevice(t *testing.T) {
