@@ -211,8 +211,7 @@ function delete_cluster() {
 	rg="$(_print_rg_name "${test_type}")"
 
 	if [[ "$(az group exists -g "${rg}")" == "true" ]]; then
-		az group delete -g "${rg}" --yes || \
-			warn "Failed to delete the resource group ${rg}"
+		az group delete -g "${rg}" --yes
 	fi
 }
 
