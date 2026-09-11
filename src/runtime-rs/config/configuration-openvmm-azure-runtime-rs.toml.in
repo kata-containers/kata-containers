@@ -166,13 +166,9 @@ queue_size = 128
 # Block device multi-queue, default 1
 num_queues = 1
 
-# network_queues configures the number of virtio-net queue pairs (RX/TX) exposed to the guest.
-# Setting network_queues = N creates N RX queues and N TX queues (i.e., N queue pairs).
-# More queues can improve network throughput and reduce per-queue contention by allowing packet processing to scale
-# across multiple vCPUs/threads (subject to host/guest capabilities and backend configuration such as vhost-net).
-# Increasing this value consumes more resources (e.g., virtqueue state, interrupts/MSI-X vectors, backend threads),
-# so it should typically not exceed the number of vCPUs or the practical parallelism of the networking backend.
-# Default: 1, Range: 1..=256
+# OpenVMM supports one virtio-net queue pair (RX/TX).
+# network_queues always resolves to 1 for this hypervisor.
+# Directly attached TAP devices must be created without multiqueue.
 network_queues = @DEFNETQUEUES@
 
 # Enable pre allocation of VM RAM, default false
