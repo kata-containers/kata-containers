@@ -16,6 +16,47 @@ This repository houses the `Direct Volume CSI driver`, along with all build and 
 
 The driver can provision volumes based on direct block devices, eliminating the need for loop devices and relying solely on single files stored on the host.
 
+## Configuration
+
+The driver runs as the `kata-directvolume` container in the
+[`csi-kata-directvol-plugin` DaemonSet](deploy/kata-directvolume/csi-directvol-plugin.yaml).
+Pass flags through that container's `args`.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--endpoint` | `unix:///var/run/csi.sock` | CSI endpoint |
+| `--drivername` | `directvolume.csi.katacontainers.io` | CSI driver name |
+| `--statedir` | `/csi-persist-data` | Directory for state across driver restarts |
+| `--storagepath` | (empty) | Host path for backend volume files |
+| `--nodeid` | (empty) | Kubernetes node ID |
+| `--capacity` | (unset) | Simulated storage capacity as `<kind>=<quantity>`. May be repeated for different kinds. |
+| `--max-volume-size` | 1 TB | Maximum volume size in bytes (inclusive). A PVC larger than this is rejected with CSI `OutOfRange`. |
+| `--enable-topology` | `true` | Advertise the `VOLUME_ACCESSIBILITY_CONSTRAINTS` capability |
+| `--spdk-rpc-timeout` | `10s` | Timeout for SPDK JSON-RPC requests |
+| `--spdk-rawpath` | (empty) | Path for SPDK rawdisk backing files |
+| `--spdk-vhostpath` | (empty) | Path for SPDK vhost controller sockets |
+| `--version` | `false` | Print version and exit |
+
+`--v` is klog verbosity; the in-tree DaemonSet sets `--v=5`.
+
+The in-tree DaemonSet already sets the flags operators normally need:
+
+```yaml
+        - name: kata-directvolume
+          args:
+            - --drivername=directvolume.csi.katacontainers.io
+            - --v=5
+            - --endpoint=$(CSI_ENDPOINT)
+            - --statedir=$(STATE_DIR)
+            - --storagepath=$(STORAGE_POOL)
+            - --nodeid=$(KUBE_NODE_NAME)
+            - --spdk-rawpath=$(RAW_DISKS)
+            - --spdk-vhostpath=$(VHU_UDS_PATH)
+            - --spdk-rpc-timeout=10s
+```
+
+To allow volumes larger than the 1 TB default, add `--max-volume-size` (bytes) to those `args`.
+
 ## Deployment
 
 [Deployment for K8S 1.20+](docs/deploy-csi-kata-directvol.md)
