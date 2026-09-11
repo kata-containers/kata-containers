@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	goruntime "runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -868,8 +867,40 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	return nil
 }
 
+func getCPUCount() (int64, error) {
+	dat, err := os.ReadFile("/sys/devices/system/cpu/online")
+	if err != nil {
+		return 0, err
+	}
+	return parseCPUList(string(dat))
+}
+
+func parseCPUList(list string) (int64, error) {
+	var count int64
+	for _, rg := range strings.Split(list, ",") {
+		cpuRange := strings.SplitN(rg, "-", 2)
+		if len(cpuRange) == 1 {
+			count++
+		} else if len(cpuRange) == 2 {
+			lo, err := strconv.ParseInt(cpuRange[0], 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			hi, err := strconv.ParseInt(strings.TrimRight(cpuRange[1], "\n"), 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			count += hi - lo + 1
+		}
+	}
+	return count, nil
+}
+
 func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
-	numCPUs := goruntime.NumCPU()
+	numCPUs, err := getCPUCount()
+	if err != nil {
+		return fmt.Errorf("faile to get cpu count %w", err)
+	}
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultVCPUs).setFloat32WithCheck(func(vcpus float32) error {
 		if vcpus > float32(numCPUs) && sbConfig.HypervisorType != vc.RemoteHypervisor {
