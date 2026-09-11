@@ -876,7 +876,7 @@ impl VirtSandbox {
             "initdata push data into compressed block: {:?}", &image_path
         );
         let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
-        let block_config = BlockConfigModern {
+        let mut block_config = BlockConfigModern {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
             driver_option: block_driver.clone(),
@@ -885,6 +885,16 @@ impl VirtSandbox {
             queue_size: hypervisor_config.blockdev_info.queue_size,
             ..Default::default()
         };
+        if self.resource_manager.config().await.runtime.hypervisor_name == HYPERVISOR_QEMU {
+            // Match the Go runtime: expose initdata by its virtio-blk serial.
+            block_config.driver_option = if uses_native_ccw_bus() {
+                VIRTIO_BLK_CCW
+            } else {
+                VIRTIO_BLK_PCI
+            }
+            .to_owned();
+            block_config.serial_override = "initdata".to_owned();
+        }
         let initdata_config = InitDataConfig(block_config, initdata_digest);
         info!(sl!(), "initdata config: {:?}", initdata_config.clone());
 
