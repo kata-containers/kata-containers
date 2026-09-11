@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufReader, Result};
+use std::io::{self, BufReader, ErrorKind, Result};
 use std::result::{self};
 
 use serde::Deserialize;
@@ -16,6 +16,7 @@ use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
 use crate::config::TomlConfig;
 use crate::initdata::add_hypervisor_initdata_overrides;
 use crate::sl;
+use libc;
 
 use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
 
@@ -682,23 +683,14 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS => match self.get_value::<f32>(key) {
                         Ok(num_cpus) => {
                             let num_cpus = num_cpus.unwrap_or_default();
-                            if num_cpus
-                                > get_hypervisor_plugin(hypervisor_name)
-                                    .unwrap()
-                                    .get_max_cpus() as f32
-                            {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::InvalidData,
-                                    format!(
-                                        "Vcpus specified in annotation {} is more than maximum limitation {}",
-                                        num_cpus,
-                                        get_hypervisor_plugin(hypervisor_name)
-                                            .unwrap()
-                                            .get_max_cpus()
-                                    ),
-                                ));
-                            } else {
-                                hv.cpu_info.default_vcpus = num_cpus;
+                            let cpus = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_ONLN) };
+                            match validate_default_vcpus(num_cpus, cpus) {
+                                Ok(vcpus) => {
+                                    hv.cpu_info.default_vcpus = vcpus;
+                                }
+                                Err(e) => {
+                                    return Err(e);
+                                }
                             }
                         }
                         Err(_e) => {
@@ -1188,6 +1180,25 @@ impl Annotation {
     }
 }
 
+fn validate_default_vcpus(num_cpus: f32, cpus: i64) -> Result<f32> {
+    if cpus < 1 {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            format!("detected online cpu count {} is less than 1", cpus),
+        ));
+    }
+    if num_cpus > cpus as f32 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Vcpus specified in annotation {} is more than maximum limitation {}",
+                num_cpus, cpus
+            ),
+        ));
+    }
+    Ok(num_cpus)
+}
+
 fn convert_to_megabytes(mem_size_str: &str) -> Result<Option<u32>> {
     match byte_unit::Byte::parse_str(mem_size_str, true) {
         Ok(mut mem_size) => {
@@ -1244,5 +1255,27 @@ mod tests {
         let result = convert_to_megabytes("2048r");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn validate_default_vcpus_valid() {
+        // Requested vCPUs is less than or equal to the number of online CPUs.
+        assert_eq!(validate_default_vcpus(2.0, 8).unwrap(), 2.0);
+        assert_eq!(validate_default_vcpus(8.0, 8).unwrap(), 8.0);
+    }
+
+    #[test]
+    fn validate_default_vcpus_exceeds_limit() {
+        // Requested vCPUs exceeds the number of online CPUs on the host.
+        let err = validate_default_vcpus(16.0, 8).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("more than maximum limitation"));
+    }
+
+    #[test]
+    fn validate_default_vcpus_no_online_cpus() {
+        // Host reports no online CPUs (sysconf returned < 1).
+        assert!(validate_default_vcpus(1.0, 0).is_err());
+        assert!(validate_default_vcpus(1.0, -1).is_err());
     }
 }
