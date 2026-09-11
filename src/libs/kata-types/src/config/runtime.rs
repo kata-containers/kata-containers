@@ -27,6 +27,29 @@ pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
 /// EmptyDir mode: plug a block device to be mounted directly in the guest.
 pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
 
+/// A kubelet PodResources source the cold-plug path may trust. Serialized
+/// as the tokens `"device-plugin"` / `"dra"`, so an unknown or misspelled
+/// token is rejected when the config is loaded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub enum PodResourceDeviceSource {
+    /// Legacy device-plugin allocations (container.Devices).
+    #[serde(rename = "device-plugin")]
+    DevicePlugin,
+    /// Dynamic Resource Allocation (KEP-3695).
+    #[serde(rename = "dra")]
+    Dra,
+}
+
+impl PodResourceDeviceSource {
+    /// The config token this variant serializes as.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PodResourceDeviceSource::DevicePlugin => "device-plugin",
+            PodResourceDeviceSource::Dra => "dra",
+        }
+    }
+}
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -224,6 +247,28 @@ pub struct Runtime {
     ///              based cold plug.
     #[serde(default)]
     pub pod_resource_api_sock: String,
+
+    /// PodResources API sources feeding the cold-plug device list:
+    /// "device-plugin" and/or "dra". `None` (key absent) means the
+    /// historical default of ["device-plugin"]; an explicit empty list
+    /// trusts neither source: a pod without cold-pluggable data runs
+    /// normally, one that carries it fails closed. `Option` keeps the two
+    /// apart even when the whole `[runtime]` section is absent and this
+    /// struct comes from `Default`. List both only for disjoint device
+    /// sets: kubelet double-counts a device advertised via both at
+    /// scheduling. Read through `pod_resource_device_sources()`.
+    #[serde(default)]
+    pub pod_resource_device_sources: Option<Vec<PodResourceDeviceSource>>,
+}
+
+impl Runtime {
+    /// The PodResources sources to trust: the configured list, or
+    /// ["device-plugin"] when the key is absent.
+    pub fn pod_resource_device_sources(&self) -> Vec<PodResourceDeviceSource> {
+        self.pod_resource_device_sources
+            .clone()
+            .unwrap_or_else(|| vec![PodResourceDeviceSource::DevicePlugin])
+    }
 }
 
 fn default_passfd_listener_port() -> u32 {
@@ -288,6 +333,22 @@ impl ConfigOps for Runtime {
             return Err(std::io::Error::other(format!(
                 "Invalid emptydir_mode `{emptydir_mode}` in configuration file",
             )));
+        }
+
+        // pod_resource_device_sources: a missing key means the default, an
+        // unknown token is rejected by serde at load, and an explicit empty
+        // list means "trust neither source". Only duplicates are left to
+        // check.
+        if let Some(sources) = &conf.runtime.pod_resource_device_sources {
+            let mut seen = std::collections::HashSet::new();
+            for s in sources {
+                if !seen.insert(*s) {
+                    return Err(std::io::Error::other(format!(
+                        "pod_resource_device_sources: duplicate source {:?}",
+                        s.as_str(),
+                    )));
+                }
+            }
         }
 
         for shared_mount in &conf.runtime.shared_mounts {
@@ -433,6 +494,94 @@ emptydir_mode = "block-plain"
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
         assert_eq!(&config.runtime.emptydir_mode, "shared-fs");
+    }
+
+    #[test]
+    fn test_default_pod_resource_device_sources() {
+        let content = r#"
+[runtime]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        // Key absent: the raw field stays None and the accessor supplies the
+        // historical default, even when the whole [runtime] section is
+        // missing (Runtime::default() would bypass a serde field default).
+        assert_eq!(config.runtime.pod_resource_device_sources, None);
+        assert_eq!(
+            config.runtime.pod_resource_device_sources(),
+            vec![PodResourceDeviceSource::DevicePlugin]
+        );
+        assert_eq!(
+            Runtime::default().pod_resource_device_sources(),
+            vec![PodResourceDeviceSource::DevicePlugin]
+        );
+    }
+
+    #[test]
+    fn test_valid_pod_resource_device_sources() {
+        // single valid source
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["device-plugin"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+
+        // dra only
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["dra"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+
+        // both sources
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["device-plugin", "dra"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(
+            config.runtime.pod_resource_device_sources(),
+            vec![
+                PodResourceDeviceSource::DevicePlugin,
+                PodResourceDeviceSource::Dra
+            ]
+        );
+
+        // explicitly empty list is valid: trust neither source
+        let content = r#"
+[runtime]
+pod_resource_device_sources = []
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(config.runtime.pod_resource_device_sources, Some(vec![]));
+        assert!(config.runtime.pod_resource_device_sources().is_empty());
+    }
+
+    #[test]
+    fn test_invalid_pod_resource_device_sources() {
+        // unknown token is rejected by serde at load time
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["device-plugin", "bogus"]
+"#;
+        let err = TomlConfig::load(content).unwrap_err();
+        assert!(
+            err.to_string().contains("pod_resource_device_sources"),
+            "{}",
+            err
+        );
+
+        // duplicate token is rejected by validate
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["dra", "dra"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
     }
 
     #[test]
