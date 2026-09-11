@@ -531,7 +531,16 @@ impl DragonballInner {
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
-        self.config.clone()
+        let mut config = self.config.clone();
+        config.network_info.network_queues = if config.network_info.disable_vhost_net {
+            1
+        } else {
+            config
+                .network_info
+                .network_queues
+                .clamp(1, config.network_queue_limit())
+        };
+        config
     }
 
     pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
@@ -565,7 +574,7 @@ impl Persist for DragonballInner {
             jailed: self.jailed,
             jailer_root: self.jailer_root.clone(),
             netns: self.netns.clone(),
-            config: self.hypervisor_config(),
+            config: self.config.clone(),
             run_dir: self.run_dir.clone(),
             cached_block_devices: self.cached_block_devices.clone(),
             passfd_listener_port: self.passfd_listener_port,
@@ -602,6 +611,51 @@ impl Persist for DragonballInner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_network_queues_preserve_request_across_restore() {
+        for (cpus, requested, expected) in [
+            (0.0, 0, 1),
+            (1.0, 16, 1),
+            (4.0, 0, 1),
+            (4.0, 2, 2),
+            (4.0, 16, 4),
+            (3.5, 16, 4),
+            (512.0, 512, 256),
+        ] {
+            for disable_vhost_net in [false, true] {
+                let (tx, _) = mpsc::channel(1);
+                let mut inner = DragonballInner::new(tx.clone());
+                inner.config.cpu_info.default_vcpus = cpus;
+                inner.config.network_info.network_queues = requested;
+                inner.config.network_info.disable_vhost_net = disable_vhost_net;
+                let expected = if disable_vhost_net { 1 } else { expected };
+
+                assert_eq!(
+                    inner.hypervisor_config().network_info.network_queues,
+                    expected
+                );
+                assert_eq!(inner.config.network_info.network_queues, requested);
+                let state = inner.save().await.unwrap();
+                assert_eq!(state.config.network_info.network_queues, requested);
+                let restored = DragonballInner::restore(tx, state).await.unwrap();
+                assert_eq!(
+                    restored.hypervisor_config().network_info.network_queues,
+                    expected
+                );
+                assert_eq!(
+                    restored
+                        .save()
+                        .await
+                        .unwrap()
+                        .config
+                        .network_info
+                        .network_queues,
+                    requested
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_template_restore_skips_boot_source_configuration() {
