@@ -433,3 +433,32 @@ func TestConfigValid(t *testing.T) {
 	result = config.valid()
 	assert.True(result)
 }
+
+func TestAllowBlockDeviceForMount(t *testing.T) {
+	const emptyDirSource = "/var/lib/kubelet/pods/pod-uid/volumes/kubernetes.io~empty-dir/scratch"
+	const bindSource = "/var/lib/kubelet/pods/pod-uid/volumes/kubernetes.io~csi/data"
+
+	tests := []struct {
+		name                  string
+		disableBlockDeviceUse bool
+		emptyDirMode          string
+		mountSource           string
+		hasDirectVolume       bool
+		expected              bool
+	}{
+		{"block device use enabled", false, EmptyDirModeSharedFs, bindSource, false, true},
+		{"direct volume with block device use disabled", true, EmptyDirModeSharedFs, bindSource, true, true},
+		{"ordinary mount with block device use disabled", true, EmptyDirModeSharedFs, bindSource, false, false},
+		{"block emptyDir with block device use disabled", true, EmptyDirModeVirtioBlkPlain, emptyDirSource, false, true},
+		{"encrypted block emptyDir with block device use disabled", true, EmptyDirModeVirtioBlkEncrypted, emptyDirSource, false, true},
+		{"block emptyDir mode with an ordinary mount", true, EmptyDirModeVirtioBlkPlain, bindSource, false, false},
+		{"shared-fs emptyDir with block device use disabled", true, EmptyDirModeSharedFs, emptyDirSource, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := allowBlockDeviceForMount(tt.disableBlockDeviceUse, tt.emptyDirMode, tt.mountSource, tt.hasDirectVolume)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,8 +17,11 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -300,4 +304,163 @@ func TestContainerRootfsPath(t *testing.T) {
 
 	container.hotplugDrive(sandbox.ctx)
 	assert.Equal(t, container.rootfsSuffix, "rootfs")
+}
+
+func TestContainerRootfsBlockDeviceUseDisabled(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	testRawFile, loopDev, fakeRootfs, err := testSetupFakeRootfs(t)
+	defer cleanupFakeRootfsSetup(testRawFile, loopDev, fakeRootfs)
+	assert.NoError(t, err)
+
+	savedCheckStorageDriver := checkStorageDriver
+	checkStorageDriver = func(major, minor int) (bool, error) {
+		return true, nil
+	}
+	defer func() {
+		checkStorageDriver = savedCheckStorageDriver
+	}()
+
+	sandbox := &Sandbox{
+		ctx:        context.Background(),
+		id:         testSandboxID,
+		devManager: manager.NewDeviceManager(config.VirtioBlock, false, "", 0, nil),
+		hypervisor: &blockCapsHypervisor{supported: true},
+		agent:      &blockCapsAgent{supported: true},
+		config: &SandboxConfig{
+			HypervisorConfig: HypervisorConfig{
+				DisableBlockDeviceUse: true,
+			},
+		},
+	}
+	container := &Container{
+		sandbox: sandbox,
+		id:      "rootfsblockdeviceusetest",
+		rootFs:  RootFs{Target: fakeRootfs, Mounted: true},
+	}
+
+	assert.NoError(t, container.hotplugDrive(sandbox.ctx))
+	assert.Empty(t, container.state.BlockDeviceID)
+}
+
+type blockCapsAgent struct {
+	mockAgent
+	supported bool
+}
+
+func (a *blockCapsAgent) capabilities() types.Capabilities {
+	caps := types.Capabilities{}
+	if a.supported {
+		caps.SetBlockDeviceSupport()
+	}
+	return caps
+}
+
+type blockCapsHypervisor struct {
+	mockHypervisor
+	supported bool
+}
+
+func (h *blockCapsHypervisor) Capabilities(ctx context.Context) types.Capabilities {
+	caps := types.Capabilities{}
+	if h.supported {
+		caps.SetBlockDeviceHotplugSupport()
+	}
+	return caps
+}
+
+func TestCreateBlockDevicesDirectVolume(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	tests := []struct {
+		name                  string
+		directVolume          bool
+		disableBlockDeviceUse bool
+		agentSupport          bool
+		hypervisorSupport     bool
+		mountInfo             string
+		expectDevice          bool
+	}{
+		{name: "direct volume with block device use disabled", directVolume: true, disableBlockDeviceUse: true, agentSupport: true, hypervisorSupport: true, expectDevice: true},
+		{name: "block file mount with block device use disabled", disableBlockDeviceUse: true, agentSupport: true, hypervisorSupport: true},
+		{name: "block file mount with block device use enabled", agentSupport: true, hypervisorSupport: true, expectDevice: true},
+		{name: "direct volume without agent support", directVolume: true, disableBlockDeviceUse: true, hypervisorSupport: true},
+		{name: "direct volume without hypervisor hotplug support", directVolume: true, disableBlockDeviceUse: true, agentSupport: true},
+		{name: "direct volume with an empty device", directVolume: true, disableBlockDeviceUse: true, agentSupport: true, hypervisorSupport: true, mountInfo: `{"volume-type":"block","device":"","fstype":"ext4"}`},
+		{name: "direct volume with malformed mount info", directVolume: true, disableBlockDeviceUse: true, agentSupport: true, hypervisorSupport: true, mountInfo: `{`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			tmpDir := t.TempDir()
+			deviceFile := filepath.Join(tmpDir, "disk.img")
+			assert.NoError(os.WriteFile(deviceFile, []byte("disk"), 0600))
+
+			source := deviceFile
+			options := []string{vcAnnotations.IsFileBlockDevice}
+
+			if tt.directVolume {
+				source = filepath.Join(tmpDir, "volume")
+				assert.NoError(os.Mkdir(source, DirMode))
+				options = nil
+
+				if tt.mountInfo != "" {
+					volumeDir := filepath.Join("/run/kata-containers/shared/direct-volumes",
+						b64.URLEncoding.EncodeToString([]byte(source)))
+					assert.NoError(os.MkdirAll(volumeDir, DirMode))
+					assert.NoError(os.WriteFile(filepath.Join(volumeDir, "mountInfo.json"), []byte(tt.mountInfo), 0600))
+				} else {
+					err := volume.AddMountInfo(source, volume.MountInfo{
+						VolumeType: "block",
+						Device:     deviceFile,
+						FsType:     "ext4",
+					})
+					assert.NoError(err)
+				}
+				defer volume.Remove(source)
+			}
+
+			sandbox := &Sandbox{
+				ctx:        context.Background(),
+				id:         testSandboxID,
+				devManager: manager.NewDeviceManager(config.VirtioBlock, false, "", 0, nil),
+				hypervisor: &blockCapsHypervisor{supported: tt.hypervisorSupport},
+				agent:      &blockCapsAgent{supported: tt.agentSupport},
+				config: &SandboxConfig{
+					EmptyDirMode: EmptyDirModeSharedFs,
+					HypervisorConfig: HypervisorConfig{
+						DisableBlockDeviceUse: tt.disableBlockDeviceUse,
+					},
+				},
+			}
+
+			container := &Container{
+				sandbox:   sandbox,
+				sandboxID: testSandboxID,
+				id:        "blockdevicetestcontainer",
+				mounts: []Mount{{
+					Source:      source,
+					Destination: "/data",
+					Type:        "bind",
+					Options:     options,
+				}},
+			}
+
+			assert.NoError(container.createBlockDevices(sandbox.ctx))
+
+			if tt.expectDevice {
+				assert.NotEmpty(container.mounts[0].BlockDeviceID)
+				assert.Equal(deviceFile, container.mounts[0].Source)
+			} else {
+				assert.Empty(container.mounts[0].BlockDeviceID)
+				assert.Equal(source, container.mounts[0].Source)
+			}
+		})
+	}
 }
