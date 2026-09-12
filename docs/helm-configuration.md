@@ -294,6 +294,9 @@ top-level `deploymentMode` value:
   host-check -> artifacts   (initContainers)  ->  cri (main)
   ```
 
+  With [`selinux.enabled`](#selinux), one more privileged one-shot container runs
+  ahead of all of them to load the policy the confined stages ask for.
+
   On `helm uninstall`, a `pre-delete` dispatcher fans out per-node Jobs that run
   the pipeline in reverse (`revert-cri -> remove-artifacts`). Unlike
   the DaemonSet, **nothing keeps running on the node after installation
@@ -919,6 +922,102 @@ job:
 See the default [`values.yaml`](#parameters) for the remaining `job.*` options
 (e.g. `dispatcherImage`, `parallelism`, `ttlSecondsAfterFinished`,
 `backoffLimit`).
+
+## SELinux
+
+The install stages run unprivileged, which on an SELinux-enforcing node means they
+run as `container_t` — a domain that is denied the host work they exist to do.
+Writing `/opt/kata`, writing the CRI drop-in and driving systemd are all refused,
+and the install fails with `AVC` denials in the node's audit log.
+
+`selinux.enabled` fixes that without giving the privilege back:
+
+```yaml title="values.yaml"
+selinux:
+  enabled: true
+```
+
+This loads a Kata-owned policy module on each node and runs each stage in a
+least-privilege domain of its own. It works in both deployment modes.
+
+| domain | used by | may |
+|---|---|---|
+| `kata_deploy_check_t` | `host-check` | read only, plus ask systemd whether the CRI is running |
+| `kata_deploy_artifacts_t` | `artifacts`, `remove-artifacts` | write `/opt/kata`, the snapshotter unit, `/etc/modules-load.d` |
+| `kata_deploy_cri_t` | `cri`, `revert-cri` | write the CRI configuration, manage the snapshotter unit, restart the CRI |
+| `kata_deploy_node_binaries_t` | `node-binaries-install`, `node-binaries-remove` | write `/usr/local/bin` |
+| `kata_deploy_t` | the DaemonSet's single container | all of the above except `/usr/local/bin` |
+
+`job` mode runs each stage in its own container, so each gets the narrowest domain
+its own work needs: `artifacts` cannot reach the CRI configuration, and neither it
+nor `cri` can touch `/usr/local/bin`. `cri` does reach `/opt/kata`, because
+`revert-cri` takes the nydus binaries back out of it. `daemonset` mode runs the
+whole install in one container, so it needs the union — minus
+`kata_deploy_node_binaries_t`, since [`nodeBinaries`](#nodebinaries) requires
+`job` mode.
+
+The containers that stage [`nodeBinaries`](#nodebinaries) get no domain of their
+own. They are the only ones running images Kata does not build, and they write
+nothing but a pod-local `emptyDir`, so plain `container_t` is both enough for them
+and the right blast radius.
+
+!!! note "Enabling it on a cluster that is not entirely SELinux"
+    Nodes with SELinux disabled are unaffected: the policy stage exits without
+    doing anything, and the runtime ignores the requested domains. So the value is
+    safe to set once for a mixed cluster rather than per node pool.
+
+### What it needs, and what it changes on the node
+
+Loading a policy module is itself privileged, so the chart adds one privileged
+one-shot container, `selinux-policy`, that runs the node's own `semodule`. It is
+first in the pipeline and exits before any confined stage starts, which is what buys
+every host-working stage after it staying unprivileged. It runs in the cleanup
+pipeline too, because those stages are confined as well and a node whose module went
+missing could otherwise never be uninstalled.
+
+It is not the only privileged container in `job` mode: `load-kernel-modules` was
+already one, and stays one. In `daemonset` mode it is the only one.
+
+The nodes need `policycoreutils` (for `semodule`) installed, unless their policy
+already defines the domains — the stage checks before it complains, so a node whose
+policy is managed elsewhere needs nothing from Kata. The module is shipped as source
+CIL and compiled by the node's own `secilc` at load time, so one artifact works
+across `selinux-policy` versions and distributions.
+
+Nothing is relabelled. The module defines no `filecon` rules, so `/opt/kata` keeps
+the labels it has today (`usr_t`, inherited from `/opt`) and the Kata *runtime* sees
+exactly what it saw before. The scope is the installer only.
+
+!!! note "Moving the install directory or the CRI configuration"
+    `env.installationPrefix` and `containerd.configDir` can put either directory
+    anywhere on the node, where it carries a label the shipped module knows nothing
+    about. So the stage reads the label each one actually has and, when it is not one
+    the module already grants, loads a one-line module of its own —
+    `kata-deploy-install-<type>`, `kata-deploy-cri-config-<type>` — adding that type
+    to the rules. Still no relabelling: the node's labels decide, not Kata.
+
+### Several releases on one node
+
+The policy store is the node's, not the release's, so every kata-deploy on a node
+shares one module. It is installed at a priority carrying the policy's own revision,
+and `semodule` keeps the highest, so an older image installing or uninstalling its
+own release cannot take a newer release's rules away.
+
+That priority is also what removal has to name:
+
+```bash
+semodule --list-modules=full | grep kata-deploy
+semodule -X <priority> -r kata-deploy
+```
+
+!!! warning "The module is left loaded on uninstall"
+    This matches how host kernel modules are already handled: `helm uninstall`
+    drops the `modules-load.d` file but never unloads a module. Remove the modules
+    listed above by hand once no release on the node needs them.
+
+Off by default, because it mutates the node's policy store — something a cluster
+that manages its own SELinux policy may prefer to do itself. The module is at
+[`tools/packaging/kata-deploy/selinux/kata-deploy.cil`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/selinux/kata-deploy.cil).
 
 ## Examples
 

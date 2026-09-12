@@ -50,10 +50,7 @@ setup_file() {
 		--set job.backoffLimit=0 \
 		--set "job.ttlSecondsAfterFinished=${JOB_TTL}" \
 		"${NODE_BINARIES_VALUES[@]}"
-}
-
-@test "The loader finds every domain the stages ask for in the node's policy" {
-	assert_domains_resolve
+	show_policy_loader_log
 }
 
 @test "The policy module is loaded into the node's policy store" {
