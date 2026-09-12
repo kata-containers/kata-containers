@@ -22,8 +22,7 @@ func TestAnnotatePodMutator(t *testing.T) {
 		name          string
 		nsBlacklist   map[string]bool
 		nsOnlyRegexp  *regexp.Regexp
-		minMemory     string
-		setMinMemory  bool
+		minMemory     *string
 		container     corev1.Container
 		initContainer corev1.Container
 		wantMutated   bool
@@ -52,8 +51,7 @@ func TestAnnotatePodMutator(t *testing.T) {
 		},
 		{
 			name:          "limit below minimum is raised",
-			minMemory:     "256Mi",
-			setMinMemory:  true,
+			minMemory:     ptr("256Mi"),
 			container:     memLimitContainer("128Mi"),
 			initContainer: memLimitContainer("128Mi"),
 			wantMutated:   true,
@@ -62,8 +60,7 @@ func TestAnnotatePodMutator(t *testing.T) {
 		},
 		{
 			name:          "limit equal to minimum is kept",
-			minMemory:     "256Mi",
-			setMinMemory:  true,
+			minMemory:     ptr("256Mi"),
 			container:     memLimitContainer("256Mi"),
 			initContainer: memLimitContainer("256Mi"),
 			wantMutated:   true,
@@ -72,8 +69,7 @@ func TestAnnotatePodMutator(t *testing.T) {
 		},
 		{
 			name:          "limit above minimum is kept",
-			minMemory:     "256Mi",
-			setMinMemory:  true,
+			minMemory:     ptr("256Mi"),
 			container:     memLimitContainer("512Mi"),
 			initContainer: memLimitContainer("512Mi"),
 			wantMutated:   true,
@@ -81,25 +77,22 @@ func TestAnnotatePodMutator(t *testing.T) {
 			wantInitLimit: "512Mi",
 		},
 		{
-			name:         "byte notation below minimum is raised",
-			minMemory:    "256Mi",
-			setMinMemory: true,
-			container:    memLimitContainer("268435455"),
-			wantMutated:  true,
-			wantLimit:    "256Mi",
+			name:        "byte notation below minimum is raised",
+			minMemory:   ptr("256Mi"),
+			container:   memLimitContainer("268435455"),
+			wantMutated: true,
+			wantLimit:   "256Mi",
 		},
 		{
-			name:         "byte notation equal to minimum keeps its notation",
-			minMemory:    "256Mi",
-			setMinMemory: true,
-			container:    memLimitContainer("268435456"),
-			wantMutated:  true,
-			wantLimit:    "268435456",
+			name:        "byte notation equal to minimum keeps its notation",
+			minMemory:   ptr("256Mi"),
+			container:   memLimitContainer("268435456"),
+			wantMutated: true,
+			wantLimit:   "268435456",
 		},
 		{
-			name:         "container without a memory limit stays unlimited",
-			minMemory:    "256Mi",
-			setMinMemory: true,
+			name:      "container without a memory limit stays unlimited",
+			minMemory: ptr("256Mi"),
 			container: corev1.Container{
 				Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{
 					corev1.ResourceCPU: resource.MustParse("1"),
@@ -108,27 +101,24 @@ func TestAnnotatePodMutator(t *testing.T) {
 			wantMutated: true,
 		},
 		{
-			name:         "empty min memory",
-			setMinMemory: true,
-			wantErr:      true,
+			name:      "empty min memory",
+			minMemory: ptr(""),
+			wantErr:   true,
 		},
 		{
-			name:         "malformed min memory",
-			minMemory:    "not-a-quantity",
-			setMinMemory: true,
-			wantErr:      true,
+			name:      "malformed min memory",
+			minMemory: ptr("not-a-quantity"),
+			wantErr:   true,
 		},
 		{
-			name:         "zero min memory",
-			minMemory:    "0",
-			setMinMemory: true,
-			wantErr:      true,
+			name:      "zero min memory",
+			minMemory: ptr("0"),
+			wantErr:   true,
 		},
 		{
-			name:         "negative min memory",
-			minMemory:    "-1Mi",
-			setMinMemory: true,
-			wantErr:      true,
+			name:      "negative min memory",
+			minMemory: ptr("-1Mi"),
+			wantErr:   true,
 		},
 	}
 
@@ -137,8 +127,9 @@ func TestAnnotatePodMutator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			whPolicy = &policy{nsBlacklist: tt.nsBlacklist, nsOnlyRegexp: tt.nsOnlyRegexp}
 
-			t.Setenv(minMemoryLimitEnvKey, tt.minMemory)
-			if !tt.setMinMemory {
+			if tt.minMemory != nil {
+				t.Setenv(minMemoryLimitEnvKey, *tt.minMemory)
+			} else {
 				if err := os.Unsetenv(minMemoryLimitEnvKey); err != nil {
 					t.Fatalf("failed to unset %s: %v", minMemoryLimitEnvKey, err)
 				}
@@ -179,6 +170,10 @@ func TestAnnotatePodMutator(t *testing.T) {
 			assertMemoryLimit(t, pod.Spec.InitContainers[0].Resources.Limits, tt.wantInitLimit)
 		})
 	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
 
 func memLimitContainer(memory string) corev1.Container {
