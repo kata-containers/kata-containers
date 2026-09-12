@@ -22,9 +22,29 @@ spec:
       set -e
       apk add --no-cache cifs-utils attr
       mkdir -p /mnt/smb
-      # Mount the SMB share
-      mount -t cifs //$SMB_SERVER_IP/share /mnt/smb \
-        -o username=testuser,password=testpass,vers=3.0,uid=0,gid=0
+      # Mount the SMB share with retries to handle transient readiness/network races.
+      max_attempts=10
+      attempt=1
+      mount_rc=1
+      while [ "$attempt" -le "$max_attempts" ]; do
+        if mount -t cifs //$SMB_SERVER_IP/share /mnt/smb \
+          -o username=testuser,password=testpass,vers=3.0,uid=0,gid=0; then
+          mount_rc=0
+          break
+        else
+          mount_rc=$?
+        fi
+
+        echo "mount attempt $attempt/$max_attempts failed; retrying..." >&2
+        umount /mnt/smb >/dev/null 2>&1 || true
+        sleep 2
+        attempt=$((attempt + 1))
+      done
+
+      if ! grep -qsE '[[:space:]]/mnt/smb[[:space:]]' /proc/mounts; then
+        echo "mount failed after $max_attempts attempts (last rc=$mount_rc)" >&2
+        exit "$mount_rc"
+      fi
       # Signal that mount is ready
       touch /tmp/mount-ready
       sleep infinity
