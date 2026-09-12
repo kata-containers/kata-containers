@@ -5,6 +5,8 @@
 #
 # Shared helm deployment helpers for kata-deploy tests
 #
+# Expects tests/common.bash and tests/gha-run-k8s-common.sh to have been loaded.
+#
 # Required environment variables:
 #   DOCKER_REGISTRY - Container registry for kata-deploy image
 #   DOCKER_REPO     - Repository name for kata-deploy image
@@ -16,7 +18,8 @@
 #   EROFS_SNAPSHOTTER_MODE      - "disk" or "memory"
 #   EROFS_DMVERITY              - Set to "dmverity" to enable dm-verity
 #   EROFS_MERGE_MODE            - "merged" or "unmerged"
-#   EROFS_UTILS_IMAGE           - Image kata-deploy takes erofs-utils from
+#   EROFS_UTILS_IMAGE           - Image kata-deploy takes erofs-utils from, in
+#                                 job mode
 
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
@@ -120,6 +123,36 @@ kata_deploy_pod_selector() {
 	fi
 }
 
+# Whether the DaemonSet and its pods are gone. An unreachable API answers
+# nothing, so that counts as "still there".
+kata_deploy_ds_gone() {
+	local leftovers
+
+	leftovers="$(kubectl -n "${HELM_NAMESPACE}" get daemonset,pod \
+		-l name=kata-deploy -o name --request-timeout=10s 2>/dev/null)" || return 1
+
+	[[ -z "${leftovers}" ]]
+}
+
+# helm's uninstall can return while the deletion is still in flight, and the
+# next install then creates a DaemonSet the old cascade deletes again.
+# The default outlasts terminationGracePeriodSeconds (600).
+# Arguments:
+#   $1 - (Optional) seconds to wait, default 660
+wait_for_kata_deploy_ds_gone() {
+	local timeout="${1:-660}"
+
+	if waitForProcess "${timeout}" 5 kata_deploy_ds_gone; then
+		return 0
+	fi
+
+	echo "the kata-deploy DaemonSet was still there ${timeout}s after the uninstall" >&2
+	kubectl -n "${HELM_NAMESPACE}" get daemonset,pod -l name=kata-deploy || true
+	kubectl -n "${HELM_NAMESPACE}" logs -l name=kata-deploy --tail=100 \
+		--prefix --timestamps || true
+	return 1
+}
+
 # Get the path to the helm chart
 get_chart_path() {
 	local script_dir
@@ -127,14 +160,47 @@ get_chart_path() {
 	echo "${script_dir}/../../../../tools/packaging/kata-deploy/helm-chart/kata-deploy"
 }
 
+# The mode the deploy about to happen will install: what the caller asked for,
+# or the chart's own default. The host preparation and the values differ by mode,
+# so a guess would prepare the node for a release that is not coming.
+#
+# Arguments:
+#   $1 - (Optional) the caller's extra values file
+#   $@ - (Optional) the caller's extra helm arguments
+requested_deployment_mode() {
+	local extra_values_file="${1:-}"
+	shift || true
+	local arg mode
+
+	# --set wins over any values file, in whichever order helm was given them.
+	for arg in "$@"; do
+		case "${arg}" in
+			*deploymentMode=*)
+				echo "${arg##*deploymentMode=}" | cut -d, -f1
+				return
+				;;
+		esac
+	done
+
+	if [[ -n "${extra_values_file}" && -f "${extra_values_file}" ]]; then
+		mode="$(yq -r '.deploymentMode // ""' "${extra_values_file}")"
+		if [[ -n "${mode}" ]]; then
+			echo "${mode}"
+			return
+		fi
+	fi
+
+	yq -r '.deploymentMode' "$(get_chart_path)/values.yaml"
+}
+
 # Generate base values YAML that disables all shims except the specified one
 # Arguments:
 #   $1 - Output file path
-#   $2 - (Optional) Additional values file to merge
+#   $2 - Deployment mode the values are for ("daemonset" or "job")
 # shellcheck disable=SC2154
 generate_base_values() {
 	local output_file="$1"
-	local extra_values_file="${2:-}"
+	local deployment_mode="${2:-daemonset}"
 
 	local k8s_distribution="${KUBERNETES}"
 	if [[ "${k8s_distribution}" == "kubeadm" ]]; then
@@ -149,6 +215,20 @@ generate_base_values() {
 			erofs_dmverity="true"
 		fi
 
+		# Job mode takes erofs-utils from an image, covering the path a node
+		# packaging none of its own actually takes. The DaemonSet cannot stage
+		# binaries at all, so there prepare_host_for_erofs puts them on the node
+		# instead and asking for them here would only fail the render.
+		local node_binaries_values=""
+		if [[ "${deployment_mode}" == "job" ]]; then
+			node_binaries_values="
+nodeBinaries:
+  erofs-utils:
+    image: \"${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}\"
+    binaries: [mkfs.erofs]
+"
+		fi
+
 		shim_snapshotter_values="    containerd:
       snapshotter: erofs"
 		snapshotter_values="snapshotter:
@@ -156,13 +236,7 @@ generate_base_values() {
   erofsSnapshotterMode: \"${EROFS_SNAPSHOTTER_MODE:-}\"
   erofsDmverity: ${erofs_dmverity}
   erofsMergeMode: \"${EROFS_MERGE_MODE:-}\"
-
-# The node has no erofs-utils of its own; see deploy_k8s.
-nodeBinaries:
-  erofs-utils:
-    image: \"${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}\"
-    binaries: [mkfs.erofs]
-
+${node_binaries_values}
 # fs-verity would also need the backing filesystem prepared for it, and these
 # tests only care about dm-verity.
 containerd:
@@ -209,12 +283,22 @@ deploy_kata() {
 
 	local chart_path
 	local values_yaml
+	local deployment_mode
 
 	chart_path="$(get_chart_path)"
 	values_yaml=$(mktemp)
 
+	deployment_mode="$(requested_deployment_mode "${extra_values_file}" \
+		"${extra_helm_args[@]}")"
+
+	# The DaemonSet stages no binaries and loads no modules, so the node has to
+	# arrive with what EROFS needs. Job mode brings its own, and is left alone.
+	if [[ "${deployment_mode}" == "daemonset" ]]; then
+		prepare_host_for_erofs
+	fi
+
 	# Generate base values
-	generate_base_values "${values_yaml}"
+	generate_base_values "${values_yaml}" "${deployment_mode}"
 
 	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
@@ -268,4 +352,12 @@ uninstall_kata() {
 		--ignore-not-found --wait --cascade foreground --timeout 10m || true
 
 	wait_for_api_and_retry_uninstall "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}"
+
+	local ret=0
+
+	wait_for_kata_deploy_ds_gone || ret=1
+	# errexit would skip this after the wait above fails.
+	wait_for_nodes_ready || ret=1
+
+	return "${ret}"
 }

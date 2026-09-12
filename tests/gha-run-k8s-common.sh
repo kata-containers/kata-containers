@@ -76,6 +76,42 @@ wait_for_api_and_retry_uninstall() {
 		--ignore-not-found --wait --timeout 5m || true
 }
 
+# True when every node reports Ready. An unreachable API answers nothing, so
+# that counts as false here and leaves the caller to ask again.
+all_nodes_ready() {
+	local ready
+
+	ready="$(kubectl get nodes -o json --request-timeout=10s 2>/dev/null |
+		jq -r '.items[].status.conditions[] | select(.type == "Ready") | .status')" ||
+		return 1
+
+	[[ -n "${ready}" ]] || return 1
+
+	! grep -qv '^True$' <<< "${ready}"
+}
+
+# Wait for every node to report Ready, which after an uninstall means waiting
+# for the API to come back too.
+#
+# `kubectl wait` is a single watch and gives up when its connection breaks,
+# which is exactly what a control plane restarting under it does - and on
+# microk8s the control plane runs on the very containerd the SIGTERM cleanup
+# restarts. Polling makes an API that is still on its way back a retry rather
+# than a verdict.
+# Arguments:
+#   $1 - (Optional) seconds to wait, default 300
+wait_for_nodes_ready() {
+	local timeout="${1:-300}"
+
+	if waitForProcess "${timeout}" 5 all_nodes_ready; then
+		return 0
+	fi
+
+	echo "not every node became Ready within ${timeout}s" >&2
+	kubectl get nodes || true
+	return 1
+}
+
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
 		small)
@@ -577,19 +613,17 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		kubeadm|vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				# No erofs-utils is installed on the node on purpose: these
-				# runners package nothing new enough, which is the very case
-				# nodeBinaries exists for, so the install has to bring its
-				# own.
-
 				# fsverity is only needed here because, unlike
 				# the docker and nerdctl jobs, these do enable
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# erofs, loop and the dm-verity targets are left unloaded on
-				# purpose: kata-deploy's own privileged stage loads and persists
-				# them, and pre-loading them here would hide it failing to.
+				# erofs-utils and the modules EROFS needs are deliberately not
+				# prepared here. What the node needs depends on the mode being
+				# deployed, and this single cluster serves both: the erofs leg
+				# runs the job-mode host-module suite alongside the daemonset
+				# ones. prepare_host_for_erofs does it per deploy instead, so
+				# job mode still faces a bare node and has to load its own.
 
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
@@ -904,10 +938,18 @@ function helm_helper() {
 			done
 		fi
 
-		# The node has no erofs-utils of its own; see deploy_k8s.
+		# The node has none of its own; see deploy_k8s. Job mode stages them
+		# from an image, which is the case nodeBinaries exists for. The
+		# DaemonSet cannot stage anything, so there the node is given
+		# erofs-utils directly and asking for nodeBinaries would fail the
+		# render.
 		if [[ "${SNAPSHOTTER}" == "erofs" ]]; then
-			yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
-			yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
+			if [[ "${deployment_mode}" == "job" ]]; then
+				yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
+				yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
+			else
+				prepare_host_for_erofs
+			fi
 		fi
 
 		if [[ -n "${EROFS_SNAPSHOTTER_MODE}" ]]; then

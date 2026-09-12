@@ -9,10 +9,17 @@
 
 debug: false
 
-# Install Kata via short-lived per-node Jobs instead of an always-on DaemonSet.
-# A tiny dispatcher Job fans out one install Job per selected node and exits, so
-# nothing keeps running on the node once the install completes.
-deploymentMode: job
+# Install Kata via the long-running kata-deploy DaemonSet, which installs it on
+# every selected node and reverts it when its pod is terminated. The alternative
+# is short-lived per-node Jobs (deploymentMode: job), where a tiny dispatcher Job
+# fans out one install Job per selected node and exits, so nothing keeps running
+# on the node once the install completes.
+#
+# NOTE: only the per-node Jobs load host kernel modules; the DaemonSet does not.
+# The EROFS settings below therefore need erofs, loop, dm_mod and dm_verity
+# already available on every node, and persistent across reboots. The install's
+# host check fails the node rather than configuring a snapshotter it cannot run.
+deploymentMode: daemonset
 
 snapshotter:
   setup: ["erofs"]
@@ -29,6 +36,10 @@ snapshotter:
 # are removed again on uninstall. The install refuses to replace an
 # /usr/local/bin/mkfs.erofs it did not put there, and that image is published for
 # amd64 and arm64 only.
+#
+# Staging binaries onto the node relies on the per-node Jobs' ordered pipeline, so
+# uncommenting this also means setting deploymentMode: job above. Leaving it on
+# daemonset fails the render rather than deploying something that cannot work.
 #
 # nodeBinaries:
 #   erofs-utils:

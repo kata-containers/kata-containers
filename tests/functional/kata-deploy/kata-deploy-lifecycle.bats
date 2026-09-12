@@ -33,13 +33,6 @@ source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 LIFECYCLE_POD_NAME="kata-lifecycle-test"
 
 setup_file() {
-	# erofs-utils now reaches the node through the job pipeline's staging, which
-	# the DaemonSet has no equivalent of, and these runners package none of their
-	# own. The other flavours cover this suite in daemonset mode.
-	if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-		skip "the DaemonSet cannot install the erofs-utils the node lacks"
-	fi
-
 	ensure_helm
 
 	echo "# Image: ${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" >&3
@@ -159,10 +152,6 @@ EOF
 	echo "# Uninstalling kata-deploy..." >&3
 	uninstall_kata
 	echo "# Uninstall complete, verifying cleanup..." >&3
-
-	# Wait for node to recover — containerd restart during cleanup may
-	# cause brief unavailability (especially on k3s/rke2/microk8s).
-	kubectl wait nodes --timeout=300s --all --for condition=Ready=True
 
 	# RuntimeClasses must be gone (filter out AKS-managed ones)
 	local rc_count
