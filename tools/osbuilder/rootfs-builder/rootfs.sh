@@ -423,7 +423,8 @@ build_nvidia_gpu_extension_in_container()
 	local image_name="nvidia-gpu-extension-osbuilder"
 	local nvidia_dir="${script_dir}/nvidia"
 	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
-	local tools_repo_url tools_repo_pkg
+	local tools_repo_url tools_repo_pkg upx_version
+	local dcgm_version dcgm_exporter_version
 	local -a build_args run_args
 
 	if [[ -n "${USE_DOCKER}" ]]; then
@@ -440,6 +441,9 @@ build_nvidia_gpu_extension_in_container()
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${ARCH}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${ARCH}.pkg")
 	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+	upx_version=$(get_package_version_from_kata_yaml "externals.upx.version")
+	dcgm_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.version")
+	dcgm_exporter_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.exporter.version")
 
 	[[ -n "${IMAGE_REGISTRY}" ]] \
 		&& build_args+=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
@@ -459,6 +463,9 @@ build_nvidia_gpu_extension_in_container()
 		--build-arg "TOOLS_REPO_URL=${tools_repo_url}" \
 		--build-arg "TOOLS_REPO_PKG=${tools_repo_pkg}" \
 		--build-arg "CTK_VERSION=${ctk_version}" \
+		--build-arg "DCGM_VERSION=${dcgm_version}" \
+		--build-arg "DCGM_EXPORTER_VERSION=${dcgm_exporter_version}" \
+		--build-arg "UPX_VERSION=${upx_version}" \
 		-t "${image_name}" "${nvidia_dir}"
 
 	run_args=(

@@ -14,6 +14,8 @@ ARG CUDA_REPO_PKG
 ARG TOOLS_REPO_URL
 ARG TOOLS_REPO_PKG
 ARG CTK_VERSION
+ARG DCGM_VERSION
+ARG DCGM_EXPORTER_VERSION
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -45,12 +47,12 @@ RUN chmod +x /usr/local/bin/install-nvidia-packages && \
         "${CUDA_REPO_PKG}" \
         "${TOOLS_REPO_URL}" \
         "${TOOLS_REPO_PKG}" \
-        "${CTK_VERSION}" && \
+        "${CTK_VERSION}" \
+        "${DCGM_VERSION}" \
+        "${DCGM_EXPORTER_VERSION}" && \
     rm -f /usr/local/bin/install-nvidia-packages
 
-# Keep UPX pinned exactly as the existing NVIDIA rootfs build did, but bake it
-# into this image so extension assembly performs no tool download at runtime.
-ARG UPX_VERSION=4.2.4
+ARG UPX_VERSION
 RUN case "${ARCH}" in \
         x86_64) upx_arch=amd64 ;; \
         aarch64) upx_arch=arm64 ;; \

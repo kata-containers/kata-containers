@@ -115,13 +115,19 @@ nvidia_populate_capability_arrays() {
 	(( ${#_nvidia_icds[@]} > 0 )) || die "nvidia: no ICD entries selected from ${driver_required_files}"
 }
 
+nvidia_upx_version() {
+	get_package_version_from_kata_yaml "externals.upx.version"
+}
+
 setup_nvidia_upx() {
-	local upx_dir="${BUILD_DIR}/upx-4.2.4-${distro_arch}_linux"
+	local version
+	version="$(nvidia_upx_version)"
+	local upx_dir="${BUILD_DIR}/upx-${version}-${distro_arch}_linux"
 	[[ -x "${upx_dir}/upx" ]] && return
 
 	pushd "${BUILD_DIR}" >> /dev/null
-	curl -LO "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
-	tar xvf "upx-4.2.4-${distro_arch}_linux.tar.xz"
+	curl -LO "https://github.com/upx/upx/releases/download/v${version}/upx-${version}-${distro_arch}_linux.tar.xz"
+	tar xvf "upx-${version}-${distro_arch}_linux.tar.xz"
 	popd >> /dev/null
 }
 
@@ -179,7 +185,7 @@ install_nvidia_driver_packages() {
 	local rootfs_dir="${1:?rootfs dir required}"
 	local install_nvrc="${2:-yes}"
 	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
-	local tools_repo_url tools_repo_pkg
+	local tools_repo_url tools_repo_pkg dcgm_version dcgm_exporter_version
 
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" "${rootfs_dir}/nvidia_chroot.sh"
 	chmod +x "${rootfs_dir}/nvidia_chroot.sh"
@@ -200,6 +206,8 @@ install_nvidia_driver_packages() {
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
 	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+	dcgm_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.version")
+	dcgm_exporter_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.exporter.version")
 
 	pushd "${rootfs_dir}" >> /dev/null
 
@@ -208,7 +216,8 @@ install_nvidia_driver_packages() {
 	mount -t proc /proc ./proc
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
-		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version}"
+		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version} \
+		 ${dcgm_version} ${dcgm_exporter_version}"
 
 	umount -R ./dev
 	umount ./proc
@@ -217,11 +226,41 @@ install_nvidia_driver_packages() {
 	popd >> /dev/null
 }
 
+# Everything install_nvidia_driver_packages() resolves before it installs
+# anything. The archive name carries no version, so without this a BUILD_DIR
+# that survives between builds keeps serving a tree pinned to whatever
+# versions.yaml said when it was first created.
+nvidia_stage_one_fingerprint() {
+	{
+		echo "${NVIDIA_GPU_STACK:?}"
+		get_package_version_from_kata_yaml "externals.nvidia.ctk.version"
+		get_package_version_from_kata_yaml "externals.nvidia.dcgm.version"
+		get_package_version_from_kata_yaml "externals.nvidia.dcgm.exporter.version"
+		get_package_version_from_kata_yaml "externals.nvrc.version"
+		get_package_version_from_kata_yaml "assets.image.architecture.${machine_arch}.nvidia-gpu.version"
+		get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url"
+		get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg"
+		get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url"
+		get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg"
+	} | sha256sum | cut -d' ' -f1
+}
+
 setup_nvidia_gpu_rootfs_stage_one() {
 	setup_nvidia_upx
+
+	local fingerprint stamp=""
+	fingerprint="$(nvidia_stage_one_fingerprint)"
+	if [[ -r "${stage_one}.fingerprint" ]]; then
+		stamp="$(cat "${stage_one}.fingerprint")"
+	fi
+
 	if [[ -e "${stage_one}.tar.zst" ]]; then
-		info "nvidia: GPU rootfs stage one already exists"
-		return
+		if [[ "${stamp}" == "${fingerprint}" ]]; then
+			info "nvidia: GPU rootfs stage one already exists"
+			return
+		fi
+		info "nvidia: GPU rootfs stage one is stale, rebuilding it"
+		rm -f "${stage_one}.tar.zst" "${stage_one}.fingerprint"
 	fi
 
 	info "nvidia: Setup GPU rootfs stage one"
@@ -230,6 +269,8 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	pushd "${ROOTFS_DIR}" >> /dev/null
 	tar cfa "${stage_one}.tar.zst" --remove-files -- *
 	popd >> /dev/null
+
+	echo "${fingerprint}" > "${stage_one}.fingerprint"
 }
 
 chisseled_iptables() {
@@ -438,12 +479,16 @@ chisseled_init() {
 
 compress_rootfs() {
 	echo "nvidia: compressing rootfs"
-	local upx="${BUILD_DIR}/upx-4.2.4-${distro_arch}_linux/upx"
+	local upx
 
-	# The dedicated gpu-extension builder bakes UPX into PATH. The generic
-	# monolith/base builder keeps using setup_nvidia_upx() and its build path.
-	if command -v upx > /dev/null; then
-		upx="$(command -v upx)"
+	# The dedicated gpu-extension builder bakes the pinned UPX into PATH and
+	# carries no yq, so resolve it there without going through versions.yaml.
+	# Everywhere else only setup_nvidia_upx()'s build path will do: an upx that
+	# happens to be on PATH would silently pack with an unpinned version.
+	if [[ "${NVIDIA_GPU_EXTENSION_CONTAINER:-no}" == "yes" ]]; then
+		upx="$(command -v upx || true)"
+	else
+		upx="${BUILD_DIR}/upx-$(nvidia_upx_version)-${distro_arch}_linux/upx"
 	fi
 	[[ -x "${upx}" ]] || die "nvidia: UPX not found"
 

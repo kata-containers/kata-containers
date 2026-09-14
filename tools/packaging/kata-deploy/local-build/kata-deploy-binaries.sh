@@ -626,6 +626,16 @@ get_latest_nvidia_nvrc_version() {
 	get_from_kata_deps ".externals.nvrc.version"
 }
 
+get_latest_upx_version() {
+	get_from_kata_deps ".externals.upx.version"
+}
+
+get_latest_nvidia_dcgm_version() {
+	echo "$(get_from_kata_deps ".externals.nvidia.dcgm.version")" \
+		"$(get_from_kata_deps ".externals.nvidia.dcgm.exporter.version")" \
+		| sha256sum | cut -c1-9
+}
+
 get_latest_nvidia_nvat_version() {
 	get_from_kata_deps ".externals.nvidia.nvat.version"
 }
@@ -672,6 +682,8 @@ install_image() {
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
+		latest_artefact+="-$(get_latest_upx_version)"
 	else
 		local libs_last_commit
 		libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
@@ -696,7 +708,9 @@ install_image() {
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 			latest_artefact+="-$(get_latest_nvidia_driver_version)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+			latest_artefact+="-$(get_latest_upx_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvat_version)"
 			latest_artefact+="-$(get_latest_nvidia_repo_version)"
 		else
@@ -715,7 +729,9 @@ install_image() {
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+		latest_artefact+="-$(get_latest_upx_version)"
 		latest_artefact+="-$(get_latest_nvidia_repo_version)"
 	fi
 
@@ -727,6 +743,7 @@ install_image() {
 		# multiple driver-specific gpu extensions.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+		latest_artefact+="-$(get_latest_upx_version)"
 	fi
 
 	# The base guest image (empty variant) is built as a measured rootfs so
@@ -1042,7 +1059,9 @@ install_initrd() {
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 			latest_artefact+="-$(get_latest_nvidia_driver_version)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+			latest_artefact+="-$(get_latest_upx_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvat_version)"
 			latest_artefact+="-$(get_latest_nvidia_repo_version)"
 		else
@@ -1058,7 +1077,9 @@ install_initrd() {
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+		latest_artefact+="-$(get_latest_upx_version)"
 		latest_artefact+="-$(get_latest_nvidia_repo_version)"
 	fi
 
