@@ -154,10 +154,11 @@ For the full set of configuration options (shim selection, custom runtimes,
 node selectors, TEE shims, drop-in configuration files and more), see the
 [Helm configuration document](helm-configuration.md).
 
-!!! note "Deployment modes: Job vs DaemonSet"
-    Short-lived, staged per-node Jobs (no always-on component on the node) are
-    the default install model (`deploymentMode: job`). You can instead use the
-    long-running `kata-deploy` DaemonSet by setting `deploymentMode: daemonset`.
+!!! note "Deployment modes: DaemonSet vs Job"
+    The long-running `kata-deploy` DaemonSet is the default install model
+    (`deploymentMode: daemonset`). You can instead use short-lived, staged
+    per-node Jobs, which leave no always-on component on the node, by setting
+    `deploymentMode: job`.
     See [Deployment Modes (DaemonSet vs Job)](helm-configuration.md#deployment-modes-daemonset-vs-job)
     for details and node-selection options.
 

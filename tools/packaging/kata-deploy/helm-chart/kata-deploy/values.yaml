@@ -1,8 +1,8 @@
 # Deployment model for installing/cleaning up Kata on nodes.
-#   daemonset: the long-running kata-deploy DaemonSet installs Kata on
+#   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
 #              every matching node and reverts it on pod termination (uninstall).
-#   job:       (default) no always-on component. A tiny k8s-job-dispatcher Job runs
-#              as a post-install/upgrade hook, enumerates
+#   job:       no always-on component. A tiny k8s-job-dispatcher Job runs as a
+#              post-install/upgrade hook, enumerates
 #              the selected nodes LIVE, and creates one node-pinned install Job
 #              per node - paced to job.parallelism and guaranteeing one install
 #              per node. Each per-node Job runs the staged pipeline as ordered
@@ -48,7 +48,7 @@
 #   Each stage writes why it is giving up to /dev/termination-log, so the reason
 #   is in the pod's status rather than only in a log that
 #   job.ttlSecondsAfterFinished deletes along with the pod.
-deploymentMode: job  # daemonset | job
+deploymentMode: daemonset  # daemonset | job
 
 # Settings specific to deploymentMode: job
 job:

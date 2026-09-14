@@ -280,10 +280,10 @@ fails the render rather than deploying something that cannot work.
 The chart can install Kata on nodes in one of two ways, selected with the
 top-level `deploymentMode` value:
 
-- **`daemonset`**: the long-running `kata-deploy` DaemonSet installs
+- **`daemonset`** (default): the long-running `kata-deploy` DaemonSet installs
   Kata on every matching node and reverts it when the pod is terminated (i.e. on
   uninstall). This is the historical behavior and is unchanged.
-- **`job`** (default): there is **no always-on component**. A tiny
+- **`job`**: there is **no always-on component**. A tiny
   [`k8s-job-dispatcher`](https://github.com/kata-containers/k8s-job-dispatcher)
   Job runs as a `post-install`/`post-upgrade` hook, enumerates the selected nodes
   **live** via the Kubernetes API, and creates one
@@ -308,24 +308,23 @@ top-level `deploymentMode` value:
   escalation, read-only root filesystem, `RuntimeDefault` seccomp), never touches
   the host, and can be confined to nodes you trust.
 
-`job` is the default; ask for `daemonset` explicitly to keep the historical
-behavior:
+`daemonset` is the default; ask for `job` explicitly to get the per-node Jobs:
 
-=== "Job (default)"
-    ```yaml title="values.yaml"
-    deploymentMode: job
-    ```
-
-=== "DaemonSet"
+=== "DaemonSet (default)"
     ```yaml title="values.yaml"
     deploymentMode: daemonset
     ```
 
-!!! warning "Upgrading a release installed before `job` became the default"
+=== "Job"
+    ```yaml title="values.yaml"
+    deploymentMode: job
+    ```
+
+!!! warning "Choose the mode at install time"
     `deploymentMode` is [immutable for the life of a release](#how-installations-keep-out-of-each-others-way-on-a-node),
-    so an existing `daemonset` release does not silently move to per-node Jobs:
-    the upgrade is refused instead. Keep `deploymentMode: daemonset` in your
-    values to stay where you are, or `helm uninstall` first to adopt `job`.
+    so an existing release cannot be moved between the two: the upgrade is
+    refused instead. To adopt `job` mode on a release already running the
+    DaemonSet, `helm uninstall` it first.
 
 #### Where the credentials live
 
