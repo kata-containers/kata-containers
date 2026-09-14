@@ -335,8 +335,9 @@ deploy_kata() {
 	# The install is complete once helm returns: --wait blocks on DaemonSet
 	# readiness, whose probe only passes after install, and hooks always block -
 	# the job-mode dispatcher is one, and it waits for every per-node Job.
-	"${helm_cmd[@]}"
-	local ret=$?
+	local ret=0
+	# Bare, errexit would skip both the cleanup and the reporting below.
+	"${helm_cmd[@]}" || ret=$?
 
 	rm -f "${values_yaml}"
 
