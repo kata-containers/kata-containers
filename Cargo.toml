@@ -175,9 +175,9 @@ ipnetwork = "0.17.0"
 lazy_static = "1.4"
 libc = "0.2.94"
 log = "0.4.14"
-netlink-packet-core = "0.7.0"
-netlink-packet-route = "0.19.0"
-netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
+netlink-packet-core = "0.9.0"
+netlink-packet-route = "0.33.0"
+netlink-sys = { version = "0.9.0", features = ["tokio_socket"] }
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
 nix = { version = "0.31.3", features = ["fs", "mount", "sched", "process", "ioctl", "signal", "socket", "feature", "user", "hostname", "term", "event", "mman", "reboot"] }
@@ -190,7 +190,7 @@ protobuf = "3.7.2"
 rand = "0.10.1"
 regex = "1.10.5"
 rstest = "0.26.1"
-rtnetlink = "0.14.0"
+rtnetlink = "0.23.0"
 scan_fmt = "0.2.6"
 scopeguard = "1.0.0"
 serde = { version = "1.0.145", features = ["derive"] }
