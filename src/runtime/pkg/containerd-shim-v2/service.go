@@ -7,22 +7,33 @@ package containerdshim
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	sysexec "os/exec"
+	"path/filepath"
 	goruntime "runtime"
 	"sync"
 	"syscall"
 	"time"
 
 	eventstypes "github.com/containerd/containerd/api/events"
+	bootapi "github.com/containerd/containerd/api/runtime/bootstrap/v1"
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
+	containerdtypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/api/types/task"
-	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/namespaces"
-	cdruntime "github.com/containerd/containerd/runtime"
-	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+	cdruntime "github.com/containerd/containerd/v2/core/runtime"
+	"github.com/containerd/containerd/v2/defaults"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
+	cdshim "github.com/containerd/containerd/v2/pkg/shim"
+	"github.com/containerd/containerd/v2/pkg/shutdown"
+	"github.com/containerd/containerd/v2/plugins"
+	"github.com/containerd/errdefs"
+	"github.com/containerd/errdefs/pkg/errgrpc"
+	"github.com/containerd/plugin"
+	"github.com/containerd/plugin/registry"
+	"github.com/containerd/ttrpc"
 	"github.com/containerd/typeurl/v2"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
@@ -30,7 +41,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	vctypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -54,11 +65,54 @@ const (
 
 	chSize      = 128
 	exitCode255 = 255
+
+	// shimVersion is the version reported in the BootstrapResult. For
+	// containerd >= 2.2 it gates supportSandboxAPIVersion (core/runtime/
+	// v2/shim_manager.go): shims reporting >= 3 are assumed to serve the
+	// v3 task service and the sandbox API with streaming I/O, so
+	// containerd reuses the sandbox shim's connection for containers
+	// without invoking "shim start", and relies on the sandbox API
+	// instead of the shim-binary "delete" for cleanup. This shim serves
+	// containerd.task.v2.Task and none of that, so it must report 2 —
+	// the same value the legacy JSON path reports to CRI-O and
+	// containerd <= 2.2, and what the pre-migration shim reported. Bump
+	// only when the shim actually serves the v3 task service and the
+	// sandbox API.
+	shimVersion = 2
 )
 
+func init() {
+	registry.Register(&plugin.Registration{
+		Type: plugins.TTRPCPlugin,
+		ID:   "task",
+		Requires: []plugin.Type{
+			plugins.EventPlugin,
+			plugins.InternalPlugin,
+		},
+		InitFn: func(ic *plugin.InitContext) (any, error) {
+			pp, err := ic.GetByID(plugins.EventPlugin, "publisher")
+			if err != nil {
+				return nil, err
+			}
+			ss, err := ic.GetByID(plugins.InternalPlugin, "shutdown")
+			if err != nil {
+				return nil, err
+			}
+			// The SDK only sets Opts.BundlePath for the "delete" action, so
+			// the sandbox ID has to come from the "-id" flag it registers.
+			idFlag := flag.Lookup("id")
+			if idFlag == nil || idFlag.Value.String() == "" {
+				return nil, fmt.Errorf("shim id flag is not set")
+			}
+			return New(ic.Context, idFlag.Value.String(), pp.(cdshim.Publisher), ss.(shutdown.Service).Shutdown)
+		},
+	})
+}
+
 var (
-	empty                     = &emptypb.Empty{}
-	_     taskAPI.TaskService = (taskAPI.TaskService)(&service{})
+	empty                          = &emptypb.Empty{}
+	_     taskAPI.TTRPCTaskService = taskAPI.TTRPCTaskService(&service{})
+	_     cdshim.TTRPCService      = (*service)(nil)
 )
 
 // concrete virtcontainer implementation
@@ -70,8 +124,144 @@ var shimLog = logrus.WithFields(logrus.Fields{
 	"name":   "containerd-shim-v2",
 })
 
-// New returns a new shim service that can be used via GRPC
-func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown func()) (cdshim.Shim, error) {
+// shimManager implements cdshim.Shim so the kata shim binary can be launched
+// by containerd v2 via cdshim.RunShim.
+type shimManager struct{ name string }
+
+// NewManager returns a cdshim.Shim for use with cdshim.RunShim.
+func NewManager(name string) cdshim.Shim { return &shimManager{name: name} }
+
+func (m *shimManager) Name() string { return m.name }
+
+func (m *shimManager) Start(ctx context.Context, params *bootapi.BootstrapParams) (_ *bootapi.BootstrapResult, retErr error) {
+	id := params.InstanceID
+	containerdAddress := params.ContainerdGrpcAddress
+
+	bundlePath, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	address, err := getAddress(ctx, bundlePath, containerdAddress, id)
+	if err != nil {
+		return nil, err
+	}
+	if address != "" {
+		return &bootapi.BootstrapResult{Version: shimVersion, Address: address, Protocol: "ttrpc"}, nil
+	}
+
+	cmd, err := newCommand(ctx, id, containerdAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	socketDir := params.GetSocketDir()
+	if socketDir == "" {
+		socketDir = filepath.Join(defaults.DefaultStateDir, "s")
+	}
+	// The main ttrpc socket must always be named without the debug
+	// suffix. Callers that re-run "shim start" for containers joining an
+	// existing sandbox (CRI-O, and containerd without the podsandbox
+	// sandboxer) recompute this address in getAddress() with debug
+	// hardcoded to false, and containerd's own shims keep the main socket
+	// at the non-debug hash too (the debug hash is reserved for an extra
+	// pprof socket). Mixing the two leaves containerd/CRI-O dialing a
+	// path where no socket exists.
+	address, err = cdshim.CreateSocketAddress(ctx, socketDir, containerdAddress, id, false)
+	if err != nil {
+		return nil, err
+	}
+
+	socket, err := cdshim.NewSocket(address)
+	if err != nil {
+		if !cdshim.SocketEaddrinuse(err) {
+			return nil, err
+		}
+		if err := cdshim.RemoveSocket(address); err != nil {
+			return nil, errors.Wrap(err, "remove already used socket")
+		}
+		if socket, err = cdshim.NewSocket(address); err != nil {
+			return nil, err
+		}
+	}
+
+	defer func() {
+		if retErr != nil {
+			socket.Close()
+			_ = cdshim.RemoveSocket(address)
+		}
+	}()
+
+	f, err := socket.File()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd.ExtraFiles = append(cmd.ExtraFiles, f)
+
+	goruntime.LockOSThread()
+	if os.Getenv("SCHED_CORE") != "" {
+		if err := utils.Create(utils.ProcessGroup); err != nil {
+			return nil, errors.Wrap(err, "enable sched core support")
+		}
+	}
+
+	if err := setupMntNs(); err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	goruntime.UnlockOSThread()
+
+	defer func() {
+		if retErr != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	if err = cdshim.WritePidFile("shim.pid", cmd.Process.Pid); err != nil {
+		return nil, err
+	}
+	return &bootapi.BootstrapResult{Version: shimVersion, Address: address, Protocol: "ttrpc"}, nil
+}
+
+// Stop implements the binary "delete" action. The v1 SDK dispatched this to
+// service.Cleanup through its shimToManager adapter (containerd@v1.7
+// runtime/v2/shim/shim.go); the v2 SDK calls Manager.Stop directly, so the
+// cleanup itself has to happen here. containerd invokes this when the shim
+// is dead or unreachable (cleanupAfterDeadShim), and for containers in
+// restored sandboxes when the shim does not advertise sandbox API support.
+func (m *shimManager) Stop(ctx context.Context, id string) (cdshim.StopStatus, error) {
+	dr, err := cleanupBundle(ctx, id)
+	if err != nil {
+		return cdshim.StopStatus{}, err
+	}
+
+	status := cdshim.StopStatus{
+		Pid:        int(dr.Pid),
+		ExitStatus: int(dr.ExitStatus),
+	}
+	if dr.ExitedAt != nil {
+		status.ExitedAt = dr.ExitedAt.AsTime()
+	}
+	return status, nil
+}
+
+func (m *shimManager) Info(ctx context.Context, _ io.Reader) (*containerdtypes.RuntimeInfo, error) {
+	return &containerdtypes.RuntimeInfo{
+		Name: m.name,
+		Version: &containerdtypes.RuntimeVersion{
+			Version:  katautils.VERSION,
+			Revision: katautils.COMMIT,
+		},
+	}, nil
+}
+
+// New constructs the kata shim service inside the forked shim process.
+func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown func()) (*service, error) {
 	shimLog = shimLog.WithFields(logrus.Fields{
 		"sandbox": id,
 		"pid":     os.Getpid(),
@@ -174,7 +364,7 @@ type service struct {
 	pid uint32
 }
 
-func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {
+func newCommand(ctx context.Context, id, containerdAddress string) (*sysexec.Cmd, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -190,7 +380,7 @@ func newCommand(ctx context.Context, id, containerdBinary, containerdAddress str
 	args := []string{
 		"-namespace", ns,
 		"-address", containerdAddress,
-		"-publish-binary", containerdBinary,
+		"-publish-binary", self,
 		"-id", id,
 	}
 	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
@@ -229,95 +419,6 @@ func setupMntNs() error {
 	}
 
 	return nil
-}
-
-// StartShim is a binary call that starts a kata shimv2 service which will
-// implement the ShimV2 APIs such as create/start/update etc containers.
-func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ string, retErr error) {
-	bundlePath, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	address, err := getAddress(ctx, bundlePath, opts.Address, opts.ID)
-	if err != nil {
-		return "", err
-	}
-	if address != "" {
-		if err := cdshim.WriteAddress("address", address); err != nil {
-			return "", err
-		}
-		return address, nil
-	}
-
-	cmd, err := newCommand(ctx, opts.ID, opts.ContainerdBinary, opts.Address)
-	if err != nil {
-		return "", err
-	}
-
-	address, err = cdshim.SocketAddress(ctx, opts.Address, opts.ID)
-	if err != nil {
-		return "", err
-	}
-
-	socket, err := cdshim.NewSocket(address)
-
-	if err != nil {
-		if !cdshim.SocketEaddrinuse(err) {
-			return "", err
-		}
-		if err := cdshim.RemoveSocket(address); err != nil {
-			return "", errors.Wrap(err, "remove already used socket")
-		}
-		if socket, err = cdshim.NewSocket(address); err != nil {
-			return "", err
-		}
-	}
-
-	defer func() {
-		if retErr != nil {
-			socket.Close()
-			_ = cdshim.RemoveSocket(address)
-		}
-	}()
-
-	f, err := socket.File()
-	if err != nil {
-		return "", err
-	}
-
-	cmd.ExtraFiles = append(cmd.ExtraFiles, f)
-
-	goruntime.LockOSThread()
-	if os.Getenv("SCHED_CORE") != "" {
-		if err := utils.Create(utils.ProcessGroup); err != nil {
-			return "", errors.Wrap(err, "enable sched core support")
-		}
-	}
-
-	if err := setupMntNs(); err != nil {
-		return "", err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return "", err
-	}
-
-	goruntime.UnlockOSThread()
-
-	defer func() {
-		if retErr != nil {
-			cmd.Process.Kill()
-		}
-	}()
-
-	if err = cdshim.WritePidFile("shim.pid", cmd.Process.Pid); err != nil {
-		return "", err
-	}
-	if err = cdshim.WriteAddress("address", address); err != nil {
-		return "", err
-	}
-	return address, nil
 }
 
 func (s *service) send(evt interface{}) {
@@ -363,23 +464,26 @@ func getTopic(e interface{}) string {
 	return cdruntime.TaskUnknownTopic
 }
 
-// Cleanup is a binary call that cleans up resources used by the shim
-func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err error) {
-	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Cleanup", shimTracingTags)
+// cleanupBundle is the binary "delete" action: it tears down whatever the
+// shim left behind for the container whose bundle is the current working
+// directory (VM, network, mounts, runtime state) and returns that
+// container's exit status.
+func cleanupBundle(ctx context.Context, id string) (_ *taskAPI.DeleteResponse, err error) {
+	span, spanCtx := katatrace.Trace(ctx, shimLog, "Cleanup", shimTracingTags)
 	defer span.End()
 
-	//Since the binary cleanup will return the DeleteResponse from stdout to
-	//containerd, thus we must make sure there is no any outputs in stdout except
-	//the returned response, thus here redirect the log to stderr in case there's
-	//any log output to stdout.
+	// Since the binary cleanup will return the DeleteResponse from stdout to
+	// containerd, thus we must make sure there is no any outputs in stdout except
+	// the returned response, thus here redirect the log to stderr in case there's
+	// any log output to stdout.
 	logrus.SetOutput(os.Stderr)
 
 	defer func() {
 		err = toGRPC(err)
 	}()
 
-	if s.id == "" {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "the container id is empty, please specify the container id")
+	if id == "" {
+		return nil, errgrpc.ToGRPCf(errdefs.ErrInvalidArgument, "the container id is empty, please specify the container id")
 	}
 
 	path, err := os.Getwd()
@@ -399,7 +503,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 	switch containerType {
 	case vc.PodSandbox, vc.SingleContainer:
-		err = cleanupContainer(spanCtx, s.id, s.id, path)
+		err = cleanupContainer(spanCtx, id, id, path)
 		if err != nil {
 			return nil, err
 		}
@@ -409,7 +513,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 			return nil, err
 		}
 
-		err = cleanupContainer(spanCtx, sandboxID, s.id, path)
+		err = cleanupContainer(spanCtx, sandboxID, id, path)
 		if err != nil {
 			return nil, err
 		}
@@ -505,21 +609,21 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 	s.eventSendMu.Lock()
 	defer s.eventSendMu.Unlock()
 
-	//start a container
+	// start a container
 	if r.ExecID == "" {
 		err = startContainer(spanCtx, s, c)
 		if err != nil {
-			return nil, errdefs.ToGRPC(err)
+			return nil, errgrpc.ToGRPC(err)
 		}
 		s.send(&eventstypes.TaskStart{
 			ContainerID: c.id,
 			Pid:         s.hpid,
 		})
 	} else {
-		//start an exec
+		// start an exec
 		_, err = startExec(spanCtx, s, r.ID, r.ExecID)
 		if err != nil {
-			return nil, errdefs.ToGRPC(err)
+			return nil, errgrpc.ToGRPC(err)
 		}
 		s.send(&eventstypes.TaskExecStarted{
 			ContainerID: c.id,
@@ -572,7 +676,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 			Pid:        s.hpid,
 		}, nil
 	}
-	//deal with the exec case
+	// deal with the exec case
 	execs, err := c.getExec(r.ExecID)
 	if err != nil {
 		return nil, err
@@ -609,12 +713,12 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *e
 	}
 
 	if e, _ := c.getExec(r.ExecID); e != nil {
-		return nil, errdefs.ToGRPCf(errdefs.ErrAlreadyExists, "id %s", r.ExecID)
+		return nil, errgrpc.ToGRPCf(errdefs.ErrAlreadyExists, "id %s", r.ExecID)
 	}
 
 	execs, err := newExec(c, r.Stdin, r.Stdout, r.Stderr, r.Terminal, r.Spec)
 	if err != nil {
-		return nil, errdefs.ToGRPC(err)
+		return nil, errgrpc.ToGRPC(err)
 	}
 
 	c.setExec(r.ExecID, execs)
@@ -704,7 +808,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 		}, nil
 	}
 
-	//deal with exec case
+	// deal with exec case
 	execs, err := c.getExec(r.ExecID)
 	if err != nil {
 		return nil, err
@@ -950,7 +1054,7 @@ func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskReque
 		rpcDurationsHistogram.WithLabelValues("checkpoint").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 
-	return nil, errdefs.ToGRPCf(errdefs.ErrNotImplemented, "service Checkpoint")
+	return nil, errgrpc.ToGRPCf(errdefs.ErrNotImplemented, "service Checkpoint")
 }
 
 // Connect returns shim information such as the shim's pid
@@ -971,9 +1075,16 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 
 	return &taskAPI.ConnectResponse{
 		ShimPid: s.pid,
-		//Since kata cannot get the container's pid in VM, thus only return the hypervisor's pid.
+		// Since kata cannot get the container's pid in VM, thus only return the hypervisor's pid.
 		TaskPid: s.hpid,
 	}, nil
+}
+
+// RegisterTTRPC registers the task service on the ttrpc server.
+// This satisfies cdshim.TTRPCService so RunShim picks up the service.
+func (s *service) RegisterTTRPC(server *ttrpc.Server) error {
+	taskAPI.RegisterTTRPCTaskService(server, s)
+	return nil
 }
 
 func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *emptypb.Empty, err error) {
@@ -1082,12 +1193,12 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 	}
 	resources, ok := v.(*specs.LinuxResources)
 	if !ok {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
+		return nil, errgrpc.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
 	}
 
 	err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)
 	if err != nil {
-		return nil, errdefs.ToGRPC(err)
+		return nil, errgrpc.ToGRPC(err)
 	}
 
 	return empty, nil
@@ -1116,14 +1227,14 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 		return nil, err
 	}
 
-	//wait for container
+	// wait for container
 	if r.ExecID == "" {
 		ret = <-c.exitCh
 
 		// refill the exitCh with the container process's exit code in case
 		// there were other waits on this process.
 		c.exitCh <- ret
-	} else { //wait for exec
+	} else { // wait for exec
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
 			return nil, err
@@ -1169,7 +1280,7 @@ func (s *service) getContainer(id string) (*container, error) {
 	c := s.containers[id]
 
 	if c == nil {
-		return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "container does not exist %s", id)
+		return nil, errgrpc.ToGRPCf(errdefs.ErrNotFound, "container does not exist %s", id)
 	}
 
 	return c, nil
@@ -1183,13 +1294,13 @@ func (s *service) getContainerStatus(containerID string) (task.Status, error) {
 
 	var status task.Status
 	switch cStatus.State.State {
-	case types.StateReady:
+	case vctypes.StateReady:
 		status = task.Status_CREATED
-	case types.StateRunning:
+	case vctypes.StateRunning:
 		status = task.Status_RUNNING
-	case types.StatePaused:
+	case vctypes.StatePaused:
 		status = task.Status_PAUSED
-	case types.StateStopped:
+	case vctypes.StateStopped:
 		status = task.Status_STOPPED
 	}
 
