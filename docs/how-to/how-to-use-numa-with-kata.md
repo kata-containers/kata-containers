@@ -102,14 +102,6 @@ $ sudo systemctl restart kubelet
 
 ## Step 3: Configure Kata Containers for NUMA
 
-> **Note:**
->
-> If you are using the NVIDIA GPU runtime classes
-> (`kata-qemu-nvidia-gpu`, `kata-qemu-nvidia-gpu-snp`,
-> `kata-qemu-nvidia-gpu-tdx`), NUMA is already enabled by default in their
-> configuration templates. You only need the steps below for the base
-> `kata-qemu` runtime class or custom configurations.
-
 Never edit the base `configuration-qemu.toml` directly — use a
 **configuration drop-in** so your customizations survive upgrades.
 
@@ -252,8 +244,8 @@ EOF
 
 ### 4.2 GPU passthrough pod with NUMA
 
-For GPU workloads, use the NVIDIA GPU runtime class. NUMA is enabled by
-default in the GPU configuration templates:
+For GPU workloads, use the NVIDIA GPU runtime class. NUMA must be enabled
+explicitly in the GPU configuration before deploying the pod:
 
 ```bash
 $ cat <<'EOF' | kubectl apply -f -
