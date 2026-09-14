@@ -52,8 +52,9 @@ responsibilities are:
   [NVIDIA/sandbox-device-plugin](https://github.com/NVIDIA/sandbox-device-plugin)
   repository):
   - Creating host-side CDI specifications for GPU passthrough,
-    resulting in the file `/var/run/cdi/nvidia.yaml`, containing
-    `kind: nvidia.com/pgpu`
+    including `/var/run/cdi/nvidia.com-pgpu.yaml`, which contains
+    `kind: nvidia.com/pgpu`. On NVSwitch-based systems, the CDI directory
+    also contains `/var/run/cdi/nvidia.com-nvswitch.yaml`.
   - Allocating GPUs during pod deployment.
   - Discovering NVIDIA GPUs, their capabilities, and advertising these to
     the Kubernetes control plane (allocatable resources as type
@@ -300,8 +301,8 @@ $ deploy_k8s
 
 > **Note:**
 >
-> We recommend to configure your Kubelet with a higher
-> `runtimeRequestTimeout` timeout value than the two minute default timeout.
+> We recommend configuring Kubelet's `runtimeRequestTimeout` to `20m` instead
+> of its two-minute default.
 > Using the guest-pull mechanism, pulling large images may take a significant
 > amount of time and may delay container start, possibly leading your Kubelet
 > to de-allocate your pod before it transitions from the *container creating*
@@ -324,7 +325,10 @@ $ deploy_k8s
 > API to discover allocated GPU devices during sandbox creation. For
 > Kubernetes versions **older than 1.34**, you must explicitly enable the
 > `KubeletPodResourcesGet` feature gate in your Kubelet configuration. For
-> Kubernetes 1.34 and later, this feature is enabled by default.
+> Kubernetes 1.34 and later, this feature is enabled by default. You must also
+> explicitly enable the `RuntimeClassInImageCriApi` feature gate, which is
+> required when using multiple snapshotters side by side and is disabled by
+> default.
 
 #### GPU Operator
 
@@ -347,8 +351,12 @@ $ helm install --wait --generate-name \
 >
 > For heterogeneous clusters with different GPU types, you can specify an
 > empty `P_GPU_ALIAS` environment variable for the sandbox device plugin:
-> `-    --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \`
-> `-    --set 'kataSandboxDevicePlugin.env[0].value=""' \`
+>
+> ```bash
+> --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \
+> --set 'kataSandboxDevicePlugin.env[0].value=""'
+> ```
+>
 > This will cause the sandbox device plugin to create GPU model-specific
 > resource types (e.g., `nvidia.com/GH100_H100L_94GB`) instead of the
 > default `pgpu` type, which usually results in advertising a resource of
@@ -382,7 +390,7 @@ $ helm install kata-deploy \
     --namespace kata-system \
     --create-namespace \
     -f "https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/${VERSION}/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml" \
-    --set nfd.enabled=false \
+    --set node-feature-discovery.enabled=false \
     --wait --timeout 10m \
     "${CHART}" --version "${VERSION}"
 ```
