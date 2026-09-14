@@ -261,6 +261,11 @@ externals:
       version: "2026.03.02"
       url: "https://github.com/NVIDIA/attestation-sdk"
 
+  upx:
+    desc: "Executable packer used to shrink the NVIDIA GPU rootfs"
+    version: "5.2.1"
+    url: "https://github.com/upx/upx"
+
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
     version: "1.36.1"

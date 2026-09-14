@@ -115,13 +115,19 @@ nvidia_populate_capability_arrays() {
 	(( ${#_nvidia_icds[@]} > 0 )) || die "nvidia: no ICD entries selected from ${driver_required_files}"
 }
 
+nvidia_upx_version() {
+	get_package_version_from_kata_yaml "externals.upx.version"
+}
+
 setup_nvidia_upx() {
-	local upx_dir="${BUILD_DIR}/upx-4.2.4-${distro_arch}_linux"
+	local version
+	version="$(nvidia_upx_version)"
+	local upx_dir="${BUILD_DIR}/upx-${version}-${distro_arch}_linux"
 	[[ -x "${upx_dir}/upx" ]] && return
 
 	pushd "${BUILD_DIR}" >> /dev/null
-	curl -LO "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
-	tar xvf "upx-4.2.4-${distro_arch}_linux.tar.xz"
+	curl -LO "https://github.com/upx/upx/releases/download/v${version}/upx-${version}-${distro_arch}_linux.tar.xz"
+	tar xvf "upx-${version}-${distro_arch}_linux.tar.xz"
 	popd >> /dev/null
 }
 
@@ -438,12 +444,16 @@ chisseled_init() {
 
 compress_rootfs() {
 	echo "nvidia: compressing rootfs"
-	local upx="${BUILD_DIR}/upx-4.2.4-${distro_arch}_linux/upx"
+	local upx
 
-	# The dedicated gpu-extension builder bakes UPX into PATH. The generic
-	# monolith/base builder keeps using setup_nvidia_upx() and its build path.
-	if command -v upx > /dev/null; then
-		upx="$(command -v upx)"
+	# The dedicated gpu-extension builder bakes the pinned UPX into PATH and
+	# carries no yq, so resolve it there without going through versions.yaml.
+	# Everywhere else only setup_nvidia_upx()'s build path will do: an upx that
+	# happens to be on PATH would silently pack with an unpinned version.
+	if [[ "${NVIDIA_GPU_EXTENSION_CONTAINER:-no}" == "yes" ]]; then
+		upx="$(command -v upx || true)"
+	else
+		upx="${BUILD_DIR}/upx-$(nvidia_upx_version)-${distro_arch}_linux/upx"
 	fi
 	[[ -x "${upx}" ]] || die "nvidia: UPX not found"
 

@@ -48,9 +48,7 @@ RUN chmod +x /usr/local/bin/install-nvidia-packages && \
         "${CTK_VERSION}" && \
     rm -f /usr/local/bin/install-nvidia-packages
 
-# Keep UPX pinned exactly as the existing NVIDIA rootfs build did, but bake it
-# into this image so extension assembly performs no tool download at runtime.
-ARG UPX_VERSION=4.2.4
+ARG UPX_VERSION
 RUN case "${ARCH}" in \
         x86_64) upx_arch=amd64 ;; \
         aarch64) upx_arch=arm64 ;; \
