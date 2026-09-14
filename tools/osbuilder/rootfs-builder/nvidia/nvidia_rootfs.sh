@@ -185,7 +185,7 @@ install_nvidia_driver_packages() {
 	local rootfs_dir="${1:?rootfs dir required}"
 	local install_nvrc="${2:-yes}"
 	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
-	local tools_repo_url tools_repo_pkg
+	local tools_repo_url tools_repo_pkg dcgm_version dcgm_exporter_version
 
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" "${rootfs_dir}/nvidia_chroot.sh"
 	chmod +x "${rootfs_dir}/nvidia_chroot.sh"
@@ -206,6 +206,8 @@ install_nvidia_driver_packages() {
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
 	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+	dcgm_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.version")
+	dcgm_exporter_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.exporter.version")
 
 	pushd "${rootfs_dir}" >> /dev/null
 
@@ -214,7 +216,8 @@ install_nvidia_driver_packages() {
 	mount -t proc /proc ./proc
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
-		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version}"
+		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version} \
+		 ${dcgm_version} ${dcgm_exporter_version}"
 
 	umount -R ./dev
 	umount ./proc

@@ -256,6 +256,14 @@ externals:
     ctk:
       version: "1.19.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
+    dcgm:
+      desc: "NVIDIA Data Center GPU Manager"
+      version: "1:4.7.0-1"
+      url: "https://github.com/NVIDIA/DCGM"
+      exporter:
+        desc: "NVIDIA DCGM exporter, released independently of DCGM itself"
+        version: "4.8.3.002-1"
+        url: "https://github.com/NVIDIA/dcgm-exporter"
     nvat:
       desc: "NVIDIA Attestation SDK"
       version: "2026.03.02"
