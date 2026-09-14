@@ -209,7 +209,7 @@ jobs:
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
     name: remove-rootfs-binary-artifacts
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: build-asset-rootfs
     strategy:

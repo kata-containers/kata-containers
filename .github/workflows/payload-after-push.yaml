@@ -79,7 +79,7 @@ jobs:
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-amd64
       target-branch: ${{ github.ref_name }}
-      runner: ubuntu-22.04
+      runner: ubuntu-24.04
       arch: amd64
       image-kind: deploy
     secrets:
@@ -151,7 +151,7 @@ jobs:
       repo: kata-containers/kata-monitor-ci
       tag: kata-monitor-latest-amd64
       target-branch: ${{ github.ref_name }}
-      runner: ubuntu-22.04
+      runner: ubuntu-24.04
       arch: amd64
       image-kind: monitor
     secrets:
@@ -213,7 +213,7 @@ jobs:
 
   publish-manifest:
     name: publish-manifest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -241,7 +241,7 @@ jobs:
 
   publish-kata-monitor-manifest:
     name: publish-kata-monitor-manifest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -277,7 +277,7 @@ jobs:
   upload-helm-chart-tarball:
     name: upload-helm-chart-tarball
     needs: publish-manifest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       packages: write # needed to push the helm chart to ghcr.io

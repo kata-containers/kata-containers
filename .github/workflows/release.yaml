@@ -11,7 +11,7 @@ permissions: {}
 jobs:
   release:
     name: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release create` command
@@ -94,7 +94,7 @@ jobs:
 
   publish-multi-arch-images:
     name: publish-multi-arch-images
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
@@ -136,7 +136,7 @@ jobs:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: write # needed for the `gh release` commands
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout repository
@@ -270,7 +270,7 @@ jobs:
   upload-versions-yaml:
     name: upload-versions-yaml
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
@@ -289,7 +289,7 @@ jobs:
   upload-cargo-vendored-tarball:
     name: upload-cargo-vendored-tarball
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
@@ -308,7 +308,7 @@ jobs:
   upload-libseccomp-tarball:
     name: upload-libseccomp-tarball
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
@@ -327,7 +327,7 @@ jobs:
   upload-helm-chart-tarball:
     name: upload-helm-chart-tarball
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
@@ -372,7 +372,7 @@ jobs:
   publish-release:
     name: publish-release
     needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, publish-kata-monitor-image, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball, upload-helm-chart-tarball ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands

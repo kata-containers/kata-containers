@@ -32,8 +32,8 @@ on:
         type: string
         default: ""
       runner:
-        default: 'ubuntu-22.04'
-        description: The runner to execute the workflow on. Defaults to 'ubuntu-22.04'.
+        default: 'ubuntu-24.04'
+        description: The runner to execute the workflow on. Defaults to 'ubuntu-24.04'.
         required: false
         type: string
       arch:
