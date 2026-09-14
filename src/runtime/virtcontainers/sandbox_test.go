@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
@@ -111,6 +113,122 @@ func TestCreateMockSandbox(t *testing.T) {
 	_, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NetworkConfig{}, nil, nil)
 	assert.NoError(t, err)
 	defer cleanUp()
+}
+
+func TestConsoleWatcherConnectsWhenSocketAppears(t *testing.T) {
+	socketPath := filepath.Join(t.TempDir(), "console.sock")
+	watcher := &consoleWatcher{
+		proto:      consoleProtoUnix,
+		consoleURL: socketPath,
+	}
+	sandbox := &Sandbox{id: testSandboxID}
+
+	start := time.Now()
+	assert.NoError(t, watcher.start(sandbox))
+	assert.Less(t, time.Since(start), time.Second)
+
+	listener, err := net.Listen("unix", socketPath)
+	if !assert.NoError(t, err) {
+		watcher.stop()
+		return
+	}
+	defer listener.Close()
+
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+
+	var consoleConn net.Conn
+	select {
+	case conn := <-accepted:
+		consoleConn = conn
+	case <-time.After(time.Second):
+		watcher.stop()
+		t.Fatal("console watcher did not connect after the socket appeared")
+	}
+
+	consoleConn.Close()
+	watcher.stop()
+}
+
+func TestConsoleWatcherStopDrainsConnectedConsole(t *testing.T) {
+	socketPath := filepath.Join(t.TempDir(), "console.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer listener.Close()
+
+	watcher := &consoleWatcher{
+		proto:      consoleProtoUnix,
+		consoleURL: socketPath,
+	}
+	sandbox := &Sandbox{id: testSandboxID}
+
+	assert.NoError(t, watcher.start(sandbox))
+
+	consoleConn, err := listener.Accept()
+	if !assert.NoError(t, err) {
+		watcher.stop()
+		return
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		watcher.Lock()
+		connected := watcher.conn != nil
+		watcher.Unlock()
+		if connected {
+			break
+		}
+		if time.Now().After(deadline) {
+			consoleConn.Close()
+			watcher.stop()
+			t.Fatal("console watcher did not record the connection")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		watcher.stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		consoleConn.Close()
+		t.Fatal("console watcher stopped before console EOF")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	_, err = consoleConn.Write([]byte("final console line\n"))
+	assert.NoError(t, err)
+	assert.NoError(t, consoleConn.Close())
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("console watcher did not stop after console EOF")
+	}
+}
+
+func TestConsoleWatcherStopCancelsConnect(t *testing.T) {
+	watcher := &consoleWatcher{
+		proto:      consoleProtoUnix,
+		consoleURL: filepath.Join(t.TempDir(), "missing-console.sock"),
+	}
+	sandbox := &Sandbox{id: testSandboxID}
+
+	assert.NoError(t, watcher.start(sandbox))
+
+	start := time.Now()
+	watcher.stop()
+	assert.Less(t, time.Since(start), time.Second)
 }
 
 func TestCalculateSandboxCPUs(t *testing.T) {
