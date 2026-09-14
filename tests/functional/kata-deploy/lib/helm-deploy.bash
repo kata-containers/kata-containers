@@ -288,6 +288,15 @@ deploy_kata() {
 	chart_path="$(get_chart_path)"
 	values_yaml=$(mktemp)
 
+	# A release inherited with no revision to upgrade from fails every deploy
+	# after it, however healthy the node is.
+	if helm_release_registered "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}" &&
+		! helm_release_has_deployed_revision "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}"; then
+		echo "The '${HELM_RELEASE_NAME}' release has no revision to install over" >&2
+		helm history "${HELM_RELEASE_NAME}" -n "${HELM_NAMESPACE}" || true
+		uninstall_kata || true
+	fi
+
 	deployment_mode="$(requested_deployment_mode "${extra_values_file}" \
 		"${extra_helm_args[@]}")"
 
