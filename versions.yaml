@@ -292,7 +292,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "304c21f29e26dbbb968783e41109f3b6d630e872"
+    version: "eae0bf63a3a9db7721f86e0a2b0b9941a7fcba3a"
     # Guest Ubuntu release qualifier published by coco-extension-image.yml
     # (tags are "<version>-<variant>", e.g. "<sha>-ubuntu26.04"). The
     # extension ships no libc, so this must match the guest rootfs ABI.
