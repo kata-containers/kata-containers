@@ -50,6 +50,37 @@ EROFS_MERGE_MODE="${EROFS_MERGE_MODE:-}"
 # jobs use.
 EROFS_UTILS_IMAGE="${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}"
 
+helm_release_registered() {
+	helm status "${1}" -n "${2}" &>/dev/null
+}
+
+# `helm upgrade --install` installs only when there is no release at all; one
+# with no deployed revision takes the upgrade path, which refuses.
+helm_release_has_deployed_revision() {
+	helm history "${1}" -n "${2}" -o json 2>/dev/null |
+		jq -e 'any(.[]; .status == "deployed")' &>/dev/null
+}
+
+# A last resort: an uninstall re-runs the release's own pre-delete hooks, so a
+# release whose hooks cannot succeed is otherwise never removed. The nodes keep
+# whatever the install put on them.
+helm_purge_release() {
+	local release_name="${1}"
+	local namespace="${2}"
+
+	echo "Purging the '${release_name}' release with its hooks skipped" >&2
+	helm uninstall "${release_name}" -n "${namespace}" \
+		--ignore-not-found --no-hooks --wait --timeout 5m || true
+
+	helm_release_registered "${release_name}" "${namespace}" || return 0
+
+	# helm will not touch a release it cannot uninstall, and its storage for one
+	# is a Secret per revision.
+	echo "The '${release_name}' release outlived --no-hooks; deleting its storage" >&2
+	kubectl -n "${namespace}" delete secret \
+		-l "owner=helm,name=${release_name}" --ignore-not-found || true
+}
+
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
 # the SIGTERM cleanup restarts the CRI runtime which takes down the API.
@@ -74,6 +105,11 @@ wait_for_api_and_retry_uninstall() {
 
 	helm uninstall "${release_name}" -n "${namespace}" \
 		--ignore-not-found --wait --timeout 5m || true
+
+	# A release left registered fails the next job, not this one.
+	if helm_release_registered "${release_name}" "${namespace}"; then
+		helm_purge_release "${release_name}" "${namespace}"
+	fi
 }
 
 # True when every node reports Ready. An unreachable API answers nothing, so
