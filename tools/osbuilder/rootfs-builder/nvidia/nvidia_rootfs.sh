@@ -226,11 +226,41 @@ install_nvidia_driver_packages() {
 	popd >> /dev/null
 }
 
+# Everything install_nvidia_driver_packages() resolves before it installs
+# anything. The archive name carries no version, so without this a BUILD_DIR
+# that survives between builds keeps serving a tree pinned to whatever
+# versions.yaml said when it was first created.
+nvidia_stage_one_fingerprint() {
+	{
+		echo "${NVIDIA_GPU_STACK:?}"
+		get_package_version_from_kata_yaml "externals.nvidia.ctk.version"
+		get_package_version_from_kata_yaml "externals.nvidia.dcgm.version"
+		get_package_version_from_kata_yaml "externals.nvidia.dcgm.exporter.version"
+		get_package_version_from_kata_yaml "externals.nvrc.version"
+		get_package_version_from_kata_yaml "assets.image.architecture.${machine_arch}.nvidia-gpu.version"
+		get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url"
+		get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg"
+		get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url"
+		get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg"
+	} | sha256sum | cut -d' ' -f1
+}
+
 setup_nvidia_gpu_rootfs_stage_one() {
 	setup_nvidia_upx
+
+	local fingerprint stamp=""
+	fingerprint="$(nvidia_stage_one_fingerprint)"
+	if [[ -r "${stage_one}.fingerprint" ]]; then
+		stamp="$(cat "${stage_one}.fingerprint")"
+	fi
+
 	if [[ -e "${stage_one}.tar.zst" ]]; then
-		info "nvidia: GPU rootfs stage one already exists"
-		return
+		if [[ "${stamp}" == "${fingerprint}" ]]; then
+			info "nvidia: GPU rootfs stage one already exists"
+			return
+		fi
+		info "nvidia: GPU rootfs stage one is stale, rebuilding it"
+		rm -f "${stage_one}.tar.zst" "${stage_one}.fingerprint"
 	fi
 
 	info "nvidia: Setup GPU rootfs stage one"
@@ -239,6 +269,8 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	pushd "${ROOTFS_DIR}" >> /dev/null
 	tar cfa "${stage_one}.tar.zst" --remove-files -- *
 	popd >> /dev/null
+
+	echo "${fingerprint}" > "${stage_one}.fingerprint"
 }
 
 chisseled_iptables() {
