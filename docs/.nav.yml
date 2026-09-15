@@ -24,6 +24,7 @@ nav:
       - Rootless VMM: how-to/how-to-run-rootless-vmm.md
     - Contributing:
       - Documentation: doc-contributing.md
+      - Guest AppArmor: guest-apparmor.md
   - Releases:
     - "4.2.0": releases/4.2.0.md
     - "4.1.0": releases/4.1.0.md
