@@ -24,6 +24,7 @@ nav:
     - Contributing:
       - Documentation: doc-contributing.md
   - Releases:
+    - "4.2.0": releases/4.2.0.md
     - "4.1.0": releases/4.1.0.md
   - Misc:
     - Architecture: design/architecture_4.0/architecture.md

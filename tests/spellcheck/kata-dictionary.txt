@@ -17,11 +17,13 @@ virtcontainers
 # Open source projects
 bootc
 distroless
+libseccomp
 materialx
 ostree
 
 # Hardware & Architecture
 AMD
+APIC
 APQN
 chiplet
 cpuid
@@ -47,6 +49,7 @@ SNP
 SRIOV
 TDX
 VBIOS
+VCEK
 VGPU
 VPMU
 
@@ -110,6 +113,7 @@ vsock
 GHSA
 LUKS
 ocicrypt
+RUSTSEC
 
 # Container, Runtime & Misc terms
 Burstable
