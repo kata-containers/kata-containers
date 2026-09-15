@@ -311,6 +311,11 @@ impl Memory {
         self
     }
 
+    fn clear_memory_backend(&mut self) -> &mut Self {
+        self.memory_backend = None;
+        self
+    }
+
     #[allow(dead_code)]
     fn set_maxmem_size(&mut self, max_size: u64) -> &mut Self {
         self.max_size = max_size;
@@ -518,6 +523,18 @@ impl CcwSubChannel {
     }
 }
 
+/// Arguments rendered elsewhere (the machine-centric `Platform`), emitted
+/// verbatim at their position in the device list.
+#[derive(Debug)]
+struct RawArgs(Vec<String>);
+
+#[async_trait]
+impl ToQemuParams for RawArgs {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(self.0.clone())
+    }
+}
+
 #[derive(Debug)]
 struct Machine {
     r#type: String,
@@ -580,6 +597,26 @@ impl Machine {
 
     fn set_confidential_guest_support(&mut self, scheme: &str) -> &mut Self {
         self.confidential_guest_support = scheme.to_owned();
+        self
+    }
+
+    /// Merge `key=value` options into the machine line.  A key already present
+    /// (from `machine_accelerators`) is replaced, so a Platform's
+    /// `gic-version=3` wins over the profile's `gic-version=host`.
+    fn merge_options(&mut self, extra: &[String]) -> &mut Self {
+        let key_of = |opt: &str| opt.split('=').next().unwrap_or(opt).to_owned();
+        let mut options: Vec<String> = self
+            .options
+            .split(',')
+            .filter(|o| !o.is_empty())
+            .map(String::from)
+            .collect();
+        for opt in extra {
+            let key = key_of(opt);
+            options.retain(|existing| key_of(existing) != key);
+            options.push(opt.clone());
+        }
+        self.options = options.join(",");
         self
     }
 }
@@ -3894,6 +3931,19 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_seccomp_sandbox(&mut self, param: &str) {
         let seccomp_sandbox = SeccompSandbox::new(param);
         self.devices.push(Box::new(seccomp_sandbox));
+    }
+
+    /// Hand the machine options and the memory/NUMA/PCIe/VFIO topology to a
+    /// machine-centric `Platform` (Phase 7).  The legacy singletons keep
+    /// `-name`, kernel, `-smp`, `-cpu`, `-m` and every device the Platform does
+    /// not model.  The machine-wide memory backend installed by `new()` is
+    /// dropped: the Platform binds guest RAM per NUMA node through `memdev=`,
+    /// and QEMU rejects `-machine memory-backend=` next to `-numa memdev=`.
+    pub fn apply_platform(&mut self, machine_options: &[String], topology_args: Vec<String>) {
+        self.machine.merge_options(machine_options);
+        self.machine.memory_backend = None;
+        self.memory.clear_memory_backend();
+        self.devices.push(Box::new(RawArgs(topology_args)));
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
