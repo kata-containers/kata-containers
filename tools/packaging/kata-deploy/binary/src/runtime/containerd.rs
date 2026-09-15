@@ -89,6 +89,26 @@ fn containerd_debug_level_toml_path(_config_schema_version: Option<u32>) -> &'st
     ".debug.level"
 }
 
+/// Installs only add keys, so debug going off has to remove the level. Only
+/// ours: another value belongs to whoever set it.
+fn write_containerd_debug_level(
+    configuration_file: &Path,
+    debug_path: &str,
+    debug: bool,
+) -> Result<()> {
+    if debug {
+        return toml_utils::set_toml_value(configuration_file, debug_path, "\"debug\"");
+    }
+
+    if toml_utils::get_toml_value(configuration_file, debug_path)
+        .is_ok_and(|level| level == "debug")
+    {
+        toml_utils::delete_toml_value(configuration_file, debug_path)?;
+    }
+
+    Ok(())
+}
+
 /// Reads config and returns the CRI plugin ID used for *runtime* config (runtimes, snapshotter-per-runtime).
 /// `runtime` selects K3s/RKE2 fallbacks when `config_file` is a template without `version`.
 pub(crate) fn get_containerd_pluginid(config_file: &str, runtime: &str) -> Result<&'static str> {
@@ -386,11 +406,12 @@ pub async fn configure_containerd_runtime(
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
 
-    if config.debug {
-        let schema = containerd_config_schema_version(&paths, runtime);
-        let debug_path = containerd_debug_level_toml_path(schema);
-        toml_utils::set_toml_value(&configuration_file, debug_path, "\"debug\"")?;
-    }
+    let schema = containerd_config_schema_version(&paths, runtime);
+    write_containerd_debug_level(
+        &configuration_file,
+        containerd_debug_level_toml_path(schema),
+        config.debug,
+    )?;
 
     Ok(())
 }
@@ -451,11 +472,12 @@ pub async fn configure_custom_containerd_runtime(
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
 
-    if config.debug {
-        let schema = containerd_config_schema_version(&paths, runtime);
-        let debug_path = containerd_debug_level_toml_path(schema);
-        toml_utils::set_toml_value(&configuration_file, debug_path, "\"debug\"")?;
-    }
+    let schema = containerd_config_schema_version(&paths, runtime);
+    write_containerd_debug_level(
+        &configuration_file,
+        containerd_debug_level_toml_path(schema),
+        config.debug,
+    )?;
 
     Ok(())
 }
@@ -1053,6 +1075,45 @@ mod tests {
         assert_eq!(containerd_debug_level_toml_path(Some(4)), ".debug.level");
         assert_eq!(containerd_debug_level_toml_path(Some(3)), ".debug.level");
         assert_eq!(containerd_debug_level_toml_path(None), ".debug.level");
+    }
+
+    #[test]
+    fn the_debug_level_goes_away_with_debug() {
+        let f = NamedTempFile::new().unwrap();
+        std::fs::write(f.path(), "version = 3\n").unwrap();
+        let debug_path = containerd_debug_level_toml_path(Some(3));
+
+        write_containerd_debug_level(f.path(), debug_path, true).unwrap();
+        assert_eq!(
+            toml_utils::get_toml_value(f.path(), debug_path).unwrap(),
+            "debug"
+        );
+
+        write_containerd_debug_level(f.path(), debug_path, false).unwrap();
+        assert!(toml_utils::get_toml_value(f.path(), debug_path).is_err());
+    }
+
+    #[test]
+    fn a_level_we_did_not_write_survives_debug_going_off() {
+        let f = NamedTempFile::new().unwrap();
+        std::fs::write(f.path(), "version = 3\n\n[debug]\nlevel = \"trace\"\n").unwrap();
+        let debug_path = containerd_debug_level_toml_path(Some(3));
+
+        write_containerd_debug_level(f.path(), debug_path, false).unwrap();
+        assert_eq!(
+            toml_utils::get_toml_value(f.path(), debug_path).unwrap(),
+            "trace"
+        );
+    }
+
+    #[test]
+    fn debug_off_leaves_a_file_without_the_key_alone() {
+        let f = NamedTempFile::new().unwrap();
+        std::fs::write(f.path(), "version = 3\n").unwrap();
+
+        write_containerd_debug_level(f.path(), containerd_debug_level_toml_path(Some(3)), false)
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(f.path()).unwrap(), "version = 3\n");
     }
 
     #[test]
