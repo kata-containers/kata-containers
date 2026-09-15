@@ -155,7 +155,7 @@ impl QemuInner {
             match Platform::for_assigned_devices(&self.config, &assigned)
                 .context("cold_plug_vfio=auto: probing host topology")?
             {
-                Some(platform) => {
+                Some(mut platform) => {
                     if matches!(
                         self.config.shared_fs.shared_fs.as_deref(),
                         Some("virtio-fs") | Some("virtio-fs-nydus")
@@ -165,6 +165,9 @@ impl QemuInner {
                              yet provide the shared file-backed memory virtio-fs needs; \
                              set shared_fs = \"none\""
                         ));
+                    }
+                    if cmdline.has_memory_hotplug_region() {
+                        platform.add_hotplug_placeholder_node();
                     }
                     cmdline.apply_platform(&platform.machine_options(), platform.topology_args()?);
                     info!(
