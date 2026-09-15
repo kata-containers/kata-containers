@@ -21,7 +21,7 @@ use cgroups::{
 
 use crate::cgroups::{rule_for_all_devices, Manager as CgroupManager};
 use crate::container::DEFAULT_DEVICES;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use libc::{self, pid_t};
 use oci::{
     LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder,
@@ -472,6 +472,34 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
     set_resource!(cpu_controller, set_rt_period_us, cpu, realtime_period);
 
     Ok(())
+}
+
+// pod_memory_limit is the runtime's byte count as the i64 the cgroup interface takes.
+fn pod_memory_limit(bytes: u64) -> Result<i64> {
+    if bytes > i64::MAX as u64 {
+        bail!("pod memory bound {bytes} does not fit the cgroup interface");
+    }
+    Ok(bytes as i64)
+}
+
+// set_pod_memory_max sets memory.max on the pod cgroup, the parent of the
+// sandbox's container cgroups. Without a memory controller the containers keep
+// their own limits.
+fn set_pod_memory_max(cg: &cgroups::Cgroup, bytes: u64) -> Result<()> {
+    let limit = pod_memory_limit(bytes)?;
+    let mem_controller: Option<&MemController> = cg.controller_of();
+    match mem_controller {
+        Some(mem_controller) => mem_controller
+            .set_limit(limit)
+            .with_context(|| format!("set memory.max of the pod cgroup to {bytes}")),
+        None => {
+            warn!(
+                sl(),
+                "The pod cgroup has no memory controller, the containers are not bounded together"
+            );
+            Ok(())
+        }
+    }
 }
 
 fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool) -> Result<()> {
@@ -1081,6 +1109,7 @@ impl Manager {
         cpath: &str,
         spec: &Spec,
         devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
+        pod_memory_max_bytes: u64,
     ) -> Result<Self> {
         let (paths, mounts) = Self::get_paths_and_mounts(cpath).context("Get paths and mounts")?;
 
@@ -1098,6 +1127,13 @@ impl Manager {
 
             if pod_cpath.as_str() == "/" {
                 // Skip setting pod cgroup for cpath due to no parent path
+                if pod_memory_max_bytes > 0 {
+                    warn!(
+                        sl(),
+                        "Container {} has no pod cgroup to bound its memory with the sandbox's other containers",
+                        cpath
+                    );
+                }
                 pod_cgroup = None
             } else {
                 // Create a cgroup for the pod if not exists.
@@ -1141,10 +1177,32 @@ impl Manager {
                         devices_group_info.allowed_all = true;
                     }
 
+                    // The runtime's bound on the containers' memory taken
+                    // together, written once when the pod cgroup is created so
+                    // every container sits under it.
+                    if pod_memory_max_bytes > 0 {
+                        set_pod_memory_max(pod_cg, pod_memory_max_bytes).with_context(|| {
+                            format!("Bound the memory of pod cgroup {pod_cpath}")
+                        })?;
+                        info!(
+                            sl(),
+                            "Bounded the memory of pod cgroup {} to {} bytes",
+                            pod_cpath,
+                            pod_memory_max_bytes
+                        );
+                    }
+
                     devices_group_info.inited = true
                 }
             }
         } else {
+            if pod_memory_max_bytes > 0 {
+                warn!(
+                    sl(),
+                    "Container {} has no pod cgroup info, the sandbox memory bound is not applied",
+                    cpath
+                );
+            }
             pod_cgroup = None;
         }
 
@@ -1428,12 +1486,22 @@ mod tests {
     use oci_spec::runtime as oci;
     use test_utils::skip_if_not_root;
 
-    use super::{cgroup_path_under_root, default_allowed_devices, load_cgroup};
+    use super::{cgroup_path_under_root, default_allowed_devices, load_cgroup, pod_memory_limit};
     use crate::cgroups::fs::{
         line_to_vec, lines_to_map, Manager, DEFAULT_ALLOWED_DEVICES, WILDCARD,
     };
     use crate::cgroups::DevicesCgroupInfo;
     use crate::container::DEFAULT_DEVICES;
+
+    #[test]
+    fn test_pod_memory_limit() {
+        const GIB: u64 = 1024 * 1024 * 1024;
+
+        assert_eq!(pod_memory_limit(186 * GIB).unwrap(), 186 * GIB as i64);
+        assert_eq!(pod_memory_limit(i64::MAX as u64).unwrap(), i64::MAX);
+        assert!(pod_memory_limit(i64::MAX as u64 + 1).is_err());
+        assert!(pod_memory_limit(u64::MAX).is_err());
+    }
 
     #[test]
     fn test_cgroup_path_under_root_trims_absolute_cpath() {
@@ -1635,7 +1703,8 @@ mod tests {
                     .build()
                     .unwrap();
                 managers.push(
-                    Manager::new(&tc.cpath[cid], &spec, Some(sandbox.devcg_info.clone())).unwrap(),
+                    Manager::new(&tc.cpath[cid], &spec, Some(sandbox.devcg_info.clone()), 0)
+                        .unwrap(),
                 );
 
                 let devcg_info = sandbox.devcg_info.read().unwrap();

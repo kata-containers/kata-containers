@@ -864,13 +864,14 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	storages := setupStorages(ctx, sandbox)
 
 	req := &grpc.CreateSandboxRequest{
-		Hostname:      hostname,
-		Dns:           dns,
-		Storages:      storages,
-		SandboxPidns:  sandbox.sharePidNs,
-		SandboxId:     sandbox.id,
-		GuestHookPath: sandbox.config.HypervisorConfig.GuestHookPath,
-		KernelModules: kmodules,
+		Hostname:              hostname,
+		Dns:                   dns,
+		Storages:              storages,
+		SandboxPidns:          sandbox.sharePidNs,
+		SandboxId:             sandbox.id,
+		GuestHookPath:         sandbox.config.HypervisorConfig.GuestHookPath,
+		KernelModules:         kmodules,
+		SandboxMemoryMaxBytes: sandboxMemoryMaxBytes(sandbox),
 	}
 
 	_, err = k.sendReq(ctx, req)
@@ -1136,6 +1137,22 @@ func staticGuestMemoryMB(sandbox *Sandbox) uint32 {
 		return 0
 	}
 	return sandbox.config.HypervisorConfig.MemorySize
+}
+
+// sandboxMemoryMaxBytes is the bound the agent puts on the parent cgroup of a
+// huge page backed static guest's containers, the guest's counterpart of the
+// pod cgroup: their own ceilings can add up to more than the guest holds, and
+// without it the guest's OOM killer picks among every guest process. Zero for
+// any other guest.
+func sandboxMemoryMaxBytes(sandbox *Sandbox) uint64 {
+	if !sandbox.config.HypervisorConfig.HugePages {
+		return 0
+	}
+	holdable := holdableGuestMemoryBytes(staticGuestMemoryMB(sandbox))
+	if holdable <= 0 {
+		return 0
+	}
+	return uint64(holdable)
 }
 
 // holdableGuestMemoryBytes is the most a container in a guest of guestMemMB can

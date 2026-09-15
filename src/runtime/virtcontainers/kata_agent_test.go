@@ -1618,3 +1618,55 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 		assert.Equal(tt.expectedSwap, memory.Swap, tt.description)
 	}
 }
+
+func TestSandboxMemoryMaxBytes(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, tt := range []struct {
+		description string
+		hugePages   bool
+		static      bool
+		memMB       uint32
+		expected    uint64
+	}{
+		{
+			// A 192Gi guest: a thirty-second (6Gi) is left to the guest itself.
+			description: "huge page backed, static",
+			hugePages:   true,
+			static:      true,
+			memMB:       192 * 1024,
+			expected:    uint64(186*1024) << 20,
+		},
+		{
+			description: "small guest, floor reserve",
+			hugePages:   true,
+			static:      true,
+			memMB:       2048,
+			expected:    uint64(2048-128) << 20,
+		},
+		{
+			description: "not huge page backed",
+			hugePages:   false,
+			static:      true,
+			memMB:       192 * 1024,
+		},
+		{
+			description: "grows on demand",
+			hugePages:   true,
+			static:      false,
+			memMB:       192 * 1024,
+		},
+		{
+			description: "too small to hold anything",
+			hugePages:   true,
+			static:      true,
+			memMB:       128,
+		},
+	} {
+		s := &Sandbox{config: &SandboxConfig{
+			StaticResourceMgmt: tt.static,
+			HypervisorConfig:   HypervisorConfig{HugePages: tt.hugePages, MemorySize: tt.memMB},
+		}}
+		assert.Equal(tt.expected, sandboxMemoryMaxBytes(s), tt.description)
+	}
+}
