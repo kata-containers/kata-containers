@@ -240,6 +240,18 @@ impl Platform {
         if topo.gpu_smmu_groups.is_empty() && topo.nic_smmu_groups.is_empty() {
             return Ok(None);
         }
+        if !topo.egm_sockets.is_empty() {
+            // vEGM makes the EGM regions the guest's RAM: -m has to match their
+            // size and every GPU of the tray has to be assigned.  Neither is
+            // wired yet, so back the guest with plain RAM instead.
+            warn!(
+                sl!(),
+                "cold_plug_vfio=auto: {} EGM device(s) found but vEGM is not wired yet, \
+                 backing the guest with RAM",
+                topo.egm_sockets.len()
+            );
+            topo.egm_sockets.clear();
+        }
         Self::from_config_and_topology(config, topo).map(Some)
     }
 
@@ -765,6 +777,19 @@ impl Platform {
         self.objects.numa_nodes.iter().any(|n| n.memdev.is_some())
     }
 
+    /// Append a NUMA node with neither CPUs nor memory after every other node.
+    /// QEMU attaches the memory hot-plug region (`-m ...,slots=,maxmem=`) to
+    /// the last NUMA node it was given; without this node that is the last GPU
+    /// initiator node, and hot-plugged RAM would share a node with GPU memory.
+    pub fn add_hotplug_placeholder_node(&mut self) {
+        let nodeid = self.objects.numa_nodes.len() as u32;
+        self.objects.numa_nodes.push(NumaNode {
+            nodeid,
+            memdev: None,
+            cpus: None,
+        });
+    }
+
     /// Q35 emission order:
     ///   1. protection object (sev-snp-guest / tdx-guest), if any
     ///   2. -machine q35,...
@@ -791,6 +816,16 @@ impl Platform {
         {
             args.push("-object".to_owned());
             args.push(emit_backend(backend, backend_id(backend)));
+            args.push("-numa".to_owned());
+            args.push(emit_numa_node(node));
+        }
+        // Nodes beyond the memory-backed ones (the hot-plug placeholder).
+        for node in self
+            .objects
+            .numa_nodes
+            .iter()
+            .skip(self.objects.memory_backends.len())
+        {
             args.push("-numa".to_owned());
             args.push(emit_numa_node(node));
         }

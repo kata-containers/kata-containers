@@ -1103,11 +1103,92 @@ fn q35_vanilla_kata_x86() {
     assert_eq!(want, got);
 }
 
+// ---- Grace I/O Virtualization Guide: devices behind one host SMMU share a
+// complex even when they sit in different IOMMU groups ----
+
+#[test]
+fn probe_groups_by_physical_smmu() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let pci = tmp.path().join("pci_devices");
+    let cpu = tmp.path().join("cpu");
+    let dev = tmp.path().join("dev");
+    fs::create_dir_all(&pci).unwrap();
+    fs::create_dir_all(&cpu).unwrap();
+    fs::create_dir_all(&dev).unwrap();
+    let iommu_groups = tmp.path().join("iommu_groups");
+    let iommus = tmp.path().join("iommu");
+
+    let make_gpu = |bdf: &str, iommu_group: u32, smmu: &str| {
+        let d = pci.join(bdf);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("vendor"), "0x10de\n").unwrap();
+        fs::write(d.join("class"), "0x030200\n").unwrap();
+        fs::write(d.join("numa_node"), "0\n").unwrap();
+        let gdir = iommu_groups.join(iommu_group.to_string());
+        fs::create_dir_all(&gdir).unwrap();
+        symlink(&gdir, d.join("iommu_group")).unwrap();
+        let sdir = iommus.join(smmu);
+        fs::create_dir_all(&sdir).unwrap();
+        symlink(&sdir, d.join("iommu")).unwrap();
+    };
+
+    // Two GPUs in distinct IOMMU groups behind the same SMMU, a third behind another.
+    make_gpu("0008:06:00.0", 50, "smmu3.0x0000000005000000");
+    make_gpu("0009:06:00.0", 48, "smmu3.0x0000000005000000");
+    make_gpu("0018:06:00.0", 88, "smmu3.0x0000100005000000");
+
+    let topo = probe_host_topology_at(&pci, &cpu, &dev).expect("probe");
+    assert_eq!(
+        topo.gpu_smmu_groups.len(),
+        2,
+        "one complex per physical SMMU"
+    );
+    assert_eq!(
+        topo.gpu_smmu_groups[0].pci_bus_addrs,
+        vec!["0008:06:00.0", "0009:06:00.0"]
+    );
+    assert_eq!(topo.gpu_smmu_groups[1].pci_bus_addrs, vec!["0018:06:00.0"]);
+}
+
+// ---- Memory hot-plug: QEMU parks the hot-plug region on the last NUMA node,
+// which must not be a GPU initiator node ----
+
+#[test]
+fn hotplug_placeholder_is_last_numa_node() {
+    let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
+    platform.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+    });
+    let before = platform.to_qemu_args().expect("args");
+    platform.add_hotplug_placeholder_node();
+    let after = platform.to_qemu_args().expect("args");
+
+    assert_eq!(after.len(), before.len() + 2, "exactly one more -numa pair");
+    let last_numa = after.iter().rposition(|a| a == "-numa").expect("numa");
+    // 1 CpuMem node + 8 initiator nodes (1..=8), then the placeholder.
+    assert_eq!(after[last_numa + 1], "node,nodeid=9");
+    let last_initiator = after.iter().position(|a| a == "node,nodeid=8").unwrap();
+    assert!(
+        last_initiator < last_numa,
+        "placeholder follows the initiator nodes"
+    );
+}
+
 // ---- Phase 6: PlatformProbe unit test ----
 //
 // Builds a minimal synthetic sysfs tree to exercise probe_host_topology_at().
 // Verifies that GPU and NIC devices are classified correctly and grouped by
-// IOMMU group into GpuSmmuGroup entries.
+// IOMMU group (the fallback when sysfs exposes no `iommu` link) into
+// GpuSmmuGroup entries.
 
 #[test]
 fn probe_synthetic_sysfs() {

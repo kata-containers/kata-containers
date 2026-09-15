@@ -279,8 +279,11 @@ pub struct SmmuV3Config {
 
 **`SMMU` grouping rule:** GPUs that share a physical `SMMU` on the host **must** be
 placed on the same `PciRootComplex` in the guest (they share the same
-`arm-smmuv3` device).  The IOMMU group boundaries in host sysfs determine the
-grouping.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
+`arm-smmuv3` device).  The prober keys complexes on the physical SMMU behind
+each device (`/sys/bus/pci/devices/<BDF>/iommu`, e.g. `smmu3.0x0000000005000000`)
+and falls back to the IOMMU group only when the kernel exposes no such link: an
+IOMMU group is an isolation boundary, not a translation unit, and two GPUs can
+sit in separate groups behind one SMMU.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
 the `2-GPUs-per-SMMU` topology.
 
 #### `Objects` — shared QEMU `-object` backends
@@ -429,6 +432,15 @@ The guest Linux kernel processes ACPI `SRAT` entries in a fixed order:
 The `-numa node` arguments **must appear in this order** in the QEMU command
 line.  Placing Generic Affinity nodes before CpuMem nodes causes the kernel to
 assign wrong NUMA node IDs.
+
+**Memory hot-plug placeholder:** QEMU attaches the hot-plug region declared by
+`-m ...,slots=,maxmem=` to the *last* NUMA node on the command line.  With GPU
+initiator nodes last, hot-plugged RAM would land on a GPU node.  Whenever the
+legacy `-m` carries a hot-plug region (kata's default outside confidential
+guests), `Platform::add_hotplug_placeholder_node` appends one more node with
+neither CPUs nor memory after the initiator nodes, exactly as the NVIDIA Grace
+I/O Virtualization Guide recommends.  The golden fixtures model VMs without
+hot-plug and therefore carry no placeholder.
 
 **8 NUMA nodes per GPU (MIG):** Each passthrough GPU requires exactly 8 dedicated
 generic-initiator NUMA nodes regardless of whether MIG is in use.  The GPU
@@ -903,8 +915,9 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
 **Delivered:**
 - `probe_host_topology()` in `probe.rs`: walks `/sys/bus/pci/devices/` to
   discover NVIDIA GPUs (class 0x0302/0x0300) and NICs (0x0200/0x0207), groups
-  them by IOMMU group ID (one group = one `SMMU` on Grace), reads NUMA node
-  affinity, and detects EGM devices under `/dev/egmN`.
+  them by IOMMU group ID (one group = one `SMMU` on Grace; Phase 7 keys on the
+  physical SMMU instead), reads NUMA node affinity, and detects EGM devices
+  under `/dev/egmN`.
 - `probe_host_topology_at(pci, cpu, dev)`: test-injectable variant used by the
   `probe_synthetic_sysfs` unit test.
 - `Platform::from_config_with_probe()`: builds Platform from kata config and
@@ -965,6 +978,9 @@ Groundwork that preparing the first real launch on a GB200 node forced:
   `cmdline_generator.rs` once parity is confirmed on GB200 and x86 hardware.
 - `"auto"` for `hot_plug_vfio` (QMP `device_add` onto Platform root ports).
 - File-backed shared memory for virtio-fs under `"auto"`.
+- vEGM under `"auto"`: `-m` from the EGM sizes and the compute-tray check.
+- `-smp sockets=` matching the guest NUMA sockets, and optional `-numa dist`
+  weights against GPU-memory spill (both from the guide's NUMA chapter).
 - Q35 `"auto"` end to end (the emitter exists; untested on hardware).
 
 ---
@@ -1233,6 +1249,16 @@ file-backed guest RAM (`/dev/shm` or hugepages).  `SocketInfo::mem_path`
 already models it (Q35 SHM), but the single-socket virt path and the hand-over
 from the legacy `add_virtiofs_share` are not wired, so `start_vm` rejects the
 combination rather than launch a VM whose shared memory is silently absent.
+
+### vEGM is not wired under `cold_plug_vfio = "auto"`
+
+vEGM makes the EGM regions the guest's system memory: `-m` must equal the sum
+of the `memory-backend-file` sizes taken from `/dev/egmN`, and the Grace I/O
+Virtualization Guide only supports it at the compute-tray boundary (every GPU of
+the tray passed through).  Neither the `-m` hand-over nor the tray check exists
+yet, so `Platform::for_assigned_devices` ignores probed EGM devices with a
+warning and backs the guest with RAM.  The emitters and fixtures grace_6 and
+grace_7 already produce the vEGM layout; Phase 8 wires the runtime side.
 
 ### At most seven `pxb-pcie` complexes
 

@@ -210,6 +210,17 @@ fn iommu_group_of(dev_path: &Path) -> Option<u32> {
         .and_then(|n| n.parse::<u32>().ok())
 }
 
+/// Name of the physical IOMMU a PCI device sits behind, from the
+/// `/sys/bus/pci/devices/<BDF>/iommu` symlink (e.g. `smmu3.0x0000000005000000`
+/// on Grace, `dmar0` on Intel).  `None` when the kernel exposes no such link.
+fn iommu_unit_of(dev_path: &Path) -> Option<String> {
+    let target = std::fs::read_link(dev_path.join("iommu")).ok()?;
+    target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_owned)
+}
+
 /// Derives the canonical BDF string (`DDDD:BB:SS.F`) from a sysfs device path.
 fn bdf_of(dev_path: &Path) -> Option<String> {
     dev_path
@@ -233,8 +244,13 @@ fn numa_node_to_socket(node: i32, socket_map: &mut HashMap<i32, u32>) -> u32 {
 /// Probe the current host and return the NVIDIA device topology.
 ///
 /// Reads `/sys/bus/pci/devices/` to discover all NVIDIA GPUs and NICs,
-/// groups them by IOMMU group (one group = one SMMU on aarch64 Grace),
-/// and builds a `HostTopology` suitable for `Platform::apply_host_defaults`.
+/// groups them by the physical SMMU each device sits behind (the `iommu`
+/// symlink; the IOMMU group is the fallback when the kernel exposes no such
+/// link), and builds a `HostTopology` suitable for
+/// `Platform::apply_host_defaults`.  Devices behind one host SMMU must share
+/// one `arm-smmuv3` in the guest, and an IOMMU group is an isolation boundary
+/// rather than a translation unit: two GPUs can sit in separate groups behind
+/// the same SMMU.
 ///
 /// Returns `Ok(topo)` with empty `gpu_smmu_groups` if no NVIDIA devices are
 /// found (e.g., on a plain x86 CI runner).
@@ -253,8 +269,10 @@ pub(crate) fn probe_host_topology_at(
     dev_root: &Path,
 ) -> Result<HostTopology> {
     // ── 1. Walk /sys/bus/pci/devices and collect NVIDIA devices ─────────────
-    let mut gpu_groups: HashMap<u32, Vec<(String, i32)>> = HashMap::new(); // group_id → [(BDF, numa_node)]
-    let mut nic_groups: HashMap<u32, Vec<(String, i32)>> = HashMap::new();
+    // complex key → [(BDF, numa_node)]; the key is the physical SMMU when the
+    // kernel exposes it, otherwise the IOMMU group
+    let mut gpu_groups: HashMap<String, Vec<(String, i32)>> = HashMap::new();
+    let mut nic_groups: HashMap<String, Vec<(String, i32)>> = HashMap::new();
 
     let dir =
         std::fs::read_dir(pci_root).with_context(|| format!("opening {}", pci_root.display()))?;
@@ -295,17 +313,18 @@ pub(crate) fn probe_host_topology_at(
                 continue;
             }
         };
+        let complex_key = iommu_unit_of(&dev_path).unwrap_or_else(|| format!("group{iommu_group}"));
 
         match class16 {
             CLASS_3D_CONTROLLER | CLASS_VGA_CONTROLLER => {
                 gpu_groups
-                    .entry(iommu_group)
+                    .entry(complex_key)
                     .or_default()
                     .push((bdf, numa_node));
             }
             CLASS_NETWORK_CONTROLLER | CLASS_INFINIBAND_CONTROLLER => {
                 nic_groups
-                    .entry(iommu_group)
+                    .entry(complex_key)
                     .or_default()
                     .push((bdf, numa_node));
             }
@@ -316,7 +335,7 @@ pub(crate) fn probe_host_topology_at(
     // ── 2. Convert raw groups → GpuSmmuGroup, sorted for deterministic output ──
     let mut socket_map: HashMap<i32, u32> = HashMap::new();
 
-    let mut gpu_smmu_groups: Vec<(u32 /* group_id */, GpuSmmuGroup)> = gpu_groups
+    let mut gpu_smmu_groups: Vec<(String /* complex key */, GpuSmmuGroup)> = gpu_groups
         .into_iter()
         .map(|(group_id, mut devs)| {
             devs.sort_by(|a, b| a.0.cmp(&b.0)); // sort BDFs
@@ -334,7 +353,7 @@ pub(crate) fn probe_host_topology_at(
     // stable across boots, group ids follow enumeration order.
     gpu_smmu_groups.sort_by(|a, b| a.1.pci_bus_addrs[0].cmp(&b.1.pci_bus_addrs[0]));
 
-    let mut nic_smmu_groups: Vec<(u32, GpuSmmuGroup)> = nic_groups
+    let mut nic_smmu_groups: Vec<(String, GpuSmmuGroup)> = nic_groups
         .into_iter()
         .map(|(group_id, mut devs)| {
             devs.sort_by(|a, b| a.0.cmp(&b.0));
