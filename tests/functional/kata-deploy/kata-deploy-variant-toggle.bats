@@ -4,8 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Toggling the debug variant off has to withdraw its containerd runtime handler
-# along with its RuntimeClass. A handler left behind names a configuration the
-# same redeploy deleted, and pods on it hang in ContainerCreating.
+# along with its RuntimeClass, and put containerd's own log level back. A
+# handler left behind names a configuration the same redeploy deleted, and pods
+# on it hang in ContainerCreating.
 #
 # The tests run in order and are not independent: the first establishes what the
 # install with debug on wrote, the second redeploys with it off, and the third
@@ -66,6 +67,13 @@ containerd_configs_naming() {
 	run_on_host "grep -rl ${1} ${CONTAINERD_CONFIG_DIRS} 2>/dev/null; echo NONE"
 }
 
+# The containerd configuration files turning its own log level up, or NONE. The
+# quotes are matched as any character: run_on_host interpolates the command into
+# a JSON pod override.
+containerd_configs_with_debug_level() {
+	run_on_host "grep -rlE '^[[:space:]]*level[[:space:]]*=[[:space:]]*.debug.' ${CONTAINERD_CONFIG_DIRS} 2>/dev/null; echo NONE"
+}
+
 setup_file() {
 	ensure_helm
 
@@ -90,6 +98,11 @@ setup_file() {
 	# there prove nothing.
 	run containerd_configs_naming "${DEBUG_HANDLER}"
 	echo "# containerd configs naming ${DEBUG_HANDLER}: ${output}" >&3
+	[[ "${output}" == *"/host/"* ]]
+
+	# Likewise the baseline for the level coming back down.
+	run containerd_configs_with_debug_level
+	echo "# containerd configs at level debug: ${output}" >&3
 	[[ "${output}" == *"/host/"* ]]
 
 	if ! runtime_handlers_published; then
@@ -124,6 +137,11 @@ setup_file() {
 	run containerd_configs_naming "${BASE_HANDLER}"
 	echo "# containerd configs naming ${BASE_HANDLER}: ${output}" >&3
 	[[ "${output}" == *"/host/"* ]]
+
+	# The install with debug on turned the level up; this one owes it back.
+	run containerd_configs_with_debug_level
+	echo "# containerd configs at level debug: ${output}" >&3
+	[[ "${output}" == "NONE" ]]
 
 	if ! runtime_handlers_published; then
 		skip "this Kubernetes does not publish node.status.runtimeHandlers"
