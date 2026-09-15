@@ -449,6 +449,10 @@ build_nvidia_gpu_extension_in_container()
 		&& build_args+=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
 	[[ "${container_engine}" == "podman" ]] \
 		&& build_args+=(--runtime "${DOCKER_RUNTIME}")
+	case "${ARCH}" in
+		x86_64)  build_args+=(--platform linux/amd64) ;;
+		aarch64) build_args+=(--platform linux/arm64) ;;
+	esac
 
 	generate_dockerfile "${nvidia_dir}"
 	"${container_engine}" build \
