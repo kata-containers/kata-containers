@@ -260,7 +260,9 @@ pub(crate) fn probe_host_topology_at(
             )
         })
         .collect();
-    gpu_smmu_groups.sort_by_key(|(gid, _)| *gid);
+    // Order complexes by their first BDF, not by IOMMU group id: BDFs are
+    // stable across boots, group ids follow enumeration order.
+    gpu_smmu_groups.sort_by(|a, b| a.1.pci_bus_addrs[0].cmp(&b.1.pci_bus_addrs[0]));
 
     let mut nic_smmu_groups: Vec<(u32, GpuSmmuGroup)> = nic_groups
         .into_iter()
@@ -276,7 +278,7 @@ pub(crate) fn probe_host_topology_at(
             )
         })
         .collect();
-    nic_smmu_groups.sort_by_key(|(gid, _)| *gid);
+    nic_smmu_groups.sort_by(|a, b| a.1.pci_bus_addrs[0].cmp(&b.1.pci_bus_addrs[0]));
 
     // ── 3. Build SocketInfo list ─────────────────────────────────────────────
     // Derive CPU ranges from /sys/devices/system/cpu/cpuN/topology/physical_package_id
