@@ -918,12 +918,54 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
   (strangle pattern — Platform takes over one section at a time).
 - 14 golden tests passing (12 original + `probe_synthetic_sysfs` + `grace_switch_port_emission`).
 
-**Still open (next):**
-- Delete machine/memory/NUMA sections from `cmdline_generator.rs` (Platform now
-  owns them — pending parity confirmation on a real system).
-- Wire `"auto"` value in `cold_plug_vfio` / `hot_plug_vfio` kata config to
-  `Platform::from_config_with_probe()` instead of the static topology config.
-- Final golden-test sweep and removal of all TODOs from this document.
+**Follow-up:** the `"auto"` wiring and the memory/NUMA/PCIe hand-over landed in
+Phase 7; deleting the superseded legacy sections is Phase 8.
+
+### Phase 7: Platform drives the launch for `cold_plug_vfio = "auto"` (2026-09-15)
+
+The strangle seam flips, gated.  With `cold_plug_vfio = "auto"` in the kata
+config, `QemuInner::start_vm` collects the host BDFs of the VFIO devices
+assigned to the sandbox, calls `Platform::for_assigned_devices`, and hands the
+result to `QemuCmdLine::apply_platform`:
+
+- the Platform's machine options are merged into the legacy `-machine` line
+  (same-key override, so `gic-version=3` replaces the profile's
+  `gic-version=host`);
+- the machine-wide `memory-backend-ram,id=entire-guest-memory` and its
+  `memory-backend=` reference are dropped; guest RAM comes from the Platform's
+  per-socket backends bound through `-numa node,memdev=`;
+- `Platform::topology_args` (everything but the `-machine` pair: iommufd,
+  backends, NUMA nodes, pxb/smmuv3/root ports/vfio, initiator links) is
+  appended to the device list verbatim;
+- Platform-placed devices are skipped by the legacy VFIO cold-plug loop and
+  get their `guest_pci_path` from `Platform::guest_pci_paths`
+  (`<bus_nr>/<port>/00`); `PciPath` learned the root-complex form for that.
+
+Legacy keeps `-name`, kernel, `-smp`, `-cpu`, `-m` (with hot-plug slots and
+maxmem), QMP, consoles, virtio devices, hot-plug root ports on `pcie.0` and any
+VFIO device the prober does not model.  Without `"auto"` nothing changes: the
+Platform is still only probed and logged.  `"auto"` with no modelled device
+falls back to the legacy topology; `"auto"` with `shared_fs = "virtio-fs"` is
+rejected (see Known Issues).
+
+Groundwork that preparing the first real launch on a GB200 node forced:
+
+- the virt machine line drops `memory-backend=` whenever a NUMA node carries
+  `memdev=` (QEMU rejects the pair; fixtures 1 to 5 and GB300 were invalid);
+- Grace pxb buses are numbered `0x20 * (idx + 1)` like Q35, above the
+  `pcie.0` secondary-bus range and in the form the agent resolves;
+- probed groups sort by BDF, not IOMMU group id;
+- the probe's host CPU ranges and memory become a guest layout
+  (`map_guest_vcpus`, `fill_guest_memory`, per-socket RAM bound to host nodes);
+- `HostTopology::retain_devices` scopes the Platform to the sandbox's devices;
+- fixture `gb200_4gpu_2socket.args` (Config 8); 18 golden and unit tests pass.
+
+**Still open (Phase 8):**
+- Delete the machine/memory/NUMA and root-port sections of
+  `cmdline_generator.rs` once parity is confirmed on GB200 and x86 hardware.
+- `"auto"` for `hot_plug_vfio` (QMP `device_add` onto Platform root ports).
+- File-backed shared memory for virtio-fs under `"auto"`.
+- Q35 `"auto"` end to end (the emitter exists; untested on hardware).
 
 ---
 
@@ -1183,6 +1225,22 @@ through `BaseMachine` today; they need typed representations before the
 legacy `Machine` struct can be deleted.
 
 ---
+
+### `cold_plug_vfio = "auto"` requires `shared_fs = "none"`
+
+The Platform emits `memory-backend-ram` per socket; virtio-fs needs `share=on`
+file-backed guest RAM (`/dev/shm` or hugepages).  `SocketInfo::mem_path`
+already models it (Q35 SHM), but the single-socket virt path and the hand-over
+from the legacy `add_virtiofs_share` are not wired, so `start_vm` rejects the
+combination rather than launch a VM whose shared memory is silently absent.
+
+### At most seven `pxb-pcie` complexes
+
+`pxb_bus_nr` spaces complexes 0x20 apart starting at 0x20; the eighth would
+need bus 0x100.  Grace trays carry at most four GPUs and Q35 groups GPUs per
+socket, so this is not a practical limit today, but a host with eight
+single-GPU IOMMU groups would need a denser scheme (and a matching agent
+change).
 
 ## Design Principles
 
