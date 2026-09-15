@@ -343,6 +343,84 @@ fn gb300_nvl_2gpu() {
     assert_eq!(want, got);
 }
 
+// ---- GB200 tray: 4 GPUs, 1 GPU per SMMU, 2 per socket, no EGM (34 NUMA nodes) ----
+//
+// Probed on a GB200 node (2026-09-15): two Grace sockets, Blackwell GPUs
+// 0008:01:00.0 and 0009:01:00.0 on host node 0, 0018:01:00.0 and 0019:01:00.0
+// on host node 1, each alone in its IOMMU group.  Guest layout: 8 vCPUs split
+// 4/4, 16G split 8G/8G bound to the matching host node.
+
+#[test]
+fn gb200_4gpu_2socket() {
+    let socket = |id: u32, cpus: std::ops::Range<u32>| SocketInfo {
+        id,
+        cpu_range: cpus,
+        host_node: Some(id),
+        mem_path: None,
+        mem_size: Some(8 << 30),
+    };
+    let group = |bdf: &str, socket: u32| GpuSmmuGroup {
+        pci_bus_addrs: vec![bdf.to_owned()],
+        socket,
+    };
+    check(
+        HostTopology {
+            sockets: vec![socket(0, 0..4), socket(1, 4..8)],
+            gpu_smmu_groups: vec![
+                group("0008:01:00.0", 0),
+                group("0009:01:00.0", 0),
+                group("0018:01:00.0", 1),
+                group("0019:01:00.0", 1),
+            ],
+            nic_smmu_groups: vec![],
+            egm_sockets: vec![],
+            numa_distances: vec![],
+            pcie_root_port: 0,
+            protection: None,
+        },
+        "gb200_4gpu_2socket.args",
+    );
+}
+
+// The prober records host CPU indices and host memory; the guest layout is
+// derived from them before apply_host_defaults.
+
+#[test]
+fn guest_layout_from_probe() {
+    let host_socket = |id: u32, cpus: std::ops::Range<u32>| SocketInfo {
+        id,
+        cpu_range: cpus,
+        host_node: Some(id),
+        mem_path: None,
+        mem_size: None,
+    };
+    let mut topo = HostTopology {
+        sockets: vec![
+            host_socket(0, 0..72),
+            host_socket(1, 72..144),
+            host_socket(2, 144..216),
+        ],
+        gpu_smmu_groups: vec![],
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+    };
+
+    topo.map_guest_vcpus(8);
+    let ranges: Vec<_> = topo.sockets.iter().map(|s| s.cpu_range.clone()).collect();
+    assert_eq!(ranges, vec![0..3, 3..6, 6..8]);
+
+    let total = 16u64 << 30;
+    topo.fill_guest_memory(total);
+    let sizes: Vec<u64> = topo.sockets.iter().map(|s| s.mem_size.unwrap()).collect();
+    // Whole-MiB shares for all but the last socket, which takes the remainder.
+    let share = (total / 3 / (1 << 20)) << 20;
+    assert_eq!(sizes, vec![share, share, total - 2 * share]);
+    assert_eq!(sizes.iter().sum::<u64>(), total);
+}
+
 // ---- Q35 CoCo (SEV-SNP) + single GPU — AMD EPYC host, H100 80GB ----
 //
 // Production capture: AMD EPYC host, 2026-07-13.  17 vCPUs, 57344M, single

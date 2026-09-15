@@ -95,6 +95,60 @@ impl ProtectionDevice {
     }
 }
 
+/// Equal share of `total` for the `i`-th of `n` consumers, rounded down to a
+/// whole MiB except for the last one, which takes the remainder so the shares
+/// add up to `total` exactly (QEMU requires memdev sizes to sum to `-m`).
+pub(crate) fn equal_share(total: u64, n: usize, i: usize) -> u64 {
+    const MIB: u64 = 1 << 20;
+    if n == 0 {
+        return total;
+    }
+    let share = total / n as u64 / MIB * MIB;
+    if i + 1 == n {
+        total - share * (n as u64 - 1)
+    } else {
+        share
+    }
+}
+
+impl HostTopology {
+    /// Replace the host CPU indices the prober recorded with guest vCPU ranges:
+    /// `max_vcpus` guest CPUs laid out contiguously over the sockets in socket
+    /// order, earlier sockets taking the remainder.  `-numa node,cpus=` names
+    /// guest CPUs, and every possible vCPU (up to maxcpus) needs a node so that
+    /// hot-plugged CPUs have somewhere to land.
+    pub(crate) fn map_guest_vcpus(&mut self, max_vcpus: u32) {
+        let n = self.sockets.len() as u32;
+        if n == 0 {
+            return;
+        }
+        let (base, rem) = (max_vcpus / n, max_vcpus % n);
+        let mut start = 0u32;
+        for (i, socket) in self.sockets.iter_mut().enumerate() {
+            let count = base + u32::from((i as u32) < rem);
+            socket.cpu_range = start..start + count;
+            start += count;
+        }
+    }
+
+    /// Give every socket without an explicit `mem_size` an equal share of the
+    /// guest RAM that the explicitly sized sockets leave over.
+    pub(crate) fn fill_guest_memory(&mut self, total_bytes: u64) {
+        let claimed: u64 = self.sockets.iter().filter_map(|s| s.mem_size).sum();
+        let open: Vec<usize> = self
+            .sockets
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.mem_size.is_none())
+            .map(|(i, _)| i)
+            .collect();
+        let remaining = total_bytes.saturating_sub(claimed);
+        for (k, idx) in open.iter().enumerate() {
+            self.sockets[*idx].mem_size = Some(equal_share(remaining, open.len(), k));
+        }
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Host topology prober
 // ──────────────────────────────────────────────────────────────────────────────

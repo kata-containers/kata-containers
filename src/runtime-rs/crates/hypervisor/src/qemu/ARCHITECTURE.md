@@ -449,6 +449,17 @@ Or by disabling NUMA balancing in the guest OS.
 - GB300 NVL72 with 4 GPUs → `8T`
 - Must be a power of 2; round up to the next power when in doubt.
 
+**Guest layout from the probe (`from_config_and_topology`):** the prober records
+host CPU indices and host NUMA nodes; the guest sees neither.  Before
+`apply_host_defaults`, `HostTopology::map_guest_vcpus` replaces the CPU ranges
+with guest vCPUs `0..maxcpus` laid out contiguously over the sockets (earlier
+sockets take the remainder, so hot-plugged CPUs always have a node), and
+`fill_guest_memory` splits guest RAM over the sockets in whole MiB with the
+remainder on the last one, so the `memdev` sizes add up to `-m`.  Multi-socket
+virt without EGM then gets one `memory-backend-ram` per socket carrying
+`host-nodes=<host node>,policy=bind`, the same model Q35 uses; a single socket
+keeps one backend spanning all guest RAM.
+
 ### Hugepages wiring (`with_hugepages`)
 
 ```rust
@@ -749,6 +760,32 @@ for that socket point to the same CpuMem NUMA node:
 ```
 
 `HostTopology`: 2 sockets, 2 `GpuSmmuGroup` (2 GPUs each), 2 `EgmSocketInfo`.
+
+### Config 8: GB200 tray, 4 GPUs, 1 GPU per `SMMU`, 2 per socket, no EGM (34 NUMA nodes)
+
+Probed on a GB200 node: two Grace sockets, Blackwell GPUs `0008:01:00.0` and
+`0009:01:00.0` on host node 0, `0018:01:00.0` and `0019:01:00.0` on host node 1,
+each alone in its IOMMU group.  Guest RAM is split per socket and bound to the
+matching host node; every GPU gets its own `pxb-pcie` complex placed on its
+socket's CpuMem node:
+
+```text
+-object iommufd,id=iommufd0
+-object memory-backend-ram,id=m0,size=8G,host-nodes=0,policy=bind
+-object memory-backend-ram,id=m1,size=8G,host-nodes=1,policy=bind
+-machine virt,accel=kvm,gic-version=3,ras=on,highmem-mmio-size=4T
+-numa node,memdev=m0,cpus=0-3,nodeid=0
+-numa node,memdev=m1,cpus=4-7,nodeid=1
+-numa node,nodeid=2 ... -numa node,nodeid=33   # 4×8 GPU initiator nodes
+-device pxb-pcie,id=pcie.1,bus=pcie.0,bus_nr=32,numa_node=0    # 0008:01:00.0
+-device pxb-pcie,id=pcie.2,bus=pcie.0,bus_nr=64,numa_node=0    # 0009:01:00.0
+-device pxb-pcie,id=pcie.3,bus=pcie.0,bus_nr=96,numa_node=1    # 0018:01:00.0
+-device pxb-pcie,id=pcie.4,bus=pcie.0,bus_nr=128,numa_node=1   # 0019:01:00.0
+# each followed by arm-smmuv3 + pcie-root-port + vfio-pci-nohotplug (Config 2 shape)
+```
+
+`HostTopology`: 2 sockets (`host_node` 0 and 1, 8G each), 4 `GpuSmmuGroup` with
+one address each on sockets 0, 0, 1, 1.  Fixture: `gb200_4gpu_2socket.args`.
 
 ---
 
