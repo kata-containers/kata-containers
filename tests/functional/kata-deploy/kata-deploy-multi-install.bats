@@ -64,7 +64,7 @@ refute_match() {
 
 	echo "${rendered}" | grep -q 'name: my-release-kata-deploy-state'
 	echo "${rendered}" | grep -q 'multiInstallSuffix: "dev"'
-	echo "${rendered}" | grep -q 'deploymentMode: "daemonset"'
+	echo "${rendered}" | grep -q 'deploymentMode: "job"'
 }
 
 @test "Helm template: an unverifiable pre-state upgrade is refused" {
