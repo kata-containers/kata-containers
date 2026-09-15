@@ -23,6 +23,17 @@
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
 
+# Every tree a distribution keeps its containerd configuration in, as the /host
+# mount sees it (containerdConfPath in the chart). A node uses one, so the rest
+# are absent. k0s and microk8s are mounted in as /etc/containerd, so the path
+# the install logs is not the one to look for on the host.
+containerd_config_roots() {
+	echo "/host/etc/containerd \
+/host/etc/k0s \
+/host/var/lib/rancher \
+/host/var/snap/microk8s/current/args"
+}
+
 # Run a command against the host node's filesystem, mounted at /host inside a
 # short-lived privileged pod.
 # Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
