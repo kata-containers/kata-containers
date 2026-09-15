@@ -123,7 +123,12 @@ rules:
 # The dispatcher only ever creates, polls, and deletes per-node Jobs in its own namespace.
 - apiGroups: ["batch"]
   resources: ["jobs"]
+{{- if (.Values.job.reconcile | default dict).enabled }}
+  # watch, because the uninstall hook waits for the per-node Jobs it deletes.
+  verbs: ["create", "get", "list", "watch", "delete"]
+{{- else }}
   verbs: ["create", "get", "list", "delete"]
+{{- end }}
 # A Job's status says that it failed and nothing else; the pod it left behind
 # holds the stage, the exit code and the termination message. Read before
 # job.ttlSecondsAfterFinished takes it away.
@@ -132,10 +137,13 @@ rules:
 {{- if (.Values.job.reconcile | default dict).enabled }}
   # A tick reads its own pod to find the Job that owns it.
   verbs: ["get", "list"]
-# Uninstall takes the schedule away before it starts reverting nodes.
+# Uninstall takes the schedule away before it starts reverting nodes, and waits
+# it out so no tick is left running. kubectl serves that wait from an informer,
+# so get and delete alone let the object go while the wait spins on a forbidden
+# list until the timeout - and the hook dies before stopping the per-node Jobs.
 - apiGroups: ["batch"]
   resources: ["cronjobs"]
-  verbs: ["get", "delete"]
+  verbs: ["get", "list", "watch", "delete"]
 {{- else }}
   verbs: ["list"]
 {{- end }}
