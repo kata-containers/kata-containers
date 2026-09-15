@@ -421,6 +421,55 @@ fn guest_layout_from_probe() {
     assert_eq!(sizes.iter().sum::<u64>(), total);
 }
 
+// A sandbox only gets the devices its pod was allocated; the probe sees all.
+
+#[test]
+fn retain_devices_keeps_only_assigned() {
+    let mut topo = HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:01:00.0", "0009:01:00.0"], &["0018:01:00.0"]], 0),
+        nic_smmu_groups: smmu_groups(&[&["0002:00:01.0"]], 0),
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+    };
+    topo.retain_devices(&["0009:01:00.0".to_owned(), "0002:00:01.0".to_uppercase()]);
+    assert_eq!(topo.gpu_smmu_groups.len(), 1, "emptied GPU group dropped");
+    assert_eq!(topo.gpu_smmu_groups[0].pci_bus_addrs, vec!["0009:01:00.0"]);
+    assert_eq!(
+        topo.nic_smmu_groups.len(),
+        1,
+        "NIC kept, matched case-insensitively"
+    );
+    assert_eq!(topo.sockets.len(), 1, "sockets untouched");
+}
+
+// Guest PCI paths: pxb bus_nr, root port slot in emission order, device at
+// function 0.  These are what the runtime writes back for the agent.
+
+#[test]
+fn guest_pci_paths_follow_bus_nr_and_port_order() {
+    let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
+    platform.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0", "0009:06:00.0"], &["0010:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+    });
+    let paths = platform.guest_pci_paths();
+    assert_eq!(paths["0008:06:00.0"], "20/00/00");
+    assert_eq!(
+        paths["0009:06:00.0"], "20/01/00",
+        "second port on the same pxb"
+    );
+    assert_eq!(paths["0010:06:00.0"], "40/00/00", "second pxb complex");
+    assert_eq!(paths.len(), 3);
+}
+
 // ---- Q35 CoCo (SEV-SNP) + single GPU — AMD EPYC host, H100 80GB ----
 //
 // Production capture: AMD EPYC host, 2026-07-13.  17 vCPUs, 57344M, single

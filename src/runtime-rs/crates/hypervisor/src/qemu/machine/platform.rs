@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use anyhow::{bail, Result};
@@ -224,6 +225,43 @@ impl Platform {
             platform = platform.with_hugepages("/dev/hugepages/");
         }
         Ok(platform)
+    }
+
+    /// Probe the host, keep only the devices assigned to this sandbox and lay
+    /// the result out as a guest.  `Ok(None)` when none of the assigned devices
+    /// is one the prober models, so the caller can stay on the legacy
+    /// command line.
+    pub fn for_assigned_devices(
+        config: &HypervisorConfig,
+        assigned: &[String],
+    ) -> Result<Option<Self>> {
+        let mut topo = probe_host_topology()?;
+        topo.retain_devices(assigned);
+        if topo.gpu_smmu_groups.is_empty() && topo.nic_smmu_groups.is_empty() {
+            return Ok(None);
+        }
+        Self::from_config_and_topology(config, topo).map(Some)
+    }
+
+    /// Guest PCI path of every placed passthrough device, keyed by host BDF:
+    /// `<bus_nr>/<port index>/00` in hex, i.e. the pxb root complex, the root
+    /// port's slot on it (QEMU assigns functions on an expander bus in
+    /// emission order) and the device at function 0 behind the port.  The
+    /// kata-agent parses this form when the first segment is >= 0x20, which
+    /// `pxb_bus_nr` guarantees.
+    pub fn guest_pci_paths(&self) -> HashMap<String, String> {
+        let mut paths = HashMap::new();
+        for root in &self.pci.roots {
+            for (port_idx, port) in root.root_ports.iter().enumerate() {
+                if let Some(dev) = &port.device {
+                    paths.insert(
+                        dev.host.to_ascii_lowercase(),
+                        format!("{:02x}/{:02x}/00", root.bus_nr, port_idx),
+                    );
+                }
+            }
+        }
+        paths
     }
 
     #[cfg(test)]

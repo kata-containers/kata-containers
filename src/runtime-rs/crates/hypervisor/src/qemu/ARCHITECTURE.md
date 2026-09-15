@@ -548,6 +548,20 @@ QEMU VFIO passthrough uses two independent configuration axes.
 and one `vfio-pci[/vfio-pci-nohotplug]` per device, emitted together in the static
 command line.  No empty pre-provisioned slots are used; device count is exact.
 
+**Sandbox scoping (`Platform::for_assigned_devices`):** the prober sees every
+NVIDIA device on the host; a sandbox only receives the ones its pod was
+allocated.  `HostTopology::retain_devices` prunes the probed groups to the
+assigned BDFs (dropping emptied groups) before the guest layout is derived, so a
+one-GPU pod on a four-GPU tray gets one complex and 8 initiator nodes.
+
+**Guest PCI path:** a Platform-placed device sits at `<bus_nr>/<port index>/00`
+(hex): the pxb root complex, the root port's slot on it (QEMU assigns functions
+on an expander bus in emission order) and the device at function 0 behind the
+port.  `Platform::guest_pci_paths` hands these to the runtime, which writes them
+back as `guest_pci_path` for the agent; the agent's pxb-aware parser
+(`pcipath_from_dev_tree_path`) requires the first segment to be >= 0x20, which
+`pxb_bus_nr` guarantees.
+
 `HostTopology::pcie_root_port` drives hot-plug slot reservation: N `pcie-root-port`
 devices emitted on `pcie.0` at VM creation, with no device attached.  At runtime,
 devices are plugged into available slots via QMP `device_add`.  DANs and dynamically

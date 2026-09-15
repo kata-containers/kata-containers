@@ -147,6 +147,22 @@ impl HostTopology {
             self.sockets[*idx].mem_size = Some(equal_share(remaining, open.len(), k));
         }
     }
+
+    /// Keep only the passthrough devices named in `keep` (BDFs, compared
+    /// case-insensitively) and drop groups that end up empty.  The prober sees
+    /// every NVIDIA device on the host; a sandbox only gets the ones its pod
+    /// was allocated.
+    pub(crate) fn retain_devices(&mut self, keep: &[String]) {
+        let keep: Vec<String> = keep.iter().map(|b| b.to_ascii_lowercase()).collect();
+        for groups in [&mut self.gpu_smmu_groups, &mut self.nic_smmu_groups] {
+            for group in groups.iter_mut() {
+                group
+                    .pci_bus_addrs
+                    .retain(|addr| keep.contains(&addr.to_ascii_lowercase()));
+            }
+            groups.retain(|group| !group.pci_bus_addrs.is_empty());
+        }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
