@@ -15,6 +15,7 @@ bytes = { workspace = true }
 containerd-shim-protos = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
+hyper014 = { package = "hyper", version = "0.14", default-features = false, features = ["http1"] }
 hyper-util = { workspace = true }
 lazy_static = { workspace = true }
 netns-rs = { workspace = true }
