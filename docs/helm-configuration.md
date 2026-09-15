@@ -203,6 +203,30 @@ leave the kubelet's own `/var/lib/kubelet` alone and need nothing.
     by both. Getting either wrong is quiet: volume updates stop arriving, and GPU
     cold plug falls back to CDI annotations.
 
+!!! warning "Only default installations are supported"
+
+    The install finds the node's CRI runtime by probing the systemd units each
+    distribution is known by, and restarts that unit, waits on it for readiness,
+    and hangs the snapshotter's service dependency off it:
+
+    | Distribution | Units probed                             |
+    | ------------ | ---------------------------------------- |
+    | K3s          | `k3s`, `k3s-agent`                       |
+    | RKE2         | `rke2-server`, `rke2-agent`              |
+    | k0s          | `k0scontroller`, `k0sworker`             |
+    | MicroK8s     | `snap.microk8s.daemon-containerd`        |
+
+    A node running one of these under any other unit name, under another init
+    system, or with its containerd configuration somewhere other than the
+    location that distribution installs it in, is not supported. Nothing detects
+    it, and `k8sDistribution` cannot make up the difference: it says which
+    configuration layout to write, never which unit to act on.
+
+    K3s is the easiest to get into this state. Its installer accepts
+    [`INSTALL_K3S_NAME`, `INSTALL_K3S_SYSTEMD_DIR` and
+    `INSTALL_K3S_TYPE`](https://docs.k3s.io/reference/env-variables), and can
+    install under openrc rather than systemd, so leave those unset.
+
 ### nodeBinaries
 
 Some of what Kata needs on a node is not part of Kata: containerd's EROFS

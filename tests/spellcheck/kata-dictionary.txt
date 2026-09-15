@@ -152,3 +152,4 @@ UNBINDABLE
 RAII
 Virt
 sysfs
+openrc
