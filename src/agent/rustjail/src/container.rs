@@ -412,6 +412,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     log_child!(cfd_log, "notify parent to send oci state");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
+    // Load guest AppArmor policy before namespace/rootfs setup. The loader
+    // must resolve profiles from the Guest rootfs, not the workload rootfs.
+    let prepared_apparmor_profile =
+        crate::apparmor::prepare_profile(oci_process.apparmor_profile().as_deref())
+            .context("prepare guest AppArmor profile")?;
+
     let buf = read_sync(crfd)?;
     let state_str = std::str::from_utf8(&buf)?;
     let mut state: OCIState = serde_json::from_str(state_str)?;
@@ -671,6 +677,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // isn't root.
     if !uid.is_root() {
         set_stdio_permissions(uid)?;
+    }
+
+    // Select the already prepared Guest profile before changing credentials or
+    // dropping capabilities. The selection applies to the following execve.
+    if let Some(profile) = prepared_apparmor_profile.as_ref() {
+        crate::apparmor::select_profile(profile).context("select guest AppArmor profile")?;
     }
 
     setid(uid, gid)?;
