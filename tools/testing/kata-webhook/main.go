@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/sirupsen/logrus"
@@ -23,11 +24,42 @@ import (
 	kwhmutating "github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
 )
 
+const minMemoryLimitEnvKey = "MIN_MEMORY_LIMIT"
+
 func getRuntimeClass(runtimeClassKey, defaultRuntimeClass string) string {
 	if runtimeClass, ok := os.LookupEnv(runtimeClassKey); ok {
 		return runtimeClass
 	}
 	return defaultRuntimeClass
+}
+
+func getMinMemoryLimit(minMemoryLimitKey string) (*resource.Quantity, error) {
+	value, ok := os.LookupEnv(minMemoryLimitKey)
+	if !ok {
+		return nil, nil
+	}
+
+	minMemoryLimit, err := resource.ParseQuantity(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s %q: %w", minMemoryLimitKey, value, err)
+	}
+	if minMemoryLimit.Sign() <= 0 {
+		return nil, fmt.Errorf("invalid %s %q: must be greater than zero", minMemoryLimitKey, value)
+	}
+
+	return &minMemoryLimit, nil
+}
+
+func enforceMinMemoryLimit(containers []corev1.Container, minimum resource.Quantity) {
+	for i := range containers {
+		currentMemoryLimit, ok := containers[i].Resources.Limits[corev1.ResourceMemory]
+		if !ok || currentMemoryLimit.Cmp(minimum) >= 0 {
+			continue
+		}
+
+		containers[i].Resources.Limits[corev1.ResourceMemory] = minimum
+		fmt.Println("memory limit too low. Updating to: ", containers[i].Resources.Limits)
+	}
 }
 
 func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
@@ -66,6 +98,15 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 	if pod.Spec.RuntimeClassName != nil {
 		fmt.Println("explicit runtime: ", pod.GetNamespace(), pod.GetName(), pod.Spec.RuntimeClassName)
 		return &kwhmutating.MutatorResult{}, nil
+	}
+
+	minMemoryLimit, err := getMinMemoryLimit(minMemoryLimitEnvKey)
+	if err != nil {
+		return nil, err
+	}
+	if minMemoryLimit != nil {
+		enforceMinMemoryLimit(pod.Spec.Containers, *minMemoryLimit)
+		enforceMinMemoryLimit(pod.Spec.InitContainers, *minMemoryLimit)
 	}
 
 	// Mutate the pod
