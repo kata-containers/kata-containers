@@ -249,6 +249,25 @@ impl Platform {
     /// emission order) and the device at function 0 behind the port.  The
     /// kata-agent parses this form when the first segment is >= 0x20, which
     /// `pxb_bus_nr` guarantees.
+    /// The `key=value` options of the machine line without the type and
+    /// `accel=`, for merging into a machine line rendered elsewhere.
+    pub fn machine_options(&self) -> Vec<String> {
+        emit_machine(&self.machine, self.numa_has_memdev())
+            .split(',')
+            .skip(2)
+            .map(String::from)
+            .collect()
+    }
+
+    /// Everything `to_qemu_args` emits except the `-machine` pair.
+    pub fn topology_args(&self) -> Result<Vec<String>> {
+        let mut args = self.to_qemu_args()?;
+        if let Some(pos) = args.iter().position(|a| a == "-machine") {
+            args.drain(pos..pos + 2);
+        }
+        Ok(args)
+    }
+
     pub fn guest_pci_paths(&self) -> HashMap<String, String> {
         let mut paths = HashMap::new();
         for root in &self.pci.roots {
