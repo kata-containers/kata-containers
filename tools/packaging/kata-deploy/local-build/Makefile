@@ -159,7 +159,7 @@ ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
 	${MAKE} -f $(MK_PATH) kata-tarball \
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
-		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
