@@ -256,10 +256,16 @@ EOF
     reserves most of its memory as huge pages: the limit is charged against
     the ordinary memory left behind, so a value anywhere near the guest's
     size is unschedulable. It does not have to be near it. When the guest
-    runs on huge pages (`enable_hugepages = true`), the memory limit does not
-    size the VM — `default_memory` does, and the pod reserves it as a
-    `hugepages-<size>` resource — so the limit only has to be large enough
-    for what the sandbox uses outside the guest:
+    runs on huge pages (`enable_hugepages = true`), is sized once at start
+    (`static_sandbox_resource_mgmt = true`) and the hypervisor lives in the
+    pod's cgroup (`sandbox_cgroup_only = true`), the memory limit does not
+    size the VM. The pod's `hugepages-<size>` reservation does: the
+    runtime reads the allowance the kubelet set on the pod's cgroup and sizes
+    the guest to it, so `default_memory` is only the smallest guest a pod may
+    ask for and the size used when no allowance is stated. A pod that
+    reserved zero of the guest's page size is refused before the VM starts
+    rather than dying while it maps its memory. The memory limit only
+    has to be large enough for what the sandbox uses outside the guest:
 
     ```yaml
     resources:
@@ -268,19 +274,7 @@ EOF
     ```
 
     That pod is Guaranteed, and its guest is the 64Gi that `hugepages-1Gi`
-    reserved. Inside the guest that 64Gi is ordinary RAM, so the container is
-    bounded by its `memory` limit *plus* the huge pages it reserved, and not
-    by the 2Gi alone, and never by more than the guest can hold. A 64Gi guest
-    reports about 63Gi of it, the rest being the page metadata its kernel
-    needs to describe that memory, so the ceiling lands at 62Gi. A ceiling
-    above that could not stop the container: the guest's own OOM killer
-    would, and it picks among all of the guest's processes, so it may kill
-    the guest's init before the workload that filled the memory, leaving the
-    pod with no OOM and no restart to report.
-
-    A sidecar that reserves no huge pages keeps its own limit as its ceiling,
-    far below the guest's size, so the containers of a pod still bound each
-    other.
+    reserved.
 
 !!! warning "`hugepages-<size>` has to cover `default_memory`"
 
