@@ -250,6 +250,8 @@ pub struct Config {
     /// cross-checked against each other. Never used as a path: it is mounted at
     /// /etc/containerd in this pod either way.
     pub containerd_config_dir: Option<String>,
+    /// The unit running this node's CRI runtime (`CRI_SERVICE_NAME`).
+    pub cri_service_name: Option<String>,
 }
 
 impl Config {
@@ -467,6 +469,11 @@ impl Config {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        let cri_service_name = env::var("CRI_SERVICE_NAME")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let config = Config {
             node_name,
             debug,
@@ -503,6 +510,7 @@ impl Config {
             container_runtime_version,
             k8s_distribution,
             containerd_config_dir,
+            cri_service_name,
         };
 
         // Validate the configuration

@@ -61,8 +61,12 @@ pub async fn wait_till_node_is_ready_timeout(
 /// Scoped to what this stage is answerable for: the runtime it bounced serving
 /// again. Whether the node as a whole is Ready is checked by the stage that
 /// labels it kata-capable.
-pub async fn wait_till_cri_unit_active(runtime: &str, timeout_secs: u64) -> Result<()> {
-    let unit = manager::cri_systemd_unit(runtime);
+pub async fn wait_till_cri_unit_active(
+    config: &Config,
+    runtime: &str,
+    timeout_secs: u64,
+) -> Result<()> {
+    let unit = manager::cri_systemd_unit_for(runtime, config.cri_service_name.as_deref());
     let start = std::time::Instant::now();
     let mut attempt = 0;
 
@@ -188,7 +192,11 @@ fn missing_handlers(expected: &[String], loaded: &[String]) -> Vec<String> {
 /// Anything that cannot be established is answered `false`, costing a restart
 /// that may turn out to be unnecessary. The opposite mistake labels a node
 /// kata-capable while its runtime knows nothing about kata.
-pub async fn cri_serving_config_from(runtime: &str, written_at: Option<SystemTime>) -> bool {
+pub async fn cri_serving_config_from(
+    config: &Config,
+    runtime: &str,
+    written_at: Option<SystemTime>,
+) -> bool {
     // k0s reloads without a restart, so there is none for a retry to have missed.
     if matches!(runtime, "k0s-worker" | "k0s-controller") {
         return true;
@@ -199,7 +207,7 @@ pub async fn cri_serving_config_from(runtime: &str, written_at: Option<SystemTim
         return false;
     };
 
-    let unit = manager::cri_systemd_unit(runtime);
+    let unit = manager::cri_systemd_unit_for(runtime, config.cri_service_name.as_deref());
     let active_since = match utils::host_unit_active_since(&unit).await {
         Ok(Some(active_since)) => active_since,
         Ok(None) => {
@@ -246,7 +254,7 @@ pub async fn restart_runtime(config: &Config, runtime: &str, staged: bool) -> Re
             info!("k0s runtime - no restart needed");
         }
         _ => {
-            let unit = manager::cri_systemd_unit(runtime);
+            let unit = manager::cri_systemd_unit_for(runtime, config.cri_service_name.as_deref());
             info!("restart_runtime: Running daemon-reload");
             utils::host_systemctl(&["daemon-reload"]).await?;
             info!("restart_runtime: Restarting {}", unit);
@@ -259,7 +267,7 @@ pub async fn restart_runtime(config: &Config, runtime: &str, staged: bool) -> Re
         // k0s never restarted anything above, so there is nothing to wait for.
         if !matches!(runtime, "k0s-worker" | "k0s-controller") {
             info!("restart_runtime: Waiting for the CRI runtime unit to come back");
-            wait_till_cri_unit_active(runtime, 300).await?;
+            wait_till_cri_unit_active(config, runtime, 300).await?;
         }
         return Ok(());
     }
@@ -270,7 +278,7 @@ pub async fn restart_runtime(config: &Config, runtime: &str, staged: bool) -> Re
     Ok(())
 }
 
-pub async fn restart_cri_runtime(_config: &Config, runtime: &str) -> Result<()> {
+pub async fn restart_cri_runtime(config: &Config, runtime: &str) -> Result<()> {
     match runtime {
         "k0s-worker" | "k0s-controller" => {
             // k0s automatically unloads config on the fly
@@ -278,7 +286,8 @@ pub async fn restart_cri_runtime(_config: &Config, runtime: &str) -> Result<()> 
         }
         _ => {
             utils::host_systemctl(&["daemon-reload"]).await?;
-            utils::host_systemctl(&["restart", &manager::cri_systemd_unit(runtime)]).await?;
+            let unit = manager::cri_systemd_unit_for(runtime, config.cri_service_name.as_deref());
+            utils::host_systemctl(&["restart", &unit]).await?;
         }
     }
 

@@ -203,6 +203,29 @@ leave the kubelet's own `/var/lib/kubelet` alone and need nothing.
     by both. Getting either wrong is quiet: volume updates stop arriving, and GPU
     cold plug falls back to CDI annotations.
 
+### criServiceName
+
+The install finds the node's CRI runtime by probing the systemd units each flavour
+is known by — `k3s`, `rke2-server` and so on. A cluster that renamed its unit
+answers to none of them, so name it here:
+
+```yaml title="values.yaml"
+k8sDistribution: k3s
+criServiceName: k3s-custom   # (1)!
+```
+
+1. `.service` is added to a bare name. One that already carries a unit type is
+   passed as given, so a snap daemon has to be named in full.
+
+A renamed unit needs both values: `k8sDistribution` says which directory the
+configuration belongs in, and this says which unit to restart so the runtime reads
+it.
+
+!!! note "Stock installs need nothing here"
+
+    Also set it on an agent or worker node, where the role cannot be probed for:
+    `k8sDistribution: k3s` alone is taken as the server.
+
 ### nodeBinaries
 
 Some of what Kata needs on a node is not part of Kata: containerd's EROFS

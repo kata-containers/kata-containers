@@ -292,6 +292,12 @@ monitor:
 # says nothing about the kubelet, so this value still applies there.
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
+# The systemd unit running this node's CRI runtime, when it is not the one its
+# flavour is usually known by. Detection probes for those units, so a renamed one
+# is only found by k8sDistribution above - which cannot say what to restart.
+# ".service" is added to a bare name; a snap daemon has to be named in full.
+criServiceName: ""
+
 # Containerd configuration overrides
 # These override the auto-detected paths based on k8sDistribution.
 # Use these when your containerd setup doesn't match any built-in distribution preset.

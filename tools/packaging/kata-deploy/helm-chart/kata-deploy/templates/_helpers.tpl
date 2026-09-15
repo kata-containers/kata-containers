@@ -809,6 +809,10 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: CONTAINERD_CONFIG_DIR
   value: {{ .Values.containerd.configDir | trim | quote }}
 {{- end }}
+{{- if .Values.criServiceName | default "" | trim }}
+- name: CRI_SERVICE_NAME
+  value: {{ .Values.criServiceName | trim | quote }}
+{{- end }}
 {{- if .Values.containerd.userDropIn | trim }}
 - name: CONTAINERD_USER_DROP_IN_SOURCE_FILE
   value: "/custom-containerd-config/containerd-user-dropin.toml"

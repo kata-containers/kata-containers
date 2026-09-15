@@ -57,3 +57,24 @@ render() {
 		return 1
 	fi
 }
+
+@test "Helm template: a named CRI unit reaches the install, in both modes" {
+	local mode rendered
+	for mode in job daemonset; do
+		rendered=$(render --set "deploymentMode=${mode}" \
+			--set k8sDistribution=k3s \
+			--set criServiceName=k3s-custom)
+
+		echo "${rendered}" | grep -A1 'name: CRI_SERVICE_NAME' | grep -q 'value: "k3s-custom"'
+	done
+}
+
+@test "Helm template: the CRI unit is only reported when named" {
+	local rendered
+	rendered=$(render --set deploymentMode=job --set k8sDistribution=k3s)
+
+	if echo "${rendered}" | grep -q 'name: CRI_SERVICE_NAME'; then
+		echo "CRI_SERVICE_NAME was passed without an explicit criServiceName" >&2
+		return 1
+	fi
+}

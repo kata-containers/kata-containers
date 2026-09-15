@@ -2647,6 +2647,7 @@ mod tests {
             container_runtime_version: None,
             k8s_distribution: None,
             containerd_config_dir: None,
+            cri_service_name: None,
         }
     }
 

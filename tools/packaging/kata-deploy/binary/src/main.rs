@@ -2020,15 +2020,19 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
                         "install (cri): configuring {runtime} changed its CRI config; a restart is \
                          needed"
                     );
-                } else if runtime::lifecycle::cri_serving_config_from(runtime, before.written_at())
-                    .await
+                } else if runtime::lifecycle::cri_serving_config_from(
+                    config,
+                    runtime,
+                    before.written_at(),
+                )
+                .await
                 {
                     info!(
                         "install (cri): CRI config for {runtime} is unchanged from a previous \
                          attempt, and {runtime} has been up since it was written. Skipping the \
                          (self-terminating) restart and checking the runtime is up instead."
                     );
-                    runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+                    runtime::lifecycle::wait_till_cri_unit_active(config, runtime, 300).await?;
                     info!("install (cri): runtime is up; CRI stage complete without restart");
                     return Ok(());
                 }

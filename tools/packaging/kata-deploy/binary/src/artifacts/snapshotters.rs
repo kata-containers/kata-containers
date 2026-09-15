@@ -325,7 +325,7 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
     );
 
     // Hook the snapshotter onto whichever unit actually runs containerd on this node.
-    let cri_service = runtime::cri_systemd_unit(runtime);
+    let cri_service = runtime::cri_systemd_unit_for(runtime, config.cri_service_name.as_deref());
     info!("Binding {nydus_snapshotter}.service to {cri_service}");
     service_content = service_content.replace("@CRI_SERVICE@", &cri_service);
 

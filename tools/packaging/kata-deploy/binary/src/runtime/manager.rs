@@ -53,7 +53,7 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     // Cleanup is precisely when the service may be failed or inactive. The
     // generic `containerd://...` version cannot distinguish MicroK8s, but the
     // chart declaration can, and points at its snap-owned configuration and unit.
-    if declared_runtime_override(config.k8s_distribution.as_deref()) == Some("microk8s") {
+    if declared_runtime(config.k8s_distribution.as_deref()) == Some("microk8s") {
         return Ok("microk8s".to_string());
     }
 
@@ -92,6 +92,12 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
         return Ok("k0s-worker".to_string());
     }
 
+    // A renamed unit answers no probe, so fall back on the declaration.
+    if let Some(runtime) = declared_runtime(config.k8s_distribution.as_deref()) {
+        info!("No CRI unit is active; taking this node for {runtime} as declared");
+        return Ok(runtime.to_string());
+    }
+
     // Default: extract runtime name from version string
     let runtime = runtime_version
         .split(':')
@@ -102,11 +108,11 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     Ok(runtime)
 }
 
-fn declared_runtime_override(distribution: Option<&str>) -> Option<&'static str> {
-    match distribution {
-        Some("microk8s") => Some("microk8s"),
-        _ => None,
-    }
+/// The flavour's first role: only the unit to restart tells the roles apart.
+fn declared_runtime(distribution: Option<&str>) -> Option<&'static str> {
+    distribution
+        .and_then(known_distribution)
+        .and_then(|distribution| runtimes_for_distribution(distribution).first().copied())
 }
 
 /// Distributions keeping containerd's configuration somewhere of their own, and
@@ -155,9 +161,8 @@ fn known_distribution(distribution: &str) -> Option<&'static str> {
 /// The Kubernetes flavour this node runs, for the parts of the install the CRI
 /// runtime cannot answer for - the kubelet's root directory, say.
 ///
-/// The declaration wins because it describes the cluster rather than inferring
-/// it from one node; failing that, a runtime only one flavour ships names it
-/// just as well.
+/// The runtime can stand in for a missing declaration, since one like
+/// `rke2-agent` is shipped by a single flavour.
 pub fn resolve_distribution(config: &Config, runtime: &str) -> Option<&'static str> {
     distribution_of(config.k8s_distribution.as_deref(), runtime)
 }
@@ -253,6 +258,14 @@ pub fn cri_systemd_unit(runtime: &str) -> String {
         "k0s-worker" => "k0sworker.service".to_string(),
         "microk8s" => "snap.microk8s.daemon-containerd.service".to_string(),
         _ => format!("{runtime}.service"),
+    }
+}
+
+/// Overridable: a cluster may name its CRI unit anything.
+pub fn cri_systemd_unit_for(runtime: &str, declared_unit: Option<&str>) -> String {
+    match declared_unit {
+        Some(unit) => utils::systemd_unit_name(unit),
+        None => cri_systemd_unit(runtime),
     }
 }
 
@@ -471,7 +484,7 @@ pub async fn restart_and_wait_for_ready(
             log::info!(
                 "restart_and_wait_for_ready: Waiting for the CRI runtime unit (timeout: 300s)"
             );
-            lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+            lifecycle::wait_till_cri_unit_active(config, runtime, 300).await?;
         }
         return Ok(());
     }
@@ -491,13 +504,52 @@ mod tests {
     use std::time::Duration;
     use tempfile::tempdir;
 
+    /// With no unit to probe, the flavour is all that is left (#13825).
+    #[rstest]
+    #[case::k3s("k3s", Some("k3s"))]
+    #[case::rke2("rke2", Some("rke2-server"))]
+    #[case::k0s("k0s", Some("k0s-controller"))]
+    #[case::microk8s_survives_an_inactive_runtime("microk8s", Some("microk8s"))]
+    #[case::vanilla_has_nothing_to_declare("k8s", None)]
+    #[case::unrecognised_is_vanilla_too("kubeadm", None)]
+    fn test_declared_runtime(#[case] distribution: &str, #[case] expected: Option<&str>) {
+        assert_eq!(declared_runtime(Some(distribution)), expected);
+    }
+
     #[test]
-    fn declared_microk8s_survives_an_inactive_runtime() {
-        assert_eq!(
-            declared_runtime_override(Some("microk8s")),
-            Some("microk8s")
-        );
-        assert_eq!(declared_runtime_override(Some("k8s")), None);
+    fn an_undeclared_distribution_names_no_runtime() {
+        assert_eq!(declared_runtime(None), None);
+    }
+
+    /// A fallback naming a runtime the install rejects would be no better.
+    #[test]
+    fn every_declared_runtime_is_supported() {
+        for (distribution, _) in DISTRIBUTION_RUNTIMES {
+            let runtime = declared_runtime(Some(distribution)).unwrap();
+            assert!(
+                crate::SUPPORTED_RUNTIMES.contains(&runtime),
+                "{distribution} resolves to unsupported runtime {runtime}"
+            );
+        }
+    }
+
+    #[rstest]
+    #[case::none_keeps_the_derived_unit("k3s", None, "k3s.service")]
+    #[case::a_named_unit_wins("k3s", Some("k3s-custom"), "k3s-custom.service")]
+    #[case::suffix_is_kept_when_given("k3s", Some("k3s-custom.service"), "k3s-custom.service")]
+    #[case::any_runtime_may_be_overridden("containerd", Some("k3s-agent"), "k3s-agent.service")]
+    // A dotted name carries its own unit type.
+    #[case::a_snap_unit_is_left_alone(
+        "microk8s",
+        Some("snap.microk8s.daemon-containerd.service"),
+        "snap.microk8s.daemon-containerd.service"
+    )]
+    fn test_cri_systemd_unit_for(
+        #[case] runtime: &str,
+        #[case] declared_unit: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(cri_systemd_unit_for(runtime, declared_unit), expected);
     }
 
     // --- snapshot_files ---

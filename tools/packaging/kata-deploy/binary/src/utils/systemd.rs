@@ -65,7 +65,7 @@ fn manager(member: &str) -> Method<'_> {
     }
 }
 
-fn service_name(name: &str) -> String {
+pub(super) fn service_name(name: &str) -> String {
     if name.contains('.') {
         name.to_owned()
     } else {
