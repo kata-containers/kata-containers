@@ -252,20 +252,16 @@ EOF
 
 !!! tip "Huge page backed guests"
 
-    Guaranteed QoS needs a `memory` limit, which is awkward on a host that
-    reserves most of its memory as huge pages: the limit is charged against
-    the ordinary memory left behind, so a value anywhere near the guest's
-    size is unschedulable. It does not have to be near it. When the guest
-    runs on huge pages (`enable_hugepages = true`), is sized once at start
-    (`static_sandbox_resource_mgmt = true`) and the hypervisor lives in the
-    pod's cgroup (`sandbox_cgroup_only = true`), the memory limit does not
-    size the VM. The pod's `hugepages-<size>` reservation does: the
-    runtime reads the allowance the kubelet set on the pod's cgroup and sizes
-    the guest to it, so `default_memory` is only the smallest guest a pod may
-    ask for and the size used when no allowance is stated. A pod that
-    reserved zero of the guest's page size is refused before the VM starts
-    rather than dying while it maps its memory. The memory limit only
-    has to be large enough for what the sandbox uses outside the guest:
+    A huge page backed guest (`enable_hugepages = true`) sized once at start
+    (`static_sandbox_resource_mgmt = true`) with the hypervisor in the pod's
+    cgroup (`sandbox_cgroup_only = true`) is sized from the pod's
+    `hugepages-<size>` reservation, not from its `memory` limit. The CRI does
+    not pass that reservation to the runtime, so the runtime reads the
+    `hugetlb.<size>.max` the kubelet set on the pod's cgroup. `default_memory`
+    is the smallest guest the runtime boots, and the size used when the pod
+    states no reservation (outside Kubernetes, or without the hugetlb
+    controller). The `memory` limit only covers what the sandbox uses outside
+    the guest, so it can stay small and the pod still be Guaranteed:
 
     ```yaml
     resources:
@@ -273,29 +269,54 @@ EOF
       limits:   { cpu: "80", memory: 2Gi, hugepages-1Gi: 64Gi }
     ```
 
-    That pod is Guaranteed, and its guest is the 64Gi that `hugepages-1Gi`
-    reserved.
+    That guest is 64Gi. Inside it the reserved pages are ordinary RAM, so
+    each container's ceiling is its `memory` limit plus its own huge page
+    reservation, held to what the guest can hold: the VM's size minus a
+    thirty-second of it, and never less than 128MiB, so 62Gi here. That margin
+    covers the page metadata the guest kernel spends before it reports MemTotal
+    (about 1.6% of the VM) and the room the kernel and the agent need. The agent
+    puts the same 62Gi on the parent cgroup of all the pod's containers, so
+    together they cannot take more than the guest holds. Without that bound a
+    leaking sidecar ends in the guest's global OOM killer, which prefers the
+    guest's own processes (oom_score_adj 0) over a Guaranteed workload (-997)
+    and leaves the pod nothing to report.
+
+    A sidecar that reserves no huge pages keeps its `memory` limit as its
+    ceiling. A sidecar that needs guest memory reserves it as
+    `hugepages-<size>`, which also grows the guest; asking for it as `memory`
+    charges the node's ordinary memory for RAM the pod already reserved.
+
+    To read a container's ceiling and to see a pod-level OOM:
+
+    ```bash
+    kubectl exec <pod> -c <container> -- cat /sys/fs/cgroup/memory.max
+    kubectl exec <pod> -c <container> -- dmesg | grep oom_memcg
+    # pod-level: oom_memcg=/kubepods-pod<uid>.slice/cri-containerd (not a container's cgroup)
+    ```
+
+    An agent older than the runtime ignores the pod-level bound; a runtime
+    older than the agent never sets it. Either way the containers keep their
+    own ceilings.
 
 !!! warning "`hugepages-<size>` has to cover `default_memory`"
 
-    `default_memory` is the smallest guest the runtime boots. Reserve less
-    than it and what follows depends on whether the VM preallocates its
-    memory. A huge page backed VM that shares its filesystem over `virtio-fs`
-    (the shipped default) always does, so such a VM could never start: the
-    sandbox is refused before the VM starts, naming the reservation, the size
-    the guest needs and the pod's cgroup that was read:
+    A reservation below `default_memory` is refused before the VM starts when
+    QEMU preallocates the guest's memory: `enable_mem_prealloc`, or huge pages
+    with `virtio-fs` (the shipped default) or nydus, where QEMU forces it.
+    Other hypervisors read none of these knobs and are never refused for a
+    short reservation.
 
     ```
     the VM is backed by huge pages it preallocates, but its pod reserved 2048 MiB
-    of hugepages-1Gi where the guest needs 4096 MiB of default_memory: request at
-    least that much on a container of the pod (pod cgroup
+    of hugepages-1Gi, less than the 4096 MiB of default_memory the VM boots with:
+    request at least that much on a container of the pod (pod cgroup
     /kubepods.slice/kubepods-pod<uid>.slice)
     ```
 
-    Without preallocation (no shared filesystem, `enable_mem_prealloc =
-    false`), and under hypervisors other than QEMU, which read none of these
-    knobs, the guest runs for as long as it touches no more than the pod
-    reserved, so it is left at `default_memory` and the runtime only says so:
+    Without preallocation, under other hypervisors, and under runtime-rs (whose
+    QEMU does not back guest RAM with huge pages and whose Dragonball leaves
+    preallocation off), the guest keeps `default_memory` and runs as long as it
+    touches no more than the pod reserved; the runtime logs:
 
     ```
     the pod reserved fewer huge pages than default_memory; the VM keeps
@@ -303,23 +324,21 @@ EOF
     pod-resource=hugepages-1Gi reserved-mb=2048 default-memory-mb=4096
     ```
 
-    Reserve none of the guest's page size and the sandbox is refused before
-    the VM starts, naming the resource to add and the pod's cgroup that was
-    read. A reservation above `default_maxmemory`, when that is set, is
-    refused the same way.
-
-    Reserve more than `default_memory` and the guest is that large. The size
-    the runtime settled on is in its log before the VM starts:
+    A pod that reserves none of the guest's page size is refused, naming the
+    resource to add and the cgroup that was read. A reservation above
+    `default_maxmemory`, when set, is refused by the Go runtime; runtime-rs
+    raises `default_maxmemory` to the reservation instead. A reservation above
+    `default_memory` sizes the guest; the size is logged before the VM starts:
 
     ```
     sizing the huge page backed VM from the pod's huge page reservation
     pod-resource=hugepages-1Gi reserved-mb=65536 default-memory-mb=4096
     ```
 
-    The reservation is per pod, so with several containers in one pod it is
-    their sum that sizes the guest. Without `sandbox_cgroup_only` the
-    hypervisor runs outside the pod's cgroup and the reservation does not
-    bound it: the guest is then `default_memory`, whatever the pod reserved.
+    The reservation is the pod's, so with several containers their sum sizes
+    the guest. Without `sandbox_cgroup_only` the hypervisor runs outside the
+    pod's cgroup and the reservation does not bound it: the guest stays at
+    `default_memory`.
 
 ### 4.2 GPU passthrough pod with NUMA
 
