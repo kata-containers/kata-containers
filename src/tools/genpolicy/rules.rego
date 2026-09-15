@@ -1275,6 +1275,7 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     i_storage.fstype == "overlay"
     i_storage.fs_group == null
     i_storage.shared == false
+    count(i_storage.driver_options) == 0
     count(i_storage.options) == 0
 
     # image_guest_pull storages always target the rootfs path directly.
@@ -1282,9 +1283,7 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with image_guest_pull: expect_root_path =", expect_root_path)
     expect_root_path == i_storage.mount_point
 
-    # TODO: missing validation for fields:
-    #   - driver_options
-    #   - source
+    # TODO: missing validation for field: source
     print("allow_storage with image_guest_pull: true")
 }
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {

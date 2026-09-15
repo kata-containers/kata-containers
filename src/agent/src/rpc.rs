@@ -271,6 +271,7 @@ impl AgentService {
         };
 
         let container_name = k8s::container_name(&oci);
+        let is_pod_sandbox = k8s::container_type(&oci).is_pod_sandbox();
 
         info!(sl(), "receive createcontainer, spec: {:?}", &oci);
         info!(
@@ -327,6 +328,7 @@ impl AgentService {
             req.storages.clone(),
             &self.sandbox,
             Some(req.container_id),
+            is_pod_sandbox,
         )
         .await?;
 
@@ -392,7 +394,7 @@ impl AgentService {
             return Err(anyhow!(nix::Error::EINVAL));
         };
 
-        let new_p = confidential_data_hub::image::get_process(p, &oci, req.storages.clone())?;
+        let new_p = confidential_data_hub::image::get_process(p, is_pod_sandbox, &req.storages)?;
         let p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
 
         // if starting container failed, we will do some rollback work
@@ -1553,7 +1555,7 @@ impl agent_ttrpc::AgentService for AgentService {
             s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
         }
 
-        let m = add_storages(sl(), req.storages.clone(), &self.sandbox, None)
+        let m = add_storages(sl(), req.storages.clone(), &self.sandbox, None, false)
             .await
             .map_ttrpc_err(same)?;
         self.sandbox.lock().await.mounts = m;
