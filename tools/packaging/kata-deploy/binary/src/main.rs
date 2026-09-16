@@ -757,13 +757,10 @@ fn modules_load_config_path(
     Ok(base.join(format!("kata-containers-{suffix}.conf")))
 }
 
-fn persist_modules_load_config(config: &config::Config, modules: &[&str]) -> Result<()> {
-    let path = modules_load_config_path(
-        std::path::Path::new(HOST_MODULES_LOAD_DIR),
-        config.multi_install_suffix.as_deref(),
-    )?;
-    let content = modules_load_config_content(modules);
-    let temp_path = path.with_extension(format!("conf.{}.tmp", std::process::id()));
+/// Installed under its final name by a rename, so that a boot, or a udev
+/// reload, landing mid-write reads either the old file or the new one.
+fn write_host_config_file(path: &std::path::Path, content: &str) -> Result<()> {
+    let temp_path = path.with_extension(format!("{}.tmp", std::process::id()));
     let write_result = (|| -> Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
 
@@ -773,28 +770,27 @@ fn persist_modules_load_config(config: &config::Config, modules: &[&str]) -> Res
             .write(true)
             .mode(0o644)
             .open(&temp_path)
-            .with_context(|| {
-                format!(
-                    "failed to create temporary modules-load.d file {}",
-                    temp_path.display()
-                )
-            })?;
+            .with_context(|| format!("failed to create {}", temp_path.display()))?;
         temp.write_all(content.as_bytes())
             .with_context(|| format!("failed to write {}", temp_path.display()))?;
         temp.sync_all()
             .with_context(|| format!("failed to sync {}", temp_path.display()))?;
-        std::fs::rename(&temp_path, &path).with_context(|| {
-            format!(
-                "failed to atomically install modules-load.d file {}",
-                path.display()
-            )
-        })?;
+        std::fs::rename(&temp_path, path)
+            .with_context(|| format!("failed to install {}", path.display()))?;
         Ok(())
     })();
     if write_result.is_err() {
         let _ = std::fs::remove_file(&temp_path);
     }
-    write_result?;
+    write_result
+}
+
+fn persist_modules_load_config(config: &config::Config, modules: &[&str]) -> Result<()> {
+    let path = modules_load_config_path(
+        std::path::Path::new(HOST_MODULES_LOAD_DIR),
+        config.multi_install_suffix.as_deref(),
+    )?;
+    write_host_config_file(&path, &modules_load_config_content(modules))?;
 
     info!(
         "install (kernel-modules): persisted the loaded modules in {}",
@@ -843,24 +839,20 @@ fn handle_module_load_failure(module: HostModule, error: anyhow::Error) -> Resul
 }
 
 /// The path is returned as it looks after the chroot, not as mounted here.
-fn find_host_modprobe() -> Result<String> {
-    const CANDIDATES: &[&str] = &[
-        "/usr/sbin/modprobe",
-        "/sbin/modprobe",
-        "/usr/bin/modprobe",
-        "/bin/modprobe",
-    ];
-
-    CANDIDATES
+fn find_host_binary(name: &str) -> Option<String> {
+    ["/usr/sbin", "/sbin", "/usr/bin", "/bin"]
         .iter()
+        .map(|dir| format!("{dir}/{name}"))
         .find(|path| host_path_is_file(std::path::Path::new(HOST_ROOT), std::path::Path::new(path)))
-        .map(|path| (*path).to_string())
-        .with_context(|| {
-            format!(
-                "host modprobe was not found under {HOST_ROOT}; install kmod on the node before \
-                 deploying Kata"
-            )
-        })
+}
+
+fn find_host_modprobe() -> Result<String> {
+    find_host_binary("modprobe").with_context(|| {
+        format!(
+            "host modprobe was not found under {HOST_ROOT}; install kmod on the node before \
+             deploying Kata"
+        )
+    })
 }
 
 /// An absolute symlink target belongs to the host, not to this image.
@@ -893,16 +885,15 @@ fn host_path_is_file(root: &std::path::Path, path: &std::path::Path) -> bool {
     false
 }
 
-fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
+/// A command that will run against the node's own files, rather than this
+/// image's: these tools are the host's, and what they work on is too.
+fn host_root_command(program: &str) -> std::process::Command {
     use std::os::unix::process::CommandExt;
 
     let host_root = std::ffi::CString::new(HOST_ROOT).expect("HOST_ROOT contains no NUL");
     let root_dir = std::ffi::CString::new("/").expect("root path contains no NUL");
-    let mut command = std::process::Command::new(modprobe);
-    command.arg(module);
+    let mut command = std::process::Command::new(program);
 
-    // This image ships no kmod, and only the host's own modprobe matches the
-    // running kernel's modules and compression.
     unsafe {
         command.pre_exec(move || {
             if libc::chroot(host_root.as_ptr()) != 0 {
@@ -914,10 +905,14 @@ fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
             Ok(())
         });
     }
+    command
+}
 
-    let output = command
+fn run_in_host_root(program: &str, args: &[&str]) -> Result<()> {
+    let output = host_root_command(program)
+        .args(args)
         .output()
-        .with_context(|| format!("failed to execute host {modprobe} for module {module}"))?;
+        .with_context(|| format!("failed to execute host {program} {}", args.join(" ")))?;
     if output.status.success() {
         return Ok(());
     }
@@ -925,9 +920,15 @@ fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     anyhow::bail!(
-        "host modprobe failed for module {module} (status {}): stdout={stdout:?}, stderr={stderr:?}",
+        "host {program} {} failed (status {}): stdout={stdout:?}, stderr={stderr:?}",
+        args.join(" "),
         output.status
     )
+}
+
+fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
+    run_in_host_root(modprobe, &[module])
+        .with_context(|| format!("failed to load the host kernel module {module}"))
 }
 
 /// The policy module shipped in this image, and the domains the chart names in
@@ -1019,19 +1020,8 @@ fn host_selinuxfs() -> Option<std::path::PathBuf> {
         .find(|path| path.join("enforce").exists())
 }
 
-/// The path is returned as it looks after the chroot, not as mounted here.
 fn find_host_semodule() -> Option<String> {
-    const CANDIDATES: &[&str] = &[
-        "/usr/sbin/semodule",
-        "/sbin/semodule",
-        "/usr/bin/semodule",
-        "/bin/semodule",
-    ];
-
-    CANDIDATES
-        .iter()
-        .find(|path| host_path_is_file(std::path::Path::new(HOST_ROOT), std::path::Path::new(path)))
-        .map(|path| (*path).to_string())
+    find_host_binary("semodule")
 }
 
 /// Nothing can be loaded here, so the node's policy has to already say what the
@@ -1063,7 +1053,7 @@ fn selinux_policy_revision(policy: &str) -> Result<u32> {
 /// Every module in the node's store, by name, at the highest priority it is
 /// installed at.
 fn installed_selinux_modules(semodule: &str) -> Result<std::collections::HashMap<String, u32>> {
-    let output = host_semodule_command(semodule)
+    let output = host_root_command(semodule)
         .arg("--list-modules=full")
         .output()
         .with_context(|| format!("failed to execute host {semodule} to list the policy store"))?;
@@ -1254,31 +1244,9 @@ fn stage_selinux_modules_on_host(modules: &[(String, String)]) -> Result<StagedM
     Ok(staged)
 }
 
-/// A `semodule` that will run against the node's own policy store.
-fn host_semodule_command(semodule: &str) -> std::process::Command {
-    use std::os::unix::process::CommandExt;
-
-    let host_root = std::ffi::CString::new(HOST_ROOT).expect("HOST_ROOT contains no NUL");
-    let root_dir = std::ffi::CString::new("/").expect("root path contains no NUL");
-    let mut command = std::process::Command::new(semodule);
-
-    unsafe {
-        command.pre_exec(move || {
-            if libc::chroot(host_root.as_ptr()) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            if libc::chdir(root_dir.as_ptr()) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-    command
-}
-
 fn run_host_semodule(semodule: &str, priority: u32, policies: &[String]) -> Result<()> {
     // One transaction for all of them: each is a full policy rebuild otherwise.
-    let mut command = host_semodule_command(semodule);
+    let mut command = host_root_command(semodule);
     command.arg(format!("--priority={priority}"));
     for policy in policies {
         command.arg("--install").arg(policy);
