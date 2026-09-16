@@ -446,10 +446,8 @@ impl Platform {
         let mut gpu_idx = 0usize;
 
         for (group_idx, group) in topo.gpu_smmu_groups.iter().enumerate() {
-            // 32-bus spacing between pxb complexes: each pxb may have up to 31
-            // subordinate buses (one per root port + potential downstream buses).
             // Production captures show bus_nr=32 for pxb-numa0, 64 for pxb-numa1.
-            let bus_nr = 32u8 + (group_idx as u8) * 32;
+            let bus_nr = pxb_bus_nr(group_idx);
 
             let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
             let pxb_id = format!("pxb-numa{group_idx}");

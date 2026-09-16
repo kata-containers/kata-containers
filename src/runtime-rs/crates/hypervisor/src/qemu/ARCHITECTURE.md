@@ -586,7 +586,9 @@ of entries in `gpu_smmu_groups` and `pci_bus_addrs`.  The model scales linearly:
 each GPU gets exactly one `pcie-root-port` on a `pxb-pcie`; GPUs on the same NUMA
 socket share a pxb complex.  `apply_q35_defaults` assigns:
 
-- `bus_nr = 32 + group_idx × 32` per pxb (32-bus spacing matches production captures)
+- `bus_nr = 0x20 × (complex_idx + 1)` per pxb (`pxb_bus_nr`, shared with virt):
+  each complex has room for its root ports and uses the kata-agent convention
+  for guest PCI paths
 - `chassis = 10 + group_idx` per pxb (unique chassis per complex, e.g. 10, 11)
 - `slot = port_index_within_pxb` (0-based, unique per pxb)
 - `id = rp-numa{group}-{port}` (port-relative, not global GPU index)
@@ -730,6 +732,7 @@ hardware for the queue base address), and `cmdqv=on` is added to `arm-smmuv3`:
 ```text
 -object memory-backend-file,id=m0,size=16G,mem-path=/dev/hugepages/,prealloc=on,share=on
 -machine virt,...
+-numa node,memdev=m0,cpus=0-3,nodeid=0
 -device arm-smmuv3,...,cmdqv=on
 ```
 
