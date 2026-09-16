@@ -22,6 +22,13 @@ HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
 HELM_AGENT_HTTPS_PROXY="${HELM_AGENT_HTTPS_PROXY:-}"
 HELM_AGENT_NO_PROXY="${HELM_AGENT_NO_PROXY:-}"
 HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
+# Runtime annotations the suites set on their pods. Only the hypervisor ones a
+# configuration enables are forwarded by default, and these are not hypervisor
+# annotations, so containerd would drop them before the shim ever saw them.
+HELM_EXTRA_POD_ANNOTATIONS="${HELM_EXTRA_POD_ANNOTATIONS:-\
+io.katacontainers.config.runtime.create_container_timeout,\
+io.katacontainers.config.runtime.disable_guest_seccomp,\
+io.katacontainers.config.runtime.sandbox_cgroup_only}"
 HELM_CREATE_RUNTIME_CLASSES="${HELM_CREATE_RUNTIME_CLASSES:-}"
 HELM_CREATE_DEFAULT_RUNTIME_CLASS="${HELM_CREATE_DEFAULT_RUNTIME_CLASS:-}"
 HELM_DEBUG="${HELM_DEBUG:-}"
@@ -1102,6 +1109,17 @@ function helm_helper() {
 							yq -i ".shims.${shim}.allowedHypervisorAnnotations += [\"${annotation}\"]" "${values_yaml}"
 						fi
 					done
+				fi
+			done
+		fi
+
+		if [[ -n "${HELM_EXTRA_POD_ANNOTATIONS}" ]]; then
+			yq -i '.containerd.extraPodAnnotations = []' "${values_yaml}"
+			IFS=',' read -ra extra_annotations <<< "${HELM_EXTRA_POD_ANNOTATIONS}"
+			for annotation in "${extra_annotations[@]}"; do
+				annotation=$(echo "${annotation}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+				if [[ -n "${annotation}" ]]; then
+					yq -i ".containerd.extraPodAnnotations += [\"${annotation}\"]" "${values_yaml}"
 				fi
 			done
 		fi

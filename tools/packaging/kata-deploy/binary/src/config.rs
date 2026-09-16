@@ -231,6 +231,11 @@ pub struct Config {
     /// removes the taint as its final install step, closing the window in which a
     /// pod could land on a not-yet-ready node.
     pub startup_taints: Vec<String>,
+    /// Extra containerd `pod_annotations` patterns for every runtime.
+    pub containerd_extra_pod_annotations: Vec<String>,
+    /// Extra containerd `pod_annotations` patterns per shim, as
+    /// `shim:pattern1,pattern2` entries.
+    pub containerd_shim_extra_pod_annotations_for_arch: Vec<String>,
     /// This node's `status.nodeInfo.containerRuntimeVersion`, supplied by
     /// whoever launched this process (`CONTAINER_RUNTIME_VERSION`).
     ///
@@ -467,6 +472,20 @@ impl Config {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        let containerd_extra_pod_annotations = env::var("CONTAINERD_EXTRA_POD_ANNOTATIONS")
+            .unwrap_or_default()
+            .split([',', ' ', '\t', '\n'])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let containerd_shim_extra_pod_annotations_for_arch =
+            get_arch_var("CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS", "", &arch)
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+
         let config = Config {
             node_name,
             debug,
@@ -503,6 +522,8 @@ impl Config {
             container_runtime_version,
             k8s_distribution,
             containerd_config_dir,
+            containerd_extra_pod_annotations,
+            containerd_shim_extra_pod_annotations_for_arch,
         };
 
         // Validate the configuration
@@ -579,6 +600,20 @@ impl Config {
                             self.shims_for_arch.join(", ")
                         ));
                     }
+                }
+            }
+        }
+
+        for annotation in &self.containerd_shim_extra_pod_annotations_for_arch {
+            if let Some((shim, _)) = annotation.split_once(':') {
+                let shim = shim.trim();
+                if !shim.is_empty() && !self.shims_for_arch.contains(&shim.to_string()) {
+                    return Err(anyhow::anyhow!(
+                        "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS for current architecture references unknown shim '{}'. \
+                         Valid shims: [{}]",
+                        shim,
+                        self.shims_for_arch.join(", ")
+                    ));
                 }
             }
         }
@@ -730,6 +765,23 @@ impl Config {
         Ok(())
     }
 
+    /// The global patterns plus `shim`'s own.
+    pub fn extra_pod_annotations_for(&self, shim: &str) -> Vec<String> {
+        let mut extras = self.containerd_extra_pod_annotations.clone();
+        for entry in &self.containerd_shim_extra_pod_annotations_for_arch {
+            if let Some((name, rest)) = entry.split_once(':') {
+                if name == shim {
+                    extras.extend(
+                        rest.split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty()),
+                    );
+                }
+            }
+        }
+        extras
+    }
+
     /// `full` prints the resolved configuration too. See its caller for why the
     /// later stages of a staged run leave it out.
     pub fn print_info(&self, action: &str, full: bool) {
@@ -777,6 +829,15 @@ impl Config {
         );
         info!("* K8S_DISTRIBUTION: {:?}", self.k8s_distribution);
         info!("* CONTAINERD_CONFIG_DIR: {:?}", self.containerd_config_dir);
+        info!(
+            "* CONTAINERD_EXTRA_POD_ANNOTATIONS: {}",
+            self.containerd_extra_pod_annotations.join(",")
+        );
+        info!(
+            "* CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS: {}",
+            self.containerd_shim_extra_pod_annotations_for_arch
+                .join(" ")
+        );
         info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
         info!(
             "* CONTAINERD_USER_DROP_IN_SOURCE_FILE: {:?}",
@@ -1288,6 +1349,12 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
             "CONTAINERD_CONFIG_FILE_NAME",
+            "CONTAINERD_EXTRA_POD_ANNOTATIONS",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_X86_64",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_AARCH64",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_S390X",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_PPC64LE",
             "STARTUP_TAINTS",
             "CUSTOM_RUNTIMES_ENABLED",
             "DEVKIT",
@@ -2148,6 +2215,37 @@ mod tests {
         assert_eq!(shim_handler("qemu", None), "kata-qemu");
         assert_eq!(shim_handler("qemu", Some("")), "kata-qemu");
         assert_eq!(shim_handler("qemu", Some("dev")), "kata-qemu-dev");
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_extra_pod_annotations_are_scoped_by_shim() {
+        setup_minimal_env();
+        std::env::set_var(
+            "CONTAINERD_EXTRA_POD_ANNOTATIONS",
+            "sgx.intel.com/epc,example.com/global-*",
+        );
+        set_arch_var(
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS",
+            "qemu:example.com/qemu-*,example.com/qemu-exact",
+        );
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.extra_pod_annotations_for("qemu"),
+            vec![
+                "sgx.intel.com/epc",
+                "example.com/global-*",
+                "example.com/qemu-*",
+                "example.com/qemu-exact",
+            ]
+        );
+        assert_eq!(
+            config.extra_pod_annotations_for("clh"),
+            vec!["sgx.intel.com/epc", "example.com/global-*"]
+        );
+
+        cleanup_env_vars();
     }
 
     #[serial]

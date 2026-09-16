@@ -21,11 +21,85 @@ struct ContainerdRuntimeParams {
     /// Path to the kata configuration file
     config_path: String,
     /// Pod annotations to allow
-    pod_annotations: &'static str,
+    pod_annotations: String,
     /// Container annotations to allow
-    container_annotations: &'static str,
+    container_annotations: String,
     /// Optional snapshotter to configure
     snapshotter: Option<String>,
+}
+
+const DEFAULT_CONTAINER_ANNOTATIONS: &str = "[\"io.kubernetes.container.terminationMessage*\"]";
+
+fn format_toml_string_array(values: &[String]) -> String {
+    let quoted: Vec<String> = values.iter().map(|v| format!("\"{v}\"")).collect();
+    format!("[{}]", quoted.join(", "))
+}
+
+fn hypervisor_annotation_pattern(name: &str) -> String {
+    let name = name.trim();
+    if name.starts_with("io.katacontainers.") {
+        name.to_string()
+    } else {
+        format!("io.katacontainers.config.hypervisor.{name}")
+    }
+}
+
+/// Read in the order Kata itself merges them: a drop-in setting the key
+/// replaces that hypervisor's list rather than adding to it.
+fn effective_enable_annotations(kata_config_file: &Path) -> Result<Vec<String>> {
+    let mut by_hypervisor = toml_utils::get_hypervisor_enable_annotations(kata_config_file)?;
+
+    if let Some(drop_in_dir) = kata_config_file.parent().map(|p| p.join("config.d")) {
+        if drop_in_dir.is_dir() {
+            let mut files: Vec<PathBuf> = fs::read_dir(&drop_in_dir)
+                .with_context(|| format!("Failed to read drop-in directory {drop_in_dir:?}"))?
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
+                .collect();
+            files.sort();
+            for file in files {
+                for (hypervisor, annotations) in
+                    toml_utils::get_hypervisor_enable_annotations(&file)?
+                {
+                    by_hypervisor.insert(hypervisor, annotations);
+                }
+            }
+        }
+    }
+
+    let mut annotations: Vec<String> = by_hypervisor.into_values().flatten().collect();
+    annotations.sort();
+    annotations.dedup();
+    Ok(annotations)
+}
+
+fn pod_annotations_for_kata_config(kata_config_file: &Path, extra: &[String]) -> Result<String> {
+    if !kata_config_file.exists() {
+        anyhow::bail!(
+            "Kata configuration {} not found; cannot derive containerd pod_annotations",
+            kata_config_file.display()
+        );
+    }
+
+    let mut annotations = Vec::new();
+
+    for name in effective_enable_annotations(kata_config_file)? {
+        if name.trim().is_empty() {
+            continue;
+        }
+        annotations.push(hypervisor_annotation_pattern(&name));
+    }
+
+    annotations.extend(
+        extra
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+    );
+    annotations.sort();
+    annotations.dedup();
+    Ok(format_toml_string_array(&annotations))
 }
 
 /// Plugin ID for CRI runtime in containerd config v3 (version = 3).
@@ -295,12 +369,12 @@ fn write_containerd_runtime_config(
     toml_utils::set_toml_value(
         config_file,
         &format!("{runtime_table}.pod_annotations"),
-        params.pod_annotations,
+        &params.pod_annotations,
     )?;
     toml_utils::set_toml_value(
         config_file,
         &format!("{runtime_table}.container_annotations"),
-        params.container_annotations,
+        &params.container_annotations,
     )?;
     toml_utils::set_toml_value(
         config_file,
@@ -361,8 +435,16 @@ pub async fn configure_containerd_runtime(
         pluginid
     );
 
-    let pod_annotations = "[\"io.katacontainers.*\"]";
-    let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
+    let kata_config_path = format!(
+        "{}/{}.toml",
+        utils::get_kata_containers_config_path(shim, &config.dest_dir),
+        configuration
+    );
+    let pod_annotations = pod_annotations_for_kata_config(
+        Path::new(&kata_config_path),
+        &config.extra_pod_annotations_for(shim),
+    )?;
+    let container_annotations = DEFAULT_CONTAINER_ANNOTATIONS.to_string();
 
     // Determine snapshotter if configured
     let snapshotter = config
@@ -396,11 +478,7 @@ pub async fn configure_containerd_runtime(
             "\"{}\"",
             utils::get_kata_containers_runtime_path(shim, &config.dest_dir)
         ),
-        config_path: format!(
-            "\"{}/{}.toml\"",
-            utils::get_kata_containers_config_path(shim, &config.dest_dir),
-            configuration
-        ),
+        config_path: format!("\"{kata_config_path}\""),
         pod_annotations,
         container_annotations,
         snapshotter,
@@ -442,8 +520,21 @@ pub async fn configure_custom_containerd_runtime(
         pluginid
     );
 
-    let pod_annotations = "[\"io.katacontainers.*\"]";
-    let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
+    let kata_config_path = format!(
+        "{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml",
+        config.dest_dir, custom_runtime.handler, custom_runtime.base_config
+    );
+    let mut extras = config.extra_pod_annotations_for(&custom_runtime.handler);
+    // Variants are this install's own copy of a shim, so they inherit what the
+    // chart asked for that shim. A user's custom runtime only shares its base
+    // configuration, and gets what it was configured with.
+    if custom_runtime.debug_variant {
+        extras.extend(config.extra_pod_annotations_for(&custom_runtime.base_config));
+    }
+    extras.sort();
+    extras.dedup();
+    let pod_annotations = pod_annotations_for_kata_config(Path::new(&kata_config_path), &extras)?;
+    let container_annotations = DEFAULT_CONTAINER_ANNOTATIONS.to_string();
 
     // Determine snapshotter if specified
     let snapshotter = custom_runtime.containerd_snapshotter.as_ref().map(|s| {
@@ -463,10 +554,7 @@ pub async fn configure_custom_containerd_runtime(
             "\"{}\"",
             utils::get_kata_containers_runtime_path(&custom_runtime.base_config, &config.dest_dir)
         ),
-        config_path: format!(
-            "\"{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml\"",
-            config.dest_dir, custom_runtime.handler, custom_runtime.base_config
-        ),
+        config_path: format!("\"{kata_config_path}\""),
         pod_annotations,
         container_annotations,
         snapshotter,
@@ -1095,8 +1183,8 @@ mod tests {
             runtime_path: "\"/opt/kata/bin/kata-runtime\"".to_string(),
             config_path: "\"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml\""
                 .to_string(),
-            pod_annotations: "[\"io.katacontainers.*\"]",
-            container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]",
+            pod_annotations: "[\"io.katacontainers.config.agent.*\"]".to_string(),
+            container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]".to_string(),
             snapshotter: snapshotter.map(|s| s.to_string()),
         }
     }
@@ -1169,6 +1257,131 @@ mod tests {
         let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy-beta.toml", false);
 
         assert!(get_user_containerd_drop_in_output_path(&paths, Some("beta")).is_err());
+    }
+
+    #[test]
+    fn pod_annotations_come_from_the_runtimes_enable_annotations() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\", \"cc_init_data\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"));
+        assert!(rendered.contains("io.katacontainers.config.hypervisor.cc_init_data"));
+        assert!(!rendered.contains("io.katacontainers.config.agent."));
+        assert!(!rendered.contains("io.katacontainers.config.runtime."));
+        assert!(!rendered.contains("io.katacontainers.container.resource."));
+        assert!(
+            !rendered.contains("io.katacontainers.*\""),
+            "must not forward the unrestricted wildcard: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_runtime_enabling_no_annotation_still_gets_the_extras() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(&config_file, "[hypervisor.qemu]\nenable_annotations = []\n").unwrap();
+
+        let rendered = pod_annotations_for_kata_config(
+            &config_file,
+            &[
+                "sgx.intel.com/epc".to_string(),
+                "io.katacontainers.*".to_string(),
+            ],
+        )
+        .unwrap();
+        assert!(rendered.contains("sgx.intel.com/epc"));
+        assert!(rendered.contains("io.katacontainers.*"));
+        assert!(!rendered.contains("io.katacontainers.config.agent."));
+        assert!(!rendered.contains("io.katacontainers.config.hypervisor."));
+    }
+
+    #[test]
+    fn a_drop_in_replaces_the_list_it_sets() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir_all(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.qemu]\nenable_annotations = [\"cc_init_data\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(rendered.contains("io.katacontainers.config.hypervisor.cc_init_data"));
+        assert!(!rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"));
+    }
+
+    #[test]
+    fn a_drop_in_overriding_one_hypervisor_leaves_the_other_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n\
+             [hypervisor.clh]\nenable_annotations = [\"default_memory\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir_all(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.qemu]\nenable_annotations = [\"cc_init_data\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.cc_init_data"),
+            "drop-in qemu annotation must be present: {rendered}"
+        );
+        assert!(
+            !rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"),
+            "overridden qemu annotation must be gone: {rendered}"
+        );
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.default_memory"),
+            "untouched clh annotation must survive: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_drop_in_adding_a_new_hypervisor_contributes_its_annotations() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir_all(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.clh]\nenable_annotations = [\"default_memory\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"),
+            "base qemu annotation must be present: {rendered}"
+        );
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.default_memory"),
+            "drop-in clh annotation must be present: {rendered}"
+        );
     }
 
     /// Uninstall may only delete a whole-file configuration it can prove an install

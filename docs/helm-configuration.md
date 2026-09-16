@@ -53,6 +53,42 @@ The optional `shims.<shim>.dropIn` field lets you add a custom Kata drop-in for 
 default (non-custom) runtime. kata-deploy writes it as
 `config.d/50-user-overrides.toml` for that shim.
 
+### Containerd pod annotations
+
+kata-deploy builds each containerd runtime's `pod_annotations` allowlist from
+that runtime's effective Kata configuration. Only
+`io.katacontainers.config.hypervisor.*` annotations whose names occur in the
+runtime's `enable_annotations` list are forwarded. This includes entries
+enabled with `shims.<shim>.allowedHypervisorAnnotations` or a Kata
+configuration drop-in. Agent, runtime, and container-resource annotations are
+not forwarded unless listed below.
+
+Additional containerd annotation patterns can be enabled globally or for one
+shim:
+
+```yaml title="values.yaml"
+containerd:
+  extraPodAnnotations:
+    - sgx.intel.com/epc
+
+shims:
+  qemu:
+    containerd:
+      extraPodAnnotations:
+        - example.com/kata-*
+```
+
+Patterns use containerd's matching syntax.
+
+!!! warning
+    `containerd.extraPodAnnotations: ["io.katacontainers.*"]` restores the former,
+    unrestricted Kata annotation forwarding. That is a security risk: any Kata
+    annotation reaches the runtime.
+
+With `env.multiInstallSuffix`, each installation derives the allowlists from
+its own installed Kata configurations and applies them only to its own suffixed
+runtime handlers.
+
 It's best to reference the default `values.yaml` file above for more details.
 
 ### NVIDIA guest settings
