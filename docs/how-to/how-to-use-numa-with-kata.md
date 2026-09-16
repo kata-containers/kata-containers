@@ -300,29 +300,26 @@ EOF
 
 !!! warning "`hugepages-<size>` has to cover `default_memory`"
 
-    A reservation below `default_memory` is refused before the VM starts when
-    QEMU preallocates the guest's memory: `enable_mem_prealloc`, or huge pages
-    with `virtio-fs` (the shipped default) or nydus, where QEMU forces it.
-    Other hypervisors read none of these knobs and are never refused for a
-    short reservation.
+    A reservation below `default_memory` is refused before the VM starts. The
+    kubelet writes the pod's reservation to both `hugetlb.<size>.max` and
+    `hugetlb.<size>.rsvd.max` on the pod's cgroup, and the reserve counter is
+    charged when the hypervisor maps the guest's RAM, not when the guest first
+    touches it. A VM larger than the reservation therefore cannot map its
+    memory at all, whether or not it faults the pages in at start:
 
     ```
-    the VM is backed by huge pages it preallocates, but its pod reserved 2048 MiB
-    of hugepages-1Gi, less than the 4096 MiB of default_memory the VM boots with:
+    the VM is backed by huge pages, but its pod reserved 2048 MiB of
+    hugepages-1Gi, less than the 4096 MiB of default_memory the VM boots with:
     request at least that much on a container of the pod (pod cgroup
     /kubepods.slice/kubepods-pod<uid>.slice)
     ```
 
-    Without preallocation, under other hypervisors, and under runtime-rs (whose
-    QEMU does not back guest RAM with huge pages and whose Dragonball leaves
-    preallocation off), the guest keeps `default_memory` and runs as long as it
-    touches no more than the pod reserved; the runtime logs:
-
-    ```
-    the pod reserved fewer huge pages than default_memory; the VM keeps
-    default_memory and the reservation has to cover it
-    pod-resource=hugepages-1Gi reserved-mb=2048 default-memory-mb=4096
-    ```
+    Only a hypervisor that takes the guest's RAM from the huge page pool is
+    sized from the pod's reservation, or refused for one. In the Go runtime
+    that is QEMU and Cloud Hypervisor; Firecracker, StratoVirt, the remote
+    hypervisor and the mock read none of the huge page knobs and keep
+    `default_memory`. Under runtime-rs it is Dragonball alone, whose QEMU does
+    not back guest RAM with huge pages.
 
     A pod that reserves none of the guest's page size is refused, naming the
     resource to add and the cgroup that was read. A reservation above
