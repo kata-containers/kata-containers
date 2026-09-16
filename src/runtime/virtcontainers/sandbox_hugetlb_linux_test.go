@@ -27,8 +27,9 @@ const (
 
 // hugetlbSizingSandbox builds the least Sandbox that carries a sandbox
 // container whose OCI spec names a cgroup, which is what the sizing reads.
-// It is a QEMU sandbox sharing its filesystem over virtio-fs, so a huge page
-// backed one preallocates its memory, as the shipped configurations do.
+// It is a QEMU sandbox sharing its filesystem over virtio-fs, as the shipped
+// configurations do; QEMU takes a huge page backed guest's RAM from the pool
+// the pod reserves.
 func hugetlbSizingSandbox(hugePages, static, sandboxCgroupOnly bool) (*Sandbox, *SandboxConfig) {
 	sbc := &SandboxConfig{
 		ID:                 "hugetlb-sizing",
@@ -88,6 +89,24 @@ func TestQemuGuestMemoryPreallocated(t *testing.T) {
 	}
 }
 
+func TestHypervisorBacksGuestRAMWithHugePages(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hypervisorType HypervisorType
+		want           bool
+	}{
+		"qemu":             {QemuHypervisor, true},
+		"cloud hypervisor": {ClhHypervisor, true},
+		"firecracker":      {FirecrackerHypervisor, false},
+		"stratovirt":       {StratovirtHypervisor, false},
+		"remote":           {RemoteHypervisor, false},
+		"mock":             {MockHypervisor, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.want, hypervisorBacksGuestRAMWithHugePages(tc.hypervisorType))
+		})
+	}
+}
+
 func TestSizeHugepageBackedVMFromPodTakesTheReservation(t *testing.T) {
 	assert := assert.New(t)
 	gotPath := stubHugetlbHost(t, nil, 192<<30, true, nil)
@@ -108,12 +127,11 @@ func TestSizeHugepageBackedVMFromPodRefusesAShortReservation(t *testing.T) {
 		"none":        {limit: 0, want: []string{"reserved none"}},
 		"beyond a VM": {limit: (uint64(math.MaxUint32) + 1) << 20, want: []string{"larger than a VM"}},
 		// The message carries both numbers the operator has to reconcile.
-		"below default_memory, shared over virtio-fs": {limit: 2 << 30, want: []string{"preallocates", "2048 MiB", "4096 MiB of default_memory"}},
-		"below default_memory, preallocation asked for": {limit: 2 << 30, want: []string{"preallocates", "2048 MiB"},
-			tweak: func(c *SandboxConfig) {
-				c.HypervisorConfig.SharedFS = config.NoSharedFS
-				c.HypervisorConfig.MemPrealloc = true
-			}},
+		"below default_memory": {limit: 2 << 30, want: []string{"2048 MiB", "4096 MiB of default_memory"}},
+		// The mapping is capped by the reservation whether or not the VM
+		// faults its pages in at start, so preallocation does not decide it.
+		"below default_memory, no preallocation": {limit: 2 << 30, want: []string{"2048 MiB", "4096 MiB of default_memory"},
+			tweak: func(c *SandboxConfig) { c.HypervisorConfig.SharedFS = config.NoSharedFS }},
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert := assert.New(t)
@@ -171,11 +189,11 @@ func TestSizeHugepageBackedVMFromPodKeepsDefaultMemory(t *testing.T) {
 		"no allowance stated":               {hugePages: true, static: true, sandboxCgroupOnly: true, stated: false},
 		"allowance unreadable":              {hugePages: true, static: true, sandboxCgroupOnly: true, limitErr: errors.New("boom")},
 		"huge page size unknown":            {hugePages: true, static: true, sandboxCgroupOnly: true, pageSizeErr: errors.New("boom")},
-		// A short reservation only stops a VM that preallocates its memory.
-		"short reservation, no preallocation": {hugePages: true, static: true, sandboxCgroupOnly: true, limit: 2 << 30, stated: true,
-			tweak: func(c *SandboxConfig) { c.HypervisorConfig.SharedFS = config.NoSharedFS }},
-		"short reservation, hypervisor not asked": {hugePages: true, static: true, sandboxCgroupOnly: true, limit: 2 << 30, stated: true,
-			tweak: func(c *SandboxConfig) { c.HypervisorType = ClhHypervisor }},
+		// A hypervisor that does not take the guest's RAM from the huge page
+		// pool is not sized from the pod's reservation, nor refused for one:
+		// a reservation that would otherwise grow the VM leaves it alone.
+		"hypervisor does not use the huge page pool": {hugePages: true, static: true, sandboxCgroupOnly: true, limit: 192 << 30, stated: true,
+			tweak: func(c *SandboxConfig) { c.HypervisorType = FirecrackerHypervisor }},
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert := assert.New(t)

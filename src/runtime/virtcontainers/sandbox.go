@@ -862,17 +862,37 @@ var (
 	}
 )
 
+// hypervisorBacksGuestRAMWithHugePages reports whether the hypervisor takes the
+// guest's memory from the host's hugetlb pool when enable_hugepages is set.
+// Only then does the pod's hugepages-<size> reservation bound the VM, and only
+// then is the reservation the VM's size. A hypervisor whose driver reads none
+// of the huge page knobs keeps default_memory.
+func hypervisorBacksGuestRAMWithHugePages(hypervisorType HypervisorType) bool {
+	switch hypervisorType {
+	case QemuHypervisor, ClhHypervisor:
+		return true
+	default:
+		return false
+	}
+}
+
 // sizeHugepageBackedVMFromPod sizes a huge page backed static VM from the pod's
 // huge page reservation instead of default_memory. The CRI does not carry the
 // reservation (kubernetes/enhancements#4113), so it is read where the kubelet
 // wrote it: hugetlb.<size>.max on the pod's cgroup, which bounds the VM when
 // the hypervisor runs inside it (sandbox_cgroup_only). default_memory is the
-// floor; a shorter reservation is refused only when the VM preallocates its
-// memory. Decided once, at creation; a sandbox fetched from the store keeps
+// floor: the reservation caps the hugetlbfs mapping the guest's RAM comes from,
+// so a VM larger than it cannot map its memory and a shorter reservation is
+// refused. Decided once, at creation; a sandbox fetched from the store keeps
 // the size it booted with.
 func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) error {
 	hc := &sandboxConfig.HypervisorConfig
 	if !hc.HugePages || !sandboxConfig.StaticResourceMgmt {
+		return nil
+	}
+	if !hypervisorBacksGuestRAMWithHugePages(sandboxConfig.HypervisorType) {
+		s.Logger().WithField("hypervisor", string(sandboxConfig.HypervisorType)).Info(
+			"the hypervisor does not take the guest's memory from the huge page pool; sizing the VM from default_memory")
 		return nil
 	}
 	if s.state.State != "" {
@@ -922,18 +942,10 @@ func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) erro
 	case hc.DefaultMaxMemorySize > 0 && reservedMB > hc.DefaultMaxMemorySize:
 		return fmt.Errorf("the pod reserved %d MiB of %s, more than the %d MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup %s)", reservedMB, podResource, hc.DefaultMaxMemorySize, podCgroup)
 	case reservedMB < uint64(hc.MemorySize):
-		// A preallocating VM faults every page in at start, so a short
-		// reservation cannot boot it; say so with both numbers.
-		if sandboxConfig.HypervisorType == QemuHypervisor && qemuGuestMemoryPreallocated(hc) {
-			return fmt.Errorf("the VM is backed by huge pages it preallocates, but its pod reserved %d MiB of %s, less than the %d MiB of default_memory the VM boots with: request at least that much on a container of the pod (pod cgroup %s)", reservedMB, podResource, hc.MemorySize, podCgroup)
-		}
-		s.Logger().WithFields(logrus.Fields{
-			"pod-cgroup":        podCgroup,
-			"pod-resource":      podResource,
-			"reserved-mb":       reservedMB,
-			"default-memory-mb": hc.MemorySize,
-		}).Info("the pod reserved fewer huge pages than default_memory; the VM keeps default_memory and the reservation has to cover it")
-		return nil
+		// The reservation caps the hugetlbfs mapping the guest's RAM comes
+		// from, so a VM of default_memory cannot map its memory at all; say
+		// so with both numbers rather than let it fail mid-allocation.
+		return fmt.Errorf("the VM is backed by huge pages, but its pod reserved %d MiB of %s, less than the %d MiB of default_memory the VM boots with: request at least that much on a container of the pod (pod cgroup %s)", reservedMB, podResource, hc.MemorySize, podCgroup)
 	}
 
 	s.Logger().WithFields(logrus.Fields{
