@@ -573,7 +573,6 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
                 0 => DEFAULT_DISK_QUEUE_SIZE,
                 sz => u16::try_from(sz)?,
             },
-            sparse: blkcfg.discard_unmap,
             image_type: ImageType::Raw,
             ..Default::default()
         };
