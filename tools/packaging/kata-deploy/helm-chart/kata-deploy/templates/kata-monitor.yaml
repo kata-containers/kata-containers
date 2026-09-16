@@ -65,8 +65,11 @@ spec:
         - name: containerd-sock
           mountPath: {{ include "monitorRuntimeSocketDir" . }}
           readOnly: true
-        - name: sbs
+        - name: go-runtime-sbs
           mountPath: /run/vc/sbs/
+          readOnly: true
+        - name: runtime-rs-sbs
+          mountPath: /run/kata/
           readOnly: true
 {{- if .Values.monitor.tls.secretName }}
         - name: certs
@@ -79,9 +82,13 @@ spec:
         hostPath:
           path: {{ include "monitorRuntimeSocketDir" . }}
           type: Directory
-      - name: sbs
+      - name: go-runtime-sbs
         hostPath:
           path: /run/vc/sbs/
+          type: DirectoryOrCreate
+      - name: runtime-rs-sbs
+        hostPath:
+          path: /run/kata/
           type: DirectoryOrCreate
 {{- if .Values.monitor.tls.secretName }}
       - name: certs
