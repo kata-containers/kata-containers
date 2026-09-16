@@ -563,7 +563,7 @@ surface much later, as a missing command or a layer conversion failure.
 {{- /* Names of containers the install and cleanup pods carry of their own, which
        an entry cannot take without the API server rejecting the pod for two
        containers sharing a name. */}}
-{{- $taken := list "artifacts" "cri" "dispatcher" "host-check" "kube-kata" "load-kernel-modules" "node-binaries-install" "node-binaries-remove" "rb-cleanup" "remove-artifacts" "revert-cri" "selinux-policy" -}}
+{{- $taken := list "artifacts" "cri" "dispatcher" "host-check" "host-devices" "kube-kata" "load-kernel-modules" "node-binaries-install" "node-binaries-remove" "rb-cleanup" "remove-artifacts" "revert-cri" "selinux-policy" -}}
 {{- range $name, $spec := $entries -}}
 {{- /* A DNS-1123 label, which is all a container name may be. */}}
 {{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $name) -}}
@@ -593,6 +593,19 @@ surface much later, as a missing command or a layer conversion failure.
 {{- end -}}
 {{- end -}}
 {{- toYaml $entries -}}
+{{- end -}}
+
+{{/*
+Whether kata-deploy opens the host devices a rootless VMM reaches directly.
+Empty when off, so call sites read as `if include "kata-deploy.rootlessDeviceAccess" . | trim`.
+*/}}
+{{- define "kata-deploy.rootlessDeviceAccess" -}}
+{{- if (.Values.rootless | default dict).deviceAccess -}}
+{{- if ne (.Values.deploymentMode | default "daemonset") "job" -}}
+{{- fail "\n\nERROR: rootless.deviceAccess is set, which requires deploymentMode: job.\n\nOpening a device to a group means running the node's own groupadd and udevadm, and only the staged install has a privileged stage to run them in. The DaemonSet runs the whole install in one unprivileged container.\n" -}}
+{{- end -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1256,7 +1269,7 @@ Arguments (dict):
   root  - top-level context (.)
   stage - "install" | "cleanup"
 
-install pipeline:  load-kernel-modules -> host-check -> artifacts (initContainers) ; cri (main)
+install pipeline:  load-kernel-modules -> [host-devices] -> host-check -> artifacts (initContainers) ; cri (main)
 cleanup pipeline:  revert-cri              (initContainer)  ; remove-artifacts (main)
 
 The node label is not a stage here: the dispatcher sets it once the Job as a whole
@@ -1372,6 +1385,11 @@ spec:
 {{- end }}
 {{- /* Privileged, and holding the host root, because it runs the host's own modprobe. */}}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "load-kernel-modules" "action" "install-stage-load-kernel-modules" "privileged" true "mountHost" true "mountHostRoot" true "mountModulesLoad" true) | nindent 8 }}
+{{- /* After them, since a device node only exists once its module is in. Writable,
+       like the policy stage: the host's groupadd writes the node's /etc/group. */}}
+{{- if include "kata-deploy.rootlessDeviceAccess" $root | trim }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-devices" "action" "install-stage-host-devices" "privileged" true "mountHost" true "mountHostRoot" true "hostRootWritable" true "mountUdevRules" true) | nindent 8 }}
+{{- end }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_check_t") | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
       containers:
@@ -1389,7 +1407,9 @@ spec:
        up even when the entries were dropped from the values first. */}}
 {{- include "kata-deploy.nodeBinariesInstallContainer" (dict "root" $root "name" "node-binaries-remove") | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
+{{- /* The udev rules are mounted here whatever the values now say, so that an
+       uninstall takes out the ones an earlier install left behind. */}}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true "mountUdevRules" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
@@ -1397,6 +1417,15 @@ spec:
           hostPath:
             path: /etc/modules-load.d
             type: DirectoryOrCreate
+{{- /* The cleanup carries it whatever the values say, so it can take out rules an
+       earlier install left; the install pipeline only where it writes them, or a
+       node with no udev would be given the directory for nothing. */}}
+{{- if or (eq $stage "cleanup") (include "kata-deploy.rootlessDeviceAccess" $root | trim) }}
+        - name: udev-rules-d
+          hostPath:
+            path: /etc/udev/rules.d
+            type: DirectoryOrCreate
+{{- end }}
 {{- /* The cleanup pipeline holds the host root for the policy stage alone. */}}
 {{- if or (eq $stage "install") (include "kata-deploy.selinuxEnabled" $root | trim) }}
         - name: host-root
@@ -1685,6 +1714,7 @@ Arguments (dict):
   mountHostRoot - bool, whether to mount the host root read-only at /host
   hostRootWritable - bool, whether that host root mount is writable
   mountModulesLoad - bool, whether to mount the host modules-load.d directory writable
+  mountUdevRules - bool, whether to mount the host udev rules.d directory writable
   selinuxDomain - SELinux type to confine this stage to, when selinux.enabled
 
 Emitted at column 0; indent with `nindent` at the call site.
@@ -1722,6 +1752,10 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- if .mountModulesLoad }}
     - name: modules-load-d
       mountPath: /host-modules-load.d
+{{- end }}
+{{- if .mountUdevRules }}
+    - name: udev-rules-d
+      mountPath: /host-udev-rules.d
 {{- end }}
 {{- end -}}
 

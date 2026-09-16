@@ -644,6 +644,32 @@ snapshotter:
 # to; the erofs-utils image above is amd64 and arm64 only.
 nodeBinaries: {}
 
+# A rootless VMM runs as a user created for that sandbox alone, so it reaches a
+# host device only through the group owning it. These are the devices it opens
+# directly, and the group each one is opened to:
+#
+#   /dev/kvm   kvm        every local runtime
+#   /dev/sev   kata-sev   the SEV-SNP runtimes
+#
+# Each gets a rule of its own under /etc/udev/rules.d, because /dev is rebuilt
+# from scratch at every boot and a group set by hand does not survive it. A
+# device the node already opens to a non-root group, as it usually does with
+# /dev/kvm, is left exactly as it is. /dev/sev is opened to a group of its own
+# rather than to kvm so that a sandbox needing nothing but /dev/kvm on an SNP
+# host does not get to open the platform with it.
+#
+# Nothing is provisioned for /dev/vhost-vsock or for VFIO: the shim opens those
+# and passes the VMM the descriptor. Neither is the TDX quote-generation socket,
+# which belongs to whatever deploys QGS, nor s390x's /dev/uv.
+#
+# Off by default, and requires deploymentMode: job: creating a group on a node
+# and handing it a device is the administrator's call, and the stage doing it is
+# privileged and runs the node's own groupadd and udevadm. An uninstall takes
+# the rules back out, leaving the groups: they have no members of their own, and
+# another installation on the node may still be opening a device to them.
+rootless:
+  deviceAccess: false
+
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
 # Set disableAll: true to disable all shims, then explicitly enable specific ones:

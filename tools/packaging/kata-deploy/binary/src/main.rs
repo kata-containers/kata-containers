@@ -78,6 +78,11 @@ enum Action {
     /// the only one the DaemonSet path does not share.
     #[clap(name = "install-stage-load-kernel-modules")]
     InstallStageLoadKernelModules,
+    /// Open the host devices a rootless VMM has to reach, once the modules
+    /// creating them are in. Privileged, and rendered only where the chart was
+    /// asked for it, since it gives a node-wide device to a group.
+    #[clap(name = "install-stage-host-devices")]
+    InstallStageHostDevices,
     /// Stage 1 of a staged (JobSet) install: validate host/node prerequisites
     /// without mutating the host. Fails fast with actionable diagnostics when
     /// the node cannot support installation.
@@ -213,6 +218,7 @@ async fn run() -> Result<()> {
         args.action,
         Action::InstallStageSelinuxPolicy
             | Action::InstallStageLoadKernelModules
+            | Action::InstallStageHostDevices
             | Action::InstallStageHostCheck
             | Action::InstallStageArtifacts
             | Action::InstallStageCri
@@ -227,6 +233,7 @@ async fn run() -> Result<()> {
         Action::Reset => "reset",
         Action::InstallStageSelinuxPolicy => "install-stage-selinux-policy",
         Action::InstallStageLoadKernelModules => "install-stage-load-kernel-modules",
+        Action::InstallStageHostDevices => "install-stage-host-devices",
         Action::InstallStageHostCheck => "install-stage-host-check",
         Action::InstallStageArtifacts => "install-stage-artifacts",
         Action::InstallStageCri => "install-stage-cri",
@@ -254,8 +261,9 @@ async fn run() -> Result<()> {
         Action::InternalPostInstallWait => std::env::var(DETECTED_RUNTIME_ENV)
             .with_context(|| format!("missing {DETECTED_RUNTIME_ENV} env var after re-exec"))?,
         // Loading a policy module is the same work whatever the CRI is, and this
-        // runs before every stage that would need one detected.
-        Action::InstallStageSelinuxPolicy => String::new(),
+        // runs before every stage that would need one detected. So is opening a
+        // device the VMM, not the CRI, is the one to reach.
+        Action::InstallStageSelinuxPolicy | Action::InstallStageHostDevices => String::new(),
         _ => {
             let r = runtime::get_container_runtime(&config).await?;
             info!("Detected container runtime: {r}");
@@ -395,6 +403,10 @@ async fn run() -> Result<()> {
         Action::InstallStageLoadKernelModules => {
             install_stage_load_kernel_modules(&config)?;
             info!("Install kernel-module stage completed, exiting");
+        }
+        Action::InstallStageHostDevices => {
+            install_stage_host_devices(&config)?;
+            info!("Install host-devices stage completed, exiting");
         }
         Action::InstallStageHostCheck => {
             install_stage_host_check(&config, &runtime, true).await?;
@@ -743,18 +755,27 @@ fn host_device_exists(device: &str) -> bool {
         || std::path::Path::new("/dev").join(device).exists()
 }
 
-fn modules_load_config_path(
-    base: &std::path::Path,
-    multi_install_suffix: Option<&str>,
-) -> Result<std::path::PathBuf> {
-    let suffix = multi_install_suffix.unwrap_or("default");
+/// What a file this install leaves on the node is named after, so that two
+/// installs sharing a node never write each other's.
+fn instance_file_suffix(multi_install_suffix: Option<&str>) -> Result<&str> {
+    let suffix = multi_install_suffix.unwrap_or(DEFAULT_INSTANCE);
     anyhow::ensure!(
         suffix
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')),
-        "MULTI_INSTALL_SUFFIX {suffix:?} cannot be used in a modules-load.d filename"
+        "MULTI_INSTALL_SUFFIX {suffix:?} cannot be used in a filename"
     );
-    Ok(base.join(format!("kata-containers-{suffix}.conf")))
+    Ok(suffix)
+}
+
+fn modules_load_config_path(
+    base: &std::path::Path,
+    multi_install_suffix: Option<&str>,
+) -> Result<std::path::PathBuf> {
+    Ok(base.join(format!(
+        "kata-containers-{}.conf",
+        instance_file_suffix(multi_install_suffix)?
+    )))
 }
 
 /// Installed under its final name by a rename, so that a boot, or a udev
@@ -835,6 +856,234 @@ fn handle_module_load_failure(module: HostModule, error: anyhow::Error) -> Resul
         "install (kernel-modules): optional host module {} could not be loaded: {error}",
         module.name
     );
+    Ok(())
+}
+
+const HOST_UDEV_RULES_DIR: &str = "/host-udev-rules.d";
+
+/// A device a VMM of its own user has to open, and the group it is opened to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RootlessDevice {
+    name: &'static str,
+    group: &'static str,
+}
+
+/// The devices this install's runtimes open, and no others: a group on a device
+/// nothing here uses is access granted for nobody.
+///
+/// /dev/vhost-vsock and the VFIO groups are absent because the shim opens those
+/// itself and hands the VMM the descriptor. So is /dev/mshv, which the nodes
+/// offering it keep root-only by design.
+fn rootless_devices_for_install(shims: &[&str], custom_bases: &[&str]) -> Vec<RootlessDevice> {
+    let runtimes = || shims.iter().chain(custom_bases.iter());
+    let mut devices = Vec::new();
+
+    if runtimes().any(|runtime| *runtime != "remote") {
+        devices.push(RootlessDevice {
+            name: "kvm",
+            group: "kvm",
+        });
+    }
+    // A group of its own rather than kvm, so that a sandbox needing nothing but
+    // /dev/kvm on an SNP host does not get to open the platform with it.
+    if runtimes().any(|runtime| runtime.contains("snp")) {
+        devices.push(RootlessDevice {
+            name: "sev",
+            group: "kata-sev",
+        });
+    }
+
+    devices
+}
+
+/// What the shim asks of a device before it drops the VMM to a user of its own:
+/// read and write, through a group that is not root's, or to everyone.
+fn rootless_vmm_can_open(gid: u32, mode: u32) -> bool {
+    const READ_WRITE: u32 = 0o6;
+
+    mode & READ_WRITE == READ_WRITE || (gid != 0 && (mode >> 3) & READ_WRITE == READ_WRITE)
+}
+
+/// Not composed into [`install`], like the modules before it: the node's devices
+/// are not the unprivileged DaemonSet's to reconfigure.
+fn install_stage_host_devices(config: &config::Config) -> Result<()> {
+    let custom_bases = config
+        .custom_runtimes
+        .iter()
+        .map(|runtime| runtime.base_config.as_str())
+        .collect::<Vec<_>>();
+    let devices = rootless_devices_for_install(
+        &config
+            .shims_for_arch
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        &custom_bases,
+    );
+
+    let _node_lock = acquire_node_mutation_lock()?;
+
+    let mut to_open = Vec::new();
+    for device in devices {
+        match host_device_ownership(device.name)? {
+            // The same values reach every node of a cluster, so a node without
+            // the device is one this runtime was not meant for, not a failure.
+            None => log::warn!(
+                "install (host-devices): this node has no /dev/{}, so nothing here opens it",
+                device.name
+            ),
+            Some((gid, mode)) if rootless_vmm_can_open(gid, mode) => info!(
+                "install (host-devices): /dev/{} is open to group {gid} already (mode {:04o})",
+                device.name,
+                mode & 0o7777
+            ),
+            Some(_) => to_open.push(device),
+        }
+    }
+
+    let rules = udev_rules_path(
+        std::path::Path::new(HOST_UDEV_RULES_DIR),
+        config.multi_install_suffix.as_deref(),
+    )?;
+    if to_open.is_empty() {
+        info!("install (host-devices): no device on this node needs opening");
+        // A redeploy that dropped the runtime needing one takes its rule with it.
+        return remove_udev_rules(&rules);
+    }
+
+    for device in &to_open {
+        ensure_host_group(device.group)?;
+    }
+    write_host_config_file(&rules, &udev_rules_content(&to_open))?;
+    info!("install (host-devices): wrote {}", rules.display());
+
+    apply_host_udev_rules(&to_open)?;
+    for device in &to_open {
+        confirm_device_is_open(device)?;
+    }
+    Ok(())
+}
+
+fn host_device_ownership(device: &str) -> Result<Option<(u32, u32)>> {
+    use std::os::unix::fs::MetadataExt;
+
+    let path = std::path::Path::new(HOST_ROOT).join("dev").join(device);
+    match std::fs::metadata(&path) {
+        Ok(metadata) => Ok(Some((metadata.gid(), metadata.mode()))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => {
+            Err(error).with_context(|| format!("failed to read the owner of {}", path.display()))
+        }
+    }
+}
+
+fn udev_rules_path(
+    base: &std::path::Path,
+    multi_install_suffix: Option<&str>,
+) -> Result<std::path::PathBuf> {
+    // Read after the rules the node ships, so the group this asks for is the one
+    // the device ends up with.
+    Ok(base.join(format!(
+        "99-kata-containers-{}.rules",
+        instance_file_suffix(multi_install_suffix)?
+    )))
+}
+
+fn udev_rules_content(devices: &[RootlessDevice]) -> String {
+    let mut content =
+        String::from("# Managed by kata-deploy; removed when this installation is uninstalled.\n");
+    for device in devices {
+        content.push_str(&format!(
+            "KERNEL==\"{}\", SUBSYSTEM==\"misc\", GROUP=\"{}\", MODE=\"0660\"\n",
+            device.name, device.group
+        ));
+    }
+    content
+}
+
+/// udev names a group, it does not create one, and a name it cannot resolve
+/// leaves the device with the owner it already had.
+fn ensure_host_group(group: &str) -> Result<()> {
+    let path = std::path::Path::new(HOST_ROOT).join("etc/group");
+    let groups = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read the node's groups from {}", path.display()))?;
+    if group_file_defines(&groups, group) {
+        info!("install (host-devices): the node already has the {group} group");
+        return Ok(());
+    }
+
+    let groupadd = find_host_binary("groupadd").with_context(|| {
+        format!(
+            "host groupadd was not found under {HOST_ROOT}; install shadow-utils on the node, or \
+             create the {group} group there, before asking kata-deploy to open these devices"
+        )
+    })?;
+    info!("install (host-devices): creating the {group} group on the node");
+    run_in_host_root(&groupadd, &["--system", group])
+}
+
+fn group_file_defines(groups: &str, group: &str) -> bool {
+    groups
+        .lines()
+        .any(|line| line.split(':').next() == Some(group))
+}
+
+/// The rules file is what carries this across a reboot; this is what makes it
+/// true of the device nodes the running kernel already created.
+fn apply_host_udev_rules(devices: &[RootlessDevice]) -> Result<()> {
+    let udevadm = find_host_binary("udevadm").with_context(|| {
+        format!(
+            "host udevadm was not found under {HOST_ROOT}; kata-deploy opens these devices \
+             through the node's own udev, which is also what reopens them at every boot"
+        )
+    })?;
+
+    run_in_host_root(&udevadm, &["control", "--reload"])?;
+    for device in devices {
+        run_in_host_root(
+            &udevadm,
+            &[
+                "trigger",
+                "--action=change",
+                "--subsystem-match=misc",
+                &format!("--sysname-match={}", device.name),
+            ],
+        )?;
+    }
+    run_in_host_root(&udevadm, &["settle"])
+}
+
+/// A rule udev declined to apply, for a group it could not resolve or a rule of
+/// the node's own read after this one, would otherwise only surface as a sandbox
+/// failing to start.
+fn confirm_device_is_open(device: &RootlessDevice) -> Result<()> {
+    let (gid, mode) = host_device_ownership(device.name)?
+        .with_context(|| format!("/dev/{} went away as it was being opened", device.name))?;
+    anyhow::ensure!(
+        rootless_vmm_can_open(gid, mode),
+        "udev left /dev/{} with group {gid} and mode {:04o} rather than opening it to the {} \
+         group; look for a rule of this node's own under /etc/udev/rules.d",
+        device.name,
+        mode & 0o7777,
+        device.group
+    );
+
+    info!(
+        "install (host-devices): /dev/{} is open to the {} group",
+        device.name, device.group
+    );
+    Ok(())
+}
+
+fn remove_udev_rules(rules: &std::path::Path) -> Result<()> {
+    match std::fs::remove_file(rules) {
+        Ok(()) => info!("removed the udev rules {}", rules.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to remove the udev rules {}", rules.display()))
+        }
+    }
     Ok(())
 }
 
@@ -2368,6 +2617,15 @@ async fn cleanup_stage_remove_artifacts(config: &config::Config) -> Result<()> {
     let _node_lock = acquire_node_mutation_lock()?;
     // A partial install may have loaded modules but extracted nothing.
     remove_modules_load_config(config)?;
+    // Unconditional, and so are the mounts behind it: an uninstall has to take
+    // the rules back out even when the values stopped asking for them first. The
+    // devices keep the group until the node reboots, as the modules above keep
+    // their place in the kernel, and the group is left behind with them: it has
+    // no members, and another install may still be opening a device to it.
+    remove_udev_rules(&udev_rules_path(
+        std::path::Path::new(HOST_UDEV_RULES_DIR),
+        config.multi_install_suffix.as_deref(),
+    )?)?;
 
     // The install dir is bind mounted into this pod, so it always exists and
     // outlives the artifacts it holds: an empty one means there is nothing
@@ -2466,6 +2724,7 @@ mod tests {
         "install-stage-load-kernel-modules",
         Action::InstallStageLoadKernelModules
     )]
+    #[case("install-stage-host-devices", Action::InstallStageHostDevices)]
     #[case("install-stage-host-check", Action::InstallStageHostCheck)]
     #[case("install-stage-artifacts", Action::InstallStageArtifacts)]
     #[case("install-stage-cri", Action::InstallStageCri)]
@@ -2617,6 +2876,7 @@ mod tests {
     #[rstest]
     #[case(Action::InstallStageHostCheck)]
     #[case(Action::InstallStageLoadKernelModules)]
+    #[case(Action::InstallStageHostDevices)]
     #[case(Action::InstallStageArtifacts)]
     #[case(Action::InstallStageCri)]
     #[case(Action::CleanupStageRevertCri)]
@@ -2835,6 +3095,84 @@ mod tests {
         let content = modules_load_config_content(&["kvm", "vhost_vsock"]);
         assert!(content.starts_with("# Managed by kata-deploy"));
         assert!(content.contains("\nkvm\nvhost_vsock\n"));
+    }
+
+    fn device_names(devices: &[RootlessDevice]) -> Vec<&str> {
+        devices.iter().map(|device| device.name).collect()
+    }
+
+    #[rstest]
+    #[case::plain_qemu(&["qemu-runtime-rs"], &[], vec!["kvm"])]
+    #[case::snp(&["qemu-snp-runtime-rs"], &[], vec!["kvm", "sev"])]
+    #[case::gpu_snp(&["qemu-nvidia-gpu-snp"], &[], vec!["kvm", "sev"])]
+    // A TEE reached through /dev/kvm alone, as TDX and SE are here.
+    #[case::tdx(&["qemu-tdx", "qemu-se"], &[], vec!["kvm"])]
+    #[case::custom_snp(&["remote"], &["qemu-snp"], vec!["kvm", "sev"])]
+    #[case::remote_only(&["remote"], &[], vec![])]
+    fn the_devices_opened_are_the_ones_the_runtimes_open(
+        #[case] shims: &[&str],
+        #[case] custom_bases: &[&str],
+        #[case] expected: Vec<&str>,
+    ) {
+        assert_eq!(
+            device_names(&rootless_devices_for_install(shims, custom_bases)),
+            expected
+        );
+    }
+
+    /// The shim's own test of a device, which is what decides whether this stage
+    /// has anything to do.
+    #[rstest]
+    #[case::root_only(0, 0o600, false)]
+    #[case::group_root(0, 0o660, false)]
+    #[case::group_read_only(63, 0o640, false)]
+    #[case::group_read_write(63, 0o660, true)]
+    #[case::everyone(0, 0o666, true)]
+    #[case::sticky_group(63, 0o2660, true)]
+    fn a_device_is_open_to_a_group_that_is_not_roots(
+        #[case] gid: u32,
+        #[case] mode: u32,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(rootless_vmm_can_open(gid, mode), expected);
+    }
+
+    #[test]
+    fn the_udev_rules_are_per_install_and_read_last() {
+        let base = std::path::Path::new("/etc/udev/rules.d");
+        assert_eq!(
+            udev_rules_path(base, None).unwrap(),
+            base.join("99-kata-containers-default.rules")
+        );
+        assert_eq!(
+            udev_rules_path(base, Some("dev")).unwrap(),
+            base.join("99-kata-containers-dev.rules")
+        );
+        assert!(udev_rules_path(base, Some("../escape")).is_err());
+    }
+
+    #[test]
+    fn a_rule_names_the_device_and_the_group_it_opens_it_to() {
+        let content = udev_rules_content(&rootless_devices_for_install(&["qemu-snp"], &[]));
+
+        assert!(content.starts_with("# Managed by kata-deploy"));
+        assert!(content
+            .contains("\nKERNEL==\"kvm\", SUBSYSTEM==\"misc\", GROUP=\"kvm\", MODE=\"0660\"\n"));
+        assert!(content.contains(
+            "\nKERNEL==\"sev\", SUBSYSTEM==\"misc\", GROUP=\"kata-sev\", MODE=\"0660\"\n"
+        ));
+    }
+
+    /// A group named by a rule but missing from the node leaves the device shut,
+    /// so this is what decides whether one is created.
+    #[test]
+    fn a_group_is_read_from_the_nodes_own_group_file() {
+        let groups = "root:x:0:\nkvm:x:36:\nkata-sev-old:x:988:\n";
+
+        assert!(group_file_defines(groups, "kvm"));
+        assert!(!group_file_defines(groups, "kata-sev"));
+        // The members of a group are not groups themselves.
+        assert!(!group_file_defines("wheel:x:10:kata-sev\n", "kata-sev"));
     }
 
     #[test]

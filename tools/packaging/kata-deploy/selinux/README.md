@@ -20,10 +20,10 @@ inherited from `/opt`) and the Kata runtime sees exactly what it saw before.
 | Domain | Used by | Can |
 | --- | --- | --- |
 | `kata_deploy_check_t` | `host-check` | Read only, plus query the CRI unit's status over D-Bus |
-| `kata_deploy_artifacts_t` | `artifacts`, `remove-artifacts` | Write `/opt/kata`, the nydus unit, `/etc/modules-load.d` |
+| `kata_deploy_artifacts_t` | `artifacts`, `remove-artifacts` | Write `/opt/kata`, the nydus unit, `/etc/modules-load.d`, and remove this install's `/etc/udev/rules.d` rules |
 | `kata_deploy_cri_t` | `cri`, `revert-cri` | Write the CRI config, manage the nydus unit, restart the CRI |
 | `kata_deploy_node_binaries_t` | `node-binaries-install`, `node-binaries-remove` | Write `/usr/local/bin` |
-| `kata_deploy_t` | the `daemonset` mode's single container | All of the above except `/usr/local/bin` |
+| `kata_deploy_t` | the `daemonset` mode's single container | All of the above except `/usr/local/bin` and the udev rules |
 
 Every domain but `kata_deploy_check_t` also takes the node mutation lock at
 `/run/lock/kata-deploy.lock`.
@@ -31,7 +31,8 @@ Every domain but `kata_deploy_check_t` also takes the node mutation lock at
 The `job` mode runs each stage in its own container, so each gets the narrowest
 domain its own work needs. The `daemonset` mode runs the whole install in one
 container, so it needs the union — minus `kata_deploy_node_binaries_t`, because
-`nodeBinaries` requires `job` mode and so can never happen there.
+`nodeBinaries` requires `job` mode and so can never happen there, and minus the
+udev rules, which `rootless.deviceAccess` writes in `job` mode alone.
 
 `kata_deploy_cri_t` writing `/opt/kata` is not a slip: `revert-cri` removes the
 nydus binaries from under it, so the CRI domain and the artifacts domain overlap
@@ -39,7 +40,8 @@ there by necessity.
 
 Some containers deliberately get **no** domain from this module:
 
-- the `load-kernel-modules` stage, which is privileged and already runs as `spc_t`;
+- the `load-kernel-modules` and `host-devices` stages, which are privileged and
+  already run as `spc_t`;
 - the `nodeBinaries` *staging* containers, one per entry, which only write a
   pod-local `emptyDir`. They are the containers in the pipeline running images
   Kata does not build, and plain `container_t` is both sufficient for them and
@@ -127,9 +129,11 @@ then fails:
   functional failure with *no* AVC at all — an install that "succeeds" while
   leaving the nydus unit behind. Verify with `dontaudit` disabled.
 - **Harvest installs *and* uninstalls, in both modes.** No single run is a
-  superset. The uninstall path is the only place `etc_t` removal appears, because
-  on install `/etc/modules-load.d/kata-containers-default.conf` is written by the
-  privileged `load-kernel-modules` stage and never generates a denial.
+  superset. The uninstall path is the only place `etc_t` and `udev_rules_t`
+  removal appears, because on install `/etc/modules-load.d/kata-containers-default.conf`
+  and `/etc/udev/rules.d/99-kata-containers-default.rules` are written by the
+  privileged `load-kernel-modules` and `host-devices` stages, which never
+  generate a denial.
 
 To attribute a denial to a stage, correlate its audit timestamp against each
 container's `startedAt`/`finishedAt`. `comm` alone is not enough: the

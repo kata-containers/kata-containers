@@ -18,7 +18,7 @@
 ; module is: it becomes the semodule priority, and the node keeps the highest.
 ; Bump it in the same commit as any change here, or an older image will happily
 ; overwrite this on a node a newer release already set up.
-; policy-revision: 1
+; policy-revision: 2
 
 ; Job mode runs each stage in a container of its own; daemonset mode runs them
 ; all in one, so kata_deploy_t is the union.
@@ -164,3 +164,15 @@
     (dir (search getattr open read write add_name remove_name)))
 (allow kata_deploy_modules_conf_writer etc_t
     (file (create open getattr setattr read write unlink)))
+
+; /etc/udev/rules.d/99-kata-containers-*.rules, written by the privileged
+; host-devices stage and removed by remove-artifacts, which is all that is
+; granted here: a udev rule runs programs of its own as root, which is why the
+; directory carries a type apart from the rest of /etc to begin with.
+;
+; kata_deploy_t is left out: the stage writing these rules is job mode's alone,
+; so the DaemonSet never has one to remove.
+(allow kata_deploy_artifacts_t udev_rules_t
+    (dir (search getattr open read remove_name)))
+(allow kata_deploy_artifacts_t udev_rules_t
+    (file (getattr unlink)))
