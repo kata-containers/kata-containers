@@ -341,6 +341,19 @@ func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return pids[0], nil
 }
 
+// HasPhysicalEndpoint reports whether the sandbox passes a host PCI netdev
+// through to the guest, and so holds host state that only the teardown puts
+// back.
+func (s *Sandbox) HasPhysicalEndpoint() bool {
+	for _, endpoint := range s.network.Endpoints() {
+		if endpoint.Type() == PhysicalEndpointType {
+			return true
+		}
+	}
+
+	return false
+}
+
 // RescanNetwork re-scans the network namespace for endpoints if none have
 // been discovered yet. This is idempotent: if endpoints already exist it
 // returns immediately. It enables Docker 26+ support where networking is
@@ -2232,7 +2245,12 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 
 	for _, c := range s.containers {
 		if err := c.stop(ctx, force); err != nil {
-			return err
+			if !force {
+				return err
+			}
+			// Giving up here would skip the VMM stop and the network
+			// teardown, which is what hands a passed-through device back.
+			s.Logger().WithError(err).WithField("container", c.id).Warn("Tearing the sandbox down past a container that would not stop")
 		}
 	}
 

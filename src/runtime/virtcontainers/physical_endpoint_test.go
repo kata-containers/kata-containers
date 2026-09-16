@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -108,6 +109,24 @@ func TestSandboxStopRestoresPassthroughDeviceOnlyOnConfirmedVMMExit(t *testing.T
 	}
 }
 
+func TestSandboxHasPhysicalEndpoint(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Sandbox{network: &LinuxNetwork{}}
+	assert.False(s.HasPhysicalEndpoint())
+
+	s = &Sandbox{network: &LinuxNetwork{eps: []Endpoint{
+		&VethEndpoint{EndpointType: VethEndpointType},
+	}}}
+	assert.False(s.HasPhysicalEndpoint())
+
+	s = &Sandbox{network: &LinuxNetwork{eps: []Endpoint{
+		&VethEndpoint{EndpointType: VethEndpointType},
+		&PhysicalEndpoint{EndpointType: PhysicalEndpointType},
+	}}}
+	assert.True(s.HasPhysicalEndpoint())
+}
+
 func TestPhysicalEndpoint_HotAttach(t *testing.T) {
 	assert := assert.New(t)
 	v := &PhysicalEndpoint{
@@ -184,4 +203,49 @@ func TestIsPhysicalIface(t *testing.T) {
 	})
 	assert.NoError(err)
 	assert.False(isPhysical)
+}
+
+// TestSandboxForceStopRestoresPassthroughDeviceDespiteAContainerFailure covers
+// what the shim relies on when it holds the container exit back: a forced stop
+// reaches the network teardown even when a container will not stop, or the exit
+// goes out with the device still on vfio-pci.
+func TestSandboxForceStopRestoresPassthroughDeviceDespiteAContainerFailure(t *testing.T) {
+	assert := assert.New(t)
+
+	endpoint := &detachRecordingEndpoint{
+		PhysicalEndpoint: PhysicalEndpoint{
+			IfaceName:    "eth0",
+			HardAddr:     net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+			EndpointType: PhysicalEndpointType,
+			BDF:          "0000:b5:09.7",
+			Driver:       "mlx5_core",
+		},
+	}
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	s := &Sandbox{
+		// An id no store can write a file for, so that the one step
+		// Container.stop() takes even under force -- persisting the new
+		// container state -- fails.
+		id:         strings.Repeat("x", 300),
+		ctx:        context.Background(),
+		config:     &SandboxConfig{},
+		store:      store,
+		state:      types.SandboxState{State: types.StateReady},
+		agent:      NewMockAgent(),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
+		network:    &LinuxNetwork{eps: []Endpoint{endpoint}},
+		hypervisor: &mockHypervisor{},
+	}
+	s.fsShare, err = NewFilesystemShare(s)
+	assert.NoError(err)
+	s.containers = map[string]*Container{
+		"c": {id: "c", sandbox: s, state: types.ContainerState{State: types.StateRunning}},
+	}
+
+	s.Stop(context.Background(), true) //nolint:errcheck
+
+	assert.Equal(1, endpoint.detached, "the device was not handed back")
 }
