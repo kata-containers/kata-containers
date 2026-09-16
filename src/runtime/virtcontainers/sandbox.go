@@ -265,6 +265,20 @@ type Sandbox struct {
 	seccompSupported  bool
 	disableVMShutdown bool
 	isVCPUsPinningOn  bool
+
+	vmmExitUnconfirmed bool
+}
+
+// errVMMExitUnconfirmed marks a stop whose VMM may still be running, and so
+// may still hold the file descriptors of the devices passed through to it.
+var errVMMExitUnconfirmed = errors.New("VMM exit was not confirmed")
+
+// canRestorePassthroughDevices reports whether the teardown may hand a
+// passed-through device back to its host driver.  It may not while the VMM
+// might still hold the device open, as the unbind then blocks in the kernel
+// until the owner lets go.
+func (s *Sandbox) canRestorePassthroughDevices() bool {
+	return !s.vmmExitUnconfirmed
 }
 
 // ID returns the sandbox identifier string.
@@ -2222,8 +2236,18 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 		}
 	}
 
-	if err := s.stopVM(ctx); err != nil && !force {
-		return err
+	if err := s.stopVM(ctx); err != nil {
+		if !force {
+			return err
+		}
+
+		// A force stop carries on through guest-related failures, but the
+		// network teardown below still needs to know whether the VMM let
+		// go of the sandbox's passed-through devices.
+		if errors.Is(err, errVMMExitUnconfirmed) {
+			s.Logger().WithError(err).Warn("Tearing the sandbox down without restoring its passed-through devices")
+			s.vmmExitUnconfirmed = true
+		}
 	}
 
 	// shutdown console watcher if exists

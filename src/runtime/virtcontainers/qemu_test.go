@@ -2026,3 +2026,34 @@ func TestQemuStopVMWaitsForQemuExit(t *testing.T) {
 		t.Fatal("StopVM did not return once QEMU had been reaped")
 	}
 }
+
+// TestQemuStopVMConfirmsAQemuThatIsAlreadyGone covers the other side of the
+// contract: a QEMU that went away on its own has released its devices, so the
+// teardown must not be told the exit is unconfirmed.
+func TestQemuStopVMConfirmsAQemuThatIsAlreadyGone(t *testing.T) {
+	assert := assert.New(t)
+
+	// A reaped process: its pid is gone, as QEMU's would be.
+	goneQemu := exec.Command("true")
+	assert.NoError(goneQemu.Run())
+
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	assert.NoError(os.WriteFile(pidFile, []byte(strconv.Itoa(goneQemu.Process.Pid)), 0600))
+
+	q := &qemu{
+		id:  "testSandbox",
+		ctx: context.Background(),
+		config: HypervisorConfig{
+			VMStorePath:  dir,
+			RunStorePath: dir,
+		},
+		qemuConfig: govmmQemu.Config{PidFile: pidFile},
+	}
+	// qmpSetup() dials a socket that is not there, as it would for a QEMU
+	// that has exited.
+	q.qmpMonitorCh.path = filepath.Join(dir, "qmp.sock")
+	q.qmpMonitorCh.ctx = context.Background()
+
+	assert.NoError(q.StopVM(context.Background(), false))
+}
