@@ -392,7 +392,7 @@ pub fn with_hugepages(mut self, path: &str) -> Self {
         prealloc: true,
         share: true,
     });
-    self.machine.set_memory_backend(&id);  // -machine memory-backend=m0
+    self.machine.set_memory_backend(&id);  // omitted at emission when NUMA nodes carry memdev=
     self
 }
 ```
@@ -414,7 +414,10 @@ in the `arm-smmuv3` device args when `vCMDQ` is enabled.
    tables reference it).
 2. Emit remaining `Objects` — `memory_backends`, `thread_contexts`, `rng` —
    all `-object` lines, IDs defined before any reference.
-3. Emit `Machine` — picks up `memory-backend=` from objects, `highmem-mmio-size`.
+3. Emit `Machine` — picks up `highmem-mmio-size` and references a
+   `memory-backend=` only when no NUMA node carries `memdev=`. QEMU rejects
+   `-machine memory-backend` together with `-numa memdev`, including the
+   single-socket case.
 4. Emit **CpuMem** `-numa node` entries: one per socket, with `cpus=` + `memdev=`.
 5. Emit **GPU initiator** `-numa node` entries: 8 per GPU, no `cpus`/`memdev`,
    ordered by GPU index.
@@ -429,6 +432,11 @@ Steps 4–6 must be in that order to match Linux ACPI `SRAT` processing.
 ---
 
 ## Grace Platform Configurations
+
+Guest `pxb-pcie` bus numbers start at 32 and advance by 32 per root complex.
+This leaves room for primary-bus root ports and 31 secondary buses per
+complex, and matches the kata-agent convention for guest PCI paths. Up to
+seven complexes fit in the 8-bit bus-number space.
 
 The 7 configurations below are derived from tested production deployments of
 NVIDIA Grace GPU passthrough.  Each becomes a golden test fixture in **Phase 0b**.
@@ -448,12 +456,12 @@ All Grace configurations share these constants:
 ```text
 -object iommufd,id=iommufd0
 -object memory-backend-ram,size=16G,id=m0
--machine virt,accel=kvm,gic-version=3,ras=on,highmem-mmio-size=4T,memory-backend=m0
+-machine virt,accel=kvm,gic-version=3,ras=on,highmem-mmio-size=4T
 -numa node,memdev=m0,cpus=0-3,nodeid=0
 -numa node,nodeid=1
 ...
 -numa node,nodeid=8
--device pxb-pcie,id=pcie.1,bus_nr=1,bus=pcie.0,numa_node=0
+-device pxb-pcie,id=pcie.1,bus_nr=32,bus=pcie.0,numa_node=0
 -device arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iommufd0
@@ -472,12 +480,12 @@ root port).  Repeat the pxb-pcie/`smmuv3`/root-port/vfio block 4 times:
 ```text
 -object iommufd,id=iommufd0
 -object memory-backend-ram,size=16G,id=m0
--machine virt,...,highmem-mmio-size=4T,memory-backend=m0
+-machine virt,...,highmem-mmio-size=4T
 -numa node,memdev=m0,cpus=0-3,nodeid=0
 -numa node,nodeid=1 ... -numa node,nodeid=32   # 4×8 = 32 GPU initiator nodes
 
 # Per GPU (N = 1..4):
--device pxb-pcie,id=pcie.N,bus_nr=N,bus=pcie.0,numa_node=0
+-device pxb-pcie,id=pcie.N,bus_nr=<32*N>,bus=pcie.0,numa_node=0
 -device arm-smmuv3,primary-bus=pcie.N,id=smmuv3.N,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device pcie-root-port,id=pcie.portN,bus=pcie.N,chassis=N,io-reserve=0
 -device vfio-pci-nohotplug,host=<addr>,bus=pcie.portN,rombar=0,id=dev<N-1>,iommufd=iommufd0
@@ -493,14 +501,14 @@ GPUs sharing a physical `SMMU` share one `PciRootComplex` with **2 root ports**.
 2 complexes × 2 GPUs each:
 
 ```text
--device pxb-pcie,id=pcie.1,bus_nr=1,bus=pcie.0,numa_node=0
+-device pxb-pcie,id=pcie.1,bus_nr=32,bus=pcie.0,numa_node=0
 -device arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iommufd0
 -device pcie-root-port,id=pcie.port2,bus=pcie.1,chassis=2,io-reserve=0
 -device vfio-pci-nohotplug,host=0009:06:00.0,bus=pcie.port2,rombar=0,id=dev1,iommufd=iommufd0
 
--device pxb-pcie,id=pcie.2,bus_nr=9,bus=pcie.0,numa_node=0
+-device pxb-pcie,id=pcie.2,bus_nr=64,bus=pcie.0,numa_node=0
 -device arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device pcie-root-port,id=pcie.port3,bus=pcie.2,chassis=3,io-reserve=0
 -device vfio-pci-nohotplug,host=0010:06:00.0,bus=pcie.port3,rombar=0,id=dev2,iommufd=iommufd0
@@ -536,7 +544,7 @@ hardware for the queue base address), and `cmdqv=on` is added to `arm-smmuv3`:
 
 ```text
 -object memory-backend-file,id=m0,size=16G,mem-path=/dev/hugepages/,prealloc=on,share=on
--machine virt,...,memory-backend=m0
+-machine virt,...
 -device arm-smmuv3,...,cmdqv=on
 ```
 
@@ -788,7 +796,7 @@ Key observations from the SEV-SNP + GPU invocation:
   used on Grace; one `iommufd` object per GPU
 - `x-pci-vendor-id=0x10de,x-pci-device-id=0x2321` overrides required so the guest
   sees the correct device IDs for measured boot / attestation
-- `pxb-pcie bus_nr=32` (not the Grace 1-indexed cumulative formula)
+- `pxb-pcie bus_nr=32` (0x20 spacing, shared with Grace)
 - BIOS: `AMDSEV.fd` (AMD-specific OVMF build, not generic `OVMF.fd`)
 - Binary: `qemu-system-x86_64-snp-experimental` (patched QEMU for SNP support)
 

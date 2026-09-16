@@ -29,6 +29,8 @@ pub(crate) struct BaseMachine {
     /// ID of the primary memory backend, written as `-machine memory-backend=<id>`.
     /// `None` for topologies that supply memory per NUMA node via `-numa node,memdev=`
     /// rather than a single machine-wide backend (e.g. multi-socket vEGM).
+    /// Emission must omit this property whenever a NUMA node carries `memdev=`;
+    /// QEMU rejects machine-level and NUMA memory backend assignments together.
     pub memory_backend: Option<String>,
     pub cpu: CpuConfig,
 }
