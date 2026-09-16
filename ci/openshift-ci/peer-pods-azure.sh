@@ -12,6 +12,9 @@
 
 SCRIPT_DIR=$(dirname "$0")
 
+# shellcheck disable=SC1091 # import based on variable
+source "${SCRIPT_DIR}/cluster/selinux_helpers.sh"
+
 ##################
 # Helper functions
 ##################
@@ -156,6 +159,12 @@ az network vnet subnet update \
 # Label the nodes
 for NODE_NAME in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do [[ "${NODE_NAME}" =~ 'worker' ]] && kubectl label node "${NODE_NAME}" node.kubernetes.io/worker=; done
 
+WORKER_NODES=$(oc get nodes | awk '{if ($3 == "worker") { print $1 } }')
+NUM_NODES=$(echo "${WORKER_NODES}" | wc -w)
+
+# Selinux context is currently not handled by kata-deploy
+apply_relabel_selinux "${SCRIPT_DIR}/cluster/deployments" "${NUM_NODES}"
+
 # CAA artifacts
 if [[ -z "${CAA_TAG}" ]]; then
 	if [[ -n "${CAA_IMAGE}" ]]; then
@@ -172,7 +181,15 @@ fi
 
 # Get latest PP image
 #
-# You can list the CI images by:
+# We use the latest *released* podvm image and run it as a confidential VM
+# (DISABLECVM="false"). All published CoCo image definitions advertise
+# "SecurityType=ConfidentialVmSupported", which can only boot as a CVM - CAA
+# always requests TrustedLaunch for non-CVMs, so the released images can not be
+# used with DISABLECVM="true" (Azure rejects them with a BadRequest). The nightly
+# gallery is no longer updated, therefore we default to the maintained release
+# line and simply pick its newest version.
+#
+# You can list the (no longer updated) CI images by:
 #     az sig image-version list-community --location "eastus" --public-gallery-name "cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85" --gallery-image-definition "podvm_image0" --output table
 # or the release images by:
 #     az sig image-version list-community --location "eastus" --public-gallery-name "cococommunity-42d8482d-92cd-415b-b332-7648bd978eff" --gallery-image-definition "peerpod-podvm-fedora" --output table
@@ -182,11 +199,14 @@ fi
 # Note there are other flavours of the released images, you can list them by:
 #     az sig image-definition list-community --location "eastus" --public-gallery-name "cococommunity-42d8482d-92cd-415b-b332-7648bd978eff" --output table
 if [[ -z "${PP_IMAGE_ID}" ]]; then
-	SUCCESS_TIME=$(curl -s \
-	  -H "Accept: application/vnd.github+json" \
-	  "https://api.github.com/repos/confidential-containers/cloud-api-adaptor/actions/workflows/azure-nightly-build.yml/runs?status=success" \
-	  | jq -r '.workflow_runs[0].updated_at')
-	PP_IMAGE_ID="/CommunityGalleries/cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85/Images/podvm_image0/Versions/$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${SUCCESS_TIME}" "+%Y.%m.%d" 2>/dev/null || date -d "${SUCCESS_TIME}" +%Y.%m.%d)"
+	PP_GALLERY="cococommunity-42d8482d-92cd-415b-b332-7648bd978eff"
+	PP_IMAGE_DEF="peerpod-podvm-fedora"
+	PP_IMAGE_VER=$(az sig image-version list-community \
+	  --location "${PP_REGION}" \
+	  --public-gallery-name "${PP_GALLERY}" \
+	  --gallery-image-definition "${PP_IMAGE_DEF}" \
+	  --query "sort_by([].{v:name,d:publishedDate}, &d)[-1].v" --output tsv)
+	PP_IMAGE_ID="/CommunityGalleries/${PP_GALLERY}/Images/${PP_IMAGE_DEF}/Versions/${PP_IMAGE_VER}"
 fi
 
 echo "AZURE_REGION=\"${AZURE_REGION}\""
@@ -225,7 +245,7 @@ kubectl create secret generic my-provider-creds \
        --from-literal=AZURE_CLIENT_ID="${AZURE_CLIENT_ID}" \
        --from-literal=AZURE_CLIENT_SECRET="${AZURE_CLIENT_SECRET}" \
        --from-literal=AZURE_TENANT_ID="${AZURE_TENANT_ID}"
-helm install peerpods . -f providers/azure.yaml --set secrets.mode=reference --set secrets.existingSecretName=my-provider-creds --set providerConfigs.azure.AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}" --set providerConfigs.azure.AZURE_REGION="${PP_REGION}" --set providerConfigs.azure.AZURE_INSTANCE_SIZE="Standard_D2as_v5" --set providerConfigs.azure.AZURE_RESOURCE_GROUP="${PP_RESOURCE_GROUP}" --set providerConfigs.azure.AZURE_SUBNET_ID="${PP_SUBNET_ID}" --set providerConfigs.azure.AZURE_IMAGE_ID="${PP_IMAGE_ID}" --set providerConfigs.azure.DISABLECVM="true" --set providerConfigs.azure.PEERPODS_LIMIT_PER_NODE="50" --dependency-update -n confidential-containers-system --create-namespace --wait
+helm install peerpods . -f providers/azure.yaml --set secrets.mode=reference --set secrets.existingSecretName=my-provider-creds --set providerConfigs.azure.AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}" --set providerConfigs.azure.AZURE_REGION="${PP_REGION}" --set providerConfigs.azure.AZURE_INSTANCE_SIZE="Standard_DC2as_v5" --set providerConfigs.azure.AZURE_RESOURCE_GROUP="${PP_RESOURCE_GROUP}" --set providerConfigs.azure.AZURE_SUBNET_ID="${PP_SUBNET_ID}" --set providerConfigs.azure.AZURE_IMAGE_ID="${PP_IMAGE_ID}" --set providerConfigs.azure.DISABLECVM="false" --set providerConfigs.azure.PEERPODS_LIMIT_PER_NODE="50" --dependency-update -n confidential-containers-system --create-namespace --wait
 popd	# charts
 popd	# git_sparse_clone CAA
 
@@ -234,6 +254,7 @@ SECONDS=0
 ( while [[ "${SECONDS}" -lt 360 ]]; do
     kubectl get runtimeclass | grep -q kata-remote && exit 0
 done; exit 1 ) || { echo "kata-remote runtimeclass not initialized in 60s"; kubectl -n confidential-containers-system get all; echo; echo "kubectl -n confidential-containers-system describe all"; kubectl -n confidential-containers-system describe all; echo; echo CAA; kubectl -n confidential-containers-system logs daemonset.apps/cloud-api-adaptor-daemonset; echo pre-install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-pre-install-daemon; echo install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-daemon-install; exit 1; }
+rerun_relabel_selinux "${NUM_NODES}"
 
 
 ################

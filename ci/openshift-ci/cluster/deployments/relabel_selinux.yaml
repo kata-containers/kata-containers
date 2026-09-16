@@ -39,6 +39,13 @@ spec:
                     (typeattributeset cil_gen_require install_t)
                     (typeattributeset cil_gen_require initrc_t)
                     (typeattributeset cil_gen_require systemd_unit_file_t)
+                    (typeattributeset cil_gen_require mlstrustedobject)
+                    (typeattributeset cil_gen_require etc_t)
+
+                    ;; Bypass MCS category enforcement for socket and lock resources
+                    (typeattributeset mlstrustedobject init_var_run_t)
+                    (typeattributeset mlstrustedobject var_lock_t)
+                    (typeattributeset mlstrustedobject etc_t)
 
                     ;; kata-deploy related policies
                     (allow container_t init_t (system (reload status)))
@@ -58,6 +65,8 @@ spec:
                     (allow container_t container_var_lib_t (sock_file (write)))
                     (allow container_t var_lock_t (dir (add_name create remove_name write search read open rmdir)))
                     (allow container_t var_lock_t (file (append create open read write setattr unlink lock getattr)))
+                    (allow container_t etc_t (dir (add_name create remove_name write search read open rmdir)))
+                    (allow container_t etc_t (file (append create open read write setattr unlink lock getattr)))
 
                     ;; Use both full paths otherwise the default /var/opt policy is longer and takes precedence
                     (filecon "/opt/kata/bin(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
