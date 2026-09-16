@@ -298,12 +298,9 @@ impl Platform {
 
         let mut gpu_idx = 0usize;
         let mut port_idx = 1usize;
-        let mut bus_nr_running: u8 = 0;
 
         for (group_idx, group) in topo.gpu_smmu_groups.iter().enumerate() {
-            let n_ports = group.pci_bus_addrs.len();
-            let bus_nr = 1u8 + bus_nr_running;
-            bus_nr_running += if n_ports <= 1 { 1 } else { n_ports as u8 * 4 };
+            let bus_nr = pxb_bus_nr(group_idx);
 
             let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
             let group_has_egm = topo.egm_sockets.iter().any(|e| e.socket == group.socket);
@@ -432,7 +429,13 @@ impl Platform {
 
         // Machine
         args.push("-machine".to_owned());
-        args.push(emit_machine(&self.machine));
+        args.push(emit_machine(
+            &self.machine,
+            self.objects
+                .numa_nodes
+                .iter()
+                .any(|node| node.memdev.is_some()),
+        ));
 
         // NUMA nodes
         for node in &self.objects.numa_nodes {
@@ -531,7 +534,7 @@ fn emit_backend(backend: &MemoryBackend, id: &str) -> String {
     }
 }
 
-fn emit_machine(machine: &Machine) -> String {
+fn emit_machine(machine: &Machine, numa_has_memdev: bool) -> String {
     match machine {
         Machine::Virt(v) => {
             let mut s = format!("virt,accel={}", v.base.accel);
@@ -542,8 +545,10 @@ fn emit_machine(machine: &Machine) -> String {
             if let Some(sz) = v.highmem_mmio_size {
                 s.push_str(&format!(",highmem-mmio-size={}", format_memory(sz)));
             }
-            if let Some(mb) = &v.base.memory_backend {
-                s.push_str(&format!(",memory-backend={mb}"));
+            if !numa_has_memdev {
+                if let Some(mb) = &v.base.memory_backend {
+                    s.push_str(&format!(",memory-backend={mb}"));
+                }
             }
             s
         }
@@ -617,6 +622,19 @@ fn emit_vfio(vfio: &VfioDevice, port_id: &str, iommufd: Option<&IommufdBackend>)
         s.push_str(&format!(",iommufd={}", ifd.id));
     }
     s
+}
+
+/// Guest bus number of the `complex_idx`-th `pxb-pcie` (0-based), 0x20 apart.
+///
+/// Shared by Q35 and virt.  Two constraints pin the scheme: the firmware
+/// numbers the secondary buses of everything on `pcie.0` (hot-plug root ports,
+/// `pcie_root_port = N`) upwards from 1, so expander buses must sit above that
+/// range; and the kata-agent recognises a guest PCI path as pxb-rooted only
+/// when its first segment is >= 0x20 (`PXB_PCIE_ROOT_BUS_MIN`).  Each complex
+/// then owns 31 secondary bus numbers for its root ports, and at most seven
+/// complexes fit below 0x100.
+fn pxb_bus_nr(complex_idx: usize) -> u8 {
+    0x20u8 * (complex_idx as u8 + 1)
 }
 
 // Socket IDs are not guaranteed contiguous; use position to get a dense NUMA node number.
