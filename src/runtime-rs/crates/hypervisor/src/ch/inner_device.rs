@@ -507,18 +507,6 @@ impl CloudHypervisorInner {
                         continue;
                     }
 
-                    // The disk configuration has no serial field, so a device
-                    // the guest finds by serial would be unusable.
-                    if !config.serial_override.is_empty() {
-                        warn!(
-                            sl!(),
-                            "not cold-plugging block device {:?}: its serial {:?} cannot be expressed",
-                            config.path_on_host,
-                            config.serial_override
-                        );
-                        continue;
-                    }
-
                     info!(sl!(), "cold-plugging block device {:?}", &config);
 
                     boot_disks.push(self.make_disk_config(&config)?);
@@ -569,6 +557,11 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
             queue_size: blkcfg.queue_size as u16,
             sparse: blkcfg.discard_unmap,
             image_type: ImageType::Raw,
+            serial: if blkcfg.serial_override.is_empty() {
+                None
+            } else {
+                Some(blkcfg.serial_override)
+            },
             ..Default::default()
         };
 
@@ -658,5 +651,20 @@ mod tests {
         let net = NetConfig::try_from(cfg);
         assert!(net.is_ok());
         assert_eq!(net.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_blockconfigmodern_to_diskconfig_serial() {
+        let mut cfg = BlockConfigModern {
+            path_on_host: "/tmp/disk.img".to_owned(),
+            ..Default::default()
+        };
+
+        let disk = DiskConfig::try_from(cfg.clone()).unwrap();
+        assert_eq!(disk.serial, None);
+
+        cfg.serial_override = "initdata".to_owned();
+        let disk = DiskConfig::try_from(cfg).unwrap();
+        assert_eq!(disk.serial.as_deref(), Some("initdata"));
     }
 }
