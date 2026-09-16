@@ -9,8 +9,29 @@ use crate::config::ContainerdPaths;
 use crate::runtime::containerd;
 use crate::utils::toml as toml_utils;
 use std::collections::HashSet;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+pub struct Override {
+    pub path: String,
+    pub file: PathBuf,
+    pub node_value: String,
+    pub our_value: String,
+}
+
+impl fmt::Display for Override {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} is {} in {}, and this install writes {}",
+            self.path,
+            self.node_value,
+            self.file.display(),
+            self.our_value
+        )
+    }
+}
 
 /// Excluded, or a redeploy would fail against its own last run. Only ours: a
 /// sibling shares this containerd and its snapshotter state, so it binds us.
@@ -100,6 +121,26 @@ pub fn sources(paths: &ContainerdPaths, multi_install_suffix: Option<&str>) -> V
     found
 }
 
+/// Values read back have lost their quoting, so a literal of ours has to too.
+fn as_read(literal: &str) -> String {
+    let literal = literal.trim();
+
+    match literal
+        .strip_prefix('[')
+        .and_then(|inner| inner.strip_suffix(']'))
+    {
+        Some(items) => {
+            let items: Vec<&str> = items
+                .split(',')
+                .map(|item| item.trim().trim_matches(['"', '\'']))
+                .filter(|item| !item.is_empty())
+                .collect();
+            format!("[{}]", items.join(", "))
+        }
+        None => literal.trim_matches(['"', '\'']).to_string(),
+    }
+}
+
 /// Searched in reverse, because containerd's merge gives the last file the word.
 pub fn states(sources: &[PathBuf], path: &str) -> Option<(PathBuf, String)> {
     sources.iter().rev().find_map(|file| {
@@ -115,9 +156,43 @@ pub fn table_stated(sources: &[PathBuf], table: &str) -> bool {
         .any(|file| toml_utils::get_toml_table_keys(file, table).is_ok_and(|keys| !keys.is_empty()))
 }
 
+/// `ours` holds TOML literals, as they would be written.
+pub fn overrides<P, V>(sources: &[PathBuf], ours: &[(P, V)]) -> Vec<Override>
+where
+    P: AsRef<str>,
+    V: AsRef<str>,
+{
+    ours.iter()
+        .filter_map(|(path, our_value)| {
+            let path = path.as_ref();
+            let our_value = as_read(our_value.as_ref());
+            let (file, node_value) = states(sources, path)?;
+
+            (node_value != our_value).then(|| Override {
+                path: path.to_string(),
+                file,
+                node_value,
+                our_value,
+            })
+        })
+        .collect()
+}
+
+/// Taking these is fine; taking them silently is not.
+pub fn warn_about_overrides<P, V>(sources: &[PathBuf], ours: &[(P, V)])
+where
+    P: AsRef<str>,
+    V: AsRef<str>,
+{
+    for taken in overrides(sources, ours) {
+        log::warn!("containerd config taken over by this install: {taken}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     fn write(dir: &Path, name: &str, body: &str) -> PathBuf {
         let path = dir.join(name);
@@ -226,6 +301,51 @@ mod tests {
 
         assert_eq!(value, "trace");
         assert!(file.ends_with("90-late.toml"));
+    }
+
+    #[rstest]
+    #[case("\"10G\"", "10G", false)]
+    #[case("true", "true", false)]
+    #[case("0", "0", false)]
+    #[case("[\"erofs\",\"walking\"]", "[erofs, walking]", false)]
+    #[case("\"10G\"", "6G", true)]
+    #[case("[\"erofs\",\"walking\"]", "[walking]", true)]
+    fn a_literal_is_compared_as_it_reads_back(
+        #[case] ours: &str,
+        #[case] node: &str,
+        #[case] conflicts: bool,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let body = if node.starts_with('[') {
+            let items: Vec<String> = node
+                .trim_matches(['[', ']'])
+                .split(',')
+                .map(|item| format!("'{}'", item.trim()))
+                .collect();
+            format!("[table]\nkey = [{}]\n", items.join(", "))
+        } else if node == "true" || node == "false" || node.parse::<i64>().is_ok() {
+            format!("[table]\nkey = {node}\n")
+        } else {
+            format!("[table]\nkey = '{node}'\n")
+        };
+        let config = write(dir.path(), "config.toml", &body);
+        let drop_in = dir.path().join("kata-deploy.toml");
+
+        let sources = sources(&paths(&config, &drop_in, true), None);
+        let found = overrides(&sources, &[(".table.key", ours.to_string())]);
+
+        assert_eq!(!found.is_empty(), conflicts, "{:?}", found.len());
+    }
+
+    #[test]
+    fn a_setting_the_node_leaves_alone_is_not_an_override() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = write(dir.path(), "config.toml", "version = 3\n");
+        let drop_in = dir.path().join("kata-deploy.toml");
+
+        let sources = sources(&paths(&config, &drop_in, true), None);
+
+        assert!(overrides(&sources, &[(".debug.level", "\"debug\"".to_string())]).is_empty());
     }
 
     #[test]

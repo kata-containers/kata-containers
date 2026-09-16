@@ -133,6 +133,18 @@ pub async fn configure_erofs_snapshotter(
         }
     }
 
+    // dm-verity is orthogonal to rw-layer backing — it verifies lower (erofs)
+    // layers via device-mapper regardless of whether the upper rw-layer lives on
+    // disk or in memory.
+    let use_dmverity = config.erofs_dmverity;
+    let dmverity_mode = if use_dmverity { "\"on\"" } else { "\"off\"" };
+    let enable_dmverity = if use_dmverity { "true" } else { "false" };
+
+    // Map EROFS_SNAPSHOTTER_MODE to containerd's default_size:
+    // - "memory" uses an in-memory rw layer (default_size = 0)
+    // - "disk" (or unset) uses a disk-backed rw layer (default_size = 10G)
+    let default_size = erofs_default_size(config.erofs_snapshotter_mode.as_deref())?;
+
     let conflicts = erofs_conflicts_with_node(node_sources, config.erofs_dmverity, unmerged);
     anyhow::ensure!(
         conflicts.is_empty(),
@@ -141,6 +153,41 @@ pub async fn configure_erofs_snapshotter(
          those change. Match them in the chart values, drop \"erofs\" from snapshotter.setup to \
          leave the node's own setup alone, or clear the erofs snapshotter state first.",
         conflicts.join("; ")
+    );
+
+    // The rest only shape new layers, so we take them.
+    node_config::warn_about_overrides(
+        node_sources,
+        &[
+            (
+                ".plugins.\"io.containerd.cri.v1.images\".discard_unpacked_layers",
+                "false".to_string(),
+            ),
+            (
+                ".plugins.\"io.containerd.service.v1.diff-service\".default",
+                "[\"erofs\",\"walking\"]".to_string(),
+            ),
+            (
+                ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
+                "true".to_string(),
+            ),
+            (
+                ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
+                "true".to_string(),
+            ),
+            (
+                ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
+                default_size.to_string(),
+            ),
+            (
+                ".plugins.\"io.containerd.differ.v1.erofs\".mkfs_options",
+                "[\"-T0\",\"--mkfs-time\",\"--sort=none\"]".to_string(),
+            ),
+            (
+                ".plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index",
+                "false".to_string(),
+            ),
+        ],
     );
 
     toml_utils::set_toml_value(
@@ -154,13 +201,6 @@ pub async fn configure_erofs_snapshotter(
         ".plugins.\"io.containerd.service.v1.diff-service\".default",
         "[\"erofs\",\"walking\"]",
     )?;
-
-    // dm-verity is orthogonal to rw-layer backing — it verifies lower (erofs)
-    // layers via device-mapper regardless of whether the upper rw-layer lives on
-    // disk or in memory.
-    let use_dmverity = config.erofs_dmverity;
-    let dmverity_mode = if use_dmverity { "\"on\"" } else { "\"off\"" };
-    let enable_dmverity = if use_dmverity { "true" } else { "false" };
 
     toml_utils::set_toml_value(
         configuration_file,
@@ -196,10 +236,6 @@ pub async fn configure_erofs_snapshotter(
         "false",
     )?;
 
-    // Map EROFS_SNAPSHOTTER_MODE to containerd's default_size:
-    // - "memory" uses an in-memory rw layer (default_size = 0)
-    // - "disk" (or unset) uses a disk-backed rw layer (default_size = 10G)
-    let default_size = erofs_default_size(config.erofs_snapshotter_mode.as_deref())?;
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
@@ -259,6 +295,8 @@ pub async fn configure_nydus_snapshotter(
 
     let containerd_nydus = nydus.clone();
     let root = format!("/var/lib/{nydus}");
+    let socket = format!("/run/{containerd_nydus}/containerd-nydus-grpc.sock");
+    let annotations = format!(".plugins.{pluginid}.disable_snapshot_annotations");
 
     let conflicts = nydus_conflicts_with_node(node_sources, &nydus, &root);
     anyhow::ensure!(
@@ -270,11 +308,22 @@ pub async fn configure_nydus_snapshotter(
         conflicts.join("; ")
     );
 
-    toml_utils::set_toml_value(
-        configuration_file,
-        &format!(".plugins.{pluginid}.disable_snapshot_annotations"),
-        "false",
-    )?;
+    node_config::warn_about_overrides(
+        node_sources,
+        &[
+            (annotations.clone(), "false".to_string()),
+            (
+                format!(".proxy_plugins.\"{nydus}\".type"),
+                "\"snapshot\"".to_string(),
+            ),
+            (
+                format!(".proxy_plugins.\"{nydus}\".address"),
+                format!("\"{socket}\""),
+            ),
+        ],
+    );
+
+    toml_utils::set_toml_value(configuration_file, &annotations, "false")?;
 
     toml_utils::set_toml_value(
         configuration_file,
@@ -284,7 +333,7 @@ pub async fn configure_nydus_snapshotter(
     toml_utils::set_toml_value(
         configuration_file,
         &format!(".proxy_plugins.\"{nydus}\".address"),
-        &format!("\"/run/{containerd_nydus}/containerd-nydus-grpc.sock\""),
+        &format!("\"{socket}\""),
     )?;
     toml_utils::set_toml_value(
         configuration_file,
