@@ -504,9 +504,11 @@ setup_kernel() {
 		# (yet) - a url naming a tarball is fetched as-is. Sources
 		# name their top-level directory differently, so extraction
 		# strips it rather than renaming one hardcoded spelling.
+		# The suffix and the local file name come from the url path -
+		# a query string (signed urls) would defeat both.
 		local driver_tarball
-		if [[ "${driver_url}" =~ \.tar\.(gz|xz)$ ]]; then
-			driver_tarball=$(basename "${driver_url}")
+		if [[ "${driver_url%%\?*}" =~ \.tar\.(gz|xz)$ ]]; then
+			driver_tarball=$(basename "${driver_url%%\?*}")
 		else
 			driver_tarball="${driver_version}.tar.gz"
 			driver_url="${driver_url}${driver_tarball}"
