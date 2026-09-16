@@ -1,7 +1,12 @@
+# check=skip=InvalidDefaultArgInFrom
+# InvalidDefaultArgInFrom: Suppresses "Default value for ARG golang:${GO_VERSION}-alpine results in empty or invalid base image name" as GO_VERSION is supplied from Makefile
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-FROM golang:1.21.5-alpine3.19 AS builder
+
+ARG GO_VERSION=
+
+FROM golang:${GO_VERSION}-alpine AS builder
 
 WORKDIR /go/src/kata-pod-annotate
 
