@@ -365,6 +365,29 @@ Output format: "shim:annotation1,annotation2" (space-separated entries, each wit
 {{- end -}}
 
 {{/*
+Get extra containerd pod annotation patterns for a specific architecture.
+Output format: "shim:pattern1,pattern2" (space-separated entries).
+*/}}
+{{- define "kata-deploy.getContainerdShimExtraPodAnnotationsForArch" -}}
+{{- $arch := .arch -}}
+{{- $disableAll := .root.Values.shims.disableAll | default false -}}
+{{- $entries := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := or (eq $shimConfig.enabled true) (and (ne $shimConfig.enabled false) (not $disableAll)) -}}
+{{- if $shimEnabled -}}
+{{- $archSupported := has $arch ($shimConfig.supportedArches | default list) -}}
+{{- $annotations := dig "containerd" "extraPodAnnotations" (list) $shimConfig -}}
+{{- if and $archSupported (gt (len $annotations) 0) -}}
+{{- $entries = append $entries (printf "%s:%s" $shimName (join "," $annotations)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join " " $entries -}}
+{{- end -}}
+
+{{/*
 Get agent HTTPS proxy from structured config
 Builds per-shim semicolon-separated list: "shim1=value1;shim2=value2"
 */}}
@@ -799,6 +822,17 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if .Values.containerd.configFileName | trim }}
 - name: CONTAINERD_CONFIG_FILE_NAME
   value: {{ .Values.containerd.configFileName | trim | quote }}
+{{- end }}
+{{- with .Values.containerd.extraPodAnnotations }}
+- name: CONTAINERD_EXTRA_POD_ANNOTATIONS
+  value: {{ join "," . | quote }}
+{{- end }}
+{{- range $arch, $suffix := dict "amd64" "X86_64" "arm64" "AARCH64" "s390x" "S390X" "ppc64le" "PPC64LE" }}
+{{- $annotations := include "kata-deploy.getContainerdShimExtraPodAnnotationsForArch" (dict "root" $ "arch" $arch) | trim }}
+{{- if $annotations }}
+- name: CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_{{ $suffix }}
+  value: {{ $annotations | quote }}
+{{- end }}
 {{- end }}
 {{- /* Passed whatever else is set: it decides more than the containerd
        directory below, the kubelet's root directory among it, and the install

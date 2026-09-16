@@ -302,6 +302,15 @@ criServiceName: ""
 # These override the auto-detected paths based on k8sDistribution.
 # Use these when your containerd setup doesn't match any built-in distribution preset.
 containerd:
+  # Extra pod annotation patterns containerd passes to every Kata runtime,
+  # matched with filepath.Match.
+  #
+  # Whatever each runtime's Kata configuration enables is already forwarded.
+  # Agent, runtime, and container-resource annotations are not, nor is anything
+  # from another component. Add those patterns here.
+  # ["io.katacontainers.*"] restores the old unrestricted forwarding and is a
+  # security risk: any Kata annotation reaches the runtime.
+  extraPodAnnotations: []
   # Override the host directory where containerd config lives.
   # When empty, derived automatically from k8sDistribution.
   # Example: "/etc/my-containerd/"
@@ -654,6 +663,7 @@ nodeBinaries: {}
 #       containerd:
 #         snapshotter: ""             # e.g. nydus, erofs, devmapper, or "" for default
 #         forceGuestPull: false       # force guest-side image pull in containerd
+#         extraPodAnnotations: []     # extra containerd pod annotations for this shim
 #       crio:
 #         guestPull: false            # enable guest-pull in CRI-O
 #       agent:

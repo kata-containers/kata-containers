@@ -2648,6 +2648,8 @@ mod tests {
             k8s_distribution: None,
             containerd_config_dir: None,
             cri_service_name: None,
+            containerd_extra_pod_annotations: vec![],
+            containerd_shim_extra_pod_annotations_for_arch: vec![],
         }
     }
 
