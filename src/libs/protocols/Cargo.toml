@@ -1,23 +1,23 @@
 [package]
-name = "protocols"
-version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+name = "protocols"
+version = "0.1.0"
 
 [features]
+async = ["async-trait", "ttrpc/async"]
 default = []
 with-serde = []
-async = ["ttrpc/async", "async-trait"]
 
 [dependencies]
-ttrpc = { workspace = true }
-async-trait = { version = "0.1.42", optional = true }
-protobuf = { version = "3.7.2" }
-serde = { version = "1.0.130", features = ["derive"] }
-serde_json = "1.0.68"
+async-trait = { optional = true, version = "0.1.42" }
 oci-spec = { workspace = true }
+protobuf = { version = "3.7.2" }
+serde = { features = ["derive"], version = "1.0.130" }
+serde_json = "1.0.68"
+ttrpc = { workspace = true }
 
 [build-dependencies]
-ttrpc-codegen = "0.6.0"
 protobuf = { version = "3.7.2" }
+ttrpc-codegen = "0.6.0"

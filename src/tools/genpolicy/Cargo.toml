@@ -4,11 +4,11 @@
 #
 
 [package]
-name = "genpolicy"
-version = "0.1.0"
 authors.workspace = true
 edition = "2021"
 license.workspace = true
+name = "genpolicy"
+version = "0.1.0"
 
 [dependencies]
 # Logging.
@@ -16,12 +16,12 @@ env_logger = "0.10.0"
 log.workspace = true
 
 # Command line parsing.
-clap = { version = "4.5.40", features = ["derive"] }
+clap = { features = ["derive"], version = "4.5.40" }
 
 # YAML file serialization/deserialization.
 base64 = "0.21.0"
-serde.workspace = true
 regex = "1.10.5"
+serde.workspace = true
 
 # Newer serde_yaml versions are using unsafe-libyaml instead of yaml-rust,
 # and incorrectly change on serialization:
@@ -42,26 +42,26 @@ async-trait.workspace = true
 docker_credential = "1.3.1"
 flate2 = "1.1.5"
 fs2 = "0.4.3"
+json-patch = "4.1"
 oci-client = { version = "0.16" }
-openssl = { version = "0.10.80", features = ["vendored"] }
+openssl = { features = ["vendored"], version = "0.10.80" }
 serde_ignored = "0.1.7"
 serde_json.workspace = true
-json-patch = "4.1"
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { features = ["rt-multi-thread"], workspace = true }
 
 # OCI container specs.
 oci-spec.workspace = true
 
 # Kata Agent protocol.
-protocols = { workspace = true, features = ["with-serde"] }
 protobuf.workspace = true
+protocols = { features = ["with-serde"], workspace = true }
 
 # containerd image pull support
+containerd-client = "0.4.0"
 k8s-cri = "0.7.0"
 tonic = "0.9.2"
 tower = "0.4.13"
-containerd-client = "0.4.0"
 
 # username to UID:GID mapping support
 tar = "0.4.46"
@@ -70,9 +70,9 @@ tar = "0.4.46"
 kata-types = { path = "../../libs/kata-types" } # TODO(burgerdev): figure out how to use this from workspace without including safe-path.
 
 [dev-dependencies]
+assert_cmd = "2.0.14"
 kata-agent-policy.workspace = true
 slog.workspace = true
-assert_cmd = "2.0.14"
 
 [package.metadata.cargo-machete]
 ignored = ["openssl"]

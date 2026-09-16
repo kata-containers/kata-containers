@@ -1,27 +1,27 @@
 [package]
-name = "shim-interface"
-version = "0.1.0"
-description = "A library to provide service interface of Kata Containers"
-keywords = ["kata", "container", "http"]
-categories = ["services"]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-homepage = "https://katacontainers.io/"
-readme = "README.md"
-license = "Apache-2.0"
+categories = ["services"]
+description = "A library to provide service interface of Kata Containers"
 edition = "2018"
+homepage = "https://katacontainers.io/"
+keywords = ["container", "http", "kata"]
+license = "Apache-2.0"
+name = "shim-interface"
+readme = "README.md"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [dependencies]
 anyhow = "^1.0"
-nix = { workspace = true }
-tokio = { version = "1.44.2", features = ["rt-multi-thread"] }
 bytes = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 hyperlocal = { workspace = true }
-kata-types = { path = "../kata-types" }
 kata-sys-util = { path = "../kata-sys-util" }
+kata-types = { path = "../kata-types" }
+nix = { workspace = true }
+tokio = { features = ["rt-multi-thread"], version = "1.44.2" }
 
 [dev-dependencies]
 tempfile = "3.19.1"

@@ -1,53 +1,53 @@
 [package]
-name = "kata-types"
-version = "0.1.0"
-description = "Constants and data types shared by Kata Containers components"
-keywords = ["kata", "container", "runtime"]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-homepage = "https://katacontainers.io/"
-readme = "README.md"
-license = "Apache-2.0"
+description = "Constants and data types shared by Kata Containers components"
 edition = "2018"
+homepage = "https://katacontainers.io/"
+keywords = ["container", "kata", "runtime"]
+license = "Apache-2.0"
+name = "kata-types"
+readme = "README.md"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [dependencies]
-bitmask-enum = "2.1.0"
 anyhow = "1.0"
 base64 = { workspace = true }
+bitmask-enum = "2.1.0"
 byte-unit = "5.2.3"
+crc = "3.4.0"
+devicemapper = { optional = true, workspace = true }
+flate2 = "1.1"
 glob = "0.3.0"
+gpt = "4.1.0"
 lazy_static = "1.4.0"
+nix = { workspace = true }
 num_cpus = "1.13.1"
+oci-spec = { workspace = true }
 regex = "1.10.5"
-serde = { version = "1.0.100", features = ["derive"] }
+safe-path = { optional = true, path = "../safe-path" }
+scopeguard = "1.0.0"
+serde = { features = ["derive"], version = "1.0.100" }
+serde-enum-str = "0.5"
+serde_json = "1.0.73"
+sha2 = { workspace = true }
 slog = "2.5.2"
 slog-scope = "4.4.0"
-serde_json = "1.0.73"
-thiserror = { workspace = true }
-toml = { workspace = true }
-serde-enum-str = "0.5"
 sysinfo = { workspace = true }
-sha2 = { workspace = true }
-flate2 = "1.1"
-nix = { workspace = true }
-oci-spec = { workspace = true }
-gpt = "4.1.0"
-scopeguard = "1.0.0"
-crc = "3.4.0"
-safe-path = { path = "../safe-path", optional = true }
-devicemapper = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["time", "rt"] }
+thiserror = { workspace = true }
+tokio = { features = ["rt", "time"], optional = true, workspace = true }
+toml = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 sysctl = "0.7.1"
 
 [dev-dependencies]
-tempfile = "3.19.1"
-test-utils = { path = "../test-utils" }
 nix = { workspace = true }
 rstest = { workspace = true }
+tempfile = "3.19.1"
+test-utils = { path = "../test-utils" }
 
 [features]
 default = []
-enable-vendor = []
-safe-path = ["dep:safe-path"] # safe-path is platform-specific
 devicemapper = ["dep:devicemapper", "dep:tokio"]
+enable-vendor = []
+safe-path = ["dep:safe-path"]                    # safe-path is platform-specific
