@@ -615,7 +615,17 @@ get_latest_kernel_nvidia_artefact_and_builder_image_version() {
 }
 
 get_latest_nvidia_driver_version() {
-	get_from_kata_deps ".externals.nvidia.driver.version"
+	local version url
+	version=$(get_from_kata_deps ".externals.nvidia.driver.version")
+	url=$(get_from_kata_deps ".externals.nvidia.driver.url")
+	# A tarball url replaces the GitHub tag as the driver source, so it
+	# must key the cache - otherwise a github-source artefact is served
+	# for a build requesting a different source drop. The default base
+	# url keeps the key unchanged.
+	if [[ "${url}" =~ \.tar\.(gz|xz)$ ]]; then
+		version+="-$(echo "${url}" | sha256sum | cut -c1-8)"
+	fi
+	echo "${version}"
 }
 
 get_latest_nvidia_ctk_version() {
@@ -1248,6 +1258,15 @@ install_cached_kernel_tarball_component() {
 
 	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
 	latest_builder_image="$(get_kernel_image_name)"
+
+	# The nvidia kernel tarball ships the out-of-tree driver modules, so
+	# the driver (version and source) must key its cache too - otherwise a
+	# driver bump serves modules built from the previous driver.
+	case ${kernel_name} in
+		kernel-nvidia-gpu*)
+			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			;;
+	esac
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
