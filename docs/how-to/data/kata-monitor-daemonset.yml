@@ -62,8 +62,11 @@ spec:
         - name: containerd-sock
           mountPath: /run/containerd
           readOnly: true
-        - name: sbs
+        - name: go-runtime-sbs
           mountPath: /run/vc/sbs/
+          readOnly: true
+        - name: runtime-rs-sbs
+          mountPath: /run/kata/
           readOnly: true
         # To enable TLS, also add:
         # - name: certs
@@ -75,9 +78,13 @@ spec:
         hostPath:
           path: /run/containerd
           type: Directory
-      - name: sbs
+      - name: go-runtime-sbs
         hostPath:
           path: /run/vc/sbs/
+          type: DirectoryOrCreate
+      - name: runtime-rs-sbs
+        hostPath:
+          path: /run/kata/
           type: DirectoryOrCreate
       # To enable TLS, also add:
       # - name: certs
