@@ -23,6 +23,7 @@ nav:
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
     - Contributing:
       - Documentation: doc-contributing.md
+      - Guest AppArmor: guest-apparmor.md
   - Releases:
     - "4.2.0": releases/4.2.0.md
     - "4.1.0": releases/4.1.0.md

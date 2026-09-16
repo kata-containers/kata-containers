@@ -71,6 +71,7 @@ else
 		"k8s-attach-handlers.bats" \
 		"k8s-block-volume.bats" \
 		"k8s-caps.bats" \
+		"k8s-apparmor.bats" \
 		"k8s-configmap.bats" \
 		"k8s-copy-file.bats" \
 		"k8s-cpu-ns.bats" \
