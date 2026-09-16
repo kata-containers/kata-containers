@@ -1746,7 +1746,8 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- if .mountHostRoot }}
     - name: host-root
       mountPath: /host
-      {{- /* The policy stage writes: semodule rebuilds the node's policy store. */}}
+      {{- /* The policy stage writes, semodule rebuilding the node's policy store in
+             place, and so does the device one, through the node's groupadd. */}}
       readOnly: {{ not .hostRootWritable }}
 {{- end }}
 {{- if .mountModulesLoad }}

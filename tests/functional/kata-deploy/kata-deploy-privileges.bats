@@ -164,6 +164,14 @@ rbac_doc() {
 	echo "${jobs}" | grep -q 'cleanup-stage-remove-artifacts'
 }
 
+@test "Helm template (job mode): the stage opening host devices needs no apiserver either" {
+	local jobs
+	jobs=$(per_node_jobs --set rootless.deviceAccess=true)
+
+	echo "${jobs}" | grep -q 'install-stage-host-devices'
+	refute_match "${jobs}" 'serviceAccountName'
+}
+
 @test "Helm template (job mode): module loading is the only privileged stage" {
 	local loader host_check artifacts cri cleanup revert_cri remove_artifacts
 	loader=$(stage_container install load-kernel-modules)
@@ -205,6 +213,86 @@ rbac_doc() {
 	refute_match "${daemonset}" 'name: host-root'
 	refute_match "${daemonset}" 'name: modules-load-d'
 	refute_match "${daemonset}" 'privileged: true'
+}
+
+@test "Helm template (job mode): no host device is opened unless it was asked for" {
+	local jobs install_spec
+	jobs=$(per_node_jobs)
+	install_spec=$(per_node_pod_spec install)
+
+	# Creating a group on a node and handing a node-wide device to it is the
+	# administrator's call, so the stage doing it does not exist until they make
+	# it - and neither does the directory it would write, which a node running no
+	# udev would otherwise be given for nothing.
+	refute_match "${jobs}" 'install-stage-host-devices'
+	refute_match "${jobs}" 'name: host-devices'
+	refute_match "${install_spec}" 'path: /etc/udev/rules.d'
+}
+
+@test "Helm template (job mode): the device stage is privileged, and writes only udev rules" {
+	local devices confined
+	devices=$(stage_container install host-devices --set rootless.deviceAccess=true)
+
+	[[ -n "${devices}" ]]
+	echo "${devices}" | grep -q 'install-stage-host-devices'
+	echo "${devices}" | grep -qE '^                privileged: true$'
+	# Writable, as the policy stage's is: the node's own groupadd writes its
+	# /etc/group, and nothing short of the host root gets it there.
+	echo "${devices}" | grep -qE '^                  mountPath: /host$'
+	echo "${devices}" | grep -qE '^                  readOnly: false$'
+	echo "${devices}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+
+	# Privileged, so it is spc_t already: a domain here would be a downgrade.
+	confined=$(stage_container install host-devices --set rootless.deviceAccess=true \
+		--set selinux.enabled=true)
+	refute_match "${confined}" 'seLinuxOptions'
+}
+
+@test "Helm template (job mode): devices are opened after their modules, before the check" {
+	# A device node only exists once the module creating it is in, and the stage
+	# reads the device to decide whether it has anything to do at all.
+	local actions
+	actions=$(per_node_jobs --set rootless.deviceAccess=true |
+		grep -o 'install-stage-[a-z-]*' |
+		awk '!seen[$0]++')
+	[[ "${actions}" == "$(printf '%s\n' \
+		install-stage-load-kernel-modules \
+		install-stage-host-devices \
+		install-stage-host-check \
+		install-stage-artifacts \
+		install-stage-cri)" ]]
+}
+
+@test "Helm template (job mode): an uninstall removes rules the values stopped asking for" {
+	local values remove_artifacts cleanup_spec
+	for values in "" "--set rootless.deviceAccess=true"; do
+		# shellcheck disable=SC2086
+		remove_artifacts=$(stage_container cleanup remove-artifacts ${values})
+		# shellcheck disable=SC2086
+		cleanup_spec=$(per_node_pod_spec cleanup ${values})
+
+		# Whatever the values say now, or a release that turned the flag off before
+		# uninstalling would leave its rules reopening the device at every boot.
+		echo "${cleanup_spec}" | grep -q 'path: /etc/udev/rules.d'
+		echo "${remove_artifacts}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+		# Removing a file it can already reach needs nothing more than the mount.
+		echo "${remove_artifacts}" | grep -qE '^                privileged: false$'
+	done
+
+	# Writing the rules is the install's business, so the cleanup renders no stage
+	# of its own for them and stays as privileged as it was.
+	refute_match "${cleanup_spec}" 'host-devices'
+}
+
+@test "Helm template (daemonset mode): opening host devices is refused, not ignored" {
+	run helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=daemonset \
+		--set rootless.deviceAccess=true
+
+	# The DaemonSet has no privileged stage to run the node's groupadd and udevadm
+	# in, and a silently unprovisioned device is a sandbox failing much later.
+	[ "${status}" -ne 0 ]
+	[[ "${output}" == *"requires deploymentMode: job"* ]]
 }
 
 @test "Helm template (job mode): module loading runs before host validation" {
@@ -472,8 +560,8 @@ EOF
 
 	[[ -n "${policy}" ]]
 	echo "${policy}" | grep -qE '^                privileged: true$'
-	# Writable, unlike every other /host mount in the chart: semodule rebuilds the
-	# node's policy store in place.
+	# Writable, which only the stages running a tool of the node's own on the
+	# node's own files are: semodule rebuilds its policy store in place.
 	echo "${policy}" | grep -qE '^                  mountPath: /host$'
 	echo "${policy}" | grep -qE '^                  readOnly: false$'
 
