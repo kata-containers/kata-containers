@@ -7,5 +7,6 @@ pub mod containerd;
 pub mod crio;
 pub mod lifecycle;
 pub mod manager;
+pub mod node_config;
 
 pub use manager::*;

@@ -261,7 +261,7 @@ pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Opt
 
 /// Suffixed, so two installations no longer share one file. `zz-` sorts it
 /// after the kata drop-in, which makes it an override.
-fn get_user_containerd_drop_in_output_path(
+pub(crate) fn get_user_containerd_drop_in_output_path(
     paths: &ContainerdPaths,
     multi_install_suffix: Option<&str>,
 ) -> Result<(PathBuf, String)> {
