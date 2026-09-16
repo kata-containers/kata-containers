@@ -261,6 +261,14 @@ func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return 0, nil
 }
 
+// HasPhysicalEndpoint implements the VCSandbox function of the same name.
+func (s *Sandbox) HasPhysicalEndpoint() bool {
+	if s.HasPhysicalEndpointFunc != nil {
+		return s.HasPhysicalEndpointFunc()
+	}
+	return false
+}
+
 func (s *Sandbox) RescanNetwork(ctx context.Context) error {
 	return nil
 }
