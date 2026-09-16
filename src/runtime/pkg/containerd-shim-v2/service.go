@@ -146,6 +146,10 @@ type service struct {
 	mu          sync.Mutex
 	eventSendMu sync.Mutex
 
+	// agentMetrics bounds guest metrics collection and keeps capability/failure
+	// state local to this sandbox.
+	agentMetrics agentMetricsState
+
 	// teardownWg tracks in-flight sandbox teardown started from wait().
 	// Shutdown() waits on it so the sandbox run directory (watched by
 	// kata-monitor) is removed before the shim exits, without having to
