@@ -230,10 +230,25 @@ pub async fn configure_erofs_snapshotter(
     Ok(())
 }
 
+/// containerd's meta.db names the root its snapshots were prepared under, the
+/// split-brain [`install_nydus_snapshotter`] keeps the data directory to avoid.
+fn nydus_conflicts_with_node(sources: &[PathBuf], nydus: &str, root: &str) -> Vec<String> {
+    let exports_root = format!(".proxy_plugins.\"{nydus}\".exports.root");
+
+    match node_config::states(sources, &exports_root) {
+        Some((file, stated)) if stated != root => vec![format!(
+            "{nydus} exports root {stated} in {}, and this install would point it at {root}",
+            file.display()
+        )],
+        _ => Vec::new(),
+    }
+}
+
 pub async fn configure_nydus_snapshotter(
     config: &Config,
     configuration_file: &Path,
     pluginid: &str,
+    node_sources: &[PathBuf],
 ) -> Result<()> {
     info!("Configuring {NYDUS_FOR_KATA_TEE}");
 
@@ -243,6 +258,17 @@ pub async fn configure_nydus_snapshotter(
     };
 
     let containerd_nydus = nydus.clone();
+    let root = format!("/var/lib/{nydus}");
+
+    let conflicts = nydus_conflicts_with_node(node_sources, &nydus, &root);
+    anyhow::ensure!(
+        conflicts.is_empty(),
+        "{NYDUS_FOR_KATA_TEE}: this node already points the proxy plugin somewhere else: {}. The \
+         snapshots containerd recorded are in the root it named, and a backend that does not hold \
+         them fails the pulls that follow. Match that root, drop \"nydus\" from \
+         snapshotter.setup, or clear the snapshot state first.",
+        conflicts.join("; ")
+    );
 
     toml_utils::set_toml_value(
         configuration_file,
@@ -263,7 +289,7 @@ pub async fn configure_nydus_snapshotter(
     toml_utils::set_toml_value(
         configuration_file,
         &format!(".proxy_plugins.\"{nydus}\".exports.root"),
-        &format!("\"/var/lib/{nydus}\""),
+        &format!("\"{root}\""),
     )?;
 
     Ok(())
@@ -299,7 +325,8 @@ pub async fn configure_snapshotter(
 
     match snapshotter {
         "nydus" => {
-            configure_nydus_snapshotter(config, &configuration_file, pluginid).await?;
+            configure_nydus_snapshotter(config, &configuration_file, pluginid, &node_sources)
+                .await?;
 
             let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
                 Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
@@ -514,7 +541,7 @@ pub async fn uninstall_snapshotter(snapshotter: &str, config: &Config) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{erofs_conflicts_with_node, erofs_default_size};
+    use super::{erofs_conflicts_with_node, erofs_default_size, nydus_conflicts_with_node};
     use rstest::rstest;
     use std::path::PathBuf;
     use tempfile::tempdir;
@@ -606,6 +633,36 @@ mod tests {
         let sources = [PathBuf::from("/nonexistent")];
 
         assert!(erofs_conflicts_with_node(&sources, true, false).is_empty());
+        assert!(nydus_conflicts_with_node(&sources, "nydus-for-kata-tee", "/var/lib/x").is_empty());
+    }
+
+    #[rstest]
+    #[case::the_same_root("/var/lib/nydus-for-kata-tee", 0)]
+    #[case::another_root("/srv/nydus", 1)]
+    fn a_nydus_root_of_the_nodes_own_is_not_repointed(
+        #[case] stated: &str,
+        #[case] expected: usize,
+    ) {
+        let (_dir, path) = node_config(&format!(
+            "[proxy_plugins.'nydus-for-kata-tee'.exports]\nroot = '{stated}'\n"
+        ));
+
+        let conflicts =
+            nydus_conflicts_with_node(&[path], "nydus-for-kata-tee", "/var/lib/nydus-for-kata-tee");
+
+        assert_eq!(conflicts.len(), expected, "{conflicts:?}");
+    }
+
+    #[test]
+    fn a_node_with_no_nydus_plugin_is_left_to_us() {
+        let (_dir, path) = node_config("version = 3\n");
+
+        assert!(nydus_conflicts_with_node(
+            &[path],
+            "nydus-for-kata-tee",
+            "/var/lib/nydus-for-kata-tee"
+        )
+        .is_empty());
     }
 
     #[rstest]
