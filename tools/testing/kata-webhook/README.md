@@ -14,7 +14,16 @@ Kubernetes YAML files required to instantiate the admission
 controller.
 
 ```bash
-docker build -t quay.io/kata-containers/kata-webhook-example:latest -f Dockerfile .
+make IMAGE=quay.io/kata-containers/kata-webhook-example:latest
+```
+
+The Go toolchain used to build the image defaults to the version in
+`versions.yaml` at the repository root, matching the `go` directive in
+`go.mod`. Reading it requires [`yq`](https://github.com/mikefarah/yq) to be
+installed. Override it with `GO_VERSION` if you need a different toolchain:
+
+```bash
+make GO_VERSION=1.26.7 IMAGE=quay.io/kata-containers/kata-webhook-example:latest
 ```
 
 > **Note**
