@@ -510,6 +510,10 @@ impl AgentService {
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
+        if confidential_data_hub::is_cdh_client_initialized() {
+            unseal_envs(&mut process.Env).await;
+        }
+
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = process.into();
         let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
@@ -2698,6 +2702,17 @@ pub(crate) async fn cdh_secure_mount(
     Ok(())
 }
 
+async fn unseal_envs(envs: &mut [String]) {
+    for env in envs.iter_mut() {
+        match confidential_data_hub::unseal_env(env).await {
+            Ok(unsealed_env) => *env = unsealed_env.to_string(),
+            Err(e) => {
+                warn!(sl(), "Failed to unseal secret: {}", e)
+            }
+        }
+    }
+}
+
 async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
     if !confidential_data_hub::is_cdh_client_initialized() {
         return Ok(());
@@ -2707,14 +2722,7 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
     if let Some(envs) = process.env_mut().as_mut() {
-        for env in envs.iter_mut() {
-            match confidential_data_hub::unseal_env(env).await {
-                Ok(unsealed_env) => *env = unsealed_env.to_string(),
-                Err(e) => {
-                    warn!(sl(), "Failed to unseal secret: {}", e)
-                }
-            }
-        }
+        unseal_envs(envs).await;
     }
 
     let mounts = oci

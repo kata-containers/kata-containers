@@ -390,6 +390,10 @@ mod tests {
         start_ttrpc_server(cdh_sock_uri.to_string());
         std::thread::sleep(std::time::Duration::from_secs(2));
         init_cdh_client(cdh_sock_uri).await.unwrap();
+        assert!(
+            is_cdh_client_initialized(),
+            "CDH client should be initialized after init_cdh_client"
+        );
 
         // Test sealed secret as env vars
         let sealed_env = String::from("key=sealed.testdata");
@@ -398,6 +402,38 @@ mod tests {
         let normal_env = String::from("key=testdata");
         let unchanged_env = unseal_env(&normal_env).await.unwrap();
         assert_eq!(unchanged_env, String::from("key=testdata"));
+
+        // Test unsealing a mixed env var list (mirrors do_exec_process pattern)
+        let mut exec_envs = [
+            String::from("PATH=/usr/bin"),
+            String::from("MY_SECRET=sealed.testdata"),
+            String::from("HOME=/root"),
+            String::from("ANOTHER_SECRET=sealed.otherdata"),
+            String::from("PLAIN_VAR=normalvalue"),
+        ];
+
+        for env in exec_envs.iter_mut() {
+            match unseal_env(env).await {
+                Ok(unsealed) => *env = unsealed,
+                Err(e) => panic!("unseal_env failed unexpectedly: {}", e),
+            }
+        }
+        assert_eq!(exec_envs[0], "PATH=/usr/bin");
+        assert_eq!(exec_envs[1], "MY_SECRET=unsealed");
+        assert_eq!(exec_envs[2], "HOME=/root");
+        assert_eq!(exec_envs[3], "ANOTHER_SECRET=unsealed");
+        assert_eq!(exec_envs[4], "PLAIN_VAR=normalvalue");
+
+        // Test edge cases for env var unsealing
+        let empty_env = String::from("");
+        assert_eq!(unseal_env(&empty_env).await.unwrap(), "");
+        let no_value = String::from("KEY_ONLY");
+        assert_eq!(unseal_env(&no_value).await.unwrap(), "KEY_ONLY");
+        let empty_value = String::from("KEY=");
+        assert_eq!(unseal_env(&empty_value).await.unwrap(), "KEY=");
+        let sealed_prefix_only = String::from("KEY=sealed.");
+        let result = unseal_env(&sealed_prefix_only).await.unwrap();
+        assert_eq!(result, "KEY=unsealed");
 
         // Test sealed secret as files
         let sealed_dir = test_dir_path.join("..test");
