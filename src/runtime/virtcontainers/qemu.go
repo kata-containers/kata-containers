@@ -120,6 +120,10 @@ type qemu struct {
 
 	stopped int32
 
+	// exitCh is closed once QEMU has been reaped.  Nil when this process
+	// did not launch it, e.g. a sandbox restored from its persisted state.
+	exitCh chan struct{}
+
 	mu sync.Mutex
 }
 
@@ -142,6 +146,8 @@ const (
 	balloonID                = "balloon0"
 
 	qemuStopSandboxTimeoutSecs = 15
+	qemuStopSandboxTimeout     = qemuStopSandboxTimeoutSecs * time.Second
+	qemuExitPollInterval       = 10 * time.Millisecond
 
 	qomPathPrefix = "/machine/peripheral/"
 
@@ -1677,7 +1683,9 @@ func (q *qemu) setupEarlyQmpConnection() (net.Conn, error) {
 	return conn, nil
 }
 
-func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
+func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser, exitCh chan struct{}) {
+	defer close(exitCh)
+
 	pid := qemuCmd.Process.Pid
 	q.Logger().Infof("Start logging QEMU (qemuPid=%d)", pid)
 	scanner := bufio.NewScanner(reader)
@@ -1777,7 +1785,12 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 
 	// Log QEMU errors and ensure the QEMU process is reaped after
 	// termination.
-	go q.LogAndWait(qemuCmd, reader)
+	q.mu.Lock()
+	q.exitCh = make(chan struct{})
+	exitCh := q.exitCh
+	q.mu.Unlock()
+
+	go q.LogAndWait(qemuCmd, reader, exitCh)
 
 	err = q.waitVM(ctx, qmpConn, timeout)
 	if err != nil {
@@ -1867,6 +1880,36 @@ func (q *qemu) waitVM(ctx context.Context, qmpConn net.Conn, timeout int) error 
 	return nil
 }
 
+// waitForExit waits for the QEMU process to be gone, not merely signalled.
+// QEMU releases the VFIO file descriptors of a passed-through device as it
+// dies, and unbinding a device userspace still owns blocks in the kernel.
+func (q *qemu) waitForExit(pid int, exitCh chan struct{}, timeout time.Duration) error {
+	if exitCh != nil {
+		// LogAndWait() is the one reaping QEMU, so wait for it to say so
+		// rather than racing exec.Cmd.Wait() for the exit status.
+		select {
+		case <-exitCh:
+			return nil
+		case <-time.After(timeout):
+			return fmt.Errorf("QEMU pid %d still running after waiting %s", pid, timeout)
+		}
+	}
+
+	// Not our child, so watching the pid is all that is left.
+	deadline := time.Now().Add(timeout)
+	for {
+		if err := syscall.Kill(pid, syscall.Signal(0)); err == syscall.ESRCH {
+			return nil
+		}
+
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("QEMU pid %d still running after waiting %s", pid, timeout)
+		}
+
+		time.Sleep(qemuExitPollInterval)
+	}
+}
+
 // StopVM will stop the Sandbox's VM.
 func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	q.mu.Lock()
@@ -1906,6 +1949,10 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 			err = syscall.Kill(pid, syscall.SIGKILL)
 			if err != nil {
 				q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
+				return err
+			}
+
+			if err := q.waitForExit(pid, q.exitCh, qemuStopSandboxTimeout); err != nil {
 				return err
 			}
 		}
