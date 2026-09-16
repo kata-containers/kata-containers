@@ -499,12 +499,23 @@ setup_kernel() {
 	if [[ "${gpu_vendor}" == "${VENDOR_NVIDIA}" ]]; then
 		driver_version=$(get_from_kata_deps .externals.nvidia.driver.version)
 		driver_url=$(get_from_kata_deps .externals.nvidia.driver.url)
-		driver_src="open-gpu-kernel-modules-${driver_version}"
+		# A base-plus-version url can only name GitHub tag archives,
+		# which locks out driver drops that are not tagged on GitHub
+		# (yet) - a url naming a tarball is fetched as-is. Sources
+		# name their top-level directory differently, so extraction
+		# strips it rather than renaming one hardcoded spelling.
+		local driver_tarball
+		if [[ "${driver_url}" =~ \.tar\.(gz|xz)$ ]]; then
+			driver_tarball=$(basename "${driver_url}")
+		else
+			driver_tarball="${driver_version}.tar.gz"
+			driver_url="${driver_url}${driver_tarball}"
+		fi
 
-		info "Downloading NVIDIA driver source code from: ${driver_url}${driver_version}.tar.gz"
-		[[ -d "${driver_src}" ]] && rm -rf "${driver_src}"
-		curl -L -o "${driver_version}.tar.gz" "${driver_url}${driver_version}.tar.gz"
-		tar -xvf "${driver_version}.tar.gz" --transform "s|open-gpu-kernel-modules-${driver_version}|open-gpu-kernel-modules|"
+		info "Downloading NVIDIA driver source code from: ${driver_url}"
+		curl -L -o "${driver_tarball}" "${driver_url}"
+		rm -rf open-gpu-kernel-modules && mkdir open-gpu-kernel-modules
+		tar -xf "${driver_tarball}" --strip-components=1 -C open-gpu-kernel-modules
 	fi
 }
 
