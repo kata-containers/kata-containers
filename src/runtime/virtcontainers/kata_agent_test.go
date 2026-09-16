@@ -1482,7 +1482,7 @@ func TestTranslateHostMemsToGuestRangeNodes(t *testing.T) {
 func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 	const (
 		gib      = int64(1024 * 1024 * 1024)
-		hugePage = uint64(64) * uint64(gib)
+		hugePage = uint64(8) * uint64(gib)
 	)
 
 	for _, tt := range []struct {
@@ -1538,7 +1538,11 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			expectedLimit: math.MaxInt64,
 		},
 		{
-			description: "a sum reaching past a fixed size guest is held to what it can hold",
+			// The pod asked for a container larger than the guest holds.
+			// It gets what the pod asked for: the bound on the pod's
+			// containers together is what stops a guest from being
+			// overcommitted, and the runtime says the guest is short.
+			description: "a sum reaching past the guest is still what the pod declared",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{
 					Limit:       2 * gib,
@@ -1546,18 +1550,16 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 					Swap:        2 * gib,
 				},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
-					{Pagesize: "1GB", Limit: 192 * uint64(gib)},
+					{Pagesize: "1GB", Limit: 16 * uint64(gib)},
 				},
 			},
-			// A 192Gi guest reports about 189Gi, so hold the container to
-			// 186Gi: 192Gi less a thirty-second of it.
-			guestMemMB:          192 * 1024,
-			expectedLimit:       186 * gib,
-			expectedReservation: 186 * gib,
-			expectedSwap:        186 * gib,
+			guestMemMB:          16 * 1024,
+			expectedLimit:       18 * gib,
+			expectedReservation: 18 * gib,
+			expectedSwap:        18 * gib,
 		},
 		{
-			description: "a small guest keeps the whole reserve",
+			description: "a small guest does not shrink what the pod declared",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: 256 * gib / 1024},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
@@ -1565,7 +1567,7 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 				},
 			},
 			guestMemMB:    2 * 1024,
-			expectedLimit: (2*1024 - 128) * gib / 1024,
+			expectedLimit: 2*gib + 256*gib/1024,
 		},
 		{
 			description: "a sum a fixed size guest can hold is left alone",
@@ -1575,11 +1577,11 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 					{Pagesize: "1GB", Limit: 4 * uint64(gib)},
 				},
 			},
-			guestMemMB:    192 * 1024,
+			guestMemMB:    16 * 1024,
 			expectedLimit: gib/4 + 4*gib,
 		},
 		{
-			description: "holding the limit down leaves the swap the container was given",
+			description: "swap keeps the room it had above the limit",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{
 					Limit: 2 * gib,
@@ -1589,11 +1591,9 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 					{Pagesize: "1GB", Limit: hugePage},
 				},
 			},
-			// The 2Gi of swap asked for above the memory limit stays
-			// above the 62Gi a 64Gi guest can hold.
-			guestMemMB:    64 * 1024,
-			expectedLimit: 62 * gib,
-			expectedSwap:  64 * gib,
+			guestMemMB:    16 * 1024,
+			expectedLimit: 2*gib + int64(hugePage),
+			expectedSwap:  4*gib + int64(hugePage),
 		},
 		{
 			description: "reservations of several page sizes saturate together",
@@ -1630,12 +1630,12 @@ func TestSandboxMemoryMaxBytes(t *testing.T) {
 		expected    uint64
 	}{
 		{
-			// A 192Gi guest: a thirty-second (6Gi) is left to the guest itself.
+			// A 32Gi guest: a thirty-second (1Gi) is left to the guest itself.
 			description: "huge page backed, static",
 			hugePages:   true,
 			static:      true,
-			memMB:       192 * 1024,
-			expected:    uint64(186*1024) << 20,
+			memMB:       32 * 1024,
+			expected:    uint64(31*1024) << 20,
 		},
 		{
 			description: "small guest, floor reserve",
@@ -1648,13 +1648,13 @@ func TestSandboxMemoryMaxBytes(t *testing.T) {
 			description: "not huge page backed",
 			hugePages:   false,
 			static:      true,
-			memMB:       192 * 1024,
+			memMB:       32 * 1024,
 		},
 		{
 			description: "grows on demand",
 			hugePages:   true,
 			static:      false,
-			memMB:       192 * 1024,
+			memMB:       32 * 1024,
 		},
 		{
 			description: "too small to hold anything",

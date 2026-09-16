@@ -271,15 +271,34 @@ EOF
 
     That guest is 64Gi. Inside it the reserved pages are ordinary RAM, so
     each container's ceiling is its `memory` limit plus its own huge page
-    reservation, held to what the guest can hold: the VM's size minus a
-    thirty-second of it, and never less than 128MiB, so 62Gi here. That margin
-    covers the page metadata the guest kernel spends before it reports MemTotal
-    (about 1.6% of the VM) and the room the kernel and the agent need. The agent
-    puts the same 62Gi on the parent cgroup of all the pod's containers, so
-    together they cannot take more than the guest holds. Without that bound a
-    leaking sidecar ends in the guest's global OOM killer, which prefers the
-    guest's own processes (oom_score_adj 0) over a Guaranteed workload (-997)
-    and leaves the pod nothing to report.
+    reservation, exactly as the pod declared it. The agent bounds the pod's
+    containers together on their parent cgroup at the VM's size minus a
+    thirty-second of it, never less than 128MiB, so 62Gi here. That bound is
+    what the guest keeps for itself: the page metadata its kernel spends before
+    it reports MemTotal (about 1.6% of the VM), the kernel and the agent.
+    Without it a leaking sidecar ends in the guest's global OOM killer, which
+    prefers the guest's own processes (oom_score_adj 0) over a Guaranteed
+    workload (-997) and leaves the pod nothing to report.
+
+    The containers' ceilings can add up to more than that bound, and then the
+    pod is stopped by it rather than by its own limits. Give the guest its own
+    share instead of taking it from the workload: declare it as the runtime
+    class's pod overhead, which the kubelet adds to the pod's cgroup and the
+    scheduler counts against the node.
+
+    ```yaml
+    kind: RuntimeClass
+    handler: kata-qemu
+    overhead:
+      podFixed:
+        cpu: "1"
+        memory: 1Gi
+        hugepages-1Gi: 4Gi
+    ```
+
+    A pod whose containers reserve 16Gi then gets a 20Gi guest, each container
+    keeps the ceiling its pod declared, and a node without the extra 4Gi never
+    schedules the pod.
 
     A sidecar that reserves no huge pages keeps its `memory` limit as its
     ceiling. A sidecar that needs guest memory reserves it as

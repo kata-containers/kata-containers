@@ -1055,10 +1055,10 @@ func translateHostMemsToGuest(hostMems string, numaNodes []types.GuestNUMANode) 
 
 // translateHostMemoryLimitToGuest adds a container's huge page reservation to
 // the memory limits the agent applies inside the guest, where the reserved
-// pages are ordinary RAM charged to the container's cgroup. Swap follows the
-// limit (it carries memory plus swap), keeping any room it had above the limit.
-// For a guest of fixed size (guestMemMB > 0) the result is held to what the
-// guest can hold; 0 means the guest grows on demand and the sum stands.
+// pages are ordinary RAM charged to the container's cgroup. Swap carries memory
+// plus swap, so it takes the same addition. The container keeps what its pod
+// declared for it; the guest's own share comes from the pod's overhead, not
+// from the container's ceiling.
 func translateHostMemoryLimitToGuest(logger *logrus.Entry, memory *grpc.LinuxMemory, hugePages uint64, guestMemMB uint32) {
 	if memory == nil || hugePages == 0 {
 		return
@@ -1069,36 +1069,21 @@ func translateHostMemoryLimitToGuest(logger *logrus.Entry, memory *grpc.LinuxMem
 		"huge-pages": hugePages,
 	}).Debug("adding the container's huge page reservation to the memory limit applied inside the guest")
 
-	// Memory plus swap minus memory is the swap alone, and it survives both
-	// the addition and the holding below.
-	swapRoom := int64(0)
-	if memory.Swap > 0 && memory.Limit > 0 && memory.Swap > memory.Limit {
-		swapRoom = memory.Swap - memory.Limit
-	}
-
 	memory.Limit = addSaturating(memory.Limit, hugePages)
 	memory.Reservation = addSaturating(memory.Reservation, hugePages)
 	memory.Swap = addSaturating(memory.Swap, hugePages)
 
-	holdable := holdableGuestMemoryBytes(guestMemMB)
-	if holdable == 0 {
-		return
-	}
-
-	if memory.Limit > holdable {
+	// A ceiling past what the guest can hold is left as the pod declared it:
+	// cutting it would hand the container less memory than its pod asked for,
+	// which is not what the same pod gets under runc. Say that the guest is
+	// short instead, and let the bound on the pod's containers together stop a
+	// pod that overcommits the guest.
+	if holdable := holdableGuestMemoryBytes(guestMemMB); holdable > 0 && memory.Limit > holdable {
 		logger.WithFields(logrus.Fields{
 			"guest-limit":  memory.Limit,
 			"vm-memory-mb": guestMemMB,
-			"held-to":      holdable,
-		}).Info("the container's huge page reservation reaches past the guest: holding its memory limit to what the guest can hold")
-
-		memory.Limit = holdable
-		if memory.Swap > 0 {
-			memory.Swap = addSaturating(holdable, uint64(swapRoom))
-		}
-	}
-	if memory.Reservation > holdable {
-		memory.Reservation = holdable
+			"guest-holds":  holdable,
+		}).Warn("the container's memory ceiling is larger than the guest can hold: declare the guest's own share as the runtime class's pod overhead, including hugepages-<size>")
 	}
 }
 

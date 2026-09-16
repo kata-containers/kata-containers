@@ -109,11 +109,11 @@ func TestHypervisorBacksGuestRAMWithHugePages(t *testing.T) {
 
 func TestSizeHugepageBackedVMFromPodTakesTheReservation(t *testing.T) {
 	assert := assert.New(t)
-	gotPath := stubHugetlbHost(t, nil, 192<<30, true, nil)
+	gotPath := stubHugetlbHost(t, nil, 64<<30, true, nil)
 
 	s, sbc := hugetlbSizingSandbox(true, true, true)
 	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
-	assert.Equal(uint32(192*1024), sbc.HypervisorConfig.MemorySize)
+	assert.Equal(uint32(64*1024), sbc.HypervisorConfig.MemorySize)
 	// The allowance is read from the pod's cgroup, not the sandbox's own.
 	assert.Equal(testHugetlbPodCgroup, *gotPath)
 }
@@ -183,8 +183,8 @@ func TestSizeHugepageBackedVMFromPodKeepsDefaultMemory(t *testing.T) {
 		pageSizeErr                          error
 		tweak                                func(*SandboxConfig)
 	}{
-		"not huge page backed":              {hugePages: false, static: true, sandboxCgroupOnly: true, limit: 192 << 30, stated: true},
-		"not statically sized":              {hugePages: true, static: false, sandboxCgroupOnly: true, limit: 192 << 30, stated: true},
+		"not huge page backed":              {hugePages: false, static: true, sandboxCgroupOnly: true, limit: 64 << 30, stated: true},
+		"not statically sized":              {hugePages: true, static: false, sandboxCgroupOnly: true, limit: 64 << 30, stated: true},
 		"hypervisor outside the pod cgroup": {hugePages: true, static: true, sandboxCgroupOnly: false, limit: 0, stated: true},
 		"no allowance stated":               {hugePages: true, static: true, sandboxCgroupOnly: true, stated: false},
 		"allowance unreadable":              {hugePages: true, static: true, sandboxCgroupOnly: true, limitErr: errors.New("boom")},
@@ -192,7 +192,7 @@ func TestSizeHugepageBackedVMFromPodKeepsDefaultMemory(t *testing.T) {
 		// A hypervisor that does not take the guest's RAM from the huge page
 		// pool is not sized from the pod's reservation, nor refused for one:
 		// a reservation that would otherwise grow the VM leaves it alone.
-		"hypervisor does not use the huge page pool": {hugePages: true, static: true, sandboxCgroupOnly: true, limit: 192 << 30, stated: true,
+		"hypervisor does not use the huge page pool": {hugePages: true, static: true, sandboxCgroupOnly: true, limit: 64 << 30, stated: true,
 			tweak: func(c *SandboxConfig) { c.HypervisorType = FirecrackerHypervisor }},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -224,7 +224,7 @@ func TestSizeHugepageBackedVMFromPodSizesOnlyANewSandbox(t *testing.T) {
 
 func TestSizeHugepageBackedVMFromPodNeedsASandboxCgroup(t *testing.T) {
 	assert := assert.New(t)
-	stubHugetlbHost(t, nil, 192<<30, true, nil)
+	stubHugetlbHost(t, nil, 64<<30, true, nil)
 
 	s, sbc := hugetlbSizingSandbox(true, true, true)
 	sbc.Containers[0].CustomSpec.Linux.CgroupsPath = ""
