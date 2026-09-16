@@ -22,9 +22,8 @@ const HugetlbUnlimited = "max"
 // ErrHugetlbCgroupV1 is returned on a cgroup v1 host, whose hugetlb controller is not read.
 var ErrHugetlbCgroupV1 = errors.New("the hugetlb allowance is not read from a cgroup v1 hierarchy")
 
-// HugetlbSizeName names a huge page size the way the kernel names its
-// hugetlb.<name>.max files (mem_fmt in mm/hugetlb_cgroup.c): the unit is picked
-// by threshold and the quotient truncated, so 1 GiB is "1GB" and 2 MiB "2MB".
+// Names a size the way the kernel names its hugetlb.<name>.max files (mem_fmt
+// in mm/hugetlb_cgroup.c): 1 GiB is "1GB", 2 MiB "2MB".
 func HugetlbSizeName(sizeBytes uint64) (string, error) {
 	const (
 		kb = uint64(1) << 10
@@ -46,9 +45,8 @@ func HugetlbSizeName(sizeBytes uint64) (string, error) {
 	}
 }
 
-// HugepagesResourceName names a huge page size the way Kubernetes does:
-// hugepages-2Mi, hugepages-1Gi. A size that is not a whole number of any unit
-// falls back to the byte count.
+// Names a size the way Kubernetes does: hugepages-2Mi, hugepages-1Gi. A size
+// that is not a whole number of any unit falls back to the byte count.
 func HugepagesResourceName(sizeBytes uint64) string {
 	const kib = uint64(1) << 10
 	for _, unit := range []struct {
@@ -66,9 +64,8 @@ func HugepagesResourceName(sizeBytes uint64) string {
 	return fmt.Sprintf("hugepages-%d", sizeBytes)
 }
 
-// PodCgroupPath returns the parent of the cgroup an OCI Linux.CgroupsPath names,
-// relative to the cgroup mount point. Under a CRI that parent is the pod's cgroup,
-// which the kubelet configures from the pod's resources.
+// The parent of the cgroup an OCI Linux.CgroupsPath names. Under a CRI that is
+// the pod's cgroup, which the kubelet configures from the pod's resources.
 func PodCgroupPath(cgroupPath string) (string, error) {
 	if IsSystemdCgroup(cgroupPath) {
 		slice, _, err := getSliceAndUnit(cgroupPath)
@@ -90,10 +87,8 @@ func PodCgroupPath(cgroupPath string) (string, error) {
 	return parent, nil
 }
 
-// HugetlbLimitBytes reads the hugetlb limit for pages of hugepageSize on the
-// cgroup at podCgroupPath, relative to the cgroup v2 mount point. The bool is
-// false when no limit is stated: the file is absent or holds "max". A limit of
-// zero is a stated limit.
+// Reads the hugetlb limit for hugepageSize on podCgroupPath. The bool is false
+// when none is stated, the file being absent or "max"; zero is a stated limit.
 func HugetlbLimitBytes(podCgroupPath string, hugepageSize uint64) (uint64, bool, error) {
 	isV1, err := IsCgroupV1()
 	if err != nil {

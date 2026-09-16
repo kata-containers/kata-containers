@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
@@ -1053,13 +1055,9 @@ func translateHostMemsToGuest(hostMems string, numaNodes []types.GuestNUMANode) 
 	return cpuset.NewCPUSet(guestNodes...).String()
 }
 
-// translateHostMemoryLimitToGuest adds a container's huge page reservation to
-// the memory limits the agent applies inside the guest, where the reserved
-// pages are ordinary RAM charged to the container's cgroup. Swap carries memory
-// plus swap, so it takes the same addition. The container keeps what its pod
-// declared for it; the guest's own share comes from the pod's overhead, not
-// from the container's ceiling.
-func translateHostMemoryLimitToGuest(logger *logrus.Entry, memory *grpc.LinuxMemory, hugePages uint64, guestMemMB uint32) {
+// Makes a container's reservation its memory limit inside the guest, where
+// those pages are ordinary RAM. Held to what the guest can hold.
+func translateHostMemoryLimitToGuest(logger *logrus.Entry, memory *grpc.LinuxMemory, hugePages uint64, guest guestCapacity) {
 	if memory == nil || hugePages == 0 {
 		return
 	}
@@ -1067,32 +1065,65 @@ func translateHostMemoryLimitToGuest(logger *logrus.Entry, memory *grpc.LinuxMem
 	logger.WithFields(logrus.Fields{
 		"host-limit": memory.Limit,
 		"huge-pages": hugePages,
-	}).Debug("adding the container's huge page reservation to the memory limit applied inside the guest")
+	}).Debug("applying the container's huge page reservation as the memory limit inside the guest")
 
-	memory.Limit = addSaturating(memory.Limit, hugePages)
-	memory.Reservation = addSaturating(memory.Reservation, hugePages)
-	memory.Swap = addSaturating(memory.Swap, hugePages)
+	// A container the pod left unbounded stays unbounded.
+	if memory.Limit > 0 {
+		memory.Limit = capToInt64(hugePages)
+		if memory.Reservation > memory.Limit {
+			memory.Reservation = memory.Limit
+		}
+		if memory.Swap > 0 && memory.Swap < memory.Limit {
+			// Swap carries memory plus swap, so it cannot sit under the limit.
+			memory.Swap = memory.Limit
+		}
+		if memory.Swap > memory.Limit {
+			memory.Swap = memory.Limit
+		}
+	}
 
-	// A ceiling past what the guest can hold is left as the pod declared it:
-	// cutting it would hand the container less memory than its pod asked for,
-	// which is not what the same pod gets under runc. Say that the guest is
-	// short instead, and let the bound on the pod's containers together stop a
-	// pod that overcommits the guest.
-	if holdable := holdableGuestMemoryBytes(guestMemMB); holdable > 0 && memory.Limit > holdable {
-		logger.WithFields(logrus.Fields{
-			"guest-limit":  memory.Limit,
-			"vm-memory-mb": guestMemMB,
-			"guest-holds":  holdable,
-		}).Warn("the container's memory ceiling is larger than the guest can hold: declare the guest's own share as the runtime class's pod overhead, including hugepages-<size>")
+	holdable := holdableGuestMemoryBytes(guest)
+	if holdable <= 0 || memory.Limit <= holdable {
+		return
+	}
+
+	logger.WithFields(logrus.Fields{
+		"declared":     memory.Limit,
+		"vm-memory-mb": guest.memoryMB,
+		"guest-holds":  holdable,
+	}).Info("the container's memory ceiling is larger than the guest can hold: holding it to what the guest holds. Reserve the guest's own share on the pod's resources or as the runtime class's pod overhead to be bounded at what the pod declared")
+
+	memory.Limit = holdable
+	if memory.Reservation > holdable {
+		memory.Reservation = holdable
+	}
+	if memory.Swap > 0 && memory.Swap < holdable {
+		// Swap carries memory plus swap, so it cannot sit under the limit.
+		memory.Swap = holdable
+	}
+	if memory.Swap > holdable {
+		memory.Swap = holdable
 	}
 }
 
-// hugePagesTotal adds up the huge pages a container reserved, of whatever page
-// sizes, saturating rather than wrapping on a spec that asks for more than
-// there could ever be.
-func hugePagesTotal(limits []*grpc.LinuxHugepageLimit) uint64 {
+// The page size the VM's memory comes from, spelled as a reservation spells
+// it. Only that size buys the guest RAM.
+func vmHugePageSizeName() (string, error) {
+	sizeBytes, err := readVMHugepageSize()
+	if err != nil {
+		return "", err
+	}
+	return resCtrl.HugetlbSizeName(sizeBytes)
+}
+
+// Adds up the pages of pageSize a container reserved, saturating rather than
+// wrapping. An empty pageSize counts every size.
+func hugePagesTotal(limits []*grpc.LinuxHugepageLimit, pageSize string) uint64 {
 	var total uint64
 	for _, l := range limits {
+		if pageSize != "" && l.Pagesize != pageSize {
+			continue
+		}
 		if l.Limit > math.MaxUint64-total {
 			return math.MaxUint64
 		}
@@ -1103,9 +1134,12 @@ func hugePagesTotal(limits []*grpc.LinuxHugepageLimit) uint64 {
 
 // hugePagesTotalOCI is hugePagesTotal for the reservations a container was
 // created with, which an update need not repeat.
-func hugePagesTotalOCI(limits []specs.LinuxHugepageLimit) uint64 {
+func hugePagesTotalOCI(limits []specs.LinuxHugepageLimit, pageSize string) uint64 {
 	var total uint64
 	for _, l := range limits {
+		if pageSize != "" && l.Pagesize != pageSize {
+			continue
+		}
 		if l.Limit > math.MaxUint64-total {
 			return math.MaxUint64
 		}
@@ -1114,66 +1148,233 @@ func hugePagesTotalOCI(limits []specs.LinuxHugepageLimit) uint64 {
 	return total
 }
 
-// staticGuestMemoryMB returns the size of a sandbox that has all the memory it
-// will ever have, and zero for one that grows on demand, whose memory is
-// hotplugged after a container asks for it.
-func staticGuestMemoryMB(sandbox *Sandbox) uint32 {
-	if !sandbox.config.StaticResourceMgmt {
-		return 0
-	}
-	return sandbox.config.HypervisorConfig.MemorySize
+// What one container carries into the guest: the pages of the VM's size it is
+// down for, and the memory limit its ceiling adds to them.
+type podReservation struct {
+	name      string
+	hugePages uint64
+	memory    int64
+	// pool is set when the container's reservation buys it a huge page pool
+	// inside the guest rather than ordinary guest memory.
+	pool bool
 }
 
-// sandboxMemoryMaxBytes is the bound the agent puts on the parent cgroup of a
-// huge page backed static guest's containers, the guest's counterpart of the
-// pod cgroup: their own ceilings can add up to more than the guest holds, and
-// without it the guest's OOM killer picks among every guest process. Zero for
-// any other guest.
+// What each of a sandbox's containers carries. A stopped one is left out: it
+// holds nothing now, and counting it would refuse the containers after it.
+func podReservations(sandbox *Sandbox, pageSize string) []podReservation {
+	var out []podReservation
+	for _, cfg := range sandbox.config.Containers {
+		if c, ok := sandbox.containers[cfg.ID]; ok && c.state.State == types.StateStopped {
+			continue
+		}
+		r := podReservation{
+			name:      cfg.ID,
+			hugePages: hugePagesTotalOCI(cfg.Resources.HugepageLimits, pageSize),
+			pool:      cfg.CustomSpec != nil && hasGuestHugePagePool(cfg.CustomSpec.Mounts),
+		}
+		if cfg.Resources.Memory != nil && cfg.Resources.Memory.Limit != nil {
+			r.memory = *cfg.Resources.Memory.Limit
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// The pod allowance the kubelet handed a container that declared none, or zero.
+// Nothing marks it, so the largest value that makes the sum impossible is it.
+func copiedReservation(reservations []podReservation, vmMemoryBytes uint64) uint64 {
+	if vmMemoryBytes == 0 {
+		return 0
+	}
+
+	var (
+		values []uint64
+		sum    uint64
+	)
+	for _, r := range reservations {
+		if r.hugePages == 0 {
+			continue
+		}
+		values = append(values, r.hugePages)
+		if r.hugePages > math.MaxUint64-sum {
+			sum = math.MaxUint64
+		} else {
+			sum += r.hugePages
+		}
+	}
+	if sum <= vmMemoryBytes {
+		return 0
+	}
+
+	sort.Slice(values, func(i, j int) bool { return values[i] > values[j] })
+	var copied uint64
+	for _, v := range values {
+		if sum <= vmMemoryBytes {
+			break
+		}
+		sum -= v
+		copied = v
+	}
+	return copied
+}
+
+// What a container reserved for itself, unless the kubelet copied it from the
+// pod, in which case its memory limit alone bounds it in the guest.
+func ownHugePages(r podReservation, copied uint64) uint64 {
+	if copied != 0 && r.hugePages == copied {
+		return 0
+	}
+	if r.pool {
+		// The reservation went to the guest's hugetlb pool, which the container mmaps
+		// rather than charges to its cgroup. Adding it again would hand it twice.
+		return 0
+	}
+	return r.hugePages
+}
+
+// ownPoolBytes is the guest huge page pool a container's reservation buys it,
+// zero when the value it carries was the pod's rather than its own.
+func ownPoolBytes(r podReservation, copied uint64) uint64 {
+	if !r.pool {
+		return 0
+	}
+	if copied != 0 && r.hugePages == copied {
+		return 0
+	}
+	return r.hugePages
+}
+
+// Refuses a pool the guest cannot fit, since naming both sizes here beats the
+// agent reporting how many pages it got. Ceilings are held, not refused.
+func refuseGuestHugePagePoolTooLarge(reservations []podReservation, copied uint64, guest guestCapacity) error {
+	holdable := holdableGuestMemoryBytes(guest)
+	if holdable <= 0 {
+		return nil
+	}
+
+	for _, r := range reservations {
+		pool := ownPoolBytes(r, copied)
+		if pool == 0 || int64(pool) < holdable {
+			continue
+		}
+		return fmt.Errorf("container %s asks for a %d MiB huge page pool inside a guest that holds %d MiB of the %d MiB it was given: reserve more huge pages for the pod, or ask for a smaller pool",
+			r.name,
+			pool>>utils.MibToBytesShift,
+			uint64(holdable)>>utils.MibToBytesShift,
+			guest.memoryMB)
+	}
+	return nil
+}
+
+// Whether a container mounts a huge page backed emptyDir, testing what
+// handleHugepages acts on: its reservation goes to the pool, not its cgroup.
+func hasGuestHugePagePool(mounts []specs.Mount) bool {
+	for _, mnt := range mounts {
+		if mnt.Type != KataLocalDevType {
+			continue
+		}
+		if _, fsType, _, _ := utils.GetDevicePathAndFsTypeOptions(mnt.Source); fsType == "hugetlbfs" {
+			return true
+		}
+	}
+	return false
+}
+
+// What a guest holds: the VM's memory and its vCPUs. Its own needs grow with
+// both, so both decide how much the pod's containers may use.
+type guestCapacity struct {
+	memoryMB uint32
+	vCPUs    uint32
+}
+
+// Capacity of a sandbox that has all its memory at boot; empty for one that
+// grows on demand, whose memory is hotplugged after a container asks.
+func staticGuestCapacity(sandbox *Sandbox) guestCapacity {
+	if !sandbox.config.StaticResourceMgmt {
+		return guestCapacity{}
+	}
+	return guestCapacity{
+		memoryMB: sandbox.config.HypervisorConfig.MemorySize,
+		vCPUs:    sandbox.config.HypervisorConfig.NumVCPUs(),
+	}
+}
+
+// Bounds the pod's containers together inside the guest, since their own
+// ceilings can add up past it. Zero for any other guest.
 func sandboxMemoryMaxBytes(sandbox *Sandbox) uint64 {
 	if !sandbox.config.HypervisorConfig.HugePages {
 		return 0
 	}
-	holdable := holdableGuestMemoryBytes(staticGuestMemoryMB(sandbox))
+	holdable := holdableGuestMemoryBytes(staticGuestCapacity(sandbox))
 	if holdable <= 0 {
 		return 0
 	}
 	return uint64(holdable)
 }
 
-// holdableGuestMemoryBytes is the most a container in a guest of guestMemMB can
-// be held to. A thirty-second of the VM, at least 128 MiB, is left for the
-// kernel's page metadata (about a sixty-fourth of RAM), the kernel and the
-// agent. Zero for a guest whose size is not known upfront.
-func holdableGuestMemoryBytes(guestMemMB uint32) int64 {
-	if guestMemMB == 0 {
+const (
+	// A guest reports less than the VM was given: a 64 byte struct page per
+	// 4 KiB frame, plus a fixed slice for firmware, kernel and initrd.
+	guestMemmapDivisor   = 64
+	guestFixedOverheadMB = 128
+
+	// What the guest keeps for its kernel, drivers, agent and free pages. Not a
+	// fraction of the VM: 1TiB on 64 vCPUs keeps 2.5GiB, 16GiB on 4 a third of one.
+	guestReserveBaseMB     = 768
+	guestReserveMemDivisor = 512
+	guestReservePerVCPUMB  = 24
+	guestReserveMaxDivisor = 4
+)
+
+// guestMemTotalMB returns the memory a guest of vmMemMB reports, or zero for a
+// VM too small to boot one.
+func guestMemTotalMB(vmMemMB uint32) uint32 {
+	memmapMB := vmMemMB / guestMemmapDivisor
+	if vmMemMB <= memmapMB+guestFixedOverheadMB {
 		return 0
 	}
-
-	const minReserveMB = 128
-	reserveMB := uint32(guestMemMB / 32)
-	if reserveMB < minReserveMB {
-		reserveMB = minReserveMB
-	}
-	if reserveMB >= guestMemMB {
-		return 0
-	}
-
-	return int64(guestMemMB-reserveMB) << utils.MibToBytesShift
+	return vmMemMB - memmapMB - guestFixedOverheadMB
 }
 
-// addSaturating grows a memory limit, leaving an unset (zero or negative, that
-// is unlimited) limit alone and saturating rather than wrapping.
-func addSaturating(limit int64, delta uint64) int64 {
-	if limit <= 0 {
-		return limit
+// guestReserveMB returns what a guest of memTotalMB on vCPUs keeps out of the
+// memory it reports.
+func guestReserveMB(memTotalMB, vCPUs uint32) uint32 {
+	reserveMB := guestReserveBaseMB + memTotalMB/guestReserveMemDivisor + vCPUs*guestReservePerVCPUMB
+	if capMB := memTotalMB / guestReserveMaxDivisor; reserveMB > capMB {
+		return capMB
 	}
-	if delta > uint64(math.MaxInt64-limit) {
+	return reserveMB
+}
+
+// What the pod's containers may use between them; zero when the guest's size
+// is not known upfront.
+func holdableGuestMemoryBytes(guest guestCapacity) int64 {
+	if guest.memoryMB == 0 {
+		return 0
+	}
+
+	memTotalMB := guestMemTotalMB(guest.memoryMB)
+	if memTotalMB == 0 {
+		return 0
+	}
+
+	reserveMB := guestReserveMB(memTotalMB, guest.vCPUs)
+	if reserveMB >= memTotalMB {
+		return 0
+	}
+
+	return int64(memTotalMB-reserveMB) << utils.MibToBytesShift
+}
+
+// capToInt64 is a byte count as a memory limit, saturating rather than wrapping.
+func capToInt64(bytes uint64) int64 {
+	if bytes > uint64(math.MaxInt64) {
 		return math.MaxInt64
 	}
-	return limit + int64(delta)
+	return int64(bytes)
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode, hugePages bool, guestMemMB uint32) error {
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode, hugePages bool, guest guestCapacity, copied uint64, guestPool bool) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1232,8 +1433,20 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 	}
 
 	if hugePages && grpcSpec.Linux.Resources != nil {
-		hugePagesBytes := hugePagesTotal(grpcSpec.Linux.Resources.HugepageLimits)
-		translateHostMemoryLimitToGuest(k.Logger(), grpcSpec.Linux.Resources.Memory, hugePagesBytes, guestMemMB)
+		pageSize, err := vmHugePageSizeName()
+		if err != nil {
+			k.Logger().WithError(err).Warn("cannot tell the VM's huge page size; counting a container's reservations of every size toward its guest ceiling")
+		}
+		hugePagesBytes := hugePagesTotal(grpcSpec.Linux.Resources.HugepageLimits, pageSize)
+		if copied != 0 && hugePagesBytes == copied {
+			k.Logger().WithField("huge-pages", hugePagesBytes).Info("the container states no huge pages of its own and was handed the pod's allowance: its memory limit alone bounds it inside the guest")
+			hugePagesBytes = 0
+		}
+		if guestPool {
+			k.Logger().WithField("huge-pages", hugePagesBytes).Info("the container's reservation buys it a huge page pool inside the guest: its memory limit alone bounds what it charges to its cgroup")
+			hugePagesBytes = 0
+		}
+		translateHostMemoryLimitToGuest(k.Logger(), grpcSpec.Linux.Resources.Memory, hugePagesBytes, guest)
 	}
 
 	// Disable network and time namespaces since they are handled on the host
@@ -1741,6 +1954,10 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	ctrStorages = append(ctrStorages, epheStorages...)
 
 	k.Logger().WithField("ociSpec Hugepage Resources", ociSpec.Linux.Resources.HugepageLimits).Debug("ociSpec HugepageLimit")
+	// handleHugepages rewrites a huge page backed emptyDir's mount in place, so
+	// read whether this container has one before the call rather than after.
+	guestPool := hasGuestHugePagePool(ociSpec.Mounts)
+
 	hugepages, err := k.handleHugepages(ociSpec.Mounts, ociSpec.Linux.Resources.HugepageLimits)
 	if err != nil {
 		return nil, err
@@ -1823,13 +2040,28 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
 	}
 
-	// A static guest has all its memory at boot, so its size caps the limits
-	// below; a guest that grows on demand hotplugs what a limit asks for later.
-	guestMemMB := staticGuestMemoryMB(sandbox)
+	// A statically sized sandbox has all its memory at boot, so its size bounds
+	// what a limit can hold a container to. One that grows on demand does not.
+	guest := staticGuestCapacity(sandbox)
+
+	// What the pod's containers carry decides two things here: the reservation the
+	// kubelet copied from the pod, and whether the guest holds their ceilings.
+	var copied uint64
+	if sandbox.config.HypervisorConfig.HugePages {
+		pageSize, sizeErr := vmHugePageSizeName()
+		if sizeErr != nil {
+			k.Logger().WithError(sizeErr).Warn("cannot tell the VM's huge page size; reading every reservation as the container's own")
+		}
+		reservations := podReservations(sandbox, pageSize)
+		copied = copiedReservation(reservations, uint64(guest.memoryMB)<<utils.MibToBytesShift)
+		if err := refuseGuestHugePagePoolTooLarge(reservations, copied, guest); err != nil {
+			return nil, err
+		}
+	}
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel, sandbox.config.HypervisorConfig.GuestNUMANodes, sandbox.config.HypervisorConfig.HugePages, guestMemMB)
+	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel, sandbox.config.HypervisorConfig.GuestNUMANodes, sandbox.config.HypervisorConfig.HugePages, guest, copied, guestPool)
 	if err != nil {
 		return nil, err
 	}
@@ -2387,14 +2619,27 @@ func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Con
 		return err
 	}
 
-	// An update repeats the memory limit but not the huge page reservation the
-	// container was created with; fold it in again or the ceiling is lost.
+	// An update carries only the limits to apply now, so the reservation is folded
+	// in again, copy check included, or the ceiling it started with is lost.
 	if sandbox.config.HypervisorConfig.HugePages && grpcResources != nil {
-		hugePages := hugePagesTotal(grpcResources.HugepageLimits)
-		if hugePages == 0 {
-			hugePages = hugePagesTotalOCI(c.config.Resources.HugepageLimits)
+		guest := staticGuestCapacity(sandbox)
+		pageSize, err := vmHugePageSizeName()
+		if err != nil {
+			k.Logger().WithError(err).Warn("cannot tell the VM's huge page size; counting a container's reservations of every size toward its guest ceiling")
 		}
-		translateHostMemoryLimitToGuest(k.Logger(), grpcResources.Memory, hugePages, staticGuestMemoryMB(sandbox))
+		hugePages := hugePagesTotal(grpcResources.HugepageLimits, pageSize)
+		if hugePages == 0 {
+			hugePages = hugePagesTotalOCI(c.config.Resources.HugepageLimits, pageSize)
+		}
+		reservations := podReservations(sandbox, pageSize)
+		copied := copiedReservation(reservations, uint64(guest.memoryMB)<<utils.MibToBytesShift)
+		if copied != 0 && hugePages == copied {
+			hugePages = 0
+		}
+		if c.config.CustomSpec != nil && hasGuestHugePagePool(c.config.CustomSpec.Mounts) {
+			hugePages = 0
+		}
+		translateHostMemoryLimitToGuest(k.Logger(), grpcResources.Memory, hugePages, guest)
 	}
 
 	req := &grpc.UpdateContainerRequest{

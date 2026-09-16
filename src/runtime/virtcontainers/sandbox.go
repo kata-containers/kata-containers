@@ -862,11 +862,8 @@ var (
 	}
 )
 
-// hypervisorBacksGuestRAMWithHugePages reports whether the hypervisor takes the
-// guest's memory from the host's hugetlb pool when enable_hugepages is set.
-// Only then does the pod's hugepages-<size> reservation bound the VM, and only
-// then is the reservation the VM's size. A hypervisor whose driver reads none
-// of the huge page knobs keeps default_memory.
+// Whether the hypervisor takes guest RAM from the hugetlb pool when
+// enable_hugepages is set. Only then is the pod's reservation the VM's size.
 func hypervisorBacksGuestRAMWithHugePages(hypervisorType HypervisorType) bool {
 	switch hypervisorType {
 	case QemuHypervisor, ClhHypervisor:
@@ -876,15 +873,12 @@ func hypervisorBacksGuestRAMWithHugePages(hypervisorType HypervisorType) bool {
 	}
 }
 
-// sizeHugepageBackedVMFromPod sizes a huge page backed static VM from the pod's
-// huge page reservation instead of default_memory. The CRI does not carry the
-// reservation (kubernetes/enhancements#4113), so it is read where the kubelet
-// wrote it: hugetlb.<size>.max on the pod's cgroup, which bounds the VM when
-// the hypervisor runs inside it (sandbox_cgroup_only). default_memory is the
-// floor: the reservation caps the hugetlbfs mapping the guest's RAM comes from,
-// so a VM larger than it cannot map its memory and a shorter reservation is
-// refused. Decided once, at creation; a sandbox fetched from the store keeps
-// the size it booted with.
+// Floor for a VM sized from the pod's reservation. default_memory cannot serve:
+// the runtime cannot tell its own substituted default from a configured one.
+const minHugePageBackedVMMiB = 1024
+
+// Sizes the VM from hugetlb.<size>.max on the pod's cgroup, which caps the
+// mapping its RAM comes from. The CRI does not carry it (k/enhancements#4113).
 func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) error {
 	hc := &sandboxConfig.HypervisorConfig
 	if !hc.HugePages || !sandboxConfig.StaticResourceMgmt {
@@ -936,16 +930,22 @@ func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) erro
 	reservedMB := reserved >> utils.MibToBytesShift
 	switch {
 	case reservedMB == 0:
-		return fmt.Errorf("the VM is backed by huge pages but its pod reserved none: request %s on a container of the pod (pod cgroup %s)", podResource, podCgroup)
+		return fmt.Errorf("the VM is backed by huge pages but its pod reserved none: request %s on a container of the pod, or give the runtime class a pod overhead of %s (pod cgroup %s)", podResource, podResource, podCgroup)
 	case reservedMB > math.MaxUint32:
 		return fmt.Errorf("the pod's %s reservation of %d bytes is larger than a VM can be sized to (pod cgroup %s)", podResource, reserved, podCgroup)
 	case hc.DefaultMaxMemorySize > 0 && reservedMB > hc.DefaultMaxMemorySize:
 		return fmt.Errorf("the pod reserved %d MiB of %s, more than the %d MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup %s)", reservedMB, podResource, hc.DefaultMaxMemorySize, podCgroup)
-	case reservedMB < uint64(hc.MemorySize):
-		// The reservation caps the hugetlbfs mapping the guest's RAM comes
-		// from, so a VM of default_memory cannot map its memory at all; say
-		// so with both numbers rather than let it fail mid-allocation.
-		return fmt.Errorf("the VM is backed by huge pages, but its pod reserved %d MiB of %s, less than the %d MiB of default_memory the VM boots with: request at least that much on a container of the pod (pod cgroup %s)", reservedMB, podResource, hc.MemorySize, podCgroup)
+	case reservedMB < minHugePageBackedVMMiB:
+		return fmt.Errorf("the pod reserved %d MiB of %s, less than the %d MiB a guest needs: reserve more on a container of the pod or as the runtime class's pod overhead (pod cgroup %s)", reservedMB, podResource, minHugePageBackedVMMiB, podCgroup)
+	}
+
+	if reservedMB < uint64(hc.MemorySize) {
+		// default_memory sizes a guest nothing else sizes; it is not a floor.
+		s.Logger().WithFields(logrus.Fields{
+			"pod-resource":      podResource,
+			"reserved-mb":       reservedMB,
+			"default-memory-mb": hc.MemorySize,
+		}).Info("the pod reserved fewer huge pages than default_memory: its guest is smaller than the ones this configuration boots by default")
 	}
 
 	s.Logger().WithFields(logrus.Fields{

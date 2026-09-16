@@ -115,9 +115,8 @@ impl CgroupManager for Manager {
     }
 }
 
-// pod_slice is the slice a bound on the pod's containers together goes on: the
-// slice the host named, which is the pod's cgroup. A container in the default
-// slice, or in the root, belongs to no pod.
+// The slice a bound on the pod's containers goes on: the one the host named.
+// A container in the default slice, or the root, belongs to no pod.
 fn pod_slice(slice: &str) -> Option<&str> {
     match slice {
         "" | "-.slice" | DEFAULT_SLICE => None,
@@ -149,9 +148,8 @@ impl Manager {
         })
     }
 
-    // set_pod_memory_max puts the sandbox memory bound on the pod's slice, the
-    // parent of every container scope, once the first scope has brought the
-    // slice up. Without a pod slice the containers keep their own limits.
+    // Puts the bound on the pod's slice, the parent of every container scope, once
+    // the first scope has brought it up. Without one the containers keep their own.
     fn set_pod_memory_max(&self) -> Result<()> {
         if self.pod_memory_max_bytes == 0 {
             return Ok(());

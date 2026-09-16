@@ -272,13 +272,17 @@ EOF
     That guest is 64Gi. Inside it the reserved pages are ordinary RAM, so
     each container's ceiling is its `memory` limit plus its own huge page
     reservation, exactly as the pod declared it. The agent bounds the pod's
-    containers together on their parent cgroup at the VM's size minus a
-    thirty-second of it, never less than 128MiB, so 62Gi here. That bound is
-    what the guest keeps for itself: the page metadata its kernel spends before
-    it reports MemTotal (about 1.6% of the VM), the kernel and the agent.
-    Without it a leaking sidecar ends in the guest's global OOM killer, which
-    prefers the guest's own processes (oom_score_adj 0) over a Guaranteed
-    workload (-997) and leaves the pod nothing to report.
+    containers together on their parent cgroup at what the guest reports less
+    what the guest keeps. A guest reports about 1.6% less than the VM was
+    given, the page metadata its kernel spends on every 4KiB page, and it
+    keeps a share of the rest for its kernel, the drivers it loads for the
+    devices it was given, the agent and the free pages its allocator needs:
+    a fixed share, a slice that grows with the size and a term per vCPU. A
+    guest of 1TiB on 64 vCPUs with eight GPUs holds 2.5GiB of its own, one of
+    16GiB on 4 vCPUs a third of a GiB. Without that bound a leaking sidecar ends in the
+    guest's global OOM killer, which prefers the guest's own processes
+    (oom_score_adj 0) over a Guaranteed workload (-997) and leaves the pod
+    nothing to report.
 
     The containers' ceilings can add up to more than that bound, and then the
     pod is stopped by it rather than by its own limits. Give the guest its own
@@ -337,13 +341,11 @@ EOF
     sized from the pod's reservation, or refused for one. In the Go runtime
     that is QEMU and Cloud Hypervisor; Firecracker, StratoVirt, the remote
     hypervisor and the mock read none of the huge page knobs and keep
-    `default_memory`. Under runtime-rs it is Dragonball alone, whose QEMU does
-    not back guest RAM with huge pages.
+    `default_memory`. runtime-rs keeps `default_memory` throughout.
 
     A pod that reserves none of the guest's page size is refused, naming the
     resource to add and the cgroup that was read. A reservation above
-    `default_maxmemory`, when set, is refused by the Go runtime; runtime-rs
-    raises `default_maxmemory` to the reservation instead. A reservation above
+    `default_maxmemory`, when set, is refused. A reservation above
     `default_memory` sizes the guest; the size is logged before the VM starts:
 
     ```

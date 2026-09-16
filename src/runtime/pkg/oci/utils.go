@@ -1337,10 +1337,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 
-		// A huge page backed guest runs on the pool the pod reserved as
-		// hugepages-<size>, not on the memory its limit is charged to, so the
-		// limit does not add to default_memory. The sandbox sizes such a guest
-		// from the pod's reservation instead (sizeHugepageBackedVMFromPod).
+		// A huge page backed guest runs on the pod's hugepages-<size> pool, not on the
+		// memory its limit is charged to, so the limit does not add to default_memory.
 		if !sandboxConfig.HypervisorConfig.HugePages {
 			sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
 		} else if sandboxConfig.SandboxResources.WorkloadMemMB > 0 {

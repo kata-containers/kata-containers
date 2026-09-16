@@ -628,9 +628,8 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	return q.buildNUMATopologyForVFIOHostSet(vfioHostSet)
 }
 
-// qemuGuestMemoryPreallocated reports whether QEMU faults every page of guest
-// memory in at start: asked for with enable_mem_prealloc, and forced for a huge
-// page backed guest shared over virtio-fs or nydus.
+// Whether QEMU faults every guest page in at start: enable_mem_prealloc, or a
+// huge page backed guest shared over virtio-fs or nydus.
 func qemuGuestMemoryPreallocated(hc *HypervisorConfig) bool {
 	if hc.MemPrealloc {
 		return true

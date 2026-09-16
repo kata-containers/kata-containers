@@ -2047,10 +2047,8 @@ type CreateSandboxRequest struct {
 	GuestHookPath string `protobuf:"bytes,6,opt,name=guest_hook_path,json=guestHookPath,proto3" json:"guest_hook_path,omitempty"`
 	// This field is the list of kernel modules to be loaded in the guest kernel.
 	KernelModules []*KernelModule `protobuf:"bytes,7,rep,name=kernel_modules,json=kernelModules,proto3" json:"kernel_modules,omitempty"`
-	// This field is the most memory, in bytes, the sandbox's containers may
-	// use together inside the guest. The agent sets it as memory.max on the
-	// parent cgroup of every container. Zero leaves the containers to their
-	// own limits, which is also what an agent that predates this field does.
+	// The most memory, in bytes, the sandbox's containers may use together inside
+	// the guest, set as memory.max on their parent cgroup. Zero leaves them alone.
 	SandboxMemoryMaxBytes uint64 `protobuf:"varint,8,opt,name=sandbox_memory_max_bytes,json=sandboxMemoryMaxBytes,proto3" json:"sandbox_memory_max_bytes,omitempty"`
 }
 

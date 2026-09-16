@@ -679,7 +679,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	}
 
 	k := kataAgent{}
-	k.constrainGRPCSpec(g, true, true, "", true, nil, false, 0)
+	k.constrainGRPCSpec(g, true, true, "", true, nil, false, guestCapacity{}, 0, false)
 
 	// Check nil fields
 	assert.Nil(g.Hooks)
@@ -1488,13 +1488,14 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 	for _, tt := range []struct {
 		description         string
 		resources           *pb.LinuxResources
-		guestMemMB          uint32
+		pageSize            string
+		guest               guestCapacity
 		expectedLimit       int64
 		expectedReservation int64
 		expectedSwap        int64
 	}{
 		{
-			description: "the huge page reservation joins the limits the guest applies",
+			description: "the huge page reservation becomes the limit the guest applies",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{
 					Limit:       2 * gib,
@@ -1505,9 +1506,9 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 					{Pagesize: "1GB", Limit: hugePage},
 				},
 			},
-			expectedLimit:       2*gib + int64(hugePage),
-			expectedReservation: 2*gib + int64(hugePage),
-			expectedSwap:        2*gib + int64(hugePage),
+			expectedLimit:       int64(hugePage),
+			expectedReservation: 2 * gib,
+			expectedSwap:        int64(hugePage),
 		},
 		{
 			description: "a container reserving no huge pages keeps its limit",
@@ -1528,7 +1529,7 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			expectedSwap:  -1,
 		},
 		{
-			description: "a reservation that cannot be added saturates",
+			description: "a reservation larger than a limit can hold saturates",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: 2 * gib},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
@@ -1538,11 +1539,9 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			expectedLimit: math.MaxInt64,
 		},
 		{
-			// The pod asked for a container larger than the guest holds.
-			// It gets what the pod asked for: the bound on the pod's
-			// containers together is what stops a guest from being
-			// overcommitted, and the runtime says the guest is short.
-			description: "a sum reaching past the guest is still what the pod declared",
+			// The whole reservation went to one container, so the ceiling is held to what
+			// the guest holds.
+			description: "a ceiling past the guest is held to what the guest holds",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{
 					Limit:       2 * gib,
@@ -1553,35 +1552,38 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 					{Pagesize: "1GB", Limit: 16 * uint64(gib)},
 				},
 			},
-			guestMemMB:          16 * 1024,
-			expectedLimit:       18 * gib,
-			expectedReservation: 18 * gib,
-			expectedSwap:        18 * gib,
+			pageSize:            "1GB",
+			guest:               guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			expectedLimit:       15105 * gib / 1024,
+			expectedReservation: 2 * gib,
+			expectedSwap:        15105 * gib / 1024,
 		},
 		{
-			description: "a small guest does not shrink what the pod declared",
+			description: "a small guest holds the ceiling to what it holds",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: 256 * gib / 1024},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
 					{Pagesize: "2MB", Limit: 2 * uint64(gib)},
 				},
 			},
-			guestMemMB:    2 * 1024,
-			expectedLimit: 2*gib + 256*gib/1024,
+			pageSize:      "2MB",
+			guest:         guestCapacity{memoryMB: 2 * 1024, vCPUs: 1},
+			expectedLimit: 1416 * gib / 1024,
 		},
 		{
-			description: "a sum a fixed size guest can hold is left alone",
+			description: "a reservation a fixed size guest can hold is left alone",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: gib / 4},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
 					{Pagesize: "1GB", Limit: 4 * uint64(gib)},
 				},
 			},
-			guestMemMB:    16 * 1024,
-			expectedLimit: gib/4 + 4*gib,
+			pageSize:      "1GB",
+			guest:         guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			expectedLimit: 4 * gib,
 		},
 		{
-			description: "swap keeps the room it had above the limit",
+			description: "swap is held with the limit, as the guest has none of its own",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{
 					Limit: 2 * gib,
@@ -1591,12 +1593,13 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 					{Pagesize: "1GB", Limit: hugePage},
 				},
 			},
-			guestMemMB:    16 * 1024,
-			expectedLimit: 2*gib + int64(hugePage),
-			expectedSwap:  4*gib + int64(hugePage),
+			pageSize:      "1GB",
+			guest:         guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			expectedLimit: int64(hugePage),
+			expectedSwap:  int64(hugePage),
 		},
 		{
-			description: "reservations of several page sizes saturate together",
+			description: "reservations of every size saturate together when the VM's size is unknown",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: 2 * gib},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
@@ -1606,11 +1609,26 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			},
 			expectedLimit: math.MaxInt64,
 		},
+		{
+			// Only the VM's page size buys the guest RAM; a 2MB reservation is charged on
+			// the host and stays out of the ceiling.
+			description: "a reservation of another page size stays out of the ceiling",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: 2 * gib},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: 4 * uint64(gib)},
+					{Pagesize: "2MB", Limit: 100 * uint64(gib)},
+				},
+			},
+			pageSize:      "1GB",
+			guest:         guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			expectedLimit: 4 * gib,
+		},
 	} {
 		assert := assert.New(t)
 
-		hugePages := hugePagesTotal(tt.resources.HugepageLimits)
-		translateHostMemoryLimitToGuest((&kataAgent{}).Logger(), tt.resources.Memory, hugePages, tt.guestMemMB)
+		hugePages := hugePagesTotal(tt.resources.HugepageLimits, tt.pageSize)
+		translateHostMemoryLimitToGuest((&kataAgent{}).Logger(), tt.resources.Memory, hugePages, tt.guest)
 
 		memory := tt.resources.Memory
 		assert.Equal(tt.expectedLimit, memory.Limit, tt.description)
@@ -1627,46 +1645,230 @@ func TestSandboxMemoryMaxBytes(t *testing.T) {
 		hugePages   bool
 		static      bool
 		memMB       uint32
+		vCPUs       float32
 		expected    uint64
 	}{
 		{
-			// A 32Gi guest: a thirty-second (1Gi) is left to the guest itself.
+			// A 32 GiB guest on 4 vCPUs reports 32128 MiB and keeps 926 of
+			// them: 768 fixed, 62 for its size, 96 for its vCPUs.
 			description: "huge page backed, static",
 			hugePages:   true,
 			static:      true,
 			memMB:       32 * 1024,
-			expected:    uint64(31*1024) << 20,
+			vCPUs:       4,
+			expected:    uint64(31202) << 20,
 		},
 		{
-			description: "small guest, floor reserve",
+			// A small guest keeps a quarter of what it reports, the cap
+			// that keeps the fixed share from taking most of it.
+			description: "small guest",
 			hugePages:   true,
 			static:      true,
 			memMB:       2048,
-			expected:    uint64(2048-128) << 20,
+			vCPUs:       1,
+			expected:    uint64(1416) << 20,
+		},
+		{
+			// Twice the vCPUs on the same size takes 96 MiB more.
+			description: "the vCPU share grows with the vCPUs",
+			hugePages:   true,
+			static:      true,
+			memMB:       32 * 1024,
+			vCPUs:       8,
+			expected:    uint64(31106) << 20,
 		},
 		{
 			description: "not huge page backed",
 			hugePages:   false,
 			static:      true,
 			memMB:       32 * 1024,
+			vCPUs:       4,
 		},
 		{
 			description: "grows on demand",
 			hugePages:   true,
 			static:      false,
 			memMB:       32 * 1024,
+			vCPUs:       4,
 		},
 		{
 			description: "too small to hold anything",
 			hugePages:   true,
 			static:      true,
 			memMB:       128,
+			vCPUs:       1,
 		},
 	} {
 		s := &Sandbox{config: &SandboxConfig{
 			StaticResourceMgmt: tt.static,
-			HypervisorConfig:   HypervisorConfig{HugePages: tt.hugePages, MemorySize: tt.memMB},
+			HypervisorConfig: HypervisorConfig{
+				HugePages:  tt.hugePages,
+				MemorySize: tt.memMB,
+				NumVCPUsF:  tt.vCPUs,
+			},
 		}}
 		assert.Equal(tt.expected, sandboxMemoryMaxBytes(s), tt.description)
+	}
+}
+
+// Keeps the reserve above what a guest of that shape holds of its own, which a
+// fraction of the VM cannot do at both ends of the size range.
+func TestHoldableGuestMemoryReserve(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, tt := range []struct {
+		description string
+		guest       guestCapacity
+		// what such a guest holds of its own: its kernel, the drivers it
+		// loaded for its devices and the free pages it keeps
+		guestHoldsMB uint32
+	}{
+		{"a small guest", guestCapacity{memoryMB: 16 * 1024, vCPUs: 4}, 317},
+		{"a mid sized guest", guestCapacity{memoryMB: 256 * 1024, vCPUs: 16}, 748},
+		{"a large guest with devices", guestCapacity{memoryMB: 1024 * 1024, vCPUs: 64}, 2560},
+	} {
+		memTotalMB := guestMemTotalMB(tt.guest.memoryMB)
+		reserveMB := guestReserveMB(memTotalMB, tt.guest.vCPUs)
+
+		assert.Greater(reserveMB, tt.guestHoldsMB, tt.description)
+
+		holdable := holdableGuestMemoryBytes(tt.guest)
+		assert.Equal(int64(memTotalMB-reserveMB)<<20, holdable, tt.description)
+		assert.Less(holdable, int64(memTotalMB)<<20, tt.description)
+	}
+
+	// The large guest keeps an eighth of what a thirty-second of the VM would
+	// have taken from it.
+	large := guestCapacity{memoryMB: 1024 * 1024, vCPUs: 64}
+	assert.Less(guestReserveMB(guestMemTotalMB(large.memoryMB), large.vCPUs), large.memoryMB/32/4)
+
+	// A guest too small to keep the whole fixed share keeps a quarter of what
+	// it reports instead.
+	small := guestCapacity{memoryMB: 2048, vCPUs: 1}
+	memTotalMB := guestMemTotalMB(small.memoryMB)
+	assert.Equal(memTotalMB/guestReserveMaxDivisor, guestReserveMB(memTotalMB, small.vCPUs))
+}
+
+func TestCopiedReservation(t *testing.T) {
+	const gib = uint64(1) << 30
+
+	for _, tt := range []struct {
+		description  string
+		reservations []podReservation
+		vmMemory     uint64
+		expected     uint64
+	}{
+		{
+			description: "reservations that fit the VM are each the container's own",
+			reservations: []podReservation{
+				{name: "app", hugePages: 8 * gib},
+				{name: "side"},
+			},
+			vmMemory: 8 * gib,
+		},
+		{
+			// The kubelet writes the pod's allowance into every container
+			// that states none of its own, so the sum runs past the VM.
+			description: "the value past what the pod could declare is the pod's",
+			reservations: []podReservation{
+				{name: "app", hugePages: 192 * gib},
+				{name: "side-a", hugePages: 200 * gib},
+				{name: "side-b", hugePages: 200 * gib},
+			},
+			vmMemory: 200 * gib,
+			expected: 200 * gib,
+		},
+		{
+			// Containers arrive one at a time, so at the first sidecar the copy does not
+			// repeat yet and has to be caught on its size alone.
+			description: "a copy is caught before it repeats",
+			reservations: []podReservation{
+				{name: "app", hugePages: 32 * gib},
+				{name: "side-a", hugePages: 40 * gib},
+			},
+			vmMemory: 40 * gib,
+			expected: 40 * gib,
+		},
+		{
+			description: "a lone container is read as having stated its own",
+			reservations: []podReservation{
+				{name: "app", hugePages: 12 * gib},
+			},
+			vmMemory: 12 * gib,
+		},
+		{
+			description: "a guest of unknown size settles nothing",
+			reservations: []podReservation{
+				{name: "app", hugePages: 8 * gib},
+				{name: "side", hugePages: 8 * gib},
+			},
+		},
+	} {
+		assert := assert.New(t)
+		assert.Equal(tt.expected, copiedReservation(tt.reservations, tt.vmMemory), tt.description)
+	}
+}
+
+func TestRefuseGuestHugePagePoolTooLarge(t *testing.T) {
+	const gib = uint64(1) << 30
+
+	for _, tt := range []struct {
+		description  string
+		reservations []podReservation
+		copied       uint64
+		guest        guestCapacity
+		refused      bool
+	}{
+		{
+			// Ceilings that add up past the guest are held, not refused: a
+			// limit is a ceiling, not a reservation.
+			description: "ceilings past what the guest holds are left to the holding",
+			reservations: []podReservation{
+				{name: "app", hugePages: 16 * gib, memory: int64(2 * gib)},
+				{name: "side", hugePages: 16 * gib, memory: int64(2 * gib)},
+			},
+			guest: guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+		},
+		{
+			description: "a pool the guest can fit is left alone",
+			reservations: []podReservation{
+				{name: "app", hugePages: 8 * gib, memory: int64(2 * gib), pool: true},
+				{name: "side", memory: int64(2 * gib)},
+			},
+			guest: guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+		},
+		{
+			// The agent reserves the pool before the container runs, so a
+			// pool this size leaves nothing to run in.
+			description: "a pool the guest cannot fit is refused by name",
+			reservations: []podReservation{
+				{name: "app", hugePages: 16 * gib, memory: int64(gib), pool: true},
+			},
+			guest:   guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			refused: true,
+		},
+		{
+			description: "a pool the kubelet copied from the pod is not the container's",
+			reservations: []podReservation{
+				{name: "app", hugePages: 16 * gib, memory: int64(gib), pool: true},
+			},
+			copied: 16 * gib,
+			guest:  guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+		},
+		{
+			description: "a guest that grows on demand is not bounded here",
+			reservations: []podReservation{
+				{name: "app", hugePages: 64 * gib, memory: int64(2 * gib), pool: true},
+			},
+		},
+	} {
+		assert := assert.New(t)
+		err := refuseGuestHugePagePoolTooLarge(tt.reservations, tt.copied, tt.guest)
+		if tt.refused {
+			assert.Error(err, tt.description)
+			assert.Contains(err.Error(), "huge page pool", tt.description)
+		} else {
+			assert.NoError(err, tt.description)
+		}
 	}
 }

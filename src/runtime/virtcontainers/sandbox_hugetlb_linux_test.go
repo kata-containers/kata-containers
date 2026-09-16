@@ -25,11 +25,8 @@ const (
 	testHugetlbPageSize      = uint64(1) << 30
 )
 
-// hugetlbSizingSandbox builds the least Sandbox that carries a sandbox
-// container whose OCI spec names a cgroup, which is what the sizing reads.
-// It is a QEMU sandbox sharing its filesystem over virtio-fs, as the shipped
-// configurations do; QEMU takes a huge page backed guest's RAM from the pool
-// the pod reserves.
+// The least Sandbox carrying a sandbox container whose OCI spec names a cgroup,
+// which is what the sizing reads. QEMU over virtio-fs, as the shipped configs do.
 func hugetlbSizingSandbox(hugePages, static, sandboxCgroupOnly bool) (*Sandbox, *SandboxConfig) {
 	sbc := &SandboxConfig{
 		ID:                 "hugetlb-sizing",
@@ -124,13 +121,13 @@ func TestSizeHugepageBackedVMFromPodRefusesAShortReservation(t *testing.T) {
 		want  []string
 		tweak func(*SandboxConfig)
 	}{
-		"none":        {limit: 0, want: []string{"reserved none"}},
+		"none":        {limit: 0, want: []string{"reserved none", "pod overhead"}},
 		"beyond a VM": {limit: (uint64(math.MaxUint32) + 1) << 20, want: []string{"larger than a VM"}},
 		// The message carries both numbers the operator has to reconcile.
-		"below default_memory": {limit: 2 << 30, want: []string{"2048 MiB", "4096 MiB of default_memory"}},
-		// The mapping is capped by the reservation whether or not the VM
-		// faults its pages in at start, so preallocation does not decide it.
-		"below default_memory, no preallocation": {limit: 2 << 30, want: []string{"2048 MiB", "4096 MiB of default_memory"},
+		"below what a guest needs": {limit: 512 << 20, want: []string{"512 MiB", "1024 MiB a guest needs"}},
+		// The floor is the guest's, not the host's: preallocation does not
+		// decide it either way.
+		"below what a guest needs, no preallocation": {limit: 512 << 20, want: []string{"512 MiB", "1024 MiB a guest needs"},
 			tweak: func(c *SandboxConfig) { c.HypervisorConfig.SharedFS = config.NoSharedFS }},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -151,6 +148,27 @@ func TestSizeHugepageBackedVMFromPodRefusesAShortReservation(t *testing.T) {
 			assert.Contains(err.Error(), "hugepages-1Gi")
 			assert.Contains(err.Error(), testHugetlbPodCgroup)
 			assert.Equal(testHugetlbDefaultMemMB, sbc.HypervisorConfig.MemorySize)
+		})
+	}
+}
+
+// A pod that reserves less than default_memory buys a smaller guest rather than
+// being refused: default_memory sizes a guest nothing else sizes.
+func TestSizeHugepageBackedVMFromPodSizesBelowDefaultMemory(t *testing.T) {
+	for name, tweak := range map[string]func(*SandboxConfig){
+		"":                   nil,
+		", no preallocation": func(c *SandboxConfig) { c.HypervisorConfig.SharedFS = config.NoSharedFS },
+	} {
+		t.Run("a reservation under default_memory sizes the VM"+name, func(t *testing.T) {
+			assert := assert.New(t)
+			stubHugetlbHost(t, nil, 2<<30, true, nil)
+
+			s, sbc := hugetlbSizingSandbox(true, true, true)
+			if tweak != nil {
+				tweak(sbc)
+			}
+			assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+			assert.Equal(uint32(2048), sbc.HypervisorConfig.MemorySize)
 		})
 	}
 }
@@ -189,9 +207,8 @@ func TestSizeHugepageBackedVMFromPodKeepsDefaultMemory(t *testing.T) {
 		"no allowance stated":               {hugePages: true, static: true, sandboxCgroupOnly: true, stated: false},
 		"allowance unreadable":              {hugePages: true, static: true, sandboxCgroupOnly: true, limitErr: errors.New("boom")},
 		"huge page size unknown":            {hugePages: true, static: true, sandboxCgroupOnly: true, pageSizeErr: errors.New("boom")},
-		// A hypervisor that does not take the guest's RAM from the huge page
-		// pool is not sized from the pod's reservation, nor refused for one:
-		// a reservation that would otherwise grow the VM leaves it alone.
+		// A hypervisor that does not map guest RAM from the pool is neither sized from
+		// the reservation nor refused for one.
 		"hypervisor does not use the huge page pool": {hugePages: true, static: true, sandboxCgroupOnly: true, limit: 64 << 30, stated: true,
 			tweak: func(c *SandboxConfig) { c.HypervisorType = FirecrackerHypervisor }},
 	} {

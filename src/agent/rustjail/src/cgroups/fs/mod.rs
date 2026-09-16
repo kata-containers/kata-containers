@@ -482,9 +482,8 @@ fn pod_memory_limit(bytes: u64) -> Result<i64> {
     Ok(bytes as i64)
 }
 
-// set_pod_memory_max sets memory.max on the pod cgroup, the parent of the
-// sandbox's container cgroups. Without a memory controller the containers keep
-// their own limits.
+// Sets memory.max on the pod cgroup, the parent of the container cgroups.
+// Without a memory controller the containers keep their own limits.
 fn set_pod_memory_max(cg: &cgroups::Cgroup, bytes: u64) -> Result<()> {
     let limit = pod_memory_limit(bytes)?;
     let mem_controller: Option<&MemController> = cg.controller_of();
@@ -1177,9 +1176,8 @@ impl Manager {
                         devices_group_info.allowed_all = true;
                     }
 
-                    // The runtime's bound on the containers' memory taken
-                    // together, written once when the pod cgroup is created so
-                    // every container sits under it.
+                    // The runtime's bound on the containers together, written once when the pod
+                    // cgroup is created so every container sits under it.
                     if pod_memory_max_bytes > 0 {
                         set_pod_memory_max(pod_cg, pod_memory_max_bytes).with_context(|| {
                             format!("Bound the memory of pod cgroup {pod_cpath}")
