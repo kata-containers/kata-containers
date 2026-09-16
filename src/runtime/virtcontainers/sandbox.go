@@ -265,6 +265,20 @@ type Sandbox struct {
 	seccompSupported  bool
 	disableVMShutdown bool
 	isVCPUsPinningOn  bool
+
+	vmmExitUnconfirmed bool
+}
+
+// errVMMExitUnconfirmed marks a stop whose VMM may still be running, and so
+// may still hold the file descriptors of the devices passed through to it.
+var errVMMExitUnconfirmed = errors.New("VMM exit was not confirmed")
+
+// canRestorePassthroughDevices reports whether the teardown may hand a
+// passed-through device back to its host driver.  It may not while the VMM
+// might still hold the device open, as the unbind then blocks in the kernel
+// until the owner lets go.
+func (s *Sandbox) canRestorePassthroughDevices() bool {
+	return !s.vmmExitUnconfirmed
 }
 
 // ID returns the sandbox identifier string.
@@ -1674,7 +1688,9 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		if err != nil {
 			// Log error, otherwise nobody might see it - StopVM could kill this process.
 			s.Logger().WithError(err).Error("Cannot start VM")
-			s.hypervisor.StopVM(ctx, false)
+			if stopErr := s.stopHypervisor(ctx, false); stopErr != nil {
+				s.Logger().WithError(stopErr).Warn("Failed to stop VM after startup failure")
+			}
 			if s.cw != nil {
 				s.cw.stop()
 			}
@@ -1781,7 +1797,15 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 
 	s.Logger().Info("Stopping VM")
 
-	return s.hypervisor.StopVM(ctx, s.disableVMShutdown)
+	return s.stopHypervisor(ctx, s.disableVMShutdown)
+}
+
+// stopHypervisor records exit confirmation for normal teardown and creation
+// rollback alike, before either path can remove the network.
+func (s *Sandbox) stopHypervisor(ctx context.Context, waitOnly bool) error {
+	err := s.hypervisor.StopVM(ctx, waitOnly)
+	s.vmmExitUnconfirmed = errors.Is(err, errVMMExitUnconfirmed)
+	return err
 }
 
 func (s *Sandbox) addContainer(c *Container) error {
@@ -2222,8 +2246,17 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 		}
 	}
 
-	if err := s.stopVM(ctx); err != nil && !force {
-		return err
+	if err := s.stopVM(ctx); err != nil {
+		if !force {
+			return err
+		}
+
+		// A force stop carries on through guest-related failures, but the
+		// network teardown below still needs to know whether the VMM let
+		// go of the sandbox's passed-through devices.
+		if errors.Is(err, errVMMExitUnconfirmed) {
+			s.Logger().WithError(err).Warn("Tearing the sandbox down without restoring its passed-through devices")
+		}
 	}
 
 	// shutdown console watcher if exists

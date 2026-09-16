@@ -13,6 +13,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -35,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newQemuConfig() HypervisorConfig {
@@ -2024,5 +2027,204 @@ func TestQemuStopVMWaitsForQemuExit(t *testing.T) {
 		assert.NoError(err)
 	case <-time.After(qemuStopSandboxTimeout):
 		t.Fatal("StopVM did not return once QEMU had been reaped")
+	}
+}
+
+// TestQemuStopVMConfirmsAQemuThatIsAlreadyGone covers the other side of the
+// contract: a QEMU that went away on its own has released its devices, so the
+// teardown must not be told the exit is unconfirmed.
+func TestQemuStopVMConfirmsAQemuThatIsAlreadyGone(t *testing.T) {
+	assert := assert.New(t)
+
+	// A reaped process: its pid is gone, as QEMU's would be.
+	goneQemu := exec.Command("true")
+	assert.NoError(goneQemu.Run())
+
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	assert.NoError(os.WriteFile(pidFile, []byte(strconv.Itoa(goneQemu.Process.Pid)), 0600))
+
+	q := &qemu{
+		id:  "testSandbox",
+		ctx: context.Background(),
+		config: HypervisorConfig{
+			VMStorePath:  dir,
+			RunStorePath: dir,
+		},
+		qemuConfig: govmmQemu.Config{PidFile: pidFile},
+	}
+	// qmpSetup() dials a socket that is not there, as it would for a QEMU
+	// that has exited.
+	q.qmpMonitorCh.path = filepath.Join(dir, "qmp.sock")
+	q.qmpMonitorCh.ctx = context.Background()
+
+	assert.NoError(q.StopVM(context.Background(), false))
+}
+
+// A restored QEMU has no exit channel. Neither that nor a working QMP
+// connection makes a missing PID proof that it has exited.
+func TestQemuStopVMWithoutPID(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		pid      string
+		launched bool
+		reaped   bool
+		qmpReady bool
+	}{
+		{name: "restored missing PID", qmpReady: true},
+		{name: "restored malformed PID", pid: "invalid", qmpReady: true},
+		{name: "restored zero PID", pid: "0", qmpReady: true},
+		{name: "restored negative PID", pid: "-1", qmpReady: true},
+		{name: "launched missing PID", launched: true, qmpReady: true},
+		{name: "restored missing PID and QMP"},
+		{name: "reaped missing PID", launched: true, reaped: true, qmpReady: true},
+		{name: "reaped missing PID and QMP", launched: true, reaped: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			vmDir := filepath.Join(dir, "testSandbox")
+			require.NoError(t, os.Mkdir(vmDir, 0700))
+			pidFile := filepath.Join(vmDir, "pid")
+			if tc.pid != "" {
+				require.NoError(t, os.WriteFile(pidFile, []byte(tc.pid), 0600))
+			}
+			q := &qemu{
+				id:         "testSandbox",
+				ctx:        context.Background(),
+				config:     HypervisorConfig{VMStorePath: dir, RunStorePath: dir},
+				qemuConfig: govmmQemu.Config{PidFile: pidFile},
+			}
+			q.qmpMonitorCh.ctx = context.Background()
+			q.qmpMonitorCh.path = filepath.Join(vmDir, "qmp.sock")
+			if tc.qmpReady {
+				q.qmpMonitorCh.qmp = &govmmQemu.QMP{}
+			}
+			if tc.launched {
+				q.exitCh = make(chan struct{})
+				if tc.reaped {
+					close(q.exitCh)
+				}
+			}
+
+			err := q.StopVM(context.Background(), false)
+			if tc.reaped {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, errVMMExitUnconfirmed)
+			}
+		})
+	}
+}
+
+// WaitLocalProcess can finish before the QEMU reaper reports completion.
+// StopVM must still wait for that confirmation on the waitOnly path.
+func TestQemuStopVMWaitOnlyConfirmsExit(t *testing.T) {
+	goneQemu := exec.Command("true")
+	require.NoError(t, goneQemu.Run())
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	require.NoError(t, os.WriteFile(pidFile, []byte(strconv.Itoa(goneQemu.Process.Pid)), 0600))
+	q := &qemu{
+		id:         "testSandbox",
+		ctx:        context.Background(),
+		config:     HypervisorConfig{VMStorePath: dir, RunStorePath: dir},
+		qemuConfig: govmmQemu.Config{PidFile: pidFile},
+		exitCh:     make(chan struct{}),
+	}
+	q.qmpMonitorCh.qmp = &govmmQemu.QMP{}
+	stopped := make(chan error, 1)
+	go func() { stopped <- q.StopVM(context.Background(), true) }()
+
+	select {
+	case err := <-stopped:
+		t.Fatalf("StopVM returned without exit confirmation: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(q.exitCh)
+	select {
+	case err := <-stopped:
+		assert.NoError(t, err)
+	case <-time.After(qemuStopSandboxTimeout):
+		t.Fatal("StopVM did not return after exit confirmation")
+	}
+}
+
+func TestQemuStopVMRestoredWithoutPID(t *testing.T) {
+	for _, viaGRPC := range []bool{false, true} {
+		t.Run(fmt.Sprintf("viaGRPC=%t", viaGRPC), func(t *testing.T) {
+			hypervisor, err := NewHypervisor(QemuHypervisor)
+			require.NoError(t, err)
+			q := hypervisor.(*qemu)
+			dir := t.TempDir()
+			q.ctx = context.Background()
+			q.id = "testSandbox"
+			q.config = newQemuConfig()
+			q.config.VMStorePath = dir
+			q.config.RunStorePath = dir
+			q.qemuConfig.PidFile = filepath.Join(dir, "missing-pid")
+			q.qmpMonitorCh.ctx = context.Background()
+			q.qmpMonitorCh.path = filepath.Join(dir, "missing-qmp.sock")
+			if viaGRPC {
+				state, err := json.Marshal(qemuGrpc{ID: q.id, QmpChannelpath: q.qmpMonitorCh.path})
+				require.NoError(t, err)
+				require.NoError(t, q.fromGrpc(context.Background(), &q.config, state))
+			} else {
+				q.Load(hv.HypervisorState{})
+			}
+
+			assert.ErrorIs(t, q.StopVM(context.Background(), false), errVMMExitUnconfirmed)
+		})
+	}
+}
+
+func TestQemuStopVMWaitsForReaperWithoutQMP(t *testing.T) {
+	for _, confirmExit := range []bool{true, false} {
+		t.Run(fmt.Sprintf("confirmExit=%t", confirmExit), func(t *testing.T) {
+			// Leave the child unreaped: kill(pid, 0) still succeeds even
+			// after it exits, until the reaper calls Wait.
+			child := exec.Command("true")
+			require.NoError(t, child.Start())
+			t.Cleanup(func() {
+				child.Process.Kill()
+				child.Wait()
+			})
+			dir := t.TempDir()
+			pidFile := filepath.Join(dir, "pid")
+			require.NoError(t, os.WriteFile(pidFile, []byte(strconv.Itoa(child.Process.Pid)), 0600))
+			q := &qemu{
+				id:         "testSandbox",
+				ctx:        context.Background(),
+				config:     HypervisorConfig{VMStorePath: dir, RunStorePath: dir},
+				qemuConfig: govmmQemu.Config{PidFile: pidFile},
+				exitCh:     make(chan struct{}),
+			}
+			q.qmpMonitorCh.ctx = context.Background()
+			q.qmpMonitorCh.path = filepath.Join(dir, "missing-qmp.sock")
+
+			if !confirmExit {
+				err := q.StopVM(context.Background(), false)
+				assert.ErrorIs(t, err, errVMMExitUnconfirmed)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "set up QMP")
+				assert.Contains(t, err.Error(), "still running after waiting")
+				return
+			}
+
+			stopped := make(chan error, 1)
+			go func() { stopped <- q.StopVM(context.Background(), false) }()
+			select {
+			case err := <-stopped:
+				t.Fatalf("StopVM returned before the reaper confirmed exit: %v", err)
+			case <-time.After(100 * time.Millisecond):
+			}
+			assert.NoError(t, child.Wait())
+			close(q.exitCh)
+			select {
+			case err := <-stopped:
+				assert.NoError(t, err)
+			case <-time.After(qemuStopSandboxTimeout):
+				t.Fatal("StopVM did not return after the reaper confirmed exit")
+			}
+		})
 	}
 }
