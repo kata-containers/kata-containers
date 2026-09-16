@@ -1780,13 +1780,10 @@ impl LinuxContainer {
         };
 
         let cgroup_manager: Arc<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
-            if config.pod_memory_max_bytes > 0 {
-                warn!(
-                    logger,
-                    "the systemd cgroup manager has no pod cgroup, the sandbox memory bound is not applied"
-                );
-            }
-            Arc::new(SystemdManager::new(cpath.as_str()).context("Create systemd manager")?)
+            Arc::new(
+                SystemdManager::new(cpath.as_str(), config.pod_memory_max_bytes)
+                    .context("Create systemd manager")?,
+            )
         } else {
             Arc::new(
                 FsManager::new(

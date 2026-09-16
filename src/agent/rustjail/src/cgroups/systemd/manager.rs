@@ -21,7 +21,7 @@ use std::vec;
 use super::super::fs::Manager as FsManager;
 
 use super::cgroups_path::CgroupsPath;
-use super::common::{CgroupHierarchy, Properties};
+use super::common::{CgroupHierarchy, Properties, DEFAULT_SLICE};
 use super::dbus_client::{DBusClient, SystemdInterface};
 use super::subsystem::transformer::Transformer;
 use super::subsystem::{cpu::Cpu, cpuset::CpuSet, memory::Memory, pids::Pids};
@@ -38,6 +38,9 @@ pub struct Manager {
     fs_manager: FsManager,
     // cgroup version for different dbus properties
     cg_hierarchy: CgroupHierarchy,
+    // the sandbox memory bound to put on the pod's slice, 0 for none
+    #[serde(default)]
+    pod_memory_max_bytes: u64,
 }
 
 impl CgroupManager for Manager {
@@ -51,6 +54,7 @@ impl CgroupManager for Manager {
                 self.cgroups_path.slice.as_str(),
                 &self.cg_hierarchy,
             )?;
+            self.set_pod_memory_max()?;
         }
 
         Ok(())
@@ -111,8 +115,18 @@ impl CgroupManager for Manager {
     }
 }
 
+// pod_slice is the slice a bound on the pod's containers together goes on: the
+// slice the host named, which is the pod's cgroup. A container in the default
+// slice, or in the root, belongs to no pod.
+fn pod_slice(slice: &str) -> Option<&str> {
+    match slice {
+        "" | "-.slice" | DEFAULT_SLICE => None,
+        _ => Some(slice),
+    }
+}
+
 impl Manager {
-    pub fn new(cgroups_path_str: &str) -> Result<Self> {
+    pub fn new(cgroups_path_str: &str, pod_memory_max_bytes: u64) -> Result<Self> {
         let cgroups_path = CgroupsPath::new(cgroups_path_str)?;
         let (parent_slice, unit_name) = cgroups_path.parse()?;
         let cpath = parent_slice + "/" + &unit_name;
@@ -131,6 +145,58 @@ impl Manager {
             } else {
                 CgroupHierarchy::Legacy
             },
+            pod_memory_max_bytes,
         })
+    }
+
+    // set_pod_memory_max puts the sandbox memory bound on the pod's slice, the
+    // parent of every container scope, once the first scope has brought the
+    // slice up. Without a pod slice the containers keep their own limits.
+    fn set_pod_memory_max(&self) -> Result<()> {
+        if self.pod_memory_max_bytes == 0 {
+            return Ok(());
+        }
+        let Some(slice) = pod_slice(self.cgroups_path.slice.as_str()) else {
+            slog_scope::warn!(
+                "Container in {} has no pod cgroup to bound its memory with the sandbox's other containers",
+                self.cgroups_path.slice
+            );
+            return Ok(());
+        };
+        self.dbus_client.set_slice_memory_max(
+            slice,
+            self.pod_memory_max_bytes,
+            &self.cg_hierarchy,
+        )?;
+        slog_scope::info!(
+            "the sandbox memory bound is set on the pod's slice";
+            "slice" => slice,
+            "bytes" => self.pod_memory_max_bytes
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pod_slice;
+
+    #[test]
+    fn pod_slice_is_the_slice_the_host_named() {
+        assert_eq!(
+            pod_slice("kubepods-pod0123.slice"),
+            Some("kubepods-pod0123.slice")
+        );
+        assert_eq!(
+            pod_slice("kubepods-burstable-pod0123.slice"),
+            Some("kubepods-burstable-pod0123.slice")
+        );
+    }
+
+    #[test]
+    fn default_and_root_slices_are_no_pod() {
+        assert_eq!(pod_slice("system.slice"), None);
+        assert_eq!(pod_slice("-.slice"), None);
+        assert_eq!(pod_slice(""), None);
     }
 }
