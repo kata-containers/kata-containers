@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 mod dan;
 mod endpoint;
-pub use dan::{dan_config_path, Dan, DanNetworkConfig};
+pub use dan::{dan_config_path, dan_vfio_device_count, Dan, DanNetworkConfig};
 pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
@@ -39,6 +39,11 @@ pub enum NetworkConfig {
 #[async_trait]
 pub trait Network: Send + Sync {
     async fn setup(&self) -> Result<()>;
+    /// Attaches endpoints that can only be plugged in once the VM is running.
+    /// Runs before the interfaces are handed to the agent.
+    async fn setup_after_start_vm(&self) -> Result<()> {
+        Ok(())
+    }
     async fn interfaces(&self) -> Result<Vec<agent::Interface>>;
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
