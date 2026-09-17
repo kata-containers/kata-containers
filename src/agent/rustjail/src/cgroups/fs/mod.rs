@@ -491,6 +491,10 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         swap = -1;
     }
 
+    // What the controller is given is not what the spec carries: see
+    // memswap_limit_value().
+    let swap_limit = memswap_limit_value(cg.v2(), swap, memory.limit().unwrap_or(0))?;
+
     if memory.limit().is_some() && swap != 0 {
         let memstat = get_memory_stats(cg)
             .into_option()
@@ -502,22 +506,19 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         // the new swap, then set limit first, otherwise the kernel would complain and
         // refused to set; on the other hand, if the current memory limit is smaller than
         // the new swap, then we should set the swap first and then set the memor limit.
+        // The ordering is a cgroup v1 constraint; on v2 the two files are
+        // independent and either order works.
         if swap == -1 || memusage.limit() < swap as u64 {
-            mem_controller.set_memswap_limit(swap)?;
+            mem_controller.set_memswap_limit(swap_limit)?;
             set_resource!(mem_controller, set_limit, memory, limit);
         } else {
             set_resource!(mem_controller, set_limit, memory, limit);
-            mem_controller.set_memswap_limit(swap)?;
+            mem_controller.set_memswap_limit(swap_limit)?;
         }
     } else {
         set_resource!(mem_controller, set_limit, memory, limit);
-        swap = if cg.v2() {
-            convert_memory_swap_to_v2_value(swap, memory.limit().unwrap_or(0))?
-        } else {
-            swap
-        };
-        if swap != 0 {
-            mem_controller.set_memswap_limit(swap)?;
+        if swap_limit != 0 {
+            mem_controller.set_memswap_limit(swap_limit)?;
         }
     }
 
@@ -1384,6 +1385,23 @@ pub fn convert_shares_to_v2_value(shares: u64) -> u64 {
     1 + ((shares - 2) * 9999) / 262142
 }
 
+/// The value to write to the swap limit, for the cgroup version in use.
+///
+/// `LinuxMemory::swap` is the total of memory and swap -- which is what
+/// cgroup v1's `memory.memsw.limit_in_bytes` takes -- while cgroup v2's
+/// `memory.swap.max` is the swap on its own. On v2 the memory limit has to
+/// come back out of the total before it is written, or a container is given
+/// the memory limit's worth of extra swap: asking for 512M of memory and
+/// 768M of memory+swap wrote 768M to `memory.swap.max` and the container
+/// ran with 768M of swap instead of 256M.
+fn memswap_limit_value(is_v2: bool, swap: i64, limit: i64) -> Result<i64> {
+    if is_v2 {
+        convert_memory_swap_to_v2_value(swap, limit)
+    } else {
+        Ok(swap)
+    }
+}
+
 // ConvertMemorySwapToCgroupV2Value converts MemorySwap value from OCI spec
 // for use by cgroup v2 drivers. A conversion is needed since Resources.MemorySwap
 // is defined as memory+swap combined, while in cgroup v2 swap is a separate value.
@@ -1428,12 +1446,72 @@ mod tests {
     use oci_spec::runtime as oci;
     use test_utils::skip_if_not_root;
 
-    use super::{cgroup_path_under_root, default_allowed_devices, load_cgroup};
+    use super::{
+        cgroup_path_under_root, default_allowed_devices, load_cgroup, memswap_limit_value,
+    };
     use crate::cgroups::fs::{
         line_to_vec, lines_to_map, Manager, DEFAULT_ALLOWED_DEVICES, WILDCARD,
     };
     use crate::cgroups::DevicesCgroupInfo;
     use crate::container::DEFAULT_DEVICES;
+
+    #[test]
+    fn test_memswap_limit_value_passes_the_total_through_on_v1() {
+        // memory.memsw.limit_in_bytes takes the total, which is what the
+        // spec field already holds.
+        assert_eq!(
+            memswap_limit_value(false, 768 * 1024 * 1024, 512 * 1024 * 1024).unwrap(),
+            768 * 1024 * 1024
+        );
+    }
+
+    #[test]
+    fn test_memswap_limit_value_takes_the_memory_out_on_v2() {
+        // memory.swap.max is the swap on its own: 512M of memory and 768M of
+        // memory+swap is 256M of swap, not 768M.
+        assert_eq!(
+            memswap_limit_value(true, 768 * 1024 * 1024, 512 * 1024 * 1024).unwrap(),
+            256 * 1024 * 1024
+        );
+    }
+
+    #[test]
+    fn test_memswap_limit_value_zero_on_v2_means_swap_is_off() {
+        // A total equal to the memory limit is how swap is turned off.
+        assert_eq!(
+            memswap_limit_value(true, 512 * 1024 * 1024, 512 * 1024 * 1024).unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn test_memswap_limit_value_unlimited_passes_through() {
+        assert_eq!(
+            memswap_limit_value(true, -1, 512 * 1024 * 1024).unwrap(),
+            -1
+        );
+        assert_eq!(
+            memswap_limit_value(false, -1, 512 * 1024 * 1024).unwrap(),
+            -1
+        );
+    }
+
+    #[test]
+    fn test_memswap_limit_value_unset_passes_through() {
+        assert_eq!(memswap_limit_value(true, 0, 512 * 1024 * 1024).unwrap(), 0);
+        assert_eq!(memswap_limit_value(false, 0, 512 * 1024 * 1024).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_memswap_limit_value_needs_a_memory_limit_on_v2() {
+        // Nothing to take out of the total, so the total cannot be resolved.
+        assert!(memswap_limit_value(true, 768 * 1024 * 1024, 0).is_err());
+    }
+
+    #[test]
+    fn test_memswap_limit_value_rejects_a_total_below_the_memory_limit_on_v2() {
+        assert!(memswap_limit_value(true, 256 * 1024 * 1024, 512 * 1024 * 1024).is_err());
+    }
 
     #[test]
     fn test_cgroup_path_under_root_trims_absolute_cpath() {
