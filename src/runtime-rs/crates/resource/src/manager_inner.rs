@@ -963,10 +963,13 @@ impl ResourceManagerInner {
         }
     }
 
-    pub async fn cleanup(&self) -> Result<()> {
+    pub async fn cleanup(&self, restore_passthrough_devices: bool) -> Result<()> {
         // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
         if let Some(network) = &self.network {
-            if let Err(err) = network.remove(self.hypervisor.as_ref()).await {
+            if let Err(err) = network
+                .remove(self.hypervisor.as_ref(), restore_passthrough_devices)
+                .await
+            {
                 warn!(sl!(), "failed to remove network: {}", err);
             }
         }

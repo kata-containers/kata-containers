@@ -36,6 +36,26 @@ pub enum NetworkConfig {
     Dan(DanNetworkConfig),
 }
 
+/// Unbinding a device userspace still owns blocks in the kernel until the
+/// owner lets go, so a device the VMM may still hold is left alone.
+pub(crate) async fn detach_endpoint(
+    endpoint: &dyn endpoint::Endpoint,
+    h: &dyn Hypervisor,
+    restore_passthrough_devices: bool,
+) -> Result<()> {
+    if !restore_passthrough_devices {
+        if let Some(bdf) = endpoint.host_bdf().await {
+            warn!(
+                sl!(),
+                "leaving {} bound to vfio-pci: the VMM exit was not confirmed", bdf
+            );
+            return Ok(());
+        }
+    }
+
+    endpoint.detach(h).await
+}
+
 #[async_trait]
 pub trait Network: Send + Sync {
     async fn setup(&self) -> Result<()>;
@@ -43,7 +63,7 @@ pub trait Network: Send + Sync {
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
-    async fn remove(&self, h: &dyn Hypervisor) -> Result<()>;
+    async fn remove(&self, h: &dyn Hypervisor, restore_passthrough_devices: bool) -> Result<()>;
     /// Returns the list of network endpoints. Used to resolve PCI paths
     /// via QMP before sending update_interface to the agent.
     async fn endpoints(&self) -> Vec<std::sync::Arc<dyn endpoint::Endpoint>> {
@@ -82,12 +102,14 @@ pub async fn new(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hypervisor::Hypervisor;
+    use hypervisor::{qemu::Qemu, Hypervisor};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     struct TestEndpoint {
         bdf: Option<String>,
+        detached: AtomicUsize,
     }
 
     #[async_trait]
@@ -102,6 +124,7 @@ mod tests {
             Ok(None)
         }
         async fn detach(&self, _hypervisor: &dyn Hypervisor) -> Result<()> {
+            self.detached.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
         async fn save(&self) -> Option<EndpointState> {
@@ -133,7 +156,7 @@ mod tests {
         async fn save(&self) -> Option<Vec<EndpointState>> {
             None
         }
-        async fn remove(&self, _h: &dyn Hypervisor) -> Result<()> {
+        async fn remove(&self, _h: &dyn Hypervisor, _restore: bool) -> Result<()> {
             Ok(())
         }
         async fn endpoints(&self) -> Vec<Arc<dyn endpoint::Endpoint>> {
@@ -141,10 +164,15 @@ mod tests {
         }
     }
 
-    fn endpoint(bdf: Option<&str>) -> Arc<dyn endpoint::Endpoint> {
+    fn test_endpoint(bdf: Option<&str>) -> Arc<TestEndpoint> {
         Arc::new(TestEndpoint {
             bdf: bdf.map(|bdf| bdf.to_owned()),
+            detached: AtomicUsize::new(0),
         })
+    }
+
+    fn endpoint(bdf: Option<&str>) -> Arc<dyn endpoint::Endpoint> {
+        test_endpoint(bdf)
     }
 
     #[tokio::test]
@@ -161,5 +189,30 @@ mod tests {
             endpoints: vec![endpoint(None), endpoint(Some("0000:b5:09.7"))],
         };
         assert!(network.has_passthrough_devices().await);
+    }
+
+    #[tokio::test]
+    async fn test_detach_endpoint_keeps_passthrough_on_unconfirmed_exit() {
+        let hypervisor = Qemu::new();
+
+        for (bdf, restore, want_detaches) in [
+            (Some("0000:b5:09.7"), false, 0),
+            (Some("0000:b5:09.7"), true, 1),
+            (None, false, 1),
+            (None, true, 1),
+        ] {
+            let endpoint = test_endpoint(bdf);
+            detach_endpoint(endpoint.as_ref(), &hypervisor, restore)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                want_detaches,
+                endpoint.detached.load(Ordering::SeqCst),
+                "bdf {:?}, restore {}",
+                bdf,
+                restore
+            );
+        }
     }
 }
