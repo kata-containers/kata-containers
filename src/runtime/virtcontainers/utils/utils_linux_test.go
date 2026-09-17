@@ -63,3 +63,31 @@ func TestGetDevicePathAndFsTypeOptionsErrors(t *testing.T) {
 	_, _, _, err = getDevicePathAndFsTypeOptionsFromReader("/not-mounted", strings.NewReader("invalid entry\n"))
 	assert.ErrorContains(err, "Incorrect no of fields")
 }
+
+func TestGetDevicePathAndFsTypeOptionsWithEscapedPath(t *testing.T) {
+	assert := assert.New(t)
+	cases := []struct {
+		path        string
+		escapedPath string
+	}{
+		{"/__kata_mount_test__/space dir", `/__kata_mount_test__/space\040dir`},
+		{"/__kata_mount_test__/tab\tdir", `/__kata_mount_test__/tab\011dir`},
+		{"/__kata_mount_test__/newline\ndir", `/__kata_mount_test__/newline\012dir`},
+		{`/__kata_mount_test__/backslash\dir`, `/__kata_mount_test__/backslash\134dir`},
+		{`/__kata_mount_test__/literal\040`, `/__kata_mount_test__/literal\134040`},
+	}
+	var mounts string
+
+	for _, tc := range cases {
+		mounts += "tmpfs " + tc.escapedPath + " tmpfs rw,nosuid,nodev 0 0\n"
+	}
+
+	for _, tc := range cases {
+		devicePath, fsType, fsOptions, err := getDevicePathAndFsTypeOptionsFromReader(tc.path, strings.NewReader(mounts))
+
+		assert.NoError(err)
+		assert.Equal("tmpfs", devicePath)
+		assert.Equal("tmpfs", fsType)
+		assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
+	}
+}

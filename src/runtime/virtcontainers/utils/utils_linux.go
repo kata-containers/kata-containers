@@ -105,6 +105,14 @@ const (
 	procOptionIndex
 )
 
+// /proc/mounts uses the fstab(5) field escaping convention; see getmntent(3).
+var mountFieldUnescaper = strings.NewReplacer(
+	`\040`, " ",
+	`\011`, "\t",
+	`\012`, "\n",
+	`\134`, `\`,
+)
+
 // GetDevicePathAndFsTypeOptions gets the device for the mount point, the file system type
 // and mount options
 func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string, fsOptions []string, err error) {
@@ -138,7 +146,8 @@ func getDevicePathAndFsTypeOptionsFromReader(mountPoint string, mounts io.Reader
 			return
 		}
 
-		if mountPoint == fields[procPathIndex] {
+		mountPath := mountFieldUnescaper.Replace(fields[procPathIndex])
+		if mountPoint == mountPath {
 			devicePath = fields[procDeviceIndex]
 			fsType = fields[procTypeIndex]
 			fsOptions = strings.Split(fields[procOptionIndex], ",")
