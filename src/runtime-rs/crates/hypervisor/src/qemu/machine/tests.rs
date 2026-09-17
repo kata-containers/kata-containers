@@ -382,6 +382,62 @@ fn gb200_4gpu_2socket() {
     );
 }
 
+/// Read the real host through the same entry point as auto cold plug, without
+/// opening device FDs or launching QEMU. Output is the Platform argument fragment,
+/// not the legacy kernel/CPU/console/device arguments of a complete sandbox.
+#[test]
+#[ignore = "requires explicit host BDFs; diagnostic only"]
+fn dump_host_topology_args() {
+    let assigned: Vec<String> = std::env::var("KATA_DRY_RUN_BDFS")
+        .expect("set KATA_DRY_RUN_BDFS to comma-separated PCI BDFs")
+        .split(',')
+        .map(str::trim)
+        .filter(|bdf| !bdf.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+    assert!(!assigned.is_empty(), "provide at least one PCI BDF");
+    let read_u32 = |name: &str, default: u32| {
+        std::env::var(name)
+            .map(|value| value.parse::<u32>().expect("expected an unsigned integer"))
+            .unwrap_or(default)
+    };
+    let vcpus = read_u32("KATA_DRY_RUN_VCPUS", 8);
+    let memory_mib = read_u32("KATA_DRY_RUN_MEMORY_MIB", 16384);
+    let hotplug = read_u32("KATA_DRY_RUN_HOTPLUG", 0);
+    assert!(vcpus > 0 && memory_mib > 0 && hotplug <= 1);
+    let mut config = kata_types::config::Hypervisor::default();
+    config.machine_info.machine_type = "virt".to_owned();
+    config.cpu_info.default_vcpus = vcpus as f32;
+    config.cpu_info.default_maxvcpus = vcpus;
+    config.memory_info.default_memory = memory_mib;
+    config.shared_fs.shared_fs = Some("none".to_owned());
+    config.device_info.cold_plug_vfio = "auto".to_owned();
+
+    let mut platform = Platform::for_assigned_devices(&config, &assigned)
+        .expect("probe and build host topology")
+        .expect("none of the requested devices is modelled by the host probe");
+    let paths = platform.guest_pci_paths();
+    for bdf in &assigned {
+        assert!(
+            paths.contains_key(bdf),
+            "requested device {} was not modelled",
+            bdf
+        );
+    }
+    if hotplug == 1 {
+        platform.add_hotplug_placeholder_node();
+    }
+    println!("# Platform fragment: virt, {vcpus} vCPUs, {memory_mib} MiB, shared_fs=none");
+    println!("# Guest sizing is supplied here, not loaded from the installed Kata config.");
+    println!("# EGM is ignored by auto mode; no devices are opened and QEMU is not started.");
+    for bdf in &assigned {
+        println!("# {bdf} -> {}", paths[bdf]);
+    }
+    for arg in platform.to_qemu_args().expect("emit Platform arguments") {
+        println!("{arg}");
+    }
+}
+
 // The prober records host CPU indices and host memory; the guest layout is
 // derived from them before apply_host_defaults.
 
@@ -1181,6 +1237,64 @@ fn hotplug_placeholder_is_last_numa_node() {
         last_initiator < last_numa,
         "placeholder follows the initiator nodes"
     );
+}
+
+// Real Grace package IDs are not sequential NUMA node IDs.
+
+#[test]
+fn probe_gb200_package_ids_preserve_numa_binding() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let pci = tmp.path().join("pci");
+    let cpu = tmp.path().join("cpu");
+    let dev = tmp.path().join("dev");
+    fs::create_dir_all(&dev).unwrap();
+    for (node, cpu_id, package, bdf) in [
+        (0, 0, 268435456u32, "0008:01:00.0"),
+        (1, 72, 285212672u32, "0018:01:00.0"),
+    ] {
+        let cpu_path = cpu.join(format!("cpu{cpu_id}"));
+        fs::create_dir_all(cpu_path.join("topology")).unwrap();
+        fs::write(
+            cpu_path.join("topology/physical_package_id"),
+            package.to_string(),
+        )
+        .unwrap();
+        let node_path = tmp.path().join(format!("node{node}"));
+        fs::create_dir_all(&node_path).unwrap();
+        symlink(&node_path, cpu_path.join(format!("node{node}"))).unwrap();
+        let d = pci.join(bdf);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("vendor"), "0x10de").unwrap();
+        fs::write(d.join("class"), "0x030200").unwrap();
+        fs::write(d.join("numa_node"), node.to_string()).unwrap();
+        symlink(tmp.path().join(format!("{node}")), d.join("iommu_group")).unwrap();
+    }
+    let topo = probe_host_topology_at(&pci, &cpu, &dev).unwrap();
+    assert_eq!(topo.sockets.len(), 2);
+    assert_eq!(topo.sockets[0].host_node, Some(0));
+    assert_eq!(topo.sockets[1].host_node, Some(1));
+    assert_eq!(topo.gpu_smmu_groups[0].socket, topo.sockets[0].id);
+    assert_eq!(topo.gpu_smmu_groups[1].socket, topo.sockets[1].id);
+
+    let mut config = kata_types::config::Hypervisor::default();
+    config.machine_info.machine_type = "virt".to_owned();
+    config.memory_info.default_memory = 16384;
+    config.cpu_info.default_vcpus = 8.0;
+    config.cpu_info.default_maxvcpus = 8;
+    let platform = Platform::from_config_and_topology(&config, topo).unwrap();
+    let args = platform.to_qemu_args().unwrap();
+    for (idx, bus_nr) in [(0, 32), (1, 64)] {
+        assert!(args.contains(&format!(
+            "memory-backend-ram,id=m{idx},size=8G,host-nodes={idx},policy=bind"
+        )));
+        assert!(args.contains(&format!(
+            "pxb-pcie,id=pcie.{},bus=pcie.0,bus_nr={bus_nr},numa_node={idx}",
+            idx + 1
+        )));
+    }
 }
 
 // ---- Phase 6: PlatformProbe unit test ----

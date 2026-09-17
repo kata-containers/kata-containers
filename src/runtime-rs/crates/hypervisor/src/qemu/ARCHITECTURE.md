@@ -973,6 +973,8 @@ Groundwork that preparing the first real launch on a GB200 node forced:
 - probed groups sort by BDF, not IOMMU group id;
 - the probe's host CPU ranges and memory become a guest layout
   (`map_guest_vcpus`, `fill_guest_memory`, per-socket RAM bound to host nodes);
+- host NUMA binding comes from `cpuN/nodeN` links, independently of the
+  decimal `physical_package_id` (Grace reports large, nonsequential IDs);
 - `HostTopology::retain_devices` scopes the Platform to the sandbox's devices;
 - fixture `gb200_4gpu_2socket.args` (Config 8); 18 golden and unit tests pass.
 
@@ -985,6 +987,31 @@ Groundwork that preparing the first real launch on a GB200 node forced:
 - `-smp sockets=` matching the guest NUMA sockets, and optional `-numa dist`
   weights against GPU-memory spill (both from the guide's NUMA chapter).
 - Q35 `"auto"` end to end (the emitter exists; untested on hardware).
+
+#### Inspect the host topology arguments without launching QEMU
+
+Run the opt-in diagnostic from the repository root on the Grace host. Pass
+the BDFs intended for the sandbox explicitly; the probe reads sysfs and
+uses the same `Platform::for_assigned_devices` path as `"auto"`:
+
+```bash
+KATA_DRY_RUN_BDFS=0008:01:00.0,0009:01:00.0,0018:01:00.0,0019:01:00.0 \
+cargo test -p hypervisor --no-default-features \
+  qemu::machine::tests::dump_host_topology_args -- --exact --ignored --nocapture
+```
+
+The defaults are 8 vCPUs (including the maximum) and 16384 MiB of guest RAM.
+Override them with `KATA_DRY_RUN_VCPUS` and `KATA_DRY_RUN_MEMORY_MIB`.
+Set `KATA_DRY_RUN_HOTPLUG=1` to include the final empty NUMA node used when
+the legacy command line reserves memory hotplug space.
+
+This prints the Platform's machine, RAM, NUMA and passthrough argument
+fragment, plus the guest PCI paths. It does not load the installed Kata
+configuration or include the legacy kernel, CPU, console, networking and
+storage arguments. It uses ordinary RAM with `shared_fs = "none"`; vEGM is
+ignored just as it is in `"auto"`. No VFIO device is opened or rebound, no
+guest memory is allocated, and QEMU is not started. This checks argument
+generation; it does not validate the installed QEMU's capabilities.
 
 ---
 
