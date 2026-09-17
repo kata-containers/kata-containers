@@ -279,8 +279,11 @@ pub struct SmmuV3Config {
 
 **`SMMU` grouping rule:** GPUs that share a physical `SMMU` on the host **must** be
 placed on the same `PciRootComplex` in the guest (they share the same
-`arm-smmuv3` device).  The IOMMU group boundaries in host sysfs determine the
-grouping.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
+`arm-smmuv3` device).  The prober keys complexes on the physical SMMU behind
+each device (`/sys/bus/pci/devices/<BDF>/iommu`, e.g. `smmu3.0x0000000005000000`)
+and falls back to the IOMMU group only when the kernel exposes no such link: an
+IOMMU group is an isolation boundary, not a translation unit, and two GPUs can
+sit in separate groups behind one SMMU.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
 the `2-GPUs-per-SMMU` topology.
 
 #### `Objects` — shared QEMU `-object` backends
@@ -430,6 +433,15 @@ The `-numa node` arguments **must appear in this order** in the QEMU command
 line.  Placing Generic Affinity nodes before CpuMem nodes causes the kernel to
 assign wrong NUMA node IDs.
 
+**Memory hot-plug placeholder:** QEMU attaches the hot-plug region declared by
+`-m ...,slots=,maxmem=` to the *last* NUMA node on the command line.  With GPU
+initiator nodes last, hot-plugged RAM would land on a GPU node.  Whenever the
+legacy `-m` carries a hot-plug region (kata's default outside confidential
+guests), `Platform::add_hotplug_placeholder_node` appends one more node with
+neither CPUs nor memory after the initiator nodes, exactly as the NVIDIA Grace
+I/O Virtualization Guide recommends.  The golden fixtures model VMs without
+hot-plug and therefore carry no placeholder.
+
 **8 NUMA nodes per GPU (MIG):** Each passthrough GPU requires exactly 8 dedicated
 generic-initiator NUMA nodes regardless of whether MIG is in use.  The GPU
 driver (CUDA) uses these nodes to online GPU memory to the guest kernel.  Total
@@ -448,6 +460,17 @@ Or by disabling NUMA balancing in the guest OS.
 - GH200 / GB200 with ≤ 4 GPUs → `4T`
 - GB300 NVL72 with 4 GPUs → `8T`
 - Must be a power of 2; round up to the next power when in doubt.
+
+**Guest layout from the probe (`from_config_and_topology`):** the prober records
+host CPU indices and host NUMA nodes; the guest sees neither.  Before
+`apply_host_defaults`, `HostTopology::map_guest_vcpus` replaces the CPU ranges
+with guest vCPUs `0..maxcpus` laid out contiguously over the sockets (earlier
+sockets take the remainder, so hot-plugged CPUs always have a node), and
+`fill_guest_memory` splits guest RAM over the sockets in whole MiB with the
+remainder on the last one, so the `memdev` sizes add up to `-m`.  Multi-socket
+virt without EGM then gets one `memory-backend-ram` per socket carrying
+`host-nodes=<host node>,policy=bind`, the same model Q35 uses; a single socket
+keeps one backend spanning all guest RAM.
 
 ### Hugepages wiring (`with_hugepages`)
 
@@ -537,6 +560,20 @@ QEMU VFIO passthrough uses two independent configuration axes.
 and one `vfio-pci[/vfio-pci-nohotplug]` per device, emitted together in the static
 command line.  No empty pre-provisioned slots are used; device count is exact.
 
+**Sandbox scoping (`Platform::for_assigned_devices`):** the prober sees every
+NVIDIA device on the host; a sandbox only receives the ones its pod was
+allocated.  `HostTopology::retain_devices` prunes the probed groups to the
+assigned BDFs (dropping emptied groups) before the guest layout is derived, so a
+one-GPU pod on a four-GPU tray gets one complex and 8 initiator nodes.
+
+**Guest PCI path:** a Platform-placed device sits at `<bus_nr>/<port index>/00`
+(hex): the pxb root complex, the root port's slot on it (QEMU assigns functions
+on an expander bus in emission order) and the device at function 0 behind the
+port.  `Platform::guest_pci_paths` hands these to the runtime, which writes them
+back as `guest_pci_path` for the agent; the agent's pxb-aware parser
+(`pcipath_from_dev_tree_path`) requires the first segment to be >= 0x20, which
+`pxb_bus_nr` guarantees.
+
 `HostTopology::pcie_root_port` drives hot-plug slot reservation: N `pcie-root-port`
 devices emitted on `pcie.0` at VM creation, with no device attached.  At runtime,
 devices are plugged into available slots via QMP `device_add`.  DANs and dynamically
@@ -549,7 +586,9 @@ of entries in `gpu_smmu_groups` and `pci_bus_addrs`.  The model scales linearly:
 each GPU gets exactly one `pcie-root-port` on a `pxb-pcie`; GPUs on the same NUMA
 socket share a pxb complex.  `apply_q35_defaults` assigns:
 
-- `bus_nr = 32 + group_idx × 32` per pxb (32-bus spacing matches production captures)
+- `bus_nr = 0x20 × (complex_idx + 1)` per pxb (`pxb_bus_nr`, shared with virt):
+  each complex has room for its root ports and uses the kata-agent convention
+  for guest PCI paths
 - `chassis = 10 + group_idx` per pxb (unique chassis per complex, e.g. 10, 11)
 - `slot = port_index_within_pxb` (0-based, unique per pxb)
 - `id = rp-numa{group}-{port}` (port-relative, not global GPU index)
@@ -693,6 +732,7 @@ hardware for the queue base address), and `cmdqv=on` is added to `arm-smmuv3`:
 ```text
 -object memory-backend-file,id=m0,size=16G,mem-path=/dev/hugepages/,prealloc=on,share=on
 -machine virt,...
+-numa node,memdev=m0,cpus=0-3,nodeid=0
 -device arm-smmuv3,...,cmdqv=on
 ```
 
@@ -749,6 +789,32 @@ for that socket point to the same CpuMem NUMA node:
 ```
 
 `HostTopology`: 2 sockets, 2 `GpuSmmuGroup` (2 GPUs each), 2 `EgmSocketInfo`.
+
+### Config 8: GB200 tray, 4 GPUs, 1 GPU per `SMMU`, 2 per socket, no EGM (34 NUMA nodes)
+
+Probed on a GB200 node: two Grace sockets, Blackwell GPUs `0008:01:00.0` and
+`0009:01:00.0` on host node 0, `0018:01:00.0` and `0019:01:00.0` on host node 1,
+each alone in its IOMMU group.  Guest RAM is split per socket and bound to the
+matching host node; every GPU gets its own `pxb-pcie` complex placed on its
+socket's CpuMem node:
+
+```text
+-object iommufd,id=iommufd0
+-object memory-backend-ram,id=m0,size=8G,host-nodes=0,policy=bind
+-object memory-backend-ram,id=m1,size=8G,host-nodes=1,policy=bind
+-machine virt,accel=kvm,gic-version=3,ras=on,highmem-mmio-size=4T
+-numa node,memdev=m0,cpus=0-3,nodeid=0
+-numa node,memdev=m1,cpus=4-7,nodeid=1
+-numa node,nodeid=2 ... -numa node,nodeid=33   # 4×8 GPU initiator nodes
+-device pxb-pcie,id=pcie.1,bus=pcie.0,bus_nr=32,numa_node=0    # 0008:01:00.0
+-device pxb-pcie,id=pcie.2,bus=pcie.0,bus_nr=64,numa_node=0    # 0009:01:00.0
+-device pxb-pcie,id=pcie.3,bus=pcie.0,bus_nr=96,numa_node=1    # 0018:01:00.0
+-device pxb-pcie,id=pcie.4,bus=pcie.0,bus_nr=128,numa_node=1   # 0019:01:00.0
+# each followed by arm-smmuv3 + pcie-root-port + vfio-pci-nohotplug (Config 2 shape)
+```
+
+`HostTopology`: 2 sockets (`host_node` 0 and 1, 8G each), 4 `GpuSmmuGroup` with
+one address each on sockets 0, 0, 1, 1.  Fixture: `gb200_4gpu_2socket.args`.
 
 ---
 
@@ -852,8 +918,9 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
 **Delivered:**
 - `probe_host_topology()` in `probe.rs`: walks `/sys/bus/pci/devices/` to
   discover NVIDIA GPUs (class 0x0302/0x0300) and NICs (0x0200/0x0207), groups
-  them by IOMMU group ID (one group = one `SMMU` on Grace), reads NUMA node
-  affinity, and detects EGM devices under `/dev/egmN`.
+  them by IOMMU group ID (one group = one `SMMU` on Grace; Phase 7 keys on the
+  physical SMMU instead), reads NUMA node affinity, and detects EGM devices
+  under `/dev/egmN`.
 - `probe_host_topology_at(pci, cpu, dev)`: test-injectable variant used by the
   `probe_synthetic_sysfs` unit test.
 - `Platform::from_config_with_probe()`: builds Platform from kata config and
@@ -867,12 +934,84 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
   (strangle pattern — Platform takes over one section at a time).
 - 14 golden tests passing (12 original + `probe_synthetic_sysfs` + `grace_switch_port_emission`).
 
-**Still open (next):**
-- Delete machine/memory/NUMA sections from `cmdline_generator.rs` (Platform now
-  owns them — pending parity confirmation on a real system).
-- Wire `"auto"` value in `cold_plug_vfio` / `hot_plug_vfio` kata config to
-  `Platform::from_config_with_probe()` instead of the static topology config.
-- Final golden-test sweep and removal of all TODOs from this document.
+**Follow-up:** the `"auto"` wiring and the memory/NUMA/PCIe hand-over landed in
+Phase 7; deleting the superseded legacy sections is Phase 8.
+
+### Phase 7: Platform drives the launch for `cold_plug_vfio = "auto"` (2026-09-15)
+
+The strangle seam flips, gated.  With `cold_plug_vfio = "auto"` in the kata
+config, `QemuInner::start_vm` collects the host BDFs of the VFIO devices
+assigned to the sandbox, calls `Platform::for_assigned_devices`, and hands the
+result to `QemuCmdLine::apply_platform`:
+
+- the Platform's machine options are merged into the legacy `-machine` line
+  (same-key override, so `gic-version=3` replaces the profile's
+  `gic-version=host`);
+- the machine-wide `memory-backend-ram,id=entire-guest-memory` and its
+  `memory-backend=` reference are dropped; guest RAM comes from the Platform's
+  per-socket backends bound through `-numa node,memdev=`;
+- `Platform::topology_args` (everything but the `-machine` pair: iommufd,
+  backends, NUMA nodes, pxb/smmuv3/root ports/vfio, initiator links) is
+  appended to the device list verbatim;
+- Platform-placed devices are skipped by the legacy VFIO cold-plug loop and
+  get their `guest_pci_path` from `Platform::guest_pci_paths`
+  (`<bus_nr>/<port>/00`); `PciPath` learned the root-complex form for that.
+
+Legacy keeps `-name`, kernel, `-smp`, `-cpu`, `-m` (with hot-plug slots and
+maxmem), QMP, consoles, virtio devices, hot-plug root ports on `pcie.0` and any
+VFIO device the prober does not model.  Without `"auto"` nothing changes: the
+Platform is still only probed and logged.  `"auto"` with no modelled device
+falls back to the legacy topology; `"auto"` with `shared_fs = "virtio-fs"` is
+rejected (see Known Issues).
+
+Groundwork that preparing the first real launch on a GB200 node forced:
+
+- the virt machine line drops `memory-backend=` whenever a NUMA node carries
+  `memdev=` (QEMU rejects the pair; fixtures 1 to 5 and GB300 were invalid);
+- Grace pxb buses are numbered `0x20 * (idx + 1)` like Q35, above the
+  `pcie.0` secondary-bus range and in the form the agent resolves;
+- probed groups sort by BDF, not IOMMU group id;
+- the probe's host CPU ranges and memory become a guest layout
+  (`map_guest_vcpus`, `fill_guest_memory`, per-socket RAM bound to host nodes);
+- host NUMA binding comes from `cpuN/nodeN` links, independently of the
+  decimal `physical_package_id` (Grace reports large, nonsequential IDs);
+- `HostTopology::retain_devices` scopes the Platform to the sandbox's devices;
+- fixture `gb200_4gpu_2socket.args` (Config 8); 18 golden and unit tests pass.
+
+**Still open (Phase 8):**
+- Delete the machine/memory/NUMA and root-port sections of
+  `cmdline_generator.rs` once parity is confirmed on GB200 and x86 hardware.
+- `"auto"` for `hot_plug_vfio` (QMP `device_add` onto Platform root ports).
+- File-backed shared memory for virtio-fs under `"auto"`.
+- vEGM under `"auto"`: `-m` from the EGM sizes and the compute-tray check.
+- `-smp sockets=` matching the guest NUMA sockets, and optional `-numa dist`
+  weights against GPU-memory spill (both from the guide's NUMA chapter).
+- Q35 `"auto"` end to end (the emitter exists; untested on hardware).
+
+#### Inspect the host topology arguments without launching QEMU
+
+Run the opt-in diagnostic from the repository root on the Grace host. Pass
+the BDFs intended for the sandbox explicitly; the probe reads sysfs and
+uses the same `Platform::for_assigned_devices` path as `"auto"`:
+
+```bash
+KATA_DRY_RUN_BDFS=0008:01:00.0,0009:01:00.0,0018:01:00.0,0019:01:00.0 \
+cargo test -p hypervisor --no-default-features \
+  qemu::machine::tests::dump_host_topology_args -- --exact --ignored --nocapture
+```
+
+The defaults are 8 vCPUs (including the maximum) and 16384 MiB of guest RAM.
+Override them with `KATA_DRY_RUN_VCPUS` and `KATA_DRY_RUN_MEMORY_MIB`.
+Set `KATA_DRY_RUN_HOTPLUG=1` to include the final empty NUMA node used when
+the legacy command line reserves memory hotplug space.
+
+This prints the Platform's machine, RAM, NUMA and passthrough argument
+fragment, plus the guest PCI paths. It does not load the installed Kata
+configuration or include the legacy kernel, CPU, console, networking and
+storage arguments. It uses ordinary RAM with `shared_fs = "none"`; vEGM is
+ignored just as it is in `"auto"`. No VFIO device is opened or rebound, no
+guest memory is allocated, and QEMU is not started. This checks argument
+generation; it does not validate the installed QEMU's capabilities.
 
 ---
 
@@ -1132,6 +1271,32 @@ through `BaseMachine` today; they need typed representations before the
 legacy `Machine` struct can be deleted.
 
 ---
+
+### `cold_plug_vfio = "auto"` requires `shared_fs = "none"`
+
+The Platform emits `memory-backend-ram` per socket; virtio-fs needs `share=on`
+file-backed guest RAM (`/dev/shm` or hugepages).  `SocketInfo::mem_path`
+already models it (Q35 SHM), but the single-socket virt path and the hand-over
+from the legacy `add_virtiofs_share` are not wired, so `start_vm` rejects the
+combination rather than launch a VM whose shared memory is silently absent.
+
+### vEGM is not wired under `cold_plug_vfio = "auto"`
+
+vEGM makes the EGM regions the guest's system memory: `-m` must equal the sum
+of the `memory-backend-file` sizes taken from `/dev/egmN`, and the Grace I/O
+Virtualization Guide only supports it at the compute-tray boundary (every GPU of
+the tray passed through).  Neither the `-m` hand-over nor the tray check exists
+yet, so `Platform::for_assigned_devices` ignores probed EGM devices with a
+warning and backs the guest with RAM.  The emitters and fixtures grace_6 and
+grace_7 already produce the vEGM layout; Phase 8 wires the runtime side.
+
+### At most seven `pxb-pcie` complexes
+
+`pxb_bus_nr` spaces complexes 0x20 apart starting at 0x20; the eighth would
+need bus 0x100.  Grace trays carry at most four GPUs and Q35 groups GPUs per
+socket, so this is not a practical limit today, but a host with eight
+single-GPU IOMMU groups would need a denser scheme (and a matching agent
+change).
 
 ## Design Principles
 
