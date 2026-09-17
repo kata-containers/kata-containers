@@ -42,7 +42,7 @@
 
 use std::fmt::Debug;
 use std::fs;
-use std::io::{self, BufRead};
+use std::io;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -134,8 +134,13 @@ pub struct LinuxMountInfo {
 /// Get the device and file system type of a mount point by parsing `/proc/mounts`.
 pub fn get_linux_mount_info(mount_point: &str) -> Result<LinuxMountInfo> {
     let mount_file = fs::File::open(PROC_MOUNTS_FILE)?;
-    let reader = io::BufReader::new(mount_file);
+    get_linux_mount_info_from_reader(mount_point, io::BufReader::new(mount_file))
+}
 
+fn get_linux_mount_info_from_reader<R: io::BufRead>(
+    mount_point: &str,
+    reader: R,
+) -> Result<LinuxMountInfo> {
     for line in reader.lines() {
         let mount = line?;
         let fields: Vec<&str> = mount.split(' ').collect();
@@ -838,19 +843,30 @@ mod tests {
 
     #[test]
     fn test_get_linux_mount_info() {
-        let info = get_linux_mount_info("/dev/shm").unwrap();
+        let mount_point = "/__kata_mount_test__/mount";
+        let mounts = format!(
+            "none /other ext4 rw 0 0\ntmpfs {} tmpfs rw,nosuid,nodev 0 0\n",
+            mount_point
+        );
+
+        let info = get_linux_mount_info_from_reader(mount_point, mounts.as_bytes()).unwrap();
 
         assert_eq!(&info.device, "tmpfs");
         assert_eq!(&info.fs_type, "tmpfs");
-        assert_eq!(&info.path, "/dev/shm");
+        assert_eq!(&info.path, mount_point);
 
         assert!(matches!(
-            get_linux_mount_info(""),
+            get_linux_mount_info_from_reader("", mounts.as_bytes()),
             Err(Error::NoMountEntry(_))
         ));
         assert!(matches!(
-            get_linux_mount_info("/sys/fs/cgroup/do_not_exist/____hi"),
+            get_linux_mount_info_from_reader("/not-mounted", mounts.as_bytes()),
             Err(Error::NoMountEntry(_))
+        ));
+
+        assert!(matches!(
+            get_linux_mount_info_from_reader(mount_point, "invalid entry\n".as_bytes()),
+            Err(Error::InvalidMountEntry(6, 2, _))
         ));
     }
 
