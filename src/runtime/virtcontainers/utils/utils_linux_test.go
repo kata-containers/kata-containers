@@ -6,9 +6,7 @@
 package utils
 
 import (
-	"bytes"
 	"errors"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -45,21 +43,23 @@ func TestGetDevicePathAndFsTypeOptionsEmptyMount(t *testing.T) {
 
 func TestGetDevicePathAndFsTypeOptionsSuccessful(t *testing.T) {
 	assert := assert.New(t)
+	mountPoint := "/__kata_mount_test__/mount"
+	mounts := "none /other ext4 rw 0 0\n" +
+		"tmpfs " + mountPoint + " tmpfs rw,nosuid,nodev 0 0\n"
 
-	cmdStr := "grep ^proc  /proc/mounts"
-	cmd := exec.Command("sh", "-c", cmdStr)
-	output, err := cmd.Output()
+	path, fstype, fsOptions, err := getDevicePathAndFsTypeOptionsFromReader(mountPoint, strings.NewReader(mounts))
 	assert.NoError(err)
+	assert.Equal("tmpfs", path)
+	assert.Equal("tmpfs", fstype)
+	assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
+}
 
-	data := bytes.Split(output, []byte(" "))
-	fstypeOut := string(data[2])
-	optsOut := strings.Split(string(data[3]), ",")
+func TestGetDevicePathAndFsTypeOptionsErrors(t *testing.T) {
+	assert := assert.New(t)
 
-	path, fstype, fsOptions, err := GetDevicePathAndFsTypeOptions("/proc")
-	assert.NoError(err)
+	_, _, _, err := getDevicePathAndFsTypeOptionsFromReader("/not-mounted", strings.NewReader("none /other ext4 rw 0 0\n"))
+	assert.EqualError(err, "Mount /not-mounted not found")
 
-	assert.Equal(path, "proc")
-	assert.Equal(fstype, "proc")
-	assert.Equal(fstype, fstypeOut)
-	assert.Equal(fsOptions, optsOut)
+	_, _, _, err = getDevicePathAndFsTypeOptionsFromReader("/not-mounted", strings.NewReader("invalid entry\n"))
+	assert.ErrorContains(err, "Incorrect no of fields")
 }

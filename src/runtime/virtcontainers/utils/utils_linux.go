@@ -112,17 +112,17 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 		err = fmt.Errorf("Mount point cannot be empty")
 		return
 	}
-
-	var file *os.File
-
-	file, err = os.Open(procMountsFile)
+	file, err := os.Open(procMountsFile)
 	if err != nil {
-		return
+		return "", "", nil, err
 	}
-
 	defer file.Close()
 
-	reader := bufio.NewReader(file)
+	return getDevicePathAndFsTypeOptionsFromReader(mountPoint, file)
+}
+
+func getDevicePathAndFsTypeOptionsFromReader(mountPoint string, mounts io.Reader) (devicePath, fsType string, fsOptions []string, err error) {
+	reader := bufio.NewReader(mounts)
 	for {
 		var line string
 
