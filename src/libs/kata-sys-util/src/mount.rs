@@ -67,6 +67,39 @@ const PROC_DEVICE_INDEX: usize = 0;
 const PROC_PATH_INDEX: usize = 1;
 const PROC_TYPE_INDEX: usize = 2;
 
+// /proc/mounts uses the fstab(5) field escaping convention; see getmntent(3).
+fn unescape_mount_field(field: &str) -> String {
+    let mut unescaped = String::with_capacity(field.len());
+    let mut chars = field.chars();
+
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            unescaped.push(ch);
+            continue;
+        }
+
+        let mut escaped = chars.clone();
+        let decoded = match (escaped.next(), escaped.next(), escaped.next()) {
+            (Some('0'), Some('4'), Some('0')) => Some(' '),
+            (Some('0'), Some('1'), Some('1')) => Some('\t'),
+            (Some('0'), Some('1'), Some('2')) => Some('\n'),
+            (Some('1'), Some('3'), Some('4')) => Some('\\'),
+            _ => None,
+        };
+
+        if let Some(decoded) = decoded {
+            chars.next();
+            chars.next();
+            chars.next();
+            unescaped.push(decoded);
+        } else {
+            unescaped.push(ch);
+        }
+    }
+
+    unescaped
+}
+
 lazy_static! {
     static ref MAX_MOUNT_PARAM_SIZE: usize =
         if let Ok(Some(v)) = unistd::sysconf(unistd::SysconfVar::PAGE_SIZE) {
@@ -153,10 +186,11 @@ fn get_linux_mount_info_from_reader<R: io::BufRead>(
             ));
         }
 
-        if mount_point == fields[PROC_PATH_INDEX] {
+        let path = unescape_mount_field(fields[PROC_PATH_INDEX]);
+        if mount_point == path {
             return Ok(LinuxMountInfo {
                 device: fields[PROC_DEVICE_INDEX].to_string(),
-                path: fields[PROC_PATH_INDEX].to_string(),
+                path,
                 fs_type: fields[PROC_TYPE_INDEX].to_string(),
             });
         }
@@ -868,6 +902,43 @@ mod tests {
             get_linux_mount_info_from_reader(mount_point, "invalid entry\n".as_bytes()),
             Err(Error::InvalidMountEntry(6, 2, _))
         ));
+    }
+
+    #[test]
+    fn test_get_linux_mount_info_with_escaped_path() {
+        let cases = [
+            (
+                "/__kata_mount_test__/space dir",
+                r"/__kata_mount_test__/space\040dir",
+            ),
+            (
+                "/__kata_mount_test__/tab\tdir",
+                r"/__kata_mount_test__/tab\011dir",
+            ),
+            (
+                "/__kata_mount_test__/newline\ndir",
+                r"/__kata_mount_test__/newline\012dir",
+            ),
+            (
+                r"/__kata_mount_test__/backslash\dir",
+                r"/__kata_mount_test__/backslash\134dir",
+            ),
+            (
+                r"/__kata_mount_test__/literal\040",
+                r"/__kata_mount_test__/literal\134040",
+            ),
+        ];
+        let mut mounts = String::new();
+
+        for (_, escaped_path) in cases {
+            mounts.push_str(&format!("tmpfs {escaped_path} tmpfs rw,nosuid,nodev 0 0\n"));
+        }
+
+        for (path, _) in cases {
+            let info = get_linux_mount_info_from_reader(path, mounts.as_bytes()).unwrap();
+
+            assert_eq!(info.path, path);
+        }
     }
 
     #[test]
