@@ -9,6 +9,7 @@ package virtcontainers
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 
@@ -48,6 +49,86 @@ func TestPhysicalEndpoint_HotDetach(t *testing.T) {
 
 	err := v.HotDetach(context.Background(), s, true, "")
 	assert.Error(err)
+}
+
+func TestPhysicalEndpoint_AttachRestoresHostDriverOnAddDeviceFailure(t *testing.T) {
+	assert := assert.New(t)
+
+	var restored *PhysicalEndpoint
+	v := &PhysicalEndpoint{
+		IfaceName: "eth0",
+		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+		BDF:       "0000:03:00.1",
+		Driver:    "mlx5_core",
+		bindToVFIO: func(_ *PhysicalEndpoint) (string, error) {
+			return "/dev/null", nil
+		},
+		bindToHost: func(endpoint *PhysicalEndpoint) error {
+			restored = endpoint
+			return nil
+		},
+	}
+	s := &Sandbox{
+		hypervisor: &mockHypervisor{},
+		config:     &SandboxConfig{},
+	}
+
+	err := v.Attach(context.Background(), s)
+	assert.Error(err)
+	assert.Equal(v, restored)
+}
+
+func TestPhysicalEndpoint_HotAttachRestoresHostDriverOnAddDeviceFailure(t *testing.T) {
+	assert := assert.New(t)
+
+	var restored *PhysicalEndpoint
+	v := &PhysicalEndpoint{
+		IfaceName: "eth0",
+		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+		BDF:       "0000:03:00.1",
+		Driver:    "mlx5_core",
+		bindToVFIO: func(_ *PhysicalEndpoint) (string, error) {
+			return "/dev/null", nil
+		},
+		bindToHost: func(endpoint *PhysicalEndpoint) error {
+			restored = endpoint
+			return nil
+		},
+	}
+	s := &Sandbox{
+		hypervisor: &mockHypervisor{},
+		config:     &SandboxConfig{},
+	}
+
+	err := v.HotAttach(context.Background(), s)
+	assert.Error(err)
+	assert.Equal(v, restored)
+}
+
+func TestPhysicalEndpoint_AttachDoesNotRestoreWhenBindFails(t *testing.T) {
+	assert := assert.New(t)
+
+	hostCalled := false
+	v := &PhysicalEndpoint{
+		IfaceName: "eth0",
+		BDF:       "0000:03:00.1",
+		Driver:    "mlx5_core",
+		bindToVFIO: func(_ *PhysicalEndpoint) (string, error) {
+			return "", fmt.Errorf("bind to vfio-pci failed")
+		},
+		bindToHost: func(_ *PhysicalEndpoint) error {
+			hostCalled = true
+			return nil
+		},
+	}
+	s := &Sandbox{
+		hypervisor: &mockHypervisor{},
+		config:     &SandboxConfig{},
+	}
+
+	err := v.Attach(context.Background(), s)
+	assert.Error(err)
+	assert.False(hostCalled)
 }
 
 func TestIsPhysicalIface(t *testing.T) {
