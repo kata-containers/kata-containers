@@ -23,6 +23,20 @@
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
 
+# Where this distribution keeps containerd's configuration, as the /host mount
+# sees it rather than as the install logs it. Only this one: a node can carry an
+# idle /etc/containerd beside the tree in use, and a handler read from there
+# would fail a test for a configuration nothing serves.
+containerd_config_roots() {
+	case "${KUBERNETES:-}" in
+		k0s) echo "/host/etc/k0s" ;;
+		k3s) echo "/host/var/lib/rancher/k3s/agent/etc/containerd" ;;
+		rke2) echo "/host/var/lib/rancher/rke2/agent/etc/containerd" ;;
+		microk8s) echo "/host/var/snap/microk8s/current/args" ;;
+		*) echo "/host/etc/containerd" ;;
+	esac
+}
+
 # Run a command against the host node's filesystem, mounted at /host inside a
 # short-lived privileged pod.
 # Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
