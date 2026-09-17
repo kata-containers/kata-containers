@@ -160,6 +160,9 @@ jobs:
           go_version="$(yq '.languages.golang.version' versions.yaml)"
           [ -n "$go_version" ]
           echo "GO_VERSION=${go_version}" >> "$GITHUB_ENV"
+          oras_version="$(yq '.externals.oras.version' versions.yaml)"
+          [ -n "$oras_version" ]
+          echo "ORAS_VERSION=${oras_version}" >> "$GITHUB_ENV"
       - name: Setup Golang version ${{ env.GO_VERSION }}
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
@@ -167,6 +170,10 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update && sudo apt-get -y install moreutils
+      - name: Install oras
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        with:
+          version: ${{ env.ORAS_VERSION }}
       - name: Install open-policy-agent
         run: |
           cd "${GOPATH}/src/github.com/${GITHUB_REPOSITORY}"

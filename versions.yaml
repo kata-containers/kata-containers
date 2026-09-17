@@ -362,6 +362,11 @@ externals:
     url: "https://github.com/containerd/nydus-snapshotter"
     version: "v0.15.15"
 
+  oras:
+    description: "OCI Registry As Storage CLI"
+    url: "https://github.com/oras-project/oras"
+    version: "1.3.3"
+
   opa:
     description: "Open Policy Agent"
     url: "https://github.com/open-policy-agent/opa"
