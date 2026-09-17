@@ -956,6 +956,13 @@ impl ResourceManagerInner {
         }
     }
 
+    pub async fn has_passthrough_devices(&self) -> bool {
+        match &self.network {
+            Some(network) => network.has_passthrough_devices().await,
+            None => false,
+        }
+    }
+
     pub async fn cleanup(&self) -> Result<()> {
         // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
         if let Some(network) = &self.network {

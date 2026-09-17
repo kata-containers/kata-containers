@@ -235,6 +235,16 @@ impl VirtSandbox {
         let _ = self.exit_notify_tx.send(true);
     }
 
+    /// A failed stop must still get a cleanup attempt, hence the logging.
+    async fn teardown(&self) {
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        if let Err(e) = self.cleanup().await {
+            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+        }
+    }
+
     #[instrument]
     async fn prepare_for_start_sandbox(
         &self,
@@ -1488,9 +1498,18 @@ impl Sandbox for VirtSandbox {
             self.monitor.stop().await;
         }
 
-        // Publish before the teardown: containerd acts on this event, and a slow
-        // guest shutdown in front of it gets the shim SIGKILLed and a clean exit
-        // reported as 255.
+        // Publishing first has containerd Delete()/Shutdown() and, on its own
+        // timeout, SIGKILL the shim, cutting short the restore cleanup() does
+        // and leaving the device on vfio-pci with no netdev to find it by.
+        let restore_before_exit =
+            is_sandbox_container && self.resource_manager.has_passthrough_devices().await;
+        if restore_before_exit {
+            self.teardown().await;
+        }
+
+        // Otherwise publish before the teardown: containerd acts on this event,
+        // and a slow guest shutdown in front of it gets the shim SIGKILLed and
+        // a clean exit reported as 255.
         let event = TaskExit {
             container_id: cid.to_string(),
             id,
@@ -1506,15 +1525,9 @@ impl Sandbox for VirtSandbox {
         }
 
         // Docker only sends ShutdownContainer once the container is removed, so
-        // release everything here instead of leaking it until then.  A failed
-        // stop must still get a cleanup attempt, hence the logging.
-        if is_sandbox_container {
-            if let Err(e) = self.stop().await {
-                error!(sl!(), "failed to stop sandbox: {:?}", e);
-            }
-            if let Err(e) = self.cleanup().await {
-                error!(sl!(), "failed to cleanup sandbox: {:?}", e);
-            }
+        // release everything here instead of leaking it until then.
+        if is_sandbox_container && !restore_before_exit {
+            self.teardown().await;
         }
 
         Ok(())
