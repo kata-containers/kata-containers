@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -105,6 +106,14 @@ const (
 	procOptionIndex
 )
 
+// /proc/mounts uses the fstab(5) field escaping convention; see getmntent(3).
+var mountFieldUnescaper = strings.NewReplacer(
+	`\040`, " ",
+	`\011`, "\t",
+	`\012`, "\n",
+	`\134`, `\`,
+)
+
 // GetDevicePathAndFsTypeOptions gets the device for the mount point, the file system type
 // and mount options
 func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string, fsOptions []string, err error) {
@@ -112,17 +121,25 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 		err = fmt.Errorf("Mount point cannot be empty")
 		return
 	}
-
-	var file *os.File
-
-	file, err = os.Open(procMountsFile)
+	file, err := os.Open(procMountsFile)
 	if err != nil {
-		return
+		return "", "", nil, err
 	}
-
 	defer file.Close()
 
-	reader := bufio.NewReader(file)
+	return getDevicePathAndFsTypeOptionsFromReader(mountPoint, file)
+}
+
+func getDevicePathAndFsTypeOptionsFromReader(mountPoint string, mounts io.Reader) (devicePath, fsType string, fsOptions []string, err error) {
+	// Mounting resolves symlinks in the target path, so /proc/mounts records
+	// the resolved path. Resolve the requested path before comparing, or fall
+	// back to the original path if resolution fails.
+	resolvedMountPoint, resolveErr := filepath.EvalSymlinks(mountPoint)
+	if resolveErr != nil {
+		resolvedMountPoint = mountPoint
+	}
+
+	reader := bufio.NewReader(mounts)
 	for {
 		var line string
 
@@ -138,7 +155,8 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 			return
 		}
 
-		if mountPoint == fields[procPathIndex] {
+		mountPath := mountFieldUnescaper.Replace(fields[procPathIndex])
+		if resolvedMountPoint == mountPath {
 			devicePath = fields[procDeviceIndex]
 			fsType = fields[procTypeIndex]
 			fsOptions = strings.Split(fields[procOptionIndex], ",")
