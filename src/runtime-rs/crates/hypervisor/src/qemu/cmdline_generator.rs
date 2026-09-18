@@ -548,12 +548,19 @@ impl Machine {
         )))]
         let is_nvdimm_supported = false;
 
+        // ppc64le: kernel_irqchip=on makes XIVE mandatory, causing fatal exit when
+        // KVM_CAP_PPC_IRQ_XIVE is absent; omitting it defaults to allowed for soft fallback.
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        let kernel_irqchip = None;
+        #[cfg(not(all(target_arch = "powerpc64", target_endian = "little")))]
+        let kernel_irqchip = Some("on".to_owned());
+
         Machine {
             r#type: config.machine_info.machine_type.clone(),
             accel: "kvm".to_owned(),
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
-            kernel_irqchip: Some("on".to_owned()), // default to off, will be turned on if needed by VFIO devices
+            kernel_irqchip,
             confidential_guest_support: "".to_owned(),
             is_nvdimm_supported,
             memory_backend: None,
@@ -4335,5 +4342,33 @@ mod tests {
             .collect();
 
         assert_eq!(values, expected_values);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_machine_kernel_irqchip() {
+        let config = test_qemu_config(Some("none"), false);
+        let params = build_test_cmdline("kernel-irqchip", &config).await;
+
+        let machine_value = params
+            .windows(2)
+            .find_map(|args| (args[0] == "-machine").then_some(args[1].as_str()))
+            .expect("-machine argument must be present");
+
+        // ppc64le: kernel_irqchip=on must not be a part of the args
+        // so the kernel can fall back to XICS when KVM_CAP_PPC_IRQ_XIVE is unavailable (e.g. on LPARs).
+        // Every other arch must include it.
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        assert!(
+            !machine_value.contains("kernel_irqchip="),
+            "kernel_irqchip must not be set on ppc64le, got: {}",
+            machine_value
+        );
+        #[cfg(not(all(target_arch = "powerpc64", target_endian = "little")))]
+        assert!(
+            machine_value.contains("kernel_irqchip=on"),
+            "kernel_irqchip=on must be present on this arch, got: {}",
+            machine_value
+        );
     }
 }
