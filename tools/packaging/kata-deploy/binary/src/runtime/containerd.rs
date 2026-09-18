@@ -492,7 +492,8 @@ fn configured_containerd_handlers(config: &Config) -> HashSet<String> {
     handlers
 }
 
-/// Not always ours alone: k0s and K3s share one drop-in between installs.
+/// Not always ours alone: without drop-in support this is the node's own
+/// config, where handlers of the host's or another application's also live.
 fn containerd_handler_is_owned_by_installation(
     config_file: &Path,
     pluginid: &str,
@@ -847,13 +848,14 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             }
         }
         "k0s-worker" | "k0s-controller" => {
-            // k0s uses /etc/containerd/containerd.d/ for drop-ins.
-            // Path is fixed for k0s, so we can hardcode it here
-            let drop_in_file_path = "/etc/containerd/containerd.d/kata-deploy.toml";
-            if let Some(parent) = Path::new(drop_in_file_path).parent() {
+            // k0s auto-loads /etc/containerd/containerd.d/, so the file only has
+            // to be there; which file it is depends on the install suffix.
+            let paths = config.get_containerd_paths(runtime).await?;
+            let drop_in_path = Path::new(&paths.drop_in_file).to_path_buf();
+            if let Some(parent) = drop_in_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::File::create(drop_in_file_path)?;
+            fs::File::create(&drop_in_path)?;
         }
         "containerd" if !Path::new(&config.containerd_conf_file).exists() => {
             if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {

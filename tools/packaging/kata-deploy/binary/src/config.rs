@@ -820,6 +820,15 @@ impl Config {
         }
     }
 
+    /// One per installation: uninstall removes the whole drop-in, so a name two
+    /// of them share takes the other's runtime handlers with it.
+    fn drop_in_file_name(&self) -> String {
+        match self.multi_install_suffix.as_ref() {
+            Some(suffix) => format!("kata-deploy-{suffix}.toml"),
+            None => "kata-deploy.toml".to_string(),
+        }
+    }
+
     /// Get containerd configuration file paths based on runtime type and containerd version
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
@@ -841,7 +850,7 @@ impl Config {
                 config_file: "/etc/containerd/containerd.toml".to_string(),
                 backup_file: "/etc/containerd/containerd.toml.bak".to_string(), // Never used, but needed for consistency
                 imports_file: None, // k0s auto-loads from containerd.d/, imports not needed
-                drop_in_file: "/etc/containerd/containerd.d/kata-deploy.toml".to_string(),
+                drop_in_file: format!("/etc/containerd/containerd.d/{}", self.drop_in_file_name()),
                 use_drop_in,
                 plugin_id: None,
             },
@@ -886,9 +895,10 @@ impl Config {
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/etc/containerd".to_string());
                 let drop_in_file = format!(
-                    "{}/{}/kata-deploy.toml",
+                    "{}/{}/{}",
                     template_dir,
                     k3s_rke2_drop_in_dir_name(use_v3),
+                    self.drop_in_file_name(),
                 );
                 let backup_file = format!("{config_file}.bak");
                 ContainerdPaths {
@@ -913,11 +923,7 @@ impl Config {
                     .unwrap_or(false);
 
                 let (imports_file, drop_in_file) = if supports_conf_d {
-                    let drop_in = if let Some(ref suffix) = self.multi_install_suffix {
-                        format!("/etc/containerd/conf.d/kata-deploy-{suffix}.toml")
-                    } else {
-                        "/etc/containerd/conf.d/kata-deploy.toml".to_string()
-                    };
+                    let drop_in = format!("/etc/containerd/conf.d/{}", self.drop_in_file_name());
                     (None, drop_in)
                 } else {
                     (
@@ -1217,8 +1223,27 @@ mod tests {
     //! `cargo test -p kata-deploy config::tests -- --test-threads=1`.
 
     use super::*;
+    use crate::artifacts::install::tests::test_config;
     use rstest::rstest;
     use serial_test::serial;
+
+    /// k0s and K3s name the drop-in themselves, so the suffix has to reach
+    /// those names too: uninstall removes the file, not the stanzas in it.
+    #[rstest]
+    #[case::unsuffixed(None, "/etc/containerd/containerd.d/kata-deploy.toml")]
+    #[case::suffixed(Some("beta"), "/etc/containerd/containerd.d/kata-deploy-beta.toml")]
+    #[tokio::test]
+    async fn k0s_drop_in_is_this_installations_own(
+        #[case] suffix: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        let mut config = test_config("qemu", "/opt/kata");
+        config.multi_install_suffix = suffix.map(str::to_string);
+
+        let paths = config.get_containerd_paths("k0s-worker").await.unwrap();
+
+        assert_eq!(paths.drop_in_file, expected);
+    }
 
     // NOTE: Env-var tests use #[serial] (see above) for safe parallel execution with other modules.
 
