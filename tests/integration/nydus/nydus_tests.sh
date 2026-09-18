@@ -38,6 +38,9 @@ IMAGE="${IMAGE:-ghcr.io/dragonflyoss/image-service/alpine:nydus-latest}"
 # How long to wait for the nydus processes to be gone after being killed
 KILL_TIMEOUT_SECS=10
 
+# Bounds the journal dumps taken when the shim outlives the pod.
+test_start_time="$(date '+%Y-%m-%d %H:%M:%S')"
+
 if [[ "${KATA_HYPERVISOR}" != "qemu" ]] && [[ "${KATA_HYPERVISOR}" != "clh" ]] && \
    [[ "${KATA_HYPERVISOR}" != "dragonball" ]] && [[ "${KATA_HYPERVISOR}" != "qemu-runtime-rs" ]] && \
    [[ "${KATA_HYPERVISOR}" != "clh-runtime-rs" ]]; then
@@ -201,6 +204,50 @@ function setup() {
 	extract_kata_env
 }
 
+# The shim is meant to be gone once the pod is removed.  check_processes only
+# says that it is still there, which is not enough to tell a shim stuck talking
+# to the VMM from one waiting on the guest, so dump where it is parked and the
+# logs of both sides of the shutdown.
+function dump_leftover_shim_state() {
+	local when="${1}"
+
+	# check_processes tolerates a shim that is still on its way out, so give it
+	# the same grace period and only report one that outstays it.
+	if waitForProcess "${KILL_TIMEOUT_SECS}" 1 "! pgrep -f containerd-shim-kata-v2 > /dev/null"; then
+		return 0
+	fi
+
+	local pids
+	pids="$(pgrep -f containerd-shim-kata-v2 || true)"
+
+	echo "Shim still running ${when}, dumping diagnostics"
+
+	local pid task
+	for pid in ${pids}; do
+		echo "--- shim ${pid} cmdline ---"
+		sudo -E cat "/proc/${pid}/cmdline" 2>/dev/null | tr '\0' ' ' || true
+		echo
+		echo "--- shim ${pid} state ---"
+		sudo -E grep -E '^(State|Threads):' "/proc/${pid}/status" 2>/dev/null || true
+		# wchan names the kernel-side wait each thread is blocked in.
+		for task in "/proc/${pid}/task/"*; do
+			echo "task $(basename "${task}") wchan=$(sudo -E cat "${task}/wchan" 2>/dev/null || true)"
+		done
+	done
+
+	echo "--- hypervisor processes ---"
+	pgrep -af 'cloud-hypervisor|qemu-system|dragonball' || echo "none"
+
+	echo "--- sandbox runtime state ---"
+	sudo -E ls -l "/run/kata-containers/${pod:-}" 2>/dev/null || echo "gone"
+
+	echo "--- kata log ---"
+	sudo -E journalctl -t kata --no-pager --since "${test_start_time}" 2>/dev/null | tail -n 200 || true
+
+	echo "--- containerd log ---"
+	sudo -E journalctl -u containerd --no-pager --since "${test_start_time}" 2>/dev/null | tail -n 100 || true
+}
+
 function run_test() {
 	sudo -E crictl --timeout=20s pull "${IMAGE}"
 	pod=$(sudo -E crictl --timeout=20s runp -r "kata-${KATA_HYPERVISOR}" "${dir_path}/nydus-sandbox.yaml")
@@ -220,6 +267,10 @@ function run_test() {
 	sudo -E crictl --timeout=20s stop "${cnt}"
 	sudo -E crictl --timeout=20s stopp "${pod}"
 	sudo -E crictl --timeout=20s rmp "${pod}"
+
+	# Before teardown kills nydusd, so a shim reported here cannot be blamed on
+	# the snapshotter going away.
+	dump_leftover_shim_state "right after the pod was removed"
 }
 
 function remove_leftover_pods() {
@@ -276,6 +327,7 @@ function teardown() {
 	fi
 
 	clean_env_ctr || rc=1
+	dump_leftover_shim_state "in teardown"
 	check_processes "${KILL_TIMEOUT_SECS}"
 	return "${rc}"
 }

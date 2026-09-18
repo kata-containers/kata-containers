@@ -23,6 +23,7 @@ use scopeguard::defer;
 use tokio::sync::RwLock;
 
 use super::{
+    detach_endpoint,
     endpoint::{
         Endpoint, IPVlanEndpoint, MacVlanEndpoint, PhysicalEndpoint, VethEndpoint, VlanEndpoint,
     },
@@ -154,18 +155,38 @@ impl Network for NetworkWithNetns {
         Some(endpoint)
     }
 
-    async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
+    async fn remove(&self, h: &dyn Hypervisor, restore_passthrough_devices: bool) -> Result<()> {
         let inner = self.inner.read().await;
 
         // Always detach endpoints regardless of whether kata created the netns.
         // Physical endpoints rebind their VF from vfio-pci back to the original
         // host driver here.  Skipping this when network_created=false would
         // permanently leave VFs bound to vfio-pci after pod deletion.
+        // A passed-through device goes back to its host driver without the
+        // netns, which may be gone by now.
+        for e in &inner.entity_list {
+            if e.endpoint.host_bdf().await.is_none() {
+                continue;
+            }
+            if let Err(err) =
+                detach_endpoint(e.endpoint.as_ref(), h, restore_passthrough_devices).await
+            {
+                warn!(sl!(), "failed to detach endpoint: {}", err);
+            }
+        }
+
         {
+            // The others work on interfaces by name, which means the wrong
+            // namespace would find the wrong interface.
             let _netns_guard =
                 netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
             for e in &inner.entity_list {
-                if let Err(err) = e.endpoint.detach(h).await {
+                if e.endpoint.host_bdf().await.is_some() {
+                    continue;
+                }
+                if let Err(err) =
+                    detach_endpoint(e.endpoint.as_ref(), h, restore_passthrough_devices).await
+                {
                     warn!(sl!(), "failed to detach endpoint: {}", err);
                 }
             }

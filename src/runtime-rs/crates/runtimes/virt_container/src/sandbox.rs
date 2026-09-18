@@ -86,13 +86,20 @@ use runtime_spec as spec;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use strum::Display;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
+use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
+
+const STOP_VM_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Short, because a stop that failed on Cloud Hypervisor never reports an exit
+/// at all.
+const VMM_EXIT_RECORD_GRACE: Duration = Duration::from_millis(500);
 
 pub struct SandboxRestoreArgs {
     pub sid: String,
@@ -120,11 +127,8 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
-    // Whether sandbox resources (cgroup, network, mounts, ...) have already
-    // been released.  Teardown can be driven both by the sandbox container
-    // exiting and by an explicit shutdown RPC, so guard against running the
-    // cleanup twice.
-    cleaned: bool,
+    /// Set when stop() could not establish that the VMM let go of its devices.
+    vmm_exit_unconfirmed: bool,
 }
 
 impl SandboxInner {
@@ -133,7 +137,7 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
-            cleaned: false,
+            vmm_exit_unconfirmed: false,
         }
     }
 }
@@ -153,6 +157,9 @@ pub struct VirtSandbox {
     factory: Option<Factory>,
     cancel_token: CancellationToken,
     oom_notifier: Arc<CrioOomNotifier>,
+    // Held for the whole teardown, so a second caller waits instead of racing.
+    stopping: Arc<Mutex<()>>,
+    cleanup_done: Arc<Mutex<bool>>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -200,6 +207,8 @@ impl VirtSandbox {
             factory: Some(factory),
             cancel_token,
             oom_notifier: Arc::new(CrioOomNotifier::default()),
+            stopping: Arc::new(Mutex::new(())),
+            cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
 
@@ -234,6 +243,48 @@ impl VirtSandbox {
             exited_at: Some(exited_at),
         });
         let _ = self.exit_notify_tx.send(true);
+    }
+
+    /// The wait is bounded because stopping a QEMU wedged in the kernel --
+    /// which is what resetting a passed-through device can do -- would block
+    /// the teardown for good.  `exit_watched` says whether a task is watching
+    /// wait_vm(), and so whether an exit can still be reported after a failure.
+    async fn stop_vm(&self, exit_watched: bool) -> bool {
+        let reason = match timeout(STOP_VM_TIMEOUT, self.hypervisor.stop_vm()).await {
+            Ok(Ok(())) => return true,
+            Ok(Err(e)) => {
+                // QEMU fails this way when the watcher got to the child first,
+                // so the record it writes is what settles the question.
+                if exit_watched
+                    && matches!(timeout(VMM_EXIT_RECORD_GRACE, self.wait()).await, Ok(Ok(_)))
+                {
+                    info!(sl!(), "VMM was gone before the stop: {:?}", e);
+                    return true;
+                }
+                format!("{:?}", e)
+            }
+            Err(_) => format!("still running after {:?}", STOP_VM_TIMEOUT),
+        };
+
+        let mut inner = self.inner.write().await;
+        if inner.state == SandboxState::Stopped {
+            // The watcher recorded the exit while we were giving up on it.
+            return true;
+        }
+
+        warn!(sl!(), "VMM exit was not confirmed: {}", reason);
+        inner.vmm_exit_unconfirmed = true;
+        false
+    }
+
+    /// A failed stop must still get a cleanup attempt, hence the logging.
+    async fn teardown(&self) {
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        if let Err(e) = self.cleanup().await {
+            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+        }
     }
 
     #[instrument]
@@ -1331,6 +1382,10 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn stop(&self) -> Result<()> {
+        // Both teardown paths reach this, and the loser would ask an already
+        // reaped hypervisor to stop.
+        let _stopping = self.stopping.lock().await;
+
         let state = {
             let sandbox_inner = self.inner.read().await;
             sandbox_inner.state
@@ -1346,13 +1401,18 @@ impl Sandbox for VirtSandbox {
 
         info!(sl!(), "begin stop sandbox");
         if state == SandboxState::Init {
-            let _ = self.hypervisor.stop_vm().await;
+            // Nothing is watching for an exit this early.
+            self.stop_vm(false).await;
             self.record_stop(0, SystemTime::now()).await;
             info!(sl!(), "sandbox stopped during Init");
             return Ok(());
         }
 
-        self.hypervisor.stop_vm().await.context("stop vm")?;
+        if !self.stop_vm(true).await {
+            self.record_stop(255, SystemTime::now()).await;
+            return Ok(());
+        }
+
         self.wait().await.context("wait for vm exit after stop")?;
         info!(sl!(), "sandbox stopped");
 
@@ -1362,12 +1422,19 @@ impl Sandbox for VirtSandbox {
     async fn shutdown(&self) -> Result<()> {
         info!(sl!(), "shutdown");
 
-        self.stop().await.context("stop")?;
-
-        self.cleanup().await.context("do the clean up")?;
-
+        // The monitor answers a dead VM with process::exit(1), which would
+        // abort the teardown below.
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
+
+        // Only the shutdown message below breaks the service loop, so a
+        // failing teardown must not keep us from sending it.
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        if let Err(e) = self.cleanup().await {
+            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+        }
 
         info!(sl!(), "stop agent");
         self.agent.stop().await;
@@ -1382,14 +1449,12 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self) -> Result<()> {
-        // Teardown may be triggered both when the sandbox container exits and
-        // by a later shutdown RPC; only release the resources once.
-        {
-            let mut inner = self.inner.write().await;
-            if inner.cleaned {
-                return Ok(());
-            }
-            inner.cleaned = true;
+        // Both the container exit and the shutdown RPC get here, and the one
+        // that arrives later blocks rather than skipping, so the shim does not
+        // exit on top of a teardown that is still running.
+        let mut cleanup_done = self.cleanup_done.lock().await;
+        if *cleanup_done {
+            return Ok(());
         }
 
         let rootless_uid = self
@@ -1407,22 +1472,24 @@ impl Sandbox for VirtSandbox {
             .context("delete hypervisor")?;
 
         info!(sl!(), "resource clean up");
+        let restore_passthrough_devices = !self.inner.read().await.vmm_exit_unconfirmed;
         self.resource_manager
-            .cleanup()
+            .cleanup(restore_passthrough_devices)
             .await
             .context("resource clean up")?;
 
         if let Some(uid) = rootless_uid {
+            // Leaving this behind leaks the directory, and the user names come
+            // from a small range, so enough of them stop sandboxes from
+            // starting at all.
             let path = vmm_user_runtime_dir(uid);
-            if let Err(err) = remove_vmm_user_runtime_dir(uid) {
-                warn!(
-                    sl!(),
-                    "failed to remove rootless runtime directory {}: {}",
-                    path.display(),
-                    err
-                );
-            }
+            remove_vmm_user_runtime_dir(uid)
+                .with_context(|| format!("remove rootless runtime dir {}", path.display()))?;
         }
+
+        // Only now, so that a cleanup which gave up part way is retried by
+        // whoever gets here next rather than skipped.
+        *cleanup_done = true;
 
         // TODO: cleanup other sandbox resource
         Ok(())
@@ -1451,10 +1518,6 @@ impl Sandbox for VirtSandbox {
         let exit_status = cm.wait_process(&process_id).await?;
         info!(sl!(), "container process exited with {:?}", exit_status);
 
-        if cm.is_sandbox_container(&process_id).await {
-            self.stop().await.context("stop sandbox")?;
-        }
-
         let cid = process_id.container_id();
         if cid.is_empty() {
             return Err(anyhow!("container id is empty"));
@@ -1466,6 +1529,27 @@ impl Sandbox for VirtSandbox {
             eid.to_string()
         };
 
+        let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
+
+        // A dead VM makes the health check fail, and the monitor answers that
+        // with process::exit(1), aborting the teardown below.
+        if is_sandbox_container {
+            info!(sl!(), "stop monitor");
+            self.monitor.stop().await;
+        }
+
+        // Publishing first has containerd Delete()/Shutdown() and, on its own
+        // timeout, SIGKILL the shim, cutting short the restore cleanup() does
+        // and leaving the device on vfio-pci with no netdev to find it by.
+        let restore_before_exit =
+            is_sandbox_container && self.resource_manager.has_passthrough_devices().await;
+        if restore_before_exit {
+            self.teardown().await;
+        }
+
+        // Otherwise publish before the teardown: containerd acts on this event,
+        // and a slow guest shutdown in front of it gets the shim SIGKILLed and
+        // a clean exit reported as 255.
         let event = TaskExit {
             container_id: cid.to_string(),
             id,
@@ -1475,8 +1559,17 @@ impl Sandbox for VirtSandbox {
             special_fields: SpecialFields::new(),
         };
         let msg = Message::new(Action::Event(Arc::new(event)));
-        let lock_sender = self.msg_sender.lock().await;
-        lock_sender.send(msg).await.context("send exit event")?;
+        {
+            let lock_sender = self.msg_sender.lock().await;
+            lock_sender.send(msg).await.context("send exit event")?;
+        }
+
+        // Docker only sends ShutdownContainer once the container is removed, so
+        // release everything here instead of leaking it until then.
+        if is_sandbox_container && !restore_before_exit {
+            self.teardown().await;
+        }
+
         Ok(())
     }
 
@@ -1686,6 +1779,8 @@ impl Persist for VirtSandbox {
             // A restored sandbox is handed back its containers by the shim, so
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
+            stopping: Arc::new(Mutex::new(())),
+            cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
 }
