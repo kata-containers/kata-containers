@@ -134,7 +134,7 @@ kata-sys-util = { path = "src/libs/kata-sys-util" }
 kata-types = { features = ["safe-path"], path = "src/libs/kata-types" }
 logging = { path = "src/libs/logging" }
 mem-agent = { path = "src/libs/mem-agent" }
-pcilibs-rs = { git = "https://github.com/kata-containers/pcilibs-rs", rev = "28308229" }
+pcilibs-rs = { git = "https://github.com/kata-containers/pcilibs-rs", rev = "f6831fa878ec315ab477ccb88fbf8ec6cbd4cdca" }
 pod-resources-rs = { path = "src/libs/pod-resources-rs" }
 protocols = { features = ["async"], path = "src/libs/protocols" }
 runtime-spec = { path = "src/libs/runtime-spec" }

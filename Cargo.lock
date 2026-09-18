@@ -5190,8 +5190,9 @@ dependencies = [
 [[package]]
 name = "pcilibs-rs"
 version = "0.1.0"
-source = "git+https://github.com/kata-containers/pcilibs-rs?rev=28308229#28308229a8601b5dd616a9f9907002dec781e3ac"
+source = "git+https://github.com/kata-containers/pcilibs-rs?rev=f6831fa878ec315ab477ccb88fbf8ec6cbd4cdca#f6831fa878ec315ab477ccb88fbf8ec6cbd4cdca"
 dependencies = [
+ "libc",
  "nix 0.31.3",
  "nom",
  "phf",
