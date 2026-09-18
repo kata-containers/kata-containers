@@ -30,6 +30,27 @@ refute_rendered() {
 	fi
 }
 
+# Print each RuntimeClass NFD selector as "<handler> <label>".
+rendered_feature_selectors() {
+	awk '
+		/^kind: / { kind = $2; handler = "" }
+		kind != "RuntimeClass" { next }
+		/^handler: / { handler = $2 }
+		/^    [^ ]*feature\.node\.kubernetes\.io\/[^ ]*:/ {
+			label = $1
+			sub(/:$/, "", label)
+			print handler, label
+		}
+	' "${RENDERED}"
+}
+
+refute_feature_selector() {
+	if rendered_feature_selectors | grep -qx "$1"; then
+		echo "unexpected RuntimeClass nodeSelector: $1" >&2
+		return 1
+	fi
+}
+
 @test "Helm template: the TEE rule and the key requests are rendered together" {
 	render_chart --set nodeFeatureRules.create=true
 
@@ -76,6 +97,26 @@ refute_rendered() {
 		/^handler: / { handler = $2 }
 		/(sev-snp\.amd\.com\/esids|tdx\.intel\.com\/keys):/ { print handler }
 	' "${RENDERED}")
+}
+
+@test "Helm template: the TEE classes select the labels NFD publishes" {
+	render_chart --set node-feature-discovery.enabled=true
+
+	local selectors
+	selectors="$(rendered_feature_selectors)"
+
+	grep -qx "kata-qemu-snp amd.feature.node.kubernetes.io/snp" <<<"${selectors}"
+	grep -qx "kata-qemu-tdx intel.feature.node.kubernetes.io/tdx" <<<"${selectors}"
+	grep -qx "kata-qemu-se feature.node.kubernetes.io/cpu-security.se.enabled" <<<"${selectors}"
+}
+
+@test "Helm template: nothing selects an NFD label without NFD to publish it" {
+	# Selectors and rules must follow the same NFD signal.
+	render_chart
+
+	refute_feature_selector "kata-qemu-snp amd.feature.node.kubernetes.io/snp"
+	refute_feature_selector "kata-qemu-tdx intel.feature.node.kubernetes.io/tdx"
+	refute_feature_selector "kata-qemu-se feature.node.kubernetes.io/cpu-security.se.enabled"
 }
 
 @test "Helm template: an unusable nodeFeatureRules.create is rejected" {

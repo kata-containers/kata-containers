@@ -3,23 +3,10 @@
        because the templates that stage them render in job mode alone. */}}
 {{- $_ := include "kata-deploy.nodeBinaries" . -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
+{{- /* Reject an external NFD when this release also enables it. */ -}}
 {{- $existingNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
 {{- if $existingNFDNamespace -}}
-{{- /* Check if NFD is part of the current release (deployed by us previously) */ -}}
-{{- $nfdInCurrentRelease := false -}}
-{{- $nfdWorkerDS := lookup "apps/v1" "DaemonSet" .Release.Namespace "node-feature-discovery-worker" -}}
-{{- if $nfdWorkerDS -}}
-{{- if $nfdWorkerDS.metadata.labels -}}
-{{- $releaseLabel := index $nfdWorkerDS.metadata.labels "app.kubernetes.io/instance" | default (index $nfdWorkerDS.metadata.labels "helm.sh/release") | default "" -}}
-{{- if eq $releaseLabel .Release.Name -}}
-{{- $nfdInCurrentRelease = true -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-{{- /* Only fail if NFD exists externally (not part of our release) */ -}}
-{{- if not $nfdInCurrentRelease -}}
 {{- fail (printf "\n\nERROR: Cannot deploy kata-deploy with node-feature-discovery.enabled=true\n\nnode-feature-discovery is already installed in namespace '%s'.\n\nTo fix this, deploy with node-feature-discovery disabled:\n  helm upgrade --install %s ... --set node-feature-discovery.enabled=false\n\nThe existing node-feature-discovery installation will work with kata-deploy.\n" $existingNFDNamespace .Release.Name) -}}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 apiVersion: apps/v1
