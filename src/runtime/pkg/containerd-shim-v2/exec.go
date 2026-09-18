@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
-	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/errdefs"
+	"github.com/containerd/errdefs/pkg/errgrpc"
 	"github.com/containerd/typeurl/v2"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -74,7 +75,7 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *a
 	var width uint32
 
 	if jspec == nil {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "anypb.Any points to nil")
+		return nil, errgrpc.ToGRPCf(errdefs.ErrInvalidArgument, "anypb.Any points to nil")
 	}
 
 	// process exec request
@@ -85,7 +86,7 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *a
 	}
 	spec, ok := v.(*specs.Process)
 	if !ok {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Get an invalid spec type")
+		return nil, errgrpc.ToGRPCf(errdefs.ErrInvalidArgument, "Get an invalid spec type")
 	}
 
 	if spec.ConsoleSize != nil {
@@ -137,13 +138,13 @@ func (c *container) getExec(id string) (*exec, error) {
 	defer c.execsMu.RUnlock()
 
 	if c.execs == nil {
-		return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "exec does not exist %s", id)
+		return nil, errgrpc.ToGRPCf(errdefs.ErrNotFound, "exec does not exist %s", id)
 	}
 
 	exec := c.execs[id]
 
 	if exec == nil {
-		return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "exec does not exist %s", id)
+		return nil, errgrpc.ToGRPCf(errdefs.ErrNotFound, "exec does not exist %s", id)
 	}
 
 	return exec, nil
