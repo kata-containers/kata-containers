@@ -223,7 +223,7 @@ EOF
 	# Deleting the CronJob is what the uninstall hook needs, and get on pods is
 	# how --owner-job-from-pod reads the Job that owns the tick.
 	echo "${role}" | grep -q 'resources: \["cronjobs"\]'
-	echo "${role}" | grep -q 'verbs: \["get", "delete"\]'
+	echo "${role}" | grep -q 'verbs: \["get", "list", "watch", "delete"\]'
 	echo "${role}" | grep -q 'verbs: \["get", "list"\]'
 
 	# A rollout only lists the pod a failed Job left behind.
@@ -234,6 +234,35 @@ EOF
 	echo "${plain}" | grep -q 'resources: \["pods"\]'
 	echo "${plain}" | grep -q 'verbs: \["list"\]'
 	refute_match "${plain}" 'cronjobs'
+
+	# And nothing only the reconcile needs.
+	echo "${plain}" | grep -q 'verbs: \["create", "get", "list", "delete"\]'
+	refute_match "${plain}" 'watch'
+}
+
+@test "Helm template: the uninstall hook may watch what it waits for" {
+	# kubectl answers a waited delete from an informer, so get and delete let
+	# the object go while the wait spins on a forbidden list until --timeout.
+	local hook role
+	hook=$(render_with_reconcile kata-deploy-reconcile.yaml)
+	role=$(render_with_reconcile kata-rbac.yaml)
+
+	echo "${hook}" | grep -q 'kubectl delete cronjob .* -n'
+	echo "${hook}" | grep -q 'kubectl delete jobs -n'
+	# Two waited deletes, and no third one this test has not accounted for.
+	[[ "$(echo "${hook}" | grep -c -- '--cascade=foreground --wait=true')" -eq 2 ]]
+
+	# The first verbs: under a resources:, not a comment in between.
+	local cronjob_verbs jobs_verbs
+	cronjob_verbs=$(echo "${role}" | grep -A 4 'resources: \["cronjobs"\]' | grep -m1 'verbs:')
+	jobs_verbs=$(echo "${role}" | grep -A 4 'resources: \["jobs"\]' | grep -m1 'verbs:')
+
+	echo "# cronjobs: ${cronjob_verbs}" >&3
+	echo "# jobs: ${jobs_verbs}" >&3
+	for verb in list watch delete; do
+		echo "${cronjob_verbs}" | grep -q "\"${verb}\""
+		echo "${jobs_verbs}" | grep -q "\"${verb}\""
+	done
 }
 
 @test "Helm template: a reconcile without a schedule is refused" {
