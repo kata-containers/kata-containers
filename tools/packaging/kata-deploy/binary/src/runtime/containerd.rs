@@ -169,7 +169,9 @@ pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Opt
     let paths = config.get_containerd_paths(runtime).await.ok()?;
 
     let mut files = vec![get_containerd_output_path(&paths)];
-    if let Ok((user_drop_in, _)) = get_user_containerd_drop_in_output_path(&paths) {
+    if let Ok((user_drop_in, _)) =
+        get_user_containerd_drop_in_output_path(&paths, config.multi_install_suffix.as_deref())
+    {
         files.push(user_drop_in);
     }
     if let Some(imports_file) = &paths.imports_file {
@@ -183,29 +185,29 @@ pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Opt
     Some(files)
 }
 
-fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(PathBuf, String)> {
+/// Suffixed, so two installations no longer share one file. `zz-` sorts it
+/// after the kata drop-in, which makes it an override.
+fn get_user_containerd_drop_in_output_path(
+    paths: &ContainerdPaths,
+    multi_install_suffix: Option<&str>,
+) -> Result<(PathBuf, String)> {
     if !paths.use_drop_in {
         anyhow::bail!(
             "Containerd user drop-in requires drop-in support, but runtime config is in non-drop-in mode"
         );
     }
 
-    let base_drop_in = Path::new(&paths.drop_in_file).to_path_buf();
-    let base_import_path = paths.drop_in_file.clone();
+    let user_file_name = match multi_install_suffix {
+        Some(suffix) if !suffix.is_empty() => format!("zz-kata-deploy-user-{suffix}.toml"),
+        _ => "zz-kata-deploy-user.toml".to_string(),
+    };
 
+    let base_drop_in = Path::new(&paths.drop_in_file);
     let parent = base_drop_in.parent().ok_or_else(|| {
-        anyhow::anyhow!("Failed to resolve parent directory for {:?}", base_drop_in)
+        anyhow::anyhow!("Failed to resolve parent directory for {base_drop_in:?}")
     })?;
-    let user_file_name = "zz-kata-deploy-user.toml";
-    let host_path = parent.join(user_file_name);
-
-    let import_parent = Path::new(&base_import_path)
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Failed to resolve import parent for {base_import_path}"))?;
-    let import_path = import_parent
-        .join(user_file_name)
-        .to_string_lossy()
-        .to_string();
+    let host_path = parent.join(&user_file_name);
+    let import_path = host_path.to_string_lossy().to_string();
 
     Ok((host_path, import_path))
 }
@@ -224,7 +226,7 @@ fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -
     }
 
     let (user_drop_in_path, user_drop_in_import_path) =
-        get_user_containerd_drop_in_output_path(paths)?;
+        get_user_containerd_drop_in_output_path(paths, config.multi_install_suffix.as_deref())?;
     if let Some(parent) = user_drop_in_path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!("Failed to create user containerd drop-in directory: {parent:?}")
@@ -490,7 +492,8 @@ fn configured_containerd_handlers(config: &Config) -> HashSet<String> {
     handlers
 }
 
-/// Not always ours alone: k0s and K3s share one drop-in between installs.
+/// Not always ours alone: without drop-in support this is the node's own
+/// config, where handlers of the host's or another application's also live.
 fn containerd_handler_is_owned_by_installation(
     config_file: &Path,
     pluginid: &str,
@@ -734,7 +737,10 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
     if paths.use_drop_in {
         if config.containerd_user_drop_in_source_file.is_some() {
             let (user_drop_in_path, user_drop_in_import_path) =
-                get_user_containerd_drop_in_output_path(&paths)?;
+                get_user_containerd_drop_in_output_path(
+                    &paths,
+                    config.multi_install_suffix.as_deref(),
+                )?;
             if let Some(imports_file) = &paths.imports_file {
                 toml_utils::remove_from_toml_array(
                     Path::new(imports_file),
@@ -842,13 +848,14 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             }
         }
         "k0s-worker" | "k0s-controller" => {
-            // k0s uses /etc/containerd/containerd.d/ for drop-ins.
-            // Path is fixed for k0s, so we can hardcode it here
-            let drop_in_file_path = "/etc/containerd/containerd.d/kata-deploy.toml";
-            if let Some(parent) = Path::new(drop_in_file_path).parent() {
+            // k0s auto-loads /etc/containerd/containerd.d/, so the file only has
+            // to be there; which file it is depends on the install suffix.
+            let paths = config.get_containerd_paths(runtime).await?;
+            let drop_in_path = Path::new(&paths.drop_in_file).to_path_buf();
+            if let Some(parent) = drop_in_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::File::create(drop_in_file_path)?;
+            fs::File::create(&drop_in_path)?;
         }
         "containerd" if !Path::new(&config.containerd_conf_file).exists() => {
             if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {
@@ -1092,6 +1099,76 @@ mod tests {
             container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]",
             snapshotter: snapshotter.map(|s| s.to_string()),
         }
+    }
+
+    fn make_drop_in_paths(drop_in_file: &str, use_drop_in: bool) -> ContainerdPaths {
+        ContainerdPaths {
+            config_file: "/etc/containerd/config.toml".to_string(),
+            backup_file: "/etc/containerd/config.toml.bak".to_string(),
+            imports_file: None,
+            drop_in_file: drop_in_file.to_string(),
+            use_drop_in,
+            plugin_id: None,
+        }
+    }
+
+    #[test]
+    fn a_suffixed_installation_gets_its_own_user_drop_in() {
+        let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy-beta.toml", true);
+
+        let (host_path, import_path) =
+            get_user_containerd_drop_in_output_path(&paths, Some("beta")).unwrap();
+
+        assert_eq!(
+            host_path,
+            Path::new("/etc/containerd/conf.d/zz-kata-deploy-user-beta.toml")
+        );
+        assert_eq!(
+            import_path,
+            "/etc/containerd/conf.d/zz-kata-deploy-user-beta.toml"
+        );
+    }
+
+    /// The name it has always written, so an upgrade still finds its file.
+    #[rstest]
+    #[case(None)]
+    #[case(Some(""))]
+    fn an_unsuffixed_installation_keeps_the_name_it_had(#[case] suffix: Option<&str>) {
+        let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy.toml", true);
+
+        let (host_path, _) = get_user_containerd_drop_in_output_path(&paths, suffix).unwrap();
+
+        assert_eq!(
+            host_path,
+            Path::new("/etc/containerd/conf.d/zz-kata-deploy-user.toml")
+        );
+    }
+
+    #[test]
+    fn the_user_drop_in_still_sorts_after_the_kata_one() {
+        for suffix in [None, Some("beta")] {
+            let kata = match suffix {
+                Some(s) => format!("/etc/containerd/conf.d/kata-deploy-{s}.toml"),
+                None => "/etc/containerd/conf.d/kata-deploy.toml".to_string(),
+            };
+            let (user, _) =
+                get_user_containerd_drop_in_output_path(&make_drop_in_paths(&kata, true), suffix)
+                    .unwrap();
+
+            let kata_name = Path::new(&kata).file_name().unwrap();
+            assert!(
+                user.file_name().unwrap() > kata_name,
+                "{:?} must sort after {kata_name:?}",
+                user.file_name().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn a_user_drop_in_needs_drop_in_support() {
+        let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy-beta.toml", false);
+
+        assert!(get_user_containerd_drop_in_output_path(&paths, Some("beta")).is_err());
     }
 
     /// Uninstall may only delete a whole-file configuration it can prove an install

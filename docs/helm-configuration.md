@@ -1367,6 +1367,12 @@ release would restore a file that predates every release and erase the surviving
 handlers. Installation therefore fails before modifying CRI configuration when
 that unsafe combination is detected.
 
+Both containerd drop-ins carry the suffix, the generated one as
+`kata-deploy-<suffix>.toml` and the `containerd.userDropIn` content as
+`zz-kata-deploy-user-<suffix>.toml`, for the same reason: each release removes
+its own files on uninstall, and a name two releases shared would be taken from
+whichever of them is still deployed.
+
 With whole-file configuration, uninstall restores the backup taken at install
 time. A node whose containerd had no configuration file at all gets one written
 for it, and uninstall deletes that file again. Any other whole-file configuration
