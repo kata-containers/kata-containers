@@ -228,47 +228,43 @@ index 6db5235a7693d..eaf9d1bea38fc 100644
  
  config VIRTIO_HARDEN_NOTIFICATION
 diff --git a/drivers/virtio/virtio_mmio.c b/drivers/virtio/virtio_mmio.c
-index b152a1eca05ad..a8a7251e8c030 100644
+index 4832c9835dff9..10aea59293d5d 100644
 --- a/drivers/virtio/virtio_mmio.c
 +++ b/drivers/virtio/virtio_mmio.c
-@@ -669,16 +669,42 @@ static struct device vm_cmdline_parent = {
+@@ -667,6 +667,32 @@ static struct device *vm_cmdline_parent;
  static int vm_cmdline_parent_registered;
  static int vm_cmdline_id;
  
 +static int vm_add_device(struct resource *resources, size_t res_size)
 +{
-+       int err;
-+       struct platform_device *pdev;
++	struct platform_device *pdev;
 +
-+       if (!vm_cmdline_parent_registered) {
-+               err = device_register(&vm_cmdline_parent);
-+               if (err) {
-+                       pr_err("Failed to register parent device!\n");
-+		       put_device(&vm_cmdline_parent);
-+                       return err;
-+               }
-+               vm_cmdline_parent_registered = 1;
-+       }
++	if (!vm_cmdline_parent_registered) {
++		vm_cmdline_parent = __root_device_register("virtio-mmio-cmdline", NULL);
++		if (IS_ERR(vm_cmdline_parent)) {
++			pr_err("Failed to register parent device!\n");
++			return PTR_ERR(vm_cmdline_parent);
++		}
++		vm_cmdline_parent_registered = 1;
++	}
 +
-+       pr_info("Registering device virtio-mmio.%d at 0x%llx-0x%llx, IRQ %d.\n",
-+                      vm_cmdline_id,
-+                      (unsigned long long)resources[0].start,
-+                      (unsigned long long)resources[0].end,
-+                  (int)resources[1].start);
++	pr_info("Registering device virtio-mmio.%d at 0x%llx-0x%llx, IRQ %d.\n",
++		       vm_cmdline_id,
++		       (unsigned long long)resources[0].start,
++		       (unsigned long long)resources[0].end,
++		       (int)resources[1].start);
 +
-+       pdev = platform_device_register_resndata(&vm_cmdline_parent,
-+                       "virtio-mmio", vm_cmdline_id++,
-+                       resources, res_size, NULL, 0);
++	pdev = platform_device_register_resndata(vm_cmdline_parent,
++			"virtio-mmio", vm_cmdline_id++,
++			resources, res_size, NULL, 0);
 +
-+       return PTR_ERR_OR_ZERO(pdev);
++	return PTR_ERR_OR_ZERO(pdev);
 +}
 +
  static int vm_cmdline_set(const char *device,
  		const struct kernel_param *kp)
  {
--	int err;
- 	struct resource resources[2] = {};
- 	char *str;
+@@ -675,7 +701,6 @@ static int vm_cmdline_set(const char *device,
  	long long base, size;
  	unsigned int irq;
  	int processed, consumed = 0;
@@ -276,16 +272,15 @@ index b152a1eca05ad..a8a7251e8c030 100644
  
  	/* Consume "size" part of the command line parameter */
  	size = memparse(device, &str);
-@@ -703,27 +729,7 @@ static int vm_cmdline_set(const char *device,
+@@ -700,26 +725,7 @@ static int vm_cmdline_set(const char *device,
  	resources[1].flags = IORESOURCE_IRQ;
  	resources[1].start = resources[1].end = irq;
  
 -	if (!vm_cmdline_parent_registered) {
--		err = device_register(&vm_cmdline_parent);
--		if (err) {
--			put_device(&vm_cmdline_parent);
+-		vm_cmdline_parent = __root_device_register("virtio-mmio-cmdline", NULL);
+-		if (IS_ERR(vm_cmdline_parent)) {
 -			pr_err("Failed to register parent device!\n");
--			return err;
+-			return PTR_ERR(vm_cmdline_parent);
 -		}
 -		vm_cmdline_parent_registered = 1;
 -	}
@@ -296,7 +291,7 @@ index b152a1eca05ad..a8a7251e8c030 100644
 -		       (unsigned long long)resources[0].end,
 -		       (int)resources[1].start);
 -
--	pdev = platform_device_register_resndata(&vm_cmdline_parent,
+-	pdev = platform_device_register_resndata(vm_cmdline_parent,
 -			"virtio-mmio", vm_cmdline_id++,
 -			resources, ARRAY_SIZE(resources), NULL, 0);
 -
@@ -305,7 +300,7 @@ index b152a1eca05ad..a8a7251e8c030 100644
  }
  
  static int vm_cmdline_get_device(struct device *dev, void *data)
-@@ -773,6 +779,94 @@ static void vm_unregister_cmdline_devices(void)
+@@ -773,6 +779,100 @@ static void vm_unregister_cmdline_devices(void)
  	}
  }
  
@@ -324,7 +319,10 @@ index b152a1eca05ad..a8a7251e8c030 100644
 +
 +static struct device *vm_find_device(struct resource *res)
 +{
-+	return device_find_child(&vm_cmdline_parent, res, vm_match_device);
++	if (!vm_cmdline_parent_registered)
++		return NULL;
++
++	return device_find_child(vm_cmdline_parent, res, vm_match_device);
 +}
 +
 +static int vm_device_overlap(struct device *dev, const void *data)
@@ -350,7 +348,10 @@ index b152a1eca05ad..a8a7251e8c030 100644
 +static struct device *vm_detect_resource(struct resource *res)
 +{
 +	/* return NULL if no resource overlapped */
-+	return device_find_child(&vm_cmdline_parent, res, vm_device_overlap);
++	if (!vm_cmdline_parent_registered)
++		return NULL;
++
++	return device_find_child(vm_cmdline_parent, res, vm_device_overlap);
 +}
 +
 +int virtio_mmio_add_device(struct resource *resources, size_t res_size)
