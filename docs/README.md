@@ -46,6 +46,7 @@ Documents that help to understand and contribute to Kata Containers.
 * [Kata Containers E2E Flow](design/end-to-end-flow.md): The entire end-to-end flow of Kata Containers
 * [Kata Containers design](./design/README.md): More Kata Containers design documents
 * [Kata Containers threat model](./threat-model/threat-model.md): Kata Containers threat model
+* [Maintenance in Kata Containers](./Maintenance.md): Classification of the levels of maintenance/support in the project
 
 ### How to Contribute
 
