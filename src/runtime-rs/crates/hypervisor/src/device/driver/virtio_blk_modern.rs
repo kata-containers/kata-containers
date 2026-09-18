@@ -175,10 +175,10 @@ pub struct BlockConfigModern {
     /// Physical sector size in bytes reported to the guest. 0 means use hypervisor default.
     pub physical_sector_size: u32,
 
-    /// Override the QEMU virtio serial for this device.
+    /// Override the guest-visible virtio serial for this device.
     /// When set, the device is discoverable in the guest via
     /// `/dev/disk/by-id/virtio-<serial>`.
-    /// If empty, the default `image-{device_id}` serial is used.
+    /// An empty value leaves serial selection to the hypervisor backend.
     pub serial_override: String,
 }
 
