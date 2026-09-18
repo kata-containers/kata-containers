@@ -126,6 +126,7 @@ else
 		"k8s-qos-pods.bats" \
 		"k8s-sandbox-vcpus-allocation.bats" \
 		"k8s-scale-nginx.bats" \
+		"k8s-large-file-volume.bats" \
 	)
 
 	case ${K8S_TEST_HOST_TYPE} in
