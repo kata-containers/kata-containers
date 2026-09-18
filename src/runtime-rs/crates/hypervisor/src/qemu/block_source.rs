@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::vmdk::validate_vmdk_layout;
 use crate::VmdkConfig;
 
 use anyhow::{anyhow, Context, Result};
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::os::fd::AsRawFd;
@@ -68,50 +68,6 @@ fn open_block_source(
     }
 
     Ok((file, metadata))
-}
-
-fn render_vmdk_descriptor(
-    config: &VmdkConfig,
-    backing_paths: &HashMap<String, String>,
-) -> Result<String> {
-    let total_sectors = config
-        .total_sectors()
-        .ok_or_else(|| anyhow!("VMDK total sector count overflow"))?;
-    if total_sectors == 0 {
-        return Err(anyhow!("VMDK contains no non-empty extents"));
-    }
-
-    let mut descriptor = String::new();
-    writeln!(descriptor, "# Disk DescriptorFile")?;
-    writeln!(descriptor, "version=1")?;
-    writeln!(descriptor, "CID=fffffffe")?;
-    writeln!(descriptor, "parentCID=ffffffff")?;
-    writeln!(descriptor, "createType=\"twoGbMaxExtentFlat\"")?;
-    writeln!(descriptor)?;
-    writeln!(descriptor, "# Extent description")?;
-    for extent in &config.extents {
-        let path = backing_paths
-            .get(&extent.path_on_host)
-            .ok_or_else(|| anyhow!("missing prepared VMDK extent {}", extent.path_on_host))?;
-        writeln!(
-            descriptor,
-            "RW {} FLAT \"{}\" {}",
-            extent.sectors, path, extent.file_offset
-        )?;
-    }
-
-    let cylinders = total_sectors.div_ceil(63 * 16);
-    writeln!(descriptor)?;
-    writeln!(descriptor, "# The Disk Data Base")?;
-    writeln!(descriptor, "#DDB")?;
-    writeln!(descriptor)?;
-    writeln!(descriptor, "ddb.virtualHWVersion = \"4\"")?;
-    writeln!(descriptor, "ddb.geometry.cylinders = \"{cylinders}\"")?;
-    writeln!(descriptor, "ddb.geometry.heads = \"16\"")?;
-    writeln!(descriptor, "ddb.geometry.sectors = \"63\"")?;
-    writeln!(descriptor, "ddb.adapterType = \"ide\"")?;
-
-    Ok(descriptor)
 }
 
 fn create_vmdk_descriptor_file(
@@ -177,21 +133,7 @@ where
         });
     };
 
-    if vmdk.extents.is_empty() {
-        return Err(anyhow!("VMDK contains no extents"));
-    }
-
-    let mut required_sectors_by_path: HashMap<&str, u64> = HashMap::new();
-    for extent in &vmdk.extents {
-        let required_sectors = extent
-            .file_offset
-            .checked_add(extent.sectors)
-            .ok_or_else(|| anyhow!("VMDK extent sector count overflow"))?;
-        required_sectors_by_path
-            .entry(extent.path_on_host.as_str())
-            .and_modify(|maximum| *maximum = (*maximum).max(required_sectors))
-            .or_insert(required_sectors);
-    }
+    let layout = validate_vmdk_layout(vmdk)?;
 
     let mut backing_paths = HashMap::new();
     for extent in &vmdk.extents {
@@ -203,9 +145,8 @@ where
         // O_DIRECT. QEMU fdsets require an exact O_DIRECT match, so preserve
         // that existing reopen behavior for delegated extent descriptors.
         let (file, metadata) = open_block_source(&extent.path_on_host, is_readonly, false, true)?;
-        let required_sectors = required_sectors_by_path
-            .get(extent.path_on_host.as_str())
-            .copied()
+        let required_sectors = layout
+            .required_sectors_for(&extent.path_on_host)
             .ok_or_else(|| anyhow!("missing VMDK extent size for {}", extent.path_on_host))?;
         if metadata.len().div_ceil(512) < required_sectors {
             return Err(anyhow!(
@@ -218,7 +159,12 @@ where
         backing_paths.insert(extent.path_on_host.clone(), fd_path);
     }
 
-    let descriptor = render_vmdk_descriptor(vmdk, &backing_paths)?;
+    let descriptor = layout.render_descriptor_with(|extent| {
+        backing_paths
+            .get(&extent.path_on_host)
+            .cloned()
+            .ok_or_else(|| anyhow!("missing prepared VMDK extent {}", extent.path_on_host))
+    })?;
     let descriptor =
         create_vmdk_descriptor_file(Path::new(path), &descriptor, is_readonly, is_direct)?;
     let filename = register(descriptor, "vmdk-descriptor")?;
@@ -237,24 +183,6 @@ mod tests {
     use std::io::{Read, Seek, SeekFrom};
     use std::os::unix::fs::symlink;
     use tempfile::tempdir;
-
-    #[test]
-    fn renders_structured_vmdk_layout() {
-        let mut config = VmdkConfig::default();
-        config.push_extent("/images/first.raw", 8, 0);
-        config.push_extent("/images/first.raw", 4, 8);
-        config.push_extent("/images/second.raw", 16, 0);
-        let backing_paths = HashMap::from([
-            ("/images/first.raw".to_string(), "/dev/fdset/1".to_string()),
-            ("/images/second.raw".to_string(), "/dev/fdset/2".to_string()),
-        ]);
-
-        let descriptor = render_vmdk_descriptor(&config, &backing_paths).unwrap();
-        assert!(descriptor.contains("RW 8 FLAT \"/dev/fdset/1\" 0"));
-        assert!(descriptor.contains("RW 4 FLAT \"/dev/fdset/1\" 8"));
-        assert!(descriptor.contains("RW 16 FLAT \"/dev/fdset/2\" 0"));
-        assert!(descriptor.contains("ddb.geometry.cylinders = \"1\""));
-    }
 
     #[test]
     fn prepares_raw_source_with_requested_access() {
