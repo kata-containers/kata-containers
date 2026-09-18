@@ -330,7 +330,45 @@ $ deploy_k8s
 > required when using multiple snapshotters side by side and is disabled by
 > default.
 
+#### Kata Containers
+
+Install the latest Kata Containers helm chart, similar to
+[existing documentation](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/README.md)
+(minimum version: `3.29.0`).
+
+```bash
+$ export VERSION=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq .tag_name | tr -d '"')
+$ export CHART="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
+
+$ helm install kata-deploy \
+    --namespace kata-system \
+    --create-namespace \
+    -f "https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/${VERSION}/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml" \
+    --set node-feature-discovery.enabled=true \
+    --wait --timeout 10m \
+    "${CHART}" --version "${VERSION}"
+```
+
+> **Note:**
+>
+> QEMU seccomp sandboxing is enabled by default for the NVIDIA QEMU runtime
+> classes. If you have performance concerns, disable it by commenting out
+> `seccomp_sandbox` in the configuration file used by the relevant
+> runtime class. See [Using seccomp with runtime-rs](../how-to/how-to-use-seccomp-with-runtime-rs.md)
+> for details.
+
+> **Note:**
+>
+> For node lifecycle management, see the
+> [lifecycle-manager](https://github.com/kata-containers/lifecycle-manager)
+> repository which enables Argo Workflows-based lifecycle management for your
+> node's Kata deployments.
+
 #### GPU Operator
+
+The Kata Containers installation above deploys Node Feature Discovery (NFD).
+Configure the GPU Operator to use this existing NFD installation while still
+creating its NVIDIA-specific node feature rules.
 
 Assuming you have the helm tools installed, deploy the latest version of the
 GPU Operator as a helm chart (minimum version: `v26.3.0`):
@@ -343,7 +381,7 @@ $ helm install --wait --generate-name \
     --set sandboxWorkloads.enabled=true \
     --set sandboxWorkloads.defaultWorkload=vm-passthrough \
     --set sandboxWorkloads.mode=kata \
-    --set nfd.enabled=true \
+    --set nfd.enabled=false \
     --set nfd.nodefeaturerules=true
 ```
 
@@ -375,40 +413,6 @@ $ helm install --wait --generate-name \
 > you intend to only use selected nodes for this scenario, and label these
 > nodes by hand, using:
 > `kubectl label node <node-name> nvidia.com/gpu.workload.config=vm-passthrough`.
-
-#### Kata Containers
-
-Install the latest Kata Containers helm chart, similar to
-[existing documentation](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/README.md)
-(minimum version: `3.29.0`).
-
-```bash
-$ export VERSION=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq .tag_name | tr -d '"')
-$ export CHART="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
-
-$ helm install kata-deploy \
-    --namespace kata-system \
-    --create-namespace \
-    -f "https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/${VERSION}/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml" \
-    --set node-feature-discovery.enabled=false \
-    --wait --timeout 10m \
-    "${CHART}" --version "${VERSION}"
-```
-
-> **Note:**
->
-> QEMU seccomp sandboxing is enabled by default for the NVIDIA QEMU runtime
-> classes. If you have performance concerns, disable it by commenting out
-> `seccomp_sandbox` in the configuration file used by the relevant
-> runtime class. See [Using seccomp with runtime-rs](../how-to/how-to-use-seccomp-with-runtime-rs.md)
-> for details.
-
-> **Note:**
->
-> For node lifecycle management, see the
-> [lifecycle-manager](https://github.com/kata-containers/lifecycle-manager)
-> repository which enables Argo Workflows-based lifecycle management for your
-> node's Kata deployments.
 
 #### Trustee's KBS for remote attestation
 
