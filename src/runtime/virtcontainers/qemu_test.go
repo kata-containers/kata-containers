@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
@@ -846,6 +847,59 @@ func startTestQMPServer(t *testing.T, serverConn net.Conn, responses []string) {
 		for scanner.Scan() {
 		}
 	}()
+}
+
+func TestHotplugRemoveBlockDeviceHonorsCallerContext(t *testing.T) {
+	assert := assert.New(t)
+
+	serverConn, clientConn := net.Pipe()
+	// QEMU accepts device_del, but deliberately never emits DEVICE_DELETED.
+	startTestQMPServer(t, serverConn, []string{`{"return":{}}`})
+
+	qmpCtx, cancelQMP := context.WithCancel(context.Background())
+	defer cancelQMP()
+
+	disconnectedCh := make(chan struct{})
+	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
+	qmp, _, err := govmmQemu.QMPStartWithConn(qmpCtx, clientConn, cfg, disconnectedCh)
+	assert.NoError(err)
+	defer func() {
+		qmp.Shutdown()
+		<-disconnectedCh
+	}()
+
+	q := &qemu{
+		config: HypervisorConfig{
+			BlockDeviceDriver: config.VirtioSCSI,
+		},
+		qmpMonitorCh: qmpChannel{
+			qmp: qmp,
+			ctx: qmpCtx,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err = q.hotplugBlockDevice(ctx, &config.BlockDrive{
+		ID:   "drive-test",
+		File: "/dev/dm-9",
+	}, RemoveDevice)
+
+	assert.ErrorIs(err, context.DeadlineExceeded)
+	assert.Less(time.Since(start), time.Second)
+}
+
+func TestHotplugRemoveDeviceSkipsQMPAfterStopVM(t *testing.T) {
+	q := &qemu{stopped: 1}
+
+	_, err := q.HotplugRemoveDevice(context.Background(), &config.BlockDrive{
+		ID:   "drive-test",
+		File: "/dev/dm-9",
+	}, BlockDev)
+
+	assert.NoError(t, err)
 }
 
 // TestHotplugAddMemoryVirtioMem verifies that when VirtioMem is enabled,
