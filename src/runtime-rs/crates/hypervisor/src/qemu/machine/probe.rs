@@ -6,7 +6,13 @@ use std::ops::Range;
 
 pub(crate) struct HostTopology {
     pub sockets: Vec<SocketInfo>,
+    /// GPU devices: each group maps to one pxb-pcie + arm-smmuv3 complex.
+    /// GPUs emit 8 acpi-generic-initiator NUMA nodes per device.
     pub gpu_smmu_groups: Vec<GpuSmmuGroup>,
+    /// NIC devices: each group maps to its own pxb-pcie + arm-smmuv3.
+    /// NICs do NOT emit acpi-generic-initiator links or NUMA initiator nodes.
+    /// Allocated after all GPU pxb complexes in bus_nr ordering.
+    pub nic_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
     /// `-numa dist` entries emitted after all NUMA nodes.  Each tuple is (src, dst, val).
     pub numa_distances: Vec<(u32, u32, u32)>,
