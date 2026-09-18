@@ -143,39 +143,43 @@ Honors monitor.logLevel, then the chart-wide logLevel, then debug:true -> debug.
 {{- end -}}
 
 {{/*
-Check if node-feature-discovery is already installed by someone else
-Returns the namespace where node-feature-discovery is found, or empty string if not found
+Return the namespace of an external NFD installation, or empty if none exists.
+NFD workload names include the Helm release name, so detect them by label while
+keeping known names as a fallback.
 */}}
 {{- define "kata-deploy.detectExistingNFD" -}}
-{{- $nfdWorkers := lookup "apps/v1" "DaemonSet" "" "" -}}
-{{- $nfdMasters := lookup "apps/v1" "Deployment" "" "" -}}
-{{- $foundNamespace := "" -}}
-{{- $currentRelease := .Release.Name -}}
-{{- range $nfdWorkers.items -}}
-{{- if eq .metadata.name "node-feature-discovery-worker" -}}
-{{- $helmRelease := "" -}}
-{{- if .metadata.labels -}}
-{{- $helmRelease = index .metadata.labels "app.kubernetes.io/instance" | default (index .metadata.labels "helm.sh/release") | default "" -}}
-{{- end -}}
-{{- if or (ne .metadata.namespace $.Release.Namespace) (and (eq .metadata.namespace $.Release.Namespace) (ne $helmRelease $currentRelease)) -}}
-{{- $foundNamespace = .metadata.namespace -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-{{- if not $foundNamespace -}}
-{{- range $nfdMasters.items -}}
-{{- if eq .metadata.name "node-feature-discovery-master" -}}
-{{- $helmRelease := "" -}}
-{{- if .metadata.labels -}}
-{{- $helmRelease = index .metadata.labels "app.kubernetes.io/instance" | default (index .metadata.labels "helm.sh/release") | default "" -}}
-{{- end -}}
-{{- if or (ne .metadata.namespace $.Release.Namespace) (and (eq .metadata.namespace $.Release.Namespace) (ne $helmRelease $currentRelease)) -}}
-{{- $foundNamespace = .metadata.namespace -}}
+{{- $found := "" -}}
+{{- range $kind := list "DaemonSet" "Deployment" -}}
+{{- range $obj := ((lookup "apps/v1" $kind "" "").items | default list) -}}
+{{- if not $found -}}
+{{- $labels := $obj.metadata.labels | default dict -}}
+{{- $byLabel := eq (index $labels "app.kubernetes.io/name" | default "") "node-feature-discovery" -}}
+{{- $byName := has $obj.metadata.name (list "node-feature-discovery-worker" "node-feature-discovery-master" "nfd-worker" "nfd-master") -}}
+{{- /* Ignore the NFD owned by this release. */ -}}
+{{- $release := index $labels "app.kubernetes.io/instance" | default (index $labels "helm.sh/release") | default "" -}}
+{{- $ours := and (eq $obj.metadata.namespace $.Release.Namespace) (eq $release $.Release.Name) -}}
+{{- if and (or $byLabel $byName) (not $ours) -}}
+{{- $found = $obj.metadata.namespace -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
-{{- $foundNamespace -}}
+{{- $found -}}
+{{- end -}}
+
+{{/*
+Return "true" when this release enables NFD, an external NFD is found, or the
+NFD API is registered. Both NodeFeatureRules and RuntimeClass selectors use
+this result so they stay in sync.
+*/}}
+{{- define "kata-deploy.nfdPresent" -}}
+{{- if index .Values "node-feature-discovery" "enabled" -}}
+true
+{{- else if include "kata-deploy.detectExistingNFD" . | trim -}}
+true
+{{- else if .Capabilities.APIVersions.Has "nfd.k8s-sigs.io/v1alpha1" -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1013,12 +1017,9 @@ confidential RuntimeClasses consume one of those keys per pod.
 
 Returns "true" or the empty string.
 
-`nodeFeatureRules.create: auto` (the default) mirrors what the kata-deploy binary
-used to check at run time - is NFD actually around? - from three angles: this
-release installs it, an existing installation was found, or the CRD is registered
-in the cluster (which also covers an NFD deployed under names the lookup does not
-recognise). The CRD check only sees a live cluster, so `helm template` renders
-nothing under `auto`; pass `--set nodeFeatureRules.create=true` to inspect it.
+`nodeFeatureRules.create: auto` (the default) follows
+`kata-deploy.nfdPresent`. A live cluster is required to detect external NFD;
+use `nodeFeatureRules.create=true` when rendering with `helm template`.
 
 Both resources hang off one signal on purpose: an extended-resource request that
 nothing advertises makes every pod on that RuntimeClass unschedulable, so the
@@ -1038,12 +1039,7 @@ true
 {{- else if ne $create "auto" -}}
 {{- fail (printf "nodeFeatureRules.create must be one of auto, true, false (got %q)" $create) -}}
 {{- else -}}
-{{- $nfdEnabled := index .Values "node-feature-discovery" "enabled" | default false -}}
-{{- $existingNFD := ne (include "kata-deploy.detectExistingNFD" . | trim) "" -}}
-{{- $crdPresent := .Capabilities.APIVersions.Has "nfd.k8s-sigs.io/v1alpha1" -}}
-{{- if or $nfdEnabled $existingNFD $crdPresent -}}
-true
-{{- end -}}
+{{- include "kata-deploy.nfdPresent" . -}}
 {{- end -}}
 {{- end -}}
 
