@@ -7103,6 +7103,7 @@ dependencies = [
  "runtimes",
  "slog",
  "slog-scope",
+ "tempfile",
  "tokio",
  "ttrpc",
 ]
