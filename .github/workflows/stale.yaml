@@ -13,7 +13,7 @@ concurrency:
 jobs:
   stale:
     name: stale
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: write # Needed to manage caches for state persistence across runs

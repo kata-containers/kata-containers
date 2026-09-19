@@ -1035,7 +1035,7 @@ function ensure_yq() {
 	export GOPATH
 	export PATH="${GOPATH}/bin:${PATH}"
 	INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
-	hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
+	hash -d yq 2> /dev/null || true # yq may be preinstalled on GHA runners; clear Bash's PATH cache.
 }
 
 function ensure_pip() {

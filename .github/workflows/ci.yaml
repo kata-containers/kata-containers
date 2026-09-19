@@ -78,7 +78,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-22.04
+      runner: ubuntu-24.04
       arch: amd64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
@@ -96,7 +96,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-22.04
+      runner: ubuntu-24.04
       arch: amd64
       image-kind: monitor
     secrets:
@@ -258,7 +258,7 @@ jobs:
     permissions:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -528,7 +528,7 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-22.04
+      runner: ubuntu-24.04
       arch: amd64
       containerd_version: ${{ matrix.params.containerd_version }}
       vmm: ${{ matrix.params.vmm }}

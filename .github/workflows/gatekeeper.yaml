@@ -23,7 +23,7 @@ concurrency:
 jobs:
   gatekeeper:
     name: gatekeeper
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
     permissions:
       actions: read # needed to check workflow run status

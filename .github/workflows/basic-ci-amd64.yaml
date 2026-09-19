@@ -93,7 +93,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-containerd-stability-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -152,7 +152,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-nydus-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -213,7 +213,7 @@ jobs:
           - qemu-nvidia-cpu-runtime-rs
           - qemu-nvidia-gpu
           - qemu-nvidia-gpu-runtime-rs
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
@@ -319,7 +319,7 @@ jobs:
 
   run-kata-agent-apis:
     name: run-kata-agent-apis
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-agent-api-amd64
       cancel-in-progress: true
