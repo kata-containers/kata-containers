@@ -123,7 +123,7 @@ pub struct Runtime {
     /// See https://www.jaegertracing.io/docs/getting-started.
     #[serde(default)]
     pub enable_tracing: bool,
-    /// The full url to the Jaeger HTTP Thrift collector.
+    /// The OTLP/gRPC receiver URL for Rust runtime tracing (default: http://localhost:4317).
     #[serde(default)]
     pub jaeger_endpoint: String,
     /// The username to be used if basic auth is required for Jaeger.
