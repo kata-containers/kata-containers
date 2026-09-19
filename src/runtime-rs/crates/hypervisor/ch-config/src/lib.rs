@@ -590,20 +590,22 @@ mod tests {
     use kata_sys_util::protection::SevSnpDetails;
 
     #[test]
-    fn test_vm_resize_serialization_preserves_256_vcpus() {
-        let resize = VmResize {
-            desired_vcpus: Some(256),
-            ..Default::default()
-        };
+    fn test_vm_resize_serialization_preserves_cpu_count() {
+        for vcpus in [256, 512] {
+            let resize = VmResize {
+                desired_vcpus: Some(vcpus),
+                ..Default::default()
+            };
 
-        assert_eq!(
-            serde_json::to_value(resize).unwrap(),
-            serde_json::json!({
-                "desired_vcpus": 256,
-                "desired_ram": null,
-                "desired_balloon": null,
-            })
-        );
+            assert_eq!(
+                serde_json::to_value(resize).unwrap(),
+                serde_json::json!({
+                    "desired_vcpus": vcpus,
+                    "desired_ram": null,
+                    "desired_balloon": null,
+                })
+            );
+        }
     }
 
     #[test]
