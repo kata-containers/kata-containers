@@ -120,6 +120,10 @@ type qemu struct {
 
 	stopped int32
 
+	// exitCh is closed once QEMU has been reaped.  Nil when this process
+	// did not launch it, e.g. a sandbox restored from its persisted state.
+	exitCh chan struct{}
+
 	mu sync.Mutex
 }
 
@@ -142,6 +146,8 @@ const (
 	balloonID                = "balloon0"
 
 	qemuStopSandboxTimeoutSecs = 15
+	qemuStopSandboxTimeout     = qemuStopSandboxTimeoutSecs * time.Second
+	qemuExitPollInterval       = 10 * time.Millisecond
 
 	qomPathPrefix = "/machine/peripheral/"
 
@@ -1677,7 +1683,9 @@ func (q *qemu) setupEarlyQmpConnection() (net.Conn, error) {
 	return conn, nil
 }
 
-func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
+func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser, exitCh chan struct{}) {
+	defer close(exitCh)
+
 	pid := qemuCmd.Process.Pid
 	q.Logger().Infof("Start logging QEMU (qemuPid=%d)", pid)
 	scanner := bufio.NewScanner(reader)
@@ -1777,7 +1785,12 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 
 	// Log QEMU errors and ensure the QEMU process is reaped after
 	// termination.
-	go q.LogAndWait(qemuCmd, reader)
+	q.mu.Lock()
+	q.exitCh = make(chan struct{})
+	exitCh := q.exitCh
+	q.mu.Unlock()
+
+	go q.LogAndWait(qemuCmd, reader, exitCh)
 
 	err = q.waitVM(ctx, qmpConn, timeout)
 	if err != nil {
@@ -1867,6 +1880,55 @@ func (q *qemu) waitVM(ctx context.Context, qmpConn net.Conn, timeout int) error 
 	return nil
 }
 
+// reaped is false for a QEMU this process did not launch, which says nothing
+// either way.
+func (q *qemu) reaped() bool {
+	if q.exitCh == nil {
+		return false
+	}
+
+	select {
+	case <-q.exitCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func (q *qemu) hasExited(pid int) bool {
+	return q.reaped() || syscall.Kill(pid, syscall.Signal(0)) == syscall.ESRCH
+}
+
+// waitForExit waits for the QEMU process to be gone, not merely signalled.
+// QEMU releases the VFIO file descriptors of a passed-through device as it
+// dies, and unbinding a device userspace still owns blocks in the kernel.
+func (q *qemu) waitForExit(pid int, exitCh chan struct{}, timeout time.Duration) error {
+	if exitCh != nil {
+		// LogAndWait() is the one reaping QEMU, so wait for it to say so
+		// rather than racing exec.Cmd.Wait() for the exit status.
+		select {
+		case <-exitCh:
+			return nil
+		case <-time.After(timeout):
+			return fmt.Errorf("QEMU pid %d still running after waiting %s", pid, timeout)
+		}
+	}
+
+	// Not our child, so watching the pid is all that is left.
+	deadline := time.Now().Add(timeout)
+	for {
+		if err := syscall.Kill(pid, syscall.Signal(0)); err == syscall.ESRCH {
+			return nil
+		}
+
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("QEMU pid %d still running after waiting %s", pid, timeout)
+		}
+
+		time.Sleep(qemuExitPollInterval)
+	}
+}
+
 // StopVM will stop the Sandbox's VM.
 func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	q.mu.Lock()
@@ -1887,26 +1949,41 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		}
 	}()
 
-	if err := q.qmpSetup(); err != nil {
-		return err
-	}
-
 	pids := q.GetPids()
 	if len(pids) == 0 {
-		return errors.New("cannot determine QEMU PID")
+		return fmt.Errorf("%w: cannot determine QEMU PID", errVMMExitUnconfirmed)
 	}
 	pid := pids[0]
-	if pid > 0 {
-		if waitOnly {
-			err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
-			if err != nil {
-				return err
-			}
-		} else {
-			err = syscall.Kill(pid, syscall.SIGKILL)
-			if err != nil {
-				q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
-				return err
+
+	if err := q.qmpSetup(); err != nil {
+		// QMP is only good for talking to a live QEMU.
+		if pid <= 0 || !q.hasExited(pid) {
+			return fmt.Errorf("%w: set up QMP: %v", errVMMExitUnconfirmed, err)
+		}
+	}
+
+	switch {
+	case q.reaped():
+		// Gone for good, and its pid may since have been recycled by a
+		// process we must not signal.
+	case pid <= 0:
+		// Nothing to signal, and only our own reaper could still tell us
+		// anything.  A QEMU we never launched holds no device.
+		if q.exitCh != nil {
+			return fmt.Errorf("%w: lost track of the QEMU process", errVMMExitUnconfirmed)
+		}
+	case waitOnly:
+		if werr := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger()); werr != nil {
+			return fmt.Errorf("%w: %v", errVMMExitUnconfirmed, werr)
+		}
+	default:
+		// ESRCH is the exit we were asking for.
+		if kerr := syscall.Kill(pid, syscall.SIGKILL); kerr != nil && kerr != syscall.ESRCH {
+			q.Logger().WithError(kerr).Error("Fail to send SIGKILL to qemu")
+			return fmt.Errorf("%w: send SIGKILL to QEMU process %d: %v", errVMMExitUnconfirmed, pid, kerr)
+		} else if kerr == nil {
+			if werr := q.waitForExit(pid, q.exitCh, qemuStopSandboxTimeout); werr != nil {
+				return fmt.Errorf("%w: %v", errVMMExitUnconfirmed, werr)
 			}
 		}
 	}
