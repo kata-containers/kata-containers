@@ -5,6 +5,9 @@ license = { workspace = true }
 name = "service"
 version = "0.1.0"
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }

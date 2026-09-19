@@ -134,7 +134,7 @@ impl RuntimeHandler for VirtContainer {
         Arc::new(VirtContainer {})
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     async fn new_instance(
         &self,
         sid: &str,
