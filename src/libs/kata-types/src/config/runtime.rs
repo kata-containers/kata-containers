@@ -9,7 +9,7 @@ use std::path::Path;
 use super::default;
 use crate::config::{ConfigOps, TomlConfig};
 use crate::mount::split_bind_mounts;
-use crate::validate_path;
+use crate::{sl, validate_path};
 
 #[path = "shared_mount.rs"]
 pub mod shared_mount;
@@ -119,17 +119,28 @@ pub struct Runtime {
     #[serde(default)]
     pub enable_vcpus_pinning: bool,
 
-    /// If enabled, the runtime will create opentracing.io traces and spans.
+    /// If enabled, the runtime will create OpenTelemetry traces and spans.
     /// See https://www.jaegertracing.io/docs/getting-started.
     #[serde(default)]
     pub enable_tracing: bool,
-    /// The full url to the Jaeger HTTP Thrift collector.
+    /// The OTLP/gRPC receiver URL for Rust runtime tracing (default: http://localhost:4317).
+    #[serde(default)]
+    pub otlp_endpoint: String,
+    /// The username to be used if the OTLP receiver requires basic auth.
+    #[serde(default)]
+    pub otlp_user: String,
+    /// The password to be used if the OTLP receiver requires basic auth.
+    #[serde(default)]
+    pub otlp_password: String,
+    /// Deprecated, use `otlp_endpoint`.
+    // TODO: remove the jaeger_* options and adopt_deprecated_key() once their
+    // deprecation period ends.
     #[serde(default)]
     pub jaeger_endpoint: String,
-    /// The username to be used if basic auth is required for Jaeger.
+    /// Deprecated, use `otlp_user`.
     #[serde(default)]
     pub jaeger_user: String,
-    /// The password to be used if basic auth is required for Jaeger.
+    /// Deprecated, use `otlp_password`.
     #[serde(default)]
     pub jaeger_password: String,
 
@@ -240,6 +251,31 @@ impl ConfigOps for Runtime {
             conf.runtime.emptydir_mode = EMPTYDIR_MODE_SHARED_FS.to_owned();
         }
 
+        let runtime = &mut conf.runtime;
+        // TODO: remove with the deprecated jaeger_* options.
+        for (new_key, new_value, old_key, old_value) in [
+            (
+                "otlp_endpoint",
+                &mut runtime.otlp_endpoint,
+                "jaeger_endpoint",
+                &mut runtime.jaeger_endpoint,
+            ),
+            (
+                "otlp_user",
+                &mut runtime.otlp_user,
+                "jaeger_user",
+                &mut runtime.jaeger_user,
+            ),
+            (
+                "otlp_password",
+                &mut runtime.otlp_password,
+                "jaeger_password",
+                &mut runtime.jaeger_password,
+            ),
+        ] {
+            adopt_deprecated_key(new_key, new_value, old_key, old_value);
+        }
+
         for bind in conf.runtime.sandbox_bind_mounts.iter_mut() {
             // Split the bind mount, canonicalize the path and then append rw mode to it.
             let (real_path, mode) = split_bind_mounts(bind);
@@ -316,6 +352,33 @@ impl Runtime {
 
 fn default_runtime_log_level() -> String {
     String::from("info")
+}
+
+fn adopt_deprecated_key(
+    new_key: &str,
+    new_value: &mut String,
+    old_key: &str,
+    old_value: &mut String,
+) {
+    // Clear the old key, as the config may be adjusted more than once.
+    let old_value = std::mem::take(old_value);
+    if old_value.is_empty() {
+        return;
+    }
+    if new_value.is_empty() {
+        warn!(
+            sl!(),
+            "`{}` is deprecated and will be removed in a future release, use `{}` instead",
+            old_key,
+            new_key
+        );
+        *new_value = old_value;
+    } else {
+        warn!(
+            sl!(),
+            "`{}` is deprecated and ignored because `{}` is set", old_key, new_key
+        );
+    }
 }
 
 #[cfg(not(feature = "enable-vendor"))]
@@ -448,9 +511,9 @@ sandbox_bind_mounts = []
 sandbox_cgroup_only = true
 enable_vcpus_pinning = true
 enable_tracing = true
-jaeger_endpoint = "localhost:1234"
-jaeger_user = "user"
-jaeger_password = "pw"
+otlp_endpoint = "localhost:1234"
+otlp_user = "user"
+otlp_password = "pw"
 enable_pprof = true
 disable_guest_seccomp = true
 vfio_mode = "vfio"
@@ -469,8 +532,31 @@ field_should_be_ignored = true
         assert!(config.runtime.sandbox_cgroup_only);
         assert!(config.runtime.enable_vcpus_pinning);
         assert!(config.runtime.enable_tracing);
+        assert_eq!(&config.runtime.otlp_endpoint, "localhost:1234");
+        assert_eq!(&config.runtime.otlp_user, "user");
+        assert_eq!(&config.runtime.otlp_password, "pw");
         assert!(config.runtime.is_experiment_enabled("a"));
         assert!(config.runtime.is_experiment_enabled("b"));
         assert!(!config.runtime.is_experiment_enabled("c"));
+    }
+
+    #[test]
+    fn test_deprecated_jaeger_keys() {
+        let content = r#"
+[runtime]
+otlp_endpoint = "http://collector:4317"
+jaeger_endpoint = "http://jaeger:14268/api/traces"
+jaeger_user = "user"
+jaeger_password = "pw"
+"#;
+        let mut config: TomlConfig = TomlConfig::load(content).unwrap();
+        // update_config_by_annotation() adjusts the config a second time.
+        config.adjust_config().unwrap();
+        assert_eq!(&config.runtime.otlp_endpoint, "http://collector:4317");
+        assert_eq!(&config.runtime.otlp_user, "user");
+        assert_eq!(&config.runtime.otlp_password, "pw");
+        assert!(config.runtime.jaeger_endpoint.is_empty());
+        assert!(config.runtime.jaeger_user.is_empty());
+        assert!(config.runtime.jaeger_password.is_empty());
     }
 }
