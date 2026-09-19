@@ -1510,6 +1510,57 @@ func TestCalculateSandboxSizing(t *testing.T) {
 	}
 }
 
+func TestStaticSandboxSizingWithHugePages(t *testing.T) {
+	assert := assert.New(t)
+
+	configPath, err := createConfig("config.json", minimalConfig)
+	assert.NoError(err)
+	defer os.Remove(configPath)
+
+	spec, err := compatoci.ParseConfigJSON(tempBundlePath)
+	assert.NoError(err)
+
+	testCases := []struct {
+		description   string
+		hugePages     bool
+		expectedMemMB uint32
+	}{
+		{
+			description:   "the workload memory limit sizes an ordinary guest",
+			hugePages:     false,
+			expectedMemMB: 3072,
+		},
+		{
+			// The guest's memory comes from the hugetlb pool, which the
+			// workload's memory limit is not charged against.
+			description:   "default_memory alone sizes a huge page backed guest",
+			hugePages:     true,
+			expectedMemMB: 2048,
+		},
+	}
+
+	for _, tt := range testCases {
+		runtimeConfig := RuntimeConfig{
+			HypervisorType: vc.QemuHypervisor,
+			HypervisorConfig: vc.HypervisorConfig{
+				MemorySize: 2048,
+				NumVCPUsF:  1,
+				HugePages:  tt.hugePages,
+			},
+			StaticSandboxResourceMgmt: true,
+			SandboxCPUs:               2,
+			SandboxMemMB:              1024,
+		}
+
+		sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, false, true)
+		assert.NoError(err, tt.description)
+		assert.Equal(tt.expectedMemMB, sandboxConfig.HypervisorConfig.MemorySize, tt.description)
+		assert.Equal(uint32(2048), sandboxConfig.SandboxResources.BaseMemMB, tt.description)
+		// The vCPU side is the same either way.
+		assert.Equal(float32(3), sandboxConfig.HypervisorConfig.NumVCPUsF, tt.description)
+	}
+}
+
 func TestNewMount(t *testing.T) {
 	assert := assert.New(t)
 
