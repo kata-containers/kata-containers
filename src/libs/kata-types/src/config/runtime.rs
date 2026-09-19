@@ -137,6 +137,12 @@ pub struct Runtime {
     #[serde(default)]
     pub enable_pprof: bool,
 
+    /// If enabled (default: false), the sandbox metrics will be exposed
+    /// through the shim management HTTP server (/metrics endpoint).
+    /// It's set with false as default.
+    #[serde(default)]
+    pub enable_metrics: bool,
+
     /// If enabled, static resource management will calculate the vcpu and memory for the sandbox/container
     /// And pod configured this will not be able to further update its CPU/Memory resource
     #[serde(default)]
