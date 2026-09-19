@@ -1527,6 +1527,23 @@ func (a *annotationConfiguration) setFloat32WithCheck(f func(float32) error) err
 	return nil
 }
 
+// CRI-O annotation keys for sandbox resource sizing.
+const (
+	// crioPodLinuxResourcesKey is the CRI-O annotation key for pod-level
+	// Linux container resources (CPU period, quota, shares, memory).
+	// The value is a JSON-encoded LinuxContainerResources object.
+	// https://github.com/cri-o/cri-o/pull/6913
+	crioPodLinuxResourcesKey = "io.kubernetes.cri-o.PodLinuxResources"
+)
+
+// crioPodLinuxResources is the JSON structure of the PodLinuxResources annotation.
+type crioPodLinuxResources struct {
+	CPUPeriod        int64 `json:"cpu_period"`
+	CPUQuota         int64 `json:"cpu_quota"`
+	CPUShares        int64 `json:"cpu_shares"`
+	MemoryLimitBytes int64 `json:"memory_limit_in_bytes"`
+}
+
 // CalculateSandboxSizing will calculate the number of CPUs and amount of Memory that should
 // be added to the VM if sandbox annotations are provided with this sizing details
 func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
@@ -1577,6 +1594,32 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		if err != nil {
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
 			memory = 0
+		}
+	}
+
+	// Fall back to CRI-O PodLinuxResources annotation if containerd annotations
+	// are not set. CRI-O encodes pod resources as a single JSON annotation
+	// (io.kubernetes.cri-o.PodLinuxResources) instead of separate key-value
+	// pairs for each resource.
+	if period == 0 && quota == 0 && memory == 0 {
+		if annotation, ok := spec.Annotations[crioPodLinuxResourcesKey]; ok {
+			var podResources crioPodLinuxResources
+			if err := json.Unmarshal([]byte(annotation), &podResources); err == nil {
+				if podResources.CPUPeriod > 0 {
+					period = uint64(podResources.CPUPeriod)
+				}
+				if podResources.CPUQuota > 0 {
+					quota = podResources.CPUQuota
+				}
+				if podResources.CPUShares > 0 {
+					shares = podResources.CPUShares
+				}
+				if podResources.MemoryLimitBytes > 0 {
+					memory = podResources.MemoryLimitBytes
+				}
+			} else {
+				ociLog.Warningf("sandbox-sizing: failure to parse CRI-O PodLinuxResources: %s", err)
+			}
 		}
 	}
 
