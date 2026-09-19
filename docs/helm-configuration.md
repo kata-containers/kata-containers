@@ -1503,13 +1503,16 @@ cluster (deployed by this chart with `node-feature-discovery.enabled=true` or fo
 - Intel TDX shims: `intel.feature.node.kubernetes.io/tdx: "true"`
 - IBM Secure Execution for Linux (SEL) shims (s390x): `feature.node.kubernetes.io/cpu-security.se.enabled: "true"`
 
-The chart uses Helm's `lookup` function to detect NFD (by looking for the
-`node-feature-discovery-worker` DaemonSet). Auto-inject only runs when NFD is detected and
-no manual `runtimeClass.nodeSelector` is set for that shim.
+The chart detects NFD once and uses that result for both these selectors and
+[TEE key advertisement](#tee-key-advertisement). Detection succeeds when this
+chart enables NFD, an external NFD workload is found by label, or the NFD API is
+registered. Auto-injection only runs when NFD is detected and the shim has no
+manual `runtimeClass.nodeSelector`.
 
-**Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
-cluster), external NFD is not seen, so auto-injected labels are not added. Manual
-`runtimeClass.nodeSelector` values are still applied in all cases.
+!!! note "Detection needs a live cluster"
+    `helm template` cannot detect external NFD. Set a manual
+    `runtimeClass.nodeSelector` and `nodeFeatureRules.create: true` when rendering
+    manifests without cluster access.
 
 ## TEE key advertisement
 
@@ -1531,9 +1534,10 @@ nodeFeatureRules:
   create: auto   # auto | true | false
 ```
 
-`auto` renders them when NFD is in the picture: installed by this chart
-(`node-feature-discovery.enabled=true`), already present in the cluster, or its CRD
-is registered. `true` and `false` decide outright.
+`auto` renders them when NFD is in the picture, by the same detection the
+[RuntimeClass node selectors](#runtimeclass-node-selectors-for-tee-shims) use:
+installed by this chart (`node-feature-discovery.enabled=true`), already present in
+the cluster, or its CRD is registered. `true` and `false` decide outright.
 
 `false` turns off **both** halves: no rule, and no confidential `RuntimeClass` asks
 for a TEE key. It is the escape hatch for a cluster that wants no part of this — not
