@@ -8,16 +8,21 @@ use std::cmp::min;
 use std::fmt::Write;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use lazy_static::lazy_static;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::{tonic_types::metadata::MetadataMap, WithExportConfig, WithTonicConfig};
 use opentelemetry_sdk::{trace::SdkTracerProvider, Resource};
-use tracing::{span, subscriber::NoSubscriber, Span, Subscriber};
+use tokio::sync::Notify;
+use tracing::{span, Span, Subscriber};
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Registry;
-use tracing_subscriber::{filter::filter_fn, layer::Context as LayerContext, Layer};
+use tracing_subscriber::{
+    filter::{filter_fn, LevelFilter, Targets},
+    layer::Context as LayerContext,
+    Layer,
+};
 
 const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";
 // TODO: remove the Jaeger Thrift endpoint mapping, which also applies to
@@ -25,6 +30,13 @@ const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";
 const OTLP_GRPC_PORT: u16 = 4317;
 const JAEGER_THRIFT_PORT: u16 = 14268;
 const JAEGER_THRIFT_PATH: &str = "/api/traces";
+
+fn export_filter() -> Targets {
+    Targets::new()
+        .with_default(LevelFilter::TRACE)
+        .with_target("opentelemetry", LevelFilter::OFF)
+        .with_target("h2", LevelFilter::OFF)
+}
 
 // Keep exporter failures visible in local logs even when the collector is unreachable.
 struct OtelDiagnostics;
@@ -46,26 +58,32 @@ impl<SubscriberType: Subscriber> Layer<SubscriberType> for OtelDiagnostics {
     }
 }
 
-lazy_static! {
-    /// The ROOTSPAN is a phantom span that is running by calling [`trace_enter_root()`] at the background
-    /// once the configuration is read and config.runtime.enable_tracing is enabled
-    /// The ROOTSPAN exits by calling [`trace_exit_root()`] on shutdown request sent from containerd
-    ///
-    /// NOTE:
-    ///     This allows other threads which are not directly running under some spans to be tracked easily
-    ///     within the entire sandbox's lifetime.
-    ///     To do this, you just need to add attribute #[instrment(parent=&(*ROOTSPAN))]
-    pub static ref ROOTSPAN: Span = span!(tracing::Level::TRACE, "root-span");
+// Guard against retained span references outliving request draining and causing
+// exporter shutdown to drop the root span. The wait shares the drain deadline.
+struct RootSpanCloseLayer {
+    closed: Arc<Notify>,
+}
+
+impl<SubscriberType> Layer<SubscriberType> for RootSpanCloseLayer
+where
+    SubscriberType: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    fn on_close(&self, id: span::Id, ctx: LayerContext<'_, SubscriberType>) {
+        if let Some(span) = ctx.span(&id) {
+            if span.metadata().target() == module_path!() && span.name() == "root-span" {
+                self.closed.notify_one();
+            }
+        }
+    }
 }
 
 /// The tracer wrapper for kata-containers
 /// The fields and member methods should ALWAYS be PRIVATE and be exposed in a safe
 /// way to other modules
-unsafe impl Send for KataTracer {}
-unsafe impl Sync for KataTracer {}
 pub struct KataTracer {
-    subscriber: Arc<dyn Subscriber + Send + Sync>,
     provider: Option<SdkTracerProvider>,
+    root_span: Option<Span>,
+    root_closed: Arc<Notify>,
 }
 
 impl Default for KataTracer {
@@ -78,14 +96,14 @@ impl KataTracer {
     /// Constructor of KataTracer, this is a dummy implementation for static initialization
     pub fn new() -> Self {
         Self {
-            subscriber: Arc::new(NoSubscriber::default()),
             provider: None,
+            root_span: None,
+            root_closed: Arc::new(Notify::new()),
         }
     }
 
     /// Call when the tracing is enabled (set in toml configuration file)
-    /// This setup the subscriber, which maintains the span's information, to global and
-    /// inside KATA_TRACER.
+    /// Install the global subscriber and retain the provider and sandbox root.
     ///
     /// Note that the span will be noop(not collected) if a invalid subscriber is set
     pub fn trace_setup(
@@ -95,6 +113,10 @@ impl KataTracer {
         username: &str,
         password: &str,
     ) -> Result<()> {
+        if self.provider.is_some() {
+            return Ok(());
+        }
+
         let endpoint = verify_otlp_config(endpoint, username, password)?;
         let mut metadata = MetadataMap::new();
         if !username.is_empty() {
@@ -122,67 +144,39 @@ impl KataTracer {
         // Do not feed exporter diagnostics back into the exporter.
         let layer = tracing_opentelemetry::layer()
             .with_tracer(tracer)
-            .with_filter(filter_fn(|metadata| {
-                !metadata.target().starts_with("opentelemetry")
-            }));
+            .with_filter(export_filter());
         // Filter before on_event: only OpenTelemetry WARN/ERROR events are formatted.
         let diagnostics = OtelDiagnostics.with_filter(filter_fn(|metadata| {
             metadata.target().starts_with("opentelemetry")
                 && *metadata.level() <= tracing::Level::WARN
         }));
-        let sub = Registry::default().with(layer).with(diagnostics);
+        let sub = Registry::default()
+            .with(layer)
+            .with(diagnostics)
+            // Keep this layer outermost so OpenTelemetry queues the root before we notify shutdown.
+            .with(RootSpanCloseLayer {
+                closed: self.root_closed.clone(),
+            });
 
-        // we use Arc to let global subscriber and katatracer to SHARE the SAME subscriber
-        // this is for record the global subscriber into a global variable KATA_TRACER for more usages
-        let subscriber = Arc::new(sub);
-        tracing::subscriber::set_global_default(subscriber.clone())?;
-        self.subscriber = subscriber;
+        tracing::subscriber::set_global_default(sub)?;
         self.provider = Some(provider);
 
-        // enter the rootspan
-        self.trace_enter_root();
+        self.root_span =
+            Some(span!(parent: None, tracing::Level::TRACE, "root-span", sandbox_id = %sid));
 
         info!(sl!(), "Tracing enabled successfully");
         Ok(())
     }
 
-    /// Flush completed spans to the OTLP receiver before stopping the runtime.
-    pub async fn trace_end(&self) -> Result<()> {
-        if let Some(provider) = self.provider.clone() {
-            self.trace_exit_root();
-            tokio::task::spawn_blocking(move || provider.shutdown())
-                .await
-                .context("join tracing shutdown")?
-                .context("shut down OTLP trace provider")?;
-        }
-        Ok(())
+    pub fn begin_shutdown(&mut self) -> Option<(SdkTracerProvider, Arc<Notify>)> {
+        let provider = self.provider.take()?;
+        drop(self.root_span.take());
+        // Notify retains a permit if the root closed synchronously before the waiter starts.
+        Some((provider, self.root_closed.clone()))
     }
 
-    /// Enter the global ROOTSPAN
-    /// This function is a hack on tracing library's guard approach, letting the span
-    /// to enter without using a RAII guard to exit. This function should only be called
-    /// once, and also in paired with [`trace_exit_root()`].
-    fn trace_enter_root(&self) {
-        self.enter_span(&ROOTSPAN);
-    }
-
-    /// Exit the global ROOTSPAN
-    /// This should be called in paired with [`trace_enter_root()`].
-    fn trace_exit_root(&self) {
-        self.exit_span(&ROOTSPAN);
-    }
-
-    /// let the subscriber enter the span, this has to be called in pair with exit(span)
-    /// This function allows **cross function span** to run without span guard
-    fn enter_span(&self, span: &Span) {
-        let id: Option<span::Id> = span.into();
-        self.subscriber.enter(&id.unwrap());
-    }
-
-    /// let the subscriber exit the span, this has to be called in pair to enter(span)
-    fn exit_span(&self, span: &Span) {
-        let id: Option<span::Id> = span.into();
-        self.subscriber.exit(&id.unwrap());
+    pub fn root_span(&self) -> Option<Span> {
+        self.root_span.clone()
     }
 }
 
@@ -232,8 +226,44 @@ fn map_jaeger_thrift_endpoint(endpoint: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use opentelemetry_sdk::trace::{SpanData, SpanExporter};
+    use std::sync::Mutex;
+
+    #[derive(Clone, Debug, Default)]
+    pub struct RecordingExporter(pub Arc<Mutex<Vec<SpanData>>>);
+
+    impl SpanExporter for RecordingExporter {
+        async fn export(&self, batch: Vec<SpanData>) -> opentelemetry_sdk::error::OTelSdkResult {
+            self.0.lock().unwrap().extend(batch);
+            Ok(())
+        }
+    }
+
+    pub fn tracer() -> (KataTracer, RecordingExporter, tracing::Dispatch) {
+        let exporter = RecordingExporter::default();
+        let provider = SdkTracerProvider::builder()
+            .with_batch_exporter(exporter.clone())
+            .build();
+        let mut tracer = KataTracer::new();
+        let subscriber = Registry::default()
+            .with(
+                tracing_opentelemetry::layer()
+                    .with_tracer(provider.tracer("lifecycle-test"))
+                    .with_filter(export_filter()),
+            )
+            .with(RootSpanCloseLayer {
+                closed: tracer.root_closed.clone(),
+            });
+        let dispatch = tracing::Dispatch::new(subscriber);
+        tracer.root_span = Some(tracing::dispatcher::with_default(
+            &dispatch,
+            || span!(target: "runtimes::tracer", parent: None, tracing::Level::TRACE, "root-span"),
+        ));
+        tracer.provider = Some(provider);
+        (tracer, exporter, dispatch)
+    }
 
     #[test]
     fn test_map_jaeger_thrift_endpoint() {
