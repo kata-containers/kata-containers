@@ -2649,6 +2649,8 @@ pub(crate) mod tests {
             container_runtime_version: None,
             k8s_distribution: None,
             containerd_config_dir: None,
+            containerd_extra_pod_annotations: vec![],
+            containerd_shim_extra_pod_annotations_for_arch: vec![],
         }
     }
 
