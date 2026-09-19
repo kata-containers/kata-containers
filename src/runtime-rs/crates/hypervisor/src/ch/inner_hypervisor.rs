@@ -812,12 +812,14 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
-        // If the container workload exits, this method gets called. However,
-        // the container manager always makes a ShutdownContainer request,
-        // which results in this method being called potentially a second
-        // time. Without this check, we'll return an error representing EPIPE
-        // since the CH API socket is at that point invalid.
-        if self.state != VmmState::VmRunning {
+        // Shut the VMM down if it has been launched, even if the VM has not
+        // booted, or its process is left behind. When the container workload
+        // exits, this method gets called. However, the container manager
+        // always makes a ShutdownContainer request, which results in this
+        // method being called potentially a second time. Without this check,
+        // we'll return an error representing EPIPE since the CH API socket is
+        // at that point invalid.
+        if self.state == VmmState::NotReady {
             return Ok(());
         }
 
@@ -1258,6 +1260,7 @@ mod tests {
     use test_utils::{assert_result, skip_if_not_root};
 
     use std::fs::{self, File};
+    use std::io::{Read, Write};
     use tempfile::Builder;
 
     fn set_fake_guest_protection(protection: Option<GuestProtection>) {
@@ -1771,6 +1774,47 @@ mod tests {
         assert!(
             !vcpus.contains_key(&1000),
             "non-vcpu thread should not be in the map"
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_stop_vm() {
+        // Never launched, so there is nothing to shut down.
+        let mut clh = CloudHypervisorInner::new(None);
+        clh.stop_vm().await.unwrap();
+        assert_eq!(clh.state, VmmState::NotReady);
+        assert!(clh.tasks.is_none());
+
+        // Launched but the VM never booted, so the VMM must still be shut down.
+        let (shim_end, mut vmm_end) = UnixStream::pair().unwrap();
+        let fake_vmm = std::thread::spawn(move || {
+            let mut request = Vec::new();
+            let mut byte = [0u8; 1];
+            while !request.ends_with(b"\r\n\r\n") {
+                vmm_end.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
+            }
+            vmm_end
+                .write_all(b"HTTP/1.1 200\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+            String::from_utf8(request).unwrap()
+        });
+
+        let mut clh = CloudHypervisorInner::new(None);
+        clh.state = VmmState::VmmServerReady;
+        *clh.api_socket.lock().await = Some(shim_end);
+        // There is no child process, so no logger task to join.
+        clh.tasks = Some(vec![]);
+
+        clh.stop_vm().await.unwrap();
+
+        assert_eq!(clh.state, VmmState::NotReady);
+        assert!(clh.tasks.is_none());
+        let request = fake_vmm.join().unwrap();
+        assert!(
+            request.starts_with("PUT /api/v1/vmm.shutdown "),
+            "{}",
+            request
         );
     }
 }
