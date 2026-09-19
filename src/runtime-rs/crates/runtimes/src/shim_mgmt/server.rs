@@ -30,11 +30,14 @@ pub struct MgmtServer {
 
     /// The sandbox instance
     pub sandbox: Arc<dyn Sandbox>,
+
+    /// Whether sandbox metrics should be collected.
+    pub enable_metrics: bool,
 }
 
 impl MgmtServer {
     /// construct a new management server
-    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Result<Self> {
+    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>, enable_metrics: bool) -> Result<Self> {
         // make sure the storage path exists, and the socket file will be created in that path
         let kata_path = sb_storage_path();
         fs::create_dir_all(kata_path)
@@ -42,7 +45,7 @@ impl MgmtServer {
 
         let s_addr = format!("unix://{kata_path}/{sid}/{SHIM_MGMT_SOCK_NAME}");
 
-        Ok(Self { s_addr, sandbox })
+        Ok(Self { s_addr, sandbox, enable_metrics })
     }
 
     // TODO(when metrics is supported): write metric addresses to fs
@@ -61,7 +64,7 @@ impl MgmtServer {
                 if let Err(err) = http1::Builder::new()
                     .serve_connection(
                         io,
-                        service_fn(|request| handler_mux(me.sandbox.clone(), request)),
+                        service_fn(|request| handler_mux(me.sandbox.clone(), request, me.enable_metrics)),
                     )
                     .await
                 {

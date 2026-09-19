@@ -45,6 +45,10 @@ impl std::fmt::Debug for ResourceManager {
 }
 
 impl ResourceManager {
+    pub async fn sandbox_cgroup_stats(&self) -> Result<crate::cgroups::SandboxCgroupStats> {
+        self.inner.read().await.cgroups_resource.stats().await
+    }
+
     pub async fn new(
         sid: &str,
         agent: Arc<dyn Agent>,
