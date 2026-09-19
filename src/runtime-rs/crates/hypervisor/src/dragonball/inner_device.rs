@@ -6,15 +6,16 @@
 
 use std::convert::TryFrom;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
+use crate::vfio_device::{VfioDeviceModern, VfioDeviceType};
 use crate::VhostUserConfig;
 use crate::{device::pci_path::PciPath, KATA_BLK_DEV_TYPE};
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
-    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, DEFAULT_HOTPLUG_TIMEOUT,
-    JAILER_ROOT,
+    ShareFsMountOperation, ShareFsMountType, VmmState, DEFAULT_HOTPLUG_TIMEOUT, JAILER_ROOT,
 };
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
@@ -29,6 +30,7 @@ use dragonball::device_manager::{
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
 };
 use kata_types::config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME;
+use tokio::sync::Mutex;
 
 const MB_TO_B: u32 = 1024 * 1024;
 const DEFAULT_VIRTIO_FS_NUM_QUEUES: i32 = 1;
@@ -56,11 +58,11 @@ impl DragonballInner {
                     .context("add net device")?;
                 Ok(DeviceType::Network(network))
             }
-            DeviceType::Vfio(mut hostdev) => {
-                self.add_vfio_device(&mut hostdev)
+            DeviceType::VfioModern(hostdev) => {
+                self.add_vfio_device(&hostdev)
+                    .await
                     .context("add vfio device")?;
-
-                Ok(DeviceType::Vfio(hostdev))
+                Ok(DeviceType::VfioModern(hostdev))
             }
             DeviceType::BlockModern(block_device) => {
                 let (
@@ -177,10 +179,8 @@ impl DragonballInner {
                 self.remove_block_drive(&device_id)
                     .context("remove block modern drive")
             }
-            DeviceType::Vfio(hostdev) => {
-                let primary_device = hostdev.devices.first().unwrap().clone();
-                let hostdev_id = primary_device.hostdev_id;
-
+            DeviceType::VfioModern(hostdev) => {
+                let hostdev_id = hostdev.lock().await.device_id.clone();
                 self.remove_vfio_device(hostdev_id)
             }
             _ => Err(anyhow!("unsupported device {:?}", device)),
@@ -199,17 +199,33 @@ impl DragonballInner {
         }
     }
 
-    fn add_vfio_device(&mut self, device: &mut VfioDevice) -> Result<()> {
-        // FIXME:
-        // A device with multi-funtions, or a IOMMU group with one more
-        // devices, the Primary device is selected to be passed to VM.
-        // And the the first one is Primary device.
-        // safe here, devices is not empty.
-        let primary_device = device.devices.first_mut().unwrap();
-        let vendor_device_id = if let Some(vdc) = primary_device.device_vendor_class.as_ref() {
-            vdc.get_device_vendor_id()?
-        } else {
-            0
+    async fn add_vfio_device(&mut self, device: &Arc<Mutex<VfioDeviceModern>>) -> Result<()> {
+        let (hostdev_id, bus_slot_func, vendor_device_id, sysfs_path) = {
+            let vfio = device.lock().await;
+            if vfio.device.device_type != VfioDeviceType::Normal {
+                return Err(anyhow!("dragonball does not support such vfio devices"));
+            }
+            let primary = &vfio.device.primary;
+            let address = primary.addr.to_string();
+            let bus_slot_func = address
+                .split_once(':')
+                .map(|(_, short)| short.to_string())
+                .ok_or_else(|| anyhow!("invalid VFIO PCI address {address}"))?;
+            let parse_id = |id: Option<&String>| -> Result<u32> {
+                match id {
+                    Some(id) => u32::from_str_radix(id.trim().trim_start_matches("0x"), 16)
+                        .with_context(|| format!("invalid PCI id {id}")),
+                    None => Ok(0),
+                }
+            };
+            let vendor = parse_id(primary.vendor_id.as_ref())?;
+            let dev = parse_id(primary.device_id.as_ref())?;
+            (
+                vfio.device_id.clone(),
+                bus_slot_func,
+                ((dev & 0xffff) << 16) | (vendor & 0xffff),
+                primary.sysfs_path.display().to_string(),
+            )
         };
 
         info!(
@@ -218,19 +234,19 @@ impl DragonballInner {
             host device id: {:?},
             bus_slot_func: {:?},
             vendor/device id: {:?}",
-            primary_device.hostdev_id,
-            primary_device.bus_slot_func,
+            hostdev_id,
+            bus_slot_func,
             vendor_device_id,
         );
 
         let vfio_dev_config = VfioPciDeviceConfig {
-            bus_slot_func: primary_device.bus_slot_func.clone(),
+            bus_slot_func,
             vendor_device_id,
             ..Default::default()
         };
         let host_dev_config = HostDeviceConfig {
-            hostdev_id: primary_device.hostdev_id.clone(),
-            sysfs_path: primary_device.sysfs_path.clone(),
+            hostdev_id,
+            sysfs_path,
             dev_config: vfio_dev_config,
         };
 
@@ -240,7 +256,8 @@ impl DragonballInner {
             .context("insert host device failed")?;
 
         // It's safe to unwrap guest_device_id as we can get a guest device id here.
-        primary_device.guest_pci_path = Some(PciPath::try_from(guest_device_id.unwrap() as u32)?);
+        device.lock().await.config.guest_pci_path =
+            Some(PciPath::try_from(guest_device_id.unwrap() as u32)?);
 
         Ok(())
     }
