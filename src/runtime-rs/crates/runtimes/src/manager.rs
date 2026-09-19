@@ -156,9 +156,9 @@ impl RuntimeHandlerManagerInner {
             let mut tracer = self.kata_tracer.lock().await;
             if let Err(e) = tracer.trace_setup(
                 &self.id,
-                &config.runtime.jaeger_endpoint,
-                &config.runtime.jaeger_user,
-                &config.runtime.jaeger_password,
+                &config.runtime.otlp_endpoint,
+                &config.runtime.otlp_user,
+                &config.runtime.otlp_password,
             ) {
                 warn!(sl!(), "failed to setup tracing, {:?}", e);
             }
@@ -855,7 +855,9 @@ impl RuntimeHandlerManager {
                     // stop the tracer collector
                     let kata_tracer = self.get_kata_tracer().await.context("get kata tracer")?;
                     let tracer = kata_tracer.lock().await;
-                    tracer.trace_end();
+                    if let Err(error) = tracer.trace_end().await {
+                        warn!(sl!(), "Failed to shut down tracing: {:?}", error);
+                    }
                 }
                 Ok(TaskResponse::ShutdownContainer)
             }
