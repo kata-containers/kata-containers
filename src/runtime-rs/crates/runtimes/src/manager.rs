@@ -699,7 +699,9 @@ impl RuntimeHandlerManager {
                     // stop the tracer collector
                     let kata_tracer = self.get_kata_tracer().await.context("get kata tracer")?;
                     let tracer = kata_tracer.lock().await;
-                    tracer.trace_end();
+                    if let Err(error) = tracer.trace_end().await {
+                        warn!(sl!(), "Failed to shut down tracing: {:?}", error);
+                    }
                 }
                 Ok(TaskResponse::ShutdownContainer)
             }

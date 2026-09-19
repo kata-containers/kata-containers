@@ -723,8 +723,8 @@ enable_vcpus_pinning = @DEFENABLEVCPUSPINNING_QEMU@
 # (default: disabled)
 enable_tracing = false
 
-# Set the full url to the Jaeger HTTP Thrift collector.
-# The default if not set will be "http://localhost:14268/api/traces"
+# Set the OTLP/gRPC receiver URL (Jaeger or OpenTelemetry Collector), without /api/traces.
+# The default if not set will be "http://localhost:4317"
 jaeger_endpoint = ""
 
 # Sets the username to be used if basic auth is required for Jaeger.
