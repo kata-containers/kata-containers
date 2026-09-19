@@ -13,7 +13,7 @@ import (
 )
 
 func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, success bool) {
-	err := validateHypervisorConfig(hypervisorConfig)
+	err := validateHypervisorConfig(hypervisorConfig, QemuHypervisor)
 	assert := assert.New(t)
 	assert.False(success && err != nil)
 	assert.False(!success && err == nil)

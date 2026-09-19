@@ -104,6 +104,18 @@ var (
 // cores.
 var defaultMaxVCPUs = govmm.MaxVCPUs()
 
+// MaxVCPUs returns the vCPU limit supported by Kata for this hypervisor.
+func MaxVCPUs(hypervisorType HypervisorType) uint32 {
+	if hypervisorType == ClhHypervisor && runtime.GOARCH == "amd64" {
+		// Match the existing Cloud Hypervisor backend detection: MSHV keeps its old limit.
+		if _, err := os.Stat("/dev/mshv"); err != nil {
+			// Cloud Hypervisor v48+ on KVM supports larger guests; match the kernel's NR_CPUS.
+			return 512
+		}
+	}
+	return defaultMaxVCPUs
+}
+
 // RootfsDriver describes a rootfs driver.
 type RootfsDriver string
 
