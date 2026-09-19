@@ -186,6 +186,7 @@ install_nvidia_driver_packages() {
 	local install_nvrc="${2:-yes}"
 	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
 	local tools_repo_url tools_repo_pkg dcgm_version dcgm_exporter_version
+	local driver_repo_url driver_repo_pkg
 
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" "${rootfs_dir}/nvidia_chroot.sh"
 	chmod +x "${rootfs_dir}/nvidia_chroot.sh"
@@ -205,6 +206,14 @@ install_nvidia_driver_packages() {
 	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.${machine_arch}.nvidia-gpu.version")
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
+
+	driver_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.driver.repo.${machine_arch}.url")
+	driver_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.driver.repo.${machine_arch}.pkg")
+	# Both or neither - fail before anything builds, not an hour later
+	# inside the chroot.
+	if [[ -n "${driver_repo_url}${driver_repo_pkg}" ]] && { [[ -z "${driver_repo_url}" ]] || [[ -z "${driver_repo_pkg}" ]]; }; then
+		die "driver repository misconfigured: url='${driver_repo_url}' pkg='${driver_repo_pkg}' - set both or neither"
+	fi
 	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
 	dcgm_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.version")
 	dcgm_exporter_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.exporter.version")
@@ -217,7 +226,8 @@ install_nvidia_driver_packages() {
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
 		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version} \
-		 ${dcgm_version} ${dcgm_exporter_version}"
+		 ${dcgm_version} ${dcgm_exporter_version} \
+		 ${driver_repo_url} ${driver_repo_pkg}"
 
 	umount -R ./dev
 	umount ./proc
@@ -242,6 +252,16 @@ nvidia_stage_one_fingerprint() {
 		get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg"
 		get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url"
 		get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg"
+		# Only when set - keeps the default fingerprint identical to
+		# before the driver repo existed. One record per field: a
+		# joint record would let different url/pkg splits collide.
+		local driver_repo_url driver_repo_pkg
+		driver_repo_url="$(get_package_version_from_kata_yaml "externals.nvidia.driver.repo.${machine_arch}.url")"
+		driver_repo_pkg="$(get_package_version_from_kata_yaml "externals.nvidia.driver.repo.${machine_arch}.pkg")"
+		if [[ -n "${driver_repo_url}${driver_repo_pkg}" ]]; then
+			echo "${driver_repo_url}"
+			echo "${driver_repo_pkg}"
+		fi
 	} | sha256sum | cut -d' ' -f1
 }
 
