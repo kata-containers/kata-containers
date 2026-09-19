@@ -138,7 +138,7 @@ impl ConfigPlugin for CloudHypervisorConfig {
             }
 
             let max_vcpus = Self::max_vcpus();
-            if (ch.cpu_info.default_vcpus > 0.0 && ch.cpu_info.default_vcpus as u32 > max_vcpus)
+            if ch.cpu_info.default_vcpus > max_vcpus as f32
                 || ch.cpu_info.default_maxvcpus > max_vcpus
             {
                 return Err(std::io::Error::other(format!(
@@ -184,11 +184,13 @@ mod tests {
         ch.memory_info.default_memory = MIN_CH_MEMORY_SIZE_MB;
 
         for (boot_vcpus, max_vcpus, valid) in [
-            (limit, limit, true),
-            (limit + 1, limit, false),
-            (1, limit + 1, false),
+            (limit as f32 - 0.5, limit, true),
+            (limit as f32, limit, true),
+            (limit as f32 + 0.5, limit, false),
+            (limit as f32 + 1.0, limit, false),
+            (1.0, limit + 1, false),
         ] {
-            ch.cpu_info.default_vcpus = boot_vcpus as f32;
+            ch.cpu_info.default_vcpus = boot_vcpus;
             ch.cpu_info.default_maxvcpus = max_vcpus;
             let mut config = TomlConfig::default();
             config
