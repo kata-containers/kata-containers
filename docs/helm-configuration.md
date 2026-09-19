@@ -227,6 +227,18 @@ leave the kubelet's own `/var/lib/kubelet` alone and need nothing.
     `INSTALL_K3S_TYPE`](https://docs.k3s.io/reference/env-variables), and can
     install under openrc rather than systemd, so leave those unset.
 
+!!! warning "erofs and nydus require a node that has not used them before"
+
+    kata-deploy writes erofs and nydus settings into containerd's configuration.
+    Those settings — dm-verity mode, the merged-layer layout, the nydus proxy root —
+    have to match what existing layers were built to, or containerd can no longer
+    mount them.
+
+    Changing them on a node that has already pulled images under a different erofs or
+    nydus configuration breaks those layers. Deploy kata-deploy with erofs or nydus
+    **only on nodes where neither snapshotter has been used before**, and leave
+    `snapshotter.setup` empty on nodes that already have one of them configured.
+
 ### nodeBinaries
 
 Some of what Kata needs on a node is not part of Kata: containerd's EROFS
