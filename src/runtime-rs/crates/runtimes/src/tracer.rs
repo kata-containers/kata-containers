@@ -5,17 +5,46 @@
 //
 
 use std::cmp::min;
+use std::fmt::Write;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use lazy_static::lazy_static;
-use opentelemetry::global;
-use opentelemetry::runtime::Tokio;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_otlp::{tonic_types::metadata::MetadataMap, WithExportConfig, WithTonicConfig};
+use opentelemetry_sdk::{trace::SdkTracerProvider, Resource};
 use tracing::{span, subscriber::NoSubscriber, Span, Subscriber};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::Registry;
+use tracing_subscriber::{filter::filter_fn, layer::Context as LayerContext, Layer};
 
-const DEFAULT_JAEGER_URL: &str = "http://localhost:14268/api/traces";
+const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";
+// TODO: remove the Jaeger Thrift endpoint mapping, which also applies to
+// otlp_endpoint, once the deprecated jaeger_* options are removed.
+const OTLP_GRPC_PORT: u16 = 4317;
+const JAEGER_THRIFT_PORT: u16 = 14268;
+const JAEGER_THRIFT_PATH: &str = "/api/traces";
+
+// Keep exporter failures visible in local logs even when the collector is unreachable.
+struct OtelDiagnostics;
+
+impl<SubscriberType: Subscriber> Layer<SubscriberType> for OtelDiagnostics {
+    fn on_event(&self, event: &tracing::Event<'_>, _context: LayerContext<'_, SubscriberType>) {
+        let metadata = event.metadata();
+        let mut message = String::new();
+        event.record(
+            &mut |field: &tracing::field::Field, value: &dyn std::fmt::Debug| {
+                let _ = write!(message, "{}={:?} ", field.name(), value);
+            },
+        );
+        if *metadata.level() == tracing::Level::ERROR {
+            error!(sl!(), "{}", message.trim_end(); "target" => metadata.target());
+        } else {
+            warn!(sl!(), "{}", message.trim_end(); "target" => metadata.target());
+        }
+    }
+}
 
 lazy_static! {
     /// The ROOTSPAN is a phantom span that is running by calling [`trace_enter_root()`] at the background
@@ -36,7 +65,7 @@ unsafe impl Send for KataTracer {}
 unsafe impl Sync for KataTracer {}
 pub struct KataTracer {
     subscriber: Arc<dyn Subscriber + Send + Sync>,
-    enabled: bool,
+    provider: Option<SdkTracerProvider>,
 }
 
 impl Default for KataTracer {
@@ -50,18 +79,8 @@ impl KataTracer {
     pub fn new() -> Self {
         Self {
             subscriber: Arc::new(NoSubscriber::default()),
-            enabled: false,
+            provider: None,
         }
-    }
-
-    /// Set the tracing enabled flag
-    fn enable(&mut self) {
-        self.enabled = true;
-    }
-
-    /// Return whether the tracing is enabled, enabled by [`trace_setup`]
-    fn enabled(&self) -> bool {
-        self.enabled
     }
 
     /// Call when the tracing is enabled (set in toml configuration file)
@@ -72,51 +91,71 @@ impl KataTracer {
     pub fn trace_setup(
         &mut self,
         sid: &str,
-        jaeger_endpoint: &str,
-        jaeger_username: &str,
-        jaeger_password: &str,
+        endpoint: &str,
+        username: &str,
+        password: &str,
     ) -> Result<()> {
-        // If varify jaeger config returns an error, it means that the tracing should not be enabled
-        let endpoint = verify_jaeger_config(jaeger_endpoint, jaeger_username, jaeger_password)?;
-
-        // derive a subscriber to collect span info
-        let tracer = opentelemetry_jaeger::new_collector_pipeline()
-            .with_service_name(format!("kata-sb-{}", &sid[0..min(8, sid.len())]))
+        let endpoint = verify_otlp_config(endpoint, username, password)?;
+        let mut metadata = MetadataMap::new();
+        if !username.is_empty() {
+            let credentials = BASE64.encode(format!("{username}:{password}"));
+            metadata.insert("authorization", format!("Basic {credentials}").parse()?);
+            if let Some(authorization) = metadata.get_mut("authorization") {
+                authorization.set_sensitive(true);
+            }
+        }
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
             .with_endpoint(endpoint)
-            .with_username(jaeger_username)
-            .with_password(jaeger_password)
-            .with_hyper()
-            .install_batch(Tokio)?;
+            .with_metadata(metadata)
+            .build()?;
+        let provider = SdkTracerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(
+                Resource::builder_empty()
+                    .with_service_name(format!("kata-sb-{}", &sid[0..min(8, sid.len())]))
+                    .build(),
+            )
+            .build();
+        let tracer = provider.tracer("kata-runtime-rs");
 
-        let layer = tracing_opentelemetry::layer().with_tracer(tracer);
-
-        let sub = Registry::default().with(layer);
+        // Do not feed exporter diagnostics back into the exporter.
+        let layer = tracing_opentelemetry::layer()
+            .with_tracer(tracer)
+            .with_filter(filter_fn(|metadata| {
+                !metadata.target().starts_with("opentelemetry")
+            }));
+        // Filter before on_event: only OpenTelemetry WARN/ERROR events are formatted.
+        let diagnostics = OtelDiagnostics.with_filter(filter_fn(|metadata| {
+            metadata.target().starts_with("opentelemetry")
+                && *metadata.level() <= tracing::Level::WARN
+        }));
+        let sub = Registry::default().with(layer).with(diagnostics);
 
         // we use Arc to let global subscriber and katatracer to SHARE the SAME subscriber
         // this is for record the global subscriber into a global variable KATA_TRACER for more usages
         let subscriber = Arc::new(sub);
         tracing::subscriber::set_global_default(subscriber.clone())?;
         self.subscriber = subscriber;
+        self.provider = Some(provider);
 
         // enter the rootspan
         self.trace_enter_root();
-
-        // modity the enable state, note that we have successfully enable tracing
-        self.enable();
 
         info!(sl!(), "Tracing enabled successfully");
         Ok(())
     }
 
-    /// Shutdown the tracer and emit the span info to jaeger agent
-    /// The tracing information is only partially update to jaeger agent before this function is called
-    pub fn trace_end(&self) {
-        if self.enabled() {
-            // exit the rootspan
+    /// Flush completed spans to the OTLP receiver before stopping the runtime.
+    pub async fn trace_end(&self) -> Result<()> {
+        if let Some(provider) = self.provider.clone() {
             self.trace_exit_root();
-
-            global::shutdown_tracer_provider();
+            tokio::task::spawn_blocking(move || provider.shutdown())
+                .await
+                .context("join tracing shutdown")?
+                .context("shut down OTLP trace provider")?;
         }
+        Ok(())
     }
 
     /// Enter the global ROOTSPAN
@@ -147,23 +186,79 @@ impl KataTracer {
     }
 }
 
-/// Verifying the configuration of jaeger and setup the default value
-fn verify_jaeger_config(endpoint: &str, username: &str, passwd: &str) -> Result<String> {
-    if username.is_empty() && !passwd.is_empty() {
+/// Verify OTLP credentials and set the default OTLP/gRPC endpoint.
+fn verify_otlp_config(endpoint: &str, username: &str, password: &str) -> Result<String> {
+    if username.is_empty() && !password.is_empty() {
         warn!(
             sl!(),
-            "Jaeger password with empty username is not allowed, tracing is NOT enabled"
+            "OTLP password with empty username is not allowed, tracing is NOT enabled"
         );
         return Err(anyhow::anyhow!("Empty username with non-empty password"));
     }
 
-    // set the default endpoint address, this expects a jaeger-collector running on localhost:14268
     let endpt = if endpoint.is_empty() {
-        DEFAULT_JAEGER_URL
+        DEFAULT_OTLP_ENDPOINT.to_owned()
     } else {
-        endpoint
-    }
-    .to_owned();
+        map_jaeger_thrift_endpoint(endpoint)
+    };
 
     Ok(endpt)
+}
+
+/// Point a legacy Jaeger Thrift/HTTP endpoint at the OTLP/gRPC port on the same host.
+fn map_jaeger_thrift_endpoint(endpoint: &str) -> String {
+    let Ok(mut url) = url::Url::parse(endpoint) else {
+        return endpoint.to_owned();
+    };
+    if url.path().trim_end_matches('/') != JAEGER_THRIFT_PATH
+        && url.port() != Some(JAEGER_THRIFT_PORT)
+    {
+        return endpoint.to_owned();
+    }
+    if url.set_port(Some(OTLP_GRPC_PORT)).is_err() {
+        return endpoint.to_owned();
+    }
+    url.set_path("");
+    let mapped = url.as_str().trim_end_matches('/').to_owned();
+    warn!(
+        sl!(),
+        "{} is a Jaeger Thrift endpoint, sending traces over OTLP/gRPC to {} instead. \
+         Jaeger 1.35 to 1.45 needs COLLECTOR_OTLP_ENABLED=true; for older Jaeger, \
+         custom ports or proxies, set otlp_endpoint to the OTLP/gRPC receiver",
+        endpoint,
+        mapped
+    );
+    mapped
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_jaeger_thrift_endpoint() {
+        for (endpoint, expected) in [
+            ("http://localhost:14268/api/traces", "http://localhost:4317"),
+            ("http://jaeger:14268", "http://jaeger:4317"),
+            (
+                "https://jaeger.example.com/api/traces",
+                "https://jaeger.example.com:4317",
+            ),
+            ("http://[::1]:14268/api/traces/", "http://[::1]:4317"),
+            ("http://collector:4317", "http://collector:4317"),
+            ("http://collector:9000", "http://collector:9000"),
+            ("localhost:1234", "localhost:1234"),
+        ] {
+            assert_eq!(map_jaeger_thrift_endpoint(endpoint), expected, "{endpoint}");
+        }
+    }
+
+    #[test]
+    fn test_verify_otlp_config() {
+        assert_eq!(
+            verify_otlp_config("", "", "").unwrap(),
+            DEFAULT_OTLP_ENDPOINT
+        );
+        assert!(verify_otlp_config("", "", "pw").is_err());
+    }
 }
