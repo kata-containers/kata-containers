@@ -353,7 +353,10 @@ impl DragonballInner {
         let guest_mac = MacAddr::parse_str(&config.mac_address).ok();
         // `config.num_queues` is a queue *pair* count (1 RX + 1 TX per pair).
         // Convert pairs into the actual queue count.
-        let num_queues = config.num_queues.max(1) * 2;
+        let num_queues = config
+            .num_queues
+            .clamp(1, self.config.network_queue_limit() as usize)
+            * 2;
         let net_cfg = NetworkInterfaceConfig {
             num_queues: Some(num_queues),
             queue_size: Some(config.queue_size as u16),

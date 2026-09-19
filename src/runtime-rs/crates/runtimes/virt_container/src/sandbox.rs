@@ -563,15 +563,16 @@ impl VirtSandbox {
 
         // Network priority: DAN > NetNS
         if dan_path.exists() {
+            // DAN can select a different network backend for each device.
+            let hypervisor_config = config.hypervisor.get(&config.runtime.hypervisor_name)?;
             Some(ResourceConfig::Network(NetworkConfig::Dan(
                 DanNetworkConfig {
                     dan_conf_path: dan_path,
-                    network_queues: self
-                        .hypervisor
-                        .hypervisor_config()
-                        .await
+                    network_queues: hypervisor_config
                         .network_info
-                        .network_queues as usize,
+                        .network_queues
+                        .clamp(1, hypervisor_config.network_queue_limit())
+                        as usize,
                 },
             )))
         } else if let Some(netns_path) = network_env.netns.as_ref() {

@@ -454,7 +454,7 @@ rx_rate_limiter_max_rate = 0
 # Default 0-sized value means unlimited rate.
 tx_rate_limiter_max_rate = 0
 # network_queues configures the number of virtio-net queue pairs (RX/TX) exposed to the guest.
-# Setting network_queues = N creates N RX queues and N TX queues (i.e., N queue pairs).
+# Setting network_queues = N creates min(N, 256, boot vCPUs) RX/TX queue pairs.
 # More queues can improve network throughput and reduce per-queue contention by allowing packet processing to scale
 # across multiple vCPUs/threads (subject to host/guest capabilities and backend configuration such as vhost-net).
 # Increasing this value consumes more resources (e.g., virtqueue state, interrupts/MSI-X vectors, backend threads),

@@ -134,7 +134,12 @@ impl CloudHypervisorInner {
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
-        self.config.clone()
+        let mut config = self.config.clone();
+        config.network_info.network_queues = config
+            .network_info
+            .network_queues
+            .clamp(1, config.network_queue_limit());
+        config
     }
 }
 
@@ -158,7 +163,7 @@ impl Persist for CloudHypervisorInner {
             jailed: false,
             jailer_root: String::default(),
             netns: self.netns.clone(),
-            config: self.hypervisor_config(),
+            config: self.config.clone(),
             run_dir: self.run_dir.clone(),
             guest_protection_to_use: self.guest_protection_to_use.clone(),
 
@@ -204,6 +209,63 @@ impl Persist for CloudHypervisorInner {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_clh_network_queues_capped_at_boot_vcpus() {
+        for (cpus, requested, expected) in [
+            (1.0, 16, 1),
+            (4.0, 16, 4),
+            (16.0, 16, 16),
+            (32.0, 16, 16),
+            (1.5, 16, 2),
+            (32.0, 0, 1),
+            (32.0, 1, 1),
+            (4.0, 256, 4),
+            (256.0, 256, 256),
+            (512.0, 512, 256),
+            (0.0, 16, 1),
+        ] {
+            let mut config = HypervisorConfig::default();
+            config.cpu_info.default_vcpus = cpus;
+            config.network_info.network_queues = requested;
+
+            let mut clh = CloudHypervisorInner::default();
+            clh.set_hypervisor_config(config);
+            assert_eq!(
+                clh.hypervisor_config().network_info.network_queues,
+                expected,
+                "cpus={cpus}, requested={requested}"
+            );
+            assert_eq!(clh.config.network_info.network_queues, requested);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_network_device_queue_limit() {
+        let mut clh = CloudHypervisorInner::default();
+        clh.config.cpu_info.default_vcpus = 4.0;
+        clh.config.network_info.network_queues = 2;
+
+        for (requested, expected) in [(0, 1), (1, 1), (2, 2), (16, 4), (usize::MAX, 4)] {
+            let device = crate::NetworkDevice {
+                config: crate::NetworkConfig {
+                    queue_num: requested,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let DeviceType::Network(device) =
+                clh.add_device(DeviceType::Network(device)).await.unwrap()
+            else {
+                panic!("expected network device");
+            };
+            assert_eq!(device.config.queue_num, expected);
+            let DeviceType::Network(pending) = &clh.pending_devices[0] else {
+                panic!("expected pending network device");
+            };
+            assert_eq!(pending.config.queue_num, expected);
+        }
+    }
+
     #[actix_rt::test]
     async fn test_save_clh() {
         let (exit_notify, _exit_waiter) = mpsc::channel(1);
@@ -215,6 +277,8 @@ mod tests {
         clh.run_dir = String::from("/var/run/kata-containers/") + &clh.id;
 
         clh.guest_protection_to_use = GuestProtection::Tdx;
+        clh.config.cpu_info.default_vcpus = 4.0;
+        clh.config.network_info.network_queues = 16;
 
         let state = clh.save().await.unwrap();
         assert_eq!(state.id, clh.id);
@@ -222,12 +286,15 @@ mod tests {
         assert_eq!(state.vm_path, clh.vm_path);
         assert_eq!(state.run_dir, clh.run_dir);
         assert_eq!(state.guest_protection_to_use, clh.guest_protection_to_use);
+        assert_eq!(state.config.network_info.network_queues, 16);
         assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
 
         let clh = CloudHypervisorInner::restore(exit_notify, state.clone())
             .await
             .unwrap();
+        assert_eq!(clh.config.network_info.network_queues, 16);
+        assert_eq!(clh.hypervisor_config().network_info.network_queues, 4);
         assert_eq!(clh.id, state.id);
         assert_eq!(clh.netns, state.netns);
         assert_eq!(clh.vm_path, state.vm_path);
