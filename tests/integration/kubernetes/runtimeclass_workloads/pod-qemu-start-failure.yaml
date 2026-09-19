@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2026 Kata Containers contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qemu-start-failure
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: quay.io/kata-containers/alpine-bash-curl:latest
+    imagePullPolicy: IfNotPresent
+    command: ["sleep", "infinity"]
