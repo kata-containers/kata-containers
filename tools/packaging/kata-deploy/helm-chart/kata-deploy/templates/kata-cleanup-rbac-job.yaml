@@ -25,6 +25,10 @@ spec:
         name: {{ .Chart.Name }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
 {{- end }}
     spec:
+{{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+{{- end }}
       restartPolicy: OnFailure
 {{- if .Values.env.multiInstallSuffix }}
       serviceAccountName: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
