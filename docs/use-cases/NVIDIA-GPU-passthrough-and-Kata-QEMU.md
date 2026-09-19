@@ -52,8 +52,9 @@ responsibilities are:
   [NVIDIA/sandbox-device-plugin](https://github.com/NVIDIA/sandbox-device-plugin)
   repository):
   - Creating host-side CDI specifications for GPU passthrough,
-    resulting in the file `/var/run/cdi/nvidia.yaml`, containing
-    `kind: nvidia.com/pgpu`
+    including `/var/run/cdi/nvidia.com-pgpu.yaml`, which contains
+    `kind: nvidia.com/pgpu`. On NVSwitch-based systems, the CDI directory
+    also contains `/var/run/cdi/nvidia.com-nvswitch.yaml`.
   - Allocating GPUs during pod deployment.
   - Discovering NVIDIA GPUs, their capabilities, and advertising these to
     the Kubernetes control plane (allocatable resources as type
@@ -300,8 +301,8 @@ $ deploy_k8s
 
 > **Note:**
 >
-> We recommend to configure your Kubelet with a higher
-> `runtimeRequestTimeout` timeout value than the two minute default timeout.
+> We recommend configuring Kubelet's `runtimeRequestTimeout` to `20m` instead
+> of its two-minute default.
 > Using the guest-pull mechanism, pulling large images may take a significant
 > amount of time and may delay container start, possibly leading your Kubelet
 > to de-allocate your pod before it transitions from the *container creating*
@@ -324,49 +325,10 @@ $ deploy_k8s
 > API to discover allocated GPU devices during sandbox creation. For
 > Kubernetes versions **older than 1.34**, you must explicitly enable the
 > `KubeletPodResourcesGet` feature gate in your Kubelet configuration. For
-> Kubernetes 1.34 and later, this feature is enabled by default.
-
-#### GPU Operator
-
-Assuming you have the helm tools installed, deploy the latest version of the
-GPU Operator as a helm chart (minimum version: `v26.3.0`):
-
-```bash
-$ helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
-$ helm install --wait --generate-name \
-    -n gpu-operator --create-namespace \
-    nvidia/gpu-operator \
-    --set sandboxWorkloads.enabled=true \
-    --set sandboxWorkloads.defaultWorkload=vm-passthrough \
-    --set sandboxWorkloads.mode=kata \
-    --set nfd.enabled=true \
-    --set nfd.nodefeaturerules=true
-```
-
-> **Note:**
->
-> For heterogeneous clusters with different GPU types, you can specify an
-> empty `P_GPU_ALIAS` environment variable for the sandbox device plugin:
-> `-    --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \`
-> `-    --set 'kataSandboxDevicePlugin.env[0].value=""' \`
-> This will cause the sandbox device plugin to create GPU model-specific
-> resource types (e.g., `nvidia.com/GH100_H100L_94GB`) instead of the
-> default `pgpu` type, which usually results in advertising a resource of
-> type `nvidia.com/pgpu`
-> The exposed device resource types can be used for pods by specifying
-> respective resource limits.
-> Your node's nvswitches are exposed as resources of type
-> `nvidia.com/nvswitch` by default. Using the variable `NVSWITCH_ALIAS`
-> allows to control the advertising behavior similar to the `P_GPU_ALIAS`
-> variable.
-
-> **Note:**
->
-> Using `--set sandboxWorkloads.defaultWorkload=vm-passthrough` causes all
-> your nodes to be labeled for GPU VM passthrough. Remove this parameter if
-> you intend to only use selected nodes for this scenario, and label these
-> nodes by hand, using:
-> `kubectl label node <node-name> nvidia.com/gpu.workload.config=vm-passthrough`.
+> Kubernetes 1.34 and later, this feature is enabled by default. You must also
+> explicitly enable the `RuntimeClassInImageCriApi` feature gate, which is
+> required when using multiple snapshotters side by side and is disabled by
+> default.
 
 #### Kata Containers
 
@@ -382,7 +344,7 @@ $ helm install kata-deploy \
     --namespace kata-system \
     --create-namespace \
     -f "https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/${VERSION}/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml" \
-    --set nfd.enabled=false \
+    --set node-feature-discovery.enabled=true \
     --wait --timeout 10m \
     "${CHART}" --version "${VERSION}"
 ```
@@ -401,6 +363,56 @@ $ helm install kata-deploy \
 > [lifecycle-manager](https://github.com/kata-containers/lifecycle-manager)
 > repository which enables Argo Workflows-based lifecycle management for your
 > node's Kata deployments.
+
+#### GPU Operator
+
+The Kata Containers installation above deploys Node Feature Discovery (NFD).
+Configure the GPU Operator to use this existing NFD installation while still
+creating its NVIDIA-specific node feature rules.
+
+Assuming you have the helm tools installed, deploy the latest version of the
+GPU Operator as a helm chart (minimum version: `v26.3.0`):
+
+```bash
+$ helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
+$ helm install --wait --generate-name \
+    -n gpu-operator --create-namespace \
+    nvidia/gpu-operator \
+    --set sandboxWorkloads.enabled=true \
+    --set sandboxWorkloads.defaultWorkload=vm-passthrough \
+    --set sandboxWorkloads.mode=kata \
+    --set nfd.enabled=false \
+    --set nfd.nodefeaturerules=true
+```
+
+> **Note:**
+>
+> For heterogeneous clusters with different GPU types, you can specify an
+> empty `P_GPU_ALIAS` environment variable for the sandbox device plugin:
+>
+> ```bash
+> --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \
+> --set 'kataSandboxDevicePlugin.env[0].value=""'
+> ```
+>
+> This will cause the sandbox device plugin to create GPU model-specific
+> resource types (e.g., `nvidia.com/GH100_H100L_94GB`) instead of the
+> default `pgpu` type, which usually results in advertising a resource of
+> type `nvidia.com/pgpu`
+> The exposed device resource types can be used for pods by specifying
+> respective resource limits.
+> Your node's nvswitches are exposed as resources of type
+> `nvidia.com/nvswitch` by default. Using the variable `NVSWITCH_ALIAS`
+> allows to control the advertising behavior similar to the `P_GPU_ALIAS`
+> variable.
+
+> **Note:**
+>
+> Using `--set sandboxWorkloads.defaultWorkload=vm-passthrough` causes all
+> your nodes to be labeled for GPU VM passthrough. Remove this parameter if
+> you intend to only use selected nodes for this scenario, and label these
+> nodes by hand, using:
+> `kubectl label node <node-name> nvidia.com/gpu.workload.config=vm-passthrough`.
 
 #### Trustee's KBS for remote attestation
 
@@ -513,17 +525,6 @@ Done
 To stop the pod, run: `kubectl delete pod cuda-vectoradd-kata`.
 
 ### Next steps
-
-#### NUMA topology for GPU locality
-
-On multi-NUMA hosts, enabling NUMA support ensures GPU memory accesses stay
-local to the NUMA node where the GPU is physically attached, avoiding
-cross-NUMA latency. The NVIDIA GPU configuration templates ship with
-`enable_numa = true` by default.
-
-For details on NUMA configuration, topology verification, and
-troubleshooting, see the
-[NUMA support guide](../how-to/how-to-use-numa-with-kata.md).
 
 #### Use multi-GPU passthrough
 
