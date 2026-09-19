@@ -316,6 +316,8 @@ pub const KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP: &str =
 
 /// A sandbox annotation that determines if pprof enabled.
 pub const KATA_ANNO_CFG_ENABLE_PPROF: &str = "io.katacontainers.config.runtime.enable_pprof";
+/// A sandbox annotation that determines if metrics is enabled.
+pub const KATA_ANNO_CFG_ENABLE_METRICS: &str = "io.katacontainers.config.runtime.enable_metrics"; 
 /// A sandbox annotation that determines if experimental features enabled.
 pub const KATA_ANNO_CFG_EXPERIMENTAL: &str = "io.katacontainers.config.runtime.experimental";
 /// A sandbox annotaion that determines how the VM should be connected to the the container network
@@ -1111,6 +1113,14 @@ impl Annotation {
                     KATA_ANNO_CFG_ENABLE_PPROF => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.enable_pprof = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(bool_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_ENABLE_METRICS => match self.get_value::<bool>(key) {
+                        Ok(r) => {
+                            config.runtime.enable_metrics = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);
