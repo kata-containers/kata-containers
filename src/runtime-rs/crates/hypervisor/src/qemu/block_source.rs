@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::VmdkConfig;
-
 use anyhow::{anyhow, Context, Result};
+use kata_types::vmdk::VmdkConfig;
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
 use std::ffi::CString;

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use kata_types::vmdk::VmdkConfig;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -53,47 +54,6 @@ impl std::fmt::Display for BlockDeviceAio {
             _ => "iouring".to_string(),
         };
         write!(f, "{to_string}")
-    }
-}
-
-const MAX_VMDK_EXTENT_SECTORS: u64 = 0x8000_0000 >> 9;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VmdkExtent {
-    pub path_on_host: String,
-    pub sectors: u64,
-    pub file_offset: u64,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct VmdkConfig {
-    pub extents: Vec<VmdkExtent>,
-}
-
-impl VmdkConfig {
-    pub fn push_extent(&mut self, path_on_host: &str, sectors: u64, file_offset: u64) {
-        self.extents.push(VmdkExtent {
-            path_on_host: path_on_host.to_string(),
-            sectors,
-            file_offset,
-        });
-    }
-
-    pub fn push_extent_chunked(&mut self, path_on_host: &str, total_sectors: u64) {
-        let mut remaining = total_sectors;
-        let mut file_offset = 0;
-        while remaining > 0 {
-            let sectors = remaining.min(MAX_VMDK_EXTENT_SECTORS);
-            self.push_extent(path_on_host, sectors, file_offset);
-            file_offset += sectors;
-            remaining -= sectors;
-        }
-    }
-
-    pub fn total_sectors(&self) -> Option<u64> {
-        self.extents
-            .iter()
-            .try_fold(0_u64, |total, extent| total.checked_add(extent.sectors))
     }
 }
 
