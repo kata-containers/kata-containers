@@ -160,7 +160,7 @@ impl QemuInner {
                         (
                             device_id,
                             cfg.path_on_host.clone(),
-                            cfg.vmdk.clone(),
+                            cfg.source.clone(),
                             cfg.is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                             cfg.is_readonly,
@@ -186,7 +186,7 @@ impl QemuInner {
                             cmdline.add_block_device(
                                 device_id.as_str(),
                                 &path_on_host,
-                                vmdk.as_ref(),
+                                &vmdk,
                                 is_direct,
                                 is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
@@ -1251,7 +1251,7 @@ impl QemuInner {
                     is_direct,
                     is_readonly,
                     no_drop,
-                    vmdk,
+                    source,
                     discard_unmap,
                     driver,
                     logical_sector_size,
@@ -1268,7 +1268,7 @@ impl QemuInner {
                         ),
                         cfg.is_readonly,
                         cfg.no_drop,
-                        cfg.vmdk.clone(),
+                        cfg.source.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
                         cfg.logical_sector_size,
@@ -1305,7 +1305,7 @@ impl QemuInner {
                         discard_unmap,
                         logical_sector_size,
                         physical_sector_size,
-                        vmdk.as_ref(),
+                        &source,
                         iothread,
                     )
                     .context("hotplug block device")?;

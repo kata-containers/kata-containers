@@ -25,12 +25,18 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
+    virtio_blk_modern::BlockSourceFormat,
     BlockConfigModern, BlockDeviceAio,
 };
-use kata_types::{gpt_disk::{
-    ErofsLayer, GptDiskLayout, GptMetadataFiles, extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options, generate_gpt_metadata, generate_padding_file, get_erofs_layer_size, parse_dmverity_metadata_file,
-}, vmdk::VmdkConfig};
 use kata_types::mount::Mount;
+use kata_types::{
+    gpt_disk::{
+        extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
+        generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
+        parse_dmverity_metadata_file, ErofsLayer, GptDiskLayout, GptMetadataFiles,
+    },
+    vmdk::VmdkConfig,
+};
 use oci_spec::runtime as oci;
 use std::collections::HashMap;
 use std::fs;
@@ -84,7 +90,7 @@ async fn generate_merged_erofs_vmdk(
     sid: &str,
     cid: &str,
     erofs_devices: &[String],
-) -> Result<(String, Option<VmdkConfig>)> {
+) -> Result<(String, BlockSourceFormat)> {
     if erofs_devices.is_empty() {
         return Err(anyhow!("no EROFS devices provided"));
     }
@@ -107,7 +113,7 @@ async fn generate_merged_erofs_vmdk(
             sl!(),
             "single EROFS device, using directly: {}", erofs_devices[0]
         );
-        return Ok((erofs_devices[0].clone(), None));
+        return Ok((erofs_devices[0].clone(), BlockSourceFormat::Raw));
     }
 
     // This reserved path identifies the block device and is included in logs;
@@ -125,7 +131,10 @@ async fn generate_merged_erofs_vmdk(
 
     let vmdk = create_vmdk_config(erofs_devices).context("failed to create VMDK layout")?;
 
-    Ok((vmdk_path.display().to_string(), Some(vmdk)))
+    Ok((
+        vmdk_path.display().to_string(),
+        BlockSourceFormat::Vmdk(vmdk),
+    ))
 }
 
 /// Create a VMDK layout for multiple EROFS extents (flatten device).
@@ -601,7 +610,7 @@ impl ErofsMultiLayerRootfs {
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            vmdk: Some(vmdk),
+                            source: BlockSourceFormat::Vmdk(vmdk),
                             path_on_host: erofs_path,
                             is_readonly: true,
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
@@ -748,12 +757,12 @@ impl ErofsMultiLayerRootfs {
                             sl!(),
                             "EROFS block device config - path: {}, structured VMDK: {}",
                             erofs_path,
-                            vmdk.is_some()
+                            matches!(vmdk, BlockSourceFormat::Vmdk(_))
                         );
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            vmdk,
+                            source: vmdk,
                             path_on_host: erofs_path,
                             is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),

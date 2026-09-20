@@ -7,12 +7,12 @@ use crate::device::pci_path::PciPath;
 use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_block_source};
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
-use kata_types::vmdk::VmdkConfig;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevDiscardOptions, BlockdevOptions, BlockdevOptionsBase,
@@ -1243,7 +1243,7 @@ impl Qmp {
         discard_unmap: bool,
         logical_block_size: u32,
         physical_block_size: u32,
-        vmdk: Option<&VmdkConfig>,
+        source: &BlockSourceFormat,
         iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
@@ -1273,7 +1273,7 @@ impl Qmp {
         let mut fdset_ids = Vec::new();
         let prepared_source = match prepare_block_source(
             path_on_host,
-            vmdk,
+            source,
             is_readonly,
             is_direct.unwrap_or(false),
             |file, label| {
@@ -1317,7 +1317,7 @@ impl Qmp {
             }
         };
 
-        let blockdev_options = if vmdk.is_none() {
+        let blockdev_options = if matches!(source, BlockSourceFormat::Raw) {
             BlockdevOptions::raw {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
