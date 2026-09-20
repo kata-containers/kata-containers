@@ -100,6 +100,23 @@ extract_kata_deploy_ds() {
 	' "${RENDERED}"
 }
 
+# Extract the kata-monitor DaemonSet manifest.
+extract_kata_monitor_ds() {
+	awk '
+		/^kind: DaemonSet$/ { buf = $0 "\n"; in_ds = 1; has_name = 0; next }
+		in_ds {
+			buf = buf $0 "\n"
+			if ($0 ~ /^  name: kata-monitor$/) { has_name = 1 }
+			if ($0 ~ /^---$/) {
+				if (has_name) { printf "%s", buf; exit }
+				in_ds = 0; buf = ""; has_name = 0
+				next
+			}
+		}
+		END { if (has_name && in_ds) { printf "%s", buf } }
+	' "${RENDERED}"
+}
+
 # Count nodeSelectorTerms under requiredDuringSchedulingIgnoredDuringExecution in a manifest.
 count_required_node_selector_terms() {
 	local manifest="${1}"
@@ -205,6 +222,45 @@ EOF
 	echo "${ds}" | grep -q "platform-team"
 	echo "${ds}" | grep -q "podAntiAffinity:"
 	echo "${ds}" | grep -q "gpu-operator"
+}
+
+@test "Helm template: user affinity is applied to the kata-monitor DaemonSet" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+monitor:
+  enabled: true
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - platform-team
+EOF
+
+	render_chart -f "${values_file}"
+	rm -f "${values_file}"
+
+	local ds
+	ds=$(extract_kata_monitor_ds)
+
+	[[ -n "${ds}" ]]
+	echo "${ds}" | grep -q "affinity:"
+	echo "${ds}" | grep -q "node.cloud/reserved"
+	echo "${ds}" | grep -q "platform-team"
+}
+
+@test "Helm template: kata-monitor DaemonSet has no affinity by default" {
+	render_chart --set monitor.enabled=true
+
+	local ds
+	ds=$(extract_kata_monitor_ds)
+
+	[[ -n "${ds}" ]]
+	! echo "${ds}" | grep -q "affinity:"
 }
 
 @test "Helm template: NFD enabled merges virtualization nodeAffinity with user nodeAffinity" {

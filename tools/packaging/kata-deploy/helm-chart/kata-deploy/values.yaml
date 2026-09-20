@@ -406,7 +406,7 @@ podLabels: {}
 #   prometheus.io/scrape: "false"
 podAnnotations: {}
 
-# Affinity rules for kata-deploy.
+# Affinity rules for the kata-deploy and kata-monitor DaemonSets.
 # nodeSelector matches exact key/value pairs; affinity supports matchExpressions
 # and rules about other pods on the same node (e.g. podAntiAffinity).
 #
