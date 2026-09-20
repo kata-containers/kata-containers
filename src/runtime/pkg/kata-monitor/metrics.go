@@ -191,7 +191,14 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder, filterFam
 		go func(sandboxID string, sandboxMetadata sandboxCRIMetadata, results chan<- []*dto.MetricFamily) {
 			sandboxMetrics, err := getParsedMetrics(sandboxID, sandboxMetadata)
 			if err != nil {
-				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
+				// A scrape that started before teardown fails once the shim
+				// socket is gone; that is not a live-sandbox failure.
+				entry := monitorLog.WithError(err).WithField("sandbox_id", sandboxID)
+				if sandboxRemoved(getSandboxFSPaths(), sandboxID) {
+					entry.Debug("failed to get metrics for removed sandbox")
+				} else {
+					entry.Error("failed to get metrics for sandbox")
+				}
 			}
 
 			results <- sandboxMetrics

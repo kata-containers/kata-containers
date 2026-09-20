@@ -6,8 +6,12 @@
 package katamonitor
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -44,6 +48,18 @@ func getSandboxFSPaths() []string {
 		shim.GetSandboxesStoragePath(),
 		shim.GetSandboxesStoragePathRust(),
 	}
+}
+
+// sandboxRemoved reports whether sandboxID is absent from every storage path.
+// A stat failure other than not-exist leaves the question open, so the
+// sandbox is then treated as still present.
+func sandboxRemoved(paths []string, sandboxID string) bool {
+	for _, path := range paths {
+		if _, err := os.Stat(filepath.Join(path, sandboxID)); !errors.Is(err, fs.ErrNotExist) {
+			return false
+		}
+	}
+	return true
 }
 
 func getFilterFamilyFromReq(r *http.Request) ([]string, error) {
