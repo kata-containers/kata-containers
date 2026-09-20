@@ -185,6 +185,10 @@ impl RuntimeHandler for VirtContainer {
             hypervisor,
             resource_manager,
             sandbox.oom_notifier(),
+            container_manager::IoLifecycle {
+                cancel: sandbox.io_cancel_token(),
+                tasks: sandbox.io_tasks.clone(),
+            },
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),

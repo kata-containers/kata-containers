@@ -89,7 +89,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use strum::Display;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::instrument;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
@@ -153,6 +153,7 @@ pub struct VirtSandbox {
     factory: Option<Factory>,
     cancel_token: CancellationToken,
     oom_notifier: Arc<CrioOomNotifier>,
+    pub(crate) io_tasks: TaskTracker,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -200,6 +201,7 @@ impl VirtSandbox {
             factory: Some(factory),
             cancel_token,
             oom_notifier: Arc::new(CrioOomNotifier::default()),
+            io_tasks: TaskTracker::new(),
         })
     }
 
@@ -212,6 +214,10 @@ impl VirtSandbox {
 
     pub fn get_agent(&self) -> Arc<dyn Agent> {
         self.agent.clone()
+    }
+
+    pub(crate) fn io_cancel_token(&self) -> CancellationToken {
+        self.cancel_token.child_token()
     }
 
     pub fn get_sid(&self) -> String {
@@ -1331,6 +1337,9 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn stop(&self) -> Result<()> {
+        // Also release blocked host I/O if the VM is already stopped. This
+        // signals cancellation only; no copy task is joined under a lock.
+        self.cancel_token.cancel();
         let state = {
             let sandbox_inner = self.inner.read().await;
             sandbox_inner.state
@@ -1339,10 +1348,6 @@ impl Sandbox for VirtSandbox {
         if state == SandboxState::Stopped {
             return Ok(());
         }
-
-        // Cancel the OOM watcher before tearing down the VM so it exits
-        // cleanly instead of hitting ECONNRESET/EOF on a closed channel.
-        self.cancel_token.cancel();
 
         info!(sl!(), "begin stop sandbox");
         if state == SandboxState::Init {
@@ -1363,6 +1368,10 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "shutdown");
 
         self.stop().await.context("stop")?;
+
+        // No sandbox/container lock is held while cancelled copies and loggers finish.
+        self.io_tasks.close();
+        self.io_tasks.wait().await;
 
         self.cleanup().await.context("do the clean up")?;
 
@@ -1686,6 +1695,7 @@ impl Persist for VirtSandbox {
             // A restored sandbox is handed back its containers by the shim, so
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
+            io_tasks: TaskTracker::new(),
         })
     }
 }

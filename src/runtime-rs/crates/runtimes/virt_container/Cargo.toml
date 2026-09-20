@@ -21,7 +21,7 @@ slog = { workspace = true }
 slog-scope = { workspace = true }
 strum = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
+tokio-util = { features = ["rt"], workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 uuid = { features = ["v4"], version = "1" }

@@ -5,6 +5,7 @@
 //
 
 mod container;
+pub(crate) use container::IoLifecycle;
 use container::{Container, Exec};
 mod container_inner;
 mod io;
