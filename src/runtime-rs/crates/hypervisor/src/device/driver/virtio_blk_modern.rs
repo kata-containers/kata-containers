@@ -72,15 +72,7 @@ pub enum BlockSourceFormat {
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfigModern {
-    /// Actual host path for a raw block source; every backend consumes this
-    /// value according to its block transport. When `vmdk` is present, QEMU is
-    /// currently the only backend that consumes the structured layout. In that
-    /// case, this is a reserved descriptor path used as the block-device key and
-    /// for logging; QEMU neither creates nor opens a file at this path. A future
-    /// backend may instead materialize and open its descriptor here. If
-    /// structured layouts gain more consumers, replace this field and `vmdk`
-    /// with explicit source variants distinguishing a raw host path from a
-    /// VMDK descriptor path and layout.
+    /// Host-side path to a block source and is format-agnostic.
     pub path_on_host: String,
 
     /// If set to true, the drive is opened in read-only mode. Otherwise, the
