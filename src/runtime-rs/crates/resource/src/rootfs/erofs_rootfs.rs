@@ -25,13 +25,11 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfigModern, BlockDeviceAio, VmdkConfig,
+    BlockConfigModern, BlockDeviceAio,
 };
-use kata_types::gpt_disk::{
-    extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
-    generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
-    parse_dmverity_metadata_file, ErofsLayer, GptDiskLayout, GptMetadataFiles,
-};
+use kata_types::{gpt_disk::{
+    ErofsLayer, GptDiskLayout, GptMetadataFiles, extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options, generate_gpt_metadata, generate_padding_file, get_erofs_layer_size, parse_dmverity_metadata_file,
+}, vmdk::VmdkConfig};
 use kata_types::mount::Mount;
 use oci_spec::runtime as oci;
 use std::collections::HashMap;

@@ -18,6 +18,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::{VIRTIO_BLK_PCI, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
+use kata_types::vmdk::VmdkConfig;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -1173,7 +1174,7 @@ impl ToQemuParams for VmdkFormatNode {
 fn block_backend_node(
     device_id: &str,
     path: &str,
-    vmdk: Option<&crate::VmdkConfig>,
+    vmdk: Option<&VmdkConfig>,
     is_direct: bool,
     is_readonly: bool,
     discard_unmap: bool,
@@ -3330,7 +3331,7 @@ impl<'a> QemuCmdLine<'a> {
         &mut self,
         device_id: &str,
         path: &str,
-        vmdk: Option<&crate::VmdkConfig>,
+        vmdk: Option<&VmdkConfig>,
         is_direct: bool,
         is_readonly: bool,
         is_scsi: bool,
@@ -4255,7 +4256,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_cold_plug_vmdk_uses_format_node() {
-        let vmdk = crate::VmdkConfig::default();
+        let vmdk = VmdkConfig::default();
         let format_node =
             block_backend_node("rootfs", "/dev/fdset/2", Some(&vmdk), false, true, false);
 

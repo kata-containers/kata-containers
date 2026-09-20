@@ -61,6 +61,9 @@ pub mod gpt_disk;
 #[cfg(feature = "devicemapper")]
 pub mod dmverity;
 
+/// VMDK (Virtual Machine Disk) types and utilities
+pub mod vmdk;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};
