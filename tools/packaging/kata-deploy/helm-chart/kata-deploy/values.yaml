@@ -383,6 +383,11 @@ tolerations: []
 # For this to work, kata-deploy itself must tolerate the taint so its own pods can
 # land on the node. Add a matching entry under `tolerations` above.
 #
+# Individual RuntimeClasses must not tolerate the taints present in this list.
+# A `runtimeClasses.tolerations` entry covering one of these keys and effects
+# re-admits the workloads the taint gates, re-introducing the scheduling race.
+# Keep the two key sets disjoint.
+#
 # Example (pairs with a Karpenter NodePool `startupTaints` entry of the same key):
 #   tolerations:
 #     - key: "katacontainers.io/kata-runtime"
@@ -1041,6 +1046,10 @@ runtimeClasses:
   # so pods using these RuntimeClasses can be scheduled onto those nodes.
   # Per-shim tolerations declared under shims.<name>.runtimeClass.tolerations are appended
   # to this list for that shim's RuntimeClass.
+  #
+  # WARNING: **Keep these keys disjoint from `startupTaints`**.
+  # A toleration covering a startup taint's key and effect admits workloads
+  # onto a node before kata-deploy has installed the runtime there.
   tolerations: []
 
 env:
