@@ -503,6 +503,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_linux() {
+        runtests("createcontainer/linux").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_env_vars() {
         runtests("createcontainer/env_vars").await;
     }

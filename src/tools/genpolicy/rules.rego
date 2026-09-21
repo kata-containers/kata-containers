@@ -156,6 +156,8 @@ allow_create_container_input if {
     is_null(i_linux.Resources.Pids)
     is_null(i_linux.Seccomp)
 
+    allow_cgroups_path(i_linux.CgroupsPath)
+
     i_process := i_oci.Process
     count(i_process.SelinuxLabel) == 0
     count(i_process.User.Username) == 0
@@ -1600,6 +1602,35 @@ strip_cap_prefix(s) := result if {
 
 check_directory_traversal(i_path) if {
     not regex.match("(^|/)\\.\\.($|/)", i_path)
+}
+
+# The Agent derives the cgroup directory from the host-provided OCI
+# Linux.CgroupsPath. Its exact value is only known at run time, so the policy
+# cannot compare it against policy data - it can only constrain its shape so
+# that the Agent cannot be driven outside of the cgroup hierarchy.
+
+# Empty path - the Agent falls back to a path derived from the container id.
+allow_cgroups_path(i_cgroups_path) if {
+    count(i_cgroups_path) == 0
+    print("allow_cgroups_path 1: true")
+}
+
+# cgroupfs format: "/path_a/path_b".
+allow_cgroups_path(i_cgroups_path) if {
+    print("allow_cgroups_path 2: i_cgroups_path =", i_cgroups_path)
+    regex.match("^/([\\w.-]+/)*[\\w.-]+$", i_cgroups_path)
+    check_directory_traversal(i_cgroups_path)
+    print("allow_cgroups_path 2: true")
+}
+
+# systemd format: "[slice]:[prefix]:[name]". The Agent turns the ":" separators
+# into "/" when it is running as init, so check for traversal after that
+# substitution as well.
+allow_cgroups_path(i_cgroups_path) if {
+    print("allow_cgroups_path 3: i_cgroups_path =", i_cgroups_path)
+    regex.match("^[\\w.-]+:[\\w.-]+:[\\w.-]+$", i_cgroups_path)
+    check_directory_traversal(replace(i_cgroups_path, ":", "/"))
+    print("allow_cgroups_path 3: true")
 }
 
 allow_sandbox_storages(i_storages) if {

@@ -180,6 +180,21 @@ fn cgroupnamespace(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
+fn cgroups_path(oci: &Spec) -> Result<()> {
+    let linux = get_linux(oci)?;
+    let Some(path) = linux.cgroups_path().as_ref() else {
+        return Ok(());
+    };
+
+    // As init, the agent turns systemd "slice:prefix:name" paths into cgroupfs paths.
+    let fs_path = PathBuf::from(path.display().to_string().replace(':', "/"));
+    if fs_path.components().any(|c| c == Component::ParentDir) {
+        return Err(anyhow!("cgroups path {:?} must not contain \"..\"", path));
+    }
+
+    Ok(())
+}
+
 lazy_static! {
     pub static ref SYSCTLS: HashMap<&'static str, bool> = {
         let mut m = HashMap::new();
@@ -322,6 +337,7 @@ pub fn validate(conf: &Config) -> Result<()> {
     security(oci).context("security")?;
     usernamespace(oci).context("usernamespace")?;
     cgroupnamespace(oci).context("cgroupnamespace")?;
+    cgroups_path(oci).context("cgroups path")?;
     sysctl(oci).context("sysctl")?;
 
     if conf.rootless_euid {
@@ -575,6 +591,40 @@ mod tests {
         spec.set_mounts(Some(vec![oci_mount]));
 
         rootless_euid(&spec).unwrap();
+    }
+
+    #[test]
+    fn test_cgroups_path() {
+        let mut spec = Spec::default();
+        spec.set_linux(Some(Linux::default()));
+        cgroups_path(&spec).unwrap();
+
+        for path in [
+            "",
+            "/kubepods/burstable/pod1234/abcd",
+            "kubepods-besteffort-pod1234.slice:cri-containerd:abcd",
+            "/a/..b/c",
+        ] {
+            spec.linux_mut()
+                .as_mut()
+                .unwrap()
+                .set_cgroups_path(Some(path.into()));
+            cgroups_path(&spec).unwrap();
+        }
+
+        for path in [
+            "..",
+            "/a/../../../../tmp/x",
+            "/kubepods/..",
+            "a:..:x",
+            "..:..:tmp",
+        ] {
+            spec.linux_mut()
+                .as_mut()
+                .unwrap()
+                .set_cgroups_path(Some(path.into()));
+            cgroups_path(&spec).unwrap_err();
+        }
     }
 
     #[test]
