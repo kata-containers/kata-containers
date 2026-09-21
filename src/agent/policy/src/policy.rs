@@ -178,8 +178,10 @@ impl AgentPolicy {
         };
 
         if results.result.len() != 1 {
-            // Results are empty when AllowRequestsFailingPolicy is used to allow a Request that hasn't been defined in the policy
+            // Results are empty when AllowRequestsFailingPolicy is used to allow a Request that hasn't
+            // been defined in the policy.
             if self.allow_failures {
+                warn!(sl!(), "policy check: ignoring missing {ep}");
                 return Ok((true, prints));
             }
             bail!(
