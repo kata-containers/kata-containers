@@ -244,26 +244,29 @@ impl AgentPolicy {
         Ok(())
     }
 
+    fn skip_log_to_file(ep: &str) -> bool {
+        match ep {
+            "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
+                // - StatsContainerRequest and ReadStreamRequest are called relatively often, so we're
+                //   not logging them, to avoid growing the log too much.
+                // - Confidential Containers Policy documents are typically large, so we're not logging
+                //   them here. The Policy text can be obtained directly from the pod YAML.
+                true
+            }
+            _ => false,
+        }
+    }
+
     async fn log_eval_to_file(&mut self, ep: &str, field: PolicyLogField, eval_data: &str) {
         if let Some(log_file) = &mut self.log_file {
-            match ep {
-                "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
-                    // - StatsContainerRequest and ReadStreamRequest are called
-                    //   relatively often, so we're not logging them, to avoid
-                    //   growing this log file too much.
-                    // - Confidential Containers Policy documents are relatively
-                    //   large, so we're not logging them here, for SetPolicyRequest.
-                    //   The Policy text can be obtained directly from the pod YAML.
-                }
-                _ => {
-                    let field = field.as_str();
-                    let log_entry = format!("{{\"kind\":\"{ep}\",\"{field}\":{eval_data}}}\n");
+            if !Self::skip_log_to_file(ep) {
+                let field = field.as_str();
+                let log_entry = format!("{{\"kind\":\"{ep}\",\"{field}\":{eval_data}}}\n");
 
-                    if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
-                        warn!(sl!(), "policy check: write_all failed: {}", e);
-                    } else if let Err(e) = log_file.flush().await {
-                        warn!(sl!(), "policy check: flush failed: {}", e);
-                    }
+                if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
+                    warn!(sl!(), "policy check: write_all failed: {}", e);
+                } else if let Err(e) = log_file.flush().await {
+                    warn!(sl!(), "policy check: flush failed: {}", e);
                 }
             }
         }
