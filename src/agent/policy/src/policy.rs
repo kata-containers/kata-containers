@@ -56,6 +56,20 @@ struct MetadataResponse {
     ops: Option<json_patch::Patch>,
 }
 
+enum PolicyLogField {
+    Request,
+    Response,
+}
+
+impl PolicyLogField {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Request => "request",
+            Self::Response => "response",
+        }
+    }
+}
+
 impl AgentPolicy {
     /// Create AgentPolicy object.
     pub fn new() -> Self {
@@ -148,7 +162,10 @@ impl AgentPolicy {
     /// Ask regorus if an API call should be allowed or not.
     pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
         debug!(sl!(), "policy check: {ep}");
-        self.log_eval_input(ep, ep_input).await;
+
+        // Log policy evaluation input information into POLICY_LOG_FILE.
+        self.log_eval_to_file(ep, PolicyLogField::Request, ep_input)
+            .await;
 
         let query = format!("data.agent_policy.{ep}");
         self.engine.set_input_json(ep_input)?;
@@ -185,7 +202,9 @@ impl AgentPolicy {
             regorus::Value::Object(obj) => {
                 let json_str = serde_json::to_string(obj)?;
 
-                self.log_eval_input(ep, &json_str).await;
+                // Log policy evaluation output information into POLICY_LOG_FILE.
+                self.log_eval_to_file(ep, PolicyLogField::Response, &json_str)
+                    .await;
 
                 let metadata_response: MetadataResponse = serde_json::from_str(&json_str)?;
 
@@ -223,7 +242,7 @@ impl AgentPolicy {
         Ok(())
     }
 
-    async fn log_eval_input(&mut self, ep: &str, input: &str) {
+    async fn log_eval_to_file(&mut self, ep: &str, field: PolicyLogField, eval_data: &str) {
         if let Some(log_file) = &mut self.log_file {
             match ep {
                 "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
@@ -235,7 +254,8 @@ impl AgentPolicy {
                     //   The Policy text can be obtained directly from the pod YAML.
                 }
                 _ => {
-                    let log_entry = format!("{{\"kind\":\"{ep}\",\"request\":{input}}}\n");
+                    let field = field.as_str();
+                    let log_entry = format!("{{\"kind\":\"{ep}\",\"{field}\":{eval_data}}}\n");
 
                     if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
                         warn!(sl!(), "policy check: write_all failed: {}", e);
@@ -355,11 +375,58 @@ mod tests {
     use std::convert::TryInto;
 
     use protocols::agent::CopyFileRequest;
+    use tempfile::NamedTempFile;
 
     struct TestCase {
         name: String,
         input: CopyFileRequest,
         output: Option<PolicyCopyFileRequest>,
+    }
+
+    #[tokio::test]
+    async fn test_policy_log_request_and_response_schema() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let file = tokio::fs::File::from_std(temp_file.reopen().unwrap());
+        let mut policy = AgentPolicy {
+            log_file: Some(file),
+            ..Default::default()
+        };
+
+        policy
+            .log_eval_to_file(
+                "CreateContainerRequest",
+                PolicyLogField::Request,
+                r#"{"container_id":"123"}"#,
+            )
+            .await;
+        policy
+            .log_eval_to_file(
+                "CreateContainerRequest",
+                PolicyLogField::Response,
+                r#"{"allowed":true}"#,
+            )
+            .await;
+        drop(policy);
+
+        let log = tokio::fs::read_to_string(temp_file.path()).await.unwrap();
+        let entries: Vec<serde_json::Value> = log
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+
+        assert_eq!(
+            entries,
+            vec![
+                serde_json::json!({
+                    "kind": "CreateContainerRequest",
+                    "request": {"container_id": "123"},
+                }),
+                serde_json::json!({
+                    "kind": "CreateContainerRequest",
+                    "response": {"allowed": true},
+                }),
+            ]
+        );
     }
 
     #[test]

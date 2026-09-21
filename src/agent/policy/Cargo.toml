@@ -48,3 +48,6 @@ slog-scope.workspace = true
 # Internal dependencies
 
 protocols = { features = ["with-serde"], workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true
