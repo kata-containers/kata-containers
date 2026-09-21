@@ -227,9 +227,13 @@ impl AgentPolicy {
             }
         };
 
-        if !allow && self.allow_failures {
-            warn!(sl!(), "policy check: ignoring error for {ep}");
-            allow = true;
+        if !allow {
+            if self.allow_failures {
+                warn!(sl!(), "policy check: ignoring error for {ep}");
+                allow = true;
+            } else {
+                Self::log_blocked_endpoint(ep, &prints);
+            }
         }
 
         Ok((allow, prints))
@@ -244,7 +248,8 @@ impl AgentPolicy {
         Ok(())
     }
 
-    fn skip_log_to_file(ep: &str) -> bool {
+    /// Skip logging into POLICY_LOG_FILE and/or slog, based on the endpoint name.
+    fn skip_log(ep: &str) -> bool {
         match ep {
             "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
                 // - StatsContainerRequest and ReadStreamRequest are called relatively often, so we're
@@ -259,7 +264,7 @@ impl AgentPolicy {
 
     async fn log_eval_to_file(&mut self, ep: &str, field: PolicyLogField, eval_data: &str) {
         if let Some(log_file) = &mut self.log_file {
-            if !Self::skip_log_to_file(ep) {
+            if !Self::skip_log(ep) {
                 let field = field.as_str();
                 let log_entry = format!("{{\"kind\":\"{ep}\",\"{field}\":{eval_data}}}\n");
 
@@ -269,6 +274,36 @@ impl AgentPolicy {
                     warn!(sl!(), "policy check: flush failed: {}", e);
                 }
             }
+        }
+    }
+
+    /// Log using slog information about an endpoint being evaluated to false/blocked.
+    fn log_blocked_endpoint(ep: &str, prints: &str) {
+        if Self::skip_log(ep) {
+            return;
+        }
+
+        match ep {
+            // AllowRequestsFailingPolicy := false is the recommended value for a CoCo policy.
+            // Confirm its correct value by using this slog entry.
+            "AllowRequestsFailingPolicy" => {
+                info!(sl!(), "policy check: {ep} is blocked, as recommended")
+            }
+
+            // The host invokes GetDiagnosticDataRequest to obtain the pod termination message, but
+            // GetDiagnosticDataRequest is typically blocked by policy. Add a warning message to the log,
+            // because users might wonder why their termination message was not available.
+            "GetDiagnosticDataRequest" => warn!(sl!(), "policy check: {ep} is blocked: {prints}"),
+
+            // The rego prints from a rejected CreateContainer are easily available from the output of
+            // "kubectl describe pod". Avoid duplicating that long text in slog.
+            "CreateContainerRequest" => error!(
+                sl!(),
+                "policy check: {ep} is blocked. For details, see the output of: kubectl describe pod"
+            ),
+
+            // For other endpoint types, log the rego prints too - useful for debugging the policy error.
+            _ => error!(sl!(), "policy check: {ep} is blocked: {prints}"),
         }
     }
 
