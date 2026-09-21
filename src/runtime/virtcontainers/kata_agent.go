@@ -16,7 +16,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1181,55 +1180,51 @@ func podReservations(sandbox *Sandbox, pageSize string) []podReservation {
 }
 
 // The pod allowance the kubelet handed a container that declared none, or zero.
-// Nothing marks it, so the largest value that makes the sum impossible is it.
+// Nothing marks it, so only a container down for less than the whole allowance
+// tells the copies apart from one that asked for all of it.
 func copiedReservation(reservations []podReservation, vmMemoryBytes uint64) uint64 {
 	if vmMemoryBytes == 0 {
 		return 0
 	}
 
-	var (
-		values []uint64
-		sum    uint64
-	)
+	var below, atAllowance bool
+	var sum uint64
 	for _, r := range reservations {
 		if r.hugePages == 0 {
 			continue
 		}
-		values = append(values, r.hugePages)
+		switch {
+		case r.hugePages < vmMemoryBytes:
+			below = true
+		case r.hugePages == vmMemoryBytes:
+			atAllowance = true
+		}
 		if r.hugePages > math.MaxUint64-sum {
 			sum = math.MaxUint64
 		} else {
 			sum += r.hugePages
 		}
 	}
-	if sum <= vmMemoryBytes {
+	// A sum the VM fits carries no copy, and with every container down for the
+	// whole allowance a copy reads the same as asking for all of it.
+	if sum <= vmMemoryBytes || !below || !atAllowance {
 		return 0
 	}
-
-	sort.Slice(values, func(i, j int) bool { return values[i] > values[j] })
-	var copied uint64
-	for _, v := range values {
-		if sum <= vmMemoryBytes {
-			break
-		}
-		sum -= v
-		copied = v
-	}
-	return copied
+	return vmMemoryBytes
 }
 
-// What a container reserved for itself, unless the kubelet copied it from the
-// pod, in which case its memory limit alone bounds it in the guest.
-func ownHugePages(r podReservation, copied uint64) uint64 {
-	if copied != 0 && r.hugePages == copied {
-		return 0
+// What a container reserved for itself, and why it lost the reservation it
+// carries when it did. Both the create and the update path hold to this.
+func ownHugePages(hugePages, copied uint64, pool bool) (uint64, string) {
+	if copied != 0 && hugePages == copied {
+		return 0, "the container states no huge pages of its own and was handed the pod's allowance: its memory limit alone bounds it inside the guest"
 	}
-	if r.pool {
+	if pool {
 		// The reservation went to the guest's hugetlb pool, which the container mmaps
 		// rather than charges to its cgroup. Adding it again would hand it twice.
-		return 0
+		return 0, "the container's reservation buys it a huge page pool inside the guest: its memory limit alone bounds what it charges to its cgroup"
 	}
-	return r.hugePages
+	return hugePages, ""
 }
 
 // ownPoolBytes is the guest huge page pool a container's reservation buys it,
@@ -1254,7 +1249,7 @@ func refuseGuestHugePagePoolTooLarge(reservations []podReservation, copied uint6
 
 	for _, r := range reservations {
 		pool := ownPoolBytes(r, copied)
-		if pool == 0 || int64(pool) < holdable {
+		if pool == 0 || capToInt64(pool) < holdable {
 			continue
 		}
 		return fmt.Errorf("container %s asks for a %d MiB huge page pool inside a guest that holds %d MiB of the %d MiB it was given: reserve more huge pages for the pod, or ask for a smaller pool",
@@ -1438,13 +1433,9 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 			k.Logger().WithError(err).Warn("cannot tell the VM's huge page size; counting a container's reservations of every size toward its guest ceiling")
 		}
 		hugePagesBytes := hugePagesTotal(grpcSpec.Linux.Resources.HugepageLimits, pageSize)
-		if copied != 0 && hugePagesBytes == copied {
-			k.Logger().WithField("huge-pages", hugePagesBytes).Info("the container states no huge pages of its own and was handed the pod's allowance: its memory limit alone bounds it inside the guest")
-			hugePagesBytes = 0
-		}
-		if guestPool {
-			k.Logger().WithField("huge-pages", hugePagesBytes).Info("the container's reservation buys it a huge page pool inside the guest: its memory limit alone bounds what it charges to its cgroup")
-			hugePagesBytes = 0
+		if own, why := ownHugePages(hugePagesBytes, copied, guestPool); why != "" {
+			k.Logger().WithField("huge-pages", hugePagesBytes).Info(why)
+			hugePagesBytes = own
 		}
 		translateHostMemoryLimitToGuest(k.Logger(), grpcSpec.Linux.Resources.Memory, hugePagesBytes, guest)
 	}
@@ -2633,11 +2624,10 @@ func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Con
 		}
 		reservations := podReservations(sandbox, pageSize)
 		copied := copiedReservation(reservations, uint64(guest.memoryMB)<<utils.MibToBytesShift)
-		if copied != 0 && hugePages == copied {
-			hugePages = 0
-		}
-		if c.config.CustomSpec != nil && hasGuestHugePagePool(c.config.CustomSpec.Mounts) {
-			hugePages = 0
+		pool := c.config.CustomSpec != nil && hasGuestHugePagePool(c.config.CustomSpec.Mounts)
+		if own, why := ownHugePages(hugePages, copied, pool); why != "" {
+			k.Logger().WithField("huge-pages", hugePages).Info(why)
+			hugePages = own
 		}
 		translateHostMemoryLimitToGuest(k.Logger(), grpcResources.Memory, hugePages, guest)
 	}

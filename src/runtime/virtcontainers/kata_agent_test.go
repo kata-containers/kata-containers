@@ -1803,9 +1803,81 @@ func TestCopiedReservation(t *testing.T) {
 				{name: "side", hugePages: 8 * gib},
 			},
 		},
+		{
+			// A copy reads the same as the holder beside it, and zeroing both
+			// would leave the holder bounded by its memory limit again.
+			description: "a holder down for the whole allowance keeps it",
+			reservations: []podReservation{
+				{name: "app", hugePages: 100 * gib},
+				{name: "side", hugePages: 100 * gib},
+			},
+			vmMemory: 100 * gib,
+		},
+		{
+			description: "a holder and its sidecars, all carrying the allowance, keep it",
+			reservations: []podReservation{
+				{name: "app", hugePages: 1536 * gib},
+				{name: "side-a", hugePages: 1536 * gib},
+				{name: "side-b", hugePages: 1536 * gib},
+				{name: "side-c", hugePages: 1536 * gib},
+			},
+			vmMemory: 1536 * gib,
+		},
+		{
+			// Two containers that each stated their own can still run past the
+			// VM. Neither carries the allowance, so neither is a copy.
+			description: "containers that each stated their own are none of them a copy",
+			reservations: []podReservation{
+				{name: "app", hugePages: 60 * gib},
+				{name: "side", hugePages: 60 * gib},
+			},
+			vmMemory: 100 * gib,
+		},
 	} {
 		assert := assert.New(t)
 		assert.Equal(tt.expected, copiedReservation(tt.reservations, tt.vmMemory), tt.description)
+	}
+}
+
+func TestOwnHugePages(t *testing.T) {
+	const gib = uint64(1) << 30
+
+	for _, tt := range []struct {
+		description string
+		hugePages   uint64
+		copied      uint64
+		pool        bool
+		expected    uint64
+		expectWhy   bool
+	}{
+		{
+			description: "a container that stated its own keeps it",
+			hugePages:   30 * gib,
+			copied:      100 * gib,
+			expected:    30 * gib,
+		},
+		{
+			description: "the value the kubelet copied is not the container's",
+			hugePages:   100 * gib,
+			copied:      100 * gib,
+			expectWhy:   true,
+		},
+		{
+			description: "a reservation that bought a guest pool is not a ceiling",
+			hugePages:   8 * gib,
+			pool:        true,
+			expectWhy:   true,
+		},
+		{
+			description: "nothing to settle leaves the reservation alone",
+			hugePages:   8 * gib,
+			expected:    8 * gib,
+		},
+	} {
+		assert := assert.New(t)
+		own, why := ownHugePages(tt.hugePages, tt.copied, tt.pool)
+		assert.Equal(tt.expected, own, tt.description)
+		assert.Equal(tt.expectWhy, why != "", tt.description)
 	}
 }
 
