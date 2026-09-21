@@ -198,7 +198,7 @@ impl AgentPolicy {
             }
 
             _ => {
-                error!(sl!(), "allow_request: unexpected eval_query result type");
+                error!(sl!(), "policy check: unexpected eval_query result type");
                 bail!(
                     "policy check: unexpected eval_query result type {:?}",
                     results
@@ -207,7 +207,7 @@ impl AgentPolicy {
         };
 
         if !allow && self.allow_failures {
-            warn!(sl!(), "policy: ignoring error for {ep}");
+            warn!(sl!(), "policy check: ignoring error for {ep}");
             allow = true;
         }
 
@@ -238,9 +238,9 @@ impl AgentPolicy {
                     let log_entry = format!("{{\"kind\":\"{ep}\",\"request\":{input}}}\n");
 
                     if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
-                        warn!(sl!(), "policy: log_eval_input: write_all failed: {}", e);
+                        warn!(sl!(), "policy check: write_all failed: {}", e);
                     } else if let Err(e) = log_file.flush().await {
-                        warn!(sl!(), "policy: log_eval_input: flush failed: {}", e);
+                        warn!(sl!(), "policy check: flush failed: {}", e);
                     }
                 }
             }
