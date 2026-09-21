@@ -893,6 +893,9 @@ verification:
 # IMPORTANT: The base config is copied AFTER kata-deploy has applied its modifications
 # (debug, proxy, annotations). Custom runtimes inherit these settings from their base.
 # RuntimeClass overhead defaults are also inherited from baseConfig when not set.
+# A custom runtime also inherits supportedArches from a matching shims.<baseConfig>
+# block, so its handler is installed only where the base shim is supported. A base
+# config with no matching shim block retains the historical all-architectures behavior.
 # Set inheritBaseOverhead: false to disable that inheritance for a custom runtime.
 #
 # Usage with values file (recommended):

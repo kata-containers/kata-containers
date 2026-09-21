@@ -112,6 +112,34 @@ enabled_shims() {
 	done
 }
 
+@test "Helm template: custom runtimes inherit every architecture of their base shim" {
+	local values_file custom_runtimes
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+customRuntimes:
+  enabled: true
+  runtimes:
+    nvidia-cpu-custom:
+      baseConfig: qemu-nvidia-cpu
+      runtimeClass: |
+        apiVersion: node.k8s.io/v1
+        kind: RuntimeClass
+        metadata:
+          name: kata-nvidia-cpu-custom
+        handler: kata-nvidia-cpu-custom
+EOF
+
+	custom_runtimes=$(render \
+		-f "${CHART_PATH}/try-kata-nvidia-cpu.values.yaml" \
+		-f "${values_file}" \
+		--show-only templates/custom-runtimes.yaml |
+		yq -r 'select(.kind == "ConfigMap") | .data."custom-runtimes.list"')
+	rm -f "${values_file}"
+
+	[[ "${custom_runtimes}" == \
+		"kata-nvidia-cpu-custom:qemu-nvidia-cpu:::amd64,arm64" ]]
+}
+
 @test "Helm template: a profile sets up every snapshotter its shims are mapped to" {
 	# A shim mapped to a snapshotter that was never set up fails at pod start, and
 	# a profile is the one place that can get this right for the shims it ships.

@@ -1946,7 +1946,9 @@ data:
 {{- end }}
 {{- end }}
 {{- if $handler }}
-    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}
+{{- $baseShim := index $.Values.shims ($runtime.baseConfig | default "") | default dict }}
+{{- $supportedArches := join "," ($baseShim.supportedArches | default list) }}
+    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}:{{ $supportedArches }}
 {{- end }}
 {{- end }}
 {{- range $name := keys .Values.customRuntimes.runtimes | sortAlpha }}
