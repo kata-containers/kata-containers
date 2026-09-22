@@ -41,6 +41,10 @@ default ResizeVolumeRequest := false
 default ResumeContainerRequest := false
 default SetGuestDateTimeRequest := false
 default SetIPTablesRequest := false
+# Denied until a rule exists to check the lines being set, which is possible
+# here because the content is in the request - unlike CopyFileRequest, whose
+# data field the policy never sees.
+default SetSandboxHostsRequest := false
 default SetPolicyRequest := false
 default SignalProcessRequest := true
 default StartContainerRequest := true

@@ -172,7 +172,8 @@ impl VolumeResource {
                 // The agent wrote this file during create_sandbox, so there is
                 // nothing to transfer.
                 Arc::new(
-                    sandbox_file_volume::SandboxFileVolume::new(m)
+                    sandbox_file_volume::SandboxFileVolume::new(m, ctx.agent.clone())
+                        .await
                         .with_context(|| format!("new sandbox file volume {m:?}"))?,
                 )
             } else if ctx.erofs_volumes
