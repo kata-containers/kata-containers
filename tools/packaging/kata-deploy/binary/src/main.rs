@@ -7,6 +7,7 @@ mod artifacts;
 mod config;
 mod health;
 mod k8s;
+mod rootless;
 mod runtime;
 mod utils;
 
@@ -16,6 +17,7 @@ use flate2::read::GzDecoder;
 use log::{error, info};
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, Write};
+use utils::system::{host_path_is_file, HOST_ROOT};
 
 /// Env var name used to thread the detected container runtime through the
 /// post-install re-exec. Avoids re-querying the apiserver after we've already
@@ -83,6 +85,8 @@ enum Action {
     /// the node cannot support installation.
     #[clap(name = "install-stage-host-check")]
     InstallStageHostCheck,
+    #[clap(name = "install-stage-rootless-devices")]
+    InstallStageRootlessDevices,
     /// Stage 2 of a staged (JobSet) install: install kata artifacts/config on
     /// the host and set up configured snapshotters. Does not touch CRI
     /// configuration.
@@ -214,6 +218,7 @@ async fn run() -> Result<()> {
         Action::InstallStageSelinuxPolicy
             | Action::InstallStageLoadKernelModules
             | Action::InstallStageHostCheck
+            | Action::InstallStageRootlessDevices
             | Action::InstallStageArtifacts
             | Action::InstallStageCri
             | Action::CleanupStageRevertCri
@@ -228,6 +233,7 @@ async fn run() -> Result<()> {
         Action::InstallStageSelinuxPolicy => "install-stage-selinux-policy",
         Action::InstallStageLoadKernelModules => "install-stage-load-kernel-modules",
         Action::InstallStageHostCheck => "install-stage-host-check",
+        Action::InstallStageRootlessDevices => "install-stage-rootless-devices",
         Action::InstallStageArtifacts => "install-stage-artifacts",
         Action::InstallStageCri => "install-stage-cri",
         Action::CleanupStageRevertCri => "cleanup-stage-revert-cri",
@@ -400,6 +406,10 @@ async fn run() -> Result<()> {
             install_stage_host_check(&config, &runtime, true).await?;
             info!("Install host-check stage completed, exiting");
         }
+        Action::InstallStageRootlessDevices => {
+            install_stage_rootless_devices(&config)?;
+            info!("Install rootless-devices stage completed, exiting");
+        }
         Action::InstallStageArtifacts => {
             install_stage_artifacts(&config, &runtime, true).await?;
             info!("Install artifacts stage completed, exiting");
@@ -521,7 +531,6 @@ const SUPPORTED_RUNTIMES: &[&str] = &[
     "microk8s",
 ];
 
-const HOST_ROOT: &str = "/host";
 const HOST_MODULES_LOAD_DIR: &str = "/host-modules-load.d";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -552,6 +561,16 @@ impl HostModule {
 struct HostModulePlan {
     modules: Vec<HostModule>,
     needs_x86_virtualization: bool,
+}
+
+fn install_stage_rootless_devices(config: &config::Config) -> Result<()> {
+    info!("install (rootless): provisioning host device access for an unprivileged VMM");
+
+    let _node_lock = acquire_node_mutation_lock()?;
+    rootless::provision_host_device_access(config)?;
+
+    info!("install (rootless): host device access provisioned");
+    Ok(())
 }
 
 /// Not composed into [`install`], so the DaemonSet path stays unprivileged.
@@ -851,73 +870,19 @@ fn find_host_modprobe() -> Result<String> {
         "/bin/modprobe",
     ];
 
-    CANDIDATES
-        .iter()
-        .find(|path| host_path_is_file(std::path::Path::new(HOST_ROOT), std::path::Path::new(path)))
-        .map(|path| (*path).to_string())
-        .with_context(|| {
-            format!(
-                "host modprobe was not found under {HOST_ROOT}; install kmod on the node before \
-                 deploying Kata"
-            )
-        })
-}
-
-/// An absolute symlink target belongs to the host, not to this image.
-fn host_path_is_file(root: &std::path::Path, path: &std::path::Path) -> bool {
-    // The kernel's MAXSYMLINKS: fewer would reject chains the chroot resolves.
-    const MAX_HOPS: usize = 40;
-
-    let mut current = path.to_path_buf();
-    for _ in 0..MAX_HOPS {
-        let mounted = root.join(current.strip_prefix("/").unwrap_or(&current));
-        let Ok(metadata) = std::fs::symlink_metadata(&mounted) else {
-            return false;
-        };
-        if !metadata.is_symlink() {
-            return metadata.is_file();
-        }
-        let Ok(target) = std::fs::read_link(&mounted) else {
-            return false;
-        };
-        current = if target.is_absolute() {
-            target
-        } else {
-            // ".." is left for the kernel to resolve against the real dir.
-            current
-                .parent()
-                .unwrap_or(std::path::Path::new("/"))
-                .join(target)
-        };
-    }
-    false
+    utils::system::find_host_program_in_chroot(CANDIDATES).with_context(|| {
+        format!(
+            "host modprobe was not found under {HOST_ROOT}; install kmod on the node before \
+             deploying Kata"
+        )
+    })
 }
 
 fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
-    use std::os::unix::process::CommandExt;
-
-    let host_root = std::ffi::CString::new(HOST_ROOT).expect("HOST_ROOT contains no NUL");
-    let root_dir = std::ffi::CString::new("/").expect("root path contains no NUL");
-    let mut command = std::process::Command::new(modprobe);
-    command.arg(module);
-
     // This image ships no kmod, and only the host's own modprobe matches the
     // running kernel's modules and compression.
-    unsafe {
-        command.pre_exec(move || {
-            if libc::chroot(host_root.as_ptr()) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            if libc::chdir(root_dir.as_ptr()) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-
-    let output = command
-        .output()
-        .with_context(|| format!("failed to execute host {modprobe} for module {module}"))?;
+    let output = utils::system::run_in_host_chroot(modprobe, &[module])
+        .with_context(|| format!("failed to run host modprobe for module {module}"))?;
     if output.status.success() {
         return Ok(());
     }
@@ -2396,6 +2361,9 @@ async fn cleanup_stage_remove_artifacts(config: &config::Config) -> Result<()> {
     let _node_lock = acquire_node_mutation_lock()?;
     // A partial install may have loaded modules but extracted nothing.
     remove_modules_load_config(config)?;
+    if !config.rootless_shims_for_arch.is_empty() {
+        rootless::remove_udev_rule(config)?;
+    }
 
     // The install dir is bind mounted into this pod, so it always exists and
     // outlives the artifacts it holds: an empty one means there is nothing
@@ -2495,6 +2463,7 @@ mod tests {
         Action::InstallStageLoadKernelModules
     )]
     #[case("install-stage-host-check", Action::InstallStageHostCheck)]
+    #[case("install-stage-rootless-devices", Action::InstallStageRootlessDevices)]
     #[case("install-stage-artifacts", Action::InstallStageArtifacts)]
     #[case("install-stage-cri", Action::InstallStageCri)]
     #[case("cleanup-stage-revert-cri", Action::CleanupStageRevertCri)]
@@ -2645,6 +2614,7 @@ mod tests {
     #[rstest]
     #[case(Action::InstallStageHostCheck)]
     #[case(Action::InstallStageLoadKernelModules)]
+    #[case(Action::InstallStageRootlessDevices)]
     #[case(Action::InstallStageArtifacts)]
     #[case(Action::InstallStageCri)]
     #[case(Action::CleanupStageRevertCri)]

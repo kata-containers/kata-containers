@@ -3,8 +3,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+
+pub const HOST_ROOT: &str = "/host";
 
 pub const RUST_SHIMS: &[&str] = &[
     "clh-azure-runtime-rs",
@@ -50,6 +52,65 @@ pub fn find_host_program(program: &str) -> Option<PathBuf> {
         .iter()
         .map(|dir| Path::new(dir).join(program))
         .find(|candidate| candidate.is_file())
+}
+
+pub fn find_host_program_in_chroot(candidates: &[&str]) -> Option<String> {
+    candidates
+        .iter()
+        .find(|path| host_path_is_file(Path::new(HOST_ROOT), Path::new(path)))
+        .map(|path| (*path).to_string())
+}
+
+pub fn host_path_is_file(root: &Path, path: &Path) -> bool {
+    // The kernel's MAXSYMLINKS: fewer would reject chains the chroot resolves.
+    const MAX_HOPS: usize = 40;
+
+    let mut current = path.to_path_buf();
+    for _ in 0..MAX_HOPS {
+        let mounted = root.join(current.strip_prefix("/").unwrap_or(&current));
+        let Ok(metadata) = std::fs::symlink_metadata(&mounted) else {
+            return false;
+        };
+        if !metadata.is_symlink() {
+            return metadata.is_file();
+        }
+        let Ok(target) = std::fs::read_link(&mounted) else {
+            return false;
+        };
+        current = if target.is_absolute() {
+            target
+        } else {
+            current.parent().unwrap_or(Path::new("/")).join(target)
+        };
+    }
+    false
+}
+
+/// Chroot is required because the container does not share the host's
+/// libraries, kernel modules, or user database.
+pub fn run_in_host_chroot(program: &str, args: &[&str]) -> Result<std::process::Output> {
+    use std::os::unix::process::CommandExt;
+
+    let host_root = std::ffi::CString::new(HOST_ROOT).expect("HOST_ROOT contains no NUL");
+    let root_dir = std::ffi::CString::new("/").expect("root path contains no NUL");
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+
+    unsafe {
+        command.pre_exec(move || {
+            if libc::chroot(host_root.as_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if libc::chdir(root_dir.as_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+
+    command
+        .output()
+        .with_context(|| format!("failed to execute host {program} under a chroot"))
 }
 
 /// Perform a systemctl-equivalent operation through the host systemd D-Bus API.

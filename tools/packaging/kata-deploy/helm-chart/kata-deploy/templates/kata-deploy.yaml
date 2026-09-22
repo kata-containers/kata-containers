@@ -2,6 +2,8 @@
 {{- /* Only the staged install can place these, and it says so. Validated here
        because the templates that stage them render in job mode alone. */}}
 {{- $_ := include "kata-deploy.nodeBinaries" . -}}
+{{- /* Rejects a rootless shim here too, where the job templates do not render. */ -}}
+{{- $_ := include "kata-deploy.getRootlessShims" . -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
 {{- /* Reject an external NFD when this release also enables it. */ -}}
 {{- $existingNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
