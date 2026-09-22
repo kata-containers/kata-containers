@@ -14,6 +14,7 @@ mod local_volume;
 mod sandbox_file_volume;
 mod share_fs_volume;
 mod shm_volume;
+mod termination_log_volume;
 pub mod utils;
 
 pub mod direct_volume;
@@ -175,6 +176,16 @@ impl VolumeResource {
                     sandbox_file_volume::SandboxFileVolume::new(m, ctx.agent.clone())
                         .await
                         .with_context(|| format!("new sandbox file volume {m:?}"))?,
+                )
+            } else if ctx.erofs_volumes
+                && share_fs.is_none()
+                && termination_log_volume::is_termination_log_mount(m, spec)
+            {
+                // Passed through untouched: the agent creates the file itself
+                // during create_container and repoints this mount at it.
+                Arc::new(
+                    default_volume::DefaultVolume::new(m)
+                        .with_context(|| format!("new termination log volume {m:?}"))?,
                 )
             } else if ctx.erofs_volumes
                 && share_fs.is_none()
