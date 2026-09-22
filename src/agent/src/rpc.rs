@@ -119,6 +119,7 @@ use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
 use kata_types::k8s;
+use safe_path::scoped_join;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
@@ -339,6 +340,10 @@ impl AgentService {
         cdh_handler_sealed_secrets(&mut oci)
             .await
             .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
+
+        // Before setup_bundle writes the spec out, so the rewritten mount is
+        // what both rustjail and the later read-back see.
+        setup_termination_log(&cid, &mut oci)?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -2619,6 +2624,73 @@ fn setup_guest_hosts(hosts: &[String]) -> Result<()> {
     write_sandbox_file("hosts", &content)
 }
 
+// Kubelet bind-mounts an empty file for the container's exit message, which
+// without filesystem sharing is unreachable from the guest. Nothing needs
+// transferring though: it starts empty, the container is its only writer, and
+// the message leaves over GetDiagnosticData. So create it here instead, from
+// create_container, where a file can only appear for a container that really
+// exists and the guest path is ours to choose.
+fn setup_termination_log(cid: &str, oci: &mut Spec) -> Result<()> {
+    do_setup_termination_log(
+        &Path::new(KATA_GUEST_SANDBOX_DIR).join("termination-logs"),
+        cid,
+        oci,
+    )
+}
+
+fn do_setup_termination_log(dir: &Path, cid: &str, oci: &mut Spec) -> Result<()> {
+    let Some(destination) = termination_message_path(oci) else {
+        return Ok(());
+    };
+
+    let Some(mounts) = oci.mounts_mut().as_mut() else {
+        return Ok(());
+    };
+
+    let Some(mount) = mounts
+        .iter_mut()
+        .find(|m| m.destination() == Path::new(&destination))
+    else {
+        return Ok(());
+    };
+
+    // With filesystem sharing the host's own file is already reachable here,
+    // and rewriting the mount would only cut off kubelet's read-back.
+    if mount.source().as_ref().is_some_and(|s| s.exists()) {
+        return Ok(());
+    }
+
+    mount.set_source(Some(create_termination_log(dir, cid)?));
+
+    Ok(())
+}
+
+fn termination_message_path(oci: &Spec) -> Option<String> {
+    oci.annotations()
+        .as_ref()?
+        .get("io.kubernetes.container.terminationMessagePath")
+        .filter(|p| !p.is_empty())
+        .cloned()
+}
+
+fn create_termination_log(dir: &Path, cid: &str) -> Result<PathBuf> {
+    fs::create_dir_all(dir)?;
+
+    // create_container already ran the id through verify_id, so this is belt
+    // and braces against it ever naming something outside our directory.
+    let path = scoped_join(dir, cid)?;
+
+    // Root-owned 0644, matching the file kubelet creates: a container running
+    // as another user cannot write that one either.
+    fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)?;
+
+    Ok(path)
+}
+
 // Written by rename so a container already sharing the file cannot observe a
 // partial one, since the runtime hands us the same content again for each
 // container in the pod.
@@ -2853,6 +2925,130 @@ mod tests {
 
     fn check_command(cmd: &str) -> bool {
         which(cmd).is_ok()
+    }
+
+    #[test]
+    fn test_create_termination_log() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+
+        let path = create_termination_log(&base, "abc123").unwrap();
+
+        assert_eq!(path, base.join("abc123"));
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert!(metadata.is_file());
+        assert_eq!(metadata.len(), 0, "kubelet's copy is empty, so ours is too");
+
+        // Asked twice for the same container it stays empty rather than
+        // erroring, so a retried create_container is harmless.
+        assert_eq!(create_termination_log(&base, "abc123").unwrap(), path);
+    }
+
+    // scoped_join treats the base as a root, so `..` is clamped there rather
+    // than rejected. Either way the file has to land inside the directory we
+    // own, which is the property worth pinning down: the id comes from the host.
+    #[test]
+    fn test_create_termination_log_cannot_escape() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+
+        for cid in [
+            "../escaped",
+            "../../etc/passwd",
+            "sub/../../escaped",
+            "/absolute",
+        ] {
+            if let Ok(path) = create_termination_log(&base, cid) {
+                assert!(
+                    path.starts_with(&base),
+                    "container id {:?} produced {:?}, outside {:?}",
+                    cid,
+                    path,
+                    base
+                );
+            }
+        }
+
+        assert!(!dir.path().join("escaped").exists());
+        assert!(!dir.path().join("etc").exists());
+    }
+
+    fn spec_with_termination_log(destination: &str, source: &Path) -> Spec {
+        let mut annotations = std::collections::HashMap::new();
+        annotations.insert(
+            "io.kubernetes.container.terminationMessagePath".to_string(),
+            destination.to_string(),
+        );
+
+        let mut mount = oci::Mount::default();
+        mount.set_destination(PathBuf::from(destination));
+        mount.set_source(Some(source.to_path_buf()));
+
+        let mut spec = Spec::default();
+        spec.set_annotations(Some(annotations));
+        spec.set_mounts(Some(vec![mount]));
+        spec
+    }
+
+    fn source_of(spec: &Spec) -> PathBuf {
+        spec.mounts().as_ref().unwrap()[0]
+            .source()
+            .as_ref()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn test_setup_termination_log_rewrites_an_unreachable_source() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+        // A host path, so not reachable from in here.
+        let host_source = dir.path().join("kubelet-copy");
+
+        let mut spec = spec_with_termination_log("/dev/termination-log", &host_source);
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+
+        // Pointed at a file we made, not the one the host named.
+        let source = source_of(&spec);
+        assert_eq!(source, base.join("abc123"));
+        assert_eq!(std::fs::metadata(&source).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_setup_termination_log_leaves_a_reachable_source_alone() {
+        // A source that exists is filesystem sharing doing its job, and
+        // rewriting it would cut off kubelet's read-back.
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+        let shared = dir.path().join("shared-termination-log");
+        std::fs::write(&shared, b"").unwrap();
+
+        let mut spec = spec_with_termination_log("/dev/termination-log", &shared);
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+
+        assert_eq!(source_of(&spec), shared);
+        assert!(!base.exists(), "nothing created for a mount we left alone");
+    }
+
+    #[test]
+    fn test_setup_termination_log_needs_the_annotation() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+        let host_source = dir.path().join("kubelet-copy");
+
+        // Annotated path that no mount matches.
+        let mut spec = spec_with_termination_log("/dev/termination-log", &host_source);
+        spec.mounts_mut().as_mut().unwrap()[0].set_destination(PathBuf::from("/etc/hosts"));
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+        assert_eq!(source_of(&spec), host_source);
+
+        // No annotation at all.
+        let mut spec = spec_with_termination_log("/dev/termination-log", &host_source);
+        spec.set_annotations(None);
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+        assert_eq!(source_of(&spec), host_source);
+
+        assert!(!base.exists());
     }
 
     fn mk_ttrpc_context() -> TtrpcContext {
