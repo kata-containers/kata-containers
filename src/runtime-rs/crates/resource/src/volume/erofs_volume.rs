@@ -12,7 +12,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{chown, lchown, symlink, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -45,6 +45,18 @@ const MKFS_EROFS: &str = "mkfs.erofs";
 
 /// The kernel requires the block size to match the guest page size.
 const EROFS_BLOCK_SIZE: &str = "4096";
+
+/// mkfs.erofs draws a random filesystem UUID unless it is given one, which on
+/// its own makes two images of identical content differ. Pin it so the bytes
+/// depend on the tree alone, which is what lets the image be measured.
+const EROFS_IMAGE_UUID: &str = "00000000-0000-0000-0000-000000000000";
+
+/// Kubelet's atomic writer points this at the directory holding the payload.
+const ATOMIC_WRITER_DATA_LINK: &str = "..data";
+
+/// What we point it at instead. Kubelet rejects keys beginning with "..", so
+/// this cannot collide with one.
+const CANONICAL_DATA_DIR: &str = "..content";
 
 const IMAGE_MODE: u32 = 0o600;
 
@@ -267,10 +279,19 @@ async fn build_image(src: &Path, entry_name: &str, image_path: &Path) -> Result<
     // mkfs.erofs images a directory tree, so a file source needs one of its own.
     let mut staging = None;
     let tree = if src.is_dir() {
-        src.to_path_buf()
+        match stage_directory(src, dir)? {
+            Some(scratch) => {
+                let path = scratch.path().to_path_buf();
+                staging = Some(scratch);
+                path
+            }
+            None => src.to_path_buf(),
+        }
     } else {
         let scratch = tempfile::tempdir_in(dir).context("create erofs staging directory")?;
-        stage_file(src, &scratch.path().join(entry_name))?;
+        let staged = scratch.path().join(entry_name);
+        stage_file(src, &staged)?;
+        clone_metadata(src, &staged)?;
         let path = scratch.path().to_path_buf();
         staging = Some(scratch);
         path
@@ -297,12 +318,94 @@ fn stage_file(src: &Path, staged: &Path) -> Result<()> {
         .map(|_| ())
 }
 
+/// Kubelet's atomic writer keeps the payload in a directory named after the
+/// moment it was written and points `..data` at it, so the same content
+/// mounted twice does not image to the same bytes. Restage it under a fixed
+/// name, which leaves the layout the container sees otherwise as it was.
+///
+/// Returns None for a tree that is not laid out this way, which can be imaged
+/// where it lies.
+fn stage_directory(src: &Path, dir: &Path) -> Result<Option<tempfile::TempDir>> {
+    let Ok(payload) = fs::read_link(src.join(ATOMIC_WRITER_DATA_LINK)) else {
+        return Ok(None);
+    };
+
+    let scratch = tempfile::tempdir_in(dir).context("create erofs staging directory")?;
+    let root = scratch.path();
+    clone_metadata(src, root)?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let from = entry.path();
+
+        if Path::new(&name) == payload {
+            copy_tree(&from, &root.join(CANONICAL_DATA_DIR))?;
+        } else if name == std::ffi::OsStr::new(ATOMIC_WRITER_DATA_LINK) {
+            stage_symlink(Path::new(CANONICAL_DATA_DIR), &from, &root.join(&name))?;
+        } else {
+            copy_entry(&entry, &from, &root.join(&name))?;
+        }
+    }
+
+    Ok(Some(scratch))
+}
+
+fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    clone_metadata(src, dst)?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        copy_entry(&entry, &from, &dst.join(entry.file_name()))?;
+    }
+
+    Ok(())
+}
+
+fn copy_entry(entry: &fs::DirEntry, from: &Path, to: &Path) -> Result<()> {
+    let file_type = entry.file_type()?;
+
+    if file_type.is_symlink() {
+        stage_symlink(&fs::read_link(from)?, from, to)
+    } else if file_type.is_dir() {
+        copy_tree(from, to)
+    } else {
+        stage_file(from, to)?;
+        clone_metadata(from, to)
+    }
+}
+
+fn stage_symlink(target: &Path, src: &Path, dst: &Path) -> Result<()> {
+    symlink(target, dst)?;
+
+    let meta = fs::symlink_metadata(src)?;
+    lchown(dst, Some(meta.uid()), Some(meta.gid()))?;
+
+    Ok(())
+}
+
+/// Mode and ownership reach the image and the container sees them, so a staged
+/// copy has to carry the originals rather than whatever the runtime would
+/// create them as.
+fn clone_metadata(src: &Path, dst: &Path) -> Result<()> {
+    let meta = fs::metadata(src)?;
+
+    fs::set_permissions(dst, meta.permissions())?;
+    chown(dst, Some(meta.uid()), Some(meta.gid()))?;
+
+    Ok(())
+}
+
 async fn run_mkfs(tree: &Path, image_path: &Path) -> Result<()> {
     let output = Command::new(MKFS_EROFS)
         .arg("-b")
         .arg(EROFS_BLOCK_SIZE)
         .arg("-T")
         .arg("0")
+        .arg("-U")
+        .arg(EROFS_IMAGE_UUID)
         .arg(image_path)
         .arg(tree)
         .output()
@@ -419,6 +522,106 @@ mod tests {
             fs::read(out.join("hosts")).unwrap(),
             b"127.0.0.1\tlocalhost\n"
         );
+    }
+
+    #[tokio::test]
+    async fn test_the_same_tree_images_to_the_same_bytes() {
+        if !erofs_utils_available() {
+            println!("skipping: erofs-utils not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap();
+        let tree = tmp.path().join("configmap");
+        fs::create_dir_all(&tree).unwrap();
+        atomic_writer_tree(&tree);
+
+        let first = tmp.path().join("first.erofs");
+        let second = tmp.path().join("second.erofs");
+        build_image(&tree, "configmap", &first).await.unwrap();
+        build_image(&tree, "configmap", &second).await.unwrap();
+
+        assert_eq!(
+            fs::read(&first).unwrap(),
+            fs::read(&second).unwrap(),
+            "two builds of one tree must produce identical images"
+        );
+    }
+
+    /// The same configmap, written by kubelet at two different moments.
+    fn atomic_writer_tree_stamped(root: &Path, stamp: &str) {
+        let data = root.join(stamp);
+        fs::create_dir_all(&data).unwrap();
+        fs::write(data.join("key-a"), b"value-a").unwrap();
+        fs::write(data.join("key-b"), b"value-b").unwrap();
+        symlink(stamp, root.join("..data")).unwrap();
+        symlink("..data/key-a", root.join("key-a")).unwrap();
+        symlink("..data/key-b", root.join("key-b")).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_kubelet_write_time_does_not_reach_the_image() {
+        if !erofs_utils_available() {
+            println!("skipping: erofs-utils not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap();
+        let mut images = Vec::new();
+
+        for stamp in ["..2026_01_01_00_00_00.1234", "..2026_09_22_19_15_00.9876"] {
+            let tree = tmp.path().join(stamp.trim_start_matches('.'));
+            fs::create_dir_all(&tree).unwrap();
+            atomic_writer_tree_stamped(&tree, stamp);
+
+            let image = tmp.path().join(format!("{}.erofs", stamp.len()));
+            build_image(&tree, "cm", &image).await.unwrap();
+            images.push(fs::read(&image).unwrap());
+        }
+
+        assert_eq!(
+            images[0], images[1],
+            "the atomic writer's timestamp must not change the image"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_staging_keeps_the_layout_the_container_sees() {
+        if !erofs_utils_available() {
+            println!("skipping: erofs-utils not installed");
+            return;
+        }
+
+        let tmp = TempDir::new().unwrap();
+        let tree = tmp.path().join("configmap");
+        fs::create_dir_all(&tree).unwrap();
+        atomic_writer_tree(&tree);
+
+        let image = tmp.path().join("out.erofs");
+        build_image(&tree, "configmap", &image).await.unwrap();
+
+        let out = tmp.path().join("extract");
+        extract(&image, &out);
+
+        assert_eq!(
+            fs::read_link(out.join("key-a")).unwrap(),
+            Path::new("..data/key-a")
+        );
+        assert_eq!(
+            fs::read_link(out.join("..data")).unwrap(),
+            Path::new(CANONICAL_DATA_DIR)
+        );
+        assert_eq!(fs::read(out.join("key-a")).unwrap(), b"value-a");
+    }
+
+    #[test]
+    fn test_a_plain_directory_is_imaged_where_it_lies() {
+        let tmp = TempDir::new().unwrap();
+        let tree = tmp.path().join("plain");
+        fs::create_dir_all(&tree).unwrap();
+        fs::write(tree.join("a"), b"a").unwrap();
+
+        assert!(stage_directory(&tree, tmp.path()).unwrap().is_none());
     }
 
     #[tokio::test]
