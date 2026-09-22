@@ -16,15 +16,19 @@ virtcontainers
 
 # Open source projects
 bootc
+Bottlerocket
 distroless
+eudev
 libseccomp
 materialx
 ostree
+Talos
 
 # Hardware & Architecture
 AMD
 APIC
 APQN
+cdev
 chiplet
 cpuid
 DCAP
@@ -146,6 +150,7 @@ passthroughfd
 passfd
 sendfd
 RunD
+udev
 udevd
 Reflink
 UNBINDABLE
