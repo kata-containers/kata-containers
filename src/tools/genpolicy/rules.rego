@@ -618,7 +618,10 @@ allow_linux(state_ops, p_oci, i_oci) := {"ops": ops, "allowed": true} if {
     print("allow_linux: p_namespaces_normalized =", p_namespaces_normalized)
     print("allow_linux: i_namespace_without_network_normalized =", i_namespace_without_network_normalized)
 
-    p_namespaces_normalized == i_namespace_without_network_normalized
+    # The runtime is free to order namespaces differently than genpolicy did,
+    # so the comparison must not depend on order. Sorting rather than converting
+    # to sets keeps duplicate entries significant.
+    sort(p_namespaces_normalized) == sort(i_namespace_without_network_normalized)
 
     allow_masked_paths(p_oci, i_oci)
     allow_readonly_paths(p_oci, i_oci)
