@@ -501,6 +501,31 @@ pub struct Devices {
 pub struct SandboxData {
     /// Expected value of the CreateSandboxRequest storages field.
     pub storages: Vec<agent::Storage>,
+
+    /// Expected content of SetSandboxHostsRequest, the hosts file kubelet
+    /// wrote for the pod.
+    #[serde(default)]
+    pub hosts: SandboxHosts,
+}
+
+/// Kubelet writes a fixed header, one line per pod IP naming the pod, and
+/// then the pod's hostAliases. Only the pod IPs are unknown up front.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct SandboxHosts {
+    /// From the settings file.
+    pub header: Vec<String>,
+    /// From the settings file, for the FQDN of pods that set a subdomain.
+    pub cluster_domain: String,
+
+    /// From the pod YAML. Empty means the pod name, which only the policy
+    /// state knows for pods created from a template.
+    #[serde(default)]
+    pub hostname: String,
+    #[serde(default)]
+    pub subdomain: String,
+    /// Lines kubelet writes for spec.hostAliases.
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -636,11 +661,16 @@ impl AgentPolicy {
             policy_containers.push(self.get_container_policy(resource, yaml_container, i == 0));
         }
 
+        let mut sandbox = self.config.settings.sandbox.clone();
+        if let Some(pod_spec) = resource.get_pod_spec() {
+            pod_spec.fill_sandbox_hosts(&mut sandbox.hosts);
+        }
+
         let policy_data = policy::PolicyData {
             containers: policy_containers,
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
-            sandbox: self.config.settings.sandbox.clone(),
+            sandbox,
             devices: self.config.settings.devices.clone(),
             cluster_config: self.config.settings.cluster_config.clone(),
         };
