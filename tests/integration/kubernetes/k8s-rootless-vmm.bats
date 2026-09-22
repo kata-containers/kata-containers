@@ -306,6 +306,7 @@ EOF
 			skip "ConfigMap inotify testing is not enabled on ${arch}"
 			;;
 	esac
+	erofs_volumes_enabled && skip "a volume shipped as an EROFS image does not see updates"
 
 	pod_name="inotify-configmap-testing"
 	pod_config="${watchable_pod_config}"

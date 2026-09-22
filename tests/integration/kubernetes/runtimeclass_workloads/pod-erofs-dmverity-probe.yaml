@@ -36,13 +36,25 @@ spec:
           sed -n 's/.*erofs (device \([^)]*\)): mounted.*/\1/p' |
           sort -u)
 
+        # With erofs_volumes on, the pod's volumes are verity-backed EROFS
+        # images too. Unlike the layers, those are mounted in this
+        # container, so leave out the devices behind its erofs mounts.
+        volume_devices=$(awk '{
+          for (i = 7; i <= NF; i++) if ($i == "-") { if ($(i + 1) == "erofs") print $3; break }
+        }' /proc/self/mountinfo | sort -u)
+
         verity_count=0
         mounted_count=0
+        volume_count=0
         for dm_path in /sys/class/block/dm-*; do
           [ -e "${dm_path}" ] || continue
           dm_name=$(cat "${dm_path}/dm/name" 2>/dev/null || true)
           case "${dm_name}" in
             kata-verity-*)
+              if printf "%s\n" "${volume_devices}" | grep -qx "$(cat "${dm_path}/dev")"; then
+                volume_count=$((volume_count + 1))
+                continue
+              fi
               verity_count=$((verity_count + 1))
               dm_device=${dm_path##*/}
               if printf "%s\n" "${erofs_devices}" | grep -qx "${dm_device}"; then
@@ -54,7 +66,7 @@ spec:
           esac
         done
 
-        echo "workload_lower_layers=${lower_count} kata_verity_devices=${verity_count} dm_erofs_mounts=${mounted_count}"
+        echo "workload_lower_layers=${lower_count} kata_verity_devices=${verity_count} dm_erofs_mounts=${mounted_count} volume_verity_devices=${volume_count}"
         if [ "${lower_count}" -ne "${verity_count}" ] ||
           [ "${lower_count}" -ne "${mounted_count}" ]; then
           echo "--- EROFS devices from dmesg ---"

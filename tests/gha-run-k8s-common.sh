@@ -671,6 +671,12 @@ function deploy_k8s() {
 				# the way we should enable verity support on a live disk.
 				sudo tune2fs -O verity "${root_device}"
 			fi
+			if [[ "${EROFS_VOLUMES:-}" == "yes" ]]; then
+				# runtime-rs appends a dm-verity hash tree to every volume
+				# image with veritysetup, which nodeBinaries cannot bring
+				# as it only takes static binaries.
+				sudo apt-get -y install --no-install-recommends cryptsetup-bin
+			fi
 			# CONTAINER_ENGINE and CONTAINER_ENGINE_VERSION are set by the caller
 			# shellcheck disable=SC2153,SC2154
 			deploy_vanilla_k8s "${CONTAINER_ENGINE}" "${CONTAINER_ENGINE_VERSION}"
@@ -1028,6 +1034,19 @@ function helm_helper() {
 
 		if [[ -z "${HELM_SHIMS}" ]]; then
 			die "A list of shims is expected but none was provided"
+		fi
+
+		# Volumes as EROFS images rather than over copy_file, which only
+		# runtime-rs implements. mkfs.erofs comes through nodeBinaries.
+		if [[ "${EROFS_VOLUMES:-}" == "yes" ]]; then
+			if [[ "${SNAPSHOTTER}" != "erofs" ]]; then
+				die "EROFS_VOLUMES is only supported with SNAPSHOTTER=erofs"
+			fi
+			for shim in ${HELM_SHIMS}; do
+				[[ "${shim}" == *-runtime-rs ]] || continue
+				SHIM="${shim}" DROP_IN=$'[runtime]\nexperimental = ["erofs_volumes"]\n' \
+					yq -i '.shims[strenv(SHIM)].dropIn = strenv(DROP_IN)' "${values_yaml}"
+			done
 		fi
 
 		# Convert simple format to per-shim format for all enabled shims
