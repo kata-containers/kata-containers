@@ -654,6 +654,8 @@ nodeBinaries: {}
 #       supportedArches:              # list of supported architectures
 #         - amd64
 #       allowedHypervisorAnnotations: []  # hypervisor annotations to pass through
+#       hypervisor:
+#         rootless: false             # run the VMM as an unprivileged user (see below)
 #       containerd:
 #         snapshotter: ""             # e.g. nydus, erofs, devmapper, or "" for default
 #         forceGuestPull: false       # force guest-side image pull in containerd
@@ -670,6 +672,23 @@ nodeBinaries: {}
 #         overhead:                  # override pod overhead (falls back to built-in defaults)
 #           memory: "160Mi"
 #           cpu: "250m"
+#
+# hypervisor.rootless runs that shim's VMM as an unprivileged user. kata-deploy
+# grants group access to /dev/kvm and to the TEE device the shim needs, and
+# records a udev rule so the permissions survive the device being re-created.
+# Each shim asks only for its own devices, so turning it on for qemu-runtime-rs
+# alone never creates the SEV or Secure Execution groups.
+#
+# /dev/vhost-vsock and /dev/vhost-net are left alone: the shim opens them while
+# still privileged and hands the VMM the descriptors, and granting access by
+# path would expose the host-wide CID namespace.
+#
+# Only the runtime-rs QEMU and Cloud Hypervisor shims accept it, and asking for
+# it on any other shim fails the install. The Go runtime has a rootless option
+# of its own, but it only ever handled /dev/kvm.
+#
+# Requires deploymentMode: job, a persistent /etc, and a udev implementation
+# reading /etc/udev/rules.d. See docs/how-to/how-to-run-rootless-vmm.md.
 shims:
   disableAll: false
 
@@ -694,6 +713,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: ""
 
@@ -702,6 +723,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: ""
 
@@ -740,6 +763,8 @@ shims:
       - s390x
       - ppc64le
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: ""
 
@@ -758,6 +783,8 @@ shims:
       - amd64
       - arm64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: ""
 
@@ -785,6 +812,8 @@ shims:
       - amd64
       - arm64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: ""
     nvrc:
@@ -824,6 +853,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: "nydus"
       forceGuestPull: false
@@ -868,6 +899,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: "nydus"
       forceGuestPull: false
@@ -902,6 +935,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: nydus
       forceGuestPull: false
@@ -930,6 +965,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: nydus
       forceGuestPull: false
@@ -958,6 +995,8 @@ shims:
     supportedArches:
       - s390x
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: nydus
       forceGuestPull: false
@@ -989,6 +1028,8 @@ shims:
       - arm64
       - s390x
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: false
     containerd:
       snapshotter: nydus
       forceGuestPull: false
