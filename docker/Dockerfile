@@ -134,5 +134,7 @@ RUN echo "${OCI_VERSION}" > /kata-build/opt/kata/DATADOG_KATA_VERSION
 
 # Final scratch-based data volume
 FROM scratch
+# SDP recognizes this classification for scratch-based payload images.
+LABEL baseimage.isgbi="scratch"
 COPY --from=builder /kata-build/opt/kata /opt/kata
 COPY --from=builder /kata-build/etc/containerd /etc/containerd
