@@ -221,6 +221,10 @@ func (p *HybridVSockTTRPCMockImp) CopyFile(ctx context.Context, req *pb.CopyFile
 	return &gpb.Empty{}, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) SetSandboxHosts(ctx context.Context, req *pb.SetSandboxHostsRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByProbeRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }

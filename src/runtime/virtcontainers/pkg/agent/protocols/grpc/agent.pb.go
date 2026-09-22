@@ -2130,6 +2130,61 @@ func (x *CreateSandboxRequest) GetKernelModules() []*KernelModule {
 	return nil
 }
 
+type SetSandboxHostsRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// The lines of the pod's hosts file, in order.
+	//
+	// The agent writes them to a sandbox-scoped file that every container in
+	// the pod then shares, which is how the host presents it too. This exists
+	// so the file does not have to travel over the general-purpose CopyFile
+	// API: unlike hostname and dns, it cannot ride CreateSandboxRequest,
+	// because the host only names it in the container spec, by which point the
+	// sandbox has already been created.
+	Hosts []string `protobuf:"bytes,1,rep,name=hosts,proto3" json:"hosts,omitempty"`
+}
+
+func (x *SetSandboxHostsRequest) Reset() {
+	*x = SetSandboxHostsRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_agent_proto_msgTypes[31]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetSandboxHostsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSandboxHostsRequest) ProtoMessage() {}
+
+func (x *SetSandboxHostsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[31]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSandboxHostsRequest.ProtoReflect.Descriptor instead.
+func (*SetSandboxHostsRequest) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *SetSandboxHostsRequest) GetHosts() []string {
+	if x != nil {
+		return x.Hosts
+	}
+	return nil
+}
+
 type DestroySandboxRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2139,7 +2194,7 @@ type DestroySandboxRequest struct {
 func (x *DestroySandboxRequest) Reset() {
 	*x = DestroySandboxRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[31]
+		mi := &file_agent_proto_msgTypes[32]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2152,7 +2207,7 @@ func (x *DestroySandboxRequest) String() string {
 func (*DestroySandboxRequest) ProtoMessage() {}
 
 func (x *DestroySandboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[31]
+	mi := &file_agent_proto_msgTypes[32]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2165,7 +2220,7 @@ func (x *DestroySandboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DestroySandboxRequest.ProtoReflect.Descriptor instead.
 func (*DestroySandboxRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{31}
+	return file_agent_proto_rawDescGZIP(), []int{32}
 }
 
 type RemoveStaleVirtiofsShareMountsRequest struct {
@@ -2177,7 +2232,7 @@ type RemoveStaleVirtiofsShareMountsRequest struct {
 func (x *RemoveStaleVirtiofsShareMountsRequest) Reset() {
 	*x = RemoveStaleVirtiofsShareMountsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[32]
+		mi := &file_agent_proto_msgTypes[33]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2190,7 +2245,7 @@ func (x *RemoveStaleVirtiofsShareMountsRequest) String() string {
 func (*RemoveStaleVirtiofsShareMountsRequest) ProtoMessage() {}
 
 func (x *RemoveStaleVirtiofsShareMountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[32]
+	mi := &file_agent_proto_msgTypes[33]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2203,7 +2258,7 @@ func (x *RemoveStaleVirtiofsShareMountsRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use RemoveStaleVirtiofsShareMountsRequest.ProtoReflect.Descriptor instead.
 func (*RemoveStaleVirtiofsShareMountsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{32}
+	return file_agent_proto_rawDescGZIP(), []int{33}
 }
 
 type Interfaces struct {
@@ -2217,7 +2272,7 @@ type Interfaces struct {
 func (x *Interfaces) Reset() {
 	*x = Interfaces{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[33]
+		mi := &file_agent_proto_msgTypes[34]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2230,7 +2285,7 @@ func (x *Interfaces) String() string {
 func (*Interfaces) ProtoMessage() {}
 
 func (x *Interfaces) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[33]
+	mi := &file_agent_proto_msgTypes[34]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2243,7 +2298,7 @@ func (x *Interfaces) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Interfaces.ProtoReflect.Descriptor instead.
 func (*Interfaces) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{33}
+	return file_agent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *Interfaces) GetInterfaces() []*protocols.Interface {
@@ -2264,7 +2319,7 @@ type Routes struct {
 func (x *Routes) Reset() {
 	*x = Routes{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[34]
+		mi := &file_agent_proto_msgTypes[35]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2277,7 +2332,7 @@ func (x *Routes) String() string {
 func (*Routes) ProtoMessage() {}
 
 func (x *Routes) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[34]
+	mi := &file_agent_proto_msgTypes[35]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2290,7 +2345,7 @@ func (x *Routes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Routes.ProtoReflect.Descriptor instead.
 func (*Routes) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{34}
+	return file_agent_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *Routes) GetRoutes() []*protocols.Route {
@@ -2311,7 +2366,7 @@ type UpdateInterfaceRequest struct {
 func (x *UpdateInterfaceRequest) Reset() {
 	*x = UpdateInterfaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[35]
+		mi := &file_agent_proto_msgTypes[36]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2324,7 +2379,7 @@ func (x *UpdateInterfaceRequest) String() string {
 func (*UpdateInterfaceRequest) ProtoMessage() {}
 
 func (x *UpdateInterfaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[35]
+	mi := &file_agent_proto_msgTypes[36]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2337,7 +2392,7 @@ func (x *UpdateInterfaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateInterfaceRequest.ProtoReflect.Descriptor instead.
 func (*UpdateInterfaceRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{35}
+	return file_agent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *UpdateInterfaceRequest) GetInterface() *protocols.Interface {
@@ -2358,7 +2413,7 @@ type UpdateRoutesRequest struct {
 func (x *UpdateRoutesRequest) Reset() {
 	*x = UpdateRoutesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[36]
+		mi := &file_agent_proto_msgTypes[37]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2371,7 +2426,7 @@ func (x *UpdateRoutesRequest) String() string {
 func (*UpdateRoutesRequest) ProtoMessage() {}
 
 func (x *UpdateRoutesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[36]
+	mi := &file_agent_proto_msgTypes[37]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2384,7 +2439,7 @@ func (x *UpdateRoutesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoutesRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRoutesRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{36}
+	return file_agent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *UpdateRoutesRequest) GetRoutes() *Routes {
@@ -2405,7 +2460,7 @@ type UpdateEphemeralMountsRequest struct {
 func (x *UpdateEphemeralMountsRequest) Reset() {
 	*x = UpdateEphemeralMountsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[37]
+		mi := &file_agent_proto_msgTypes[38]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2418,7 +2473,7 @@ func (x *UpdateEphemeralMountsRequest) String() string {
 func (*UpdateEphemeralMountsRequest) ProtoMessage() {}
 
 func (x *UpdateEphemeralMountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[37]
+	mi := &file_agent_proto_msgTypes[38]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2431,7 +2486,7 @@ func (x *UpdateEphemeralMountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateEphemeralMountsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateEphemeralMountsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{37}
+	return file_agent_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *UpdateEphemeralMountsRequest) GetStorages() []*Storage {
@@ -2450,7 +2505,7 @@ type ListInterfacesRequest struct {
 func (x *ListInterfacesRequest) Reset() {
 	*x = ListInterfacesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[38]
+		mi := &file_agent_proto_msgTypes[39]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2463,7 +2518,7 @@ func (x *ListInterfacesRequest) String() string {
 func (*ListInterfacesRequest) ProtoMessage() {}
 
 func (x *ListInterfacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[38]
+	mi := &file_agent_proto_msgTypes[39]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2476,7 +2531,7 @@ func (x *ListInterfacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInterfacesRequest.ProtoReflect.Descriptor instead.
 func (*ListInterfacesRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{38}
+	return file_agent_proto_rawDescGZIP(), []int{39}
 }
 
 type ListRoutesRequest struct {
@@ -2488,7 +2543,7 @@ type ListRoutesRequest struct {
 func (x *ListRoutesRequest) Reset() {
 	*x = ListRoutesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[39]
+		mi := &file_agent_proto_msgTypes[40]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2501,7 +2556,7 @@ func (x *ListRoutesRequest) String() string {
 func (*ListRoutesRequest) ProtoMessage() {}
 
 func (x *ListRoutesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[39]
+	mi := &file_agent_proto_msgTypes[40]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2514,7 +2569,7 @@ func (x *ListRoutesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoutesRequest.ProtoReflect.Descriptor instead.
 func (*ListRoutesRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{39}
+	return file_agent_proto_rawDescGZIP(), []int{40}
 }
 
 type ARPNeighbors struct {
@@ -2528,7 +2583,7 @@ type ARPNeighbors struct {
 func (x *ARPNeighbors) Reset() {
 	*x = ARPNeighbors{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[40]
+		mi := &file_agent_proto_msgTypes[41]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2541,7 +2596,7 @@ func (x *ARPNeighbors) String() string {
 func (*ARPNeighbors) ProtoMessage() {}
 
 func (x *ARPNeighbors) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[40]
+	mi := &file_agent_proto_msgTypes[41]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2554,7 +2609,7 @@ func (x *ARPNeighbors) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ARPNeighbors.ProtoReflect.Descriptor instead.
 func (*ARPNeighbors) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{40}
+	return file_agent_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ARPNeighbors) GetARPNeighbors() []*protocols.ARPNeighbor {
@@ -2575,7 +2630,7 @@ type AddARPNeighborsRequest struct {
 func (x *AddARPNeighborsRequest) Reset() {
 	*x = AddARPNeighborsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[41]
+		mi := &file_agent_proto_msgTypes[42]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2588,7 +2643,7 @@ func (x *AddARPNeighborsRequest) String() string {
 func (*AddARPNeighborsRequest) ProtoMessage() {}
 
 func (x *AddARPNeighborsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[41]
+	mi := &file_agent_proto_msgTypes[42]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2601,7 +2656,7 @@ func (x *AddARPNeighborsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddARPNeighborsRequest.ProtoReflect.Descriptor instead.
 func (*AddARPNeighborsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{41}
+	return file_agent_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *AddARPNeighborsRequest) GetNeighbors() *ARPNeighbors {
@@ -2622,7 +2677,7 @@ type GetIPTablesRequest struct {
 func (x *GetIPTablesRequest) Reset() {
 	*x = GetIPTablesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[42]
+		mi := &file_agent_proto_msgTypes[43]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2635,7 +2690,7 @@ func (x *GetIPTablesRequest) String() string {
 func (*GetIPTablesRequest) ProtoMessage() {}
 
 func (x *GetIPTablesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[42]
+	mi := &file_agent_proto_msgTypes[43]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2648,7 +2703,7 @@ func (x *GetIPTablesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIPTablesRequest.ProtoReflect.Descriptor instead.
 func (*GetIPTablesRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{42}
+	return file_agent_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *GetIPTablesRequest) GetIsIpv6() bool {
@@ -2670,7 +2725,7 @@ type GetIPTablesResponse struct {
 func (x *GetIPTablesResponse) Reset() {
 	*x = GetIPTablesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[43]
+		mi := &file_agent_proto_msgTypes[44]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2683,7 +2738,7 @@ func (x *GetIPTablesResponse) String() string {
 func (*GetIPTablesResponse) ProtoMessage() {}
 
 func (x *GetIPTablesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[43]
+	mi := &file_agent_proto_msgTypes[44]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2696,7 +2751,7 @@ func (x *GetIPTablesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIPTablesResponse.ProtoReflect.Descriptor instead.
 func (*GetIPTablesResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{43}
+	return file_agent_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetIPTablesResponse) GetData() []byte {
@@ -2720,7 +2775,7 @@ type SetIPTablesRequest struct {
 func (x *SetIPTablesRequest) Reset() {
 	*x = SetIPTablesRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[44]
+		mi := &file_agent_proto_msgTypes[45]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2733,7 +2788,7 @@ func (x *SetIPTablesRequest) String() string {
 func (*SetIPTablesRequest) ProtoMessage() {}
 
 func (x *SetIPTablesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[44]
+	mi := &file_agent_proto_msgTypes[45]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2746,7 +2801,7 @@ func (x *SetIPTablesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetIPTablesRequest.ProtoReflect.Descriptor instead.
 func (*SetIPTablesRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{44}
+	return file_agent_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *SetIPTablesRequest) GetIsIpv6() bool {
@@ -2775,7 +2830,7 @@ type SetIPTablesResponse struct {
 func (x *SetIPTablesResponse) Reset() {
 	*x = SetIPTablesResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[45]
+		mi := &file_agent_proto_msgTypes[46]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2788,7 +2843,7 @@ func (x *SetIPTablesResponse) String() string {
 func (*SetIPTablesResponse) ProtoMessage() {}
 
 func (x *SetIPTablesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[45]
+	mi := &file_agent_proto_msgTypes[46]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2801,7 +2856,7 @@ func (x *SetIPTablesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetIPTablesResponse.ProtoReflect.Descriptor instead.
 func (*SetIPTablesResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{45}
+	return file_agent_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *SetIPTablesResponse) GetData() []byte {
@@ -2830,7 +2885,7 @@ type OnlineCPUMemRequest struct {
 func (x *OnlineCPUMemRequest) Reset() {
 	*x = OnlineCPUMemRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[46]
+		mi := &file_agent_proto_msgTypes[47]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2843,7 +2898,7 @@ func (x *OnlineCPUMemRequest) String() string {
 func (*OnlineCPUMemRequest) ProtoMessage() {}
 
 func (x *OnlineCPUMemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[46]
+	mi := &file_agent_proto_msgTypes[47]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2856,7 +2911,7 @@ func (x *OnlineCPUMemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnlineCPUMemRequest.ProtoReflect.Descriptor instead.
 func (*OnlineCPUMemRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{46}
+	return file_agent_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *OnlineCPUMemRequest) GetWait() bool {
@@ -2892,7 +2947,7 @@ type ReseedRandomDevRequest struct {
 func (x *ReseedRandomDevRequest) Reset() {
 	*x = ReseedRandomDevRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[47]
+		mi := &file_agent_proto_msgTypes[48]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2905,7 +2960,7 @@ func (x *ReseedRandomDevRequest) String() string {
 func (*ReseedRandomDevRequest) ProtoMessage() {}
 
 func (x *ReseedRandomDevRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[47]
+	mi := &file_agent_proto_msgTypes[48]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2918,7 +2973,7 @@ func (x *ReseedRandomDevRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReseedRandomDevRequest.ProtoReflect.Descriptor instead.
 func (*ReseedRandomDevRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{47}
+	return file_agent_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ReseedRandomDevRequest) GetData() []byte {
@@ -2952,7 +3007,7 @@ type AgentDetails struct {
 func (x *AgentDetails) Reset() {
 	*x = AgentDetails{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[48]
+		mi := &file_agent_proto_msgTypes[49]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2965,7 +3020,7 @@ func (x *AgentDetails) String() string {
 func (*AgentDetails) ProtoMessage() {}
 
 func (x *AgentDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[48]
+	mi := &file_agent_proto_msgTypes[49]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2978,7 +3033,7 @@ func (x *AgentDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentDetails.ProtoReflect.Descriptor instead.
 func (*AgentDetails) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{48}
+	return file_agent_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *AgentDetails) GetVersion() string {
@@ -3041,7 +3096,7 @@ type GuestDetailsRequest struct {
 func (x *GuestDetailsRequest) Reset() {
 	*x = GuestDetailsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[49]
+		mi := &file_agent_proto_msgTypes[50]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3054,7 +3109,7 @@ func (x *GuestDetailsRequest) String() string {
 func (*GuestDetailsRequest) ProtoMessage() {}
 
 func (x *GuestDetailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[49]
+	mi := &file_agent_proto_msgTypes[50]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3067,7 +3122,7 @@ func (x *GuestDetailsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GuestDetailsRequest.ProtoReflect.Descriptor instead.
 func (*GuestDetailsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{49}
+	return file_agent_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GuestDetailsRequest) GetMemBlockSize() bool {
@@ -3098,7 +3153,7 @@ type GuestDetailsResponse struct {
 func (x *GuestDetailsResponse) Reset() {
 	*x = GuestDetailsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[50]
+		mi := &file_agent_proto_msgTypes[51]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3111,7 +3166,7 @@ func (x *GuestDetailsResponse) String() string {
 func (*GuestDetailsResponse) ProtoMessage() {}
 
 func (x *GuestDetailsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[50]
+	mi := &file_agent_proto_msgTypes[51]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3124,7 +3179,7 @@ func (x *GuestDetailsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GuestDetailsResponse.ProtoReflect.Descriptor instead.
 func (*GuestDetailsResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{50}
+	return file_agent_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GuestDetailsResponse) GetMemBlockSizeBytes() uint64 {
@@ -3161,7 +3216,7 @@ type MemHotplugByProbeRequest struct {
 func (x *MemHotplugByProbeRequest) Reset() {
 	*x = MemHotplugByProbeRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[51]
+		mi := &file_agent_proto_msgTypes[52]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3174,7 +3229,7 @@ func (x *MemHotplugByProbeRequest) String() string {
 func (*MemHotplugByProbeRequest) ProtoMessage() {}
 
 func (x *MemHotplugByProbeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[51]
+	mi := &file_agent_proto_msgTypes[52]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3187,7 +3242,7 @@ func (x *MemHotplugByProbeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemHotplugByProbeRequest.ProtoReflect.Descriptor instead.
 func (*MemHotplugByProbeRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{51}
+	return file_agent_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *MemHotplugByProbeRequest) GetMemHotplugProbeAddr() []uint64 {
@@ -3211,7 +3266,7 @@ type SetGuestDateTimeRequest struct {
 func (x *SetGuestDateTimeRequest) Reset() {
 	*x = SetGuestDateTimeRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[52]
+		mi := &file_agent_proto_msgTypes[53]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3224,7 +3279,7 @@ func (x *SetGuestDateTimeRequest) String() string {
 func (*SetGuestDateTimeRequest) ProtoMessage() {}
 
 func (x *SetGuestDateTimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[52]
+	mi := &file_agent_proto_msgTypes[53]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3237,7 +3292,7 @@ func (x *SetGuestDateTimeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetGuestDateTimeRequest.ProtoReflect.Descriptor instead.
 func (*SetGuestDateTimeRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{52}
+	return file_agent_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *SetGuestDateTimeRequest) GetSec() int64 {
@@ -3272,7 +3327,7 @@ type FSGroup struct {
 func (x *FSGroup) Reset() {
 	*x = FSGroup{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[53]
+		mi := &file_agent_proto_msgTypes[54]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3285,7 +3340,7 @@ func (x *FSGroup) String() string {
 func (*FSGroup) ProtoMessage() {}
 
 func (x *FSGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[53]
+	mi := &file_agent_proto_msgTypes[54]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3298,7 +3353,7 @@ func (x *FSGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FSGroup.ProtoReflect.Descriptor instead.
 func (*FSGroup) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{53}
+	return file_agent_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *FSGroup) GetGroupId() uint32 {
@@ -3339,7 +3394,7 @@ type SharedMount struct {
 func (x *SharedMount) Reset() {
 	*x = SharedMount{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[54]
+		mi := &file_agent_proto_msgTypes[55]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3352,7 +3407,7 @@ func (x *SharedMount) String() string {
 func (*SharedMount) ProtoMessage() {}
 
 func (x *SharedMount) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[54]
+	mi := &file_agent_proto_msgTypes[55]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3365,7 +3420,7 @@ func (x *SharedMount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SharedMount.ProtoReflect.Descriptor instead.
 func (*SharedMount) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{54}
+	return file_agent_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *SharedMount) GetName() string {
@@ -3448,7 +3503,7 @@ type Storage struct {
 func (x *Storage) Reset() {
 	*x = Storage{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[55]
+		mi := &file_agent_proto_msgTypes[56]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3461,7 +3516,7 @@ func (x *Storage) String() string {
 func (*Storage) ProtoMessage() {}
 
 func (x *Storage) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[55]
+	mi := &file_agent_proto_msgTypes[56]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3474,7 +3529,7 @@ func (x *Storage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Storage.ProtoReflect.Descriptor instead.
 func (*Storage) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{55}
+	return file_agent_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *Storage) GetDriver() string {
@@ -3576,7 +3631,7 @@ type Device struct {
 func (x *Device) Reset() {
 	*x = Device{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[56]
+		mi := &file_agent_proto_msgTypes[57]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3589,7 +3644,7 @@ func (x *Device) String() string {
 func (*Device) ProtoMessage() {}
 
 func (x *Device) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[56]
+	mi := &file_agent_proto_msgTypes[57]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3602,7 +3657,7 @@ func (x *Device) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Device.ProtoReflect.Descriptor instead.
 func (*Device) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{56}
+	return file_agent_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *Device) GetId() string {
@@ -3653,7 +3708,7 @@ type StringUser struct {
 func (x *StringUser) Reset() {
 	*x = StringUser{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[57]
+		mi := &file_agent_proto_msgTypes[58]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3666,7 +3721,7 @@ func (x *StringUser) String() string {
 func (*StringUser) ProtoMessage() {}
 
 func (x *StringUser) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[57]
+	mi := &file_agent_proto_msgTypes[58]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3679,7 +3734,7 @@ func (x *StringUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StringUser.ProtoReflect.Descriptor instead.
 func (*StringUser) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{57}
+	return file_agent_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *StringUser) GetUid() string {
@@ -3732,7 +3787,7 @@ type CopyFileRequest struct {
 func (x *CopyFileRequest) Reset() {
 	*x = CopyFileRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[58]
+		mi := &file_agent_proto_msgTypes[59]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3745,7 +3800,7 @@ func (x *CopyFileRequest) String() string {
 func (*CopyFileRequest) ProtoMessage() {}
 
 func (x *CopyFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[58]
+	mi := &file_agent_proto_msgTypes[59]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3758,7 +3813,7 @@ func (x *CopyFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFileRequest.ProtoReflect.Descriptor instead.
 func (*CopyFileRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{58}
+	return file_agent_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *CopyFileRequest) GetPath() string {
@@ -3826,7 +3881,7 @@ type GetOOMEventRequest struct {
 func (x *GetOOMEventRequest) Reset() {
 	*x = GetOOMEventRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[59]
+		mi := &file_agent_proto_msgTypes[60]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3839,7 +3894,7 @@ func (x *GetOOMEventRequest) String() string {
 func (*GetOOMEventRequest) ProtoMessage() {}
 
 func (x *GetOOMEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[59]
+	mi := &file_agent_proto_msgTypes[60]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3852,7 +3907,7 @@ func (x *GetOOMEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOOMEventRequest.ProtoReflect.Descriptor instead.
 func (*GetOOMEventRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{59}
+	return file_agent_proto_rawDescGZIP(), []int{60}
 }
 
 type OOMEvent struct {
@@ -3866,7 +3921,7 @@ type OOMEvent struct {
 func (x *OOMEvent) Reset() {
 	*x = OOMEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[60]
+		mi := &file_agent_proto_msgTypes[61]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3879,7 +3934,7 @@ func (x *OOMEvent) String() string {
 func (*OOMEvent) ProtoMessage() {}
 
 func (x *OOMEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[60]
+	mi := &file_agent_proto_msgTypes[61]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3892,7 +3947,7 @@ func (x *OOMEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OOMEvent.ProtoReflect.Descriptor instead.
 func (*OOMEvent) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{60}
+	return file_agent_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *OOMEvent) GetContainerId() string {
@@ -3913,7 +3968,7 @@ type AddSwapRequest struct {
 func (x *AddSwapRequest) Reset() {
 	*x = AddSwapRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[61]
+		mi := &file_agent_proto_msgTypes[62]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3926,7 +3981,7 @@ func (x *AddSwapRequest) String() string {
 func (*AddSwapRequest) ProtoMessage() {}
 
 func (x *AddSwapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[61]
+	mi := &file_agent_proto_msgTypes[62]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3939,7 +3994,7 @@ func (x *AddSwapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSwapRequest.ProtoReflect.Descriptor instead.
 func (*AddSwapRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{61}
+	return file_agent_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *AddSwapRequest) GetPCIPath() []uint32 {
@@ -3960,7 +4015,7 @@ type AddSwapPathRequest struct {
 func (x *AddSwapPathRequest) Reset() {
 	*x = AddSwapPathRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[62]
+		mi := &file_agent_proto_msgTypes[63]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3973,7 +4028,7 @@ func (x *AddSwapPathRequest) String() string {
 func (*AddSwapPathRequest) ProtoMessage() {}
 
 func (x *AddSwapPathRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[62]
+	mi := &file_agent_proto_msgTypes[63]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3986,7 +4041,7 @@ func (x *AddSwapPathRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSwapPathRequest.ProtoReflect.Descriptor instead.
 func (*AddSwapPathRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{62}
+	return file_agent_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *AddSwapPathRequest) GetPath() string {
@@ -4005,7 +4060,7 @@ type GetMetricsRequest struct {
 func (x *GetMetricsRequest) Reset() {
 	*x = GetMetricsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[63]
+		mi := &file_agent_proto_msgTypes[64]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4018,7 +4073,7 @@ func (x *GetMetricsRequest) String() string {
 func (*GetMetricsRequest) ProtoMessage() {}
 
 func (x *GetMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[63]
+	mi := &file_agent_proto_msgTypes[64]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4031,7 +4086,7 @@ func (x *GetMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMetricsRequest.ProtoReflect.Descriptor instead.
 func (*GetMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{63}
+	return file_agent_proto_rawDescGZIP(), []int{64}
 }
 
 type Metrics struct {
@@ -4045,7 +4100,7 @@ type Metrics struct {
 func (x *Metrics) Reset() {
 	*x = Metrics{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[64]
+		mi := &file_agent_proto_msgTypes[65]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4058,7 +4113,7 @@ func (x *Metrics) String() string {
 func (*Metrics) ProtoMessage() {}
 
 func (x *Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[64]
+	mi := &file_agent_proto_msgTypes[65]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4071,7 +4126,7 @@ func (x *Metrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Metrics.ProtoReflect.Descriptor instead.
 func (*Metrics) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{64}
+	return file_agent_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *Metrics) GetMetrics() string {
@@ -4093,7 +4148,7 @@ type VolumeStatsRequest struct {
 func (x *VolumeStatsRequest) Reset() {
 	*x = VolumeStatsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[65]
+		mi := &file_agent_proto_msgTypes[66]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4106,7 +4161,7 @@ func (x *VolumeStatsRequest) String() string {
 func (*VolumeStatsRequest) ProtoMessage() {}
 
 func (x *VolumeStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[65]
+	mi := &file_agent_proto_msgTypes[66]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4119,7 +4174,7 @@ func (x *VolumeStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeStatsRequest.ProtoReflect.Descriptor instead.
 func (*VolumeStatsRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{65}
+	return file_agent_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *VolumeStatsRequest) GetVolumeGuestPath() string {
@@ -4142,7 +4197,7 @@ type ResizeVolumeRequest struct {
 func (x *ResizeVolumeRequest) Reset() {
 	*x = ResizeVolumeRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[66]
+		mi := &file_agent_proto_msgTypes[67]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4155,7 +4210,7 @@ func (x *ResizeVolumeRequest) String() string {
 func (*ResizeVolumeRequest) ProtoMessage() {}
 
 func (x *ResizeVolumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[66]
+	mi := &file_agent_proto_msgTypes[67]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4168,7 +4223,7 @@ func (x *ResizeVolumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResizeVolumeRequest.ProtoReflect.Descriptor instead.
 func (*ResizeVolumeRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{66}
+	return file_agent_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ResizeVolumeRequest) GetVolumeGuestPath() string {
@@ -4196,7 +4251,7 @@ type SetPolicyRequest struct {
 func (x *SetPolicyRequest) Reset() {
 	*x = SetPolicyRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[67]
+		mi := &file_agent_proto_msgTypes[68]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4209,7 +4264,7 @@ func (x *SetPolicyRequest) String() string {
 func (*SetPolicyRequest) ProtoMessage() {}
 
 func (x *SetPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[67]
+	mi := &file_agent_proto_msgTypes[68]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4222,7 +4277,7 @@ func (x *SetPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPolicyRequest.ProtoReflect.Descriptor instead.
 func (*SetPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{67}
+	return file_agent_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *SetPolicyRequest) GetPolicy() string {
@@ -4244,7 +4299,7 @@ type GetDiagnosticDataRequest struct {
 func (x *GetDiagnosticDataRequest) Reset() {
 	*x = GetDiagnosticDataRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[68]
+		mi := &file_agent_proto_msgTypes[69]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4257,7 +4312,7 @@ func (x *GetDiagnosticDataRequest) String() string {
 func (*GetDiagnosticDataRequest) ProtoMessage() {}
 
 func (x *GetDiagnosticDataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[68]
+	mi := &file_agent_proto_msgTypes[69]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4270,7 +4325,7 @@ func (x *GetDiagnosticDataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiagnosticDataRequest.ProtoReflect.Descriptor instead.
 func (*GetDiagnosticDataRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{68}
+	return file_agent_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *GetDiagnosticDataRequest) GetLogType() string {
@@ -4298,7 +4353,7 @@ type GetDiagnosticDataResponse struct {
 func (x *GetDiagnosticDataResponse) Reset() {
 	*x = GetDiagnosticDataResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[69]
+		mi := &file_agent_proto_msgTypes[70]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4311,7 +4366,7 @@ func (x *GetDiagnosticDataResponse) String() string {
 func (*GetDiagnosticDataResponse) ProtoMessage() {}
 
 func (x *GetDiagnosticDataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[69]
+	mi := &file_agent_proto_msgTypes[70]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4324,7 +4379,7 @@ func (x *GetDiagnosticDataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiagnosticDataResponse.ProtoReflect.Descriptor instead.
 func (*GetDiagnosticDataResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{69}
+	return file_agent_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetDiagnosticDataResponse) GetData() string {
@@ -4351,7 +4406,7 @@ type MemAgentMemcgConfig struct {
 func (x *MemAgentMemcgConfig) Reset() {
 	*x = MemAgentMemcgConfig{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[70]
+		mi := &file_agent_proto_msgTypes[71]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4364,7 +4419,7 @@ func (x *MemAgentMemcgConfig) String() string {
 func (*MemAgentMemcgConfig) ProtoMessage() {}
 
 func (x *MemAgentMemcgConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[70]
+	mi := &file_agent_proto_msgTypes[71]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4377,7 +4432,7 @@ func (x *MemAgentMemcgConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemAgentMemcgConfig.ProtoReflect.Descriptor instead.
 func (*MemAgentMemcgConfig) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{70}
+	return file_agent_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *MemAgentMemcgConfig) GetDisabled() bool {
@@ -4447,7 +4502,7 @@ type MemAgentCompactConfig struct {
 func (x *MemAgentCompactConfig) Reset() {
 	*x = MemAgentCompactConfig{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_agent_proto_msgTypes[71]
+		mi := &file_agent_proto_msgTypes[72]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4460,7 +4515,7 @@ func (x *MemAgentCompactConfig) String() string {
 func (*MemAgentCompactConfig) ProtoMessage() {}
 
 func (x *MemAgentCompactConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[71]
+	mi := &file_agent_proto_msgTypes[72]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4473,7 +4528,7 @@ func (x *MemAgentCompactConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemAgentCompactConfig.ProtoReflect.Descriptor instead.
 func (*MemAgentCompactConfig) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{71}
+	return file_agent_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *MemAgentCompactConfig) GetDisabled() bool {
@@ -4836,7 +4891,10 @@ var file_agent_proto_rawDesc = []byte{
 	0x65, 0x72, 0x6e, 0x65, 0x6c, 0x5f, 0x6d, 0x6f, 0x64, 0x75, 0x6c, 0x65, 0x73, 0x18, 0x07, 0x20,
 	0x03, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x4b, 0x65, 0x72, 0x6e, 0x65,
 	0x6c, 0x4d, 0x6f, 0x64, 0x75, 0x6c, 0x65, 0x52, 0x0d, 0x6b, 0x65, 0x72, 0x6e, 0x65, 0x6c, 0x4d,
-	0x6f, 0x64, 0x75, 0x6c, 0x65, 0x73, 0x22, 0x17, 0x0a, 0x15, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f,
+	0x6f, 0x64, 0x75, 0x6c, 0x65, 0x73, 0x22, 0x2e, 0x0a, 0x16, 0x53, 0x65, 0x74, 0x53, 0x61, 0x6e,
+	0x64, 0x62, 0x6f, 0x78, 0x48, 0x6f, 0x73, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x14, 0x0a, 0x05, 0x68, 0x6f, 0x73, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52,
+	0x05, 0x68, 0x6f, 0x73, 0x74, 0x73, 0x22, 0x17, 0x0a, 0x15, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f,
 	0x79, 0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f, 0x78, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
 	0x27, 0x0a, 0x25, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x53, 0x74, 0x61, 0x6c, 0x65, 0x56, 0x69,
 	0x72, 0x74, 0x69, 0x6f, 0x66, 0x73, 0x53, 0x68, 0x61, 0x72, 0x65, 0x4d, 0x6f, 0x75, 0x6e, 0x74,
@@ -5097,7 +5155,7 @@ var file_agent_proto_rawDesc = []byte{
 	0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x63, 0x74, 0x5f, 0x6f, 0x72, 0x64, 0x65, 0x72, 0x42, 0x14,
 	0x0a, 0x12, 0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x63, 0x74, 0x5f, 0x74, 0x68, 0x72, 0x65, 0x73,
 	0x68, 0x6f, 0x6c, 0x64, 0x42, 0x16, 0x0a, 0x14, 0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x63, 0x74,
-	0x5f, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x73, 0x32, 0xea, 0x16, 0x0a,
+	0x5f, 0x66, 0x6f, 0x72, 0x63, 0x65, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x73, 0x32, 0xb3, 0x17, 0x0a,
 	0x0c, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x12, 0x47, 0x0a,
 	0x0f, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x43, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72,
 	0x12, 0x1c, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x43, 0x6f,
@@ -5226,68 +5284,72 @@ var file_agent_proto_rawDesc = []byte{
 	0x70, 0x63, 0x2e, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f, 0x78,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
 	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12,
-	0x45, 0x0a, 0x0e, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f, 0x79, 0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f,
-	0x78, 0x12, 0x1b, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f, 0x79,
-	0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f, 0x78, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16,
-	0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66,
-	0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x41, 0x0a, 0x0c, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65,
-	0x43, 0x50, 0x55, 0x4d, 0x65, 0x6d, 0x12, 0x19, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x4f, 0x6e,
-	0x6c, 0x69, 0x6e, 0x65, 0x43, 0x50, 0x55, 0x4d, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x47, 0x0a, 0x0f, 0x52, 0x65, 0x73,
-	0x65, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x64, 0x6f, 0x6d, 0x44, 0x65, 0x76, 0x12, 0x1c, 0x2e, 0x67,
-	0x72, 0x70, 0x63, 0x2e, 0x52, 0x65, 0x73, 0x65, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x64, 0x6f, 0x6d,
-	0x44, 0x65, 0x76, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f,
-	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70,
-	0x74, 0x79, 0x12, 0x48, 0x0a, 0x0f, 0x47, 0x65, 0x74, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x65,
-	0x74, 0x61, 0x69, 0x6c, 0x73, 0x12, 0x19, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x47, 0x75, 0x65,
-	0x73, 0x74, 0x44, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x1a, 0x1a, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x65, 0x74,
-	0x61, 0x69, 0x6c, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4b, 0x0a, 0x11,
-	0x4d, 0x65, 0x6d, 0x48, 0x6f, 0x74, 0x70, 0x6c, 0x75, 0x67, 0x42, 0x79, 0x50, 0x72, 0x6f, 0x62,
-	0x65, 0x12, 0x1e, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x4d, 0x65, 0x6d, 0x48, 0x6f, 0x74, 0x70,
-	0x6c, 0x75, 0x67, 0x42, 0x79, 0x50, 0x72, 0x6f, 0x62, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x49, 0x0a, 0x10, 0x53, 0x65, 0x74,
-	0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x12, 0x1d, 0x2e,
-	0x67, 0x72, 0x70, 0x63, 0x2e, 0x53, 0x65, 0x74, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x61, 0x74,
-	0x65, 0x54, 0x69, 0x6d, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67,
-	0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45,
-	0x6d, 0x70, 0x74, 0x79, 0x12, 0x39, 0x0a, 0x08, 0x43, 0x6f, 0x70, 0x79, 0x46, 0x69, 0x6c, 0x65,
-	0x12, 0x15, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x43, 0x6f, 0x70, 0x79, 0x46, 0x69, 0x6c, 0x65,
+	0x47, 0x0a, 0x0f, 0x53, 0x65, 0x74, 0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f, 0x78, 0x48, 0x6f, 0x73,
+	0x74, 0x73, 0x12, 0x1c, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x53, 0x65, 0x74, 0x53, 0x61, 0x6e,
+	0x64, 0x62, 0x6f, 0x78, 0x48, 0x6f, 0x73, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62,
+	0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x45, 0x0a, 0x0e, 0x44, 0x65, 0x73, 0x74,
+	0x72, 0x6f, 0x79, 0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f, 0x78, 0x12, 0x1b, 0x2e, 0x67, 0x72, 0x70,
+	0x63, 0x2e, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f, 0x79, 0x53, 0x61, 0x6e, 0x64, 0x62, 0x6f, 0x78,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
 	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12,
-	0x37, 0x0a, 0x0b, 0x47, 0x65, 0x74, 0x4f, 0x4f, 0x4d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x18,
-	0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x47, 0x65, 0x74, 0x4f, 0x4f, 0x4d, 0x45, 0x76, 0x65, 0x6e,
-	0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x0e, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e,
-	0x4f, 0x4f, 0x4d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x37, 0x0a, 0x07, 0x41, 0x64, 0x64, 0x53,
-	0x77, 0x61, 0x70, 0x12, 0x14, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x77,
-	0x61, 0x70, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67,
-	0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74,
-	0x79, 0x12, 0x3f, 0x0a, 0x0b, 0x41, 0x64, 0x64, 0x53, 0x77, 0x61, 0x70, 0x50, 0x61, 0x74, 0x68,
-	0x12, 0x18, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x77, 0x61, 0x70, 0x50,
-	0x61, 0x74, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f,
+	0x41, 0x0a, 0x0c, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x43, 0x50, 0x55, 0x4d, 0x65, 0x6d, 0x12,
+	0x19, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x43, 0x50, 0x55,
+	0x4d, 0x65, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f,
 	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70,
-	0x74, 0x79, 0x12, 0x45, 0x0a, 0x0e, 0x47, 0x65, 0x74, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x53,
-	0x74, 0x61, 0x74, 0x73, 0x12, 0x18, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x56, 0x6f, 0x6c, 0x75,
-	0x6d, 0x65, 0x53, 0x74, 0x61, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19,
-	0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x53, 0x74, 0x61, 0x74,
-	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x41, 0x0a, 0x0c, 0x52, 0x65, 0x73,
-	0x69, 0x7a, 0x65, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x12, 0x19, 0x2e, 0x67, 0x72, 0x70, 0x63,
-	0x2e, 0x52, 0x65, 0x73, 0x69, 0x7a, 0x65, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x3b, 0x0a, 0x09,
-	0x53, 0x65, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x12, 0x16, 0x2e, 0x67, 0x72, 0x70, 0x63,
-	0x2e, 0x53, 0x65, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x42, 0x60, 0x5a, 0x5e, 0x67, 0x69, 0x74,
-	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6b, 0x61, 0x74, 0x61, 0x2d, 0x63, 0x6f, 0x6e,
-	0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x73, 0x2f, 0x6b, 0x61, 0x74, 0x61, 0x2d, 0x63, 0x6f, 0x6e,
-	0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x72, 0x75, 0x6e, 0x74,
-	0x69, 0x6d, 0x65, 0x2f, 0x76, 0x69, 0x72, 0x74, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65,
-	0x72, 0x73, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x61, 0x67, 0x65, 0x6e, 0x74, 0x2f, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x73, 0x2f, 0x67, 0x72, 0x70, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x74, 0x79, 0x12, 0x47, 0x0a, 0x0f, 0x52, 0x65, 0x73, 0x65, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x64,
+	0x6f, 0x6d, 0x44, 0x65, 0x76, 0x12, 0x1c, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x52, 0x65, 0x73,
+	0x65, 0x65, 0x64, 0x52, 0x61, 0x6e, 0x64, 0x6f, 0x6d, 0x44, 0x65, 0x76, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x48, 0x0a, 0x0f, 0x47,
+	0x65, 0x74, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x12, 0x19,
+	0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x65, 0x74, 0x61, 0x69,
+	0x6c, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1a, 0x2e, 0x67, 0x72, 0x70, 0x63,
+	0x2e, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x65, 0x74, 0x61, 0x69, 0x6c, 0x73, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4b, 0x0a, 0x11, 0x4d, 0x65, 0x6d, 0x48, 0x6f, 0x74, 0x70,
+	0x6c, 0x75, 0x67, 0x42, 0x79, 0x50, 0x72, 0x6f, 0x62, 0x65, 0x12, 0x1e, 0x2e, 0x67, 0x72, 0x70,
+	0x63, 0x2e, 0x4d, 0x65, 0x6d, 0x48, 0x6f, 0x74, 0x70, 0x6c, 0x75, 0x67, 0x42, 0x79, 0x50, 0x72,
+	0x6f, 0x62, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f,
+	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70,
+	0x74, 0x79, 0x12, 0x49, 0x0a, 0x10, 0x53, 0x65, 0x74, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x61,
+	0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x12, 0x1d, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x53, 0x65,
+	0x74, 0x47, 0x75, 0x65, 0x73, 0x74, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x39, 0x0a,
+	0x08, 0x43, 0x6f, 0x70, 0x79, 0x46, 0x69, 0x6c, 0x65, 0x12, 0x15, 0x2e, 0x67, 0x72, 0x70, 0x63,
+	0x2e, 0x43, 0x6f, 0x70, 0x79, 0x46, 0x69, 0x6c, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62,
+	0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x37, 0x0a, 0x0b, 0x47, 0x65, 0x74, 0x4f,
+	0x4f, 0x4d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x18, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x47,
+	0x65, 0x74, 0x4f, 0x4f, 0x4d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x0e, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x4f, 0x4f, 0x4d, 0x45, 0x76, 0x65, 0x6e,
+	0x74, 0x12, 0x37, 0x0a, 0x07, 0x41, 0x64, 0x64, 0x53, 0x77, 0x61, 0x70, 0x12, 0x14, 0x2e, 0x67,
+	0x72, 0x70, 0x63, 0x2e, 0x41, 0x64, 0x64, 0x53, 0x77, 0x61, 0x70, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x3f, 0x0a, 0x0b, 0x41, 0x64,
+	0x64, 0x53, 0x77, 0x61, 0x70, 0x50, 0x61, 0x74, 0x68, 0x12, 0x18, 0x2e, 0x67, 0x72, 0x70, 0x63,
+	0x2e, 0x41, 0x64, 0x64, 0x53, 0x77, 0x61, 0x70, 0x50, 0x61, 0x74, 0x68, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x45, 0x0a, 0x0e, 0x47,
+	0x65, 0x74, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x53, 0x74, 0x61, 0x74, 0x73, 0x12, 0x18, 0x2e,
+	0x67, 0x72, 0x70, 0x63, 0x2e, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x53, 0x74, 0x61, 0x74, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x56,
+	0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x53, 0x74, 0x61, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x41, 0x0a, 0x0c, 0x52, 0x65, 0x73, 0x69, 0x7a, 0x65, 0x56, 0x6f, 0x6c, 0x75,
+	0x6d, 0x65, 0x12, 0x19, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x52, 0x65, 0x73, 0x69, 0x7a, 0x65,
+	0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e,
+	0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e,
+	0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x3b, 0x0a, 0x09, 0x53, 0x65, 0x74, 0x50, 0x6f, 0x6c, 0x69,
+	0x63, 0x79, 0x12, 0x16, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x53, 0x65, 0x74, 0x50, 0x6f, 0x6c,
+	0x69, 0x63, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f,
+	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70,
+	0x74, 0x79, 0x42, 0x60, 0x5a, 0x5e, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
+	0x2f, 0x6b, 0x61, 0x74, 0x61, 0x2d, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x73,
+	0x2f, 0x6b, 0x61, 0x74, 0x61, 0x2d, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x73,
+	0x2f, 0x73, 0x72, 0x63, 0x2f, 0x72, 0x75, 0x6e, 0x74, 0x69, 0x6d, 0x65, 0x2f, 0x76, 0x69, 0x72,
+	0x74, 0x63, 0x6f, 0x6e, 0x74, 0x61, 0x69, 0x6e, 0x65, 0x72, 0x73, 0x2f, 0x70, 0x6b, 0x67, 0x2f,
+	0x61, 0x67, 0x65, 0x6e, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x73, 0x2f,
+	0x67, 0x72, 0x70, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -5302,7 +5364,7 @@ func file_agent_proto_rawDescGZIP() []byte {
 	return file_agent_proto_rawDescData
 }
 
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 74)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 75)
 var file_agent_proto_goTypes = []interface{}{
 	(*CreateContainerRequest)(nil),                // 0: grpc.CreateContainerRequest
 	(*StartContainerRequest)(nil),                 // 1: grpc.StartContainerRequest
@@ -5335,74 +5397,75 @@ var file_agent_proto_goTypes = []interface{}{
 	(*TtyWinResizeRequest)(nil),                   // 28: grpc.TtyWinResizeRequest
 	(*KernelModule)(nil),                          // 29: grpc.KernelModule
 	(*CreateSandboxRequest)(nil),                  // 30: grpc.CreateSandboxRequest
-	(*DestroySandboxRequest)(nil),                 // 31: grpc.DestroySandboxRequest
-	(*RemoveStaleVirtiofsShareMountsRequest)(nil), // 32: grpc.RemoveStaleVirtiofsShareMountsRequest
-	(*Interfaces)(nil),                            // 33: grpc.Interfaces
-	(*Routes)(nil),                                // 34: grpc.Routes
-	(*UpdateInterfaceRequest)(nil),                // 35: grpc.UpdateInterfaceRequest
-	(*UpdateRoutesRequest)(nil),                   // 36: grpc.UpdateRoutesRequest
-	(*UpdateEphemeralMountsRequest)(nil),          // 37: grpc.UpdateEphemeralMountsRequest
-	(*ListInterfacesRequest)(nil),                 // 38: grpc.ListInterfacesRequest
-	(*ListRoutesRequest)(nil),                     // 39: grpc.ListRoutesRequest
-	(*ARPNeighbors)(nil),                          // 40: grpc.ARPNeighbors
-	(*AddARPNeighborsRequest)(nil),                // 41: grpc.AddARPNeighborsRequest
-	(*GetIPTablesRequest)(nil),                    // 42: grpc.GetIPTablesRequest
-	(*GetIPTablesResponse)(nil),                   // 43: grpc.GetIPTablesResponse
-	(*SetIPTablesRequest)(nil),                    // 44: grpc.SetIPTablesRequest
-	(*SetIPTablesResponse)(nil),                   // 45: grpc.SetIPTablesResponse
-	(*OnlineCPUMemRequest)(nil),                   // 46: grpc.OnlineCPUMemRequest
-	(*ReseedRandomDevRequest)(nil),                // 47: grpc.ReseedRandomDevRequest
-	(*AgentDetails)(nil),                          // 48: grpc.AgentDetails
-	(*GuestDetailsRequest)(nil),                   // 49: grpc.GuestDetailsRequest
-	(*GuestDetailsResponse)(nil),                  // 50: grpc.GuestDetailsResponse
-	(*MemHotplugByProbeRequest)(nil),              // 51: grpc.MemHotplugByProbeRequest
-	(*SetGuestDateTimeRequest)(nil),               // 52: grpc.SetGuestDateTimeRequest
-	(*FSGroup)(nil),                               // 53: grpc.FSGroup
-	(*SharedMount)(nil),                           // 54: grpc.SharedMount
-	(*Storage)(nil),                               // 55: grpc.Storage
-	(*Device)(nil),                                // 56: grpc.Device
-	(*StringUser)(nil),                            // 57: grpc.StringUser
-	(*CopyFileRequest)(nil),                       // 58: grpc.CopyFileRequest
-	(*GetOOMEventRequest)(nil),                    // 59: grpc.GetOOMEventRequest
-	(*OOMEvent)(nil),                              // 60: grpc.OOMEvent
-	(*AddSwapRequest)(nil),                        // 61: grpc.AddSwapRequest
-	(*AddSwapPathRequest)(nil),                    // 62: grpc.AddSwapPathRequest
-	(*GetMetricsRequest)(nil),                     // 63: grpc.GetMetricsRequest
-	(*Metrics)(nil),                               // 64: grpc.Metrics
-	(*VolumeStatsRequest)(nil),                    // 65: grpc.VolumeStatsRequest
-	(*ResizeVolumeRequest)(nil),                   // 66: grpc.ResizeVolumeRequest
-	(*SetPolicyRequest)(nil),                      // 67: grpc.SetPolicyRequest
-	(*GetDiagnosticDataRequest)(nil),              // 68: grpc.GetDiagnosticDataRequest
-	(*GetDiagnosticDataResponse)(nil),             // 69: grpc.GetDiagnosticDataResponse
-	(*MemAgentMemcgConfig)(nil),                   // 70: grpc.MemAgentMemcgConfig
-	(*MemAgentCompactConfig)(nil),                 // 71: grpc.MemAgentCompactConfig
-	nil,                                           // 72: grpc.MemoryStats.StatsEntry
-	nil,                                           // 73: grpc.CgroupStats.HugetlbStatsEntry
-	(*Spec)(nil),                                  // 74: grpc.Spec
-	(*Process)(nil),                               // 75: grpc.Process
-	(*LinuxResources)(nil),                        // 76: grpc.LinuxResources
-	(*protocols.Interface)(nil),                   // 77: types.Interface
-	(*protocols.Route)(nil),                       // 78: types.Route
-	(*protocols.ARPNeighbor)(nil),                 // 79: types.ARPNeighbor
-	(protocols.FSGroupChangePolicy)(0),            // 80: types.FSGroupChangePolicy
-	(*emptypb.Empty)(nil),                         // 81: google.protobuf.Empty
-	(*VolumeStatsResponse)(nil),                   // 82: grpc.VolumeStatsResponse
+	(*SetSandboxHostsRequest)(nil),                // 31: grpc.SetSandboxHostsRequest
+	(*DestroySandboxRequest)(nil),                 // 32: grpc.DestroySandboxRequest
+	(*RemoveStaleVirtiofsShareMountsRequest)(nil), // 33: grpc.RemoveStaleVirtiofsShareMountsRequest
+	(*Interfaces)(nil),                            // 34: grpc.Interfaces
+	(*Routes)(nil),                                // 35: grpc.Routes
+	(*UpdateInterfaceRequest)(nil),                // 36: grpc.UpdateInterfaceRequest
+	(*UpdateRoutesRequest)(nil),                   // 37: grpc.UpdateRoutesRequest
+	(*UpdateEphemeralMountsRequest)(nil),          // 38: grpc.UpdateEphemeralMountsRequest
+	(*ListInterfacesRequest)(nil),                 // 39: grpc.ListInterfacesRequest
+	(*ListRoutesRequest)(nil),                     // 40: grpc.ListRoutesRequest
+	(*ARPNeighbors)(nil),                          // 41: grpc.ARPNeighbors
+	(*AddARPNeighborsRequest)(nil),                // 42: grpc.AddARPNeighborsRequest
+	(*GetIPTablesRequest)(nil),                    // 43: grpc.GetIPTablesRequest
+	(*GetIPTablesResponse)(nil),                   // 44: grpc.GetIPTablesResponse
+	(*SetIPTablesRequest)(nil),                    // 45: grpc.SetIPTablesRequest
+	(*SetIPTablesResponse)(nil),                   // 46: grpc.SetIPTablesResponse
+	(*OnlineCPUMemRequest)(nil),                   // 47: grpc.OnlineCPUMemRequest
+	(*ReseedRandomDevRequest)(nil),                // 48: grpc.ReseedRandomDevRequest
+	(*AgentDetails)(nil),                          // 49: grpc.AgentDetails
+	(*GuestDetailsRequest)(nil),                   // 50: grpc.GuestDetailsRequest
+	(*GuestDetailsResponse)(nil),                  // 51: grpc.GuestDetailsResponse
+	(*MemHotplugByProbeRequest)(nil),              // 52: grpc.MemHotplugByProbeRequest
+	(*SetGuestDateTimeRequest)(nil),               // 53: grpc.SetGuestDateTimeRequest
+	(*FSGroup)(nil),                               // 54: grpc.FSGroup
+	(*SharedMount)(nil),                           // 55: grpc.SharedMount
+	(*Storage)(nil),                               // 56: grpc.Storage
+	(*Device)(nil),                                // 57: grpc.Device
+	(*StringUser)(nil),                            // 58: grpc.StringUser
+	(*CopyFileRequest)(nil),                       // 59: grpc.CopyFileRequest
+	(*GetOOMEventRequest)(nil),                    // 60: grpc.GetOOMEventRequest
+	(*OOMEvent)(nil),                              // 61: grpc.OOMEvent
+	(*AddSwapRequest)(nil),                        // 62: grpc.AddSwapRequest
+	(*AddSwapPathRequest)(nil),                    // 63: grpc.AddSwapPathRequest
+	(*GetMetricsRequest)(nil),                     // 64: grpc.GetMetricsRequest
+	(*Metrics)(nil),                               // 65: grpc.Metrics
+	(*VolumeStatsRequest)(nil),                    // 66: grpc.VolumeStatsRequest
+	(*ResizeVolumeRequest)(nil),                   // 67: grpc.ResizeVolumeRequest
+	(*SetPolicyRequest)(nil),                      // 68: grpc.SetPolicyRequest
+	(*GetDiagnosticDataRequest)(nil),              // 69: grpc.GetDiagnosticDataRequest
+	(*GetDiagnosticDataResponse)(nil),             // 70: grpc.GetDiagnosticDataResponse
+	(*MemAgentMemcgConfig)(nil),                   // 71: grpc.MemAgentMemcgConfig
+	(*MemAgentCompactConfig)(nil),                 // 72: grpc.MemAgentCompactConfig
+	nil,                                           // 73: grpc.MemoryStats.StatsEntry
+	nil,                                           // 74: grpc.CgroupStats.HugetlbStatsEntry
+	(*Spec)(nil),                                  // 75: grpc.Spec
+	(*Process)(nil),                               // 76: grpc.Process
+	(*LinuxResources)(nil),                        // 77: grpc.LinuxResources
+	(*protocols.Interface)(nil),                   // 78: types.Interface
+	(*protocols.Route)(nil),                       // 79: types.Route
+	(*protocols.ARPNeighbor)(nil),                 // 80: types.ARPNeighbor
+	(protocols.FSGroupChangePolicy)(0),            // 81: types.FSGroupChangePolicy
+	(*emptypb.Empty)(nil),                         // 82: google.protobuf.Empty
+	(*VolumeStatsResponse)(nil),                   // 83: grpc.VolumeStatsResponse
 }
 var file_agent_proto_depIdxs = []int32{
-	57, // 0: grpc.CreateContainerRequest.string_user:type_name -> grpc.StringUser
-	56, // 1: grpc.CreateContainerRequest.devices:type_name -> grpc.Device
-	55, // 2: grpc.CreateContainerRequest.storages:type_name -> grpc.Storage
-	74, // 3: grpc.CreateContainerRequest.OCI:type_name -> grpc.Spec
-	54, // 4: grpc.CreateContainerRequest.shared_mounts:type_name -> grpc.SharedMount
-	57, // 5: grpc.ExecProcessRequest.string_user:type_name -> grpc.StringUser
-	75, // 6: grpc.ExecProcessRequest.process:type_name -> grpc.Process
-	76, // 7: grpc.UpdateContainerRequest.resources:type_name -> grpc.LinuxResources
+	58, // 0: grpc.CreateContainerRequest.string_user:type_name -> grpc.StringUser
+	57, // 1: grpc.CreateContainerRequest.devices:type_name -> grpc.Device
+	56, // 2: grpc.CreateContainerRequest.storages:type_name -> grpc.Storage
+	75, // 3: grpc.CreateContainerRequest.OCI:type_name -> grpc.Spec
+	55, // 4: grpc.CreateContainerRequest.shared_mounts:type_name -> grpc.SharedMount
+	58, // 5: grpc.ExecProcessRequest.string_user:type_name -> grpc.StringUser
+	76, // 6: grpc.ExecProcessRequest.process:type_name -> grpc.Process
+	77, // 7: grpc.UpdateContainerRequest.resources:type_name -> grpc.LinuxResources
 	11, // 8: grpc.CpuStats.cpu_usage:type_name -> grpc.CpuUsage
 	12, // 9: grpc.CpuStats.throttling_data:type_name -> grpc.ThrottlingData
 	15, // 10: grpc.MemoryStats.usage:type_name -> grpc.MemoryData
 	15, // 11: grpc.MemoryStats.swap_usage:type_name -> grpc.MemoryData
 	15, // 12: grpc.MemoryStats.kernel_usage:type_name -> grpc.MemoryData
-	72, // 13: grpc.MemoryStats.stats:type_name -> grpc.MemoryStats.StatsEntry
+	73, // 13: grpc.MemoryStats.stats:type_name -> grpc.MemoryStats.StatsEntry
 	17, // 14: grpc.BlkioStats.io_service_bytes_recursive:type_name -> grpc.BlkioStatsEntry
 	17, // 15: grpc.BlkioStats.io_serviced_recursive:type_name -> grpc.BlkioStatsEntry
 	17, // 16: grpc.BlkioStats.io_queued_recursive:type_name -> grpc.BlkioStatsEntry
@@ -5415,21 +5478,21 @@ var file_agent_proto_depIdxs = []int32{
 	16, // 23: grpc.CgroupStats.memory_stats:type_name -> grpc.MemoryStats
 	14, // 24: grpc.CgroupStats.pids_stats:type_name -> grpc.PidsStats
 	18, // 25: grpc.CgroupStats.blkio_stats:type_name -> grpc.BlkioStats
-	73, // 26: grpc.CgroupStats.hugetlb_stats:type_name -> grpc.CgroupStats.HugetlbStatsEntry
+	74, // 26: grpc.CgroupStats.hugetlb_stats:type_name -> grpc.CgroupStats.HugetlbStatsEntry
 	20, // 27: grpc.StatsContainerResponse.cgroup_stats:type_name -> grpc.CgroupStats
 	21, // 28: grpc.StatsContainerResponse.network_stats:type_name -> grpc.NetworkStats
-	55, // 29: grpc.CreateSandboxRequest.storages:type_name -> grpc.Storage
+	56, // 29: grpc.CreateSandboxRequest.storages:type_name -> grpc.Storage
 	29, // 30: grpc.CreateSandboxRequest.kernel_modules:type_name -> grpc.KernelModule
-	77, // 31: grpc.Interfaces.Interfaces:type_name -> types.Interface
-	78, // 32: grpc.Routes.Routes:type_name -> types.Route
-	77, // 33: grpc.UpdateInterfaceRequest.interface:type_name -> types.Interface
-	34, // 34: grpc.UpdateRoutesRequest.routes:type_name -> grpc.Routes
-	55, // 35: grpc.UpdateEphemeralMountsRequest.storages:type_name -> grpc.Storage
-	79, // 36: grpc.ARPNeighbors.ARPNeighbors:type_name -> types.ARPNeighbor
-	40, // 37: grpc.AddARPNeighborsRequest.neighbors:type_name -> grpc.ARPNeighbors
-	48, // 38: grpc.GuestDetailsResponse.agent_details:type_name -> grpc.AgentDetails
-	80, // 39: grpc.FSGroup.group_change_policy:type_name -> types.FSGroupChangePolicy
-	53, // 40: grpc.Storage.fs_group:type_name -> grpc.FSGroup
+	78, // 31: grpc.Interfaces.Interfaces:type_name -> types.Interface
+	79, // 32: grpc.Routes.Routes:type_name -> types.Route
+	78, // 33: grpc.UpdateInterfaceRequest.interface:type_name -> types.Interface
+	35, // 34: grpc.UpdateRoutesRequest.routes:type_name -> grpc.Routes
+	56, // 35: grpc.UpdateEphemeralMountsRequest.storages:type_name -> grpc.Storage
+	80, // 36: grpc.ARPNeighbors.ARPNeighbors:type_name -> types.ARPNeighbor
+	41, // 37: grpc.AddARPNeighborsRequest.neighbors:type_name -> grpc.ARPNeighbors
+	49, // 38: grpc.GuestDetailsResponse.agent_details:type_name -> grpc.AgentDetails
+	81, // 39: grpc.FSGroup.group_change_policy:type_name -> types.FSGroupChangePolicy
+	54, // 40: grpc.Storage.fs_group:type_name -> grpc.FSGroup
 	19, // 41: grpc.CgroupStats.HugetlbStatsEntry.value:type_name -> grpc.HugetlbStats
 	0,  // 42: grpc.AgentService.CreateContainer:input_type -> grpc.CreateContainerRequest
 	1,  // 43: grpc.AgentService.StartContainer:input_type -> grpc.StartContainerRequest
@@ -5438,85 +5501,87 @@ var file_agent_proto_depIdxs = []int32{
 	4,  // 46: grpc.AgentService.SignalProcess:input_type -> grpc.SignalProcessRequest
 	5,  // 47: grpc.AgentService.WaitProcess:input_type -> grpc.WaitProcessRequest
 	7,  // 48: grpc.AgentService.UpdateContainer:input_type -> grpc.UpdateContainerRequest
-	37, // 49: grpc.AgentService.UpdateEphemeralMounts:input_type -> grpc.UpdateEphemeralMountsRequest
+	38, // 49: grpc.AgentService.UpdateEphemeralMounts:input_type -> grpc.UpdateEphemeralMountsRequest
 	8,  // 50: grpc.AgentService.StatsContainer:input_type -> grpc.StatsContainerRequest
 	9,  // 51: grpc.AgentService.PauseContainer:input_type -> grpc.PauseContainerRequest
 	10, // 52: grpc.AgentService.ResumeContainer:input_type -> grpc.ResumeContainerRequest
-	32, // 53: grpc.AgentService.RemoveStaleVirtiofsShareMounts:input_type -> grpc.RemoveStaleVirtiofsShareMountsRequest
-	68, // 54: grpc.AgentService.GetDiagnosticData:input_type -> grpc.GetDiagnosticDataRequest
+	33, // 53: grpc.AgentService.RemoveStaleVirtiofsShareMounts:input_type -> grpc.RemoveStaleVirtiofsShareMountsRequest
+	69, // 54: grpc.AgentService.GetDiagnosticData:input_type -> grpc.GetDiagnosticDataRequest
 	23, // 55: grpc.AgentService.WriteStdin:input_type -> grpc.WriteStreamRequest
 	25, // 56: grpc.AgentService.ReadStdout:input_type -> grpc.ReadStreamRequest
 	25, // 57: grpc.AgentService.ReadStderr:input_type -> grpc.ReadStreamRequest
 	27, // 58: grpc.AgentService.CloseStdin:input_type -> grpc.CloseStdinRequest
 	28, // 59: grpc.AgentService.TtyWinResize:input_type -> grpc.TtyWinResizeRequest
-	35, // 60: grpc.AgentService.UpdateInterface:input_type -> grpc.UpdateInterfaceRequest
-	36, // 61: grpc.AgentService.UpdateRoutes:input_type -> grpc.UpdateRoutesRequest
-	38, // 62: grpc.AgentService.ListInterfaces:input_type -> grpc.ListInterfacesRequest
-	39, // 63: grpc.AgentService.ListRoutes:input_type -> grpc.ListRoutesRequest
-	41, // 64: grpc.AgentService.AddARPNeighbors:input_type -> grpc.AddARPNeighborsRequest
-	42, // 65: grpc.AgentService.GetIPTables:input_type -> grpc.GetIPTablesRequest
-	44, // 66: grpc.AgentService.SetIPTables:input_type -> grpc.SetIPTablesRequest
-	63, // 67: grpc.AgentService.GetMetrics:input_type -> grpc.GetMetricsRequest
-	70, // 68: grpc.AgentService.MemAgentMemcgSet:input_type -> grpc.MemAgentMemcgConfig
-	71, // 69: grpc.AgentService.MemAgentCompactSet:input_type -> grpc.MemAgentCompactConfig
+	36, // 60: grpc.AgentService.UpdateInterface:input_type -> grpc.UpdateInterfaceRequest
+	37, // 61: grpc.AgentService.UpdateRoutes:input_type -> grpc.UpdateRoutesRequest
+	39, // 62: grpc.AgentService.ListInterfaces:input_type -> grpc.ListInterfacesRequest
+	40, // 63: grpc.AgentService.ListRoutes:input_type -> grpc.ListRoutesRequest
+	42, // 64: grpc.AgentService.AddARPNeighbors:input_type -> grpc.AddARPNeighborsRequest
+	43, // 65: grpc.AgentService.GetIPTables:input_type -> grpc.GetIPTablesRequest
+	45, // 66: grpc.AgentService.SetIPTables:input_type -> grpc.SetIPTablesRequest
+	64, // 67: grpc.AgentService.GetMetrics:input_type -> grpc.GetMetricsRequest
+	71, // 68: grpc.AgentService.MemAgentMemcgSet:input_type -> grpc.MemAgentMemcgConfig
+	72, // 69: grpc.AgentService.MemAgentCompactSet:input_type -> grpc.MemAgentCompactConfig
 	30, // 70: grpc.AgentService.CreateSandbox:input_type -> grpc.CreateSandboxRequest
-	31, // 71: grpc.AgentService.DestroySandbox:input_type -> grpc.DestroySandboxRequest
-	46, // 72: grpc.AgentService.OnlineCPUMem:input_type -> grpc.OnlineCPUMemRequest
-	47, // 73: grpc.AgentService.ReseedRandomDev:input_type -> grpc.ReseedRandomDevRequest
-	49, // 74: grpc.AgentService.GetGuestDetails:input_type -> grpc.GuestDetailsRequest
-	51, // 75: grpc.AgentService.MemHotplugByProbe:input_type -> grpc.MemHotplugByProbeRequest
-	52, // 76: grpc.AgentService.SetGuestDateTime:input_type -> grpc.SetGuestDateTimeRequest
-	58, // 77: grpc.AgentService.CopyFile:input_type -> grpc.CopyFileRequest
-	59, // 78: grpc.AgentService.GetOOMEvent:input_type -> grpc.GetOOMEventRequest
-	61, // 79: grpc.AgentService.AddSwap:input_type -> grpc.AddSwapRequest
-	62, // 80: grpc.AgentService.AddSwapPath:input_type -> grpc.AddSwapPathRequest
-	65, // 81: grpc.AgentService.GetVolumeStats:input_type -> grpc.VolumeStatsRequest
-	66, // 82: grpc.AgentService.ResizeVolume:input_type -> grpc.ResizeVolumeRequest
-	67, // 83: grpc.AgentService.SetPolicy:input_type -> grpc.SetPolicyRequest
-	81, // 84: grpc.AgentService.CreateContainer:output_type -> google.protobuf.Empty
-	81, // 85: grpc.AgentService.StartContainer:output_type -> google.protobuf.Empty
-	81, // 86: grpc.AgentService.RemoveContainer:output_type -> google.protobuf.Empty
-	81, // 87: grpc.AgentService.ExecProcess:output_type -> google.protobuf.Empty
-	81, // 88: grpc.AgentService.SignalProcess:output_type -> google.protobuf.Empty
-	6,  // 89: grpc.AgentService.WaitProcess:output_type -> grpc.WaitProcessResponse
-	81, // 90: grpc.AgentService.UpdateContainer:output_type -> google.protobuf.Empty
-	81, // 91: grpc.AgentService.UpdateEphemeralMounts:output_type -> google.protobuf.Empty
-	22, // 92: grpc.AgentService.StatsContainer:output_type -> grpc.StatsContainerResponse
-	81, // 93: grpc.AgentService.PauseContainer:output_type -> google.protobuf.Empty
-	81, // 94: grpc.AgentService.ResumeContainer:output_type -> google.protobuf.Empty
-	81, // 95: grpc.AgentService.RemoveStaleVirtiofsShareMounts:output_type -> google.protobuf.Empty
-	69, // 96: grpc.AgentService.GetDiagnosticData:output_type -> grpc.GetDiagnosticDataResponse
-	24, // 97: grpc.AgentService.WriteStdin:output_type -> grpc.WriteStreamResponse
-	26, // 98: grpc.AgentService.ReadStdout:output_type -> grpc.ReadStreamResponse
-	26, // 99: grpc.AgentService.ReadStderr:output_type -> grpc.ReadStreamResponse
-	81, // 100: grpc.AgentService.CloseStdin:output_type -> google.protobuf.Empty
-	81, // 101: grpc.AgentService.TtyWinResize:output_type -> google.protobuf.Empty
-	77, // 102: grpc.AgentService.UpdateInterface:output_type -> types.Interface
-	34, // 103: grpc.AgentService.UpdateRoutes:output_type -> grpc.Routes
-	33, // 104: grpc.AgentService.ListInterfaces:output_type -> grpc.Interfaces
-	34, // 105: grpc.AgentService.ListRoutes:output_type -> grpc.Routes
-	81, // 106: grpc.AgentService.AddARPNeighbors:output_type -> google.protobuf.Empty
-	43, // 107: grpc.AgentService.GetIPTables:output_type -> grpc.GetIPTablesResponse
-	45, // 108: grpc.AgentService.SetIPTables:output_type -> grpc.SetIPTablesResponse
-	64, // 109: grpc.AgentService.GetMetrics:output_type -> grpc.Metrics
-	81, // 110: grpc.AgentService.MemAgentMemcgSet:output_type -> google.protobuf.Empty
-	81, // 111: grpc.AgentService.MemAgentCompactSet:output_type -> google.protobuf.Empty
-	81, // 112: grpc.AgentService.CreateSandbox:output_type -> google.protobuf.Empty
-	81, // 113: grpc.AgentService.DestroySandbox:output_type -> google.protobuf.Empty
-	81, // 114: grpc.AgentService.OnlineCPUMem:output_type -> google.protobuf.Empty
-	81, // 115: grpc.AgentService.ReseedRandomDev:output_type -> google.protobuf.Empty
-	50, // 116: grpc.AgentService.GetGuestDetails:output_type -> grpc.GuestDetailsResponse
-	81, // 117: grpc.AgentService.MemHotplugByProbe:output_type -> google.protobuf.Empty
-	81, // 118: grpc.AgentService.SetGuestDateTime:output_type -> google.protobuf.Empty
-	81, // 119: grpc.AgentService.CopyFile:output_type -> google.protobuf.Empty
-	60, // 120: grpc.AgentService.GetOOMEvent:output_type -> grpc.OOMEvent
-	81, // 121: grpc.AgentService.AddSwap:output_type -> google.protobuf.Empty
-	81, // 122: grpc.AgentService.AddSwapPath:output_type -> google.protobuf.Empty
-	82, // 123: grpc.AgentService.GetVolumeStats:output_type -> grpc.VolumeStatsResponse
-	81, // 124: grpc.AgentService.ResizeVolume:output_type -> google.protobuf.Empty
-	81, // 125: grpc.AgentService.SetPolicy:output_type -> google.protobuf.Empty
-	84, // [84:126] is the sub-list for method output_type
-	42, // [42:84] is the sub-list for method input_type
+	31, // 71: grpc.AgentService.SetSandboxHosts:input_type -> grpc.SetSandboxHostsRequest
+	32, // 72: grpc.AgentService.DestroySandbox:input_type -> grpc.DestroySandboxRequest
+	47, // 73: grpc.AgentService.OnlineCPUMem:input_type -> grpc.OnlineCPUMemRequest
+	48, // 74: grpc.AgentService.ReseedRandomDev:input_type -> grpc.ReseedRandomDevRequest
+	50, // 75: grpc.AgentService.GetGuestDetails:input_type -> grpc.GuestDetailsRequest
+	52, // 76: grpc.AgentService.MemHotplugByProbe:input_type -> grpc.MemHotplugByProbeRequest
+	53, // 77: grpc.AgentService.SetGuestDateTime:input_type -> grpc.SetGuestDateTimeRequest
+	59, // 78: grpc.AgentService.CopyFile:input_type -> grpc.CopyFileRequest
+	60, // 79: grpc.AgentService.GetOOMEvent:input_type -> grpc.GetOOMEventRequest
+	62, // 80: grpc.AgentService.AddSwap:input_type -> grpc.AddSwapRequest
+	63, // 81: grpc.AgentService.AddSwapPath:input_type -> grpc.AddSwapPathRequest
+	66, // 82: grpc.AgentService.GetVolumeStats:input_type -> grpc.VolumeStatsRequest
+	67, // 83: grpc.AgentService.ResizeVolume:input_type -> grpc.ResizeVolumeRequest
+	68, // 84: grpc.AgentService.SetPolicy:input_type -> grpc.SetPolicyRequest
+	82, // 85: grpc.AgentService.CreateContainer:output_type -> google.protobuf.Empty
+	82, // 86: grpc.AgentService.StartContainer:output_type -> google.protobuf.Empty
+	82, // 87: grpc.AgentService.RemoveContainer:output_type -> google.protobuf.Empty
+	82, // 88: grpc.AgentService.ExecProcess:output_type -> google.protobuf.Empty
+	82, // 89: grpc.AgentService.SignalProcess:output_type -> google.protobuf.Empty
+	6,  // 90: grpc.AgentService.WaitProcess:output_type -> grpc.WaitProcessResponse
+	82, // 91: grpc.AgentService.UpdateContainer:output_type -> google.protobuf.Empty
+	82, // 92: grpc.AgentService.UpdateEphemeralMounts:output_type -> google.protobuf.Empty
+	22, // 93: grpc.AgentService.StatsContainer:output_type -> grpc.StatsContainerResponse
+	82, // 94: grpc.AgentService.PauseContainer:output_type -> google.protobuf.Empty
+	82, // 95: grpc.AgentService.ResumeContainer:output_type -> google.protobuf.Empty
+	82, // 96: grpc.AgentService.RemoveStaleVirtiofsShareMounts:output_type -> google.protobuf.Empty
+	70, // 97: grpc.AgentService.GetDiagnosticData:output_type -> grpc.GetDiagnosticDataResponse
+	24, // 98: grpc.AgentService.WriteStdin:output_type -> grpc.WriteStreamResponse
+	26, // 99: grpc.AgentService.ReadStdout:output_type -> grpc.ReadStreamResponse
+	26, // 100: grpc.AgentService.ReadStderr:output_type -> grpc.ReadStreamResponse
+	82, // 101: grpc.AgentService.CloseStdin:output_type -> google.protobuf.Empty
+	82, // 102: grpc.AgentService.TtyWinResize:output_type -> google.protobuf.Empty
+	78, // 103: grpc.AgentService.UpdateInterface:output_type -> types.Interface
+	35, // 104: grpc.AgentService.UpdateRoutes:output_type -> grpc.Routes
+	34, // 105: grpc.AgentService.ListInterfaces:output_type -> grpc.Interfaces
+	35, // 106: grpc.AgentService.ListRoutes:output_type -> grpc.Routes
+	82, // 107: grpc.AgentService.AddARPNeighbors:output_type -> google.protobuf.Empty
+	44, // 108: grpc.AgentService.GetIPTables:output_type -> grpc.GetIPTablesResponse
+	46, // 109: grpc.AgentService.SetIPTables:output_type -> grpc.SetIPTablesResponse
+	65, // 110: grpc.AgentService.GetMetrics:output_type -> grpc.Metrics
+	82, // 111: grpc.AgentService.MemAgentMemcgSet:output_type -> google.protobuf.Empty
+	82, // 112: grpc.AgentService.MemAgentCompactSet:output_type -> google.protobuf.Empty
+	82, // 113: grpc.AgentService.CreateSandbox:output_type -> google.protobuf.Empty
+	82, // 114: grpc.AgentService.SetSandboxHosts:output_type -> google.protobuf.Empty
+	82, // 115: grpc.AgentService.DestroySandbox:output_type -> google.protobuf.Empty
+	82, // 116: grpc.AgentService.OnlineCPUMem:output_type -> google.protobuf.Empty
+	82, // 117: grpc.AgentService.ReseedRandomDev:output_type -> google.protobuf.Empty
+	51, // 118: grpc.AgentService.GetGuestDetails:output_type -> grpc.GuestDetailsResponse
+	82, // 119: grpc.AgentService.MemHotplugByProbe:output_type -> google.protobuf.Empty
+	82, // 120: grpc.AgentService.SetGuestDateTime:output_type -> google.protobuf.Empty
+	82, // 121: grpc.AgentService.CopyFile:output_type -> google.protobuf.Empty
+	61, // 122: grpc.AgentService.GetOOMEvent:output_type -> grpc.OOMEvent
+	82, // 123: grpc.AgentService.AddSwap:output_type -> google.protobuf.Empty
+	82, // 124: grpc.AgentService.AddSwapPath:output_type -> google.protobuf.Empty
+	83, // 125: grpc.AgentService.GetVolumeStats:output_type -> grpc.VolumeStatsResponse
+	82, // 126: grpc.AgentService.ResizeVolume:output_type -> google.protobuf.Empty
+	82, // 127: grpc.AgentService.SetPolicy:output_type -> google.protobuf.Empty
+	85, // [85:128] is the sub-list for method output_type
+	42, // [42:85] is the sub-list for method input_type
 	42, // [42:42] is the sub-list for extension type_name
 	42, // [42:42] is the sub-list for extension extendee
 	0,  // [0:42] is the sub-list for field type_name
@@ -5903,7 +5968,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[31].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DestroySandboxRequest); i {
+			switch v := v.(*SetSandboxHostsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5915,7 +5980,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[32].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RemoveStaleVirtiofsShareMountsRequest); i {
+			switch v := v.(*DestroySandboxRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5927,7 +5992,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Interfaces); i {
+			switch v := v.(*RemoveStaleVirtiofsShareMountsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5939,7 +6004,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Routes); i {
+			switch v := v.(*Interfaces); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5951,7 +6016,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateInterfaceRequest); i {
+			switch v := v.(*Routes); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5963,7 +6028,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateRoutesRequest); i {
+			switch v := v.(*UpdateInterfaceRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5975,7 +6040,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UpdateEphemeralMountsRequest); i {
+			switch v := v.(*UpdateRoutesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5987,7 +6052,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ListInterfacesRequest); i {
+			switch v := v.(*UpdateEphemeralMountsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -5999,7 +6064,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ListRoutesRequest); i {
+			switch v := v.(*ListInterfacesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6011,7 +6076,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[40].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ARPNeighbors); i {
+			switch v := v.(*ListRoutesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6023,7 +6088,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[41].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddARPNeighborsRequest); i {
+			switch v := v.(*ARPNeighbors); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6035,7 +6100,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[42].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetIPTablesRequest); i {
+			switch v := v.(*AddARPNeighborsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6047,7 +6112,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetIPTablesResponse); i {
+			switch v := v.(*GetIPTablesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6059,7 +6124,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetIPTablesRequest); i {
+			switch v := v.(*GetIPTablesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6071,7 +6136,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[45].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetIPTablesResponse); i {
+			switch v := v.(*SetIPTablesRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6083,7 +6148,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[46].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*OnlineCPUMemRequest); i {
+			switch v := v.(*SetIPTablesResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6095,7 +6160,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[47].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReseedRandomDevRequest); i {
+			switch v := v.(*OnlineCPUMemRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6107,7 +6172,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[48].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AgentDetails); i {
+			switch v := v.(*ReseedRandomDevRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6119,7 +6184,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[49].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GuestDetailsRequest); i {
+			switch v := v.(*AgentDetails); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6131,7 +6196,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[50].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GuestDetailsResponse); i {
+			switch v := v.(*GuestDetailsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6143,7 +6208,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[51].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MemHotplugByProbeRequest); i {
+			switch v := v.(*GuestDetailsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6155,7 +6220,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetGuestDateTimeRequest); i {
+			switch v := v.(*MemHotplugByProbeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6167,7 +6232,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*FSGroup); i {
+			switch v := v.(*SetGuestDateTimeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6179,7 +6244,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SharedMount); i {
+			switch v := v.(*FSGroup); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6191,7 +6256,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Storage); i {
+			switch v := v.(*SharedMount); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6203,7 +6268,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Device); i {
+			switch v := v.(*Storage); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6215,7 +6280,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StringUser); i {
+			switch v := v.(*Device); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6227,7 +6292,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CopyFileRequest); i {
+			switch v := v.(*StringUser); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6239,7 +6304,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetOOMEventRequest); i {
+			switch v := v.(*CopyFileRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6251,7 +6316,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*OOMEvent); i {
+			switch v := v.(*GetOOMEventRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6263,7 +6328,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddSwapRequest); i {
+			switch v := v.(*OOMEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6275,7 +6340,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[62].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AddSwapPathRequest); i {
+			switch v := v.(*AddSwapRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6287,7 +6352,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetMetricsRequest); i {
+			switch v := v.(*AddSwapPathRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6299,7 +6364,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[64].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Metrics); i {
+			switch v := v.(*GetMetricsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6311,7 +6376,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[65].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*VolumeStatsRequest); i {
+			switch v := v.(*Metrics); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6323,7 +6388,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[66].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ResizeVolumeRequest); i {
+			switch v := v.(*VolumeStatsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6335,7 +6400,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[67].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetPolicyRequest); i {
+			switch v := v.(*ResizeVolumeRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6347,7 +6412,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[68].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetDiagnosticDataRequest); i {
+			switch v := v.(*SetPolicyRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6359,7 +6424,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[69].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GetDiagnosticDataResponse); i {
+			switch v := v.(*GetDiagnosticDataRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6371,7 +6436,7 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[70].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MemAgentMemcgConfig); i {
+			switch v := v.(*GetDiagnosticDataResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -6383,6 +6448,18 @@ func file_agent_proto_init() {
 			}
 		}
 		file_agent_proto_msgTypes[71].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*MemAgentMemcgConfig); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_agent_proto_msgTypes[72].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MemAgentCompactConfig); i {
 			case 0:
 				return &v.state
@@ -6395,15 +6472,15 @@ func file_agent_proto_init() {
 			}
 		}
 	}
-	file_agent_proto_msgTypes[70].OneofWrappers = []interface{}{}
 	file_agent_proto_msgTypes[71].OneofWrappers = []interface{}{}
+	file_agent_proto_msgTypes[72].OneofWrappers = []interface{}{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_agent_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   74,
+			NumMessages:   75,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
