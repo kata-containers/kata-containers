@@ -44,7 +44,15 @@ const EROFS_FS_TYPE: &str = "erofs";
 const MKFS_EROFS: &str = "mkfs.erofs";
 
 /// The kernel requires the block size to match the guest page size.
-const EROFS_BLOCK_SIZE: &str = "4096";
+const EROFS_BLOCK_SIZE: u64 = 4096;
+
+const VERITYSETUP: &str = "veritysetup";
+
+/// veritysetup draws a random salt unless it is given one, which would put the
+/// root hash back to differing on every build. A fixed salt costs nothing
+/// here: salting defends against precomputation across images, and the root
+/// hash is something we publish anyway.
+const VERITY_SALT: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// mkfs.erofs draws a random filesystem UUID unless it is given one, which on
 /// its own makes two images of identical content differ. Pin it so the bytes
@@ -84,12 +92,12 @@ impl ErofsVolume {
         let entry_name = entry_name(m.destination())?;
 
         let image_path = image_path(sid, cid, m.destination())?;
-        build_image(&src, &entry_name, &image_path)
+        let verity = build_image(&src, &entry_name, &image_path)
             .await
             .with_context(|| format!("build erofs image for {source}"))?;
 
         // The image must not outlive a failed attach.
-        let volume = Self::attach(d, m, sid, &src, &entry_name, &image_path).await;
+        let volume = Self::attach(d, m, sid, &src, &entry_name, &image_path, &verity).await;
         if volume.is_err() {
             remove_image(&image_path);
         }
@@ -103,6 +111,7 @@ impl ErofsVolume {
         src: &Path,
         entry_name: &str,
         image_path: &Path,
+        verity: &Verity,
     ) -> Result<Self> {
         let blkdev_info = get_block_device_info(d).await;
         let block_device_config = BlockConfigModern {
@@ -126,7 +135,7 @@ impl ErofsVolume {
         .context("attach erofs volume device")?;
 
         let mount_options = mount_options_for(src);
-        let (storage, mut mount, device_id) = handle_block_volume(
+        let (mut storage, mut mount, device_id) = handle_block_volume(
             device_info,
             m,
             true,
@@ -136,6 +145,10 @@ impl ErofsVolume {
         )
         .await
         .context("handle erofs block volume")?;
+
+        // Added here rather than through handle_block_volume, whose options
+        // also end up on the container's bind mount, where these do not belong.
+        storage.options.extend(verity.storage_options());
 
         // An image root is always a directory, so a file source sits one level
         // inside the mount point.
@@ -269,7 +282,7 @@ fn image_path(sid: &str, cid: &str, destination: &Path) -> Result<PathBuf> {
         )))
 }
 
-async fn build_image(src: &Path, entry_name: &str, image_path: &Path) -> Result<()> {
+async fn build_image(src: &Path, entry_name: &str, image_path: &Path) -> Result<Verity> {
     let dir = image_path
         .parent()
         .ok_or_else(|| anyhow!("image path {} has no parent", image_path.display()))?;
@@ -301,10 +314,12 @@ async fn build_image(src: &Path, entry_name: &str, image_path: &Path) -> Result<
     drop(staging);
     result?;
 
+    let verity = append_verity_tree(image_path).await?;
+
     fs::set_permissions(image_path, fs::Permissions::from_mode(IMAGE_MODE))
         .with_context(|| format!("set permissions on {}", image_path.display()))?;
 
-    Ok(())
+    Ok(verity)
 }
 
 fn stage_file(src: &Path, staged: &Path) -> Result<()> {
@@ -316,6 +331,106 @@ fn stage_file(src: &Path, staged: &Path) -> Result<()> {
     fs::copy(src, staged)
         .with_context(|| format!("stage {} for imaging", src.display()))
         .map(|_| ())
+}
+
+/// What the guest needs in order to check the image against what we measured.
+pub(crate) struct Verity {
+    root_hash: String,
+    /// Where the hash tree starts, which is also the size of the image proper.
+    hash_offset: u64,
+}
+
+impl Verity {
+    /// Read by the agent, which builds the dm-verity device from them before
+    /// mounting. Not mount options: the agent strips the prefix before it
+    /// calls mount().
+    fn storage_options(&self) -> Vec<String> {
+        vec![
+            "X-kata.dmverity-enabled=true".to_string(),
+            format!("X-kata.dmverity.roothash={}", self.root_hash),
+            format!("X-kata.dmverity.hashoffset={}", self.hash_offset),
+            format!("X-kata.dmverity.blocksize={}", EROFS_BLOCK_SIZE),
+            format!("X-kata.dmverity.hashsize={}", EROFS_BLOCK_SIZE),
+            format!("X-kata.dmverity.salt={}", VERITY_SALT),
+        ]
+    }
+}
+
+/// Append a dm-verity hash tree to the image, so that the guest can check
+/// every block it reads against a hash rather than trusting the device.
+///
+/// Tree and image share one file, which keeps it to a single device: the
+/// image occupies everything below the offset and the tree everything above.
+///
+/// The root hash is worth only as much as the ability to recompute it, and it
+/// is tied to the erofs-utils version: 1.7.1 and 1.9.3 number inodes
+/// differently, so their images never agree. Two separate builds of one
+/// version do agree, so pinning the version is enough, and kata-deploy
+/// already pins it through the erofs-utils image.
+async fn append_verity_tree(image_path: &Path) -> Result<Verity> {
+    // veritysetup wants the hash area block-aligned, and mkfs.erofs does not
+    // promise a whole number of blocks. Padding is invisible to erofs, which
+    // reads no further than its own superblock says.
+    let data_size = pad_to_block(image_path)?;
+
+    let output = Command::new(VERITYSETUP)
+        .arg("format")
+        .arg(image_path)
+        .arg(image_path)
+        .arg(format!("--hash-offset={}", data_size))
+        .arg(format!("--data-blocks={}", data_size / EROFS_BLOCK_SIZE))
+        .arg(format!("--data-block-size={}", EROFS_BLOCK_SIZE))
+        .arg(format!("--hash-block-size={}", EROFS_BLOCK_SIZE))
+        .arg(format!("--salt={}", VERITY_SALT))
+        // veritysetup stamps a random UUID into the hash superblock, which
+        // leaves the image differing between builds even though the root
+        // hash does not.
+        .arg(format!("--uuid={}", EROFS_IMAGE_UUID))
+        .output()
+        .await
+        .with_context(|| format!("run {VERITYSETUP}; is cryptsetup installed?"))?;
+
+    if !output.status.success() {
+        return Err(anyhow!(
+            "{VERITYSETUP} failed for {} ({}): {}",
+            image_path.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    Ok(Verity {
+        root_hash: parse_root_hash(&String::from_utf8_lossy(&output.stdout))?,
+        hash_offset: data_size,
+    })
+}
+
+fn pad_to_block(image_path: &Path) -> Result<u64> {
+    let size = fs::metadata(image_path)?.len();
+    let padded = size.div_ceil(EROFS_BLOCK_SIZE) * EROFS_BLOCK_SIZE;
+
+    if padded != size {
+        fs::OpenOptions::new()
+            .write(true)
+            .open(image_path)?
+            .set_len(padded)?;
+    }
+
+    if padded == 0 {
+        return Err(anyhow!("{} is empty", image_path.display()));
+    }
+
+    Ok(padded)
+}
+
+fn parse_root_hash(output: &str) -> Result<String> {
+    output
+        .lines()
+        .find_map(|line| line.strip_prefix("Root hash:"))
+        .map(str::trim)
+        .filter(|hash| !hash.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("no root hash in {VERITYSETUP} output: {output}"))
 }
 
 /// Kubelet's atomic writer keeps the payload in a directory named after the
@@ -401,7 +516,7 @@ fn clone_metadata(src: &Path, dst: &Path) -> Result<()> {
 async fn run_mkfs(tree: &Path, image_path: &Path) -> Result<()> {
     let output = Command::new(MKFS_EROFS)
         .arg("-b")
-        .arg(EROFS_BLOCK_SIZE)
+        .arg(EROFS_BLOCK_SIZE.to_string())
         .arg("-T")
         .arg("0")
         .arg("-U")
@@ -432,8 +547,12 @@ mod tests {
     use tempfile::TempDir;
 
     fn erofs_utils_available() -> bool {
-        StdCommand::new(MKFS_EROFS)
-            .arg("--help")
+        tool_available(MKFS_EROFS, "--help") && tool_available(VERITYSETUP, "--version")
+    }
+
+    fn tool_available(tool: &str, probe: &str) -> bool {
+        StdCommand::new(tool)
+            .arg(probe)
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
@@ -612,6 +731,34 @@ mod tests {
             Path::new(CANONICAL_DATA_DIR)
         );
         assert_eq!(fs::read(out.join("key-a")).unwrap(), b"value-a");
+    }
+
+    #[test]
+    fn test_root_hash_is_read_from_veritysetup_output() {
+        let output = "VERITY header information for /img\n\
+                      UUID:                 8f3f\n\
+                      Hash type:            1\n\
+                      Data blocks:          1\n\
+                      Salt:                 0000\n\
+                      Root hash:            9c4a1e2f\n";
+
+        assert_eq!(parse_root_hash(output).unwrap(), "9c4a1e2f");
+        assert!(parse_root_hash("Root hash:   \n").is_err());
+        assert!(parse_root_hash("no hash here").is_err());
+    }
+
+    #[test]
+    fn test_verity_storage_options_carry_what_the_guest_needs() {
+        let options = Verity {
+            root_hash: "9c4a1e2f".to_string(),
+            hash_offset: 8192,
+        }
+        .storage_options();
+
+        assert!(options.contains(&"X-kata.dmverity-enabled=true".to_string()));
+        assert!(options.contains(&"X-kata.dmverity.roothash=9c4a1e2f".to_string()));
+        assert!(options.contains(&"X-kata.dmverity.hashoffset=8192".to_string()));
+        assert!(options.iter().all(|o| o.starts_with("X-kata.")));
     }
 
     #[test]
