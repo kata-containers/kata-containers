@@ -559,7 +559,7 @@ fn is_lower_storage(storage: &Storage) -> bool {
 }
 
 /// Check if dm-verity is enabled for this storage
-fn is_dmverity_enabled(storage: &Storage) -> bool {
+pub(crate) fn is_dmverity_enabled(storage: &Storage) -> bool {
     storage.options.iter().any(|o| o == OPT_DMVERITY_ENABLED)
 }
 
