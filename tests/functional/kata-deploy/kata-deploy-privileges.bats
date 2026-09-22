@@ -97,6 +97,14 @@ stage_container() {
 	'
 }
 
+host_mount_qualifier() {
+	echo "${1}" | grep -A1 -E '^                  mountPath: /host$' | tail -1
+}
+
+env_value() {
+	echo "${1}" | grep -A1 -E "^                - name: ${2}\$" | tail -1
+}
+
 # One YAML document out of a rendered multi-document template, picked by name, so
 # that a test can assert what a single ClusterRole grants rather than counting
 # substrings across every document at once.
@@ -207,6 +215,63 @@ rbac_doc() {
 	refute_match "${daemonset}" 'privileged: true'
 }
 
+@test "Helm template (job mode): rootless adds one privileged stage and nothing else" {
+	local stage loader devices
+	loader=$(stage_container install load-kernel-modules --set rootless=true)
+	devices=$(stage_container install rootless-devices --set rootless=true)
+
+	[[ -n "${devices}" ]]
+	echo "${devices}" | grep -q 'install-stage-rootless-devices'
+
+	echo "${devices}" | grep -qE '^                privileged: true$'
+	[[ "$(host_mount_qualifier "${devices}")" != *readOnly* ]]
+	[[ "$(host_mount_qualifier "${loader}")" == *"readOnly: true"* ]]
+
+	echo "${devices}" | grep -qE '^                  mountPath: /host-dev$'
+	echo "${devices}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+	[[ "$(env_value "${devices}" ROOTLESS)" == *'value: "true"'* ]]
+
+	local container
+	for container in host-check artifacts cri; do
+		container=$(stage_container install "${container}" --set rootless=true)
+		[[ -n "${container}" ]]
+		echo "${container}" | grep -qE '^                privileged: false$'
+		refute_match "${container}" 'mountPath: /host$'
+		refute_match "${container}" 'mountPath: /host-dev$'
+	done
+
+	local remove_artifacts revert_cri
+	remove_artifacts=$(stage_container cleanup remove-artifacts --set rootless=true)
+	revert_cri=$(stage_container cleanup revert-cri --set rootless=true)
+	echo "${remove_artifacts}" | grep -qE '^                privileged: false$'
+	echo "${remove_artifacts}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+	refute_match "${remove_artifacts}" 'mountPath: /host$'
+	refute_match "${revert_cri}" 'mountPath: /host-udev-rules.d$'
+}
+
+@test "Helm template: rootless is refused in daemonset mode" {
+	run helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=daemonset --set rootless=true
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q 'requires deploymentMode: job'
+
+	run helm template kata-deploy "${CHART_PATH}" --set rootless=true
+	[ "${status}" -eq 0 ]
+}
+
+@test "Helm template (job mode): rootless changes nothing when it is off" {
+	local default_render explicit_off
+	default_render=$(helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job)
+	explicit_off=$(helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job --set rootless=false)
+
+	[[ "${default_render}" == "${explicit_off}" ]]
+	refute_match "${default_render}" 'install-stage-rootless-devices'
+	refute_match "${default_render}" 'ROOTLESS'
+	refute_match "${default_render}" 'host-dev'
+	refute_match "${default_render}" 'udev-rules-d'
+}
+
 @test "Helm template (job mode): module loading runs before host validation" {
 	# The host check rejects a node whose kernel lacks EROFS or device-mapper,
 	# and that is only true after the modules are in.
@@ -217,6 +282,16 @@ rbac_doc() {
 	[[ "${actions}" == "$(printf '%s\n' \
 		install-stage-load-kernel-modules \
 		install-stage-host-check \
+		install-stage-artifacts \
+		install-stage-cri)" ]]
+
+	actions=$(per_node_jobs --set rootless=true |
+		grep -o 'install-stage-[a-z-]*' |
+		awk '!seen[$0]++')
+	[[ "${actions}" == "$(printf '%s\n' \
+		install-stage-load-kernel-modules \
+		install-stage-host-check \
+		install-stage-rootless-devices \
 		install-stage-artifacts \
 		install-stage-cri)" ]]
 }
