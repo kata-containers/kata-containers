@@ -325,7 +325,7 @@ struct Probe {
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TCPSocketAction {
-    port: String,
+    port: yaml::IntOrString,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     host: Option<String>,
@@ -343,7 +343,7 @@ struct GRPCAction {
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct HTTPGetAction {
-    port: String,
+    port: yaml::IntOrString,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     host: Option<String>,
@@ -1361,5 +1361,34 @@ mod tests {
         };
 
         assert_eq!(c.get_nvidia_pgpu_count(&keys), Some(3));
+    }
+
+    #[test]
+    fn int_or_string_fields_accept_both_forms() {
+        // Kubernetes types probe ports and rolling-update budgets as IntOrString,
+        // so a manifest may carry either `8080` and `1` or `"http"` and `"25%"`.
+        let probe: Probe = serde_yaml::from_str("tcpSocket:\n  port: 8080\n").unwrap();
+        assert!(matches!(
+            probe.tcpSocket.as_ref().unwrap().port,
+            yaml::IntOrString::Int(8080)
+        ));
+
+        let probe: Probe = serde_yaml::from_str("httpGet:\n  port: http\n").unwrap();
+        match &probe.httpGet.as_ref().unwrap().port {
+            yaml::IntOrString::String(name) => assert_eq!(name, "http"),
+            other => panic!("expected a named port, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_numeric_probe_port_is_not_emitted_as_a_string() {
+        // Kubernetes reads a quoted port as a named port. genpolicy's output
+        // comes from the untyped document, not these structs, so this keeps
+        // the structs safe to serialize if that ever changes.
+        let probe: Probe = serde_yaml::from_str("tcpSocket:\n  port: 8080\n").unwrap();
+        let emitted = serde_yaml::to_string(&probe).unwrap();
+
+        assert!(emitted.contains("port: 8080"), "{emitted}");
+        assert!(!emitted.contains("\"8080\""), "{emitted}");
     }
 }
