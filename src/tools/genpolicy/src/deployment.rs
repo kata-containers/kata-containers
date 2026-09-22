@@ -102,6 +102,10 @@ impl yaml::K8sResource for Deployment {
         self.metadata.get_namespace()
     }
 
+    fn get_pod_spec(&self) -> Option<&pod::PodSpec> {
+        Some(&self.spec.template.spec)
+    }
+
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<policy::KataMount>,

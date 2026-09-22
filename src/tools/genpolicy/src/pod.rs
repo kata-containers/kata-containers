@@ -79,6 +79,12 @@ pub struct PodSpec {
     hostname: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    subdomain: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hostAliases: Option<Vec<HostAlias>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hostNetwork: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -689,6 +695,33 @@ struct TopologySpreadConstraint {
     nodeTaintsPolicy: Option<String>,
 }
 
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct HostAlias {
+    ip: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hostnames: Option<Vec<String>>,
+}
+
+impl PodSpec {
+    pub fn fill_sandbox_hosts(&self, hosts: &mut policy::SandboxHosts) {
+        hosts.hostname = self.hostname.clone().unwrap_or_default();
+        hosts.subdomain = self.subdomain.clone().unwrap_or_default();
+
+        // In kubelet's format, as these reach the pod's hosts file verbatim.
+        hosts.aliases = self
+            .hostAliases
+            .iter()
+            .flatten()
+            .map(|alias| {
+                let names = alias.hostnames.clone().unwrap_or_default();
+                format!("{}\t{}", alias.ip, names.join("\t"))
+            })
+            .collect();
+    }
+}
+
 impl Container {
     pub async fn init(&mut self, config: &Config) {
         // Load container image properties from the registry.
@@ -1008,6 +1041,10 @@ impl yaml::K8sResource for Pod {
 
     fn get_namespace(&self) -> Option<String> {
         self.metadata.get_namespace()
+    }
+
+    fn get_pod_spec(&self) -> Option<&PodSpec> {
+        Some(&self.spec)
     }
 
     fn get_container_mounts_and_storages(

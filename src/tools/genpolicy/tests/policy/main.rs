@@ -15,7 +15,8 @@ mod tests {
     use json_patch::{patch, Patch};
     use protocols::agent::{
         AddARPNeighborsRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
-        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        RemoveContainerRequest, SetSandboxHostsRequest, UpdateInterfaceRequest,
+        UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,7 @@ mod tests {
         CreateSandboxRequest(CreateSandboxRequest),
         ExecProcessRequest(ExecProcessRequest),
         RemoveContainerRequest(RemoveContainerRequest),
+        SetSandboxHostsRequest(SetSandboxHostsRequest),
         UpdateInterfaceRequest(UpdateInterfaceRequest),
         UpdateRoutesRequest(UpdateRoutesRequest),
         AddARPNeighborsRequest(AddARPNeighborsRequest),
@@ -45,6 +47,7 @@ mod tests {
                 TestRequest::CreateSandboxRequest(_) => write!(f, "CreateSandboxRequest"),
                 TestRequest::ExecProcessRequest(_) => write!(f, "ExecProcessRequest"),
                 TestRequest::RemoveContainerRequest(_) => write!(f, "RemoveContainerRequest"),
+                TestRequest::SetSandboxHostsRequest(_) => write!(f, "SetSandboxHostsRequest"),
                 TestRequest::UpdateInterfaceRequest(_) => write!(f, "UpdateInterfaceRequest"),
                 TestRequest::UpdateRoutesRequest(_) => write!(f, "UpdateRoutesRequest"),
                 TestRequest::AddARPNeighborsRequest(_) => write!(f, "AddARPNeighborsRequest"),
@@ -394,6 +397,11 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_volumes_container_image() {
         runtests("createcontainer/volumes/container_image").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_volumes_erofs() {
+        runtests("createcontainer/volumes/erofs").await;
     }
 
     #[tokio::test]

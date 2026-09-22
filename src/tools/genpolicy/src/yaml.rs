@@ -77,6 +77,10 @@ pub trait K8sResource {
         panic!("Unsupported");
     }
 
+    fn get_pod_spec(&self) -> Option<&pod::PodSpec> {
+        None
+    }
+
     fn get_containers(&self) -> &Vec<pod::Container> {
         panic!("Unsupported");
     }
@@ -326,6 +330,16 @@ pub fn get_container_mounts_and_storages(
 
             mount_and_storage::get_image_mount_and_storage(settings, policy_mounts, volume.0);
         }
+    }
+
+    if settings.kata_config.erofs_volumes {
+        mount_and_storage::use_erofs_volumes(
+            settings,
+            policy_mounts,
+            storages,
+            container,
+            &podSpec.volumes,
+        );
     }
 }
 
