@@ -121,14 +121,15 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     ret.allowed
 
     # save to policy state
-    # key: input.container_id
-    # val: index of p_container in the policy_data.containers array
-    print("CreateContainerRequest: adding container_id=", input.container_id, " to state")
-    add_p_container_to_state := state_allows(input.container_id, idx)
-
+    # key: "p_container_idx", where idx = index of p_container in the policy_data.containers array
+    # value: input.container_id (not suitable as a policy state key because it is provided by the untrusted host)
+    key := get_state_container_key(idx)
+    value := input.container_id
+    print("CreateContainerRequest: adding container state: key = ", key, "value =", value)
+    add_p_container_to_state := state_allows(key, value)
     ops := concat_op_if_not_null(ret.ops, add_p_container_to_state)
 
-    print("CreateContainerRequest: true")
+    print("CreateContainerRequest: true, ops =", ops)
 }
 
 allow_create_container_input if {
@@ -1657,9 +1658,21 @@ allow_interactive_exec(p_container, i_process) if {
     print("allow_interactive_exec: true")
 }
 
-get_state_container(container_id):= p_container if {
-    idx := get_state_val(container_id)
-    p_container := policy_data.containers[idx]
+get_state_container_key(p_container_idx) := key if {
+    key := sprintf("p_container_%v", [p_container_idx])
+}
+
+get_state_container(container_id) := {"idx": idx, "p_container": p_container} if {
+    print("get_state_container: container_id =", container_id)
+
+    state := get_state()
+
+    some idx, p_container in policy_data.containers
+    key := get_state_container_key(idx)
+    print("get_state_container: key =", key, "state =", state[key])
+    state[key] == container_id
+
+    print("get_state_container: true")
 }
 
 ExecProcessRequest if {
@@ -1670,8 +1683,8 @@ ExecProcessRequest if {
     print("ExecProcessRequest 1: p_command =", p_command)
     p_command == input.process.Args
 
-    p_container := get_state_container(input.container_id)
-    allow_interactive_exec(p_container, input.process)
+    ret := get_state_container(input.container_id)
+    allow_interactive_exec(ret.p_container, input.process)
 
     print("ExecProcessRequest 1: true")
 }
@@ -1679,7 +1692,8 @@ ExecProcessRequest if {
     print("ExecProcessRequest 2: input =", input)
     allow_exec_process_input
 
-    p_container := get_state_container(input.container_id)
+    ret := get_state_container(input.container_id)
+    p_container := ret.p_container
 
     some p_command in p_container.exec_commands
     print("ExecProcessRequest 2: p_command =", p_command)
@@ -1702,9 +1716,9 @@ ExecProcessRequest if {
 
     regex.match(p_regex, i_command)
 
-    p_container := get_state_container(input.container_id)
+    ret := get_state_container(input.container_id)
 
-    allow_interactive_exec(p_container, input.process)
+    allow_interactive_exec(ret.p_container, input.process)
 
     print("ExecProcessRequest 3: true")
 }
@@ -1801,12 +1815,17 @@ GetDiagnosticDataRequest if {
     policy_data.request_defaults.GetDiagnosticDataRequest == true
 }
 
-RemoveContainerRequest:= {"ops": ops, "allowed": true} if {
+RemoveContainerRequest := {"ops": ops, "allowed": true} if {
     print("RemoveContainerRequest: input =", input)
 
     # Delete input.container_id from p_state
     ops_builder1 := []
-    del_container := state_del_key(input.container_id)
+
+    ret = get_state_container(input.container_id)
+    print("RemoveContainerRequest: ret =", ret)
+    key := get_state_container_key(ret.idx)
+    del_container := state_del_key(key)
+
     ops := concat_op_if_not_null(ops_builder1, del_container)
 
     print("RemoveContainerRequest: true")
