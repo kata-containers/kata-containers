@@ -22,6 +22,9 @@ use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+const UNRESOLVED_SOURCE_HINT: &str = "could not be resolved; check that it is passed \
+with --config-file or as another document in the input YAML";
+
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Pod {
@@ -824,8 +827,8 @@ impl EnvFromSource {
                 return value.clone();
             } else {
                 panic!(
-                    "Couldn't get values from configmap ref: {}",
-                    &config_map_env_source.name
+                    "Couldn't get values from configmap ref: {}: the ConfigMap {}",
+                    &config_map_env_source.name, UNRESOLVED_SOURCE_HINT
                 );
             }
         }
@@ -835,8 +838,8 @@ impl EnvFromSource {
                 return value.clone();
             } else {
                 panic!(
-                    "Couldn't get values from secret ref: {}",
-                    &secret_env_source.name
+                    "Couldn't get values from secret ref: {}: the Secret {}",
+                    &secret_env_source.name, UNRESOLVED_SOURCE_HINT
                 );
             }
         }
@@ -878,12 +881,30 @@ impl EnvVar {
         service_account_name: &str,
     ) -> Option<String> {
         if let Some(value_from) = &self.valueFrom {
-            if let Some(value) = config_map::get_value(value_from, config_maps) {
-                return Some(value);
+            if let Some(key_ref) = &value_from.configMapKeyRef {
+                return Some(
+                    config_map::get_value(value_from, config_maps).unwrap_or_else(|| {
+                        panic!(
+                            "Couldn't get the value of env var: {}: ConfigMap {:?} key {:?} {}",
+                            &self.name,
+                            key_ref.name.as_deref().unwrap_or_default(),
+                            key_ref.key,
+                            UNRESOLVED_SOURCE_HINT
+                        )
+                    }),
+                );
             }
 
-            if let Some(value) = secret::get_value(value_from, secrets) {
-                return Some(value);
+            if let Some(key_ref) = &value_from.secretKeyRef {
+                return Some(secret::get_value(value_from, secrets).unwrap_or_else(|| {
+                    panic!(
+                        "Couldn't get the value of env var: {}: Secret {:?} key {:?} {}",
+                        &self.name,
+                        key_ref.name.as_deref().unwrap_or_default(),
+                        key_ref.key,
+                        UNRESOLVED_SOURCE_HINT
+                    )
+                }));
             }
 
             if let Some(value) =
