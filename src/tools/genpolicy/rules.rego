@@ -1623,7 +1623,7 @@ allow_copy_file_path(path, regex_suffix) if {
     regex.match(regex5, path)
 }
 
-CreateSandboxRequest if {
+CreateSandboxRequest := {"ops": [add_sandbox_to_state], "allowed": true} if {
     print("CreateSandboxRequest: input.guest_hook_path =", input.guest_hook_path)
     count(input.guest_hook_path) == 0
 
@@ -1634,6 +1634,10 @@ CreateSandboxRequest if {
     print("CreateSandboxRequest: i_pidns =", i_pidns)
     i_pidns == false
     allow_sandbox_storages(input.storages)
+
+    state := get_state()
+    not state["sandbox_created"]
+    add_sandbox_to_state := state_allows("sandbox_created", true)
 }
 
 allow_exec(p_container, i_process) if {

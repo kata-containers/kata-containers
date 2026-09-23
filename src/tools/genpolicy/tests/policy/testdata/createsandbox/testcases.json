@@ -15,6 +15,12 @@
       "patch": []
     },
     {
+      "description": "second sandbox",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": []
+    },
+    {
       "description": "pidns",
       "base": "create-sandbox",
       "allowed": false,
