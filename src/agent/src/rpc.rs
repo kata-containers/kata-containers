@@ -99,7 +99,7 @@ use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::{do_set_policy, is_allowed, is_allowed_with_entrypoint};
+use crate::policy::{do_set_policy, is_allowed, is_allowed_stateful, is_allowed_with_entrypoint};
 
 use opentelemetry::global;
 use tracing::span;
@@ -177,6 +177,21 @@ fn sandbox_err_to_ttrpc(err: SandboxError) -> ttrpc::Error {
 #[cfg(not(feature = "agent-policy"))]
 async fn is_allowed(_req: &impl serde::Serialize) -> ttrpc::Result<()> {
     Ok(())
+}
+
+#[cfg(not(feature = "agent-policy"))]
+struct PolicyStateGuard;
+
+#[cfg(not(feature = "agent-policy"))]
+impl PolicyStateGuard {
+    async fn commit(self) -> ttrpc::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(not(feature = "agent-policy"))]
+async fn is_allowed_stateful(_req: &impl serde::Serialize) -> ttrpc::Result<PolicyStateGuard> {
+    Ok(PolicyStateGuard)
 }
 
 fn same<E>(e: E) -> E {
@@ -953,8 +968,9 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
         self.do_create_container(req).await.map_ttrpc_err(same)?;
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 
@@ -975,8 +991,9 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
         self.do_remove_container(req).await.map_ttrpc_err(same)?;
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 
@@ -986,8 +1003,9 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
         self.do_exec_process(req).await.map_ttrpc_err(same)?;
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 

@@ -70,6 +70,36 @@ impl PolicyLogField {
     }
 }
 
+/// Result of a policy evaluation whose state changes have not yet been applied.
+pub struct PolicyDecision {
+    allowed: bool,
+    prints: String,
+    state_patch: Option<json_patch::Patch>,
+}
+
+impl PolicyDecision {
+    pub fn allowed(&self) -> bool {
+        self.allowed
+    }
+
+    pub fn prints(&self) -> &str {
+        &self.prints
+    }
+
+    pub async fn commit(self, policy: &mut AgentPolicy) -> Result<()> {
+        if let Some(patch) = self.state_patch {
+            if let Err(e) = policy.apply_patch_to_state(patch).await {
+                error!(sl!(), "Failed to update agent policy state: {:?}", e);
+                // Continuing execution with inconsistent policy state could be dangerous.
+                // Give a brief moment for the logs to flush, then abort the process to stop the VM.
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                std::process::abort();
+            }
+        }
+        Ok(())
+    }
+}
+
 impl AgentPolicy {
     /// Create AgentPolicy object.
     pub fn new() -> Self {
@@ -159,8 +189,8 @@ impl AgentPolicy {
         Ok(())
     }
 
-    /// Ask regorus if an API call should be allowed or not.
-    pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+    /// Evaluate whether an API call should be allowed without applying its state changes.
+    pub async fn evaluate_request(&mut self, ep: &str, ep_input: &str) -> Result<PolicyDecision> {
         debug!(sl!(), "policy check: {ep}");
 
         // Log policy evaluation input information into POLICY_LOG_FILE.
@@ -182,7 +212,11 @@ impl AgentPolicy {
             // been defined in the policy.
             if self.allow_failures {
                 warn!(sl!(), "policy check: ignoring missing {ep}");
-                return Ok((true, prints));
+                return Ok(PolicyDecision {
+                    allowed: true,
+                    prints,
+                    state_patch: None,
+                });
             }
             bail!(
                 "policy check: unexpected eval_query result len {:?}",
@@ -197,8 +231,8 @@ impl AgentPolicy {
             );
         }
 
-        let mut allow = match &results.result[0].expressions[0].value {
-            regorus::Value::Bool(b) => *b,
+        let (mut allow, state_patch) = match &results.result[0].expressions[0].value {
+            regorus::Value::Bool(b) => (*b, None),
 
             // Match against a specific variant that could be interpreted as MetadataResponse
             regorus::Value::Object(obj) => {
@@ -210,12 +244,12 @@ impl AgentPolicy {
 
                 let metadata_response: MetadataResponse = serde_json::from_str(&json_str)?;
 
-                if metadata_response.allowed {
-                    if let Some(ops) = metadata_response.ops {
-                        self.apply_patch_to_state(ops).await?;
-                    }
-                }
-                metadata_response.allowed
+                let state_patch = if metadata_response.allowed {
+                    metadata_response.ops
+                } else {
+                    None
+                };
+                (metadata_response.allowed, state_patch)
             }
 
             _ => {
@@ -236,7 +270,20 @@ impl AgentPolicy {
             }
         }
 
-        Ok((allow, prints))
+        Ok(PolicyDecision {
+            allowed: allow,
+            prints,
+            state_patch,
+        })
+    }
+
+    /// Ask regorus if an API call should be allowed and apply its state changes immediately.
+    pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+        let decision = self.evaluate_request(ep, ep_input).await?;
+        let allowed = decision.allowed();
+        let prints = decision.prints().to_owned();
+        decision.commit(self).await?;
+        Ok((allowed, prints))
     }
 
     /// Replace the Policy in regorus.
@@ -416,6 +463,41 @@ mod tests {
 
     use protocols::agent::CopyFileRequest;
     use tempfile::NamedTempFile;
+
+    #[tokio::test]
+    async fn test_policy_state_changes_can_be_deferred() {
+        let mut policy = AgentPolicy::new();
+        policy
+            .set_policy(
+                r#"
+                package agent_policy
+
+                AllowRequestsFailingPolicy := false
+                StatefulRequest := {
+                    "allowed": true,
+                    "ops": [{"op": "add", "path": "/pstate/key", "value": "value"}],
+                }
+                ReadState := object.get(data.pstate, "key", "") == "value"
+                "#,
+            )
+            .await
+            .unwrap();
+
+        let discarded_decision = policy
+            .evaluate_request("StatefulRequest", "{}")
+            .await
+            .unwrap();
+        assert!(discarded_decision.allowed());
+        drop(discarded_decision);
+        assert!(!policy.allow_request("ReadState", "{}").await.unwrap().0);
+
+        let decision = policy
+            .evaluate_request("StatefulRequest", "{}")
+            .await
+            .unwrap();
+        decision.commit(&mut policy).await.unwrap();
+        assert!(policy.allow_request("ReadState", "{}").await.unwrap().0);
+    }
 
     struct TestCase {
         name: String,
