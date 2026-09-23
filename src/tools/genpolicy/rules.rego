@@ -65,6 +65,8 @@ default AllowRequestsFailingPolicy := false
 # Constants
 S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
 S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
+CRI_CONTAINER_TYPE_KEY = "io.kubernetes.cri.container-type"
+KATA_CONTAINER_TYPE_KEY = "io.katacontainers.pkg.oci.container_type"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
 VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
 
@@ -336,33 +338,41 @@ allow_sandbox_name(p_s_name, i_s_name) if {
     print("allow_sandbox_name: true")
 }
 
-# Check that the "io.kubernetes.cri.container-type" and
-# "io.katacontainers.pkg.oci.container_type" annotations designate the
-# expected type - either a "sandbox" or a "container". Then, validate
-# other annotations based on the actual "sandbox" or "container" value
-# from the input container.
+# Classify an OCI specification using its paired
+# "io.kubernetes.cri.container-type" and
+# "io.katacontainers.pkg.oci.container_type" annotations. Supported
+# pairs are "sandbox"/"pod_sandbox" and "container"/"pod_container".
+container_role(oci) := "sandbox" if {
+    annotations := oci.Annotations
+    annotations[CRI_CONTAINER_TYPE_KEY] == "sandbox"
+    annotations[KATA_CONTAINER_TYPE_KEY] == "pod_sandbox"
+}
+
+container_role(oci) := "container" if {
+    annotations := oci.Annotations
+    annotations[CRI_CONTAINER_TYPE_KEY] == "container"
+    annotations[KATA_CONTAINER_TYPE_KEY] == "pod_container"
+}
+
+# Check that the policy and input OCI specifications designate the same
+# supported container role. Then validate annotations specific to that
+# role.
 allow_by_container_types(p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_types: checking io.kubernetes.cri.container-type")
+    print("allow_by_container_types: checking container type annotations")
 
-    c_type := "io.kubernetes.cri.container-type"
+    p_role := container_role(p_oci)
+    i_role := container_role(i_oci)
+    print("allow_by_container_types: p_role =", p_role, "i_role =", i_role)
+    p_role == i_role
 
-    p_cri_type := p_oci.Annotations[c_type]
-    i_cri_type := i_oci.Annotations[c_type]
-    print("allow_by_container_types: p_cri_type =", p_cri_type, "i_cri_type =", i_cri_type)
-    p_cri_type == i_cri_type
-
-    allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace)
+    allow_by_container_type(i_role, p_oci, i_oci, s_name, s_namespace)
 
     print("allow_by_container_types: true")
 }
 
-allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_type 1: i_cri_type =", i_cri_type)
-    i_cri_type == "sandbox"
-
-    i_kata_type := i_oci.Annotations["io.katacontainers.pkg.oci.container_type"]
-    print("allow_by_container_type 1: i_kata_type =", i_kata_type)
-    i_kata_type == "pod_sandbox"
+allow_by_container_type(role, p_oci, i_oci, s_name, s_namespace) if {
+    print("allow_by_container_type 1: role =", role)
+    role == "sandbox"
 
     allow_sandbox_container_name(p_oci, i_oci)
     allow_sandbox_net_namespace(p_oci, i_oci)
@@ -371,13 +381,9 @@ allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
     print("allow_by_container_type 1: true")
 }
 
-allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_type 2: i_cri_type =", i_cri_type)
-    i_cri_type == "container"
-
-    i_kata_type := i_oci.Annotations["io.katacontainers.pkg.oci.container_type"]
-    print("allow_by_container_type 2: i_kata_type =", i_kata_type)
-    i_kata_type == "pod_container"
+allow_by_container_type(role, p_oci, i_oci, s_name, s_namespace) if {
+    print("allow_by_container_type 2: role =", role)
+    role == "container"
 
     allow_container_name(p_oci, i_oci)
     allow_net_namespace(p_oci, i_oci)
