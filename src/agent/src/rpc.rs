@@ -1555,7 +1555,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_sandbox", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
 
         {
             let mut s = self.sandbox.lock().await;
@@ -1604,6 +1604,7 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 
