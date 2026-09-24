@@ -56,6 +56,20 @@ struct MetadataResponse {
     ops: Option<json_patch::Patch>,
 }
 
+enum PolicyLogField {
+    Request,
+    Response,
+}
+
+impl PolicyLogField {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Request => "request",
+            Self::Response => "response",
+        }
+    }
+}
+
 impl AgentPolicy {
     /// Create AgentPolicy object.
     pub fn new() -> Self {
@@ -148,7 +162,10 @@ impl AgentPolicy {
     /// Ask regorus if an API call should be allowed or not.
     pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
         debug!(sl!(), "policy check: {ep}");
-        self.log_eval_input(ep, ep_input).await;
+
+        // Log policy evaluation input information into POLICY_LOG_FILE.
+        self.log_eval_to_file(ep, PolicyLogField::Request, ep_input)
+            .await;
 
         let query = format!("data.agent_policy.{ep}");
         self.engine.set_input_json(ep_input)?;
@@ -161,8 +178,10 @@ impl AgentPolicy {
         };
 
         if results.result.len() != 1 {
-            // Results are empty when AllowRequestsFailingPolicy is used to allow a Request that hasn't been defined in the policy
+            // Results are empty when AllowRequestsFailingPolicy is used to allow a Request that hasn't
+            // been defined in the policy.
             if self.allow_failures {
+                warn!(sl!(), "policy check: ignoring missing {ep}");
                 return Ok((true, prints));
             }
             bail!(
@@ -185,7 +204,9 @@ impl AgentPolicy {
             regorus::Value::Object(obj) => {
                 let json_str = serde_json::to_string(obj)?;
 
-                self.log_eval_input(ep, &json_str).await;
+                // Log policy evaluation output information into POLICY_LOG_FILE.
+                self.log_eval_to_file(ep, PolicyLogField::Response, &json_str)
+                    .await;
 
                 let metadata_response: MetadataResponse = serde_json::from_str(&json_str)?;
 
@@ -198,7 +219,7 @@ impl AgentPolicy {
             }
 
             _ => {
-                error!(sl!(), "allow_request: unexpected eval_query result type");
+                error!(sl!(), "policy check: unexpected eval_query result type");
                 bail!(
                     "policy check: unexpected eval_query result type {:?}",
                     results
@@ -206,9 +227,13 @@ impl AgentPolicy {
             }
         };
 
-        if !allow && self.allow_failures {
-            warn!(sl!(), "policy: ignoring error for {ep}");
-            allow = true;
+        if !allow {
+            if self.allow_failures {
+                warn!(sl!(), "policy check: ignoring error for {ep}");
+                allow = true;
+            } else {
+                Self::log_blocked_endpoint(ep, &prints);
+            }
         }
 
         Ok((allow, prints))
@@ -223,27 +248,62 @@ impl AgentPolicy {
         Ok(())
     }
 
-    async fn log_eval_input(&mut self, ep: &str, input: &str) {
-        if let Some(log_file) = &mut self.log_file {
-            match ep {
-                "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
-                    // - StatsContainerRequest and ReadStreamRequest are called
-                    //   relatively often, so we're not logging them, to avoid
-                    //   growing this log file too much.
-                    // - Confidential Containers Policy documents are relatively
-                    //   large, so we're not logging them here, for SetPolicyRequest.
-                    //   The Policy text can be obtained directly from the pod YAML.
-                }
-                _ => {
-                    let log_entry = format!("{{\"kind\":\"{ep}\",\"request\":{input}}}\n");
+    /// Skip logging into POLICY_LOG_FILE and/or slog, based on the endpoint name.
+    fn skip_log(ep: &str) -> bool {
+        match ep {
+            "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
+                // - StatsContainerRequest and ReadStreamRequest are called relatively often, so we're
+                //   not logging them, to avoid growing the log too much.
+                // - Confidential Containers Policy documents are typically large, so we're not logging
+                //   them here. The Policy text can be obtained directly from the pod YAML.
+                true
+            }
+            _ => false,
+        }
+    }
 
-                    if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
-                        warn!(sl!(), "policy: log_eval_input: write_all failed: {}", e);
-                    } else if let Err(e) = log_file.flush().await {
-                        warn!(sl!(), "policy: log_eval_input: flush failed: {}", e);
-                    }
+    async fn log_eval_to_file(&mut self, ep: &str, field: PolicyLogField, eval_data: &str) {
+        if let Some(log_file) = &mut self.log_file {
+            if !Self::skip_log(ep) {
+                let field = field.as_str();
+                let log_entry = format!("{{\"kind\":\"{ep}\",\"{field}\":{eval_data}}}\n");
+
+                if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
+                    warn!(sl!(), "policy check: write_all failed: {}", e);
+                } else if let Err(e) = log_file.flush().await {
+                    warn!(sl!(), "policy check: flush failed: {}", e);
                 }
             }
+        }
+    }
+
+    /// Log using slog information about an endpoint being evaluated to false/blocked.
+    fn log_blocked_endpoint(ep: &str, prints: &str) {
+        if Self::skip_log(ep) {
+            return;
+        }
+
+        match ep {
+            // AllowRequestsFailingPolicy := false is the recommended value for a CoCo policy.
+            // Confirm its correct value by using this slog entry.
+            "AllowRequestsFailingPolicy" => {
+                info!(sl!(), "policy check: {ep} is blocked, as recommended")
+            }
+
+            // The host invokes GetDiagnosticDataRequest to obtain the pod termination message, but
+            // GetDiagnosticDataRequest is typically blocked by policy. Add a warning message to the log,
+            // because users might wonder why their termination message was not available.
+            "GetDiagnosticDataRequest" => warn!(sl!(), "policy check: {ep} is blocked: {prints}"),
+
+            // The rego prints from a rejected CreateContainer are easily available from the output of
+            // "kubectl describe pod". Avoid duplicating that long text in slog.
+            "CreateContainerRequest" => error!(
+                sl!(),
+                "policy check: {ep} is blocked. For details, see the output of: kubectl describe pod"
+            ),
+
+            // For other endpoint types, log the rego prints too - useful for debugging the policy error.
+            _ => error!(sl!(), "policy check: {ep} is blocked: {prints}"),
         }
     }
 
@@ -355,11 +415,58 @@ mod tests {
     use std::convert::TryInto;
 
     use protocols::agent::CopyFileRequest;
+    use tempfile::NamedTempFile;
 
     struct TestCase {
         name: String,
         input: CopyFileRequest,
         output: Option<PolicyCopyFileRequest>,
+    }
+
+    #[tokio::test]
+    async fn test_policy_log_request_and_response_schema() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let file = tokio::fs::File::from_std(temp_file.reopen().unwrap());
+        let mut policy = AgentPolicy {
+            log_file: Some(file),
+            ..Default::default()
+        };
+
+        policy
+            .log_eval_to_file(
+                "CreateContainerRequest",
+                PolicyLogField::Request,
+                r#"{"container_id":"123"}"#,
+            )
+            .await;
+        policy
+            .log_eval_to_file(
+                "CreateContainerRequest",
+                PolicyLogField::Response,
+                r#"{"allowed":true}"#,
+            )
+            .await;
+        drop(policy);
+
+        let log = tokio::fs::read_to_string(temp_file.path()).await.unwrap();
+        let entries: Vec<serde_json::Value> = log
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+
+        assert_eq!(
+            entries,
+            vec![
+                serde_json::json!({
+                    "kind": "CreateContainerRequest",
+                    "request": {"container_id": "123"},
+                }),
+                serde_json::json!({
+                    "kind": "CreateContainerRequest",
+                    "response": {"allowed": true},
+                }),
+            ]
+        );
     }
 
     #[test]
