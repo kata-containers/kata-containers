@@ -146,6 +146,8 @@ pub struct DiskConfig {
     pub disable_io_uring: bool,
     #[serde(default)]
     pub pci_segment: u16,
+    #[serde(default)]
+    pub serial: Option<String>,
     #[serde(default = "default_diskconfig_sparse")]
     pub sparse: bool,
     #[serde(default)]
@@ -171,6 +173,7 @@ impl Default for DiskConfig {
             id: None,
             disable_io_uring: false,
             pci_segment: 0,
+            serial: None,
             sparse: default_diskconfig_sparse(),
             image_type: ImageType::default(),
         }
