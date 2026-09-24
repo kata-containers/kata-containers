@@ -149,6 +149,11 @@ customRuntimes:
         pullType: "guest-pull"  # Configure CRI-O runtime_pull_image = true
 ```
 
+The chart renders the `runtimeClass` manifest as written, with two additions:
+the node selector marking it as this installation's, and `runtimeClasses.tolerations`,
+prepended to any `scheduling.tolerations` the manifest declares.
+There is no per-runtime tolerations value (see [RuntimeClass Tolerations](#runtimeclass-tolerations)).
+
 Again, view the default [`values.yaml`](#parameters) file for more details.
 
 ### Drop-In Runtime Configuration
@@ -1172,6 +1177,9 @@ tolerations:
 To install on control-plane nodes, see
 [Installing on control-plane nodes](#installing-on-control-plane-nodes).
 
+These are the installer's own tolerations. A separate setting lets Kata *workloads*
+onto tainted nodes: see [RuntimeClass Tolerations](#runtimeclass-tolerations).
+
 !!! note "Cordoned and pressured nodes are still installed on"
     Kubernetes gives every DaemonSet pod an implicit set of tolerations so that
     node conditions — `unschedulable` (a cordoned node), plus disk, memory and PID
@@ -1462,6 +1470,84 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 **Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
+
+## RuntimeClass Tolerations
+
+Kubernetes merges a `RuntimeClass`'s own tolerations into every `Pod` admitted with that class.
+Put the tolerations for your tainted Kata nodes here and each workload that names the class gets them,
+without its pod spec repeating them. Pods that name no Kata class are unaffected.
+
+Two values fill the list, both empty by default:
+
+```yaml title="values.yaml"
+runtimeClasses:
+  tolerations: # (1)!
+    - key: katacontainers.io/dedicated
+      operator: Exists
+      effect: NoSchedule
+
+shims:
+  qemu:
+    runtimeClass:
+      tolerations: # (2)!
+        - key: confidential
+          operator: Equal
+          value: "gpu"
+          effect: NoSchedule
+```
+
+1. Applied to every `RuntimeClass` the chart generates.
+2. Appended to the global list, for this shim's `RuntimeClass` only.
+
+Which renders `kata-qemu` as:
+
+```yaml
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+    kata-deploy.katacontainers.io/default: "true"
+  tolerations:
+    - effect: NoSchedule
+      key: katacontainers.io/dedicated
+      operator: Exists
+    - effect: NoSchedule
+      key: confidential
+      operator: Equal
+      value: gpu
+```
+
+The global list reaches every class the chart generates: one per enabled shim,
+the default class (`runtimeClasses.createDefault`), the `-debug` and `-devkit` variants,
+and the `RuntimeClass` of every entry under `customRuntimes.runtimes`.
+
+!!! note "Per-shim tolerations accumulate"
+    The other per-shim `runtimeClass` keys replace what the chart would
+    otherwise use: `overhead` and `overheadEnabled` win over the global setting,
+    and `nodeSelector` takes the place of the labels NFD would auto-inject.
+    Tolerations accumulate instead, because a shim that tolerates
+    one extra taint still runs on the nodes the whole installation tolerates.
+    To give one shim a list of its own, leave `runtimeClasses.tolerations`
+    empty and set each shim's list explicitly.
+
+A custom runtime has no `shims.<shim>` entry and so no per-runtime value.
+The `scheduling.tolerations` of its inline `runtimeClass` manifest take that place
+the global list comes first, then the manifest's own entries, the same order
+per-shim list gets.
+
+!!! danger "Keep these keys out of `startupTaints`"
+    kata-deploy removes a taint listed under [`startupTaints`](#parameters)
+    only after it has installed the runtime on the node and labelled it.
+    Until then the taint holds Kata workloads off. A `RuntimeClass` toleration
+    covering one of those keys and effects cancels that for every pod using the class:
+    the taint stays on the node, the pods are admitted anyway,
+    and they fail on a handler that does not exist yet.
+    Keep the two key sets disjoint.
+
+!!! info "Not to be confused with top-level `tolerations`"
+    [`tolerations`](#tolerations) at the top level belongs to the kata-deploy pods
+    and decides which tainted nodes Kata is *installed* on.
+    The values here decide which tainted nodes Kata *workloads* run on.
+    A tainted node can need both: one to get the runtime installed, one to let pods use it.
 
 ## TEE key advertisement
 
