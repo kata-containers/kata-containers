@@ -1343,6 +1343,10 @@ impl Sandbox for VirtSandbox {
         // Cancel the OOM watcher before tearing down the VM so it exits
         // cleanly instead of hitting ECONNRESET/EOF on a closed channel.
         self.cancel_token.cancel();
+        // Likewise stop the health check: once the VM is stopped the agent is
+        // unreachable, and a failed check would exit the runtime before the
+        // sandbox cleanup and the reply to the pending shutdown request.
+        self.monitor.stop().await;
 
         info!(sl!(), "begin stop sandbox");
         if state == SandboxState::Init {
