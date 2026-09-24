@@ -393,7 +393,7 @@ impl Config {
         let custom_runtimes_from_configmap =
             env::var("CUSTOM_RUNTIMES_ENABLED").unwrap_or_else(|_| "false".to_string()) == "true";
         let mut custom_runtimes = if custom_runtimes_from_configmap {
-            parse_custom_runtimes()?
+            parse_custom_runtimes(&arch)?
         } else {
             Vec::new()
         };
@@ -963,9 +963,9 @@ fn get_arch() -> Result<String> {
 
 /// Parse custom runtimes from the mounted ConfigMap at /custom-configs/
 /// Reads the custom-runtimes.list file which contains entries in the format:
-/// handler:baseConfig:containerd_snapshotter:crio_pulltype
+/// handler:baseConfig:containerd_snapshotter:crio_pulltype:supported_arches
 /// Optionally reads drop-in files named dropin-{handler}.toml
-fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
+fn parse_custom_runtimes(arch: &str) -> Result<Vec<CustomRuntime>> {
     let custom_configs_dir = "/custom-configs";
     let list_file = format!("{}/custom-runtimes.list", custom_configs_dir);
 
@@ -988,7 +988,7 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
             continue;
         }
 
-        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype:supported_arches
         let parts: Vec<&str> = line.split(':').collect();
         let handler = parts.first().map(|s| s.trim()).unwrap_or("");
         if handler.is_empty() {
@@ -1003,6 +1003,17 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
             );
         }
 
+        let supported_arches = parts.get(4).map(|s| s.trim()).unwrap_or("");
+        if !custom_runtime_supports_arch(supported_arches, arch) {
+            log::info!(
+                "Skipping custom runtime {}: base config {} supports [{}], not {}",
+                handler,
+                base_config,
+                supported_arches,
+                helm_arch(arch)
+            );
+            continue;
+        }
         let containerd_snapshotter = parts
             .get(2)
             .map(|s| s.trim())
@@ -1049,6 +1060,24 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
         list_file
     );
     Ok(custom_runtimes)
+}
+
+/// Translate the Rust architecture spelling to the names used by Helm values.
+fn helm_arch(arch: &str) -> &str {
+    match arch {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        _ => arch,
+    }
+}
+
+/// An empty list preserves compatibility for custom bases that have no matching
+/// shims.<baseConfig> block in the chart.
+fn custom_runtime_supports_arch(supported_arches: &str, arch: &str) -> bool {
+    supported_arches.trim().is_empty()
+        || supported_arches
+            .split(',')
+            .any(|candidate| candidate.trim() == helm_arch(arch))
 }
 
 /// Look up `shim`'s value in a comma-separated "shim1:value1,shim2:value2"
@@ -1586,6 +1615,15 @@ mod tests {
         assert!(lookup_mapping_value(mapping, "stratovirt").is_none());
         // Nothing mapped at all.
         assert!(lookup_mapping_value("", "qemu").is_none());
+    }
+
+    #[test]
+    fn test_custom_runtime_supported_arches() {
+        assert!(custom_runtime_supports_arch("amd64,arm64", "x86_64"));
+        assert!(custom_runtime_supports_arch("amd64,arm64", "aarch64"));
+        assert!(!custom_runtime_supports_arch("amd64,arm64", "s390x"));
+        assert!(custom_runtime_supports_arch("", "s390x"));
+        assert!(custom_runtime_supports_arch("ppc64le", "ppc64le"));
     }
 
     #[serial]
