@@ -84,6 +84,8 @@ use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, Networ
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -722,6 +724,28 @@ impl VirtSandbox {
         Ok(configs)
     }
 
+    /// Reseeds a template-restored guest's RNG, which clones share with the snapshot.
+    async fn reseed_rng(agent: &dyn Agent, config: &HypervisorConfig) -> Result<()> {
+        if !config.vm_template.boot_from_template {
+            return Ok(());
+        }
+        if config.security_info.confidential_guest {
+            return Err(anyhow!(
+                "VM templating is not supported for confidential guests"
+            ));
+        }
+        let mut data = vec![0; 512];
+        File::open("/dev/urandom")
+            .context("open host entropy source")?
+            .read_exact(&mut data)
+            .context("read host entropy")?;
+        agent
+            .reseed_random_dev(agent::ReseedRandomDevRequest { data })
+            .await
+            .context("reseed guest RNG")?;
+        Ok(())
+    }
+
     async fn set_agent_policy(&self) -> Result<()> {
         // TODO: Exclude policy-related items from the annotations.
         let toml_config = self.resource_manager.config().await;
@@ -1130,6 +1154,11 @@ impl Sandbox for VirtSandbox {
             .start(&address)
             .await
             .context(format!("connect to address {:?}", &address))?;
+        Self::reseed_rng(
+            self.agent.as_ref(),
+            &self.hypervisor.hypervisor_config().await,
+        )
+        .await?;
         self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager
