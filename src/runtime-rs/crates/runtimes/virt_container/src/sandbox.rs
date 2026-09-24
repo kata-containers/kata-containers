@@ -382,10 +382,12 @@ impl VirtSandbox {
         }
 
         let port = match cold_plug_vfio.as_str() {
-            "root-port" => PCIePort::RootPort,
+            // "auto" collects devices like "root-port"; the QEMU hypervisor
+            // then derives the guest topology from the host at VM start.
+            "root-port" | "auto" => PCIePort::RootPort,
             other => {
                 return Err(anyhow!(
-                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" is supported",
+                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" and \"auto\" are supported",
                     other
                 ))
             }
@@ -477,10 +479,12 @@ impl VirtSandbox {
         }
 
         let port = match cold_plug_vfio.as_str() {
-            "root-port" => PCIePort::RootPort,
+            // "auto" collects devices like "root-port"; the QEMU hypervisor
+            // then derives the guest topology from the host at VM start.
+            "root-port" | "auto" => PCIePort::RootPort,
             other => {
                 return Err(anyhow!(
-                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" is supported",
+                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" and \"auto\" are supported",
                     other
                 ))
             }
