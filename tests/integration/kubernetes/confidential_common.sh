@@ -39,7 +39,7 @@ function get_remote_command_per_hypervisor() {
 	if is_se_hypervisor "${KATA_HYPERVISOR}"; then
 		echo "cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
 	elif is_snp_hypervisor "${KATA_HYPERVISOR}"; then
-		echo "dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
+		echo "cat /sys/devices/system/cpu/sev/vmpl"
 	elif is_tdx_hypervisor "${KATA_HYPERVISOR}"; then
 		echo "cpuid | grep TDX_GUEST"
 	else
