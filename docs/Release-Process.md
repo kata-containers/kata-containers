@@ -10,7 +10,10 @@ This document lists the tasks required to create a Kata Release.
 
 Kata Containers follows a rolling release model with monthly snapshots.
 New features, bug fixes, and improvements are continuously integrated into
-`main`. Each month, a snapshot is tagged as a new `MINOR` release.
+`main`. Each month, a snapshot is tagged as a new `MINOR` release. The
+target release date is no earlier than the first Tuesday on or after
+the 15th of each month. The actual release date may be later, but any
+changes merged before the target date are expected to make it into the release.
 
 ### Versioning
 
