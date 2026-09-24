@@ -806,10 +806,10 @@ impl QemuInner {
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
 
-        // Confidential Guest doesn't permit virtio-fs.
-        let flags = if self.hypervisor_config().security_info.confidential_guest
-            || self.hypervisor_config().shared_fs.shared_fs.is_none()
-        {
+        // Allow virtio-fs for confidential guests when shared_fs is explicitly
+        // configured, to match the go runtime and permit experimentation with
+        // confidential file storage.
+        let flags = if self.hypervisor_config().shared_fs.shared_fs.is_none() {
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
                 | CapabilityBits::BlockDeviceDiscardSupport
