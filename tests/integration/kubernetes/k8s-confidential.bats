@@ -30,18 +30,12 @@ setup() {
 
 	coco_enabled=""
 	for i in {1..6}; do
-		rm -f "${HOME}/.ssh/known_hosts"
-		if ! pod_ip=$(kubectl get pod -o wide | grep "confidential-unencrypted" | awk '{print $6;}'); then
-			warn "Failed to get pod IP address."
-		else
-			info "Pod IP address: ${pod_ip}"
-			coco_enabled=$(ssh -i ${SSH_KEY_FILE} -o "StrictHostKeyChecking no" -o "PasswordAuthentication=no" root@${pod_ip} "$(get_remote_command_per_hypervisor)" 2> /dev/null) && break
-			warn "Failed to connect to pod."
-		fi
+		coco_enabled=$(kubectl exec "${pod_name}" -- bash -c "$(get_remote_command_per_hypervisor)" 2>/dev/null) && break
+		warn "kubectl exec attempt ${i} failed, retrying..."
 		sleep 5
 	done
 	[ -z "$coco_enabled" ] && die "Confidential compute is expected but not enabled."
-	info "ssh client output: ${coco_enabled}"
+	info "verification output: ${coco_enabled}"
 }
 
 teardown() {
