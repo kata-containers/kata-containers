@@ -65,6 +65,8 @@ default AllowRequestsFailingPolicy := false
 # Constants
 S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
 S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
+CRI_CONTAINER_TYPE_KEY = "io.kubernetes.cri.container-type"
+KATA_CONTAINER_TYPE_KEY = "io.katacontainers.pkg.oci.container_type"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
 VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
 
@@ -111,8 +113,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
 
     allow_anno(p_container, i_oci)
 
-    p_storages := p_container.storages
-    allow_by_anno(p_oci, i_oci, p_storages, i_storages)
+    allow_by_anno(p_container, i_oci, i_storages)
 
     p_devices := p_container.devices
     allow_devices(p_devices, i_devices, i_oci)
@@ -285,9 +286,10 @@ allow_anno_key_value(i_key, i_value, p_container) if {
 
 # Get the value of the S_NAME_KEY annotation and
 # correlate it with other annotations and process fields.
-allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
+allow_by_anno(p_container, i_oci, i_storages) if {
     print("allow_by_anno 1: start")
 
+    p_oci := p_container.OCI
     not p_oci.Annotations[S_NAME_KEY]
 
     i_s_name := i_oci.Annotations[S_NAME_KEY]
@@ -296,13 +298,14 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
     i_s_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
     print("allow_by_anno 1: i_s_namespace =", i_s_namespace)
 
-    allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name, i_s_namespace)
+    allow_by_sandbox_name(p_container, i_oci, i_storages, i_s_name, i_s_namespace)
 
     print("allow_by_anno 1: true")
 }
-allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
+allow_by_anno(p_container, i_oci, i_storages) if {
     print("allow_by_anno 2: start")
 
+    p_oci := p_container.OCI
     p_s_name := p_oci.Annotations[S_NAME_KEY]
     i_s_name := i_oci.Annotations[S_NAME_KEY]
     print("allow_by_anno 2: i_s_name =", i_s_name, "p_s_name =", p_s_name)
@@ -312,18 +315,19 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
     i_s_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
     print("allow_by_anno 2: i_s_namespace =", i_s_namespace)
 
-    allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name, i_s_namespace)
+    allow_by_sandbox_name(p_container, i_oci, i_storages, i_s_name, i_s_namespace)
 
     print("allow_by_anno 2: true")
 }
 
-allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name, s_namespace) if {
+allow_by_sandbox_name(p_container, i_oci, i_storages, s_name, s_namespace) if {
     print("allow_by_sandbox_name: start")
 
+    p_oci := p_container.OCI
     i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
 
     allow_by_container_types(p_oci, i_oci, s_name, i_namespace)
-    allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages)
+    allow_by_bundle_or_sandbox_id(p_container, i_oci, i_storages)
     allow_process(p_oci.Process, i_oci.Process, s_name, s_namespace)
 
     print("allow_by_sandbox_name: true")
@@ -336,33 +340,41 @@ allow_sandbox_name(p_s_name, i_s_name) if {
     print("allow_sandbox_name: true")
 }
 
-# Check that the "io.kubernetes.cri.container-type" and
-# "io.katacontainers.pkg.oci.container_type" annotations designate the
-# expected type - either a "sandbox" or a "container". Then, validate
-# other annotations based on the actual "sandbox" or "container" value
-# from the input container.
+# Classify an OCI specification using its paired
+# "io.kubernetes.cri.container-type" and
+# "io.katacontainers.pkg.oci.container_type" annotations. Supported
+# pairs are "sandbox"/"pod_sandbox" and "container"/"pod_container".
+container_role(oci) := "sandbox" if {
+    annotations := oci.Annotations
+    annotations[CRI_CONTAINER_TYPE_KEY] == "sandbox"
+    annotations[KATA_CONTAINER_TYPE_KEY] == "pod_sandbox"
+}
+
+container_role(oci) := "container" if {
+    annotations := oci.Annotations
+    annotations[CRI_CONTAINER_TYPE_KEY] == "container"
+    annotations[KATA_CONTAINER_TYPE_KEY] == "pod_container"
+}
+
+# Check that the policy and input OCI specifications designate the same
+# supported container role. Then validate annotations specific to that
+# role.
 allow_by_container_types(p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_types: checking io.kubernetes.cri.container-type")
+    print("allow_by_container_types: checking container type annotations")
 
-    c_type := "io.kubernetes.cri.container-type"
+    p_role := container_role(p_oci)
+    i_role := container_role(i_oci)
+    print("allow_by_container_types: p_role =", p_role, "i_role =", i_role)
+    p_role == i_role
 
-    p_cri_type := p_oci.Annotations[c_type]
-    i_cri_type := i_oci.Annotations[c_type]
-    print("allow_by_container_types: p_cri_type =", p_cri_type, "i_cri_type =", i_cri_type)
-    p_cri_type == i_cri_type
-
-    allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace)
+    allow_by_container_type(i_role, p_oci, i_oci, s_name, s_namespace)
 
     print("allow_by_container_types: true")
 }
 
-allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_type 1: i_cri_type =", i_cri_type)
-    i_cri_type == "sandbox"
-
-    i_kata_type := i_oci.Annotations["io.katacontainers.pkg.oci.container_type"]
-    print("allow_by_container_type 1: i_kata_type =", i_kata_type)
-    i_kata_type == "pod_sandbox"
+allow_by_container_type(role, p_oci, i_oci, s_name, s_namespace) if {
+    print("allow_by_container_type 1: role =", role)
+    role == "sandbox"
 
     allow_sandbox_container_name(p_oci, i_oci)
     allow_sandbox_net_namespace(p_oci, i_oci)
@@ -371,13 +383,9 @@ allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
     print("allow_by_container_type 1: true")
 }
 
-allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_type 2: i_cri_type =", i_cri_type)
-    i_cri_type == "container"
-
-    i_kata_type := i_oci.Annotations["io.katacontainers.pkg.oci.container_type"]
-    print("allow_by_container_type 2: i_kata_type =", i_kata_type)
-    i_kata_type == "pod_container"
+allow_by_container_type(role, p_oci, i_oci, s_name, s_namespace) if {
+    print("allow_by_container_type 2: role =", role)
+    role == "container"
 
     allow_container_name(p_oci, i_oci)
     allow_net_namespace(p_oci, i_oci)
@@ -789,9 +797,10 @@ allow_linux_sysctl(p_linux, i_linux) if {
 
 # Check the consistency of the input "io.katacontainers.pkg.oci.bundle_path"
 # and io.kubernetes.cri.sandbox-id" values with other fields.
-allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
+allow_by_bundle_or_sandbox_id(p_container, i_oci, i_storages) if {
     print("allow_by_bundle_or_sandbox_id: start")
 
+    p_oci := p_container.OCI
     key := "io.kubernetes.cri.sandbox-id"
 
     p_regex := p_oci.Annotations[key]
@@ -817,7 +826,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
     print("allow_by_bundle_or_sandbox_id: p_matches =", p_matches)
     count(p_matches) == count(i_oci.Mounts)
 
-    allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
+    allow_storages(p_container, i_storages, bundle_id, sandbox_id)
 
     print("allow_by_bundle_or_sandbox_id: true")
 }
@@ -1233,11 +1242,40 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
 ######################################################################
 # Create container Storages
 
+image_digest(image) := digest if {
+    parts := split(image, "@")
+    count(parts) == 2
+    parts[0] != ""
+    digest := parts[1]
+    digest != ""
+}
+
+expected_image_guest_pull_source(p_container) := "pause" if {
+    container_role(p_container.OCI) == "sandbox"
+} else := p_container.image if {
+    container_role(p_container.OCI) == "container"
+}
+
+# Unpinned image references must match byte-for-byte.
+allow_image_reference(p_image_source, i_image) if {
+    not contains(p_image_source, "@")
+    p_image_source == i_image
+}
+
+# Pinned image references may use different registries, repositories, or tags,
+# but both references must carry the same manifest digest.
+allow_image_reference(p_image_source, i_image) if {
+    p_digest := image_digest(p_image_source)
+    i_digest := image_digest(i_image)
+    p_digest == i_digest
+}
+
 expected_image_guest_pull_count := 1 if {
     policy_data.cluster_config.guest_pull
 } else := 0
 
-allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
+allow_storages(p_container, i_storages, bundle_id, sandbox_id) if {
+    p_storages := p_container.storages
     print("allow_storages: p_storages =", p_storages)
     print("allow_storages: i_storages =", i_storages)
 
@@ -1250,14 +1288,14 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
     p_count == i_count - img_pull_count
 
     every i_storage in i_storages {
-        allow_storage(p_storages, i_storage, bundle_id, sandbox_id)
+        allow_storage(p_container, i_storage, bundle_id, sandbox_id)
     }
 
     print("allow_storages: true")
 }
 
-allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
-    some p_storage in p_storages
+allow_storage(p_container, i_storage, bundle_id, sandbox_id) if {
+    some p_storage in p_container.storages
 
     print("allow_storage: p_storage =", p_storage)
     print("allow_storage: i_storage =", i_storage)
@@ -1269,7 +1307,7 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
 
     print("allow_storage: true")
 }
-allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
+allow_storage(p_container, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with image_guest_pull: start")
     i_storage.driver == "image_guest_pull"
     i_storage.fstype == "overlay"
@@ -1283,26 +1321,28 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with image_guest_pull: expect_root_path =", expect_root_path)
     expect_root_path == i_storage.mount_point
 
-    # TODO: missing validation for field: source
+    p_image_source := expected_image_guest_pull_source(p_container)
+    allow_image_reference(p_image_source, i_storage.source)
+
     print("allow_storage with image_guest_pull: true")
 }
-allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
+allow_storage(p_container, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with scsi: start")
 
     i_storage.driver == "scsi"
     regex.match("^[0-9]+:[0-9]+$", i_storage.source)
 
-    allow_block_storage(p_storages, i_storage, bundle_id, sandbox_id)
+    allow_block_storage(p_container.storages, i_storage, bundle_id, sandbox_id)
 
     print("allow_storage with scsi: true")
 }
-allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
+allow_storage(p_container, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with blk: start")
 
     i_storage.driver == "blk"
     regex.match("^[0-9a-f]{2}(/[0-9a-f]{2})?$", i_storage.source)
 
-    allow_block_storage(p_storages, i_storage, bundle_id, sandbox_id)
+    allow_block_storage(p_container.storages, i_storage, bundle_id, sandbox_id)
 
     print("allow_storage with blk: true")
 }

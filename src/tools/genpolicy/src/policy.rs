@@ -270,6 +270,9 @@ pub struct KataMount {
 /// Policy data for a container, included in the output of this app.
 #[derive(Debug, Serialize)]
 pub struct ContainerPolicy {
+    /// Image reference declared for this container in the input workload.
+    image: String,
+
     /// Data compared with req.OCI for CreateContainerRequest calls.
     pub OCI: KataSpec,
 
@@ -827,6 +830,7 @@ impl AgentPolicy {
         }
 
         ContainerPolicy {
+            image: yaml_container.image.clone(),
             OCI: KataSpec {
                 Version: self.config.settings.kata_config.oci_version.clone(),
                 Process: process,

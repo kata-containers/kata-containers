@@ -402,6 +402,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_image_guest_pull_source_pinned() {
+        runtests("createcontainer/image_guest_pull_source/pinned").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_image_guest_pull_source_unpinned() {
+        runtests("createcontainer/image_guest_pull_source/unpinned").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_gpu_vfio_cdi() {
         runtests("createcontainer/gpu_vfio_cdi").await;
     }
