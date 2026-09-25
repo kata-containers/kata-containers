@@ -119,6 +119,8 @@ impl_agent!(
     list_routes | crate::Empty | crate::Routes | None,
     create_sandbox | crate::CreateSandboxRequest | crate::Empty | None,
     destroy_sandbox | crate::Empty | crate::Empty | None,
+    reseed_random_dev | crate::ReseedRandomDevRequest | crate::Empty | None,
+    set_guest_date_time | crate::SetGuestDateTimeRequest | crate::Empty | None,
     copy_file | crate::CopyFileRequest | crate::Empty | None,
     get_oom_event | crate::Empty | crate::OomEventResponse | Some(0),
     get_ip_tables | crate::GetIPTablesRequest | crate::GetIPTablesResponse | None,
