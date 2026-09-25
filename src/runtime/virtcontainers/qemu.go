@@ -628,6 +628,15 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	return q.buildNUMATopologyForVFIOHostSet(vfioHostSet)
 }
 
+// Whether QEMU faults every guest page in at start: enable_mem_prealloc, or a
+// huge page backed guest shared over virtio-fs or nydus.
+func qemuGuestMemoryPreallocated(hc *HypervisorConfig) bool {
+	if hc.MemPrealloc {
+		return true
+	}
+	return hc.HugePages && (hc.SharedFS == config.VirtioFS || hc.SharedFS == config.VirtioFSNydus)
+}
+
 // defaultHugepagesMountpoint is the standard mount point of the hugetlbfs
 // filesystem used to back guest memory with huge pages.
 const defaultHugepagesMountpoint = "/dev/hugepages"
@@ -1180,7 +1189,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		NoDefaults:    true,
 		NoGraphic:     true,
 		NoReboot:      true,
-		MemPrealloc:   q.config.MemPrealloc,
+		MemPrealloc:   qemuGuestMemoryPreallocated(&q.config),
 		HugePages:     q.config.HugePages,
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
@@ -1197,9 +1206,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
 			return errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
-		}
-		if q.config.HugePages {
-			knobs.MemPrealloc = true
 		}
 	}
 
