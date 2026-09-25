@@ -105,7 +105,9 @@ impl OpenVmmInner {
     }
 
     pub(crate) fn hypervisor_config(&self) -> HypervisorConfig {
-        self.config.clone()
+        let mut config = self.config.clone();
+        config.network_info.network_queues = 1;
+        config
     }
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {

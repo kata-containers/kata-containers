@@ -166,7 +166,9 @@ impl FcInner {
 
     pub(crate) fn hypervisor_config(&self) -> HypervisorConfig {
         debug!(sl(), "[Firecracker]: Hypervisor config");
-        self.config.clone()
+        let mut config = self.config.clone();
+        config.network_info.network_queues = 1;
+        config
     }
 
     pub(crate) fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
@@ -235,7 +237,7 @@ impl Persist for FcInner {
             hypervisor_type: HYPERVISOR_FIRECRACKER.to_string(),
             id: self.id.clone(),
             vm_path: self.vm_path.clone(),
-            config: self.hypervisor_config(),
+            config: self.config.clone(),
             jailed: self.jailed,
             jailer_root: self.jailer_root.clone(),
             run_dir: self.run_dir.clone(),

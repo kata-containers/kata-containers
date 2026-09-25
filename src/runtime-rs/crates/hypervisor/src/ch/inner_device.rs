@@ -48,7 +48,13 @@ use tokio::sync::Mutex;
 const VIRTIO_FS: &str = "virtio-fs";
 
 impl CloudHypervisorInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+    pub(crate) async fn add_device(&mut self, mut device: DeviceType) -> Result<DeviceType> {
+        if let DeviceType::Network(net) = &mut device {
+            net.config.queue_num = net
+                .config
+                .queue_num
+                .clamp(1, self.config.network_queue_limit() as usize);
+        }
         if self.state != VmmState::VmRunning {
             // If the VM is not running, add the device to the pending list to
             // be handled later.
@@ -434,8 +440,7 @@ impl CloudHypervisorInner {
                     shared_fs_devices.push(fs_cfg);
                 }
                 DeviceType::Network(net_device) => {
-                    let network_queues_pairs =
-                        self.hypervisor_config().network_info.network_queues as usize;
+                    let network_queues_pairs = net_device.config.queue_num;
 
                     let mut net_config = NetConfig::try_from(net_device.config.clone())?;
                     // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
