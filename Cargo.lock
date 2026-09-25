@@ -3822,6 +3822,7 @@ dependencies = [
  "glob",
  "gpt",
  "lazy_static",
+ "libc",
  "nix 0.31.3",
  "num_cpus",
  "oci-spec 0.10.0",
