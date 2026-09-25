@@ -25,7 +25,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
-use std::{os::unix::fs::symlink, path::PathBuf};
+use std::path::PathBuf;
 use tokio::sync::OnceCell;
 
 pub mod image;
@@ -198,25 +198,28 @@ pub async fn pull_image(image: &str, bundle_path: PathBuf) -> Result<String> {
     Ok(image_bundle_path.as_path().display().to_string())
 }
 
-pub async fn unseal_file(path: &str) -> Result<()> {
-    let cdh_client = CDH_CLIENT
-        .get()
-        .expect("Confidential Data Hub not initialized");
-
-    if !Path::new(path).exists() {
-        bail!("sealed secret file {:?} does not exist", path);
+/// Unseal the secret volume at `src` into `dst`, leaving `src` untouched.
+///
+/// Returns false if nothing was sealed, in which case `dst` is not created and
+/// the caller should leave the mount pointing at `src`.
+///
+/// Unsealing in place would fail on a read-only volume, as it is once the
+/// runtime ships it as an EROFS image, and it would fail quietly, leaving the
+/// container with the ciphertext.
+pub async fn unseal_files_into(src: &Path, dst: &Path) -> Result<bool> {
+    if !src.exists() {
+        bail!("sealed secret file {:?} does not exist", src);
     }
 
-    // Iterate over all entries to handle the sealed secret file.
-    // For example, the directory is as follows:
-    // The secret directory in the guest: /run/kata-containers/shared/containers/21bbf0d932b70263d65d7052ecfd72ee46de03f766650cb378e93852ddb30a54-5063be11b6800f96-sealed-secret-target/:
-    // - ..2024_09_30_02_55_58.2237819815
-    // - ..data -> ..2024_09_30_02_55_58.2237819815
-    // - secret -> ..2024_09_30_02_55_58.2237819815/secret
-    //
-    // The directory "..2024_09_30_02_55_58.2237819815":
-    // - secret
-    for entry in fs::read_dir(path)? {
+    // A hostPath file is a single file, and read_dir would fail. Sealed
+    // secrets only exist in kubelet's atomic-writer directory layout.
+    if !src.is_dir() {
+        return Ok(false);
+    }
+
+    // Resolved up front so a volume with nothing sealed costs only the read.
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(src)? {
         let entry = entry?;
         let entry_type = entry.file_type()?;
         if !entry_type.is_symlink() && !entry_type.is_file() {
@@ -230,40 +233,46 @@ pub async fn unseal_file(path: &str) -> Result<()> {
         }
 
         let target_path = fs::canonicalize(entry.path())?;
-        info!(sl(), "sealed source entry target path: {:?}", target_path);
 
-        // Skip if the target path is not a file (e.g., it's a symlink pointing to the secret file).
         if !target_path.is_file() {
             debug!(sl(), "sealed source is not a file: {:?}", target_path);
             continue;
         }
 
-        let secret_name = entry.file_name();
-        if content_starts_with_prefix(&target_path, SEALED_SECRET_PREFIX).await? {
-            let contents = fs::read_to_string(&target_path)?;
-            // Get the directory name of the sealed secret file
-            let dir_name = target_path
-                .parent()
-                .and_then(|p| p.file_name())
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_default();
-
-            // Create the unsealed file name in the same directory, which will be written the unsealed data.
-            let unsealed_filename = format!("{}.unsealed", target_path.to_string_lossy());
-            // Create the unsealed file symlink, which is used for reading the unsealed data in the container.
-            let unsealed_filename_symlink =
-                format!("{}/{}.unsealed", dir_name, secret_name.to_string_lossy());
-
-            // Unseal the secret and write it to the unsealed file
-            let unsealed_value = cdh_client.unseal_secret_async(&contents).await?;
-            fs::write(&unsealed_filename, unsealed_value)?;
-
-            // Remove the original sealed symlink and create a symlink to the unsealed file
-            fs::remove_file(entry.path())?;
-            symlink(unsealed_filename_symlink, entry.path())?;
-        }
+        let sealed = content_starts_with_prefix(&target_path, SEALED_SECRET_PREFIX).await?;
+        entries.push((entry.file_name(), target_path, sealed));
     }
-    Ok(())
+
+    if !entries.iter().any(|(_, _, sealed)| *sealed) {
+        return Ok(false);
+    }
+
+    // Only needed once there is something to unseal.
+    let cdh_client = CDH_CLIENT
+        .get()
+        .expect("Confidential Data Hub not initialized");
+
+    fs::create_dir_all(dst)?;
+
+    for (name, target_path, sealed) in entries {
+        let contents = if sealed {
+            info!(sl(), "unsealing {:?}", target_path);
+            let sealed_contents = fs::read_to_string(&target_path)?;
+            cdh_client.unseal_secret_async(&sealed_contents).await?
+        } else {
+            // Copied, not linked: this directory replaces the volume, and a
+            // link to the original guest path would not resolve in the
+            // container's mount namespace.
+            fs::read(&target_path)?
+        };
+
+        let path = dst.join(&name);
+        fs::write(&path, contents)?;
+        // Whatever defaultMode the pod asked for.
+        fs::set_permissions(&path, fs::metadata(&target_path)?.permissions())?;
+    }
+
+    Ok(true)
 }
 
 pub async fn content_starts_with_prefix(path: &Path, prefix: &str) -> io::Result<bool> {
@@ -306,8 +315,8 @@ pub async fn get_cdh_resource(resource_path: &str) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use std::fs::File;
-    use std::io::{Read, Write};
+    use std::io::Write;
+    use std::os::unix::fs::symlink;
     use std::sync::Arc;
     use tempfile::{tempdir, NamedTempFile};
     use test_utils::skip_if_not_root;
@@ -436,36 +445,96 @@ mod tests {
         assert_eq!(result, "KEY=unsealed");
 
         // Test sealed secret as files
-        let sealed_dir = test_dir_path.join("..test");
-        fs::create_dir(&sealed_dir).unwrap();
-        let sealed_filename = sealed_dir.join("secret");
-        let mut sealed_file = File::create(sealed_filename.clone()).unwrap();
-        sealed_file.write_all(b"sealed.testdata").unwrap();
-        let secret_symlink = test_dir_path.join("secret");
-        symlink(&sealed_filename, &secret_symlink).unwrap();
+        let volume = test_dir_path.join("volume");
+        atomic_writer_volume(
+            &volume,
+            &[("secret", b"sealed.testdata"), ("plain", b"testdata")],
+        );
 
-        unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
+        let unsealed = test_dir_path.join("unsealed");
+        assert!(unseal_files_into(&volume, &unsealed).await.unwrap());
 
-        let unsealed_filename = test_dir_path.join("secret");
-        let mut unsealed_file = File::open(unsealed_filename.clone()).unwrap();
-        let mut contents = String::new();
-        unsealed_file.read_to_string(&mut contents).unwrap();
-        assert_eq!(contents, String::from("unsealed"));
-        fs::remove_file(sealed_filename).unwrap();
-        fs::remove_file(unsealed_filename).unwrap();
+        // The unsealed copy replaces the volume, so entries that were not
+        // sealed have to come through it too.
+        assert_eq!(
+            fs::read_to_string(unsealed.join("secret")).unwrap(),
+            "unsealed"
+        );
+        assert_eq!(
+            fs::read_to_string(unsealed.join("plain")).unwrap(),
+            "testdata"
+        );
 
-        let normal_filename = test_dir_path.join("secret");
-        let mut normal_file = File::create(normal_filename.clone()).unwrap();
-        normal_file.write_all(b"testdata").unwrap();
-        unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
-        let mut contents = String::new();
-        let mut normal_file = File::open(normal_filename.clone()).unwrap();
-        normal_file.read_to_string(&mut contents).unwrap();
-        assert_eq!(contents, String::from("testdata"));
-        fs::remove_file(normal_filename).unwrap();
+        // The source is left alone: it may be read-only.
+        assert_eq!(
+            fs::read_to_string(volume.join("secret")).unwrap(),
+            "sealed.testdata"
+        );
+        assert!(!volume.join("..data/secret.unsealed").exists());
+
+        // Nothing sealed: no directory, and the caller keeps the original.
+        fs::write(volume.join("..data/secret"), b"testdata").unwrap();
+        let untouched = test_dir_path.join("untouched");
+        assert!(!unseal_files_into(&volume, &untouched).await.unwrap());
+        assert!(!untouched.exists());
 
         rt.shutdown_background();
         std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    /// The layout kubelet's atomic writer produces.
+    fn atomic_writer_volume(root: &Path, contents: &[(&str, &[u8])]) {
+        let data = root.join("..2024_09_30_02_55_58.2237819815");
+        fs::create_dir_all(&data).unwrap();
+        symlink("..2024_09_30_02_55_58.2237819815", root.join("..data")).unwrap();
+
+        for (name, body) in contents {
+            fs::write(data.join(name), body).unwrap();
+            symlink(format!("..data/{name}"), root.join(name)).unwrap();
+        }
+    }
+
+    /// Every volume in every pod comes through here and almost none hold a
+    /// sealed secret, so this is the path that matters most.
+    #[tokio::test]
+    async fn test_nothing_sealed_leaves_the_volume_alone() {
+        let tmp = tempdir().unwrap();
+
+        let volume = tmp.path().join("volume");
+        atomic_writer_volume(
+            &volume,
+            &[("key-a", b"value-a"), ("key-b", b"not-sealed.value-b")],
+        );
+
+        let dst = tmp.path().join("unsealed");
+        assert!(!unseal_files_into(&volume, &dst).await.unwrap());
+
+        // No directory to clean up, and the caller keeps the original mount.
+        assert!(!dst.exists());
+        assert_eq!(fs::read_to_string(volume.join("key-a")).unwrap(), "value-a");
+    }
+
+    #[tokio::test]
+    async fn test_file_volume_is_left_alone() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("foo.txt");
+        fs::write(&file, "test\n").unwrap();
+        let dst = tmp.path().join("unsealed");
+
+        assert!(!unseal_files_into(&file, &dst).await.unwrap());
+        assert!(!dst.exists());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "test\n");
+    }
+
+    #[tokio::test]
+    async fn test_missing_source_is_an_error() {
+        let tmp = tempdir().unwrap();
+
+        assert!(
+            unseal_files_into(&tmp.path().join("absent"), &tmp.path().join("out"))
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

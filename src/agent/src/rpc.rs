@@ -119,6 +119,7 @@ use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
 use kata_types::k8s;
+use safe_path::scoped_join;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
@@ -134,6 +135,9 @@ const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
 const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-restore";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
 const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+/// Holds the sandbox-scoped files the containers share, alongside the
+/// resolv.conf that setup_guest_dns() writes.
+const KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox";
 
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
@@ -333,9 +337,13 @@ impl AgentService {
         .await?;
 
         // Handle sealed secrets after storage is mounted
-        cdh_handler_sealed_secrets(&mut oci)
+        cdh_handler_sealed_secrets(&cid, &mut oci)
             .await
             .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
+
+        // Before setup_bundle writes the spec out, so the rewritten mount is
+        // what both rustjail and the later read-back see.
+        setup_termination_log(&cid, &mut oci)?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -511,7 +519,7 @@ impl AgentService {
         update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
         if confidential_data_hub::is_cdh_client_initialized() {
-            unseal_envs(&mut process.Env).await;
+            unseal_envs(&mut process.Env).await?;
         }
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
@@ -1578,6 +1586,8 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        setup_guest_hostname(&req.hostname).map_ttrpc_err(same)?;
+
         setup_guest_dns(sl(), &req.dns).map_ttrpc_err(same)?;
         {
             let mut s = self.sandbox.lock().await;
@@ -1585,6 +1595,19 @@ impl agent_ttrpc::AgentService for AgentService {
                 s.network.set_dns(dns);
             }
         }
+
+        Ok(Empty::new())
+    }
+
+    async fn set_sandbox_hosts(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::SetSandboxHostsRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "set_sandbox_hosts", req);
+        is_allowed(&req).await?;
+
+        setup_guest_hosts(&req.hosts).map_ttrpc_err(same)?;
 
         Ok(Empty::new())
     }
@@ -2575,6 +2598,113 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     Ok(olddir)
 }
 
+// The host hands every container in the pod a bind mount of one per-pod
+// hostname file, so write the equivalent from the hostname the request
+// already carries and let the containers point at that.
+fn setup_guest_hostname(hostname: &str) -> Result<()> {
+    if hostname.is_empty() {
+        return Ok(());
+    }
+
+    // Trailing newline to match what containerd writes on the host.
+    write_sandbox_file("hostname", &format!("{hostname}\n"))
+}
+
+// Same idea for the pod's hosts file, except the runtime has to hand this one
+// over separately: the host only names it in a container spec, long after
+// create_sandbox.
+fn setup_guest_hosts(hosts: &[String]) -> Result<()> {
+    if hosts.is_empty() {
+        return Ok(());
+    }
+
+    let mut content = hosts.join("\n");
+    content.push('\n');
+
+    write_sandbox_file("hosts", &content)
+}
+
+// Kubelet bind-mounts an empty file for the container's exit message, which
+// without filesystem sharing is unreachable from the guest. Nothing needs
+// transferring though: it starts empty, the container is its only writer, and
+// the message leaves over GetDiagnosticData. So create it here instead, from
+// create_container, where a file can only appear for a container that really
+// exists and the guest path is ours to choose.
+fn setup_termination_log(cid: &str, oci: &mut Spec) -> Result<()> {
+    do_setup_termination_log(
+        &Path::new(KATA_GUEST_SANDBOX_DIR).join("termination-logs"),
+        cid,
+        oci,
+    )
+}
+
+fn do_setup_termination_log(dir: &Path, cid: &str, oci: &mut Spec) -> Result<()> {
+    let Some(destination) = termination_message_path(oci) else {
+        return Ok(());
+    };
+
+    let Some(mounts) = oci.mounts_mut().as_mut() else {
+        return Ok(());
+    };
+
+    let Some(mount) = mounts
+        .iter_mut()
+        .find(|m| m.destination() == Path::new(&destination))
+    else {
+        return Ok(());
+    };
+
+    // With filesystem sharing the host's own file is already reachable here,
+    // and rewriting the mount would only cut off kubelet's read-back.
+    if mount.source().as_ref().is_some_and(|s| s.exists()) {
+        return Ok(());
+    }
+
+    mount.set_source(Some(create_termination_log(dir, cid)?));
+
+    Ok(())
+}
+
+fn termination_message_path(oci: &Spec) -> Option<String> {
+    oci.annotations()
+        .as_ref()?
+        .get("io.kubernetes.container.terminationMessagePath")
+        .filter(|p| !p.is_empty())
+        .cloned()
+}
+
+fn create_termination_log(dir: &Path, cid: &str) -> Result<PathBuf> {
+    fs::create_dir_all(dir)?;
+
+    // create_container already ran the id through verify_id, so this is belt
+    // and braces against it ever naming something outside our directory.
+    let path = scoped_join(dir, cid)?;
+
+    // Root-owned 0644, matching the file kubelet creates: a container running
+    // as another user cannot write that one either.
+    fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)?;
+
+    Ok(path)
+}
+
+// Written by rename so a container already sharing the file cannot observe a
+// partial one, since the runtime hands us the same content again for each
+// container in the pod.
+fn write_sandbox_file(name: &str, content: &str) -> Result<()> {
+    let dir = Path::new(KATA_GUEST_SANDBOX_DIR);
+    fs::create_dir_all(dir)?;
+
+    let tmp = dir.join(format!(".{name}.tmp"));
+    fs::write(&tmp, content)?;
+    fs::rename(&tmp, dir.join(name))?;
+
+    Ok(())
+}
+
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
     if module.name.is_empty() {
         return Err(anyhow!("Kernel module name is empty"));
@@ -2702,18 +2832,16 @@ pub(crate) async fn cdh_secure_mount(
     Ok(())
 }
 
-async fn unseal_envs(envs: &mut [String]) {
+async fn unseal_envs(envs: &mut [String]) -> Result<()> {
     for env in envs.iter_mut() {
-        match confidential_data_hub::unseal_env(env).await {
-            Ok(unsealed_env) => *env = unsealed_env.to_string(),
-            Err(e) => {
-                warn!(sl(), "Failed to unseal secret: {}", e)
-            }
-        }
+        *env = confidential_data_hub::unseal_env(env)
+            .await
+            .context("unseal environment variable")?;
     }
+    Ok(())
 }
 
-async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
+async fn cdh_handler_sealed_secrets(cid: &str, oci: &mut Spec) -> Result<()> {
     if !confidential_data_hub::is_cdh_client_initialized() {
         return Ok(());
     }
@@ -2722,7 +2850,7 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
     if let Some(envs) = process.env_mut().as_mut() {
-        unseal_envs(envs).await;
+        unseal_envs(envs).await?;
     }
 
     let mounts = oci
@@ -2744,26 +2872,42 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
         if is_sealed_secret_path(source_path) {
             debug!(
                 sl(),
-                "Calling unseal_file for - source: {:?} destination: {:?}",
+                "Checking for sealed secrets - source: {:?} destination: {:?}",
                 source_path,
                 m.destination()
             );
-            // Call unseal_file. This function checks the files under the source_path
-            // for the sealed secret header and unseal it if the header is present.
-            // This is suboptimal as we are going through every file under the source_path.
-            // But currently there is no quick way to determine which volume-mount is referring
-            // to a sealed secret without reading the file.
-            // And relying on file naming heuristic is inflexible. So we are going with this approach.
-            if let Err(e) = confidential_data_hub::unseal_file(source_path).await {
-                warn!(
-                    sl(),
-                    "Failed to unseal file: {:?}, Error: {:?}", source_path, e
-                );
+
+            // Every file has to be read: nothing short of the content says
+            // whether a volume holds a sealed secret.
+            let dst = unsealed_dir(cid, source_path)?;
+            if confidential_data_hub::unseal_files_into(Path::new(source_path), &dst)
+                .await
+                .with_context(|| format!("unseal {source_path}"))?
+            {
+                m.set_source(Some(dst));
             }
         }
     }
 
     Ok(())
+}
+
+/// Guest-private and writable, so that the volume itself can stay read-only.
+fn unsealed_dir(cid: &str, source_path: &str) -> Result<PathBuf> {
+    do_unsealed_dir(Path::new(KATA_GUEST_SANDBOX_DIR), cid, source_path)
+}
+
+fn do_unsealed_dir(sandbox_dir: &Path, cid: &str, source_path: &str) -> Result<PathBuf> {
+    let name = Path::new(source_path)
+        .file_name()
+        .ok_or_else(|| anyhow!("mount source {source_path} has no file name"))?;
+
+    // scoped_join clamps to its root rather than failing, so root it here and
+    // not at the sandbox directory that holds hosts, hostname and the rest.
+    let base = sandbox_dir.join("unsealed");
+    fs::create_dir_all(&base)?;
+
+    Ok(scoped_join(&base, Path::new(cid).join(name))?)
 }
 
 #[cfg(test)]
@@ -2795,6 +2939,179 @@ mod tests {
 
     fn check_command(cmd: &str) -> bool {
         which(cmd).is_ok()
+    }
+
+    #[test]
+    fn test_create_termination_log() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+
+        let path = create_termination_log(&base, "abc123").unwrap();
+
+        assert_eq!(path, base.join("abc123"));
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert!(metadata.is_file());
+        assert_eq!(metadata.len(), 0, "kubelet's copy is empty, so ours is too");
+
+        // Asked twice for the same container it stays empty rather than
+        // erroring, so a retried create_container is harmless.
+        assert_eq!(create_termination_log(&base, "abc123").unwrap(), path);
+    }
+
+    // scoped_join treats the base as a root, so `..` is clamped there rather
+    // than rejected. Either way the file has to land inside the directory we
+    // own, which is the property worth pinning down: the id comes from the host.
+    #[test]
+    fn test_create_termination_log_cannot_escape() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+
+        for cid in [
+            "../escaped",
+            "../../etc/passwd",
+            "sub/../../escaped",
+            "/absolute",
+        ] {
+            if let Ok(path) = create_termination_log(&base, cid) {
+                assert!(
+                    path.starts_with(&base),
+                    "container id {:?} produced {:?}, outside {:?}",
+                    cid,
+                    path,
+                    base
+                );
+            }
+        }
+
+        assert!(!dir.path().join("escaped").exists());
+        assert!(!dir.path().join("etc").exists());
+    }
+
+    fn spec_with_termination_log(destination: &str, source: &Path) -> Spec {
+        let mut annotations = std::collections::HashMap::new();
+        annotations.insert(
+            "io.kubernetes.container.terminationMessagePath".to_string(),
+            destination.to_string(),
+        );
+
+        let mut mount = oci::Mount::default();
+        mount.set_destination(PathBuf::from(destination));
+        mount.set_source(Some(source.to_path_buf()));
+
+        let mut spec = Spec::default();
+        spec.set_annotations(Some(annotations));
+        spec.set_mounts(Some(vec![mount]));
+        spec
+    }
+
+    fn source_of(spec: &Spec) -> PathBuf {
+        spec.mounts().as_ref().unwrap()[0]
+            .source()
+            .as_ref()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn test_unsealed_dir_is_per_container_and_per_volume() {
+        let tmp = tempdir().unwrap();
+        let dir = |cid, source| do_unsealed_dir(tmp.path(), cid, source).unwrap();
+
+        let secret = "/run/kata-containers/shared/containers/dev-hash-secret";
+        let projected = "/run/kata-containers/shared/containers/dev-hash-projected";
+
+        assert_ne!(
+            dir("cid-a", secret),
+            dir("cid-b", secret),
+            "two containers must not share a directory"
+        );
+        assert_ne!(
+            dir("cid-a", secret),
+            dir("cid-a", projected),
+            "two volumes must not share a directory"
+        );
+        assert_eq!(
+            dir("cid-a", secret),
+            tmp.path().join("unsealed/cid-a/dev-hash-secret")
+        );
+
+        // The leaf is unseal_files_into's to create, and only if it finds
+        // something sealed.
+        assert!(!dir("cid-a", secret).exists());
+    }
+
+    #[test]
+    fn test_unsealed_dir_cannot_escape() {
+        let tmp = tempdir().unwrap();
+        let base = tmp.path().join("unsealed");
+
+        for cid in ["../../escaped", "../..", "/etc"] {
+            let dir = do_unsealed_dir(
+                tmp.path(),
+                cid,
+                "/run/kata-containers/shared/containers/vol",
+            )
+            .unwrap();
+            assert!(
+                dir.starts_with(&base),
+                "container id {:?} escaped to {:?}",
+                cid,
+                dir
+            );
+        }
+    }
+
+    #[test]
+    fn test_setup_termination_log_rewrites_an_unreachable_source() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+        // A host path, so not reachable from in here.
+        let host_source = dir.path().join("kubelet-copy");
+
+        let mut spec = spec_with_termination_log("/dev/termination-log", &host_source);
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+
+        // Pointed at a file we made, not the one the host named.
+        let source = source_of(&spec);
+        assert_eq!(source, base.join("abc123"));
+        assert_eq!(std::fs::metadata(&source).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_setup_termination_log_leaves_a_reachable_source_alone() {
+        // A source that exists is filesystem sharing doing its job, and
+        // rewriting it would cut off kubelet's read-back.
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+        let shared = dir.path().join("shared-termination-log");
+        std::fs::write(&shared, b"").unwrap();
+
+        let mut spec = spec_with_termination_log("/dev/termination-log", &shared);
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+
+        assert_eq!(source_of(&spec), shared);
+        assert!(!base.exists(), "nothing created for a mount we left alone");
+    }
+
+    #[test]
+    fn test_setup_termination_log_needs_the_annotation() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("termination-logs");
+        let host_source = dir.path().join("kubelet-copy");
+
+        // Annotated path that no mount matches.
+        let mut spec = spec_with_termination_log("/dev/termination-log", &host_source);
+        spec.mounts_mut().as_mut().unwrap()[0].set_destination(PathBuf::from("/etc/hosts"));
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+        assert_eq!(source_of(&spec), host_source);
+
+        // No annotation at all.
+        let mut spec = spec_with_termination_log("/dev/termination-log", &host_source);
+        spec.set_annotations(None);
+        do_setup_termination_log(&base, "abc123", &mut spec).unwrap();
+        assert_eq!(source_of(&spec), host_source);
+
+        assert!(!base.exists());
     }
 
     fn mk_ttrpc_context() -> TtrpcContext {

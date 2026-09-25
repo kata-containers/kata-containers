@@ -23,10 +23,10 @@ pub use types::{
     MemHotplugByProbeRequest, MetricsResponse, OnlineCPUMemRequest, OomEventResponse,
     ReadStreamRequest, ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest,
     ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest,
-    SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage,
-    TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-    VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-    WaitProcessResponse, WriteStreamRequest, WriteStreamResponse,
+    SetIPTablesResponse, SetSandboxHostsRequest, SignalProcessRequest, StatsContainerResponse,
+    Storage, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
+    UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+    WaitProcessRequest, WaitProcessResponse, WriteStreamRequest, WriteStreamResponse,
 };
 
 use anyhow::Result;
@@ -58,6 +58,7 @@ pub trait HealthService: Send + Sync {
 pub trait Agent: AgentManager + HealthService + Send + Sync {
     // sandbox
     async fn create_sandbox(&self, req: CreateSandboxRequest) -> Result<Empty>;
+    async fn set_sandbox_hosts(&self, req: SetSandboxHostsRequest) -> Result<Empty>;
     async fn destroy_sandbox(&self, req: Empty) -> Result<Empty>;
     async fn online_cpu_mem(&self, req: OnlineCPUMemRequest) -> Result<Empty>;
 

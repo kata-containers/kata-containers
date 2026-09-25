@@ -223,6 +223,35 @@
                 "rprivate",
                 "rw"
             ]
+        },
+        "erofs": {
+            "mount_point": "^$(cpath)/[0-9a-f]{1,10}-[0-9a-f]{8}-",
+            "options": [
+                "ro",
+                "nosuid",
+                "nodev"
+            ],
+            "content_options": [
+                "noexec"
+            ],
+            "verity_options": [
+                "^X-kata\\.dmverity-enabled=true$",
+                "^X-kata\\.dmverity\\.roothash=[0-9a-f]{64}$",
+                "^X-kata\\.dmverity\\.hashoffset=[0-9]+$",
+                "^X-kata\\.dmverity\\.blocksize=4096$",
+                "^X-kata\\.dmverity\\.hashsize=4096$",
+                "^X-kata\\.dmverity\\.salt=0{64}$"
+            ],
+            "content_mounts": [
+                "/var/run/secrets/kubernetes.io/serviceaccount",
+                "/var/run/secrets/azure/tokens"
+            ],
+            "sandbox_files": {
+                "/etc/hosts": "^/run/kata-containers/sandbox/hosts$",
+                "/etc/hostname": "^/run/kata-containers/sandbox/hostname$",
+                "/etc/resolv.conf": "^/run/kata-containers/sandbox/resolv\\.conf$"
+            },
+            "termination_log_source": "^/var/lib/kubelet/pods/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/containers/[a-z0-9]([-a-z0-9]*[a-z0-9])?/[0-9a-f]{8}$"
         }
     },
     "devices": {
@@ -265,7 +294,19 @@
                 "mount_point": "/run/kata-containers/sandbox/shm",
                 "fs_group": null
             }
-        ]
+        ],
+        "hosts": {
+            "header": [
+                "# Kubernetes-managed hosts file.",
+                "127.0.0.1\tlocalhost",
+                "::1\tlocalhost ip6-localhost ip6-loopback",
+                "fe00::0\tip6-localnet",
+                "fe00::0\tip6-mcastprefix",
+                "fe00::1\tip6-allnodes",
+                "fe00::2\tip6-allrouters"
+            ],
+            "cluster_domain": "cluster.local"
+        }
     },
     "common": {
         "cpath": "/run/kata-containers/shared/containers(?:/passthrough)?",
@@ -339,7 +380,8 @@
     },
     "kata_config": {
         "oci_version": "1.1.0",
-        "enable_configmap_secret_storages": false
+        "enable_configmap_secret_storages": false,
+        "erofs_volumes": false
     },
     "cluster_config": {
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",

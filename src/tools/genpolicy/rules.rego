@@ -41,6 +41,7 @@ default ResizeVolumeRequest := false
 default ResumeContainerRequest := false
 default SetGuestDateTimeRequest := false
 default SetIPTablesRequest := false
+default SetSandboxHostsRequest := false
 default SetPolicyRequest := false
 default SignalProcessRequest := true
 default StartContainerRequest := true
@@ -1247,7 +1248,13 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
     print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count)
 
     img_pull_count == expected_image_guest_pull_count
-    p_count == i_count - img_pull_count
+
+    # EROFS volume storages are optional: the policy lists one for every
+    # mount that could be a volume, such as the service account token, which
+    # a pod does not always get.
+    p_required_count := count([s | s := p_storages[_]; s.fstype != "erofs"])
+    p_required_count <= i_count - img_pull_count
+    i_count - img_pull_count <= p_count
 
     every i_storage in i_storages {
         allow_storage(p_storages, i_storage, bundle_id, sandbox_id)
@@ -1368,6 +1375,19 @@ allow_storage_options(p_storage, i_storage) if {
 
     print("allow_storage_options 1: true")
 }
+allow_storage_options(p_storage, i_storage) if {
+    print("allow_storage_options 2: start")
+
+    # EROFS volume images carry a dm-verity root hash and hash offset that
+    # depend on the volume's content, so the policy options are regexes.
+    p_storage.fstype == "erofs"
+    count(p_storage.options) == count(i_storage.options)
+    every i, p_option in p_storage.options {
+        regex.match(p_option, i_storage.options[i])
+    }
+
+    print("allow_storage_options 2: true")
+}
 
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
     print("allow_mount_point 1: start")
@@ -1432,6 +1452,18 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
     allow_mount_point_by_device_id(p_storage, i_storage)
 
     print("allow_mount_point 5: true")
+}
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
+    print("allow_mount_point 6: start")
+
+    p_storage.fstype == "erofs"
+
+    mount1 := replace(p_storage.mount_point, "$(cpath)", policy_data.common.cpath)
+    print("allow_mount_point 6: mount1 =", mount1)
+
+    regex.match(mount1, i_storage.mount_point)
+
+    print("allow_mount_point 6: true")
 }
 
 allow_mount_point_by_device_id(p_storage, i_storage) if {
@@ -1633,6 +1665,84 @@ CreateSandboxRequest if {
     print("CreateSandboxRequest: i_pidns =", i_pidns)
     i_pidns == false
     allow_sandbox_storages(input.storages)
+}
+
+# The hosts file kubelet wrote for the pod, line by line: a fixed header, one
+# line per pod IP naming the pod, then the pod's hostAliases. The pod IPs are
+# the only part not known up front, and the pod name only for pods created
+# from a template, so it comes from the state the pause container left.
+SetSandboxHostsRequest if {
+    p_hosts := policy_data.sandbox.hosts
+    i_hosts := input.hosts
+    print("SetSandboxHostsRequest: i_hosts =", i_hosts)
+
+    s_name := get_state_val("sandbox_name")
+    s_namespace := get_state_val("namespace")
+
+    hostname := sandbox_hostname(p_hosts.hostname, s_name)
+    names := sandbox_host_names(hostname, p_hosts.subdomain, s_namespace, p_hosts.cluster_domain)
+    aliases := sandbox_host_aliases(p_hosts.aliases)
+    print("SetSandboxHostsRequest: names =", names, "aliases =", aliases)
+
+    n_header := count(p_hosts.header)
+    n_ips := count(i_hosts) - n_header - count(aliases)
+
+    # One pod IP per address family.
+    n_ips >= 1
+    n_ips <= 2
+
+    every i, line in i_hosts {
+        allow_sandbox_hosts_line(i, line, p_hosts.header, n_ips, names, aliases)
+    }
+
+    print("SetSandboxHostsRequest: true")
+}
+
+sandbox_hostname(p_hostname, s_name) := p_hostname if {
+    p_hostname != ""
+}
+# Kubelet cuts the pod name down to a valid hostname.
+sandbox_hostname(p_hostname, s_name) := trim_right(substring(s_name, 0, 63), "-.") if {
+    p_hostname == ""
+}
+
+sandbox_host_names(hostname, subdomain, namespace, domain) := [hostname] if {
+    subdomain == ""
+}
+sandbox_host_names(hostname, subdomain, namespace, domain) := [fqdn, hostname] if {
+    subdomain != ""
+    fqdn := concat(".", [hostname, subdomain, namespace, "svc", domain])
+}
+
+sandbox_host_aliases(aliases) := [] if {
+    count(aliases) == 0
+}
+sandbox_host_aliases(aliases) := array.concat(["", "# Entries added by HostAliases."], aliases) if {
+    count(aliases) > 0
+}
+
+allow_sandbox_hosts_line(i, line, header, n_ips, names, aliases) if {
+    i < count(header)
+    line == header[i]
+}
+allow_sandbox_hosts_line(i, line, header, n_ips, names, aliases) if {
+    i >= count(header)
+    i < count(header) + n_ips
+
+    fields := split(line, "\t")
+    allow_pod_ip(fields[0])
+    array.slice(fields, 1, count(fields)) == names
+}
+allow_sandbox_hosts_line(i, line, header, n_ips, names, aliases) if {
+    i >= count(header) + n_ips
+    line == aliases[i - count(header) - n_ips]
+}
+
+allow_pod_ip(ip) if {
+    is_ip(ip)
+}
+allow_pod_ip(ip) if {
+    regex.match("^[0-9a-fA-F:]*:[0-9a-fA-F:]*$", ip)
 }
 
 allow_exec(p_container, i_process) if {

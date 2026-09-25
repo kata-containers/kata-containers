@@ -75,6 +75,7 @@ setup() {
 }
 
 @test "Secret propagation to volume-mounted pod" {
+	erofs_volumes_enabled && skip "a volume shipped as an EROFS image does not see updates"
 	original_username="my-app"
 	updated_username="updated-username"
 

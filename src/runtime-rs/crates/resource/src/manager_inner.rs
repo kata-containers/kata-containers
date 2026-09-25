@@ -45,7 +45,10 @@ use crate::{
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, NydusShareFs, ShareFs},
-    volume::{utils::is_block_device_readonly, Volume, VolumeResource},
+    volume::{
+        erofs_volume::EROFS_VOLUMES_FEATURE, utils::is_block_device_readonly, Volume,
+        VolumeResource,
+    },
     ResourceConfig, ResourceUpdateOp,
 };
 
@@ -58,6 +61,7 @@ pub(crate) struct ResourceManagerInner {
     network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
     nydus_share_fs: Option<Arc<dyn NydusShareFs>>,
+    sandbox_files: Vec<String>,
 
     pub rootfs_resource: RootFsResource,
     pub volume_resource: VolumeResource,
@@ -130,6 +134,7 @@ impl ResourceManagerInner {
             network: None,
             share_fs: None,
             nydus_share_fs: None,
+            sandbox_files: Vec::new(),
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource,
@@ -141,6 +146,10 @@ impl ResourceManagerInner {
 
     pub fn config(&self) -> Arc<TomlConfig> {
         self.toml_config.clone()
+    }
+
+    pub(crate) fn set_sandbox_files(&mut self, sandbox_files: Vec<String>) {
+        self.sandbox_files = sandbox_files;
     }
 
     pub fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
@@ -506,6 +515,11 @@ impl ResourceManagerInner {
             emptydir_mode: &self.toml_config.runtime.emptydir_mode,
             fs_sharing_supported: capabilities.is_fs_sharing_supported(),
             block_device_discard_supported: capabilities.is_block_device_discard_supported(),
+            erofs_volumes: self
+                .toml_config
+                .runtime
+                .is_experiment_enabled(EROFS_VOLUMES_FEATURE),
+            sandbox_files: &self.sandbox_files,
         };
         self.volume_resource.handler_volumes(&ctx, cid, spec).await
     }
@@ -1138,6 +1152,7 @@ impl Persist for ResourceManagerInner {
             network: None,
             share_fs: None,
             nydus_share_fs: None,
+            sandbox_files: Vec::new(),
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource: CgroupsResource::restore(

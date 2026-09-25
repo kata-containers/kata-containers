@@ -8,10 +8,13 @@ pub(crate) mod block_emptydir_volume;
 mod block_volume;
 mod default_volume;
 mod ephemeral_volume;
+pub mod erofs_volume;
 pub mod hugepage;
 mod local_volume;
+mod sandbox_file_volume;
 mod share_fs_volume;
 mod shm_volume;
+mod termination_log_volume;
 pub mod utils;
 
 pub mod direct_volume;
@@ -40,6 +43,14 @@ pub struct VolumeContext<'a> {
     pub emptydir_mode: &'a str,
     pub fs_sharing_supported: bool,
     pub block_device_discard_supported: bool,
+    /// The erofs_volumes experimental feature, which takes every mount the
+    /// guest cannot otherwise see off copy_file. Everything it changes stays
+    /// behind it, since generated agent policies still expect the copy_file
+    /// layout.
+    pub erofs_volumes: bool,
+    /// Container mount destinations the agent materialised during
+    /// create_sandbox, and which the containers can therefore share.
+    pub sandbox_files: &'a [String],
 }
 
 #[async_trait]
@@ -154,6 +165,39 @@ impl VolumeResource {
                 Arc::new(
                     hugepage::Hugepage::new(m, hugepage_limits, options)
                         .with_context(|| format!("handle hugepages {m:?}"))?,
+                )
+            } else if ctx.erofs_volumes
+                && share_fs.is_none()
+                && sandbox_file_volume::is_sandbox_file_mount(m, ctx.sandbox_files)
+            {
+                // The agent wrote this file during create_sandbox, so there is
+                // nothing to transfer.
+                Arc::new(
+                    sandbox_file_volume::SandboxFileVolume::new(m, ctx.agent.clone())
+                        .await
+                        .with_context(|| format!("new sandbox file volume {m:?}"))?,
+                )
+            } else if ctx.erofs_volumes
+                && share_fs.is_none()
+                && termination_log_volume::is_termination_log_mount(m, spec)
+            {
+                // Passed through untouched: the agent creates the file itself
+                // during create_container and repoints this mount at it.
+                Arc::new(
+                    default_volume::DefaultVolume::new(m)
+                        .with_context(|| format!("new termination log volume {m:?}"))?,
+                )
+            } else if ctx.erofs_volumes
+                && share_fs.is_none()
+                && share_fs_volume::is_share_fs_volume(m)
+                && erofs_volume::is_erofs_candidate(m, read_only)
+            {
+                // No fallback to copy_file: quietly falling back would hand
+                // back the attack surface this was turned on to remove.
+                Arc::new(
+                    erofs_volume::ErofsVolume::new(d, m, sid, cid)
+                        .await
+                        .with_context(|| format!("new erofs volume {m:?}"))?,
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
