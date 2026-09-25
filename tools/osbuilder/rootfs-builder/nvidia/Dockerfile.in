@@ -13,6 +13,8 @@ ARG CUDA_REPO_URL
 ARG CUDA_REPO_PKG
 ARG TOOLS_REPO_URL
 ARG TOOLS_REPO_PKG
+ARG DRIVER_REPO_URL
+ARG DRIVER_REPO_PKG
 ARG CTK_VERSION
 ARG DCGM_VERSION
 ARG DCGM_EXPORTER_VERSION
@@ -49,7 +51,9 @@ RUN chmod +x /usr/local/bin/install-nvidia-packages && \
         "${TOOLS_REPO_PKG}" \
         "${CTK_VERSION}" \
         "${DCGM_VERSION}" \
-        "${DCGM_EXPORTER_VERSION}" && \
+        "${DCGM_EXPORTER_VERSION}" \
+        "${DRIVER_REPO_URL}" \
+        "${DRIVER_REPO_PKG}" && \
     rm -f /usr/local/bin/install-nvidia-packages
 
 ARG UPX_VERSION

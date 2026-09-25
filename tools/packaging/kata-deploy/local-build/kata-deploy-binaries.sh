@@ -647,11 +647,21 @@ get_latest_nvidia_repo_version() {
 	local arch
 	arch="$(uname -m)"
 
-	echo "$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")" \
-		"$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")" \
-		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")" \
-		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")" \
-		| sha256sum | cut -c1-9
+	local repos
+	repos="$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")"
+	repos+=" $(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")"
+	repos+=" $(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")"
+	repos+=" $(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")"
+
+	# Joins the hash only when set, so the default (unset) key is
+	# identical to before the driver repo existed. Url and pkg stay
+	# separate fields - joined, different splits could collide.
+	local driver_repo_url driver_repo_pkg
+	driver_repo_url="$(get_from_kata_deps ".externals.nvidia.driver.repo.${arch}.url")"
+	driver_repo_pkg="$(get_from_kata_deps ".externals.nvidia.driver.repo.${arch}.pkg")"
+	[[ -n "${driver_repo_url}${driver_repo_pkg}" ]] && repos+=" ${driver_repo_url} ${driver_repo_pkg}"
+
+	echo "${repos}" | sha256sum | cut -c1-9
 }
 
 #Install guest image
