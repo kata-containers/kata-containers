@@ -32,8 +32,8 @@ func TestNewHeading(t *testing.T) {
 		{"a", "", "", 1, true},
 
 		{"a", "a", "a", 1, false},
-		{"a-b", "`a-b`", "`a-b`", 1, false},
-		{"a_b", "`a_b`", "`a_b`", 1, false},
+		{"a-b", "`a-b`", "a-b", 1, false},
+		{"a_b", "`a_b`", "a_b", 1, false},
 		{"foo (json) bar", "foo `(json)` bar", "foo-json-bar", 1, false},
 		{"func(json)", "`func(json)`", "funcjson", 1, false},
 		{"?", "?", "", 1, false},
@@ -57,9 +57,9 @@ func TestNewHeading(t *testing.T) {
 			continue
 		}
 
-		assert.Equal(h.Name, d.headingName, msg)
-		assert.Equal(h.MDName, d.mdName, msg)
-		assert.Equal(h.Level, d.level, msg)
-		assert.Equal(h.LinkName, d.expectedLinkName, msg)
+		assert.Equal(d.headingName, h.Name, msg)
+		assert.Equal(d.mdName, h.MDName, msg)
+		assert.Equal(d.level, h.Level, msg)
+		assert.Equal(d.expectedLinkName, h.LinkName, msg)
 	}
 }
