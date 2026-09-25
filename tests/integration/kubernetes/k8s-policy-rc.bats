@@ -97,6 +97,16 @@ test_rc_policy() {
 
 @test "Successful replication controller with auto-generated policy" {
     test_rc_policy false
+
+    # Kubernetes reads a string probe port as a named port. genpolicy writes
+    # its output from the untyped document, so this guards against the output
+    # ever being rebuilt from the typed structs.
+    local http_port_tag tcp_port_tag
+    http_port_tag=$(yq '.spec.template.spec.containers[0].readinessProbe.httpGet.port | tag' "${correct_yaml}")
+    tcp_port_tag=$(yq '.spec.template.spec.containers[0].livenessProbe.tcpSocket.port | tag' "${correct_yaml}")
+
+    [ "${http_port_tag}" = "!!int" ]
+    [ "${tcp_port_tag}" = "!!str" ]
 }
 
 @test "Policy failure: unexpected container command" {

@@ -16,6 +16,14 @@ spec:
       role: master
       tier: backend
   replicas: 1
+  # maxSurge and maxUnavailable are IntOrString too, and a percentage is the
+  # form that only parses once they are typed as such. These are the values
+  # Kubernetes defaults to, so the rollout behaves as it did before.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
   template:
     metadata:
       labels:
