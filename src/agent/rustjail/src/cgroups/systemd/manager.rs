@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::cgroups::nested::{exec_cgroup, normalize_cgroup_path};
 use crate::cgroups::Manager as CgroupManager;
 use crate::cgroups_rs as cgroups;
 use crate::protocols::agent::CgroupStats;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
+use cgroups::CgroupPid;
 use libc::{self, pid_t};
 use oci::LinuxResources;
 use oci_spec::runtime as oci;
@@ -18,7 +20,7 @@ use std::convert::TryInto;
 use std::string::String;
 use std::vec;
 
-use super::super::fs::Manager as FsManager;
+use super::super::fs::{load_cgroup, Manager as FsManager};
 
 use super::cgroups_path::CgroupsPath;
 use super::common::{CgroupHierarchy, Properties};
@@ -41,10 +43,21 @@ pub struct Manager {
 }
 
 impl CgroupManager for Manager {
-    fn apply(&self, pid: pid_t) -> Result<()> {
+    fn apply(&self, pid: pid_t, init_pid: pid_t) -> Result<()> {
         if self.dbus_client.unit_exists()? {
-            let subcgroup = self.fs_manager.subcgroup();
-            self.dbus_client.add_process(pid, subcgroup)?;
+            let path = exec_cgroup(pid, init_pid, &self.cpath);
+            let container_cgroup = normalize_cgroup_path(&self.cpath);
+            if path == container_cgroup {
+                self.dbus_client.add_process(pid, "/")?;
+            } else if let Some(rel) = path.strip_prefix(&format!("{container_cgroup}/")) {
+                self.dbus_client.add_process(pid, rel)?;
+            } else {
+                // AttachProcessesToUnit only accepts a unit-relative subcgroup.
+                let cgroup = load_cgroup(cgroups::hierarchies::auto(), &path);
+                cgroup
+                    .add_task_by_tgid(CgroupPid::from(pid as u64))
+                    .with_context(|| format!("add task {} to cgroup {}", pid, cgroup.path()))?;
+            }
         } else {
             self.dbus_client.start_unit(
                 (pid as u32).try_into().unwrap(),
