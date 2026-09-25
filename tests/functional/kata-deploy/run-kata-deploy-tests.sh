@@ -24,6 +24,7 @@ else
 	# other suite loads the modules it is meant to exercise.
 	if [[ "${KUBERNETES:-}" == "kubeadm" ]]; then
 		KATA_DEPLOY_TEST_UNION+=("kata-deploy-host-modules.bats")
+		KATA_DEPLOY_TEST_UNION+=("kata-deploy-rootless-devices.bats")
 	fi
 
 	KATA_DEPLOY_TEST_UNION+=( \

@@ -20,7 +20,7 @@ inherited from `/opt`) and the Kata runtime sees exactly what it saw before.
 | Domain | Used by | Can |
 | --- | --- | --- |
 | `kata_deploy_check_t` | `host-check` | Read only, plus query the CRI unit's status over D-Bus |
-| `kata_deploy_artifacts_t` | `artifacts`, `remove-artifacts` | Write `/opt/kata`, the nydus unit, `/etc/modules-load.d` |
+| `kata_deploy_artifacts_t` | `artifacts`, `remove-artifacts` | Write `/opt/kata`, the nydus unit, `/etc/modules-load.d`, and remove the rootless udev rule |
 | `kata_deploy_cri_t` | `cri`, `revert-cri` | Write the CRI config, manage the nydus unit, restart the CRI |
 | `kata_deploy_node_binaries_t` | `node-binaries-install`, `node-binaries-remove` | Write `/usr/local/bin` |
 | `kata_deploy_t` | the `daemonset` mode's single container | All of the above except `/usr/local/bin` |
@@ -40,6 +40,8 @@ there by necessity.
 Some containers deliberately get **no** domain from this module:
 
 - the `load-kernel-modules` stage, which is privileged and already runs as `spc_t`;
+- the `rootless-devices` stage, privileged for the same reason: it creates host
+  groups and reconciles device nodes;
 - the `nodeBinaries` *staging* containers, one per entry, which only write a
   pod-local `emptyDir`. They are the containers in the pipeline running images
   Kata does not build, and plain `container_t` is both sufficient for them and
@@ -129,7 +131,9 @@ then fails:
 - **Harvest installs *and* uninstalls, in both modes.** No single run is a
   superset. The uninstall path is the only place `etc_t` removal appears, because
   on install `/etc/modules-load.d/kata-containers-default.conf` is written by the
-  privileged `load-kernel-modules` stage and never generates a denial.
+  privileged `load-kernel-modules` stage and never generates a denial. The
+  rootless udev rule under `udev_rules_t` is the second instance of this, so
+  harvest with a rootless shim enabled as well.
 
 To attribute a denial to a stage, correlate its audit timestamp against each
 container's `startedAt`/`finishedAt`. `comm` alone is not enough: the

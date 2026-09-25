@@ -48,6 +48,13 @@ $ sudo systemctl reboot
 
 Please note that the method of enabling the Secure Execution capability may vary among Linux distributions.
 
+!!! note "Running the VMM unprivileged"
+    `/dev/uv` comes up as `root:root 0600`, so an unprivileged QEMU cannot open
+    it and a Secure Execution sandbox with `rootless = true` fails to start.
+    Granting group access to it is host configuration, not something the shim
+    does on the fly; see [How to run a rootless VMM](how-to-run-rootless-vmm.md)
+    for the contract and for the `kata-deploy` setting that provisions it.
+
 2. Artifacts from Kata Containers
 
 A secure image is constructed using the following artifacts

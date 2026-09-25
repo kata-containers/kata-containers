@@ -41,12 +41,18 @@ containerd_config_roots() {
 # short-lived privileged pod.
 # Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
 #        run_on_host "chroot /host /usr/sbin/semodule -r kata-deploy" false
+#        run_on_host "ls /proc" true true   # third argument: see the node's processes
+#
+# The command runs in this pod's own namespaces, so it reads the host's files but
+# not its users or processes: `stat -c %G` resolves against the image's group
+# database, and only host_pid makes /proc the node's.
 #
 # We avoid `kubectl run --rm -i` because rke2 injects session-recording banners
 # into interactive pods, polluting stdout. Instead: create, wait, fetch logs, delete.
 run_on_host() {
 	local cmd="$1"
 	local read_only="${2:-true}"
+	local host_pid="${3:-false}"
 	local node_name
 	node_name=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -1)
 	local pod_name="host-exec-${RANDOM}"
@@ -57,6 +63,7 @@ run_on_host() {
 		--overrides="{
 			\"spec\": {
 				\"nodeName\": \"${node_name}\",
+				\"hostPID\": ${host_pid},
 				\"activeDeadlineSeconds\": 300,
 				\"tolerations\": [{\"operator\": \"Exists\"}],
 				\"containers\": [{

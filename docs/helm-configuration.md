@@ -195,6 +195,76 @@ found [here](runtime-configuration.md#drop-in-files).
 You can also use the `customRuntimes.runtimes.[name].dropIn` configuration in the helm
 chart to achieve the same results.
 
+### `shims.<shim>.hypervisor.rootless`
+
+Runs a shim's VMM as a throwaway unprivileged user per sandbox, instead of
+`root`:
+
+```yaml title="values.yaml"
+shims:
+  qemu-runtime-rs:
+    hypervisor:
+      rootless: true
+```
+
+Only the **runtime-rs QEMU and Cloud Hypervisor** shims run their VMM
+unprivileged, so only they accept it: `qemu-runtime-rs` and its variants, plus
+`clh-runtime-rs` and `clh-azure-runtime-rs`. Asking for it on any other shim
+fails the install. Everything outside the VMM — the shim, `virtiofsd`, the guest
+— is unaffected either way.
+
+Enabling it turns `rootless = true` on for that shim *and* provisions the host
+device access an unprivileged VMM needs, because neither half is any use without
+the other:
+
+| Device | Group | Needed by |
+| --- | --- | --- |
+| `/dev/kvm` | `kvm` | every VMM |
+| `/dev/sev` | `kata-sev` | AMD SEV-SNP, when an SNP shim is rootless |
+| `/dev/uv` | `kata-se` | IBM Secure Execution, when `qemu-se-runtime-rs` is rootless |
+
+Each shim asks only for what it needs, so a node running an SNP shim privileged
+alongside a rootless `qemu-runtime-rs` never gets the `kata-sev` group.
+
+Each device gets group read/write, recorded as a udev rule under
+`/etc/udev/rules.d` so it outlives a reboot or the device being re-created.
+Uninstall removes the rule. The TEE devices deliberately do not join `kvm`, so a
+plain rootless sandbox cannot reach the SEV or ultravisor platform interface just
+because it needs KVM, and the groups are created empty, so no existing user gains
+anything.
+
+A device the node does not have is skipped, and one that already grants
+unprivileged access is left exactly as the node has it.
+
+Only devices the VMM opens by path are provisioned, which is why
+`/dev/vhost-vsock` and `/dev/vhost-net` are absent: the shim opens them as `root`
+and passes the descriptors to the VMM, so the VMM user needs no access to them.
+
+!!! warning "Requires udev on the node"
+
+    Reboot persistence relies on the node running a udev implementation that
+    reads `/etc/udev/rules.d` (`systemd-udevd` or eudev) and keeping `/etc`
+    across reboots — true of every supported `k8sDistribution`. A node using
+    busybox `mdev`, or an image that rebuilds `/etc` at boot such as
+    Bottlerocket, accepts the file and never acts on it. The devices are still
+    reconciled, so sandboxes run until the next reboot, but the permissions do
+    not stick. See
+    [How to run a rootless VMM](how-to/how-to-run-rootless-vmm.md) for what to do
+    on those hosts.
+
+!!! warning "Requires `deploymentMode: job`"
+
+    The DaemonSet does its host work from a single unprivileged container with no
+    host root, so it cannot create the groups or reconcile the device nodes. The
+    chart refuses a rootless shim in that mode rather than configuring sandboxes
+    that could not start. `job` is the default mode.
+
+Intel TDX needs nothing here when its quote generation service is reached over
+AF_VSOCK, which is the supported path. A deployment that points the shim at a
+QGS Unix socket has to grant the VMM user write access to it separately; see
+[How to run a rootless VMM](how-to/how-to-run-rootless-vmm.md) for that and for
+the full host access contract.
+
 ### k8sDistribution
 
 Different Kubernetes distributions keep containerd's configuration in different

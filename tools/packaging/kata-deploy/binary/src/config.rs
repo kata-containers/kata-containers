@@ -220,6 +220,9 @@ pub struct Config {
     /// Enable dm-verity integrity for EROFS lower layers.
     /// Independent of rw-layer backing; works with both disk and memory modes.
     pub erofs_dmverity: bool,
+    /// Shims whose VMM runs unprivileged. Per shim, so a node only grants the
+    /// devices the shims that asked for it need.
+    pub rootless_shims_for_arch: Vec<String>,
     /// Startup taints to remove from the node once Kata is installed and the
     /// node has been labeled `katacontainers.io/kata-runtime=true`. Each entry
     /// is either a bare taint key (matches any effect) or `key:effect` (matches
@@ -446,6 +449,13 @@ impl Config {
             .trim()
             .eq_ignore_ascii_case("dmverity");
 
+        let rootless_shims_for_arch = get_arch_var("ROOTLESS", "", &arch)
+            .split(',')
+            .map(str::trim)
+            .filter(|shim| !shim.is_empty())
+            .map(str::to_string)
+            .collect();
+
         // Startup taints to remove after install+label. Comma- or whitespace-separated
         // list of `key` or `key:effect` entries. Empty/unset means "remove nothing".
         let startup_taints = env::var("STARTUP_TAINTS")
@@ -518,6 +528,7 @@ impl Config {
             devkit_enabled,
             erofs_snapshotter_mode,
             erofs_dmverity,
+            rootless_shims_for_arch,
             startup_taints,
             container_runtime_version,
             k8s_distribution,
@@ -749,6 +760,19 @@ impl Config {
             }
         }
 
+        // Validate ROOTLESS
+        // This is a list of shim names
+        for shim in &self.rootless_shims_for_arch {
+            if !self.shims_for_arch.contains(shim) {
+                return Err(anyhow::anyhow!(
+                    "ROOTLESS for current architecture references unknown shim '{}'. \
+                     Valid shims: [{}]",
+                    shim,
+                    self.shims_for_arch.join(", ")
+                ));
+            }
+        }
+
         // Validate EROFS_SNAPSHOTTER_MODE.
         if let Some(mode) = self.erofs_snapshotter_mode.as_ref() {
             match mode.as_str() {
@@ -823,6 +847,7 @@ impl Config {
             self.erofs_snapshotter_mode
         );
         info!("* EROFS_DMVERITY: {}", self.erofs_dmverity);
+        info!("* ROOTLESS: {}", self.rootless_shims_for_arch.join(","));
         info!(
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
@@ -1348,6 +1373,11 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64",
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
+            "ROOTLESS",
+            "ROOTLESS_X86_64",
+            "ROOTLESS_AARCH64",
+            "ROOTLESS_S390X",
+            "ROOTLESS_PPC64LE",
             "CONTAINERD_CONFIG_FILE_NAME",
             "CONTAINERD_EXTRA_POD_ANNOTATIONS",
             "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS",
@@ -1858,6 +1888,46 @@ mod tests {
         set_arch_var("EXPERIMENTAL_FORCE_GUEST_PULL", "clh,dragonball");
 
         assert_config_error_contains("EXPERIMENTAL_FORCE_GUEST_PULL");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_validate_rootless_invalid_shim() {
+        setup_minimal_env();
+        set_arch_var("SHIMS", "qemu-runtime-rs fc");
+        set_arch_var("DEFAULT_SHIM", "qemu-runtime-rs");
+        set_arch_var("ROOTLESS", "clh-runtime-rs");
+
+        assert_config_error_contains("ROOTLESS");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_rootless_is_read_per_shim() {
+        setup_minimal_env();
+        set_arch_var("SHIMS", "qemu-runtime-rs clh-runtime-rs");
+        set_arch_var("DEFAULT_SHIM", "qemu-runtime-rs");
+        set_arch_var("ROOTLESS", "qemu-runtime-rs,clh-runtime-rs");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.rootless_shims_for_arch,
+            vec!["qemu-runtime-rs", "clh-runtime-rs"]
+        );
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_rootless_defaults_to_no_shim() {
+        setup_minimal_env();
+        set_arch_var("SHIMS", "qemu-runtime-rs");
+        set_arch_var("DEFAULT_SHIM", "qemu-runtime-rs");
+
+        let config = Config::from_env().unwrap();
+        assert!(config.rootless_shims_for_arch.is_empty());
         cleanup_env_vars();
     }
 
