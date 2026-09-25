@@ -179,8 +179,12 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let memory = match template_memory {
             Some(memory) => memory,
-            None => MemoryConfig::try_from((cfg.memory_info, guest_protection_to_use.clone()))
-                .map_err(VmConfigError::MemoryError)?,
+            None => MemoryConfig::try_from((
+                cfg.memory_info,
+                guest_protection_to_use.clone(),
+                cfg.shared_fs.shared_fs.is_some(),
+            ))
+            .map_err(VmConfigError::MemoryError)?,
         };
 
         std::fs::create_dir_all(sandbox_path.clone())
@@ -246,12 +250,13 @@ impl TryFrom<(String, u32)> for VsockConfig {
     }
 }
 
-impl TryFrom<(MemoryInfo, GuestProtection)> for MemoryConfig {
+impl TryFrom<(MemoryInfo, GuestProtection, bool)> for MemoryConfig {
     type Error = MemoryConfigError;
 
-    fn try_from(args: (MemoryInfo, GuestProtection)) -> Result<Self, Self::Error> {
+    fn try_from(args: (MemoryInfo, GuestProtection, bool)) -> Result<Self, Self::Error> {
         let mem = args.0;
         let guest_protection_to_use = args.1;
+        let has_shared_fs = args.2;
 
         if mem.default_memory == 0 {
             return Err(MemoryConfigError::NoDefaultMemory);
@@ -291,8 +296,7 @@ impl TryFrom<(MemoryInfo, GuestProtection)> for MemoryConfig {
         let cfg = MemoryConfig {
             size: mem_bytes,
 
-            // Required
-            shared: true,
+            shared: has_shared_fs || mem.enable_hugepages,
 
             hotplug_size,
 
@@ -667,7 +671,7 @@ mod tests {
 
         let mem_cfg = MemoryConfig {
             size: default_memory_mib as u64 * MIB,
-            shared: true,
+            shared: false,
             hotplug_size,
 
             ..Default::default()
@@ -1594,7 +1598,7 @@ mod tests {
                 guest_protection: GuestProtection::Tdx,
                 result: Ok(MemoryConfig {
                     size: (17 * MIB),
-                    shared: true,
+                    shared: false,
                     hotplug_size: None,
 
                     ..Default::default()
@@ -1609,7 +1613,7 @@ mod tests {
                 guest_protection: GuestProtection::Tdx,
                 result: Ok(MemoryConfig {
                     size: usable_max_mem_bytes,
-                    shared: true,
+                    shared: false,
                     hotplug_size: None,
 
                     ..Default::default()
@@ -1633,7 +1637,7 @@ mod tests {
                 guest_protection: GuestProtection::NoProtection,
                 result: Ok(MemoryConfig {
                     size: 1024_u64 * MIB,
-                    shared: true,
+                    shared: false,
                     hotplug_size: checked_next_multiple_of(
                         usable_max_mem_bytes - (1024 * MIB),
                         PMEM_ALIGN_BYTES,
@@ -1657,7 +1661,12 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = MemoryConfig::try_from((d.mem_info.clone(), d.guest_protection.clone()));
+            let has_shared_fs = false;
+            let result = MemoryConfig::try_from((
+                d.mem_info.clone(),
+                d.guest_protection.clone(),
+                has_shared_fs,
+            ));
 
             let msg = format!("{}: actual result: {:?}", msg, result);
 
@@ -1675,6 +1684,18 @@ mod tests {
             assert!(result.is_ok(), "{}", msg);
             assert_eq!(&result.unwrap(), d.result.as_ref().unwrap(), "{}", msg);
         }
+
+        let memory = MemoryConfig::try_from((
+            MemoryInfo {
+                default_memory: 1024,
+                enable_hugepages: true,
+                ..Default::default()
+            },
+            GuestProtection::NoProtection,
+            false,
+        ))
+        .unwrap();
+        assert!(memory.shared);
     }
 
     #[test]
@@ -1802,6 +1823,8 @@ mod tests {
 
         let (memory_info_std, mem_config_std) =
             make_memory_objects(79, usable_max_mem_bytes, false);
+        let mut mem_config_with_shared_fs = mem_config_std.clone();
+        mem_config_with_shared_fs.shared = true;
 
         let (memory_info_confidential_guest, mem_config_confidential_guest) =
             make_memory_objects(79, usable_max_mem_bytes, true);
@@ -1858,7 +1881,7 @@ mod tests {
             ..Default::default()
         };
 
-        let hypervisor_cfg_with_initrd = HypervisorConfig {
+        let mut hypervisor_cfg_with_initrd = HypervisorConfig {
             cpu_info: cpu_info.clone(),
             memory_info: memory_info_std,
             boot_info: boot_info_with_initrd,
@@ -1866,6 +1889,7 @@ mod tests {
 
             ..Default::default()
         };
+        hypervisor_cfg_with_initrd.shared_fs.shared_fs = Some("virtio-fs".to_string());
 
         let security_info_confidential_guest = SecurityInfo {
             confidential_guest: true,
@@ -1926,7 +1950,7 @@ mod tests {
 
         let vmconfig_with_initrd = VmConfig {
             cpus: cpus_config.clone(),
-            memory: mem_config_std,
+            memory: mem_config_with_shared_fs,
             rng: rng_config.clone(),
             vsock: Some(valid_vsock.clone()),
 
