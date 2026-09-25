@@ -30,6 +30,7 @@ use resource::{
     cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
 };
 use tokio::sync::RwLock;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use super::{
     process::{Process, ProcessWatcher},
@@ -42,6 +43,11 @@ pub struct Exec {
     pub(crate) oci_process: OCIProcess,
 }
 
+pub struct IoLifecycle {
+    pub(crate) cancel: CancellationToken,
+    pub(crate) tasks: TaskTracker,
+}
+
 pub struct Container {
     pid: u32,
     pub container_id: ContainerID,
@@ -52,6 +58,7 @@ pub struct Container {
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
+    io: IoLifecycle,
 }
 
 fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) -> Result<bool> {
@@ -75,11 +82,12 @@ impl Container {
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
         passfd_listener_addr: Option<(String, u32)>,
+        io: IoLifecycle,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
         let logger = sl!().new(o!("container_id" => config.container_id.clone()));
         let process = ContainerProcess::new(&config.container_id, "")?;
-        let init_process = Process::new(
+        let mut init_process = Process::new(
             &process,
             pid,
             &config.bundle,
@@ -88,6 +96,8 @@ impl Container {
             config.stderr.clone(),
             config.terminal,
         );
+        init_process.io_cancel = io.cancel.child_token();
+        init_process.io_tasks = io.tasks.clone();
         let linux_resources = spec
             .linux()
             .as_ref()
@@ -108,6 +118,7 @@ impl Container {
             resource_manager,
             logger,
             passfd_listener_addr,
+            io,
         })
     }
 
@@ -475,6 +486,7 @@ impl Container {
         container_process: &ContainerProcess,
         signal: u32,
         all: bool,
+        io_cancel: &mut Option<CancellationToken>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
 
@@ -502,6 +514,20 @@ impl Container {
             return Ok(());
         }
 
+        // Capture only after the stopped-process no-op check, even for all=true.
+        // Keep the exact instance: the exec ID can be reused after this guard.
+        if signal == libc::SIGKILL as u32 {
+            *io_cancel = if all || container_process.exec_id.is_empty() {
+                // The agent treats init SIGKILL as killing the whole container.
+                Some(self.io.cancel.clone())
+            } else {
+                inner
+                    .exec_processes
+                    .get(&container_process.exec_id)
+                    .map(|exec| exec.process.io_cancel.clone())
+            };
+        }
+
         match inner.signal_process(container_process, signal, all).await {
             Ok(()) => Ok(()),
             Err(e) if is_term_signal && is_no_such_process_error(&e) => {
@@ -515,6 +541,17 @@ impl Container {
                 Ok(())
             }
             Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn cancel_io(&self) {
+        self.io.cancel.cancel();
+    }
+
+    pub(crate) async fn cancel_exec_io(&self, exec_id: &str) {
+        let inner = self.inner.read().await;
+        if let Some(exec) = inner.exec_processes.get(exec_id) {
+            exec.process.io_cancel.cancel();
         }
     }
 
@@ -532,7 +569,7 @@ impl Container {
             oci_process.set_selinux_label(None);
         }
 
-        let process = Process::new(
+        let mut process = Process::new(
             container_process,
             self.pid,
             &self.config.bundle,
@@ -541,6 +578,8 @@ impl Container {
             stderr,
             terminal,
         );
+        process.io_cancel = self.io.cancel.child_token();
+        process.io_tasks = self.io.tasks.clone();
         let exec = Exec {
             process,
             oci_process,
@@ -913,6 +952,140 @@ mod tests {
     use super::*;
     use oci_spec::runtime::LinuxNamespaceType;
     use oci_spec::runtime::{LinuxBuilder, LinuxNamespaceBuilder};
+
+    #[tokio::test]
+    async fn test_sigkill_io_cancellation_scope() {
+        use persist::sandbox_persist::Persist;
+        use resource::{
+            cgroups::cgroup_persist::CgroupState, manager::ManagerArgs,
+            resource_persist::ResourceState,
+        };
+
+        let agent = Arc::new(agent::kata::KataAgent::new(Default::default()));
+        // Restore only the resource handles: unlike ResourceManager::new,
+        // this does not create cgroups or move the test process into one.
+        let resources = Arc::new(
+            ResourceManager::restore(
+                ManagerArgs {
+                    sid: "io-test".into(),
+                    agent: agent.clone(),
+                    hypervisor: Arc::new(hypervisor::qemu::Qemu::new()),
+                    config: TomlConfig::default(),
+                },
+                ResourceState {
+                    cgroup_state: Some(CgroupState {
+                        path: Some("io-test".into()),
+                        overhead_path: Some("io-test-overhead".into()),
+                        sandbox_cgroup_only: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap(),
+        );
+        // The agent treats init SIGKILL as container-wide even with all=false.
+        for (exec_id, all, signal, stopped, whole_container) in [
+            ("", false, libc::SIGKILL, false, true),
+            ("", true, libc::SIGKILL, false, true),
+            ("exec-a", true, libc::SIGKILL, false, true),
+            ("exec-a", false, libc::SIGKILL, false, false),
+            ("exec-a", true, libc::SIGKILL, true, false),
+            ("exec-a", true, libc::SIGTERM, false, false),
+        ] {
+            let sandbox = CancellationToken::new();
+            let other_container = sandbox.child_token();
+            let container = Container::new(
+                0,
+                ContainerConfig {
+                    container_id: "io-test".into(),
+                    bundle: String::new(),
+                    rootfs_mounts: Vec::new(),
+                    terminal: false,
+                    options: None,
+                    stdin: None,
+                    stdout: None,
+                    stderr: None,
+                },
+                oci::Spec::default(),
+                agent.clone(),
+                resources.clone(),
+                None,
+                IoLifecycle {
+                    cancel: sandbox.child_token(),
+                    tasks: TaskTracker::new(),
+                },
+            )
+            .await
+            .unwrap();
+            for id in ["exec-a", "exec-b"] {
+                container
+                    .exec_process(
+                        &ContainerProcess::new("io-test", id).unwrap(),
+                        None,
+                        None,
+                        None,
+                        false,
+                        OCIProcess::default(),
+                    )
+                    .await
+                    .unwrap();
+            }
+            {
+                let inner = container.inner.read().await;
+                inner.init_process.set_status(ProcessStatus::Running).await;
+                for (id, exec) in &inner.exec_processes {
+                    exec.process
+                        .set_status(if stopped && id == "exec-a" {
+                            ProcessStatus::Stopped
+                        } else {
+                            ProcessStatus::Running
+                        })
+                        .await;
+                }
+            }
+            let mut captured = None;
+            let result = container
+                .kill_process(
+                    &ContainerProcess::new("io-test", exec_id).unwrap(),
+                    signal as u32,
+                    all,
+                    &mut captured,
+                )
+                .await;
+            if stopped {
+                // Base behavior signals nothing, even with all=true.
+                assert!(result.is_ok());
+            } else {
+                // No VM or agent connection: test token capture before the RPC.
+                assert!(result.is_err());
+            }
+            let should_capture = signal == libc::SIGKILL && !stopped;
+            assert_eq!(captured.is_some(), should_capture);
+            if let Some(token) = captured {
+                token.cancel();
+            }
+            let inner = container.inner.read().await;
+            assert_eq!(inner.init_process.io_cancel.is_cancelled(), whole_container);
+            assert_eq!(
+                inner.exec_processes["exec-a"]
+                    .process
+                    .io_cancel
+                    .is_cancelled(),
+                should_capture
+            );
+            assert_eq!(
+                inner.exec_processes["exec-b"]
+                    .process
+                    .io_cancel
+                    .is_cancelled(),
+                whole_container
+            );
+            assert!(!other_container.is_cancelled());
+            assert!(!sandbox.is_cancelled());
+        }
+    }
 
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {
