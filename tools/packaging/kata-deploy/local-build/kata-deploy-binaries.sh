@@ -618,6 +618,22 @@ get_latest_nvidia_driver_version() {
 	get_from_kata_deps ".externals.nvidia.driver.version"
 }
 
+get_nvidia_driver_cache_key() {
+	local version url
+	version=$(get_latest_nvidia_driver_version)
+	url=$(get_from_kata_deps ".externals.nvidia.driver.url")
+	# A tarball url replaces the GitHub tag as the driver source, so it
+	# must key the caches - otherwise a github-source artefact is served
+	# for a build requesting a different source drop. Cache keys only:
+	# the raw version above names the driver packages to install, and a
+	# suffixed version names packages that do not exist. The suffix test
+	# ignores a query string; the hash keys the complete url.
+	if [[ "${url%%\?*}" =~ \.tar\.(gz|xz)$ ]]; then
+		version+="-$(echo "${url}" | sha256sum | cut -c1-8)"
+	fi
+	echo "${version}"
+}
+
 get_latest_nvidia_ctk_version() {
 	get_from_kata_deps ".externals.nvidia.ctk.version"
 }
@@ -680,7 +696,7 @@ install_image() {
 		latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${image_type}"
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_nvidia_driver_cache_key)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_upx_version)"
@@ -706,7 +722,7 @@ install_image() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			latest_artefact+="-$(get_nvidia_driver_cache_key)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -727,7 +743,7 @@ install_image() {
 		# Monolith: Kata NVIDIA modules + pinned driver/CTK userspace + NVRC init.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_nvidia_driver_cache_key)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1057,7 +1073,7 @@ install_initrd() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			latest_artefact+="-$(get_nvidia_driver_cache_key)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1075,7 +1091,7 @@ install_initrd() {
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_nvidia_driver_cache_key)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1248,6 +1264,15 @@ install_cached_kernel_tarball_component() {
 
 	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
 	latest_builder_image="$(get_kernel_image_name)"
+
+	# The nvidia kernel tarball ships the out-of-tree driver modules, so
+	# the driver (version and source) must key its cache too - otherwise a
+	# driver bump serves modules built from the previous driver.
+	case ${kernel_name} in
+		kernel-nvidia-gpu*)
+			latest_artefact+="-$(get_nvidia_driver_cache_key)"
+			;;
+	esac
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
