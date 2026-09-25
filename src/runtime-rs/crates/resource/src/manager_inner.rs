@@ -959,8 +959,21 @@ impl ResourceManagerInner {
     pub async fn cleanup(&self) -> Result<()> {
         // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
         if let Some(network) = &self.network {
-            if let Err(err) = network.remove(self.hypervisor.as_ref()).await {
-                warn!(sl!(), "failed to remove network: {}", err);
+            let network = network.clone();
+            let hypervisor = self.hypervisor.clone();
+            // NetnsGuard changes thread-local state across async detach calls. Keep the
+            // future on one OS thread so a shared Tokio worker cannot retain the pod netns.
+            let remove_result = tokio::task::spawn_blocking(move || -> Result<()> {
+                let rt = runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?;
+                rt.block_on(network.remove(hypervisor.as_ref()))
+            })
+            .await;
+            match remove_result {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => warn!(sl!(), "failed to remove network: {}", err),
+                Err(err) => warn!(sl!(), "failed to join network removal task: {}", err),
             }
         }
 
