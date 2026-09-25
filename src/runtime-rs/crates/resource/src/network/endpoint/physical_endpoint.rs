@@ -105,6 +105,19 @@ impl PhysicalEndpoint {
             hostdev_id: std::sync::Mutex::new(None),
         })
     }
+
+    fn restore_host_driver(&self, cause: &str) {
+        if let Err(err) = driver::bind_device_to_host(
+            &self.bdf,
+            &self.driver,
+            &self.vendor_device_id.vendor_device_id(),
+        ) {
+            warn!(
+                sl!(),
+                "failed to restore {} to {} after {}: {}", self.bdf, self.driver, cause, err
+            );
+        }
+    }
 }
 
 #[async_trait]
@@ -153,7 +166,13 @@ impl Endpoint for PhysicalEndpoint {
         )
         .with_context(|| format!("bind physical endpoint from {} to vfio", &self.driver))?;
 
-        let vfio_device = get_vfio_device(self.bdf.clone()).context("get vfio device failed.")?;
+        let vfio_device = match get_vfio_device(self.bdf.clone()) {
+            Ok(dev) => dev,
+            Err(err) => {
+                self.restore_host_driver("get vfio device");
+                return Err(err).context("get vfio device failed.");
+            }
+        };
         let vfio_dev_config = &mut VfioConfig {
             host_path: vfio_device.clone(),
             dev_type: "pci".to_string(),
@@ -164,10 +183,18 @@ impl Endpoint for PhysicalEndpoint {
         // create and insert VFIO device into Kata VM; do_handle_device returns
         // the DeviceType with guest_pci_path already computed by
         // do_add_pcie_endpoint() inside VfioDevice::register().
-        let device_type =
-            do_handle_device(&self.d, &DeviceConfig::VfioCfg(vfio_dev_config.clone()))
-                .await
-                .context("do handle device failed.")?;
+        let device_type = match do_handle_device(
+            &self.d,
+            &DeviceConfig::VfioCfg(vfio_dev_config.clone()),
+        )
+        .await
+        {
+            Ok(dt) => dt,
+            Err(err) => {
+                self.restore_host_driver("do handle device");
+                return Err(err).context("do handle device failed.");
+            }
+        };
 
         // Store the QEMU hostdev_id for later QMP-based PCI path resolution.
         // The topology-computed guest_pci_path from do_add_pcie_endpoint() is

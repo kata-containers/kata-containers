@@ -7,6 +7,8 @@
 package drivers
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -47,4 +49,59 @@ func TestGetVFIODetails(t *testing.T) {
 		}
 	}
 
+}
+
+func TestUnbindPCIDeviceIfBound(t *testing.T) {
+	bdf := "0000:03:00.1"
+
+	tests := []struct {
+		name       string
+		state      string
+		wantUnbind bool
+		wantErr    bool
+	}{
+		{
+			name:       "bound device is unbound",
+			state:      "bound",
+			wantUnbind: true,
+		},
+		{
+			name: "unbound device is accepted",
+		},
+		{
+			name:    "other unbind errors are returned",
+			state:   "invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			driverDir := filepath.Join(tempDir, "driver")
+			unbindPath := filepath.Join(driverDir, "unbind")
+			switch test.state {
+			case "bound":
+				assert.NoError(t, os.Mkdir(driverDir, 0o755))
+				assert.NoError(t, os.WriteFile(unbindPath, nil, 0o600))
+			case "invalid":
+				assert.NoError(t, os.WriteFile(driverDir, nil, 0o600))
+			}
+
+			err := unbindPCIDeviceIfBound(unbindPath, bdf)
+			if test.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+
+			contents, err := os.ReadFile(unbindPath)
+			if test.wantUnbind {
+				assert.NoError(t, err)
+				assert.Equal(t, bdf, string(contents))
+			} else {
+				assert.True(t, os.IsNotExist(err))
+			}
+		})
+	}
 }
