@@ -283,6 +283,41 @@
       "patch": []
     },
     {
+      "description": "reject matching policy container with a different container_id",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/container_id",
+          "value": "different-container-id"
+        }
+      ]
+    },
+    {
+      "description": "reject remove container with missing container_id",
+      "base": "remove-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/container_id"
+        }
+      ]
+    },
+    {
+      "description": "reject remove container with unknown container_id",
+      "base": "remove-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/container_id",
+          "value": "unknown-container-id"
+        }
+      ]
+    },
+    {
       "description": "test remove container and remove container_id from state",
       "base": "remove-container",
       "allowed": true,
