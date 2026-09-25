@@ -933,7 +933,30 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
-    fs::write(path, "1")?;
+    // For virtio-mem-ccw (s390x), hotplugged memory blocks must land in the
+    // MOVABLE zone so they can be offlined later during hot-unplug.  Writing
+    // "1" (equivalent to "online") places blocks in NORMAL, which the kernel
+    // refuses to offline.  Check valid_zones first; fall back to "1" only
+    // when the file is absent (older kernels / non-memory sysfs paths) or
+    // when only the Normal zone is advertised, preserving existing behaviour
+    // on all other architectures and device types.  Any other read error
+    // (permission denied, I/O error, …) is surfaced so the caller knows
+    // something is wrong rather than silently onlining in the wrong zone.
+    let valid_zones_path = std::path::Path::new(path)
+        .parent()
+        .map(|p| p.join("valid_zones"));
+    let value = match valid_zones_path {
+        Some(p) => match fs::read_to_string(&p) {
+            Ok(z) if z.split_whitespace().any(|w| w == "Movable") => "online_movable",
+            Ok(_) => "1",
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => "1",
+            Err(e) => {
+                return Err(e).with_context(|| format!("failed to read {}", p.display()));
+            }
+        },
+        None => "1",
+    };
+    fs::write(path, value)?;
     Ok(())
 }
 
@@ -1255,15 +1278,66 @@ mod tests {
         );
     }
 
+    // valid_zones content → expected value written to the online file.
+    #[rstest]
+    #[case::movable_only("Movable\n", "online_movable")]
+    #[case::normal_and_movable("Normal Movable\n", "online_movable")]
+    #[case::normal_only("Normal\n", "1")]
+    #[case::empty_file("\n", "1")]
     #[test]
-    fn test_online_device() {
+    fn test_online_device_valid_zones(#[case] zones: &str, #[case] expected: &str) {
         let testdir = tempdir().expect("failed to create tmpdir");
-        let device_path = testdir.path().join("online");
+        let online_path = testdir.path().join("online");
+        let valid_zones_path = testdir.path().join("valid_zones");
 
-        online_device(device_path.to_str().unwrap()).unwrap();
-        assert_eq!(fs::read_to_string(&device_path).unwrap(), "1");
+        fs::write(&valid_zones_path, zones).unwrap();
+        online_device(online_path.to_str().unwrap()).unwrap();
+        assert_eq!(
+            fs::read_to_string(&online_path).unwrap(),
+            expected,
+            "valid_zones={zones:?}"
+        );
+    }
 
+    #[test]
+    fn test_online_device_no_valid_zones_file() {
+        // No valid_zones present — must fall back to "1" safely.
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let online_path = testdir.path().join("online");
+
+        online_device(online_path.to_str().unwrap()).unwrap();
+        assert_eq!(fs::read_to_string(&online_path).unwrap(), "1");
+    }
+
+    #[test]
+    fn test_online_device_bad_path_returns_error() {
         assert!(online_device("/nonexistent/path/to/device").is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_online_device_unreadable_valid_zones_returns_error() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let online_path = testdir.path().join("online");
+        let valid_zones_path = testdir.path().join("valid_zones");
+
+        // Create the file then remove all read permissions so that
+        // fs::read_to_string returns a non-NotFound IO error.
+        fs::write(&valid_zones_path, "Movable\n").unwrap();
+        fs::set_permissions(&valid_zones_path, fs::Permissions::from_mode(0o000)).unwrap();
+
+        // Running as root would bypass the permission check, so skip in that case.
+        if nix::unistd::Uid::effective().is_root() {
+            return;
+        }
+
+        let result = online_device(online_path.to_str().unwrap());
+        assert!(
+            result.is_err(),
+            "expected Err for unreadable valid_zones, got Ok"
+        );
     }
 
     #[test]
