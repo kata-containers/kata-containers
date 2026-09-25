@@ -126,6 +126,15 @@ To enable runtime tracing, set the tracing option as shown:
 enable_tracing = true
 ```
 
+For the Rust runtime, enable the collector's OTLP/gRPC receiver and set
+`jaeger_endpoint` to its URL (default: `http://localhost:4317`). Replace
+legacy HTTP Thrift endpoints such as `http://localhost:14268/api/traces`;
+OTLP/gRPC URLs must not include `/api/traces` or `/v1/traces`.
+
+The existing `jaeger_user` and `jaeger_password` settings send Basic auth
+in gRPC metadata when a username is set. The receiver or proxy must support
+it; use HTTPS with trusted certificates for credentials sent over a network.
+
 ## Enable agent tracing
 
 To enable agent tracing, set the tracing option as shown:

@@ -55,11 +55,11 @@ use std::{
     os::unix::fs::{chown, MetadataExt},
     path::{Path, PathBuf},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use tokio::fs;
-use tokio::sync::{mpsc::Sender, Mutex, RwLock};
-use tracing::instrument;
+use tokio::sync::{mpsc::Sender, oneshot, Mutex, RwLock};
+use tracing::{instrument, Instrument, Span};
 #[cfg(feature = "virt")]
 use virt_container::{
     sandbox::{SandboxRestoreArgs, VirtSandbox},
@@ -69,10 +69,9 @@ use virt_container::{
 #[cfg(feature = "wasm")]
 use wasm_container::WasmContainer;
 
-use crate::{
-    shim_mgmt::server::MgmtServer,
-    tracer::{KataTracer, ROOTSPAN},
-};
+use crate::{shim_mgmt::server::MgmtServer, tracer::KataTracer};
+
+const TRACING_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn convert_string_to_slog_level(string_level: &str) -> slog::Level {
     match string_level {
@@ -121,7 +120,7 @@ impl RuntimeHandlerManagerInner {
         })
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     async fn init_runtime_handler(
         &mut self,
         sandbox_config: SandboxConfig,
@@ -151,26 +150,13 @@ impl RuntimeHandlerManagerInner {
             .await
             .context("new runtime instance")?;
 
-        // initilize the trace subscriber
-        if config.runtime.enable_tracing {
-            let mut tracer = self.kata_tracer.lock().await;
-            if let Err(e) = tracer.trace_setup(
-                &self.id,
-                &config.runtime.jaeger_endpoint,
-                &config.runtime.jaeger_user,
-                &config.runtime.jaeger_password,
-            ) {
-                warn!(sl!(), "failed to setup tracing, {:?}", e);
-            }
-        }
-
         let instance = Arc::new(runtime_instance);
         self.runtime_instance = Some(instance.clone());
 
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     async fn try_init(
         &mut self,
         mut sandbox_config: SandboxConfig,
@@ -249,13 +235,32 @@ impl RuntimeHandlerManagerInner {
 
         update_component_log_level(&config);
 
+        if config.runtime.enable_tracing {
+            let mut tracer = self.kata_tracer.lock().await;
+            if let Err(e) = tracer.trace_setup(
+                &self.id,
+                &config.runtime.jaeger_endpoint,
+                &config.runtime.jaeger_user,
+                &config.runtime.jaeger_password,
+            ) {
+                warn!(sl!(), "failed to setup tracing, {:?}", e);
+            }
+        }
+
         let dan_path = dan_config_path(&config, &self.id);
         // set netns to None if we want no network for the VM
         if config.runtime.disable_new_netns || dan_path.exists() {
             sandbox_config.network_env.netns = None;
         }
 
+        let root_span = self
+            .kata_tracer
+            .lock()
+            .await
+            .root_span()
+            .unwrap_or_else(Span::none);
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
+            .instrument(root_span)
             .await
             .context("init runtime handler")?;
 
@@ -367,13 +372,75 @@ impl RuntimeHandlerManager {
             .ok_or_else(|| anyhow!("runtime not ready"))
     }
 
-    async fn get_kata_tracer(&self) -> Result<Arc<Mutex<KataTracer>>> {
+    async fn get_kata_tracer(&self) -> Arc<Mutex<KataTracer>> {
         let inner = self.inner.read().await;
-        Ok(inner.get_kata_tracer())
+        inner.get_kata_tracer()
+    }
+
+    async fn trace_parent(&self) -> Option<Span> {
+        let tracer = self.get_kata_tracer().await;
+        let tracer = tracer.lock().await;
+        tracer.root_span()
+    }
+
+    pub async fn finish_tracing(&self, drain_requests: impl std::future::Future<Output = ()>) {
+        const TIMEOUT: Duration = Duration::from_secs(5);
+        let finish = async {
+            let tracer = self.get_kata_tracer().await;
+            let root = tracer.lock().await.root_span();
+            let Some(root) = root else {
+                return Ok(());
+            };
+            let drain_deadline = tokio::time::Instant::now() + TRACING_DRAIN_TIMEOUT;
+            if tokio::time::timeout_at(drain_deadline, drain_requests.instrument(root))
+                .await
+                .is_err()
+            {
+                warn!(
+                    sl!(),
+                    "tracing request drain timed out; exporting completed spans only"
+                );
+            }
+
+            let shutdown = tracer.lock().await.begin_shutdown();
+            let Some((provider, root_closed)) = shutdown else {
+                return Ok(());
+            };
+
+            // Reuse the drain deadline so retained span references cannot prolong shutdown.
+            if tokio::time::timeout_at(drain_deadline, root_closed.notified())
+                .await
+                .is_err()
+            {
+                warn!(
+                    sl!(),
+                    "tracing spans still active; exporting completed spans only"
+                );
+            }
+
+            // Unlike spawn_blocking, a detached thread cannot hold up Tokio runtime teardown.
+            let (completed, receiver) = oneshot::channel();
+            std::thread::Builder::new()
+                .name("kata-trace-shutdown".to_owned())
+                .spawn(move || {
+                    let _ = completed.send(provider.shutdown_with_timeout(TIMEOUT));
+                })
+                .context("spawn tracing shutdown thread")?;
+            receiver
+                .await
+                .context("tracing shutdown thread stopped")?
+                .context("shut down OTLP trace provider")
+        };
+
+        // Bound the entire tracing phase, including lock acquisition and span draining.
+        match tokio::time::timeout(TIMEOUT, finish).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => warn!(sl!(), "Failed to shut down tracing: {:?}", error),
+            Err(_) => warn!(sl!(), "Tracing shutdown timed out; continuing shim exit"),
+        }
     }
 
     //init the sandbox for the normal task api
-    #[instrument]
     async fn task_init_runtime_instance(
         &self,
         spec: &mut oci::Spec,
@@ -471,7 +538,7 @@ impl RuntimeHandlerManager {
     }
 
     //init the sandbox for the sandbox api
-    #[instrument]
+    #[instrument(skip_all)]
     async fn sandbox_init_runtime_instance(&self, sandbox_config: SandboxConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
         // return if runtime instance has init
@@ -481,7 +548,7 @@ impl RuntimeHandlerManager {
         inner.try_init(sandbox_config, None, &None).await
     }
 
-    #[instrument(parent = &*(ROOTSPAN))]
+    #[instrument(skip_all, parent = self.trace_parent().await.unwrap_or_else(Span::none))]
     pub async fn handler_sandbox_message(&self, req: SandboxRequest) -> Result<SandboxResponse> {
         if let SandboxRequest::CreateSandbox(sandbox_config) = req {
             let config = sandbox_config.deref().clone();
@@ -498,7 +565,7 @@ impl RuntimeHandlerManager {
         }
     }
 
-    #[instrument(parent = &*(ROOTSPAN))]
+    #[instrument(skip_all, parent = self.trace_parent().await.unwrap_or_else(Span::none))]
     pub async fn handler_task_message(&self, req: TaskRequest) -> Result<TaskResponse> {
         if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
@@ -525,9 +592,11 @@ impl RuntimeHandlerManager {
                 .await
                 .context("get runtime instance")?;
 
+            let root_span = self.trace_parent().await.unwrap_or_else(Span::none);
             instance
                 .sandbox
                 .start()
+                .instrument(root_span.clone())
                 .await
                 .context("start sandbox in task handler")?;
 
@@ -536,6 +605,7 @@ impl RuntimeHandlerManager {
             let shim_pid = instance
                 .container_manager
                 .create_container(container_config, spec)
+                .instrument(root_span)
                 .await
                 .context("create container")?;
 
@@ -650,7 +720,7 @@ impl RuntimeHandlerManager {
         }
     }
 
-    #[instrument(parent = &(*ROOTSPAN))]
+    #[instrument(skip_all)]
     pub async fn handler_task_request(&self, req: TaskRequest) -> Result<TaskResponse> {
         let instance = self
             .get_runtime_instance()
@@ -695,11 +765,6 @@ impl RuntimeHandlerManager {
             TaskRequest::ShutdownContainer(req) => {
                 if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
-
-                    // stop the tracer collector
-                    let kata_tracer = self.get_kata_tracer().await.context("get kata tracer")?;
-                    let tracer = kata_tracer.lock().await;
-                    tracer.trace_end();
                 }
                 Ok(TaskResponse::ShutdownContainer)
             }
@@ -1084,6 +1149,102 @@ mod tests {
     use rstest::rstest;
     use tokio::sync::mpsc::channel;
 
+    #[tokio::test]
+    async fn test_finish_tracing_exports_open_span() {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (tracer, exporter, dispatch) = crate::tracer::tests::tracer();
+        tracing::dispatcher::with_default(&dispatch, || {
+            tracer.root_span().unwrap().in_scope(|| {});
+        });
+        let child = tracing::dispatcher::with_default(
+            &dispatch,
+            || tracing::info_span!(parent: tracer.root_span().unwrap(), "in-flight"),
+        );
+        *manager.get_kata_tracer().await.lock().await = tracer;
+        let (release, released) = oneshot::channel();
+        let finish = manager.finish_tracing(async { released.await.unwrap() });
+        tokio::pin!(finish);
+        std::future::poll_fn(|context| {
+            use std::future::Future;
+            assert!(finish.as_mut().poll(context).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        assert!(exporter.0.lock().unwrap().is_empty());
+        tracing::dispatcher::with_default(&dispatch, || drop(child));
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), finish)
+            .await
+            .expect("completed requests must unblock trace finalization");
+        assert!(manager.trace_parent().await.is_none());
+        let spans = exporter.0.lock().unwrap();
+        let child = spans.iter().find(|span| span.name == "in-flight").unwrap();
+        let root = spans.iter().find(|span| span.name == "root-span").unwrap();
+        assert_eq!(child.parent_span_id, root.span_context.span_id());
+        assert!(root.end_time >= child.end_time);
+    }
+
+    #[tokio::test]
+    async fn test_finish_tracing_waits_for_root_close() {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (tracer, exporter, dispatch) = crate::tracer::tests::tracer();
+        let child = tracing::dispatcher::with_default(
+            &dispatch,
+            || tracing::info_span!(parent: tracer.root_span().unwrap(), "retained-child"),
+        );
+        *manager.get_kata_tracer().await.lock().await = tracer;
+        let finish = manager.finish_tracing(std::future::ready(()));
+        tokio::pin!(finish);
+        assert!(tokio::time::timeout(Duration::from_millis(50), &mut finish)
+            .await
+            .is_err());
+        assert!(manager.trace_parent().await.is_none());
+        assert!(exporter.0.lock().unwrap().is_empty());
+        tracing::dispatcher::with_default(&dispatch, || drop(child));
+        tokio::time::timeout(Duration::from_secs(3), finish)
+            .await
+            .expect("closing the child must unblock trace finalization");
+        let spans = exporter.0.lock().unwrap();
+        let root = spans.iter().find(|span| span.name == "root-span").unwrap();
+        let child = spans
+            .iter()
+            .find(|span| span.name == "retained-child")
+            .unwrap();
+        assert_eq!(child.parent_span_id, root.span_context.span_id());
+    }
+
+    #[tokio::test]
+    async fn test_finish_tracing_bounds_request_drain() {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (tracer, exporter, _dispatch) = crate::tracer::tests::tracer();
+        *manager.get_kata_tracer().await.lock().await = tracer;
+        let drain_started = std::cell::Cell::new(false);
+        let finish = manager.finish_tracing(async {
+            drain_started.set(true);
+            std::future::pending::<()>().await;
+        });
+        tokio::pin!(finish);
+        std::future::poll_fn(|context| {
+            use std::future::Future;
+            assert!(finish.as_mut().poll(context).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        assert!(drain_started.get());
+        tokio::time::timeout(Duration::from_secs(3), finish)
+            .await
+            .expect("a stalled request drain must not prevent trace export");
+        assert!(exporter
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|span| span.name == "root-span"));
+    }
+
     #[rstest]
     #[case::armed_guard_removes_runtime_dir(false, false)]
     #[case::disarmed_guard_keeps_runtime_dir(true, true)]
@@ -1131,6 +1292,13 @@ mod tests {
             .try_recv()
             .expect("an Action::Shutdown message must be sent to stop the daemon");
         assert!(matches!(msg.action, Action::Shutdown));
+
+        tokio::time::timeout(
+            Duration::from_millis(500),
+            manager.finish_tracing(std::future::pending()),
+        )
+        .await
+        .expect("disabled tracing must not delay service shutdown");
     }
 
     #[test]
