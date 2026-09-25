@@ -429,6 +429,46 @@ pub fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
     Ok(Vec::new())
 }
 
+/// `enable_annotations` lists keyed by hypervisor name.
+///
+/// Only the hypervisors setting the key are returned: a drop-in's empty list
+/// means something different from its absence.
+pub fn get_hypervisor_enable_annotations(
+    file_path: &Path,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    let content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
+
+    let (_header, toml_content) = split_non_toml_header(&content);
+    let doc = toml_content
+        .parse::<DocumentMut>()
+        .context("Failed to parse TOML")?;
+
+    let mut result = std::collections::BTreeMap::new();
+    let Some(hypervisor) = doc.get("hypervisor").and_then(|item| item.as_table()) else {
+        return Ok(result);
+    };
+
+    for (name, item) in hypervisor.iter() {
+        let Some(table) = item.as_table() else {
+            continue;
+        };
+        let Some(Item::Value(Value::Array(arr))) = table.get("enable_annotations") else {
+            continue;
+        };
+        let values: Vec<String> = arr
+            .iter()
+            .map(|v| match v {
+                Value::String(s) => s.value().to_string(),
+                _ => format!("{v:?}"),
+            })
+            .collect();
+        result.insert(name.to_string(), values);
+    }
+
+    Ok(result)
+}
+
 /// Set a TOML array value
 pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result<()> {
     let content = std::fs::read_to_string(file_path)
@@ -793,6 +833,24 @@ mod tests {
 
         let values = get_toml_array(path, "hypervisor.qemu.enable_annotations").unwrap();
         assert_eq!(values.len(), 0);
+    }
+
+    #[test]
+    fn test_get_hypervisor_enable_annotations() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(
+            path,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\", \"cc_init_data\"]\n[hypervisor.clh]\npath = \"/usr/bin/cloud-hypervisor\"\n",
+        )
+        .unwrap();
+
+        let values = get_hypervisor_enable_annotations(path).unwrap();
+        assert_eq!(
+            values.get("qemu").unwrap(),
+            &vec!["default_vcpus".to_string(), "cc_init_data".to_string()]
+        );
+        assert!(!values.contains_key("clh"));
     }
 
     #[test]
