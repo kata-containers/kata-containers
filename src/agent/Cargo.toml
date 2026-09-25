@@ -91,6 +91,8 @@ sha2 = { workspace = true }
 
 container-device-interface.workspace = true
 
+rustix = { version = "0.38.44", features = ["mount"] }
+
 [target.'cfg(target_arch = "s390x")'.dependencies]
 pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", package = "s390_pv_core", rev = "4942504a9a2977d49989a5e5b7c1c8e07dc0fa41" }
 
