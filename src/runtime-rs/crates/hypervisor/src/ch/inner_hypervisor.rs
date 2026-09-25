@@ -1773,4 +1773,31 @@ mod tests {
             "non-vcpu thread should not be in the map"
         );
     }
+
+    #[actix_rt::test]
+    async fn test_get_ch_vcpu_tids_missing_comm() {
+        let tmp_dir = Builder::new().prefix("fake-proc-pid").tempdir().unwrap();
+        let task_dir = tmp_dir.path().join("task");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        let vcpu_tid_dir = task_dir.join("3001");
+        fs::create_dir_all(&vcpu_tid_dir).unwrap();
+        fs::write(vcpu_tid_dir.join("comm"), "vcpu0\n").unwrap();
+
+        // Simulates a thread that exited mid-scan.
+        let missing_comm_dir = task_dir.join("9999");
+        fs::create_dir_all(&missing_comm_dir).unwrap();
+
+        let proc_path = tmp_dir.path().to_str().unwrap();
+        let result = get_ch_vcpu_tids(proc_path);
+        let vcpus = result.unwrap();
+
+        // Should only contain the valid vcpu thread; the missing-comm tid is skipped.
+        assert_eq!(
+            vcpus.len(),
+            1,
+            "only vcpu threads with comm should be mapped"
+        );
+        assert_eq!(vcpus[&0], 3001);
+    }
 }
