@@ -12,6 +12,7 @@ OS_NAME=ubuntu
 OS_VERSION=${OS_VERSION:-""}
 [[ -z "${OS_VERSION}" ]] && echo "OS_VERSION is required, but was not set" && exit 1
 PACKAGES="chrony iptables dbus"
+[[ "${GUEST_APPARMOR}" = yes ]] && PACKAGES+=" apparmor apparmor-utils"
 # shellcheck disable=SC2154
 [[ "${AGENT_INIT}" = no ]] && PACKAGES+=" init"
 # cryptsetup-bin and e2fsprogs are installed unconditionally:
