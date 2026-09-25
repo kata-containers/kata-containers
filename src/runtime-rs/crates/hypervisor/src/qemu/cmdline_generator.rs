@@ -11,6 +11,7 @@ use crate::utils::{
     SocketAddress,
 };
 
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 use std::borrow::Cow;
 
@@ -1173,7 +1174,7 @@ impl ToQemuParams for VmdkFormatNode {
 fn block_backend_node(
     device_id: &str,
     path: &str,
-    vmdk: Option<&crate::VmdkConfig>,
+    source: &BlockSourceFormat,
     is_direct: bool,
     is_readonly: bool,
     discard_unmap: bool,
@@ -1182,7 +1183,7 @@ fn block_backend_node(
     backend.set_read_only(is_readonly);
     backend.set_discard_unmap(discard_unmap);
 
-    if vmdk.is_some() {
+    if matches!(source, BlockSourceFormat::Vmdk(_)) {
         Box::new(VmdkFormatNode::new(device_id, backend))
     } else {
         Box::new(backend)
@@ -3330,7 +3331,7 @@ impl<'a> QemuCmdLine<'a> {
         &mut self,
         device_id: &str,
         path: &str,
-        vmdk: Option<&crate::VmdkConfig>,
+        source: &BlockSourceFormat,
         is_direct: bool,
         is_readonly: bool,
         is_scsi: bool,
@@ -3341,7 +3342,7 @@ impl<'a> QemuCmdLine<'a> {
             return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
         }
         let mut fdset_ids = Vec::new();
-        let path = prepare_block_source(path, vmdk, is_readonly, is_direct, |file, label| {
+        let path = prepare_block_source(path, source, is_readonly, is_direct, |file, label| {
             let (path, fdset_id) =
                 self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
             fdset_ids.push(fdset_id);
@@ -3353,7 +3354,7 @@ impl<'a> QemuCmdLine<'a> {
         let backend = block_backend_node(
             device_id,
             &path,
-            vmdk,
+            source,
             is_direct,
             is_readonly,
             discard_unmap,
@@ -4017,6 +4018,7 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_types::vmdk::VmdkConfig;
     use rstest::rstest;
     use serial_test::serial;
     use tempfile::tempdir;
@@ -4223,7 +4225,7 @@ mod tests {
         let result = cmdline.add_block_device(
             "rootfs",
             image.to_str().unwrap(),
-            None,
+            &BlockSourceFormat::Raw,
             false,
             true,
             false,
@@ -4255,9 +4257,15 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_cold_plug_vmdk_uses_format_node() {
-        let vmdk = crate::VmdkConfig::default();
-        let format_node =
-            block_backend_node("rootfs", "/dev/fdset/2", Some(&vmdk), false, true, false);
+        let vmdk = VmdkConfig::default();
+        let format_node = block_backend_node(
+            "rootfs",
+            "/dev/fdset/2",
+            &BlockSourceFormat::Vmdk(vmdk),
+            false,
+            true,
+            false,
+        );
 
         let format_params = format_node.qemu_params().await.unwrap();
         assert_eq!(format_params[0], "-blockdev");
@@ -4302,7 +4310,7 @@ mod tests {
             .add_block_device(
                 "blk0",
                 image.to_str().unwrap(),
-                None,
+                &BlockSourceFormat::Raw,
                 true,
                 is_readonly,
                 false,
