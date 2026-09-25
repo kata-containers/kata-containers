@@ -88,7 +88,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 use strum::Display;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -746,6 +746,24 @@ impl VirtSandbox {
         Ok(())
     }
 
+    /// Sets a template-restored guest's clock, which stops while the template is paused.
+    async fn sync_time(agent: &dyn Agent, config: &HypervisorConfig) -> Result<()> {
+        if !config.vm_template.boot_from_template {
+            return Ok(());
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .context("read host time")?;
+        agent
+            .set_guest_date_time(agent::SetGuestDateTimeRequest {
+                sec: now.as_secs() as i64,
+                usec: now.subsec_micros() as i64,
+            })
+            .await
+            .context("sync guest time")?;
+        Ok(())
+    }
+
     async fn set_agent_policy(&self) -> Result<()> {
         // TODO: Exclude policy-related items from the annotations.
         let toml_config = self.resource_manager.config().await;
@@ -1154,11 +1172,9 @@ impl Sandbox for VirtSandbox {
             .start(&address)
             .await
             .context(format!("connect to address {:?}", &address))?;
-        Self::reseed_rng(
-            self.agent.as_ref(),
-            &self.hypervisor.hypervisor_config().await,
-        )
-        .await?;
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        Self::reseed_rng(self.agent.as_ref(), &hypervisor_config).await?;
+        Self::sync_time(self.agent.as_ref(), &hypervisor_config).await?;
         self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager

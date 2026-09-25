@@ -98,7 +98,7 @@ We can verify whether a VM was launched from a template or started normally by c
 
 !!! note
 
-    VMs restored from a template reseed the guest RNG on startup. If the guest enforces an agent policy, it must allow `ReseedRandomDevRequest`.
+    VMs restored from a template reseed the guest RNG and sync the guest clock on startup. If the guest enforces an agent policy, it must allow `ReseedRandomDevRequest` and `SetGuestDateTimeRequest`.
 
 ## Performance Test
 
