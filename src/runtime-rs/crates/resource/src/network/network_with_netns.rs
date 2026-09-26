@@ -23,7 +23,6 @@ use scopeguard::defer;
 use tokio::sync::{Mutex, RwLock};
 
 use super::{
-    detach_endpoint,
     endpoint::{
         Endpoint, IPVlanEndpoint, MacVlanEndpoint, PhysicalEndpoint, VethEndpoint, VlanEndpoint,
     },
@@ -164,7 +163,7 @@ impl Network for NetworkWithNetns {
         Some(endpoint)
     }
 
-    async fn remove(&self, h: &dyn Hypervisor, restore_passthrough_devices: bool) -> Result<()> {
+    async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let mut cleanup = self.cleanup.lock().await;
         let inner = self.inner.read().await;
         let mut errors = Vec::new();
@@ -182,7 +181,7 @@ impl Network for NetworkWithNetns {
             if e.endpoint.host_bdf().await.is_none() {
                 continue;
             }
-            match detach_endpoint(e.endpoint.as_ref(), h, restore_passthrough_devices).await {
+            match e.endpoint.detach(h).await {
                 Ok(()) => {
                     cleanup.detached.insert(index);
                 }
@@ -209,7 +208,7 @@ impl Network for NetworkWithNetns {
                 if e.endpoint.host_bdf().await.is_some() {
                     continue;
                 }
-                match detach_endpoint(e.endpoint.as_ref(), h, restore_passthrough_devices).await {
+                match e.endpoint.detach(h).await {
                     Ok(()) => {
                         cleanup.detached.insert(index);
                     }
@@ -523,9 +522,9 @@ mod cleanup_tests {
         };
         let hypervisor = Qemu::new();
 
-        assert!(network.remove(&hypervisor, true).await.is_err());
-        network.remove(&hypervisor, true).await.unwrap();
-        network.remove(&hypervisor, true).await.unwrap();
+        assert!(network.remove(&hypervisor).await.is_err());
+        network.remove(&hypervisor).await.unwrap();
+        network.remove(&hypervisor).await.unwrap();
         assert_eq!(done.calls.load(Ordering::SeqCst), 1);
         assert_eq!(retry.calls.load(Ordering::SeqCst), 2);
     }

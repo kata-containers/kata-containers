@@ -1524,7 +1524,7 @@ impl Sandbox for VirtSandbox {
         if !steps.resources {
             match self
                 .resource_manager
-                .cleanup(true)
+                .cleanup()
                 .await
                 .context("resource clean up")
             {

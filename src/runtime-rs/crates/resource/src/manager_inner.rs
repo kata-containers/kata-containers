@@ -979,7 +979,7 @@ impl ResourceManagerInner {
         }
     }
 
-    pub async fn cleanup(&self, restore_passthrough_devices: bool) -> Result<()> {
+    pub async fn cleanup(&self) -> Result<()> {
         // Hold this lock across the attempt: a concurrent caller can retry
         // failed stages, but cannot run them while the first attempt is active.
         let mut steps = self.cleanup_steps.lock().await;
@@ -988,7 +988,7 @@ impl ResourceManagerInner {
         if !steps.network {
             if let Some(network) = &self.network {
                 match network
-                    .remove(self.hypervisor.as_ref(), restore_passthrough_devices)
+                    .remove(self.hypervisor.as_ref())
                     .await
                     .context("remove network")
                 {

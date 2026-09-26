@@ -34,7 +34,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
-use super::{detach_endpoint, EndpointState, Network};
+use super::{EndpointState, Network};
 use crate::network::endpoint::{TapEndpoint, VhostUserEndpoint};
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;
@@ -187,7 +187,7 @@ impl Network for Dan {
         Some(ep_states)
     }
 
-    async fn remove(&self, h: &dyn Hypervisor, restore_passthrough_devices: bool) -> Result<()> {
+    async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let mut detached = self.detached.lock().await;
         let inner = self.inner.read().await;
         if detached.len() == inner.entity_list.len() {
@@ -202,7 +202,7 @@ impl Network for Dan {
             if detached.contains(&index) {
                 continue;
             }
-            match detach_endpoint(e.endpoint.as_ref(), h, restore_passthrough_devices).await {
+            match e.endpoint.detach(h).await {
                 Ok(()) => {
                     detached.insert(index);
                 }

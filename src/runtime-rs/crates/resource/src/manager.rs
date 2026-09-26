@@ -219,9 +219,9 @@ impl ResourceManager {
         inner.update_linux_resource(cid, linux_resources, op).await
     }
 
-    pub async fn cleanup(&self, restore_passthrough_devices: bool) -> Result<()> {
+    pub async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
-        inner.cleanup(restore_passthrough_devices).await
+        inner.cleanup().await
     }
 
     pub async fn has_passthrough_devices(&self) -> bool {
