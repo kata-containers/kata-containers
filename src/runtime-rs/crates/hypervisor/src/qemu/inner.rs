@@ -30,6 +30,8 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
 };
+use nix::sched::{sched_setaffinity, CpuSet as NixCpuSet};
+use nix::unistd::Pid;
 use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
@@ -415,6 +417,9 @@ impl QemuInner {
             None
         };
 
+        // Capture cpu_set before moving into the pre_exec closure.
+        let cpu_set_str = self.config.cpu_info.cpu_set.clone();
+
         // we need move the qemu process into Network Namespace and set SELinux label.
         unsafe {
             let selinux_label = self.config.security_info.selinux_label.clone();
@@ -439,6 +444,38 @@ impl QemuInner {
                     }
                     set_process_credentials(user)
                         .map_err(|err| io::Error::other(format!("{err:#}")))?;
+                }
+
+                // Apply CPU affinity mask if cpu_set is configured.
+                if !cpu_set_str.is_empty() {
+                    match parse_cpuset_str(&cpu_set_str) {
+                        Ok(cpus) => {
+                            let mut nix_cpuset = NixCpuSet::new();
+                            for &cpu_id in &cpus {
+                                if let Err(e) = nix_cpuset.set(cpu_id) {
+                                    error!(
+                                        sl!(),
+                                        "cpu_set: failed to set CPU {} in affinity mask: {}",
+                                        cpu_id,
+                                        e
+                                    );
+                                }
+                            }
+                            if let Err(e) = sched_setaffinity(Pid::from_raw(0), &nix_cpuset) {
+                                error!(
+                                    sl!(),
+                                    "cpu_set: sched_setaffinity failed for cpu_set \"{}\": {}",
+                                    cpu_set_str,
+                                    e
+                                );
+                            } else {
+                                info!(sl!(), "cpu_set: QEMU process pinned to CPUs {:?}", cpus);
+                            }
+                        }
+                        Err(e) => {
+                            error!(sl!(), "cpu_set: invalid cpu_set \"{}\": {}", cpu_set_str, e);
+                        }
+                    }
                 }
 
                 Ok(())
@@ -1543,4 +1580,63 @@ mod tests {
             None => assert!(warnings.is_empty()),
         }
     }
+
+    // ── parse_cpuset_str — valid inputs ───────────────────────────────────
+
+    #[rstest]
+    #[case::single_cpu("0",          vec![0])]
+    #[case::comma_list("0,1,2",      vec![0, 1, 2])]
+    #[case::simple_range("0-3",      vec![0, 1, 2, 3])]
+    #[case::mixed_list_and_range("0,2,4-7,10", vec![0, 2, 4, 5, 6, 7, 10])]
+    #[case::range_before_singles("4-7,0,2",    vec![0, 2, 4, 5, 6, 7])]
+    #[case::duplicates_deduped("0,0,1,1",      vec![0, 1])]
+    #[case::single_element_range("0-0",        vec![0])]
+    #[case::whitespace_trimmed("  0 , 1 ",     vec![0, 1])]
+    fn test_parse_cpuset_valid(#[case] input: &str, #[case] expected: Vec<usize>) {
+        let result = parse_cpuset_str(input).unwrap();
+        assert_eq!(result, expected, "input: {:?}", input);
+    }
+
+    // ── parse_cpuset_str — invalid inputs ─────────────────────────────────
+
+    #[rstest]
+    #[case::empty_string("")]
+    #[case::non_numeric("abc")]
+    #[case::inverted_range("5-3")]
+    fn test_parse_cpuset_invalid(#[case] input: &str) {
+        assert!(
+            parse_cpuset_str(input).is_err(),
+            "expected error for input: {:?}",
+            input
+        );
+    }
+}
+
+/// Parse a cpu_set string (e.g. "0,2,4-7,10") into a sorted, deduplicated
+/// list of CPU indices.  Returns an error if no valid CPU entries are found.
+fn parse_cpuset_str(cpuset: &str) -> Result<Vec<usize>> {
+    let mut cpus: Vec<usize> = Vec::new();
+    for token in cpuset.split(',') {
+        let token = token.trim();
+        if let Some((lo, hi)) = token.split_once('-') {
+            match (lo.trim().parse::<usize>(), hi.trim().parse::<usize>()) {
+                (Ok(lo), Ok(hi)) if lo <= hi => cpus.extend(lo..=hi),
+                _ => warn!(sl!(), "cpu_set: ignoring invalid range token \"{}\"", token),
+            }
+        } else {
+            match token.parse::<usize>() {
+                Ok(n) => cpus.push(n),
+                Err(_) => warn!(sl!(), "cpu_set: ignoring invalid cpu token \"{}\"", token),
+            }
+        }
+    }
+    cpus.sort_unstable();
+    cpus.dedup();
+    if cpus.is_empty() {
+        return Err(anyhow!(
+            "cpu_set \"{}\" contains no valid CPU entries",
+            cpuset
+        ));
+    }
+    Ok(cpus)
 }
