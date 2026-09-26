@@ -348,6 +348,10 @@ impl RuntimeHandlerManager {
                     .await
                     .context("failed to restore the sandbox")?;
                 sandbox
+                    .confirm_restored_vmm_exit()
+                    .await
+                    .context("failed to stop the restored VMM")?;
+                sandbox
                     .cleanup()
                     .await
                     .context("failed to cleanup the resource")?;

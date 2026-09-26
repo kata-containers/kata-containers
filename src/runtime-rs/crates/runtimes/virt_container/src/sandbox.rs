@@ -94,6 +94,8 @@ use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
+use crate::vmm_process::VmmProcessIdentity;
+
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
 
 const STOP_VM_TIMEOUT: Duration = Duration::from_secs(15);
@@ -169,6 +171,7 @@ pub struct VirtSandbox {
     publishing_exit: Arc<Mutex<()>>,
     /// Cancelled only when a stop or the exit watcher confirms the VMM is gone.
     vmm_exit_confirmed: CancellationToken,
+    vmm_process: Arc<RwLock<Option<VmmProcessIdentity>>>,
 }
 
 #[derive(Default)]
@@ -228,6 +231,7 @@ impl VirtSandbox {
             shutdown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
             vmm_exit_confirmed: CancellationToken::new(),
+            vmm_process: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -248,6 +252,34 @@ impl VirtSandbox {
 
     pub fn get_hypervisor(&self) -> Arc<dyn Hypervisor> {
         self.hypervisor.clone()
+    }
+
+    async fn remember_vmm_process(&self) {
+        let identity = match self.hypervisor.get_vmm_master_tid().await {
+            Ok(pid) => VmmProcessIdentity::capture(pid),
+            Err(err) => Err(err).context("get VMM PID"),
+        };
+        match identity {
+            Ok(identity) => *self.vmm_process.write().await = Some(identity),
+            Err(err) => warn!(sl!(), "could not save VMM process identity: {err:#}"),
+        }
+    }
+
+    /// A fresh shim has no child handle for the VMM created by the old shim.
+    /// Confirm its exit before releasing devices and mounts during recovery.
+    pub async fn confirm_restored_vmm_exit(&self) -> Result<()> {
+        if self.vmm_exit_confirmed.is_cancelled() {
+            return Ok(());
+        }
+        let identity = self
+            .vmm_process
+            .read()
+            .await
+            .clone()
+            .context("no saved VMM process identity; refusing unsafe recovery cleanup")?;
+        identity.terminate_and_wait(STOP_VM_TIMEOUT).await?;
+        self.vmm_exit_confirmed.cancel();
+        Ok(())
     }
 
     async fn record_stop(
@@ -1131,6 +1163,7 @@ impl Sandbox for VirtSandbox {
         inner.vmm_start_attempted = true;
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
+        self.remember_vmm_process().await;
 
         let sandbox = self.clone();
         // wait for vm exit in background, and record the exit status and time when vm exited.
@@ -1362,6 +1395,7 @@ impl Sandbox for VirtSandbox {
             .await
             .context("start template vm")?;
         info!(sl!(), "vm started from template");
+        self.remember_vmm_process().await;
 
         let sandbox = self.clone();
         tokio::spawn(async move {
@@ -1632,13 +1666,12 @@ impl Sandbox for VirtSandbox {
             let lock_sender = self.msg_sender.lock().await;
             lock_sender.send(msg).await.context("send exit event")?;
         }
-        drop(publishing_exit);
-
         // Docker only sends ShutdownContainer once the container is removed, so
         // release everything here instead of leaking it until then.
         if is_sandbox_container && !restore_before_exit {
             self.teardown().await;
         }
+        drop(publishing_exit);
 
         Ok(())
     }
@@ -1731,6 +1764,8 @@ impl Persist for VirtSandbox {
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
+            vmm_process: self.vmm_process.read().await.clone(),
+            vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -1835,6 +1870,10 @@ impl Persist for VirtSandbox {
         let resource_manager = Arc::new(ResourceManager::restore(args, r).await?);
         let mut inner = SandboxInner::new();
         inner.vmm_start_attempted = true;
+        let vmm_exit_confirmed = CancellationToken::new();
+        if sandbox_state.vmm_exit_confirmed {
+            vmm_exit_confirmed.cancel();
+        }
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(sandbox_args.sender)),
@@ -1855,7 +1894,8 @@ impl Persist for VirtSandbox {
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
-            vmm_exit_confirmed: CancellationToken::new(),
+            vmm_exit_confirmed,
+            vmm_process: Arc::new(RwLock::new(sandbox_state.vmm_process)),
         })
     }
 }
