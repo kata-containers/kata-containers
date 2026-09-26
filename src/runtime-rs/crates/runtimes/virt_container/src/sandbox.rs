@@ -128,8 +128,9 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
-    /// Set when stop() could not establish that the VMM let go of its devices.
-    vmm_exit_unconfirmed: bool,
+    /// start_vm() can fail after creating a process, before a watcher exists.
+    vmm_start_attempted: bool,
+    vmm_exit_watched: bool,
 }
 
 impl SandboxInner {
@@ -138,7 +139,8 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
-            vmm_exit_unconfirmed: false,
+            vmm_start_attempted: false,
+            vmm_exit_watched: false,
         }
     }
 }
@@ -165,6 +167,8 @@ pub struct VirtSandbox {
     // Held until the container exit is on the channel, which shutdown() waits
     // for before it breaks the service loop.
     publishing_exit: Arc<Mutex<()>>,
+    /// Cancelled only when a stop or the exit watcher confirms the VMM is gone.
+    vmm_exit_confirmed: CancellationToken,
 }
 
 #[derive(Default)]
@@ -223,6 +227,7 @@ impl VirtSandbox {
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
+            vmm_exit_confirmed: CancellationToken::new(),
         })
     }
 
@@ -245,8 +250,19 @@ impl VirtSandbox {
         self.hypervisor.clone()
     }
 
-    async fn record_stop(&self, exit_status: u32, exited_at: std::time::SystemTime) {
+    async fn record_stop(
+        &self,
+        exit_status: u32,
+        exited_at: std::time::SystemTime,
+        vmm_exited: bool,
+    ) {
         let mut inner = self.inner.write().await;
+        // A watcher can confirm exit after stop() has already recorded a
+        // synthetic status. Keep that confirmation without replacing the
+        // container's first exit status.
+        if vmm_exited {
+            self.vmm_exit_confirmed.cancel();
+        }
         if inner.state == SandboxState::Stopped {
             return;
         }
@@ -261,33 +277,34 @@ impl VirtSandbox {
 
     /// The wait is bounded because stopping a QEMU wedged in the kernel --
     /// which is what resetting a passed-through device can do -- would block
-    /// the teardown for good.  `exit_watched` says whether a task is watching
-    /// wait_vm(), and so whether an exit can still be reported after a failure.
+    /// the teardown for good. `exit_watched` says whether a task can still
+    /// confirm the exit after a failed stop.
     async fn stop_vm(&self, exit_watched: bool) -> bool {
         let reason = match timeout(STOP_VM_TIMEOUT, self.hypervisor.stop_vm()).await {
-            Ok(Ok(())) => return true,
-            Ok(Err(e)) => {
-                // QEMU fails this way when the watcher got to the child first,
-                // so the record it writes is what settles the question.
-                if exit_watched
-                    && matches!(timeout(VMM_EXIT_RECORD_GRACE, self.wait()).await, Ok(Ok(_)))
-                {
-                    info!(sl!(), "VMM was gone before the stop: {:?}", e);
-                    return true;
-                }
-                format!("{:?}", e)
+            Ok(Ok(())) => {
+                self.vmm_exit_confirmed.cancel();
+                return true;
             }
+            Ok(Err(e)) => format!("{:?}", e),
             Err(_) => format!("still running after {:?}", STOP_VM_TIMEOUT),
         };
 
-        let mut inner = self.inner.write().await;
-        if inner.state == SandboxState::Stopped {
-            // The watcher recorded the exit while we were giving up on it.
+        if exit_watched
+            && timeout(VMM_EXIT_RECORD_GRACE, self.vmm_exit_confirmed.cancelled())
+                .await
+                .is_ok()
+        {
+            info!(
+                sl!(),
+                "VMM exit was confirmed after stop failed: {}", reason
+            );
+            return true;
+        }
+        if self.vmm_exit_confirmed.is_cancelled() {
             return true;
         }
 
         warn!(sl!(), "VMM exit was not confirmed: {}", reason);
-        inner.vmm_exit_unconfirmed = true;
         false
     }
 
@@ -1111,6 +1128,7 @@ impl Sandbox for VirtSandbox {
             .context("set up device before start vm")?;
 
         // start vm
+        inner.vmm_start_attempted = true;
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
 
@@ -1120,15 +1138,16 @@ impl Sandbox for VirtSandbox {
             match sandbox.hypervisor.wait_vm().await {
                 Ok(exit_code) => {
                     sandbox
-                        .record_stop(exit_code as u32, SystemTime::now())
+                        .record_stop(exit_code as u32, SystemTime::now(), true)
                         .await;
                 }
                 Err(err) => {
                     warn!(sl!(), "failed waiting for sandbox VM exit: {:?}", err);
-                    sandbox.record_stop(255, SystemTime::now()).await;
+                    sandbox.record_stop(255, SystemTime::now(), false).await;
                 }
             }
         });
+        inner.vmm_exit_watched = true;
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
@@ -1305,7 +1324,7 @@ impl Sandbox for VirtSandbox {
 
         // if sandbox is not in SandboxState::Init then return,
         // otherwise try to create sandbox
-        let inner = self.inner.write().await;
+        let mut inner = self.inner.write().await;
         if inner.state != SandboxState::Init {
             return Ok(());
         }
@@ -1337,6 +1356,7 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
+        inner.vmm_start_attempted = true;
         self.hypervisor
             .start_vm(10_000)
             .await
@@ -1348,15 +1368,16 @@ impl Sandbox for VirtSandbox {
             match sandbox.hypervisor.wait_vm().await {
                 Ok(exit_code) => {
                     sandbox
-                        .record_stop(exit_code as u32, SystemTime::now())
+                        .record_stop(exit_code as u32, SystemTime::now(), true)
                         .await;
                 }
                 Err(err) => {
                     warn!(sl!(), "failed waiting for sandbox VM exit: {:?}", err);
-                    sandbox.record_stop(255, SystemTime::now()).await;
+                    sandbox.record_stop(255, SystemTime::now(), false).await;
                 }
             }
         });
+        inner.vmm_exit_watched = true;
 
         Ok(())
     }
@@ -1400,12 +1421,16 @@ impl Sandbox for VirtSandbox {
         // reaped hypervisor to stop.
         let _stopping = self.stopping.lock().await;
 
-        let state = {
+        let (state, vmm_start_attempted, vmm_exit_watched) = {
             let sandbox_inner = self.inner.read().await;
-            sandbox_inner.state
+            (
+                sandbox_inner.state,
+                sandbox_inner.vmm_start_attempted,
+                sandbox_inner.vmm_exit_watched,
+            )
         };
 
-        if state == SandboxState::Stopped {
+        if state == SandboxState::Stopped && self.vmm_exit_confirmed.is_cancelled() {
             return Ok(());
         }
 
@@ -1414,16 +1439,23 @@ impl Sandbox for VirtSandbox {
         self.cancel_token.cancel();
 
         info!(sl!(), "begin stop sandbox");
+        if !vmm_start_attempted {
+            // Start failed before start_vm(), so there is no VMM to stop.
+            self.record_stop(0, SystemTime::now(), true).await;
+            info!(sl!(), "sandbox stopped before VM start");
+            return Ok(());
+        }
+
         if state == SandboxState::Init {
-            // Nothing is watching for an exit this early.
-            self.stop_vm(false).await;
-            self.record_stop(0, SystemTime::now()).await;
+            let confirmed = self.stop_vm(vmm_exit_watched).await;
+            self.record_stop(if confirmed { 0 } else { 255 }, SystemTime::now(), false)
+                .await;
             info!(sl!(), "sandbox stopped during Init");
             return Ok(());
         }
 
-        if !self.stop_vm(true).await {
-            self.record_stop(255, SystemTime::now()).await;
+        if !self.stop_vm(vmm_exit_watched).await {
+            self.record_stop(255, SystemTime::now(), false).await;
             return Ok(());
         }
 
@@ -1458,7 +1490,7 @@ impl Sandbox for VirtSandbox {
     async fn cleanup(&self) -> Result<()> {
         // A stop timeout does not prove that the VMM released its mounts,
         // cgroup, or rootless user. Leave them in place while it may be alive.
-        if self.inner.read().await.vmm_exit_unconfirmed {
+        if self.inner.read().await.vmm_start_attempted && !self.vmm_exit_confirmed.is_cancelled() {
             return Err(anyhow!(
                 "VMM exit unconfirmed; refusing unsafe sandbox cleanup"
             ));
@@ -1489,11 +1521,10 @@ impl Sandbox for VirtSandbox {
         }
 
         info!(sl!(), "resource clean up");
-        let restore_passthrough_devices = !self.inner.read().await.vmm_exit_unconfirmed;
         if !steps.resources {
             match self
                 .resource_manager
-                .cleanup(restore_passthrough_devices)
+                .cleanup(true)
                 .await
                 .context("resource clean up")
             {
@@ -1802,10 +1833,12 @@ impl Persist for VirtSandbox {
             config,
         };
         let resource_manager = Arc::new(ResourceManager::restore(args, r).await?);
+        let mut inner = SandboxInner::new();
+        inner.vmm_start_attempted = true;
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(sandbox_args.sender)),
-            inner: Arc::new(RwLock::new(SandboxInner::new())),
+            inner: Arc::new(RwLock::new(inner)),
             agent,
             hypervisor,
             resource_manager,
@@ -1822,6 +1855,7 @@ impl Persist for VirtSandbox {
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
+            vmm_exit_confirmed: CancellationToken::new(),
         })
     }
 }
