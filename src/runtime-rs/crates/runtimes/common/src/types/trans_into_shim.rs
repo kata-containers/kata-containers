@@ -143,6 +143,30 @@ impl TryFrom<SandboxResponse> for sandbox_api::ShutdownSandboxResponse {
     }
 }
 
+impl TryFrom<SandboxResponse> for sandbox_api::SandboxMetricsResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::SandboxMetrics(resp) => {
+                let mut response = Self::new();
+                let metric = response.mut_metrics();
+                metric.id = resp.sandbox_id;
+                metric.timestamp = option_system_time_into(Some(resp.timestamp));
+                if let Some(value) = resp.stats.value {
+                    let data = metric.mut_data();
+                    data.type_url = value.type_url;
+                    data.value = value.value;
+                }
+                Ok(response)
+            }
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
 impl From<ProcessExitStatus> for api::WaitResponse {
     fn from(from: ProcessExitStatus) -> Self {
         Self {

@@ -72,5 +72,6 @@ impl_service!(
     wait_sandbox | sandbox_api::WaitSandboxRequest | sandbox_api::WaitSandboxResponse,
     sandbox_status | sandbox_api::SandboxStatusRequest | sandbox_api::SandboxStatusResponse,
     ping_sandbox | sandbox_api::PingRequest | sandbox_api::PingResponse,
-    shutdown_sandbox | sandbox_api::ShutdownSandboxRequest | sandbox_api::ShutdownSandboxResponse
+    shutdown_sandbox | sandbox_api::ShutdownSandboxRequest | sandbox_api::ShutdownSandboxResponse,
+    sandbox_metrics | sandbox_api::SandboxMetricsRequest | sandbox_api::SandboxMetricsResponse
 );
