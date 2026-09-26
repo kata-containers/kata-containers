@@ -33,7 +33,7 @@ use tokio::sync::RwLock;
 
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
-use super::{EndpointState, Network};
+use super::{detach_endpoint, EndpointState, Network};
 use crate::network::endpoint::{TapEndpoint, VhostUserEndpoint};
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;
@@ -184,14 +184,16 @@ impl Network for Dan {
         Some(ep_states)
     }
 
-    async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
+    async fn remove(&self, h: &dyn Hypervisor, restore_passthrough_devices: bool) -> Result<()> {
         let inner = self.inner.read().await;
         let _netns_guard;
         if let Some(netns) = inner.netns.as_ref() {
             _netns_guard = NetnsGuard::new(netns).context("New netns guard")?;
         }
         for e in inner.entity_list.iter() {
-            e.endpoint.detach(h).await.context("Detach")?;
+            detach_endpoint(e.endpoint.as_ref(), h, restore_passthrough_devices)
+                .await
+                .context("Detach")?;
         }
         Ok(())
     }

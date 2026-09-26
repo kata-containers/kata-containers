@@ -86,13 +86,20 @@ use runtime_spec as spec;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use strum::Display;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
+use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
+
+const STOP_VM_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Short, because a stop that failed on Cloud Hypervisor never reports an exit
+/// at all.
+const VMM_EXIT_RECORD_GRACE: Duration = Duration::from_millis(500);
 
 pub struct SandboxRestoreArgs {
     pub sid: String,
@@ -120,6 +127,8 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
+    /// Set when stop() could not establish that the VMM let go of its devices.
+    vmm_exit_unconfirmed: bool,
 }
 
 impl SandboxInner {
@@ -128,6 +137,7 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
+            vmm_exit_unconfirmed: false,
         }
     }
 }
@@ -237,6 +247,38 @@ impl VirtSandbox {
             exited_at: Some(exited_at),
         });
         let _ = self.exit_notify_tx.send(true);
+    }
+
+    /// The wait is bounded because stopping a QEMU wedged in the kernel --
+    /// which is what resetting a passed-through device can do -- would block
+    /// the teardown for good.  `exit_watched` says whether a task is watching
+    /// wait_vm(), and so whether an exit can still be reported after a failure.
+    async fn stop_vm(&self, exit_watched: bool) -> bool {
+        let reason = match timeout(STOP_VM_TIMEOUT, self.hypervisor.stop_vm()).await {
+            Ok(Ok(())) => return true,
+            Ok(Err(e)) => {
+                // QEMU fails this way when the watcher got to the child first,
+                // so the record it writes is what settles the question.
+                if exit_watched
+                    && matches!(timeout(VMM_EXIT_RECORD_GRACE, self.wait()).await, Ok(Ok(_)))
+                {
+                    info!(sl!(), "VMM was gone before the stop: {:?}", e);
+                    return true;
+                }
+                format!("{:?}", e)
+            }
+            Err(_) => format!("still running after {:?}", STOP_VM_TIMEOUT),
+        };
+
+        let mut inner = self.inner.write().await;
+        if inner.state == SandboxState::Stopped {
+            // The watcher recorded the exit while we were giving up on it.
+            return true;
+        }
+
+        warn!(sl!(), "VMM exit was not confirmed: {}", reason);
+        inner.vmm_exit_unconfirmed = true;
+        false
     }
 
     /// A failed stop must still get a cleanup attempt, hence the logging.
@@ -1363,14 +1405,14 @@ impl Sandbox for VirtSandbox {
 
         info!(sl!(), "begin stop sandbox");
         if state == SandboxState::Init {
-            let _ = self.hypervisor.stop_vm().await;
+            // Nothing is watching for an exit this early.
+            self.stop_vm(false).await;
             self.record_stop(0, SystemTime::now()).await;
             info!(sl!(), "sandbox stopped during Init");
             return Ok(());
         }
 
-        if let Err(e) = self.hypervisor.stop_vm().await {
-            warn!(sl!(), "failed to stop vm, recording it as gone: {:?}", e);
+        if !self.stop_vm(true).await {
             self.record_stop(255, SystemTime::now()).await;
             return Ok(());
         }
@@ -1422,6 +1464,10 @@ impl Sandbox for VirtSandbox {
         if *cleanup_done {
             return Ok(());
         }
+        // Marked before the work, because the steps below are not idempotent:
+        // a second pass fails on what the first one already removed, and it
+        // would run inside the shutdown RPC, which is on a timeout.
+        *cleanup_done = true;
 
         let rootless_uid = self
             .hypervisor
@@ -1438,8 +1484,9 @@ impl Sandbox for VirtSandbox {
             .context("delete hypervisor")?;
 
         info!(sl!(), "resource clean up");
+        let restore_passthrough_devices = !self.inner.read().await.vmm_exit_unconfirmed;
         self.resource_manager
-            .cleanup()
+            .cleanup(restore_passthrough_devices)
             .await
             .context("resource clean up")?;
 
@@ -1454,10 +1501,6 @@ impl Sandbox for VirtSandbox {
                 );
             }
         }
-
-        // Only now, so that a cleanup which gave up part way is retried by
-        // whoever gets here next rather than skipped.
-        *cleanup_done = true;
 
         // TODO: cleanup other sandbox resource
         Ok(())
