@@ -85,6 +85,7 @@ use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use strum::Display;
@@ -159,10 +160,18 @@ pub struct VirtSandbox {
     oom_notifier: Arc<CrioOomNotifier>,
     // Held for the whole teardown, so a second caller waits instead of racing.
     stopping: Arc<Mutex<()>>,
-    cleanup_done: Arc<Mutex<bool>>,
+    cleanup_steps: Arc<Mutex<CleanupSteps>>,
+    shutdown_started: Arc<AtomicBool>,
     // Held until the container exit is on the channel, which shutdown() waits
     // for before it breaks the service loop.
     publishing_exit: Arc<Mutex<()>>,
+}
+
+#[derive(Default)]
+struct CleanupSteps {
+    hypervisor: bool,
+    resources: bool,
+    rootless_runtime_dir: bool,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -211,7 +220,8 @@ impl VirtSandbox {
             cancel_token,
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
-            cleanup_done: Arc::new(Mutex::new(false)),
+            cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
+            shutdown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
         })
     }
@@ -1425,49 +1435,41 @@ impl Sandbox for VirtSandbox {
 
     async fn shutdown(&self) -> Result<()> {
         info!(sl!(), "shutdown");
+        // The RPC has a short deadline. Keep the finalizer owned by the shim
+        // so cancellation of the request cannot strand the service loop.
+        if !self.shutdown_started.swap(true, Ordering::AcqRel) {
+            let sandbox = self.clone();
+            tokio::spawn(async move {
+                sandbox.monitor.stop().await;
+                sandbox.teardown().await;
+                sandbox.agent.stop().await;
 
-        // The monitor answers a dead VM with process::exit(1), which would
-        // abort the teardown below.
-        info!(sl!(), "stop monitor");
-        self.monitor.stop().await;
-
-        // Only the shutdown message below breaks the service loop, so a
-        // failing teardown must not keep us from sending it.
-        if let Err(e) = self.stop().await {
-            error!(sl!(), "failed to stop sandbox: {:?}", e);
+                // The service loop must see a queued exit before Shutdown.
+                drop(sandbox.publishing_exit.lock().await);
+                let sender = sandbox.msg_sender.lock().await;
+                if let Err(e) = sender.send(Message::new(Action::Shutdown)).await {
+                    error!(sl!(), "failed to send shutdown message: {:?}", e);
+                }
+            });
         }
-        if let Err(e) = self.cleanup().await {
-            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
-        }
-
-        info!(sl!(), "stop agent");
-        self.agent.stop().await;
-
-        // An exit still on its way to the channel would never be forwarded
-        // once the message below breaks the service loop.
-        drop(self.publishing_exit.lock().await);
-
-        // stop server
-        info!(sl!(), "send shutdown message");
-        let msg = Message::new(Action::Shutdown);
-        let sender = self.msg_sender.clone();
-        let sender = sender.lock().await;
-        sender.send(msg).await.context("send shutdown msg")?;
         Ok(())
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // A stop timeout does not prove that the VMM released its mounts,
+        // cgroup, or rootless user. Leave them in place while it may be alive.
+        if self.inner.read().await.vmm_exit_unconfirmed {
+            return Err(anyhow!(
+                "VMM exit unconfirmed; refusing unsafe sandbox cleanup"
+            ));
+        }
         // Both the container exit and the shutdown RPC get here, and the one
         // that arrives later blocks rather than skipping, so the shim does not
         // exit on top of a teardown that is still running.
-        let mut cleanup_done = self.cleanup_done.lock().await;
-        if *cleanup_done {
+        let mut steps = self.cleanup_steps.lock().await;
+        if steps.hypervisor && steps.resources && steps.rootless_runtime_dir {
             return Ok(());
         }
-        // Marked before the work, because the steps below are not idempotent:
-        // a second pass fails on what the first one already removed, and it
-        // would run inside the shutdown RPC, which is on a timeout.
-        *cleanup_done = true;
 
         let rootless_uid = self
             .hypervisor
@@ -1477,33 +1479,51 @@ impl Sandbox for VirtSandbox {
             .rootless_user
             .map(|user| user.uid);
 
-        info!(sl!(), "delete hypervisor");
-        self.hypervisor
-            .cleanup()
-            .await
-            .context("delete hypervisor")?;
-
-        info!(sl!(), "resource clean up");
-        let restore_passthrough_devices = !self.inner.read().await.vmm_exit_unconfirmed;
-        self.resource_manager
-            .cleanup(restore_passthrough_devices)
-            .await
-            .context("resource clean up")?;
-
-        if let Some(uid) = rootless_uid {
-            let path = vmm_user_runtime_dir(uid);
-            if let Err(err) = remove_vmm_user_runtime_dir(uid) {
-                warn!(
-                    sl!(),
-                    "failed to remove rootless runtime directory {}: {}",
-                    path.display(),
-                    err
-                );
+        let mut errors = Vec::new();
+        if !steps.hypervisor {
+            info!(sl!(), "delete hypervisor");
+            match self.hypervisor.cleanup().await.context("delete hypervisor") {
+                Ok(()) => steps.hypervisor = true,
+                Err(e) => errors.push(e),
             }
         }
 
-        // TODO: cleanup other sandbox resource
-        Ok(())
+        info!(sl!(), "resource clean up");
+        let restore_passthrough_devices = !self.inner.read().await.vmm_exit_unconfirmed;
+        if !steps.resources {
+            match self
+                .resource_manager
+                .cleanup(restore_passthrough_devices)
+                .await
+                .context("resource clean up")
+            {
+                Ok(()) => steps.resources = true,
+                Err(e) => errors.push(e),
+            }
+        }
+
+        if !steps.rootless_runtime_dir {
+            if let Some(uid) = rootless_uid {
+                let path = vmm_user_runtime_dir(uid);
+                match remove_vmm_user_runtime_dir(uid).with_context(|| {
+                    format!("remove rootless runtime directory {}", path.display())
+                }) {
+                    Ok(()) => steps.rootless_runtime_dir = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                steps.rootless_runtime_dir = true;
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            for error in &errors {
+                error!(sl!(), "sandbox cleanup step failed: {error:#}");
+            }
+            Err(anyhow!("{} sandbox cleanup step(s) failed", errors.len()))
+        }
     }
 
     async fn rescan_network(&self) -> Result<()> {
@@ -1526,6 +1546,14 @@ impl Sandbox for VirtSandbox {
         process_id: ContainerProcess,
         shim_pid: u32,
     ) -> Result<()> {
+        let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
+        // Keep Shutdown behind the sandbox exit even while the agent wait is
+        // pending. Other container waits must remain independent.
+        let publishing_exit = if is_sandbox_container {
+            Some(self.publishing_exit.lock().await)
+        } else {
+            None
+        };
         let exit_status = cm.wait_process(&process_id).await?;
         info!(sl!(), "container process exited with {:?}", exit_status);
 
@@ -1540,8 +1568,6 @@ impl Sandbox for VirtSandbox {
             eid.to_string()
         };
 
-        let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
-
         // A dead VM makes the health check fail, and the monitor answers that
         // with process::exit(1), aborting the teardown below.
         if is_sandbox_container {
@@ -1554,12 +1580,6 @@ impl Sandbox for VirtSandbox {
         // and leaving the device on vfio-pci with no netdev to find it by.
         let restore_before_exit =
             is_sandbox_container && self.resource_manager.has_passthrough_devices().await;
-
-        // The Wait RPC has already answered, so containerd may be in
-        // shutdown() by now, and the service loop stops at its Action::Shutdown
-        // without forwarding anything queued after it.
-        let publishing_exit = self.publishing_exit.clone();
-        let publishing_exit = publishing_exit.lock().await;
 
         if restore_before_exit {
             self.teardown().await;
@@ -1799,7 +1819,8 @@ impl Persist for VirtSandbox {
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
-            cleanup_done: Arc::new(Mutex::new(false)),
+            cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
+            shutdown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
         })
     }
