@@ -5,7 +5,7 @@
 //
 
 use std::{
-    fs,
+    collections::HashSet,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -20,7 +20,7 @@ use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_sys_util::netns;
 use netns_rs::get_from_path;
 use scopeguard::defer;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use super::{
     endpoint::{
@@ -74,6 +74,14 @@ impl NetworkWithNetnsInner {
 
 pub(crate) struct NetworkWithNetns {
     inner: Arc<RwLock<NetworkWithNetnsInner>>,
+    cleanup: Mutex<NetworkCleanup>,
+}
+
+#[derive(Default)]
+struct NetworkCleanup {
+    detached: HashSet<usize>,
+    netns_unmounted: bool,
+    path_removed: bool,
 }
 
 impl NetworkWithNetns {
@@ -83,6 +91,7 @@ impl NetworkWithNetns {
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(NetworkWithNetnsInner::new(config, d).await?)),
+            cleanup: Mutex::new(NetworkCleanup::default()),
         })
     }
 }
@@ -155,20 +164,67 @@ impl Network for NetworkWithNetns {
     }
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
+        let mut cleanup = self.cleanup.lock().await;
         let inner = self.inner.read().await;
+        let mut errors = Vec::new();
 
         // Always detach endpoints regardless of whether kata created the netns.
         // Physical endpoints rebind their VF from vfio-pci back to the original
         // host driver here.  Skipping this when network_created=false would
         // permanently leave VFs bound to vfio-pci after pod deletion.
-        {
+        // A passed-through device goes back to its host driver without the
+        // netns, which may be gone by now.
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if cleanup.detached.contains(&index) {
+                continue;
+            }
+            if e.endpoint.host_bdf().await.is_none() {
+                continue;
+            }
+            match e.endpoint.detach(h).await {
+                Ok(()) => {
+                    cleanup.detached.insert(index);
+                }
+                Err(err) => errors.push(err),
+            }
+        }
+
+        let mut needs_netns = false;
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if !cleanup.detached.contains(&index) && e.endpoint.host_bdf().await.is_none() {
+                needs_netns = true;
+                break;
+            }
+        }
+        if needs_netns {
+            // The others work on interfaces by name, which means the wrong
+            // namespace would find the wrong interface.
             let _netns_guard =
                 netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
-            for e in &inner.entity_list {
-                if let Err(err) = e.endpoint.detach(h).await {
-                    warn!(sl!(), "failed to detach endpoint: {}", err);
+            for (index, e) in inner.entity_list.iter().enumerate() {
+                if cleanup.detached.contains(&index) {
+                    continue;
+                }
+                if e.endpoint.host_bdf().await.is_some() {
+                    continue;
+                }
+                match e.endpoint.detach(h).await {
+                    Ok(()) => {
+                        cleanup.detached.insert(index);
+                    }
+                    Err(err) => errors.push(err),
                 }
             }
+        }
+
+        if !errors.is_empty() {
+            for error in &errors {
+                warn!(sl!(), "failed to detach endpoint: {error:#}");
+            }
+            return Err(anyhow!(
+                "{} network endpoint(s) failed to detach",
+                errors.len()
+            ));
         }
 
         // Only delete the network namespace if kata created it.
@@ -176,9 +232,16 @@ impl Network for NetworkWithNetns {
         if !inner.network_created {
             return Ok(());
         }
-        let netns = get_from_path(inner.netns_path.clone())?;
-        netns.remove()?;
-        fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
+        if !cleanup.netns_unmounted {
+            let netns = get_from_path(inner.netns_path.clone())?;
+            netns.remove()?;
+            cleanup.netns_unmounted = true;
+        }
+        if !cleanup.path_removed {
+            hypervisor::utils::remove_dir_all_if_exists(&inner.netns_path)
+                .context("failed to remove netns path")?;
+            cleanup.path_removed = true;
+        }
         Ok(())
     }
 
@@ -379,4 +442,90 @@ fn is_physical_iface(name: &str) -> Result<bool> {
         return Ok(false);
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use agent::{ARPNeighbor, Interface, Route};
+    use hypervisor::qemu::Qemu;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct TestEndpoint {
+        calls: AtomicUsize,
+        fail_once: bool,
+    }
+
+    #[async_trait]
+    impl Endpoint for TestEndpoint {
+        async fn name(&self) -> String {
+            "eth0".into()
+        }
+        async fn hardware_addr(&self) -> String {
+            String::new()
+        }
+        async fn attach(&self) -> Result<Option<String>> {
+            Ok(None)
+        }
+        async fn detach(&self, _: &dyn Hypervisor) -> Result<()> {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.fail_once && call == 0 {
+                Err(anyhow!("device still busy"))
+            } else {
+                Ok(())
+            }
+        }
+        async fn save(&self) -> Option<EndpointState> {
+            None
+        }
+        async fn host_bdf(&self) -> Option<String> {
+            Some("0000:00:00.1".into())
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestNetworkInfo;
+
+    #[async_trait]
+    impl NetworkInfo for TestNetworkInfo {
+        async fn interface(&self) -> Result<Interface> {
+            Ok(Interface::default())
+        }
+        async fn routes(&self) -> Result<Vec<Route>> {
+            Ok(vec![])
+        }
+        async fn neighs(&self) -> Result<Vec<ARPNeighbor>> {
+            Ok(vec![])
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_detach_retries_without_repeating_successful_detach() {
+        let done = Arc::new(TestEndpoint {
+            calls: AtomicUsize::new(0),
+            fail_once: false,
+        });
+        let retry = Arc::new(TestEndpoint {
+            calls: AtomicUsize::new(0),
+            fail_once: true,
+        });
+        let entity =
+            |endpoint: Arc<TestEndpoint>| NetworkEntity::new(endpoint, Arc::new(TestNetworkInfo));
+        let network = NetworkWithNetns {
+            inner: Arc::new(RwLock::new(NetworkWithNetnsInner {
+                netns_path: String::new(),
+                entity_list: vec![entity(done.clone()), entity(retry.clone())],
+                network_created: false,
+            })),
+            cleanup: Mutex::new(NetworkCleanup::default()),
+        };
+        let hypervisor = Qemu::new();
+
+        assert!(network.remove(&hypervisor).await.is_err());
+        network.remove(&hypervisor).await.unwrap();
+        network.remove(&hypervisor).await.unwrap();
+        assert_eq!(done.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(retry.calls.load(Ordering::SeqCst), 2);
+    }
 }

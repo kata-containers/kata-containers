@@ -7,6 +7,7 @@
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use hypervisor::utils::remove_dir_all_if_exists;
 use kata_sys_util::mount::{bind_remount, umount_all, umount_timeout};
 use kata_types::k8s::is_watchable_mount;
 use std::fs;
@@ -188,13 +189,13 @@ impl ShareFsMount for VirtiofsShareMount {
         // Unmount ro path
         let host_ro_dest = get_host_ro_shared_path(sid);
         umount_all(host_ro_dest.clone(), true).context("failed to umount ro path")?;
-        fs::remove_dir_all(host_ro_dest).context("failed to remove ro path")?;
+        remove_dir_all_if_exists(host_ro_dest).context("failed to remove ro path")?;
         // As the rootfs and volume have been umounted before calling this function, so just remove the rw dir directly
         let host_rw_dest = get_host_rw_shared_path(sid);
-        fs::remove_dir_all(host_rw_dest).context("failed to remove rw path")?;
+        remove_dir_all_if_exists(host_rw_dest).context("failed to remove rw path")?;
         // remove the host share directory
         let host_path = get_host_shared_path(sid);
-        fs::remove_dir_all(host_path).context("failed to remove host shared path")?;
+        remove_dir_all_if_exists(host_path).context("failed to remove host shared path")?;
         Ok(())
     }
 }

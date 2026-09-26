@@ -8,14 +8,20 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::rootless::is_rootless;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
+use tokio::time::timeout;
 
 use crate::share_fs::nydus::{nydus_client::NydusClient, MountRequest};
+
+/// A nydusd stuck on a mount cannot be reaped at all, and the teardown waiting
+/// for it is inside an RPC containerd gives up on.
+const NYDUSD_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// passthrough_fs is a special filesystem type in nydus which simply passthroughs the source directory
 /// to the guest without any caching or overlay.
@@ -292,22 +298,43 @@ impl Nydusd {
     }
 
     pub async fn stop(&self) -> Result<()> {
-        let (pid, child) = {
-            let mut inner = self.inner.write().await;
-            (inner.pid.take(), inner.child.take())
-        };
-
-        if let Some(pid) = pid {
+        let mut inner = self.inner.write().await;
+        if let Some(pid) = inner.pid {
             info!(sl!(), "stopping nydusd with pid {}", pid);
 
-            if let Some(mut child) = child {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
+            if let Some(child) = inner.child.as_mut() {
+                if child.try_wait().context("check nydusd status")?.is_none() {
+                    match timeout(NYDUSD_STOP_TIMEOUT, child.kill()).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => return Err(e).context("kill nydusd"),
+                        Err(_) => {
+                            warn!(
+                                sl!(),
+                                "nydusd {} outlived the kill, retry on next cleanup", pid
+                            );
+                            return Err(anyhow!(
+                                "nydusd {} did not exit after {:?}",
+                                pid,
+                                NYDUSD_STOP_TIMEOUT
+                            ));
+                        }
+                    }
+                }
             }
+            inner.child = None;
+            inner.pid = None;
 
-            // Clean up the socket files created by nydusd
-            cleanup_socket(&self.config.sock_path).await?;
-            cleanup_socket(&self.config.api_sock_path).await?;
+            // A leftover socket is worth less than the rest of the teardown.
+            for path in [&self.config.sock_path, &self.config.api_sock_path] {
+                if let Err(err) = cleanup_socket(path).await {
+                    warn!(
+                        sl!(),
+                        "failed to remove nydusd socket {}: {}",
+                        path.display(),
+                        err
+                    );
+                }
+            }
 
             info!(sl!(), "nydusd stopped");
         }

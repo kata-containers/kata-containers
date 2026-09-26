@@ -326,7 +326,7 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
 }
 
 pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
-    remove_dir_all_if_exists(vm_path)?;
+    let path_result = remove_dir_all_if_exists(vm_path);
     if kata_types::rootless::is_rootless() {
         let user = &config
             .security_info
@@ -346,7 +346,7 @@ pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
             }
         }
     }
-    Ok(())
+    path_result
 }
 
 // QGS_SOCKET_PATH: the Unix Domain Socket Path served by Intel TDX Quote Generation Service
