@@ -6,6 +6,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use dbs_virtio_devices as virtio;
@@ -13,7 +14,7 @@ use dbs_virtio_devices::mmio::DRAGONBALL_FEATURE_INTR_USED;
 use dbs_virtio_devices::vsock::backend::{
     VsockInnerBackend, VsockInnerConnector, VsockTcpBackend, VsockUnixStreamBackend,
 };
-use dbs_virtio_devices::vsock::Vsock;
+use dbs_virtio_devices::vsock::{Vsock, VsockState};
 use dbs_virtio_devices::Error as VirtioError;
 use serde_derive::{Deserialize, Serialize};
 
@@ -322,9 +323,9 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
 
     /// Capture the state of all vsock devices.
     ///
-    /// The virtual machine must be paused when this is called. Live vsock
-    /// connection state is not captured: snapshots must be taken at a clean
-    /// quiesce point with no active connections.
+    /// The virtual machine must be paused when this is called. The host half
+    /// of a live vsock connection cannot be captured, so each device records
+    /// the identity of its live connections instead; restore resets them.
     fn save_state(&mut self, _args: ()) -> std::result::Result<Self::State, Self::Error> {
         let mut devices = Vec::new();
         for info in self.info_list.iter() {
@@ -349,11 +350,48 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
     /// The devices must have been re-created from the same configuration
     /// (matched by id) and must not have been activated yet. Must be called
     /// before the guest vCPUs resume.
+    ///
+    /// The state is validated in full before any of it is applied, so that a
+    /// malformed snapshot is refused rather than half-restored.
     fn restore_state(
         &mut self,
         state: &Self::State,
         _args: (),
     ) -> std::result::Result<(), Self::Error> {
+        // A repeated device id would restore two sets of connection resets
+        // onto the same device and leave another device with none. This is a
+        // property of the state alone, so check it before looking at the VM.
+        let mut seen_ids = HashSet::with_capacity(state.devices.len());
+        for dev_state in &state.devices {
+            if !seen_ids.insert(dev_state.config.id()) {
+                return Err(VsockDeviceError::DeviceIDAlreadyExist(
+                    dev_state.config.id().to_string(),
+                ));
+            }
+        }
+
+        // Saving records every configured device, so a state naming fewer is
+        // not one this VM produced. Restoring it anyway would silently leave
+        // the missing device un-restored, and with no resets for the stale
+        // guest sockets that restored RAM still holds.
+        if state.devices.len() != self.info_list.len() {
+            return Err(VsockDeviceError::Virtio(VirtioError::InvalidInput));
+        }
+
+        // Every device in the state must match a configured device: the
+        // resets it carries belong to that device's guest sockets, and have
+        // nowhere else to go. With the count equal and no id repeated, this
+        // makes the two sets identical.
+        for dev_state in &state.devices {
+            if !self
+                .info_list
+                .iter()
+                .any(|info| info.config.id() == dev_state.config.id())
+            {
+                return Err(VsockDeviceError::Virtio(VirtioError::InvalidInput));
+            }
+        }
+
         for dev_state in &state.devices {
             let info = self
                 .info_list
@@ -376,9 +414,13 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
     }
 }
 
-/// Snapshot state of one vsock device (config + guest-negotiated device state
-/// + transport state); see [`persist::VirtioDevState`].
-pub type VsockDevState = persist::VirtioDevState<VsockDeviceConfigInfo>;
+/// Snapshot state of one vsock device (config + device state + transport
+/// state); see [`persist::VirtioDevState`].
+///
+/// The device state is [`VsockState`] rather than the default
+/// `VirtioDeviceInfoState`: besides the guest-negotiated device state it
+/// carries the connections restore has to reset.
+pub type VsockDevState = persist::VirtioDevState<VsockDeviceConfigInfo, VsockState>;
 
 /// Snapshot state of the vsock device manager.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -396,5 +438,115 @@ impl Default for VsockDeviceMgr {
             default_inner_connector: None,
             use_shared_irq: USE_SHARED_IRQ,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use dbs_snapshot::Persist;
+    use dbs_virtio_devices::persist::MmioV2TransportState;
+
+    use super::*;
+    use crate::device_manager::persist::VirtioTransportState;
+
+    fn dev_state(id: &str) -> VsockDevState {
+        VsockDevState {
+            config: VsockDeviceConfigInfo {
+                id: id.to_string(),
+                guest_cid: 3,
+                ..Default::default()
+            },
+            device_info: VsockState::default(),
+            transport: VirtioTransportState::Mmio(MmioV2TransportState::default()),
+        }
+    }
+
+    #[test]
+    fn test_restore_state_rejects_duplicate_device_id() {
+        // A repeated id would restore two sets of connection resets onto the
+        // same device, leaving another with none.
+        let mut mgr = VsockDeviceMgr::default();
+        let state = VsockDeviceMgrState {
+            devices: vec![dev_state("vsock0"), dev_state("vsock0")],
+        };
+
+        assert!(matches!(
+            mgr.restore_state(&state, ()),
+            Err(VsockDeviceError::DeviceIDAlreadyExist(id)) if id == "vsock0"
+        ));
+    }
+
+    #[test]
+    fn test_restore_state_rejects_missing_device() {
+        // Saving records every configured device, so a state naming fewer is
+        // not one this VM produced. Accepting it would leave the missing
+        // device un-restored and its stale guest sockets un-reset.
+        let mut mgr = VsockDeviceMgr::default();
+        mgr.info_list
+            .insert_or_update(&VsockDeviceConfigInfo {
+                id: "vsock0".to_string(),
+                guest_cid: 3,
+                ..Default::default()
+            })
+            .unwrap();
+        mgr.info_list
+            .insert_or_update(&VsockDeviceConfigInfo {
+                id: "vsock1".to_string(),
+                guest_cid: 4,
+                ..Default::default()
+            })
+            .unwrap();
+
+        let state = VsockDeviceMgrState {
+            devices: vec![dev_state("vsock0")],
+        };
+        assert!(matches!(
+            mgr.restore_state(&state, ()),
+            Err(VsockDeviceError::Virtio(VirtioError::InvalidInput))
+        ));
+    }
+
+    #[test]
+    fn test_restore_state_rejects_unknown_device() {
+        // The VM must have been re-created from the configuration the
+        // snapshot was taken with; a device the state names but the VM does
+        // not have has nowhere to put its resets.
+        let mut mgr = VsockDeviceMgr::default();
+        let state = VsockDeviceMgrState {
+            devices: vec![dev_state("vsock0")],
+        };
+
+        assert!(matches!(
+            mgr.restore_state(&state, ()),
+            Err(VsockDeviceError::Virtio(VirtioError::InvalidInput))
+        ));
+    }
+
+    #[test]
+    fn test_restore_state_without_devices_is_a_no_op() {
+        let mut mgr = VsockDeviceMgr::default();
+        assert!(mgr
+            .restore_state(&VsockDeviceMgrState::default(), ())
+            .is_ok());
+    }
+
+    #[test]
+    fn test_device_mgr_state_json_roundtrip() {
+        let mut state = dev_state("vsock0");
+        state.device_info.reset_connections = vec![dbs_virtio_devices::vsock::VsockConnectionId {
+            local_port: 1024,
+            peer_port: 7,
+        }];
+        let state = VsockDeviceMgrState {
+            devices: vec![state],
+        };
+
+        let json = serde_json::to_string(&state).unwrap();
+        let loaded: VsockDeviceMgrState = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.devices.len(), 1);
+        assert_eq!(
+            loaded.devices[0].device_info.reset_connections,
+            state.devices[0].device_info.reset_connections
+        );
     }
 }
