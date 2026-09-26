@@ -116,6 +116,12 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			wg.Done()
 			shimLog.Debug("stdin io stream copy exited")
 		}()
+	} else {
+		// Nothing is ever forwarded to the process' stdin, so it is
+		// already safe to close it.  Without this, a CloseIO() request
+		// for such a process would wait on stdinCloser forever, while
+		// holding the service lock.
+		close(stdinCloser)
 	}
 
 	if tty.io.Stdout() != nil {
