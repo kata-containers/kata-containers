@@ -150,6 +150,9 @@ pub struct VirtSandbox {
     // Held for the whole teardown, so a second caller waits instead of racing.
     stopping: Arc<Mutex<()>>,
     cleanup_done: Arc<Mutex<bool>>,
+    // Held until the container exit is on the channel, which shutdown() waits
+    // for before it breaks the service loop.
+    publishing_exit: Arc<Mutex<()>>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -199,6 +202,7 @@ impl VirtSandbox {
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
             cleanup_done: Arc::new(Mutex::new(false)),
+            publishing_exit: Arc::new(Mutex::new(())),
         })
     }
 
@@ -233,6 +237,16 @@ impl VirtSandbox {
             exited_at: Some(exited_at),
         });
         let _ = self.exit_notify_tx.send(true);
+    }
+
+    /// A failed stop must still get a cleanup attempt, hence the logging.
+    async fn teardown(&self) {
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        if let Err(e) = self.cleanup().await {
+            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+        }
     }
 
     #[instrument]
@@ -1387,6 +1401,10 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "stop agent");
         self.agent.stop().await;
 
+        // An exit still on its way to the channel would never be forwarded
+        // once the message below breaks the service loop.
+        drop(self.publishing_exit.lock().await);
+
         // stop server
         info!(sl!(), "send shutdown message");
         let msg = Message::new(Action::Shutdown);
@@ -1488,9 +1506,25 @@ impl Sandbox for VirtSandbox {
             self.monitor.stop().await;
         }
 
-        // Publish before the teardown: containerd acts on this event, and a slow
-        // guest shutdown in front of it gets the shim SIGKILLed and a clean exit
-        // reported as 255.
+        // Publishing first has containerd Delete()/Shutdown() and, on its own
+        // timeout, SIGKILL the shim, cutting short the restore cleanup() does
+        // and leaving the device on vfio-pci with no netdev to find it by.
+        let restore_before_exit =
+            is_sandbox_container && self.resource_manager.has_passthrough_devices().await;
+
+        // The Wait RPC has already answered, so containerd may be in
+        // shutdown() by now, and the service loop stops at its Action::Shutdown
+        // without forwarding anything queued after it.
+        let publishing_exit = self.publishing_exit.clone();
+        let publishing_exit = publishing_exit.lock().await;
+
+        if restore_before_exit {
+            self.teardown().await;
+        }
+
+        // Otherwise publish before the teardown: containerd acts on this event,
+        // and a slow guest shutdown in front of it gets the shim SIGKILLed and
+        // a clean exit reported as 255.
         let event = TaskExit {
             container_id: cid.to_string(),
             id,
@@ -1504,17 +1538,12 @@ impl Sandbox for VirtSandbox {
             let lock_sender = self.msg_sender.lock().await;
             lock_sender.send(msg).await.context("send exit event")?;
         }
+        drop(publishing_exit);
 
         // Docker only sends ShutdownContainer once the container is removed, so
-        // release everything here instead of leaking it until then.  A failed
-        // stop must still get a cleanup attempt, hence the logging.
-        if is_sandbox_container {
-            if let Err(e) = self.stop().await {
-                error!(sl!(), "failed to stop sandbox: {:?}", e);
-            }
-            if let Err(e) = self.cleanup().await {
-                error!(sl!(), "failed to cleanup sandbox: {:?}", e);
-            }
+        // release everything here instead of leaking it until then.
+        if is_sandbox_container && !restore_before_exit {
+            self.teardown().await;
         }
 
         Ok(())
@@ -1728,6 +1757,7 @@ impl Persist for VirtSandbox {
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
             cleanup_done: Arc::new(Mutex::new(false)),
+            publishing_exit: Arc::new(Mutex::new(())),
         })
     }
 }

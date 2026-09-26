@@ -223,6 +223,11 @@ impl ResourceManager {
         let inner = self.inner.read().await;
         inner.cleanup().await
     }
+
+    pub async fn has_passthrough_devices(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.has_passthrough_devices().await
+    }
 }
 
 #[async_trait]

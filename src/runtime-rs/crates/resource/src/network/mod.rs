@@ -49,6 +49,16 @@ pub trait Network: Send + Sync {
     async fn endpoints(&self) -> Vec<std::sync::Arc<dyn endpoint::Endpoint>> {
         vec![]
     }
+
+    async fn has_passthrough_devices(&self) -> bool {
+        for endpoint in self.endpoints().await {
+            if endpoint.host_bdf().await.is_some() {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 pub async fn new(
@@ -66,5 +76,90 @@ pub async fn new(
                 .await
                 .context("New directly attachable network")?,
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hypervisor::Hypervisor;
+    use std::sync::Arc;
+
+    #[derive(Debug)]
+    struct TestEndpoint {
+        bdf: Option<String>,
+    }
+
+    #[async_trait]
+    impl endpoint::Endpoint for TestEndpoint {
+        async fn name(&self) -> String {
+            "eth0".to_owned()
+        }
+        async fn hardware_addr(&self) -> String {
+            "02:00:ca:fe:00:04".to_owned()
+        }
+        async fn attach(&self) -> Result<Option<String>> {
+            Ok(None)
+        }
+        async fn detach(&self, _hypervisor: &dyn Hypervisor) -> Result<()> {
+            Ok(())
+        }
+        async fn save(&self) -> Option<EndpointState> {
+            None
+        }
+        async fn host_bdf(&self) -> Option<String> {
+            self.bdf.clone()
+        }
+    }
+
+    struct TestNetwork {
+        endpoints: Vec<Arc<dyn endpoint::Endpoint>>,
+    }
+
+    #[async_trait]
+    impl Network for TestNetwork {
+        async fn setup(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn interfaces(&self) -> Result<Vec<agent::Interface>> {
+            Ok(vec![])
+        }
+        async fn routes(&self) -> Result<Vec<agent::Route>> {
+            Ok(vec![])
+        }
+        async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>> {
+            Ok(vec![])
+        }
+        async fn save(&self) -> Option<Vec<EndpointState>> {
+            None
+        }
+        async fn remove(&self, _h: &dyn Hypervisor) -> Result<()> {
+            Ok(())
+        }
+        async fn endpoints(&self) -> Vec<Arc<dyn endpoint::Endpoint>> {
+            self.endpoints.clone()
+        }
+    }
+
+    fn endpoint(bdf: Option<&str>) -> Arc<dyn endpoint::Endpoint> {
+        Arc::new(TestEndpoint {
+            bdf: bdf.map(|bdf| bdf.to_owned()),
+        })
+    }
+
+    #[tokio::test]
+    async fn test_has_passthrough_devices() {
+        let network = TestNetwork { endpoints: vec![] };
+        assert!(!network.has_passthrough_devices().await);
+
+        let network = TestNetwork {
+            endpoints: vec![endpoint(None)],
+        };
+        assert!(!network.has_passthrough_devices().await);
+
+        let network = TestNetwork {
+            endpoints: vec![endpoint(None), endpoint(Some("0000:b5:09.7"))],
+        };
+        assert!(network.has_passthrough_devices().await);
     }
 }
