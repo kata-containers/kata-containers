@@ -19,6 +19,7 @@ ttrpc = { workspace = true }
 common = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }
+persist = { workspace = true }
 runtimes = { workspace = true }
 
 

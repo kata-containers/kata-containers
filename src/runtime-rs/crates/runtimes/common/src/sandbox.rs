@@ -50,6 +50,9 @@ pub trait Sandbox: Send + Sync {
         process_id: ContainerProcess,
         shim_pid: u32,
     ) -> Result<()>;
+    // Returns once wait_process has sent TaskExit for the sandbox container,
+    // or at once if nothing is waiting for that exit.
+    async fn wait_exit_published(&self);
 
     // Docker 26+ network rescan: discover interfaces that Docker configured
     // between the Create and Start RPCs.

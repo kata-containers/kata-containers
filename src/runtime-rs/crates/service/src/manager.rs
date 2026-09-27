@@ -6,6 +6,7 @@
 
 use std::fs;
 use std::os::unix::io::RawFd;
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -122,11 +123,20 @@ impl ServiceManager {
     pub async fn cleanup(sid: &str) -> Result<()> {
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
+        let temp_dir = [KATA_PATH, sid].join("/");
         if let Err(e) = handler.cleanup().await {
+            // The state is the only record of what is left on the host, so a
+            // later delete can still retry.
+            if Path::new(&temp_dir).join(persist::PERSIST_FILE).exists() {
+                error!(
+                    sl!(),
+                    "failed to clean up runtime state, keeping {} for a retry: {:#}", temp_dir, e
+                );
+                return Ok(());
+            }
             warn!(sl!(), "failed to clean up runtime state, {}", e);
         }
 
-        let temp_dir = [KATA_PATH, sid].join("/");
         if fs::metadata(temp_dir.as_str()).is_ok() {
             // try to remove dir and skip the result
             if let Err(e) = fs::remove_dir_all(temp_dir) {

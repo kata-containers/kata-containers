@@ -13,4 +13,6 @@ pub struct SandboxState {
     pub sandbox_type: String,
     pub resource: Option<ResourceState>,
     pub hypervisor: Option<HypervisorState>,
+    #[serde(default)]
+    pub vmm_exit_confirmed: bool,
 }

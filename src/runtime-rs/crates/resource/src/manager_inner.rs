@@ -1001,13 +1001,17 @@ impl ResourceManagerInner {
         }
 
         if !steps.cgroup {
+            info!(sl!(), "begin cgroup cleanup");
             match self
                 .cgroups_resource
                 .delete()
                 .await
                 .context("delete cgroup")
             {
-                Ok(()) => steps.cgroup = true,
+                Ok(()) => {
+                    steps.cgroup = true;
+                    info!(sl!(), "cgroup cleanup finished");
+                }
                 Err(e) => errors.push(e),
             }
         }
