@@ -125,6 +125,10 @@ impl DeviceManager {
         self.pcie_topology.clone()
     }
 
+    pub fn get_pcie_topology_mut(&mut self) -> Option<&mut PCIeTopology> {
+        self.pcie_topology.as_mut()
+    }
+
     async fn get_block_device_info(&self) -> BlockDeviceInfo {
         self.hypervisor.hypervisor_config().await.blockdev_info
     }

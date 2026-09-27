@@ -320,6 +320,34 @@ pub struct PCIeTopology {
 }
 
 impl PCIeTopology {
+    /// Add ports for devices that will be attached after the VM starts. QEMU
+    /// needs these ports on its command line before the devices are hotplugged.
+    pub fn reserve_root_ports(&mut self, count: u32) -> Result<()> {
+        if count == 0 {
+            return Ok(());
+        }
+        if self.pcie_switch_ports > 0 {
+            return Err(anyhow!(
+                "DAN VFIO root ports cannot be reserved with PCIe switch ports"
+            ));
+        }
+        let existing = self
+            .pcie_port_devices
+            .keys()
+            .max()
+            .map(|id| id + 1)
+            .unwrap_or(0);
+        let total = self
+            .pcie_root_ports
+            .max(existing)
+            .checked_add(count)
+            .ok_or_else(|| anyhow!("PCIe root port count overflow"))?;
+        self.add_root_ports_on_bus(total)?;
+        self.pcie_root_ports = total;
+        self.mode = PCIePort::RootPort;
+        Ok(())
+    }
+
     // As some special case doesn't support PCIe devices, there's no need to build a PCIe Topology.
     pub fn new(config_info: Option<&TopologyConfigInfo>) -> Option<Self> {
         // if config_info is None, it will return None.
@@ -870,6 +898,34 @@ mod tests {
     fn test_root_port_only() {
         let pcie_topo = create_pcie_topo(2, 0);
         assert_eq!(pcie_topo.get_pcie_port(), Some((PCIePort::RootPort, 2)));
+    }
+
+    #[test]
+    fn test_reserve_root_ports_for_hotplug() {
+        let mut topology = create_pcie_topo(0, 0);
+        topology.reserve_root_ports(2).unwrap();
+        assert_eq!(topology.mode, PCIePort::RootPort);
+        assert_eq!(topology.get_pcie_port(), Some((PCIePort::RootPort, 2)));
+        assert!(topology.pcie_port_devices.contains_key(&0));
+        assert!(topology.pcie_port_devices.contains_key(&1));
+        assert!(topology
+            .reserve_bus_for_device("vfio0", PCIePort::RootPort)
+            .unwrap()
+            .is_some());
+        assert!(topology
+            .reserve_bus_for_device("vfio1", PCIePort::RootPort)
+            .unwrap()
+            .is_some());
+        assert!(topology
+            .reserve_bus_for_device("vfio2", PCIePort::RootPort)
+            .is_err());
+    }
+
+    #[test]
+    fn test_reserve_root_ports_rejects_switch_topology() {
+        let mut topology = create_pcie_topo(1, 2);
+        assert!(topology.reserve_root_ports(1).is_err());
+        assert_eq!(topology.pcie_root_ports, 1);
     }
 
     #[test]
