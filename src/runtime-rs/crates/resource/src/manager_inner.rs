@@ -93,6 +93,7 @@ impl ResourceManagerInner {
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
+        cgroup_parent: Option<&str>,
     ) -> Result<Self> {
         let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
@@ -141,7 +142,7 @@ impl ResourceManagerInner {
         };
         // Created last: nothing removes the cgroups of a resource manager that
         // failed to come up, nor records them until the sandbox saves its state.
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config, cgroup_parent)?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
