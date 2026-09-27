@@ -23,7 +23,7 @@ use std::{sync::Arc, vec::Vec};
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 use agent::Agent;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::{k8s::is_disk_empty_dir, mount::get_mount_options};
@@ -188,9 +188,11 @@ impl VolumeResource {
 
     pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
         let inner = self.inner.read().await;
+        let mut failures = 0;
         for disk in &inner.ephemeral_disks {
             if let Err(e) = std::fs::remove_file(&disk.disk_path) {
                 if e.kind() != std::io::ErrorKind::NotFound {
+                    failures += 1;
                     warn!(
                         sl!(),
                         "failed to remove ephemeral disk {:?}: {}", disk.disk_path, e
@@ -198,13 +200,20 @@ impl VolumeResource {
                 }
             }
             if let Err(e) = kata_types::mount::remove_volume_path(&disk.source_path) {
+                failures += 1;
                 warn!(
                     sl!(),
                     "failed to remove direct-volume path for {}: {}", disk.source_path, e
                 );
             }
         }
-        Ok(())
+        if failures == 0 {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "{failures} ephemeral disk cleanup operation(s) failed"
+            ))
+        }
     }
 
     pub async fn dump(&self) {
@@ -240,4 +249,29 @@ fn need_local_volume(m: &oci::Mount, fs_sharing_supported: bool, emptydir_mode: 
 fn is_skip_volume(_m: &oci::Mount) -> bool {
     // TODO: support volume check
     false
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn failed_ephemeral_disk_removal_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk_path = dir.path().join("disk.img");
+        std::fs::create_dir(&disk_path).unwrap();
+
+        let resource = VolumeResource::new();
+        resource.inner.write().await.ephemeral_disks.push(
+            block_emptydir_volume::EphemeralDiskInfo {
+                disk_path: disk_path.clone(),
+                source_path: format!(
+                    "ephemeral-test-{}",
+                    dir.path().file_name().unwrap().to_string_lossy()
+                ),
+            },
+        );
+
+        assert!(resource.cleanup_ephemeral_disks().await.is_err());
+    }
 }

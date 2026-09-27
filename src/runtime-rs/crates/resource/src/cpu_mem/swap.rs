@@ -362,7 +362,7 @@ impl SwapTask {
 struct SwapResourceInner {
     wake_tx: mpsc::Sender<()>,
     core: Arc<Mutex<Core>>,
-    swap_task_handle: Arc<Mutex<task::JoinHandle<()>>>,
+    swap_task_handle: Arc<Mutex<Option<task::JoinHandle<()>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -478,7 +478,7 @@ impl SwapResource {
             inner: Some(SwapResourceInner {
                 wake_tx,
                 core,
-                swap_task_handle: Arc::new(Mutex::new(swap_task_handle)),
+                swap_task_handle: Arc::new(Mutex::new(Some(swap_task_handle))),
             }),
         })
     }
@@ -525,28 +525,92 @@ impl SwapResource {
         self.wakeup_thread();
     }
 
-    async fn stop(&self) {
+    async fn stop(&self) -> Result<()> {
         if let Some(inner) = &self.inner {
             inner.core.lock().await.stop();
-        }
-
-        self.wakeup_thread();
-
-        if let Some(inner) = &self.inner {
             let mut handle = inner.swap_task_handle.lock().await;
-            let join_handle = std::mem::replace(&mut *handle, task::spawn(async {}));
-            join_handle.await.unwrap();
+            if let Some(join_handle) = handle.as_mut() {
+                self.wakeup_thread();
+                let result = join_handle.await.context("wait for swap task");
+                *handle = None;
+                result?;
+            }
         }
+        Ok(())
     }
 
-    pub async fn clean(&self) {
-        self.stop().await;
+    pub async fn clean(&self) -> Result<()> {
+        self.stop().await?;
 
-        if let Err(e) = fs::remove_dir_all(&self.runtime_path).await {
-            error!(
-                sl!(),
-                "swap fs::remove_dir_all {:?} fail: {:?}", self.runtime_path, e
-            );
+        match fs::remove_dir_all(&self.runtime_path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e).with_context(|| {
+                format!(
+                    "remove swap runtime directory {}",
+                    self.runtime_path.display()
+                )
+            }),
         }
+    }
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use tokio::sync::oneshot;
+    use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn stop_keeps_task_handle_after_cancellation() {
+        let (release_tx, release_rx) = oneshot::channel::<()>();
+        let (wake_tx, _wake_rx) = mpsc::channel(1);
+        let swap = SwapResource {
+            runtime_path: PathBuf::new(),
+            inner: Some(SwapResourceInner {
+                wake_tx,
+                core: Arc::new(Mutex::new(Core::new())),
+                swap_task_handle: Arc::new(Mutex::new(Some(task::spawn(async move {
+                    let _ = release_rx.await;
+                })))),
+            }),
+        };
+
+        assert!(timeout(Duration::from_millis(10), swap.stop())
+            .await
+            .is_err());
+        assert!(swap
+            .inner
+            .as_ref()
+            .unwrap()
+            .swap_task_handle
+            .lock()
+            .await
+            .is_some());
+        release_tx.send(()).unwrap();
+        swap.stop().await.unwrap();
+        assert!(swap
+            .inner
+            .as_ref()
+            .unwrap()
+            .swap_task_handle
+            .lock()
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn failed_swap_directory_removal_can_be_retried() {
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_path = dir.path().join("swap");
+        fs::write(&runtime_path, b"not a directory").await.unwrap();
+        let swap = SwapResource {
+            runtime_path: runtime_path.clone(),
+            inner: None,
+        };
+
+        assert!(swap.clean().await.is_err());
+        fs::remove_file(&runtime_path).await.unwrap();
+        swap.clean().await.unwrap();
     }
 }
