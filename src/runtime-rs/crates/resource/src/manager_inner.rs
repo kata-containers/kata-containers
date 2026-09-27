@@ -101,6 +101,7 @@ impl ResourceManagerInner {
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
         attach_runtime: bool,
+        cgroup_parent: Option<&str>,
     ) -> Result<Self> {
         let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
@@ -153,21 +154,22 @@ impl ResourceManagerInner {
         // recorded until the sandbox exists and saves its state, so a failure
         // after either leaves it behind. Create the cgroups last, when nothing
         // else can fail, and remove the swap directory if they fail.
-        let cgroups_resource = match CgroupsResource::new(sid, &toml_config, attach_runtime) {
-            Ok(cgroups_resource) => cgroups_resource,
-            Err(e) => {
-                if let Some(swap) = &swap_resource {
-                    if let Err(clean_err) = swap.clean().await {
-                        warn!(
+        let cgroups_resource =
+            match CgroupsResource::new(sid, &toml_config, attach_runtime, cgroup_parent) {
+                Ok(cgroups_resource) => cgroups_resource,
+                Err(e) => {
+                    if let Some(swap) = &swap_resource {
+                        if let Err(clean_err) = swap.clean().await {
+                            warn!(
                             sl!(),
                             "failed to remove the swap directory after the cgroups failed: {:#}",
                             clean_err
                         );
+                        }
                     }
+                    return Err(e);
                 }
-                return Err(e);
-            }
-        };
+            };
         Ok(Self {
             sid: sid.to_string(),
             toml_config,

@@ -52,6 +52,7 @@ impl ResourceManager {
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
         attach_runtime: bool,
+        cgroup_parent: Option<&str>,
     ) -> Result<Self> {
         // Regist resource logger for later use.
         logging::register_subsystem_logger("runtimes", "resource");
@@ -65,6 +66,7 @@ impl ResourceManager {
                     toml_config,
                     init_size_manager,
                     attach_runtime,
+                    cgroup_parent,
                 )
                 .await?,
             )),

@@ -166,6 +166,7 @@ impl TemplateVm {
             hostname: String::new(),
             dns: Vec::new(),
             network_env: SandboxNetworkEnv::default(),
+            cgroup_parent: None,
             annotations: HashMap::default(),
             hooks: None,
             state: runtime_spec::State {
@@ -216,6 +217,7 @@ impl TemplateVm {
                 toml_config_arc,
                 initial_size_manager,
                 config.hypervisor_name != hypervisor::HYPERVISOR_DRAGONBALL,
+                sandbox_config.cgroup_parent.as_deref(),
             )
             .await
             .context("build resource manager")?,
