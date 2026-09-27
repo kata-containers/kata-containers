@@ -8,14 +8,20 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::rootless::is_rootless;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
+use tokio::time::timeout;
 
 use crate::share_fs::nydus::{nydus_client::NydusClient, MountRequest};
+
+/// A nydusd stuck on a mount cannot be reaped at all, and the teardown waiting
+/// for it is inside an RPC containerd gives up on.
+const NYDUSD_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// passthrough_fs is a special filesystem type in nydus which simply passthroughs the source directory
 /// to the guest without any caching or overlay.
@@ -298,7 +304,21 @@ impl Nydusd {
 
             if let Some(child) = inner.child.as_mut() {
                 if child.try_wait().context("check nydusd status")?.is_none() {
-                    child.kill().await.context("kill nydusd")?;
+                    match timeout(NYDUSD_STOP_TIMEOUT, child.kill()).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => return Err(e).context("kill nydusd"),
+                        Err(_) => {
+                            warn!(
+                                sl!(),
+                                "nydusd {} outlived the kill, retry on next cleanup", pid
+                            );
+                            return Err(anyhow!(
+                                "nydusd {} did not exit after {:?}",
+                                pid,
+                                NYDUSD_STOP_TIMEOUT
+                            ));
+                        }
+                    }
                 }
             }
             inner.child = None;
