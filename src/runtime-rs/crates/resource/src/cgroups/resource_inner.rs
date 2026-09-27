@@ -11,6 +11,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use cgroups::fs::{hierarchies, Cgroup, Subsystem};
 use cgroups::manager::is_systemd_cgroup;
 use cgroups::{CgroupPid, FsManager, Manager, SystemdManager};
 use hypervisor::{Hypervisor, VcpuThreadIds};
@@ -42,6 +43,21 @@ pub(crate) struct CgroupsResourceInner {
 }
 
 impl CgroupsResourceInner {
+    // cgroups-rs considers a v1 cgroup present if any controller exists.
+    // A Kubernetes parent may exist in memory/cpu but not devices, so create
+    // each missing controller before attaching any processes or threads.
+    fn ensure_cgroup_subsystem(subsystems: &[Subsystem]) -> Result<()> {
+        for subsystem in subsystems {
+            let controller = subsystem.to_controller();
+            if !controller.exists() {
+                controller.create().with_context(|| {
+                    format!("create cgroup controller {}", controller.path().display())
+                })?;
+            }
+        }
+        Ok(())
+    }
+
     fn is_already_exists_error(err: &cgroups::manager::Error) -> bool {
         let mut source = err.source();
 
@@ -149,6 +165,11 @@ impl CgroupsResourceInner {
     pub(crate) fn new(config: &CgroupConfig) -> Result<Self> {
         let (mut sandbox_cgroup, mut overhead_cgroup) =
             Self::new_cgroup_managers(config).context("create new cgroups")?;
+
+        if !sandbox_cgroup.v2() && !sandbox_cgroup.systemd() {
+            let cgroup = Cgroup::load(hierarchies::auto(), &config.path);
+            Self::ensure_cgroup_subsystem(cgroup.subsystems())?;
+        }
 
         // The runtime is prioritized to be added to the overhead cgroup.
         let pid = CgroupPid::from(process::id() as u64);
@@ -552,7 +573,41 @@ fn new_cpuset_resources(resources: &LinuxResources) -> Result<LinuxResources> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cgroups::fs::{devices::DevicesController, memory::MemController};
     use rstest::rstest;
+
+    #[test]
+    fn test_create_missing_cgroup_controllers() {
+        let dir = tempfile::tempdir().unwrap();
+        let memory_path = dir.path().join("memory/pod-id");
+        let devices_path = dir.path().join("devices/pod-id");
+        std::fs::create_dir_all(&memory_path).unwrap();
+        let memory_limit = memory_path.join("memory.limit_in_bytes");
+        std::fs::write(&memory_limit, "536870912").unwrap();
+
+        let subsystems = [
+            Subsystem::Mem(MemController::new(
+                memory_path.clone(),
+                dir.path().join("memory"),
+                false,
+            )),
+            Subsystem::Devices(DevicesController::new(
+                devices_path.clone(),
+                dir.path().join("devices"),
+            )),
+        ];
+        assert!(subsystems.iter().any(|s| s.to_controller().exists()));
+        assert!(!devices_path.exists());
+
+        // Missing controllers are created without changing existing limits,
+        // and repeating initialization is harmless.
+        for _ in 0..2 {
+            CgroupsResourceInner::ensure_cgroup_subsystem(&subsystems).unwrap();
+            assert!(memory_path.is_dir());
+            assert!(devices_path.is_dir());
+            assert_eq!(std::fs::read_to_string(&memory_limit).unwrap(), "536870912");
+        }
+    }
 
     fn make_resources_with_cpus(cpus: &str) -> LinuxResources {
         let cpu = LinuxCpuBuilder::default()

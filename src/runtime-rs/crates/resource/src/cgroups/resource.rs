@@ -33,8 +33,8 @@ pub struct CgroupsResource {
 }
 
 impl CgroupsResource {
-    pub fn new(sid: &str, toml_config: &TomlConfig) -> Result<Self> {
-        let cgroup_config = CgroupConfig::new(sid, toml_config)?;
+    pub fn new(sid: &str, toml_config: &TomlConfig, cgroup_parent: Option<&str>) -> Result<Self> {
+        let cgroup_config = CgroupConfig::new(sid, toml_config, cgroup_parent)?;
         let inner = CgroupsResourceInner::new(&cgroup_config)?;
         let inner = Arc::new(RwLock::new(inner));
 

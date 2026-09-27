@@ -162,6 +162,7 @@ impl RuntimeHandler for VirtContainer {
                 hypervisor.clone(),
                 config,
                 init_size_manager,
+                sandbox_config.cgroup_parent.as_deref(),
             )
             .await?,
         );

@@ -48,6 +48,14 @@ fn trans_from_shim_mount(from: &api::Mount) -> Mount {
     }
 }
 
+fn get_cgroup_parent(config: &cri_api_v1::PodSandboxConfig) -> Option<String> {
+    config
+        .linux
+        .as_ref()
+        .map(|linux| linux.cgroup_parent.clone())
+        .filter(|parent| !parent.is_empty())
+}
+
 // There're a lot of information to create a sandbox from CreateSandboxRequest and the internal PodSandboxConfig.
 // At present, we only take out part of it to build SandboxConfig.
 impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
@@ -59,6 +67,7 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
         };
 
         let config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.options.value)?;
+        let cgroup_parent = get_cgroup_parent(&config);
 
         let mut dns: Vec<String> = vec![];
         config.dns_config.map(|mut dns_config| {
@@ -75,6 +84,7 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
                 netns: Some(from.netns_path),
                 network_created: false,
             },
+            cgroup_parent,
             annotations: config.annotations.clone(),
             hooks: None,
             state: runtime_spec::State {
