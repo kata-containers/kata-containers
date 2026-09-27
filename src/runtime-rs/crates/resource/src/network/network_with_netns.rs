@@ -24,7 +24,8 @@ use tokio::sync::RwLock;
 
 use super::{
     endpoint::{
-        Endpoint, IPVlanEndpoint, MacVlanEndpoint, PhysicalEndpoint, VethEndpoint, VlanEndpoint,
+        Endpoint, IPVlanEndpoint, MacVlanEndpoint, PhysicalEndpoint, PhysicalEndpointSource,
+        VethEndpoint, VlanEndpoint,
     },
     network_entity::NetworkEntity,
     network_info::network_info_from_link::{handle_addresses, NetworkInfoFromLink},
@@ -302,8 +303,14 @@ async fn create_endpoint(
             &attrs.name,
             nix::unistd::gettid()
         );
-        let t = PhysicalEndpoint::new(&attrs.name, &attrs.hardware_addr, d)
-            .context("new physical endpoint")?;
+        let t = PhysicalEndpoint::new(
+            PhysicalEndpointSource::HostInterface {
+                name: &attrs.name,
+                hardware_addr: &attrs.hardware_addr,
+            },
+            d,
+        )
+        .context("new physical endpoint")?;
         Arc::new(t)
     } else {
         info!(
