@@ -33,8 +33,11 @@ pub struct CgroupConfig {
 }
 
 impl CgroupConfig {
-    fn new(sid: &str, toml_config: &TomlConfig) -> Result<Self> {
-        let path = if let Ok(spec) = load_oci_spec() {
+    fn new(sid: &str, toml_config: &TomlConfig, cgroup_parent: Option<&str>) -> Result<Self> {
+        let path = if let Some(parent) = cgroup_parent {
+            // The cgroup manager expects a path relative to the cgroup mount.
+            parent.trim_start_matches('/').to_string()
+        } else if let Ok(spec) = load_oci_spec() {
             spec.linux()
                 .clone()
                 .and_then(|linux| linux.cgroups_path().clone())
@@ -86,5 +89,19 @@ impl CgroupConfig {
             sandbox_cgroup_only: state.sandbox_cgroup_only,
             enable_vcpus_pinning: state.enable_vcpus_pinning,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cgroup_config_uses_parent_directly() {
+        for parent in ["/kubepods/pod-id", "kubepods/pod-id"] {
+            let config =
+                CgroupConfig::new("sandbox-id", &TomlConfig::default(), Some(parent)).unwrap();
+            assert_eq!(config.path, "kubepods/pod-id");
+        }
     }
 }
