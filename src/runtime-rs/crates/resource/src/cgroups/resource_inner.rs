@@ -39,6 +39,8 @@ pub(crate) struct CgroupsResourceInner {
     /// matches the sandbox cpuset size. Tracked so we know when to reset
     /// threads back to the full cpuset after a mismatch.
     is_vcpus_pinning_on: bool,
+    sandbox_cgroup_deleted: bool,
+    overhead_cgroup_deleted: bool,
 }
 
 impl CgroupsResourceInner {
@@ -176,6 +178,8 @@ impl CgroupsResourceInner {
             overhead_cgroup,
             enable_vcpus_pinning: config.enable_vcpus_pinning,
             is_vcpus_pinning_on: false,
+            sandbox_cgroup_deleted: false,
+            overhead_cgroup_deleted: false,
         })
     }
 
@@ -189,6 +193,8 @@ impl CgroupsResourceInner {
             overhead_cgroup,
             enable_vcpus_pinning: config.enable_vcpus_pinning,
             is_vcpus_pinning_on: false,
+            sandbox_cgroup_deleted: false,
+            overhead_cgroup_deleted: false,
         })
     }
 }
@@ -438,17 +444,37 @@ impl CgroupsResourceInner {
 
 impl CgroupsResourceInner {
     pub(crate) async fn delete(&mut self) -> Result<()> {
-        self.sandbox_cgroup
-            .destroy()
-            .context("destroy sandbox cgroup")?;
-
-        if let Some(overhead_cgroup) = self.overhead_cgroup.as_mut() {
-            overhead_cgroup
+        let mut errors = Vec::new();
+        if !self.sandbox_cgroup_deleted {
+            match self
+                .sandbox_cgroup
                 .destroy()
-                .context("destroy overhead cgroup")?;
+                .context("destroy sandbox cgroup")
+            {
+                Ok(()) => self.sandbox_cgroup_deleted = true,
+                Err(e) => errors.push(e),
+            }
         }
 
-        Ok(())
+        if !self.overhead_cgroup_deleted {
+            if let Some(overhead_cgroup) = self.overhead_cgroup.as_mut() {
+                match overhead_cgroup.destroy().context("destroy overhead cgroup") {
+                    Ok(()) => self.overhead_cgroup_deleted = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                self.overhead_cgroup_deleted = true;
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            for error in &errors {
+                warn!(sl!(), "cgroup cleanup step failed: {error:#}");
+            }
+            Err(anyhow!("{} cgroup cleanup step(s) failed", errors.len()))
+        }
     }
 
     pub(crate) async fn update(
@@ -569,6 +595,8 @@ mod tests {
             overhead_cgroup: None,
             enable_vcpus_pinning: enable_pinning,
             is_vcpus_pinning_on: false,
+            sandbox_cgroup_deleted: false,
+            overhead_cgroup_deleted: false,
         }
     }
 
