@@ -9,6 +9,8 @@ use std::sync::Arc;
 mod dan;
 mod endpoint;
 pub use dan::{dan_config_path, Dan, DanNetworkConfig};
+// Sandbox preparation in virt_container counts VFIO NICs before creating VM ports.
+pub use dan::dan_vfio_device_count;
 pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
