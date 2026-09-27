@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::convert::TryFrom;
+
 use crate::health_check::HealthCheck;
 use crate::oom::CrioOomNotifier;
 use agent::kata::KataAgent;
@@ -80,7 +82,9 @@ use resource::coco_data::initdata::{
 };
 use resource::coco_data::initdata_block;
 use resource::manager::ManagerArgs;
-use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
+use resource::network::{
+    dan_config_path, dan_vfio_device_count, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig,
+};
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::collections::HashSet;
@@ -336,16 +340,35 @@ impl VirtSandbox {
         }
 
         // prepare pcie port device config
-        if let Some(port_dev_config) = self.prepare_pcie_port_devices().await {
+        if let Some(port_dev_config) = self.prepare_pcie_port_devices().await? {
             resource_configs.push(ResourceConfig::PortDevice(port_dev_config));
         }
 
         Ok(resource_configs)
     }
 
-    async fn prepare_pcie_port_devices(&self) -> Option<PortDeviceConfig> {
-        // Fetch the device manager and read the PCIe topology
+    async fn prepare_pcie_port_devices(&self) -> Result<Option<PortDeviceConfig>> {
+        let config = self.resource_manager.config().await;
+        let dan_path = dan_config_path(&config, &self.sid);
+        let count = if dan_path.exists() {
+            dan_vfio_device_count(&dan_path)
+                .await
+                .context("count DAN VFIO devices")?
+        } else {
+            0
+        };
         let device_manager = self.resource_manager.get_device_manager().await;
+        if count > 0 {
+            let count = u32::try_from(count).context("too many DAN VFIO devices")?;
+            info!(sl!(), "reserving {} PCIe root port(s) for DAN VFIO", count);
+            device_manager
+                .write()
+                .await
+                .get_pcie_topology_mut()
+                .ok_or_else(|| anyhow!("no PCIe topology for DAN VFIO root ports"))?
+                .reserve_root_ports(count)?;
+        }
+        // Fetch the device manager and read the PCIe topology
         let dm = device_manager.read().await;
 
         // Get the PCIe topology and port information
@@ -355,18 +378,18 @@ impl VirtSandbox {
                     sl!(),
                     "Preparing PCIe {:?} with {} devices for VM.", port_type, total_ports
                 );
-                Some(PortDeviceConfig::new(port_type, total_ports))
+                Ok(Some(PortDeviceConfig::new(port_type, total_ports)))
             }
             Some((_, 0)) => {
                 info!(sl!(), "No PCIe ports available for VM.");
-                None
+                Ok(None)
             }
             _ => {
                 info!(
                     sl!(),
                     "Invalid PCIe configuration or no topology available."
                 );
-                None
+                Ok(None)
             }
         }
     }
