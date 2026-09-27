@@ -11,7 +11,7 @@ use super::{
     DEFAULT_SHM_SIZE,
 };
 
-use kata_types::mount::Mount;
+use kata_types::{annotations::cri_containerd, mount::Mount};
 use std::{
     convert::{From, TryFrom},
     path::PathBuf,
@@ -48,6 +48,28 @@ fn trans_from_shim_mount(from: &api::Mount) -> Mount {
     }
 }
 
+fn update_resource_annotation(config: &mut cri_api_v1::PodSandboxConfig) {
+    if let Some(resources) = config
+        .linux
+        .as_ref()
+        .and_then(|linux| linux.resources.as_ref())
+    {
+        for (key, value) in [
+            (cri_containerd::SANDBOX_CPU_QUOTA_KEY, resources.cpu_quota),
+            (cri_containerd::SANDBOX_CPU_PERIOD_KEY, resources.cpu_period),
+            (cri_containerd::SANDBOX_CPU_SHARE_KEY, resources.cpu_shares),
+            (
+                cri_containerd::SANDBOX_MEM_KEY,
+                resources.memory_limit_in_bytes,
+            ),
+        ] {
+            config
+                .annotations
+                .insert(key.to_string(), value.to_string());
+        }
+    }
+}
+
 fn get_cgroup_parent(config: &cri_api_v1::PodSandboxConfig) -> Option<String> {
     config
         .linux
@@ -66,7 +88,8 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
             return Err(anyhow!(format!("unsupported type url: {}", type_url)));
         };
 
-        let config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.options.value)?;
+        let mut config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.options.value)?;
+        update_resource_annotation(&mut config);
         let cgroup_parent = get_cgroup_parent(&config);
 
         let mut dns: Vec<String> = vec![];
@@ -321,5 +344,101 @@ impl TryFrom<api::ConnectRequest> for TaskRequest {
     type Error = anyhow::Error;
     fn try_from(from: api::ConnectRequest) -> Result<Self> {
         Ok(TaskRequest::ConnectContainer(ContainerID::new(&from.id)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn convert_sandbox_config(config: cri_api_v1::PodSandboxConfig) -> SandboxConfig {
+        let request = sandbox_api::CreateSandboxRequest {
+            sandbox_id: "sandbox-id".to_string(),
+            options: protobuf::MessageField::some(protobuf::well_known_types::any::Any {
+                type_url: SANDBOX_API_V1.to_string(),
+                value: config.write_to_bytes().unwrap(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        match SandboxRequest::try_from(request).unwrap() {
+            SandboxRequest::CreateSandbox(config) => *config,
+            _ => panic!("expected create sandbox request"),
+        }
+    }
+
+    #[test]
+    fn test_sandbox_linux_resources_override_annotations() {
+        let config = cri_api_v1::PodSandboxConfig {
+            linux: protobuf::MessageField::some(cri_api_v1::LinuxPodSandboxConfig {
+                cgroup_parent: "/kubepods/pod-id".to_string(),
+                resources: protobuf::MessageField::some(cri_api_v1::LinuxContainerResources {
+                    cpu_quota: 200_000,
+                    cpu_period: 100_000,
+                    memory_limit_in_bytes: 536_870_912,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            annotations: HashMap::from([
+                (
+                    cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                    "1".to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                    "1024".to_string(),
+                ),
+                ("custom".to_string(), "preserved".to_string()),
+            ]),
+            ..Default::default()
+        };
+
+        let sandbox = convert_sandbox_config(config);
+        assert_eq!(sandbox.cgroup_parent.as_deref(), Some("/kubepods/pod-id"));
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_CPU_QUOTA_KEY],
+            "200000"
+        );
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_CPU_PERIOD_KEY],
+            "100000"
+        );
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_CPU_SHARE_KEY],
+            "0"
+        );
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_MEM_KEY],
+            "536870912"
+        );
+        assert_eq!(sandbox.annotations["custom"], "preserved");
+        assert_eq!(sandbox.state.annotations, sandbox.annotations);
+    }
+
+    #[test]
+    fn test_sandbox_without_linux_resources_preserves_annotations() {
+        for linux in [None, Some(cri_api_v1::LinuxPodSandboxConfig::default())] {
+            let annotations = HashMap::from([
+                (
+                    cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                    "-1".to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                    "536870912".to_string(),
+                ),
+            ]);
+            let sandbox = convert_sandbox_config(cri_api_v1::PodSandboxConfig {
+                linux: linux.into(),
+                annotations: annotations.clone(),
+                ..Default::default()
+            });
+
+            assert_eq!(sandbox.cgroup_parent, None);
+            assert_eq!(sandbox.annotations, annotations);
+            assert_eq!(sandbox.state.annotations, annotations);
+        }
     }
 }
