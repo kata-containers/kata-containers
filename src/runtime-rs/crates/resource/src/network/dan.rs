@@ -14,6 +14,7 @@
 //! by CNI plugins. They might have some slight differences, and may be revised in
 //! the future.
 
+use std::collections::HashSet;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -29,7 +30,7 @@ use kata_types::config::TomlConfig;
 use scopeguard::defer;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
@@ -42,6 +43,7 @@ use crate::network::Endpoint;
 /// Directly attachable network
 pub struct Dan {
     inner: Arc<RwLock<DanInner>>,
+    detached: Mutex<HashSet<usize>>,
 }
 
 pub struct DanInner {
@@ -56,6 +58,7 @@ impl Dan {
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(DanInner::new(config, &dev_mgr).await?)),
+            detached: Mutex::new(HashSet::new()),
         })
     }
 }
@@ -185,13 +188,32 @@ impl Network for Dan {
     }
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
+        let mut detached = self.detached.lock().await;
         let inner = self.inner.read().await;
+        if detached.len() == inner.entity_list.len() {
+            return Ok(());
+        }
         let _netns_guard;
         if let Some(netns) = inner.netns.as_ref() {
             _netns_guard = NetnsGuard::new(netns).context("New netns guard")?;
         }
-        for e in inner.entity_list.iter() {
-            e.endpoint.detach(h).await.context("Detach")?;
+        let mut errors = Vec::new();
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if detached.contains(&index) {
+                continue;
+            }
+            match e.endpoint.detach(h).await {
+                Ok(()) => {
+                    detached.insert(index);
+                }
+                Err(e) => errors.push(e),
+            }
+        }
+        if !errors.is_empty() {
+            for error in &errors {
+                warn!(sl!(), "failed to detach DAN endpoint: {error:#}");
+            }
+            return Err(anyhow!("{} DAN endpoint(s) failed to detach", errors.len()));
         }
         Ok(())
     }

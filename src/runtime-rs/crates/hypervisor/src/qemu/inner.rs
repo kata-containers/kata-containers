@@ -64,6 +64,22 @@ fn open_qemu_pidfd(pid: u32) -> Result<Arc<OwnedFd>> {
     Ok(Arc::new(unsafe { OwnedFd::from_raw_fd(fd as i32) }))
 }
 
+fn qemu_is_gone(exit_reaped: bool, qmp_connected: bool, pidfd: Option<&OwnedFd>) -> bool {
+    if exit_reaped || !qmp_connected {
+        return true;
+    }
+    let Some(pidfd) = pidfd else {
+        return false;
+    };
+    let mut pollfd = libc::pollfd {
+        fd: pidfd.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let rc = unsafe { libc::poll(&mut pollfd, 1, 0) };
+    rc > 0 && pollfd.revents & libc::POLLIN != 0
+}
+
 #[derive(Debug)]
 pub struct QemuInner {
     /// sandbox id
@@ -71,6 +87,7 @@ pub struct QemuInner {
 
     qemu_process: Mutex<Option<Child>>,
     qemu_pidfd: Option<Arc<OwnedFd>>,
+    vm_exited: std::sync::atomic::AtomicBool,
     qmp: Option<Qmp>,
 
     config: HypervisorConfig,
@@ -86,6 +103,7 @@ impl QemuInner {
             id: "".to_string(),
             qemu_process: Mutex::new(None),
             qemu_pidfd: None,
+            vm_exited: std::sync::atomic::AtomicBool::new(false),
             qmp: None,
             config: Default::default(),
             devices: Vec::new(),
@@ -688,6 +706,22 @@ impl QemuInner {
         }
     }
 
+    pub(crate) fn mark_exited(&self) {
+        self.vm_exited
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    /// Sandbox teardown runs only after the VMM exit is confirmed, which may
+    /// come from the exit watcher, from the pidfd, or from a restored shim
+    /// that never had a QMP connection.
+    fn is_gone(&self) -> bool {
+        qemu_is_gone(
+            self.vm_exited.load(std::sync::atomic::Ordering::Acquire),
+            self.qmp.is_some(),
+            self.qemu_pidfd.as_deref(),
+        )
+    }
+
     pub(crate) async fn take_qemu_process(&self) -> Result<Child> {
         let mut qemu_process = self.qemu_process.lock().await;
         qemu_process
@@ -1185,6 +1219,14 @@ impl QemuInner {
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "QemuInner::remove_device() {} ", device);
+        // Network devices cannot be hot-unplugged, but they go away with QEMU.
+        if matches!(
+            device,
+            DeviceType::Network(_) | DeviceType::VhostUserNetwork(_)
+        ) && self.is_gone()
+        {
+            return Ok(());
+        }
         self.hotunplug_device(&device).await?;
 
         self.devices.retain(|d| match (d, &device) {
@@ -1506,6 +1548,7 @@ impl Persist for QemuInner {
             id: hypervisor_state.id,
             qemu_process: Mutex::new(None),
             qemu_pidfd: None,
+            vm_exited: std::sync::atomic::AtomicBool::new(false),
             qmp: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
@@ -1525,6 +1568,38 @@ mod tests {
     use crate::qemu::Qemu;
     use crate::Hypervisor;
     use rstest::rstest;
+
+    #[tokio::test]
+    async fn network_removal_without_qemu_does_not_hotunplug() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let mut qemu = QemuInner::new(exit_notify);
+
+        qemu.remove_device(DeviceType::Network(crate::NetworkDevice::default()))
+            .await
+            .unwrap();
+        qemu.remove_device(DeviceType::VhostUserNetwork(
+            crate::VhostUserNetDevice::default(),
+        ))
+        .await
+        .unwrap();
+    }
+
+    #[test]
+    fn qemu_is_gone_once_it_exits_even_without_the_watcher() {
+        assert!(!qemu_is_gone(false, true, None));
+        assert!(qemu_is_gone(true, true, None));
+        assert!(qemu_is_gone(false, false, None));
+
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let pidfd = open_qemu_pidfd(child.id()).unwrap();
+        assert!(!qemu_is_gone(false, true, Some(&pidfd)));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(qemu_is_gone(false, true, Some(&pidfd)));
+    }
 
     #[tokio::test]
     async fn stop_leaves_qemu_child_for_exit_watcher_to_reap() {

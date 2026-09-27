@@ -93,6 +93,7 @@ impl Hypervisor for Qemu {
         if let Ok(mut process) = process {
             let status = process.wait().await?;
             waiter.1 = status.code().unwrap_or(0);
+            self.inner.read().await.mark_exited();
         }
 
         Ok(waiter.1)
