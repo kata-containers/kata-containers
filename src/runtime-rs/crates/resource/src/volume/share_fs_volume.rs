@@ -39,7 +39,7 @@ use kata_types::{
 };
 use oci_spec::runtime as oci;
 
-const MAX_CHUNK_SIZE: usize = 1 << 20;
+const MAX_CHUNK_SIZE: usize = 1 << 20; // 1MiB
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
 const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
