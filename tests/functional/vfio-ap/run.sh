@@ -145,8 +145,8 @@ build_test_image() {
 }
 
 create_mediated_device() {
-    # a device lastly listed is chosen
-    APQN=$(lszcrypt | tail -1 | awk '{ print $1}')
+    # Choose the first listed EP11 queue.
+    APQN=$(lszcrypt | awk '/EP11/ && /\./ { print $1; exit }')
     if [[ ! ${APQN} =~ [[:xdigit:]]{2}.[[:xdigit:]]{4} ]]; then
         echo "Incorrect format for APQN" >&2
         exit 1
@@ -224,7 +224,7 @@ run_test() {
     if sudo ctr run --runtime "${runtime_type}" --rm \
         --privileged --privileged-without-host-devices \
         --device "${dev_base}/${dev_index}" "${test_image_name}" test \
-        bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"; then
+        -- bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"; then
         result=0
     else
         result=1
