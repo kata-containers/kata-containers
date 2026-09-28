@@ -138,6 +138,31 @@ impl SandboxInner {
     }
 }
 
+/// Announces that the sandbox has stopped.
+///
+/// The sandbox holds no receiver of its own, and `watch::Sender::send()`
+/// drops the value when no receiver exists at that moment. A waiter that
+/// found the sandbox running and subscribes only after the stop was recorded
+/// would then wait for a notification that never comes. `send_replace()`
+/// stores the value whether or not anybody is listening.
+fn notify_sandbox_exit(exit_notify_tx: &watch::Sender<bool>) {
+    exit_notify_tx.send_replace(true);
+}
+
+/// Returns once the stop of the sandbox has been announced, be it before or
+/// after the call.
+async fn wait_sandbox_exit(exit_notify_tx: &watch::Sender<bool>) -> Result<()> {
+    let mut exit_notify_rx = exit_notify_tx.subscribe();
+    while !*exit_notify_rx.borrow() {
+        exit_notify_rx
+            .changed()
+            .await
+            .context("wait for sandbox stop notification")?;
+    }
+
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct VirtSandbox {
     sid: String,
@@ -233,7 +258,7 @@ impl VirtSandbox {
             exit_status,
             exited_at: Some(exited_at),
         });
-        let _ = self.exit_notify_tx.send(true);
+        notify_sandbox_exit(&self.exit_notify_tx);
     }
 
     #[instrument]
@@ -1318,13 +1343,7 @@ impl Sandbox for VirtSandbox {
             }
         }
 
-        let mut exit_notify_rx = self.exit_notify_tx.subscribe();
-        while !*exit_notify_rx.borrow() {
-            exit_notify_rx
-                .changed()
-                .await
-                .context("wait for sandbox stop notification")?;
-        }
+        wait_sandbox_exit(&self.exit_notify_tx).await?;
 
         let inner = self.inner.read().await;
         Ok(inner.exit_info.clone().unwrap_or_default())
@@ -1687,5 +1706,48 @@ impl Persist for VirtSandbox {
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    const NOTIFY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    #[tokio::test]
+    async fn test_sandbox_exit_reaches_a_waiter_that_subscribes_afterwards() {
+        // As in VirtSandbox::new(): nobody holds a receiver when the stop is
+        // announced.
+        let (exit_notify_tx, _) = watch::channel(false);
+
+        notify_sandbox_exit(&exit_notify_tx);
+
+        tokio::time::timeout(NOTIFY_TIMEOUT, wait_sandbox_exit(&exit_notify_tx))
+            .await
+            .expect("a stop announced before the waiter subscribed is lost")
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_sandbox_exit_wakes_a_waiter_that_subscribed_before() {
+        let (exit_notify_tx, _) = watch::channel(false);
+
+        let waiter = {
+            let exit_notify_tx = exit_notify_tx.clone();
+            tokio::spawn(async move { wait_sandbox_exit(&exit_notify_tx).await })
+        };
+        while exit_notify_tx.receiver_count() == 0 {
+            tokio::task::yield_now().await;
+        }
+
+        notify_sandbox_exit(&exit_notify_tx);
+
+        tokio::time::timeout(NOTIFY_TIMEOUT, waiter)
+            .await
+            .expect("the waiter was not woken by the stop")
+            .unwrap()
+            .unwrap();
     }
 }
