@@ -830,6 +830,9 @@ type HypervisorConfig struct {
 	// when running on top of another VMM.
 	DisableNestingChecks bool
 
+	// DisableNestedVirtualization disables nested virtualization in Cloud Hypervisor guests.
+	DisableNestedVirtualization bool
+
 	// DisableImageNvdimm is used to disable guest rootfs image nvdimm devices
 	DisableImageNvdimm bool
 

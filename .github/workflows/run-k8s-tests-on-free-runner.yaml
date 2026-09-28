@@ -61,6 +61,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-24.04
+    timeout-minutes: 70
     permissions:
       contents: read
     env:

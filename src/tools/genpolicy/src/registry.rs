@@ -491,9 +491,8 @@ impl Container {
             for env in config_env {
                 process.Env.push(env.clone());
             }
-        } else {
-            containerd::get_default_unix_env(&mut process.Env);
         }
+        containerd::add_default_path_env(&mut process.Env);
 
         let policy_args = &mut process.Args;
         debug!(
@@ -874,6 +873,27 @@ mod tests {
         }
     }
 
+    fn container_with_image_env(env: Option<&[&str]>) -> Container {
+        Container {
+            image: "test-image".to_string(),
+            config_layer: DockerConfigLayer {
+                config: DockerImageConfig {
+                    Env: env.map(|vars| vars.iter().map(|var| var.to_string()).collect()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            passwd: String::new(),
+            group: String::new(),
+        }
+    }
+
+    fn process_env(container: &Container) -> Vec<String> {
+        let mut process = policy::KataProcess::default();
+        container.get_process(&mut process, false, false, false);
+        process.Env
+    }
+
     fn create_tar_layer(path: &Path, entries: &[(&str, &str)]) {
         let layer_file = std::fs::File::create(path).unwrap();
         let mut archive = tar::Builder::new(layer_file);
@@ -1010,6 +1030,30 @@ mod tests {
         assert_eq!(
             get_users_from_decompressed_layer(&layer_path).unwrap(),
             (WHITEOUT_MARKER.to_string(), WHITEOUT_MARKER.to_string())
+        );
+    }
+
+    #[test]
+    fn image_without_env_gets_default_path() {
+        assert_eq!(
+            process_env(&container_with_image_env(None)),
+            vec![containerd::DEFAULT_PATH_ENV]
+        );
+    }
+
+    #[test]
+    fn image_env_without_path_gets_default_path_appended() {
+        assert_eq!(
+            process_env(&container_with_image_env(Some(&["FOO=bar"]))),
+            vec!["FOO=bar", containerd::DEFAULT_PATH_ENV]
+        );
+    }
+
+    #[test]
+    fn image_env_with_path_is_unchanged() {
+        assert_eq!(
+            process_env(&container_with_image_env(Some(&["FOO=bar", "PATH=/bin"]))),
+            vec!["FOO=bar", "PATH=/bin"]
         );
     }
 }

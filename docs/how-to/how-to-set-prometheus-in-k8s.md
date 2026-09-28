@@ -59,6 +59,12 @@ part of every Kata Containers release. Two flavours are available:
 
 `kata-monitor` can be started on the cluster as follows:
 
+> **Note**: The manifest below runs kata-monitor over plain HTTP by default.
+> To enable TLS, follow the inline comments in the manifest and create the
+> required `kata-monitor-certs` Secret beforehand. See the
+> [kata-monitor TLS documentation](../../src/runtime/cmd/kata-monitor/README.md#tls)
+> for certificate generation steps.
+
 ```
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/how-to/data/kata-monitor-daemonset.yml
 ```

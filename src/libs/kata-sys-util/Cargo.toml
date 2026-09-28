@@ -1,30 +1,36 @@
 [package]
-name = "kata-sys-util"
-version = "0.1.0"
-description = "System Utilities for Kata Containers"
-keywords = ["kata", "container", "runtime"]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-homepage = "https://katacontainers.io/"
-readme = "README.md"
-license = "Apache-2.0"
+description = "System Utilities for Kata Containers"
 edition = "2018"
+homepage = "https://katacontainers.io/"
+keywords = ["container", "kata", "runtime"]
+license = "Apache-2.0"
+name = "kata-sys-util"
+readme = "README.md"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.31"
 byteorder = "1.4.3"
 fail = "0.5.1"
+hex = "0.4.3"
 lazy_static = "1.4.0"
 libc = "0.2.100"
-nix = { workspace = true, features = ["fs", "mount", "sched", "process", "ioctl"] }
-serde = { version = "1.0.138", features = ["derive"] }
+nix = { features = [
+  "fs",
+  "ioctl",
+  "mount",
+  "process",
+  "sched",
+], workspace = true }
+rand = { features = ["std", "std_rng", "thread_rng"], version = "0.10.1" }
+serde = { features = ["derive"], version = "1.0.138" }
 serde_json = "1.0.73"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 subprocess = "1.2.0"
-rand = { version = "0.10.1", features = ["std", "std_rng", "thread_rng"] }
 thiserror = { workspace = true }
-hex = "0.4.3"
 
 kata-types = { path = "../kata-types" }
 oci-spec = { workspace = true }

@@ -45,6 +45,8 @@ pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError
 pub use crate::device_manager::net_dev_mgr::{
     NetworkDeviceError, NetworkDeviceMgr, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig,
 };
+#[cfg(feature = "virtio-rng")]
+pub use crate::device_manager::rng_dev_mgr::{RngDeviceConfigInfo, RngDeviceError};
 #[cfg(feature = "host-device")]
 use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError};
 #[cfg(feature = "virtio-vsock")]
@@ -148,6 +150,11 @@ pub enum VmmActionError {
     /// Balloon device related errors.
     #[error("virtio-balloon device error: {0}")]
     Balloon(#[source] BalloonDeviceError),
+
+    #[cfg(feature = "virtio-rng")]
+    /// Rng device related errors.
+    #[error("virtio-rng device error: {0}")]
+    Rng(#[source] RngDeviceError),
     /// Setup tracing Failed.
     #[error("Setup tracing failed: {0}")]
     SetupTracingFailed(#[source] TraceError),
@@ -295,6 +302,11 @@ pub enum VmmAction {
     /// Add a new balloon device or update one that already exists using the `BalloonDeviceConfig`
     /// as input.
     InsertBalloonDevice(BalloonDeviceConfigInfo),
+
+    #[cfg(feature = "virtio-rng")]
+    /// Add a new rng device or update one that already exists using the `RngDeviceConfigInfo`
+    /// as input. This action can only be called before the microVM has booted.
+    InsertRngDevice(RngDeviceConfigInfo),
 
     #[cfg(feature = "host-device")]
     /// Add a VFIO assignment host device or update that already exists
@@ -446,6 +458,8 @@ impl VmmService {
             VmmAction::InsertBalloonDevice(balloon_cfg) => {
                 self.add_balloon_device(vmm, event_mgr, balloon_cfg)
             }
+            #[cfg(feature = "virtio-rng")]
+            VmmAction::InsertRngDevice(rng_cfg) => self.add_rng_device(vmm, event_mgr, rng_cfg),
             #[cfg(feature = "host-device")]
             VmmAction::InsertHostDevice(mut hostdev_cfg) => {
                 self.add_vfio_device(vmm, &mut hostdev_cfg)
@@ -1147,6 +1161,39 @@ impl VmmService {
             .insert_or_update_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Balloon)
+    }
+
+    #[cfg(feature = "virtio-rng")]
+    #[instrument(skip(self, event_mgr))]
+    fn add_rng_device(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        config: RngDeviceConfigInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+
+        if vm.is_vm_initialized() {
+            return Err(VmmActionError::Rng(
+                RngDeviceError::UpdateNotAllowedPostBoot,
+            ));
+        }
+
+        let ctx = vm
+            .create_device_op_context(Some(event_mgr.epoll_manager()))
+            .map_err(|e| {
+                if let StartMicroVmError::UpcallServerNotReady = e {
+                    VmmActionError::UpcallServerNotReady
+                } else {
+                    VmmActionError::StartMicroVm(e)
+                }
+            })?;
+
+        vm.device_manager_mut()
+            .rng_manager
+            .insert_or_update_device(ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Rng)
     }
 }
 
@@ -2037,6 +2084,46 @@ mod tests {
             // success
             TestData::new(
                 VmmAction::InsertBalloonDevice(BalloonDeviceConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| {
+                    assert!(result.is_ok());
+                },
+            ),
+        ];
+
+        for t in tests.iter_mut() {
+            t.check_request();
+        }
+    }
+
+    #[cfg(feature = "virtio-rng")]
+    #[test]
+    fn test_vmm_action_insert_rng_device() {
+        skip_if_kvm_unaccessable!();
+
+        let tests = &mut [
+            // invalid state
+            TestData::new(
+                VmmAction::InsertRngDevice(RngDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Rng(
+                            RngDeviceError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                    let err_string = format!("{}", result.unwrap_err());
+                    let expected_err = String::from(
+                        "virtio-rng device error: \
+                        the update operation is not allowed after boot",
+                    );
+                    assert_eq!(err_string, expected_err);
+                },
+            ),
+            // success
+            TestData::new(
+                VmmAction::InsertRngDevice(RngDeviceConfigInfo::default()),
                 InstanceState::Uninitialized,
                 &|result| {
                     assert!(result.is_ok());

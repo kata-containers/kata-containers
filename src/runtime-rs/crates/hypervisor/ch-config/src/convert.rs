@@ -20,7 +20,7 @@ use kata_types::config::hypervisor::{
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::errors::*;
 
@@ -37,17 +37,6 @@ pub const DEFAULT_NUM_PCI_SEGMENTS: u16 = 1;
 
 pub const DEFAULT_DISK_QUEUES: usize = 1;
 pub const DEFAULT_DISK_QUEUE_SIZE: u16 = 128;
-
-const MSHV_DEVICE_PATH: &str = "/dev/mshv";
-
-fn cpu_nested_config(disable_nested_virtualization: Option<bool>) -> Option<bool> {
-    if Path::new(MSHV_DEVICE_PATH).exists() {
-        // Nested vCPUs are not supported on MSHV yet.
-        Some(false)
-    } else {
-        disable_nested_virtualization.map(|value| !value)
-    }
-}
 
 // TDX requires all rootfs's be mounted using a block device. This test
 // ensures that the user has a correct set of values for the following Kata
@@ -425,7 +414,7 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
         let cfg = CpusConfig {
             boot_vcpus,
             max_vcpus,
-            nested: cpu_nested_config(cpu.disable_nested_virtualization),
+            nested: cpu.disable_nested_virtualization.map(|value| !value),
             max_phys_bits,
             topology: Some(topology),
             features,
@@ -714,7 +703,7 @@ mod tests {
         let cpus_config = CpusConfig {
             boot_vcpus: cpu_default,
             max_vcpus,
-            nested: cpu_nested_config(cpu_info.disable_nested_virtualization),
+            nested: None,
             topology: Some(CpuTopology {
                 cores_per_die: u16::try_from(max_vcpus).unwrap(),
 
@@ -1282,7 +1271,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 1,
-                    nested: cpu_nested_config(None),
+                    nested: None,
                     topology: Some(CpuTopology {
                         cores_per_die: 1,
 
@@ -1304,7 +1293,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 3,
-                    nested: cpu_nested_config(Some(false)),
+                    nested: Some(true),
                     topology: Some(CpuTopology {
                         cores_per_die: 3,
 
@@ -1347,7 +1336,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 256,
-                    nested: cpu_nested_config(None),
+                    nested: None,
                     topology: Some(CpuTopology {
                         cores_per_die: 256,
 
@@ -1368,7 +1357,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 1,
-                    nested: cpu_nested_config(None),
+                    nested: None,
                     topology: Some(CpuTopology {
                         cores_per_die: 1,
 

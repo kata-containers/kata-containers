@@ -5,6 +5,7 @@
 //
 
 use crate::health_check::HealthCheck;
+use crate::oom::CrioOomNotifier;
 use agent::kata::KataAgent;
 use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
@@ -151,6 +152,7 @@ pub struct VirtSandbox {
     shm_size: u64,
     factory: Option<Factory>,
     cancel_token: CancellationToken,
+    oom_notifier: Arc<CrioOomNotifier>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -197,7 +199,15 @@ impl VirtSandbox {
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
+            oom_notifier: Arc::new(CrioOomNotifier::default()),
         })
+    }
+
+    /// The sandbox watches for OOM events but only the container manager knows
+    /// the bundle each container was created with, which is where CRI-O looks
+    /// for word of one.
+    pub fn oom_notifier(&self) -> Arc<CrioOomNotifier> {
+        self.oom_notifier.clone()
     }
 
     pub fn get_agent(&self) -> Arc<dyn Agent> {
@@ -1165,6 +1175,7 @@ impl Sandbox for VirtSandbox {
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         let cancel_token = self.cancel_token.clone();
+        let oom_notifier = self.oom_notifier.clone();
 
         info!(sl!(), "oom watcher start");
         tokio::spawn(async move {
@@ -1180,6 +1191,8 @@ impl Sandbox for VirtSandbox {
                             Ok(resp) => {
                                 let cid = &resp.container_id;
                                 warn!(sl!(), "send oom event for container {}", &cid);
+                                // CRI-O reads a file rather than the event below.
+                                oom_notifier.notify(cid).await;
                                 let event = TaskOOM {
                                     container_id: cid.to_string(),
                                     ..Default::default()
@@ -1670,6 +1683,9 @@ impl Persist for VirtSandbox {
             shm_size: DEFAULT_SHM_SIZE,
             factory: None,
             cancel_token: CancellationToken::default(),
+            // A restored sandbox is handed back its containers by the shim, so
+            // this starts out empty and fills up as they are created again.
+            oom_notifier: Arc::new(CrioOomNotifier::default()),
         })
     }
 }

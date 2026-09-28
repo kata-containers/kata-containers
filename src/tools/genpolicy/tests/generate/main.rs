@@ -26,7 +26,9 @@ fn config_map_in_separate_file_config_map_flag() -> Result<(), Box<dyn std::erro
     let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
 
     genpolicy_fails_with(
-        "Couldn't get the value of env var: ENV_FROM_CONFIGMAP",
+        "Couldn't get the value of env var: ENV_FROM_CONFIGMAP: \
+ConfigMap \"configmap-sample\" key \"key\" could not be resolved; check that it is passed with \
+--config-file or as another document in the input YAML",
         |cmd| {
             cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
         },
@@ -49,7 +51,9 @@ fn config_map_in_separate_file_workdir_flag() -> Result<(), Box<dyn std::error::
     let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
 
     genpolicy_fails_with(
-        "Couldn't get the value of env var: ENV_FROM_CONFIGMAP",
+        "Couldn't get the value of env var: ENV_FROM_CONFIGMAP: \
+ConfigMap \"configmap-sample\" key \"key\" could not be resolved; check that it is passed with \
+--config-file or as another document in the input YAML",
         |cmd| {
             cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
         },
@@ -72,7 +76,59 @@ fn secret_in_separate_file() -> Result<(), Box<dyn std::error::Error>> {
     let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
 
     genpolicy_fails_with(
-        "Couldn't get the value of env var: ENV_FROM_SECRET",
+        "Couldn't get the value of env var: ENV_FROM_SECRET: \
+Secret \"secret-sample\" key \"key\" could not be resolved; check that it is passed with \
+--config-file or as another document in the input YAML",
+        |cmd| {
+            cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        },
+    )?;
+
+    genpolicy_succeeds(|cmd| {
+        cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        cmd.arg("--config-file").arg(workdir.join(config_file));
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn config_map_env_from_in_separate_file() -> Result<(), Box<dyn std::error::Error>> {
+    // Prepare temp dir for running genpolicy.
+    let test_case_dir = "config_map_env_from_separate_file";
+    let pod_yaml_name = "pod_with_config_map_env_from.yaml";
+    let config_file = "config_map.yaml";
+    let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
+
+    genpolicy_fails_with(
+        "Couldn't get values from configmap ref: configmap-sample: the ConfigMap \
+could not be resolved; check that it is passed with --config-file or as another document in \
+the input YAML",
+        |cmd| {
+            cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        },
+    )?;
+
+    genpolicy_succeeds(|cmd| {
+        cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        cmd.arg("--config-file").arg(workdir.join(config_file));
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn secret_env_from_in_separate_file() -> Result<(), Box<dyn std::error::Error>> {
+    // Prepare temp dir for running genpolicy.
+    let test_case_dir = "secret_env_from_separate_file";
+    let pod_yaml_name = "pod_with_secret_env_from.yaml";
+    let config_file = "secret.yaml";
+    let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
+
+    genpolicy_fails_with(
+        "Couldn't get values from secret ref: secret-sample: the Secret \
+could not be resolved; check that it is passed with --config-file or as another document in \
+the input YAML",
         |cmd| {
             cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
         },

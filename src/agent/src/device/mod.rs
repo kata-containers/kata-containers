@@ -20,7 +20,7 @@ use kata_types::device::DeviceHandlerManager;
 use nix::sys::stat;
 use oci::{LinuxDeviceCgroup, Spec};
 use oci_spec::runtime as oci;
-use pcilibs_rs::{is_vfio_device_type, snapshot_infiniband};
+use pcilibs_rs::{is_vfio_device_type, snapshot_infiniband, Sysfs, INFINIBAND_DEV_DIR};
 use protocols::agent::Device;
 use slog::Logger;
 use std::collections::{HashMap, HashSet};
@@ -949,13 +949,13 @@ pub fn online_device(path: &str) -> Result<()> {
 /// returns `Ok(())` immediately — the guest simply does not have IB
 /// devices (no mlx5_ib or VF not yet rebound).
 fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<()> {
-    let ib_dir = std::path::Path::new("/dev/infiniband");
+    let ib_dir = std::path::Path::new(INFINIBAND_DEV_DIR);
     if !ib_dir.exists() {
         info!(
             logger,
             "expose_guest_infiniband_devices: /dev/infiniband does not \
              exist, skipping (no IB driver in guest, or VF not yet rebound)";
-            "snapshot" => snapshot_infiniband(),
+            "snapshot" => snapshot_infiniband(ib_dir, &Sysfs::default()),
         );
         return Ok(());
     }
@@ -975,7 +975,7 @@ fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<(
         info!(
             logger,
             "expose_guest_infiniband_devices: /dev/infiniband is empty, skipping";
-            "snapshot" => snapshot_infiniband(),
+            "snapshot" => snapshot_infiniband(ib_dir, &Sysfs::default()),
         );
         return Ok(());
     }
@@ -1078,7 +1078,7 @@ fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<(
         "expose_guest_infiniband_devices: injected {} guest IB char device(s)",
         exposed.len();
         "exposed" => exposed.join(","),
-        "snapshot" => snapshot_infiniband(),
+        "snapshot" => snapshot_infiniband(ib_dir, &Sysfs::default()),
     );
 
     Ok(())

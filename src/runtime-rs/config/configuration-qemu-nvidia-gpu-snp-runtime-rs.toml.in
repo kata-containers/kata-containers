@@ -771,11 +771,6 @@ enable_pprof = false
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
 
-# kubelet_root_dir is the kubelet root directory used to match ConfigMap/Secret
-# volume paths for propagation. Override for distros that use a different path
-# (e.g. k0s: /var/lib/k0s/kubelet).
-kubelet_root_dir = "@DEFKUBELETROOTDIR@"
-
 # pod_resource_api_sock specifies the unix socket for the Kubelet's PodResource API endpoint.
 # When set (together with a non-"no-port" cold_plug_vfio), the runtime can cold-plug
 # devices discovered via the Pod Resources API. Path is typically under kubelet root-dir.

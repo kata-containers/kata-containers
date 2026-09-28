@@ -6,9 +6,9 @@
 package utils
 
 import (
-	"bytes"
 	"errors"
-	"os/exec"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -45,21 +45,68 @@ func TestGetDevicePathAndFsTypeOptionsEmptyMount(t *testing.T) {
 
 func TestGetDevicePathAndFsTypeOptionsSuccessful(t *testing.T) {
 	assert := assert.New(t)
+	mountPoint := "/__kata_mount_test__/mount"
+	mounts := "none /other ext4 rw 0 0\n" +
+		"tmpfs " + mountPoint + " tmpfs rw,nosuid,nodev 0 0\n"
 
-	cmdStr := "grep ^proc  /proc/mounts"
-	cmd := exec.Command("sh", "-c", cmdStr)
-	output, err := cmd.Output()
+	path, fstype, fsOptions, err := getDevicePathAndFsTypeOptionsFromReader(mountPoint, strings.NewReader(mounts))
 	assert.NoError(err)
+	assert.Equal("tmpfs", path)
+	assert.Equal("tmpfs", fstype)
+	assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
+}
 
-	data := bytes.Split(output, []byte(" "))
-	fstypeOut := string(data[2])
-	optsOut := strings.Split(string(data[3]), ",")
+func TestGetDevicePathAndFsTypeOptionsErrors(t *testing.T) {
+	assert := assert.New(t)
 
-	path, fstype, fsOptions, err := GetDevicePathAndFsTypeOptions("/proc")
+	_, _, _, err := getDevicePathAndFsTypeOptionsFromReader("/not-mounted", strings.NewReader("none /other ext4 rw 0 0\n"))
+	assert.EqualError(err, "Mount /not-mounted not found")
+
+	_, _, _, err = getDevicePathAndFsTypeOptionsFromReader("/not-mounted", strings.NewReader("invalid entry\n"))
+	assert.ErrorContains(err, "Incorrect no of fields")
+}
+
+func TestGetDevicePathAndFsTypeOptionsWithEscapedPath(t *testing.T) {
+	assert := assert.New(t)
+	cases := []struct {
+		path        string
+		escapedPath string
+	}{
+		{"/__kata_mount_test__/space dir", `/__kata_mount_test__/space\040dir`},
+		{"/__kata_mount_test__/tab\tdir", `/__kata_mount_test__/tab\011dir`},
+		{"/__kata_mount_test__/newline\ndir", `/__kata_mount_test__/newline\012dir`},
+		{`/__kata_mount_test__/backslash\dir`, `/__kata_mount_test__/backslash\134dir`},
+		{`/__kata_mount_test__/literal\040`, `/__kata_mount_test__/literal\134040`},
+	}
+	var mounts string
+
+	for _, tc := range cases {
+		mounts += "tmpfs " + tc.escapedPath + " tmpfs rw,nosuid,nodev 0 0\n"
+	}
+
+	for _, tc := range cases {
+		devicePath, fsType, fsOptions, err := getDevicePathAndFsTypeOptionsFromReader(tc.path, strings.NewReader(mounts))
+
+		assert.NoError(err)
+		assert.Equal("tmpfs", devicePath)
+		assert.Equal("tmpfs", fsType)
+		assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
+	}
+}
+
+func TestGetDevicePathAndFsTypeOptionsThroughSymlinkedParent(t *testing.T) {
+	assert := assert.New(t)
+	tempDir := t.TempDir()
+	directDev := filepath.Join(tempDir, "direct-dev")
+	directShm := filepath.Join(directDev, "shm")
+	assert.NoError(os.MkdirAll(directShm, 0o755))
+	symlinkedDev := filepath.Join(tempDir, "dev")
+	assert.NoError(os.Symlink(directDev, symlinkedDev))
+	mounts := "tmpfs " + directShm + " tmpfs rw,nosuid,nodev 0 0\n"
+
+	path, fsType, fsOptions, err := getDevicePathAndFsTypeOptionsFromReader(filepath.Join(symlinkedDev, "shm"), strings.NewReader(mounts))
 	assert.NoError(err)
-
-	assert.Equal(path, "proc")
-	assert.Equal(fstype, "proc")
-	assert.Equal(fstype, fstypeOut)
-	assert.Equal(fsOptions, optsOut)
+	assert.Equal("tmpfs", path)
+	assert.Equal("tmpfs", fsType)
+	assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
 }

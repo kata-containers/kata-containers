@@ -5,6 +5,8 @@
 #
 # Shared helm deployment helpers for kata-deploy tests
 #
+# Expects tests/common.bash and tests/gha-run-k8s-common.sh to have been loaded.
+#
 # Required environment variables:
 #   DOCKER_REGISTRY - Container registry for kata-deploy image
 #   DOCKER_REPO     - Repository name for kata-deploy image
@@ -21,14 +23,30 @@
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
 
+# Where this distribution keeps containerd's configuration, as the /host mount
+# sees it rather than as the install logs it. Only this one: a node can carry an
+# idle /etc/containerd beside the tree in use, and a handler read from there
+# would fail a test for a configuration nothing serves.
+containerd_config_roots() {
+	case "${KUBERNETES:-}" in
+		k0s) echo "/host/etc/k0s" ;;
+		k3s) echo "/host/var/lib/rancher/k3s/agent/etc/containerd" ;;
+		rke2) echo "/host/var/lib/rancher/rke2/agent/etc/containerd" ;;
+		microk8s) echo "/host/var/snap/microk8s/current/args" ;;
+		*) echo "/host/etc/containerd" ;;
+	esac
+}
+
 # Run a command against the host node's filesystem, mounted at /host inside a
 # short-lived privileged pod.
 # Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
+#        run_on_host "chroot /host /usr/sbin/semodule -r kata-deploy" false
 #
 # We avoid `kubectl run --rm -i` because rke2 injects session-recording banners
 # into interactive pods, polluting stdout. Instead: create, wait, fetch logs, delete.
 run_on_host() {
 	local cmd="$1"
+	local read_only="${2:-true}"
 	local node_name
 	node_name=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -1)
 	local pod_name="host-exec-${RANDOM}"
@@ -47,7 +65,7 @@ run_on_host() {
 					\"imagePullPolicy\": \"IfNotPresent\",
 					\"command\": [\"sh\", \"-c\", \"${cmd}\"],
 					\"securityContext\": {\"privileged\": true},
-					\"volumeMounts\": [{\"name\": \"host\", \"mountPath\": \"/host\", \"readOnly\": true}]
+					\"volumeMounts\": [{\"name\": \"host\", \"mountPath\": \"/host\", \"readOnly\": ${read_only}}]
 				}],
 				\"volumes\": [{\"name\": \"host\", \"hostPath\": {\"path\": \"/\"}}]
 			}
@@ -116,6 +134,36 @@ kata_deploy_pod_selector() {
 	else
 		echo "app.kubernetes.io/name=kata-deploy"
 	fi
+}
+
+# Whether the DaemonSet and its pods are gone. An unreachable API answers
+# nothing, so that counts as "still there".
+kata_deploy_ds_gone() {
+	local leftovers
+
+	leftovers="$(kubectl -n "${HELM_NAMESPACE}" get daemonset,pod \
+		-l name=kata-deploy -o name --request-timeout=10s 2>/dev/null)" || return 1
+
+	[[ -z "${leftovers}" ]]
+}
+
+# helm's uninstall can return while the deletion is still in flight, and the
+# next install then creates a DaemonSet the old cascade deletes again.
+# The default outlasts terminationGracePeriodSeconds (600).
+# Arguments:
+#   $1 - (Optional) seconds to wait, default 660
+wait_for_kata_deploy_ds_gone() {
+	local timeout="${1:-660}"
+
+	if waitForProcess "${timeout}" 5 kata_deploy_ds_gone; then
+		return 0
+	fi
+
+	echo "the kata-deploy DaemonSet was still there ${timeout}s after the uninstall" >&2
+	kubectl -n "${HELM_NAMESPACE}" get daemonset,pod -l name=kata-deploy || true
+	kubectl -n "${HELM_NAMESPACE}" logs -l name=kata-deploy --tail=100 \
+		--prefix --timestamps || true
+	return 1
 }
 
 # Get the path to the helm chart
@@ -211,6 +259,15 @@ deploy_kata() {
 	chart_path="$(get_chart_path)"
 	values_yaml=$(mktemp)
 
+	# A release inherited with no revision to upgrade from fails every deploy
+	# after it, however healthy the node is.
+	if helm_release_registered "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}" &&
+		! helm_release_has_deployed_revision "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}"; then
+		echo "The '${HELM_RELEASE_NAME}' release has no revision to install over" >&2
+		helm history "${HELM_RELEASE_NAME}" -n "${HELM_NAMESPACE}" || true
+		uninstall_kata || true
+	fi
+
 	# Generate base values
 	generate_base_values "${values_yaml}"
 
@@ -240,8 +297,9 @@ deploy_kata() {
 	# The install is complete once helm returns: --wait blocks on DaemonSet
 	# readiness, whose probe only passes after install, and hooks always block -
 	# the job-mode dispatcher is one, and it waits for every per-node Job.
-	"${helm_cmd[@]}"
-	local ret=$?
+	local ret=0
+	# Bare, errexit would skip both the cleanup and the reporting below.
+	"${helm_cmd[@]}" || ret=$?
 
 	rm -f "${values_yaml}"
 
@@ -266,4 +324,12 @@ uninstall_kata() {
 		--ignore-not-found --wait --cascade foreground --timeout 10m || true
 
 	wait_for_api_and_retry_uninstall "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}"
+
+	local ret=0
+
+	wait_for_kata_deploy_ds_gone || ret=1
+	# errexit would skip this after the wait above fails.
+	wait_for_nodes_ready || ret=1
+
+	return "${ret}"
 }

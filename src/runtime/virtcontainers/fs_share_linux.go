@@ -675,9 +675,6 @@ func forceGuestPull(c *Container) (*SharedFile, error) {
 	}
 	guestPullVolume := &types.KataVirtualVolume{
 		VolumeType: types.KataVirtualVolumeImageGuestPullType,
-		ImagePull: &types.ImagePullVolume{
-			Metadata: map[string]string{},
-		},
 	}
 	vol, err := handleVirtualVolumeStorageObject(c, "", guestPullVolume)
 	if err != nil {

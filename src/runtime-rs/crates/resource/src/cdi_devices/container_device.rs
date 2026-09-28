@@ -372,10 +372,8 @@ mod tests {
         let _devices = annotate_container_devices(&mut spec, devices);
 
         let expected_annotations: HashMap<String, String> = vec![
-            ("cdi.k8s.io/vfio0".to_owned(), "intel.com/gpu=0".to_owned()),
             ("cdi.k8s.io/vfio1".to_owned(), "nvidia.com/gpu=0".to_owned()),
             ("cdi.k8s.io/vfio2".to_owned(), "nvidia.com/gpu=1".to_owned()),
-            ("cdi.k8s.io/vfio3".to_owned(), "intel.com/gpu=1".to_owned()),
         ]
         .into_iter()
         .collect();

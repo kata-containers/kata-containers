@@ -143,6 +143,31 @@ fn distribution_for_runtime(runtime: &str) -> Option<&'static str> {
         .map(|(name, _)| *name)
 }
 
+/// `None` for the values meaning "vanilla", which - as in
+/// `runtimes_for_distribution` - is everything the chart does not recognise.
+fn known_distribution(distribution: &str) -> Option<&'static str> {
+    DISTRIBUTION_RUNTIMES
+        .iter()
+        .find(|(name, _)| *name == distribution)
+        .map(|(name, _)| *name)
+}
+
+/// The Kubernetes flavour this node runs, for the parts of the install the CRI
+/// runtime cannot answer for - the kubelet's root directory, say.
+///
+/// The declaration wins because it describes the cluster rather than inferring
+/// it from one node; failing that, a runtime only one flavour ships names it
+/// just as well.
+pub fn resolve_distribution(config: &Config, runtime: &str) -> Option<&'static str> {
+    distribution_of(config.k8s_distribution.as_deref(), runtime)
+}
+
+fn distribution_of(declared: Option<&str>, runtime: &str) -> Option<&'static str> {
+    declared
+        .and_then(known_distribution)
+        .or_else(|| distribution_for_runtime(runtime))
+}
+
 /// Refuse to continue when the Kubernetes flavour the chart was configured for is
 /// not the one this node turns out to run.
 ///
@@ -152,7 +177,31 @@ fn distribution_for_runtime(runtime: &str) -> Option<&'static str> {
 /// directory this node's CRI runtime never reads, and the install can then go on
 /// to restart the runtime and advertise the node as Kata-capable regardless.
 pub fn validate_declared_distribution(config: &Config, runtime: &str) -> Result<()> {
-    check_declared_distribution(config.k8s_distribution.as_deref(), runtime)
+    let declared = declaration_to_check(
+        config.k8s_distribution.as_deref(),
+        config.containerd_config_dir.as_deref(),
+    );
+
+    check_declared_distribution(declared, runtime)
+}
+
+/// The flavour reaches the install whatever else is set, since it decides more
+/// than the containerd directory. Only that directory is in question here, so
+/// pinning it explicitly settles this check and nothing else.
+fn declaration_to_check<'a>(
+    declared: Option<&'a str>,
+    pinned_config_dir: Option<&str>,
+) -> Option<&'a str> {
+    match pinned_config_dir {
+        Some(config_dir) => {
+            info!(
+                "the containerd configuration directory is pinned to {config_dir}, so it is not \
+                 the one k8sDistribution ({declared:?}) would have derived; nothing to cross-check"
+            );
+            None
+        }
+        None => declared,
+    }
 }
 
 fn check_declared_distribution(declared: Option<&str>, runtime: &str) -> Result<()> {
@@ -653,6 +702,45 @@ mod tests {
             .to_string();
         assert!(err.contains("k0s-worker"), "{err}");
         assert!(err.contains(r#"set k8sDistribution to "k0s""#), "{err}");
+    }
+
+    // --- declaration_to_check ---
+
+    #[test]
+    fn a_pinned_containerd_directory_takes_the_check_out_of_the_way() {
+        assert_eq!(
+            declaration_to_check(Some("k8s"), Some("/etc/my-containerd/")),
+            None
+        );
+        assert_eq!(declaration_to_check(Some("k8s"), None), Some("k8s"));
+    }
+
+    // --- distribution_of ---
+
+    /// A k0s node keeps its kubelet root under /var/lib/k0s whether or not
+    /// anything told us it is k0s, which is what the fallback is for.
+    #[rstest]
+    #[case::declared_is_taken_as_given(Some("k0s"), "crio", Some("k0s"))]
+    #[case::declared_microk8s(Some("microk8s"), "containerd", Some("microk8s"))]
+    #[case::vanilla_is_not_a_flavour_of_its_own(Some("k8s"), "containerd", None)]
+    #[case::unrecognised_declaration_is_vanilla(Some("kubeadm"), "containerd", None)]
+    #[case::undeclared_k0s_worker(None, "k0s-worker", Some("k0s"))]
+    #[case::undeclared_k0s_controller(None, "k0s-controller", Some("k0s"))]
+    #[case::undeclared_microk8s(None, "microk8s", Some("microk8s"))]
+    #[case::undeclared_k3s_agent(None, "k3s-agent", Some("k3s"))]
+    #[case::undeclared_vanilla_containerd(None, "containerd", None)]
+    // CRI-O is shipped by every flavour and so names none of them.
+    #[case::undeclared_crio(None, "crio", None)]
+    fn test_distribution_of(
+        #[case] declared: Option<&str>,
+        #[case] runtime: &str,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(
+            distribution_of(declared, runtime),
+            expected,
+            "declared: {declared:?}, runtime: {runtime}"
+        );
     }
 
     // --- is_containerd_capable_of_drop_in (pure version) ---

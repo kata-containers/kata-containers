@@ -6,7 +6,6 @@
 //
 
 use safe_path::scoped_join;
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -33,11 +32,6 @@ fn resolve_pause_bundle() -> Result<PathBuf> {
         KATA_PAUSE_BUNDLE,
     )
 }
-
-const K8S_CONTAINER_TYPE_KEYS: [&str; 2] = [
-    "io.kubernetes.cri.container-type",
-    "io.kubernetes.cri-o.ContainerType",
-];
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -128,39 +122,18 @@ pub fn unpack_pause_image(cid: &str) -> Result<String> {
     Ok(pause_rootfs.display().to_string())
 }
 
-/// check whether the image is for sandbox or for container.
-pub fn is_sandbox(image_metadata: &HashMap<String, String>) -> bool {
-    let mut is_sandbox = false;
-    for key in K8S_CONTAINER_TYPE_KEYS.iter() {
-        if let Some(value) = image_metadata.get(key as &str) {
-            if value == "sandbox" {
-                is_sandbox = true;
-                break;
-            }
-        }
-    }
-    is_sandbox
-}
-
 /// get_process overrides the OCI process spec with pause image process spec if needed
 pub fn get_process(
     ocip: &oci::Process,
-    oci: &oci::Spec,
-    storages: Vec<Storage>,
+    is_pod_sandbox: bool,
+    storages: &[Storage],
 ) -> Result<oci::Process> {
-    let mut guest_pull = false;
-    for storage in storages {
-        if storage.driver == KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL {
-            guest_pull = true;
-            break;
-        }
-    }
-    if guest_pull {
-        if let Some(a) = oci.annotations() {
-            if is_sandbox(a) {
-                return get_pause_image_process();
-            }
-        }
+    let guest_pull = storages
+        .iter()
+        .any(|storage| storage.driver == KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL);
+
+    if guest_pull && is_pod_sandbox {
+        return get_pause_image_process();
     }
 
     Ok(ocip.clone())

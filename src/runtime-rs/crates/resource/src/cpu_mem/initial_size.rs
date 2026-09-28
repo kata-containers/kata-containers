@@ -234,6 +234,16 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
     let period = annotation.get_sandbox_cpu_period();
     let quota = annotation.get_sandbox_cpu_quota();
     let memory = annotation.get_sandbox_mem();
+
+    // CRI-O states the same sizing as one JSON annotation and sets none of the
+    // keys read above, so a sandbox under it would otherwise be sized from the
+    // configuration defaults alone.
+    if period == 0 && quota == 0 && memory == 0 {
+        if let Some(crio) = annotation.get_crio_pod_linux_resources() {
+            return Ok((crio.cpu_period, crio.cpu_quota, crio.memory_limit_in_bytes));
+        }
+    }
+
     Ok((period, quota, memory))
 }
 
@@ -243,7 +253,7 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
 #[allow(clippy::too_many_arguments)]
 mod tests {
     use super::*;
-    use kata_types::annotations::cri_containerd;
+    use kata_types::annotations::{cri_containerd, crio};
     use oci_spec::runtime::{LinuxBuilder, LinuxMemory, LinuxMemoryBuilder, LinuxResourcesBuilder};
     use rstest::rstest;
     use std::collections::HashMap;
@@ -573,6 +583,70 @@ mod tests {
         const VCPU_TOLERANCE: f32 = 0.0001;
         assert!((mgr.resource.vcpu - 1.2).abs() < VCPU_TOLERANCE);
         assert_eq!(mgr.resource.mem_mb, 256);
+    }
+
+    #[rstest]
+    #[case::current_key(crio::POD_LINUX_RESOURCES_KEY)]
+    #[case::deprecated_key(crio::POD_LINUX_RESOURCES_KEY_DEPRECATED)]
+    fn test_initial_size_sandbox_from_crio_pod_resources(#[case] key: &str) {
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(HashMap::from([
+            (
+                crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                crio::SANDBOX.to_string(),
+            ),
+            (
+                key.to_string(),
+                // 2200 mCPU, rounded up to 3 vcpus, and 512 MiB.
+                r#"{"cpu_period":100000,"cpu_quota":220000,"cpu_shares":2252,
+                    "memory_limit_in_bytes":536870912,"unified":{}}"#
+                    .to_string(),
+            ),
+        ])));
+
+        let initial_size = InitialSize::try_from(&spec).unwrap();
+        assert_eq!(initial_size.vcpu.ceil(), 3.0);
+        assert_eq!(initial_size.mem_mb, 512);
+    }
+
+    #[test]
+    fn test_initial_size_sandbox_prefers_containerd_over_crio_pod_resources() {
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(HashMap::from([
+            (
+                cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                cri_containerd::SANDBOX.to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                (256 * MIB).to_string(),
+            ),
+            (
+                crio::POD_LINUX_RESOURCES_KEY.to_string(),
+                r#"{"memory_limit_in_bytes":536870912}"#.to_string(),
+            ),
+        ])));
+
+        assert_eq!(InitialSize::try_from(&spec).unwrap().mem_mb, 256);
+    }
+
+    #[test]
+    fn test_initial_size_sandbox_survives_malformed_crio_pod_resources() {
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(HashMap::from([
+            (
+                crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                crio::SANDBOX.to_string(),
+            ),
+            (
+                crio::POD_LINUX_RESOURCES_KEY.to_string(),
+                "not json".to_string(),
+            ),
+        ])));
+
+        let initial_size = InitialSize::try_from(&spec).unwrap();
+        assert_eq!(initial_size.vcpu, 0.0);
+        assert_eq!(initial_size.mem_mb, 0);
     }
 
     #[test]

@@ -1,27 +1,27 @@
 [package]
-name = "common"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name = "common"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-containerd-shim-protos = { workspace = true, features = ["sandbox"] }
+containerd-shim-protos = { features = ["sandbox"], workspace = true }
 nix = { workspace = true }
+oci-spec = { workspace = true }
 protobuf = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "process", "fs"] }
-oci-spec = { workspace = true }
+tokio = { features = ["fs", "process", "rt-multi-thread"], workspace = true }
 
 # Local dependencies
 agent = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
-runtime-spec = { workspace = true }
-resource = { workspace = true }
 protocols = { workspace = true }
+resource = { workspace = true }
+runtime-spec = { workspace = true }
