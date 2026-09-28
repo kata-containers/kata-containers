@@ -205,15 +205,15 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.35"
+    version: "v6.18.52"
     nvidia:
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.18.35"
+      version: "v6.18.52"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.35"
+    version: "v6.18.52"
 
 externals:
   description: "Third-party projects used by the system"
@@ -221,7 +221,7 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
-    version: "v0.1.6"
+    version: "v0.1.7"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
   nvidia:
@@ -256,10 +256,23 @@ externals:
     ctk:
       version: "1.19.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
+    dcgm:
+      desc: "NVIDIA Data Center GPU Manager"
+      version: "1:4.7.0-1"
+      url: "https://github.com/NVIDIA/DCGM"
+      exporter:
+        desc: "NVIDIA DCGM exporter, released independently of DCGM itself"
+        version: "4.8.3.002-1"
+        url: "https://github.com/NVIDIA/dcgm-exporter"
     nvat:
       desc: "NVIDIA Attestation SDK"
       version: "2026.03.02"
       url: "https://github.com/NVIDIA/attestation-sdk"
+
+  upx:
+    desc: "Executable packer used to shrink the NVIDIA GPU rootfs"
+    version: "5.2.1"
+    url: "https://github.com/upx/upx"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
@@ -279,7 +292,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "304c21f29e26dbbb968783e41109f3b6d630e872"
+    version: "eae0bf63a3a9db7721f86e0a2b0b9941a7fcba3a"
     # Guest Ubuntu release qualifier published by coco-extension-image.yml
     # (tags are "<version>-<variant>", e.g. "<sha>-ubuntu26.04"). The
     # extension ships no libc, so this must match the guest rootfs ABI.
@@ -296,7 +309,7 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "bc80356aaa774db455f9c82173b329ab692cfbc1"
+    version: "512fed65642015b849f38fb13bfdec7806639987"
     toolchain: "1.90.0"
     # Helm chart deploys three separate images; tags match version.
     images:
@@ -308,11 +321,8 @@ externals:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
     url: "github.com/containerd/containerd"
-    # containerd from v1.5.0 used the path unix socket
-    # instead of abstract socket, thus kata wouldn's support the containerd's
-    # version older than them.
-    minimum: "v1.7"
-    latest: "v2.3"
+    minimum: "v2.2"
+    latest: "v2.4"
 
   runc:
     description: "CLI tool for spawning and running containers"
@@ -349,6 +359,11 @@ externals:
     url: "https://github.com/containerd/nydus-snapshotter"
     version: "v0.15.15"
 
+  oras:
+    description: "OCI Registry As Storage CLI"
+    url: "https://github.com/oras-project/oras"
+    version: "1.3.3"
+
   opa:
     description: "Open Policy Agent"
     url: "https://github.com/open-policy-agent/opa"
@@ -370,7 +385,7 @@ externals:
       package_output_dir: "AmdSev"
     tdx:
       description: "UEFI for Intel TDX virtual machines."
-      version: "edk2-stable202511"
+      version: "edk2-stable202608"
       package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
       package_output_dir: "IntelTdx"
     arm64:

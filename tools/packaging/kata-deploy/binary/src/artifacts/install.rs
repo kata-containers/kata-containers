@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{variant_handler, Config, Variant, DEFAULT_KATA_INSTALL_DIR};
+use crate::runtime;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
@@ -12,7 +13,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
-use toml_edit::{value, ArrayOfTables, DocumentMut, Item, Table};
+use toml_edit::{value, Array, ArrayOfTables, DocumentMut, Item, Table, Value};
 #[cfg(test)]
 use walkdir::WalkDir;
 
@@ -49,6 +50,29 @@ const ALL_SHIMS: &[&str] = &[
     "qemu-tdx-runtime-rs",
 ];
 
+/// Kubelet root directories that are not the kubelet's own /var/lib/kubelet.
+const DISTRIBUTION_KUBELET_ROOT_DIRS: &[(&str, &str)] = &[
+    ("k0s", "/var/lib/k0s/kubelet"),
+    ("microk8s", "/var/snap/microk8s/common/var/lib/kubelet"),
+];
+
+const DEFAULT_KUBELET_ROOT_DIR: &str = "/var/lib/kubelet";
+
+const KUBELET_ROOT_DROP_IN: &str = "22-kubelet-root.toml";
+
+/// The same drop-in up to Kata Containers 4.1, when k0s was the only flavour it
+/// was written for. Left behind, it keeps pointing a node at /var/lib/k0s.
+const LEGACY_K0S_KUBELET_ROOT_DROP_IN: &str = "22-k0s-kubelet-root.toml";
+
+fn kubelet_root_dir_for(distribution: Option<&str>) -> Option<&'static str> {
+    let distribution = distribution?;
+
+    DISTRIBUTION_KUBELET_ROOT_DIRS
+        .iter()
+        .find(|(name, _)| *name == distribution)
+        .map(|(_, root_dir)| *root_dir)
+}
+
 /// Check if a shim is a QEMU-based shim (all QEMU shims start with "qemu")
 fn is_qemu_shim(shim: &str) -> bool {
     shim.starts_with("qemu")
@@ -81,6 +105,8 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
 
 pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Result<()> {
     info!("copying kata artifacts onto host");
+
+    let distribution = runtime::resolve_distribution(config, container_runtime);
 
     // Create the installation directory if it doesn't exist
     // fs::create_dir_all handles existing directories gracefully (returns Ok if already exists)
@@ -116,12 +142,12 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
     set_executable_permissions(&config.host_install_dir)?;
 
     for shim in &config.shims_for_arch {
-        configure_shim_config(config, shim, container_runtime).await?;
+        configure_shim_config(config, shim, distribution).await?;
     }
 
     // Install custom runtime configuration files if enabled
     if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
-        install_custom_runtime_configs(config, container_runtime)?;
+        install_custom_runtime_configs(config, distribution)?;
     }
 
     // Drop stale kata-<shim>-debug handler dirs left by a previous deploy with
@@ -213,15 +239,21 @@ fn write_common_drop_ins(
     config: &Config,
     shim: &str,
     config_d_dir: &str,
-    container_runtime: &str,
+    distribution: Option<&str>,
     apply_guest_debug: bool,
 ) -> Result<()> {
     info!("Generating drop-in configuration files for shim: {}", shim);
 
     // 1. Installation prefix adjustments (if not default)
-    if config.dest_dir != DEFAULT_KATA_INSTALL_DIR {
+    let prefix_content = if config.dest_dir != DEFAULT_KATA_INSTALL_DIR {
         info!("  - Installation prefix: {} (non-default)", config.dest_dir);
-        let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
+        generate_installation_prefix_drop_in(config, shim)?
+    } else {
+        String::new()
+    };
+    if prefix_content.is_empty() {
+        reconcile_stale_drop_in(config_d_dir, "10-installation-prefix.toml")?;
+    } else {
         write_drop_in_file(config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
     }
 
@@ -232,14 +264,14 @@ fn write_common_drop_ins(
         reconcile_stale_drop_in(config_d_dir, "20-debug.toml")?;
     }
 
-    // 2b. k0s: set kubelet root dir so ConfigMap/Secret volume propagation works (non-Rust shims only)
-    if (container_runtime == "k0s-worker" || container_runtime == "k0s-controller")
-        && !utils::is_rust_shim(shim)
-    {
-        info!("  - k0s: setting kubelet_root_dir for ConfigMap/Secret propagation");
-        let k0s_content = generate_k0s_kubelet_root_drop_in();
-        write_drop_in_file(config_d_dir, "22-k0s-kubelet-root.toml", &k0s_content)?;
+    // 2b. Settings measured from the kubelet's root directory
+    let kubelet_root_content = generate_kubelet_root_drop_in(config, shim, distribution)?;
+    if kubelet_root_content.is_empty() {
+        reconcile_stale_drop_in(config_d_dir, KUBELET_ROOT_DROP_IN)?;
+    } else {
+        write_drop_in_file(config_d_dir, KUBELET_ROOT_DROP_IN, &kubelet_root_content)?;
     }
+    reconcile_stale_drop_in(config_d_dir, LEGACY_K0S_KUBELET_ROOT_DROP_IN)?;
 
     // 3. Combined kernel_params (proxy, and guest debug when requested)
     // Reads base kernel_params from original config and combines with new params
@@ -329,8 +361,9 @@ fn reconcile_optional_drop_in(
 
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
 /// Custom runtimes inherit the same drop-in configurations as standard runtimes
-/// (installation prefix, debug, kernel_params, and for k0s on Go/remote runtime: kubelet root) plus any user-provided overrides.
-fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> Result<()> {
+/// (installation prefix, debug, kernel_params, kubelet root) plus any
+/// user-provided overrides.
+fn install_custom_runtime_configs(config: &Config, distribution: Option<&str>) -> Result<()> {
     info!("Installing custom runtime configuration files");
 
     for runtime in &config.custom_runtimes {
@@ -384,7 +417,7 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             config,
             &runtime.base_config,
             &config_d_dir,
-            container_runtime,
+            distribution,
             runtime.debug_variant,
         )?;
 
@@ -422,6 +455,7 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
                     &existing,
                     &image_path,
                     verity_params.as_deref(),
+                    &config.dest_dir,
                 ),
             )?;
         }
@@ -1323,7 +1357,11 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     Ok(())
 }
 
-async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &str) -> Result<()> {
+async fn configure_shim_config(
+    config: &Config,
+    shim: &str,
+    distribution: Option<&str>,
+) -> Result<()> {
     // Set up the runtime directory: copy config to per-shim dir and replace original with symlink
     setup_runtime_directory(config, shim)?;
 
@@ -1345,7 +1383,7 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
 
     // Generate common drop-in files (shared with custom runtimes).
     // Normal RuntimeClasses never carry guest debug settings.
-    write_common_drop_ins(config, shim, &config_d_dir, container_runtime, false)?;
+    write_common_drop_ins(config, shim, &config_d_dir, distribution, false)?;
 
     // Apply user-provided drop-in for default runtimes, if present.
     install_default_runtime_drop_in(shim, &config_d_dir)?;
@@ -1401,27 +1439,6 @@ fn write_drop_in_file(config_d_dir: &str, filename: &str, content: &str) -> Resu
     Ok(())
 }
 
-/// Get the name of the QEMU artifact a given shim is installed from.
-/// Every artifact other than "qemu" is a suffixed build, so the name is also
-/// the suffix of both its share directory and its qemu-system-* binary.
-fn get_qemu_artifact_name(shim: &str) -> Option<String> {
-    if !is_qemu_shim(shim) {
-        return None;
-    }
-
-    let artifact_name = match shim {
-        "qemu-nvidia-cpu-runtime-rs" => "qemu-no-shared-fs",
-        "qemu-nvidia-gpu-runtime-rs" => "qemu-no-shared-fs",
-        "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
-        "qemu-nvidia-gpu-snp-runtime-rs" => "qemu-snp-experimental",
-        "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
-        "qemu-nvidia-gpu-tdx-runtime-rs" => "qemu-tdx-experimental",
-        _ => "qemu",
-    };
-
-    Some(artifact_name.to_string())
-}
-
 /// Name of the QEMU system emulator for a given architecture.  QEMU calls its
 /// ppc64le target "ppc64"; every other one matches the architecture.
 fn qemu_system_binary_for(arch: &str) -> String {
@@ -1433,146 +1450,263 @@ fn qemu_system_binary_for(arch: &str) -> String {
     format!("qemu-system-{target}")
 }
 
-/// Create a QEMU wrapper script that adds the -L flag for firmware paths.
-/// This is needed when using a non-default installation prefix.
-fn create_qemu_wrapper_script(config: &Config, shim: &str) -> Result<Option<String>> {
-    let qemu_artifact = match get_qemu_artifact_name(shim) {
-        Some(artifact) => artifact,
-        None => return Ok(None), // Not a QEMU shim, no wrapper needed
-    };
+/// Each QEMU flavour is built with its own `--datadir`, named after its binary.
+fn qemu_data_dir(qemu_binary: &str, dest_dir: &str) -> Option<String> {
+    let system_binary = qemu_system_binary_for(current_arch());
+    let flavour_suffix = Path::new(qemu_binary)
+        .file_name()?
+        .to_str()?
+        .strip_prefix(system_binary.as_str())?;
 
-    let binary_suffix = qemu_artifact.trim_start_matches("qemu");
-    let qemu_binary = format!(
-        "{}/bin/{}{}",
-        config.dest_dir,
-        qemu_system_binary_for(current_arch()),
-        binary_suffix
-    );
+    Some(format!("{dest_dir}/share/kata-qemu{flavour_suffix}/qemu/"))
+}
+
+/// QEMU has its data directory compiled in, so a relocated one needs `-L`.
+fn create_qemu_wrapper_script(qemu_binary: &str, qemu_data_dir: &str) -> Result<String> {
     let wrapper_script_path = format!("{}-installation-prefix", qemu_binary);
-    let host_wrapper_path = wrapper_script_path.clone();
 
-    // Create wrapper script if it doesn't exist
-    if !Path::new(&host_wrapper_path).exists() {
-        // Ensure parent directory exists
-        if let Some(parent) = Path::new(&host_wrapper_path).parent() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = Path::new(&wrapper_script_path).parent() {
+        fs::create_dir_all(parent)?;
+    }
 
-        let script_content = format!(
-            r#"#!/usr/bin/env bash
+    // Unconditionally, or an upgrade keeps the -L an older kata-deploy guessed.
+    let script_content = format!(
+        r#"#!/usr/bin/env bash
 
-exec {} "$@" -L {}/share/kata-{}/qemu/
+exec {} "$@" -L {}
 "#,
-            qemu_binary, config.dest_dir, qemu_artifact
-        );
+        qemu_binary, qemu_data_dir
+    );
 
-        fs::write(&host_wrapper_path, &script_content)?;
-        let mut perms = fs::metadata(&host_wrapper_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&host_wrapper_path, perms)?;
+    fs::write(&wrapper_script_path, &script_content)?;
+    let mut perms = fs::metadata(&wrapper_script_path)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&wrapper_script_path, perms)?;
 
-        log::debug!("Created QEMU wrapper script: {}", host_wrapper_path);
-    }
+    log::debug!("Wrote QEMU wrapper script: {}", wrapper_script_path);
 
-    Ok(Some(wrapper_script_path))
+    Ok(wrapper_script_path)
 }
 
-/// Get the hypervisor binary path for a given shim.
-/// Returns the path to the hypervisor binary based on the shim type.
-fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
-    if is_qemu_shim(shim) {
-        // For QEMU shims, use the wrapper script that adds firmware paths
-        // create_qemu_wrapper_script always returns Some for QEMU shims
-        create_qemu_wrapper_script(config, shim)?.ok_or_else(|| {
-            anyhow::anyhow!("QEMU wrapper script should always be created for QEMU shims")
-        })
-    } else {
-        // For non-QEMU shims, use the appropriate hypervisor binary
-        let binary = match shim {
-            "clh" | "clh-azure" | "clh-runtime-rs" | "clh-azure-runtime-rs" => "cloud-hypervisor",
-            "openvmm-azure-runtime-rs" => "openvmm",
-            "fc" | "firecracker" => "firecracker",
-            "dragonball" => "dragonball",
-            "stratovirt" => "stratovirt",
-            // Remote and other shims don't have a local hypervisor binary
-            _ => return Ok(String::new()),
-        };
-        Ok(format!("{}/bin/{}", config.dest_dir, binary))
+/// `None` outside the prefix: not ours, so it does not move.
+fn reprefix_installed_path(path: &str, dest_dir: &str) -> Option<String> {
+    let relative = path.strip_prefix(DEFAULT_KATA_INSTALL_DIR)?;
+    if !relative.is_empty() && !relative.starts_with('/') {
+        return None;
+    }
+
+    Some(format!("{dest_dir}{relative}"))
+}
+
+/// Arrays are re-emitted whole, since the drop-in merge replaces them.
+fn reprefixed_value(value: &Value, dest_dir: &str) -> Option<Value> {
+    match value {
+        Value::String(path) => reprefix_installed_path(path.value(), dest_dir).map(Value::from),
+        Value::Array(paths) => {
+            let mut reprefixed = Array::new();
+            let mut relocated = false;
+            for path in paths.iter() {
+                let path = path.as_str()?;
+                match reprefix_installed_path(path, dest_dir) {
+                    Some(path) => {
+                        reprefixed.push(path);
+                        relocated = true;
+                    }
+                    None => reprefixed.push(path),
+                }
+            }
+            relocated.then_some(Value::Array(reprefixed))
+        }
+        _ => None,
     }
 }
 
-/// Generate drop-in content for installation prefix adjustments.
-/// This replaces /opt/kata with the custom dest_dir in all relevant paths.
-/// For QEMU shims, this also creates a wrapper script for firmware paths.
+fn reprefixed_table(table: &Table, dest_dir: &str) -> Table {
+    let mut reprefixed = Table::new();
+    // Implicit: no header for a table left with only sub-tables.
+    reprefixed.set_implicit(true);
+
+    for (key, item) in table.iter() {
+        if let Some(item) = reprefixed_item(item, dest_dir) {
+            reprefixed.insert(key, item);
+        }
+    }
+
+    reprefixed
+}
+
+/// Mutated in place: a key left out would be lost in the merge.
+fn reprefix_table_in_place(table: &mut Table, dest_dir: &str) -> bool {
+    let mut relocated = false;
+
+    for (_, item) in table.iter_mut() {
+        match item {
+            Item::Value(item_value) => {
+                if let Some(reprefixed) = reprefixed_value(item_value, dest_dir) {
+                    *item_value = reprefixed;
+                    relocated = true;
+                }
+            }
+            Item::Table(sub_table) => {
+                relocated |= reprefix_table_in_place(sub_table, dest_dir);
+            }
+            Item::ArrayOfTables(sub_tables) => {
+                for sub_table in sub_tables.iter_mut() {
+                    relocated |= reprefix_table_in_place(sub_table, dest_dir);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    relocated
+}
+
+fn reprefixed_item(item: &Item, dest_dir: &str) -> Option<Item> {
+    match item {
+        Item::Value(value) => reprefixed_value(value, dest_dir).map(Item::Value),
+        Item::Table(table) => {
+            let reprefixed = reprefixed_table(table, dest_dir);
+            (!reprefixed.is_empty()).then_some(Item::Table(reprefixed))
+        }
+        Item::ArrayOfTables(tables) => {
+            let mut reprefixed = tables.clone();
+            let relocated = reprefixed.iter_mut().fold(false, |moved, table| {
+                moved | reprefix_table_in_place(table, dest_dir)
+            });
+
+            relocated.then_some(Item::ArrayOfTables(reprefixed))
+        }
+        _ => None,
+    }
+}
+
+/// `None` for a QEMU from outside the installation: it finds its own data dir.
+fn relocated_qemu_binary(
+    drop_in: &DocumentMut,
+    shim: &str,
+    hypervisor_name: &str,
+) -> Option<String> {
+    if !is_qemu_shim(shim) {
+        return None;
+    }
+
+    drop_in
+        .get("hypervisor")?
+        .get(hypervisor_name)?
+        .get("path")?
+        .as_str()
+        .map(str::to_string)
+}
+
+/// Re-prefixes what the base config sets, rather than guessing paths.
 fn generate_installation_prefix_drop_in(config: &Config, shim: &str) -> Result<String> {
     let hypervisor_name = get_hypervisor_name(shim)?;
+    let base_config = base_config_file(config, shim);
+    let base_config_path = Path::new(&base_config);
 
-    // Build the drop-in content with adjusted paths
+    if !base_config_path.exists() {
+        warn!(
+            "{}: base config {} is missing; no installation prefix drop-in will be generated",
+            shim, base_config
+        );
+        return Ok(String::new());
+    }
+
+    let base = fs::read_to_string(base_config_path)
+        .with_context(|| format!("Failed to read base config: {base_config}"))?
+        .parse::<DocumentMut>()
+        .with_context(|| format!("Failed to parse base config as TOML: {base_config}"))?;
+
+    let mut drop_in = DocumentMut::new();
+    *drop_in.as_table_mut() = reprefixed_table(base.as_table(), &config.dest_dir);
+
+    if let Some(qemu_binary) = relocated_qemu_binary(&drop_in, shim, hypervisor_name) {
+        match qemu_data_dir(&qemu_binary, &config.dest_dir) {
+            Some(data_dir) => {
+                let wrapper = create_qemu_wrapper_script(&qemu_binary, &data_dir)?;
+                drop_in["hypervisor"][hypervisor_name]["path"] = value(wrapper);
+            }
+            None => warn!(
+                "{}: cannot tell which data directory {} belongs to, so it is run unwrapped \
+                 and may fail to find its firmware",
+                shim, qemu_binary
+            ),
+        }
+    }
+
+    if drop_in.as_table().is_empty() {
+        return Ok(String::new());
+    }
+
     let mut content = String::new();
     content.push_str("# Installation prefix adjustments\n");
-    content.push_str("# Generated by kata-deploy\n\n");
-
-    // Hypervisor section
-    content.push_str(&format!("[hypervisor.{}]\n", hypervisor_name));
-
-    // Only set hypervisor path if applicable for this shim type
-    let hypervisor_path = get_hypervisor_path(config, shim)?;
-    if !hypervisor_path.is_empty() {
-        content.push_str(&format!("path = \"{}\"\n", hypervisor_path));
-    }
-
-    // Common paths for all hypervisors
+    content.push_str("# Generated by kata-deploy\n");
+    content.push_str("#\n");
     content.push_str(&format!(
-        "kernel = \"{}/share/kata-containers/vmlinux.container\"\n",
-        config.dest_dir
+        "# The paths the base configuration sets under {}, moved to {}.\n\n",
+        DEFAULT_KATA_INSTALL_DIR, config.dest_dir
     ));
-    content.push_str(&format!(
-        "image = \"{}/share/kata-containers/kata-containers.img\"\n",
-        config.dest_dir
-    ));
-    content.push_str(&format!(
-        "initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n",
-        config.dest_dir
-    ));
-
-    // QEMU-specific paths (firmware is only relevant for QEMU)
-    if is_qemu_shim(shim) {
-        content.push_str(&format!(
-            "firmware = \"{}/share/kata-containers/firmware/\"\n",
-            config.dest_dir
-        ));
-        content.push_str(&format!(
-            "firmware_volume = \"{}/share/kata-containers/firmware/\"\n",
-            config.dest_dir
-        ));
-    }
-
-    // Firecracker-specific paths (jailer is only for Firecracker)
-    if shim == "fc" || shim == "firecracker" {
-        content.push_str(&format!(
-            "jailer_path = \"{}/bin/jailer\"\n",
-            config.dest_dir
-        ));
-        content.push_str(&format!(
-            "valid_jailer_paths = [\"{}/bin/jailer\"]\n",
-            config.dest_dir
-        ));
-    }
+    content.push_str(&drop_in.to_string());
 
     Ok(content)
 }
 
-/// Generate drop-in content for k0s kubelet root directory.
-/// k0s uses /var/lib/k0s/kubelet instead of /var/lib/kubelet; setting this
-/// allows the runtime to match ConfigMap/Secret volume paths for propagation.
-fn generate_k0s_kubelet_root_drop_in() -> String {
-    r#"# k0s kubelet root directory
-# Generated by kata-deploy for k0s (ConfigMap/Secret volume propagation)
+fn generate_kubelet_root_drop_in(
+    config: &Config,
+    shim: &str,
+    distribution: Option<&str>,
+) -> Result<String> {
+    let Some(kubelet_root_dir) = kubelet_root_dir_for(distribution) else {
+        return Ok(String::new());
+    };
 
-[runtime]
-kubelet_root_dir = "/var/lib/k0s/kubelet"
-"#
-    .to_string()
+    let mut settings = Vec::new();
+
+    // runtime-rs matches those volumes by path shape
+    // (kata_types::k8s::is_special_dir) rather than against the kubelet root, so
+    // it has no such setting. It does read the socket below.
+    if !utils::is_rust_shim(shim) {
+        settings.push(format!(r#"kubelet_root_dir = "{kubelet_root_dir}""#));
+    }
+
+    let base_sock = read_base_pod_resource_api_sock(config, shim)?;
+    if let Some(sock) = relocate_under_kubelet_root(&base_sock, kubelet_root_dir) {
+        settings.push(format!(r#"pod_resource_api_sock = "{sock}""#));
+    }
+
+    if settings.is_empty() {
+        return Ok(String::new());
+    }
+
+    Ok(format!(
+        "# Kubelet root directory\n# Generated by kata-deploy\n\n[runtime]\n{}\n",
+        settings.join("\n")
+    ))
+}
+
+/// Only paths the build measured from the default root move: empty is how a
+/// feature is left switched off, and any other prefix is somebody's own choice.
+fn relocate_under_kubelet_root(path: &str, kubelet_root_dir: &str) -> Option<String> {
+    let relative = path.strip_prefix(&format!("{DEFAULT_KUBELET_ROOT_DIR}/"))?;
+
+    Some(format!("{kubelet_root_dir}/{relative}"))
+}
+
+fn read_base_pod_resource_api_sock(config: &Config, shim: &str) -> Result<String> {
+    let original_config_dir =
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+    let original_config_file = format!("{original_config_dir}/configuration-{shim}.toml");
+    let config_path = Path::new(&original_config_file);
+
+    if !config_path.exists() {
+        return Ok(String::new());
+    }
+
+    let sock = toml_utils::get_toml_value(config_path, "runtime.pod_resource_api_sock")
+        .unwrap_or_default();
+
+    Ok(sock.trim_matches('"').to_string())
 }
 
 /// Generate drop-in content for debug configuration.
@@ -1700,6 +1834,7 @@ fn generate_devkit_drop_in(
     existing: &[GuestExtension],
     image_path: &str,
     verity_params: Option<&str>,
+    dest_dir: &str,
 ) -> String {
     let mut doc = DocumentMut::new();
 
@@ -1717,12 +1852,9 @@ fn generate_devkit_drop_in(
     // as headers; the intermediate `hypervisor` table is implicit.
     let mut images = ArrayOfTables::new();
     for ext in existing {
-        push_guest_extension(
-            &mut images,
-            &ext.name,
-            &ext.path,
-            ext.verity_params.as_deref(),
-        );
+        // This drop-in sorts last, so a path left at /opt/kata wins.
+        let path = reprefix_installed_path(&ext.path, dest_dir).unwrap_or_else(|| ext.path.clone());
+        push_guest_extension(&mut images, &ext.name, &path, ext.verity_params.as_deref());
     }
     push_guest_extension(&mut images, "devkit", image_path, verity_params);
     let mut hv = Table::new();
@@ -1766,12 +1898,18 @@ fn get_proxy_value_for_shim(proxy_var: &Option<String>, shim: &str) -> Option<St
     }
 }
 
+/// The shim's installed configuration, the one config.d is layered on top of.
+fn base_config_file(config: &Config, shim: &str) -> String {
+    let original_config_dir =
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+
+    format!("{}/configuration-{}.toml", original_config_dir, shim)
+}
+
 /// Read base kernel_params from the original configuration file.
 fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
     let hypervisor_name = get_hypervisor_name(shim)?;
-    let original_config_dir =
-        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
-    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let original_config_file = base_config_file(config, shim);
     let config_path = Path::new(&original_config_file);
 
     if !config_path.exists() {
@@ -1912,7 +2050,7 @@ async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use rstest::rstest;
 
@@ -1952,25 +2090,47 @@ mod tests {
     }
 
     #[rstest]
-    #[case("qemu", "qemu")]
-    #[case("qemu-runtime-rs", "qemu")]
-    #[case("qemu-nvidia-cpu", "qemu")]
-    #[case("qemu-nvidia-cpu-runtime-rs", "qemu-no-shared-fs")]
-    #[case("qemu-nvidia-gpu-runtime-rs", "qemu-no-shared-fs")]
-    #[case("qemu-nvidia-gpu-snp", "qemu-snp-experimental")]
-    #[case("qemu-nvidia-gpu-snp-runtime-rs", "qemu-snp-experimental")]
-    #[case("qemu-nvidia-gpu-tdx", "qemu-tdx-experimental")]
-    #[case("qemu-nvidia-gpu-tdx-runtime-rs", "qemu-tdx-experimental")]
-    fn test_get_qemu_artifact_name(#[case] shim: &str, #[case] expected: &str) {
-        assert_eq!(get_qemu_artifact_name(shim).unwrap(), expected);
+    #[case("", "kata-qemu")]
+    #[case("-no-shared-fs", "kata-qemu-no-shared-fs")]
+    #[case("-snp-experimental", "kata-qemu-snp-experimental")]
+    #[case("-tdx-experimental", "kata-qemu-tdx-experimental")]
+    fn test_qemu_data_dir_follows_the_flavour(
+        #[case] flavour_suffix: &str,
+        #[case] expected_share_dir: &str,
+    ) {
+        let qemu_binary = format!(
+            "/opt/kata-coco/bin/{}{}",
+            qemu_system_binary_for(current_arch()),
+            flavour_suffix
+        );
+
+        assert_eq!(
+            qemu_data_dir(&qemu_binary, "/opt/kata-coco").unwrap(),
+            format!("/opt/kata-coco/share/{}/qemu/", expected_share_dir)
+        );
+    }
+
+    #[test]
+    fn test_qemu_data_dir_unknown_binary() {
+        assert!(qemu_data_dir("/usr/bin/some-other-vmm", "/opt/kata-coco").is_none());
     }
 
     #[rstest]
-    #[case("clh")]
-    #[case("dragonball")]
-    #[case("fc")]
-    fn test_get_qemu_artifact_name_non_qemu(#[case] shim: &str) {
-        assert!(get_qemu_artifact_name(shim).is_none());
+    #[case(
+        "/opt/kata/share/kata-containers/vmlinuz.container",
+        Some("/prefix/opt/kata/share/kata-containers/vmlinuz.container")
+    )]
+    #[case("/opt/kata", Some("/prefix/opt/kata"))]
+    // Host-provided artifact.
+    #[case("/usr/share/cloud-hypervisor/vmlinux.bin", None)]
+    // Another multi-install, not ours.
+    #[case("/opt/kata-other/bin/qemu-system-x86_64", None)]
+    #[case("", None)]
+    fn test_reprefix_installed_path(#[case] path: &str, #[case] expected: Option<&str>) {
+        assert_eq!(
+            reprefix_installed_path(path, "/prefix/opt/kata").as_deref(),
+            expected
+        );
     }
 
     #[rstest]
@@ -2018,7 +2178,8 @@ mod tests {
     fn test_generate_devkit_drop_in_scalars() {
         // The drop-in enables the agent debug console; which shell it execs is
         // the agent's own decision once the extension is mounted.
-        let content = generate_devkit_drop_in("qemu", &[], DEVKIT_IMG, None);
+        let content =
+            generate_devkit_drop_in("qemu", &[], DEVKIT_IMG, None, DEFAULT_KATA_INSTALL_DIR);
 
         assert!(content.contains("[agent.kata]"));
         assert!(content.contains("debug_console_enabled = true"));
@@ -2028,7 +2189,8 @@ mod tests {
     #[test]
     fn test_generate_devkit_drop_in_only_devkit_when_base_empty() {
         // A base config with no extensions yields an array with devkit only.
-        let content = generate_devkit_drop_in("qemu", &[], DEVKIT_IMG, None);
+        let content =
+            generate_devkit_drop_in("qemu", &[], DEVKIT_IMG, None, DEFAULT_KATA_INSTALL_DIR);
 
         assert_eq!(drop_in_extension_names(&content, "qemu"), vec!["devkit"]);
         assert!(content.contains(&format!("path = \"{DEVKIT_IMG}\"")));
@@ -2046,7 +2208,13 @@ mod tests {
             path: "/opt/kata/share/kata-containers/coco.img".to_string(),
             verity_params: Some("root_hash=abc".to_string()),
         }];
-        let content = generate_devkit_drop_in("qemu", &existing, DEVKIT_IMG, Some("root_hash=def"));
+        let content = generate_devkit_drop_in(
+            "qemu",
+            &existing,
+            DEVKIT_IMG,
+            Some("root_hash=def"),
+            DEFAULT_KATA_INSTALL_DIR,
+        );
 
         assert_eq!(
             drop_in_extension_names(&content, "qemu"),
@@ -2442,15 +2610,14 @@ mod tests {
         assert!(content.contains("debug_console_enabled = true"));
     }
 
-    /// A Config with no source of kernel params of its own, so each test can
-    /// switch on just the one it is about. dest_dir points at a path with no
-    /// installed configuration, which makes the base params come out empty.
-    fn kernel_params_config() -> crate::config::Config {
+    /// Shared with other modules' tests: Config has no Default, and one
+    /// hand-built literal is enough to keep in step with its fields.
+    pub(crate) fn test_config(shim: &str, dest_dir: &str) -> crate::config::Config {
         crate::config::Config {
             node_name: "test".to_string(),
             debug: true,
-            shims_for_arch: vec!["qemu".to_string()],
-            default_shim_for_arch: "qemu".to_string(),
+            shims_for_arch: vec![shim.to_string()],
+            default_shim_for_arch: shim.to_string(),
             allowed_hypervisor_annotations_for_arch: vec![],
             snapshotter_handler_mapping_for_arch: None,
             agent_https_proxy: None,
@@ -2464,8 +2631,8 @@ mod tests {
             experimental_setup_snapshotter: None,
             erofs_merge_mode: None,
             experimental_force_guest_pull_for_arch: vec![],
-            dest_dir: "/opt/kata".to_string(),
-            host_install_dir: "/opt/kata".to_string(),
+            dest_dir: dest_dir.to_string(),
+            host_install_dir: dest_dir.to_string(),
             crio_drop_in_conf_dir: String::new(),
             crio_drop_in_conf_file: String::new(),
             crio_drop_in_conf_file_debug: String::new(),
@@ -2481,7 +2648,15 @@ mod tests {
             startup_taints: vec![],
             container_runtime_version: None,
             k8s_distribution: None,
+            containerd_config_dir: None,
+            containerd_extra_pod_annotations: vec![],
+            containerd_shim_extra_pod_annotations_for_arch: vec![],
         }
+    }
+
+    /// No kernel params, so each test adds just the one it is about.
+    fn kernel_params_config() -> crate::config::Config {
+        test_config("qemu", DEFAULT_KATA_INSTALL_DIR)
     }
 
     #[test]
@@ -2514,7 +2689,270 @@ mod tests {
         assert!(other.is_empty());
     }
 
+    fn install_base_config(config: &crate::config::Config, shim: &str, content: &str) -> String {
+        let base_config = base_config_file(config, shim);
+        fs::create_dir_all(Path::new(&base_config).parent().unwrap()).unwrap();
+        fs::write(&base_config, content).unwrap();
+        base_config
+    }
+
+    /// The qemu-snp base config, trimmed to the paths that matter.
+    fn confidential_base_config() -> String {
+        format!(
+            r#"[hypervisor.qemu]
+path = "/opt/kata/bin/{qemu}-snp-experimental"
+valid_hypervisor_paths = ["/opt/kata/bin/{qemu}-snp-experimental"]
+kernel = "/opt/kata/share/kata-containers/vmlinuz.container"
+image = "/opt/kata/share/kata-containers/kata-containers-confidential.img"
+firmware = "/opt/kata/share/ovmf/AMDSEV.fd"
+firmware_volume = ""
+virtio_fs_daemon = "/opt/kata/libexec/virtiofsd"
+shared_fs = "virtio-fs"
+kernel_params = ""
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "coco"
+path = "/opt/kata/share/kata-containers/kata-containers-coco-extension.img"
+verity_params = "roothash=abc"
+
+[runtime]
+enable_debug = false
+"#,
+            qemu = qemu_system_binary_for(current_arch())
+        )
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_keeps_confidential_artifacts() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("qemu-snp", dest_dir);
+        install_base_config(&config, "qemu-snp", &confidential_base_config());
+
+        let content = generate_installation_prefix_drop_in(&config, "qemu-snp").unwrap();
+        let drop_in = content.parse::<DocumentMut>().unwrap();
+        let hypervisor = &drop_in["hypervisor"]["qemu"];
+
+        assert_eq!(
+            hypervisor["kernel"].as_str().unwrap(),
+            format!("{dest_dir}/share/kata-containers/vmlinuz.container")
+        );
+        assert_eq!(
+            hypervisor["image"].as_str().unwrap(),
+            format!("{dest_dir}/share/kata-containers/kata-containers-confidential.img")
+        );
+        assert_eq!(
+            hypervisor["firmware"].as_str().unwrap(),
+            format!("{dest_dir}/share/ovmf/AMDSEV.fd")
+        );
+
+        // An image-only guest must not be given an initrd.
+        assert!(hypervisor.get("initrd").is_none());
+        assert!(hypervisor.get("firmware_volume").is_none());
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_wraps_the_qemu_flavour_the_shim_runs() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("qemu-snp", dest_dir);
+        install_base_config(&config, "qemu-snp", &confidential_base_config());
+
+        let content = generate_installation_prefix_drop_in(&config, "qemu-snp").unwrap();
+        let drop_in = content.parse::<DocumentMut>().unwrap();
+
+        let qemu_binary = format!(
+            "{dest_dir}/bin/{}-snp-experimental",
+            qemu_system_binary_for(current_arch())
+        );
+        let wrapper = format!("{qemu_binary}-installation-prefix");
+        assert_eq!(
+            drop_in["hypervisor"]["qemu"]["path"].as_str().unwrap(),
+            wrapper
+        );
+
+        // Its own flavour's firmware, not the plain build's.
+        let script = fs::read_to_string(&wrapper).unwrap();
+        assert!(
+            script.contains(&format!(
+                "exec {qemu_binary} \"$@\" -L {dest_dir}/share/kata-qemu-snp-experimental/qemu/"
+            )),
+            "unexpected wrapper script: {script}"
+        );
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_only_carries_installed_paths() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("qemu-snp", dest_dir);
+        install_base_config(&config, "qemu-snp", &confidential_base_config());
+
+        let content = generate_installation_prefix_drop_in(&config, "qemu-snp").unwrap();
+        let drop_in = content.parse::<DocumentMut>().unwrap();
+        let hypervisor = &drop_in["hypervisor"]["qemu"];
+
+        assert_eq!(
+            hypervisor["valid_hypervisor_paths"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|path| path.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec![format!(
+                "{dest_dir}/bin/{}-snp-experimental",
+                qemu_system_binary_for(current_arch())
+            )]
+        );
+        assert_eq!(
+            hypervisor["virtio_fs_daemon"].as_str().unwrap(),
+            format!("{dest_dir}/libexec/virtiofsd")
+        );
+
+        // The merge replaces the array, so neighbouring keys come along.
+        let extensions = hypervisor["guest_extension_images"]
+            .as_array_of_tables()
+            .unwrap();
+        assert_eq!(extensions.len(), 1);
+        let extension = extensions.get(0).unwrap();
+        assert_eq!(
+            extension["path"].as_str().unwrap(),
+            format!("{dest_dir}/share/kata-containers/kata-containers-coco-extension.img")
+        );
+        assert_eq!(extension["name"].as_str().unwrap(), "coco");
+        assert_eq!(extension["verity_params"].as_str().unwrap(), "roothash=abc");
+
+        // Anything that is not a path stays with the base config.
+        assert!(hypervisor.get("shared_fs").is_none());
+        assert!(hypervisor.get("kernel_params").is_none());
+        assert!(
+            !content.contains("[runtime]"),
+            "a section with nothing to relocate should not be emitted: {content}"
+        );
+    }
+
+    #[test]
+    fn test_devkit_drop_in_relocates_the_extensions_it_relists() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("qemu-snp", dest_dir);
+        let base_config = install_base_config(&config, "qemu-snp", &confidential_base_config());
+
+        let existing = read_guest_extension_images(Path::new(&base_config), "qemu").unwrap();
+        let image_path =
+            format!("{dest_dir}/share/kata-containers/kata-containers-devkit-extension.img");
+        let content = generate_devkit_drop_in("qemu", &existing, &image_path, None, dest_dir);
+
+        let drop_in = content.parse::<DocumentMut>().unwrap();
+        let extensions = drop_in["hypervisor"]["qemu"]["guest_extension_images"]
+            .as_array_of_tables()
+            .unwrap();
+        assert_eq!(extensions.len(), 2);
+
+        assert_eq!(
+            extensions.get(0).unwrap()["path"].as_str().unwrap(),
+            format!("{dest_dir}/share/kata-containers/kata-containers-coco-extension.img")
+        );
+        assert_eq!(
+            extensions.get(1).unwrap()["path"].as_str().unwrap(),
+            image_path
+        );
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_rewrites_a_stale_qemu_wrapper() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("qemu-snp", dest_dir);
+        install_base_config(&config, "qemu-snp", &confidential_base_config());
+
+        // What an older kata-deploy left behind: the plain build's data dir.
+        let qemu_binary = format!(
+            "{dest_dir}/bin/{}-snp-experimental",
+            qemu_system_binary_for(current_arch())
+        );
+        let wrapper = format!("{qemu_binary}-installation-prefix");
+        fs::create_dir_all(Path::new(&wrapper).parent().unwrap()).unwrap();
+        fs::write(
+            &wrapper,
+            "#!/usr/bin/env bash\nexec qemu -L /opt/kata/share/kata-qemu/qemu/\n",
+        )
+        .unwrap();
+
+        generate_installation_prefix_drop_in(&config, "qemu-snp").unwrap();
+
+        let script = fs::read_to_string(&wrapper).unwrap();
+        assert!(
+            script.contains(&format!(
+                "exec {qemu_binary} \"$@\" -L {dest_dir}/share/kata-qemu-snp-experimental/qemu/"
+            )),
+            "the stale wrapper survived the upgrade: {script}"
+        );
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_skips_host_provided_extension_images() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("qemu-snp", dest_dir);
+        install_base_config(
+            &config,
+            "qemu-snp",
+            r#"[hypervisor.qemu]
+path = "/opt/kata/bin/qemu-system-x86_64"
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "vendor"
+path = "/usr/share/vendor/extension.img"
+"#,
+        );
+
+        let content = generate_installation_prefix_drop_in(&config, "qemu-snp").unwrap();
+        let drop_in = content.parse::<DocumentMut>().unwrap();
+
+        assert!(drop_in["hypervisor"]["qemu"]
+            .get("guest_extension_images")
+            .is_none());
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_keeps_host_provided_artifacts() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dest_dir = tmpdir.path().to_str().unwrap();
+        let config = test_config("clh-azure", dest_dir);
+        install_base_config(
+            &config,
+            "clh-azure",
+            r#"[hypervisor.clh]
+path = "/opt/kata/bin/cloud-hypervisor"
+kernel = "/usr/share/cloud-hypervisor/vmlinux.bin"
+image = "/opt/kata/share/kata-containers/kata-containers-mariner.img"
+"#,
+        );
+
+        let content = generate_installation_prefix_drop_in(&config, "clh-azure").unwrap();
+        let drop_in = content.parse::<DocumentMut>().unwrap();
+        let hypervisor = &drop_in["hypervisor"]["clh"];
+
+        assert_eq!(
+            hypervisor["path"].as_str().unwrap(),
+            format!("{dest_dir}/bin/cloud-hypervisor")
+        );
+        assert!(hypervisor.get("kernel").is_none());
+    }
+
+    #[test]
+    fn test_installation_prefix_drop_in_is_empty_without_a_base_config() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config = test_config("qemu", tmpdir.path().to_str().unwrap());
+
+        assert!(generate_installation_prefix_drop_in(&config, "qemu")
+            .unwrap()
+            .is_empty());
+    }
+
     #[rstest]
+    #[case("10-installation-prefix.toml")]
     #[case("20-debug.toml")]
     #[case("30-kernel-params.toml")]
     fn test_reconcile_stale_drop_in_removes_file(#[case] filename: &str) {
@@ -2536,6 +2974,156 @@ mod tests {
         fs::create_dir_all(&config_d_dir).unwrap();
 
         reconcile_stale_drop_in(config_d_dir.to_str().unwrap(), "20-debug.toml").unwrap();
+    }
+
+    // --- kubelet root directory ---
+
+    #[rstest]
+    #[case::k0s(Some("k0s"), Some("/var/lib/k0s/kubelet"))]
+    #[case::microk8s(Some("microk8s"), Some("/var/snap/microk8s/common/var/lib/kubelet"))]
+    // K3s and RKE2 move containerd's configuration but not the kubelet's root.
+    #[case::k3s(Some("k3s"), None)]
+    #[case::rke2(Some("rke2"), None)]
+    #[case::vanilla(None, None)]
+    fn test_kubelet_root_dir_for(
+        #[case] distribution: Option<&str>,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(
+            kubelet_root_dir_for(distribution),
+            expected,
+            "distribution: {distribution:?}"
+        );
+    }
+
+    #[rstest]
+    #[case::k0s(Some("k0s"), "qemu", Some("/var/lib/k0s/kubelet"))]
+    #[case::microk8s(
+        Some("microk8s"),
+        "qemu",
+        Some("/var/snap/microk8s/common/var/lib/kubelet")
+    )]
+    #[case::vanilla(Some("k8s"), "qemu", None)]
+    #[case::runtime_rs_does_not_read_it(Some("k0s"), "qemu-runtime-rs", None)]
+    fn the_kubelet_root_drop_in_follows_the_flavour(
+        #[case] distribution: Option<&str>,
+        #[case] shim: &str,
+        #[case] expected: Option<&str>,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        write_common_drop_ins(
+            &kernel_params_config(),
+            shim,
+            config_d_dir.to_str().unwrap(),
+            distribution,
+            false,
+        )
+        .unwrap();
+
+        let drop_in = config_d_dir.join(KUBELET_ROOT_DROP_IN);
+        match expected {
+            Some(root_dir) => assert!(
+                fs::read_to_string(&drop_in)
+                    .unwrap()
+                    .contains(&format!(r#"kubelet_root_dir = "{root_dir}""#)),
+                "expected {root_dir} in {}",
+                drop_in.display()
+            ),
+            None => assert!(!drop_in.exists(), "{} was written", drop_in.display()),
+        }
+    }
+
+    #[rstest]
+    #[case::under_the_default(
+        "/var/lib/kubelet/pod-resources/kubelet.sock",
+        Some("/var/lib/k0s/kubelet/pod-resources/kubelet.sock")
+    )]
+    #[case::switched_off("", None)]
+    #[case::chosen_elsewhere("/run/kubelet/pod-resources/kubelet.sock", None)]
+    #[case::a_longer_name("/var/lib/kubelet-standby/pod-resources/kubelet.sock", None)]
+    fn only_paths_measured_from_the_default_kubelet_root_move(
+        #[case] base_path: &str,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(
+            relocate_under_kubelet_root(base_path, "/var/lib/k0s/kubelet").as_deref(),
+            expected,
+            "base path: {base_path:?}"
+        );
+    }
+
+    #[rstest]
+    #[case::go("qemu-nvidia-gpu", true)]
+    #[case::runtime_rs("qemu-nvidia-gpu-runtime-rs", false)]
+    fn the_pod_resources_socket_follows_the_kubelet_root(
+        #[case] shim: &str,
+        #[case] also_names_the_root_dir: bool,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let mut config = kernel_params_config();
+        config.dest_dir = tmpdir.path().to_str().unwrap().to_string();
+
+        let shipped_dir = utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+        fs::create_dir_all(&shipped_dir).unwrap();
+        fs::write(
+            format!("{shipped_dir}/configuration-{shim}.toml"),
+            "[runtime]\npod_resource_api_sock = \"/var/lib/kubelet/pod-resources/kubelet.sock\"\n",
+        )
+        .unwrap();
+
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        write_common_drop_ins(
+            &config,
+            shim,
+            config_d_dir.to_str().unwrap(),
+            Some("k0s"),
+            false,
+        )
+        .unwrap();
+
+        let drop_in = fs::read_to_string(config_d_dir.join(KUBELET_ROOT_DROP_IN)).unwrap();
+        assert!(
+            drop_in.contains(
+                r#"pod_resource_api_sock = "/var/lib/k0s/kubelet/pod-resources/kubelet.sock""#
+            ),
+            "{drop_in}"
+        );
+        assert_eq!(
+            drop_in.contains("kubelet_root_dir"),
+            also_names_the_root_dir
+        );
+    }
+
+    /// Left behind, the 4.1 file would keep pointing a microk8s or vanilla node
+    /// at /var/lib/k0s/kubelet.
+    #[test]
+    fn the_k0s_specific_kubelet_root_drop_in_is_taken_out_again() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+        let legacy = config_d_dir.join(LEGACY_K0S_KUBELET_ROOT_DROP_IN);
+        fs::write(
+            &legacy,
+            "[runtime]\nkubelet_root_dir = \"/var/lib/k0s/kubelet\"\n",
+        )
+        .unwrap();
+
+        write_common_drop_ins(
+            &kernel_params_config(),
+            "qemu",
+            config_d_dir.to_str().unwrap(),
+            Some("k0s"),
+            false,
+        )
+        .unwrap();
+
+        assert!(!legacy.exists());
+        assert!(config_d_dir.join(KUBELET_ROOT_DROP_IN).exists());
     }
 
     #[test]

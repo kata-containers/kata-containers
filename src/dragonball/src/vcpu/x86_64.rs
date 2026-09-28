@@ -39,6 +39,13 @@ pub const KVM_HC_MAP_GPA_RANGE: u64 = 12;
 /// otherwise shared.
 pub const KVM_MAP_GPA_RANGE_ENCRYPTED: u64 = 1 << 4;
 
+/// MSRs held back until every other MSR has been restored.
+///
+/// KVM arms the LAPIC timer against the guest TSC as it handles the write to
+/// MSR_IA32_TSCDEADLINE, so the deadline has to follow MSR_IA32_TSC or the
+/// timer is primed against a TSC the restore has not set up yet.
+const DEFERRED_MSRS: &[u32] = &[dbs_arch::msr::MSR_IA32_TSCDEADLINE];
+
 impl Vcpu {
     /// Constructs a new VCPU for `vm`.
     ///
@@ -172,6 +179,23 @@ impl Vcpu {
             .set_cpuid2(&self.cpuid)
             .map_err(VcpuError::SetSupportedCpusFailed)
     }
+
+    /// Write a batch of MSRs, failing if KVM did not accept all of them.
+    fn set_msr_entries(&self, entries: &[kvm_msr_entry]) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let msrs = Msrs::from_entries(entries).map_err(VcpuError::Msr)?;
+        let nmsrs = self.fd.set_msrs(&msrs).map_err(VcpuError::Kvm)?;
+        if nmsrs != entries.len() {
+            return Err(VcpuError::MsrsIncomplete {
+                id: self.id,
+                processed: nmsrs,
+                requested: entries.len(),
+            });
+        }
+        Ok(())
+    }
 }
 
 /// Snapshot state of a x86_64 vCPU: guest-visible registers plus
@@ -207,6 +231,48 @@ pub struct VcpuState {
     /// Guest TSC frequency in kHz, if the host supports retrieving it.
     #[serde(default)]
     pub tsc_khz: Option<u32>,
+}
+
+/// Order the saved MSRs into the batches `restore_state` writes.
+///
+/// [`DEFERRED_MSRS`] are held back into a final batch, and a deadline saved as
+/// zero is armed at the restored TSC: KVM ignores a zero deadline, so a
+/// snapshot that caught the timer after it expired but before its interrupt
+/// was delivered would otherwise restore with nothing armed at all.
+fn plan_msr_restore(chunks: &[Msrs]) -> Vec<Vec<kvm_msr_entry>> {
+    let mut batches = Vec::with_capacity(chunks.len() + 1);
+    let mut deferred = Vec::new();
+    let mut tsc = None;
+
+    for chunk in chunks {
+        let (held, now): (Vec<_>, Vec<_>) = chunk
+            .as_slice()
+            .iter()
+            .copied()
+            .partition(|e| DEFERRED_MSRS.contains(&e.index));
+        for entry in &now {
+            if entry.index == dbs_arch::msr::MSR_IA32_TSC {
+                // One entry is expected; take the highest if a snapshot
+                // somehow carries several.
+                tsc = tsc.max(Some(entry.data));
+            }
+        }
+        deferred.extend(held);
+        batches.push(now);
+    }
+
+    if let Some(tsc) = tsc {
+        for entry in deferred
+            .iter_mut()
+            .filter(|e| e.index == dbs_arch::msr::MSR_IA32_TSCDEADLINE && e.data == 0)
+        {
+            warn!("MSR_IA32_TSCDEADLINE is 0, arming it at TSC {:#x}", tsc);
+            entry.data = tsc;
+        }
+    }
+    batches.push(deferred);
+
+    batches
 }
 
 impl<'a> dbs_snapshot::Persist<'a> for Vcpu {
@@ -289,23 +355,15 @@ impl<'a> dbs_snapshot::Persist<'a> for Vcpu {
     ///
     /// Must be called on a freshly created, unconfigured vCPU before it runs.
     fn restore_state(&mut self, state: &VcpuState, _args: ()) -> Result<()> {
-        // Ordering matters (mirrors Firecracker): CPUID first as it gates
-        // MSR/XSAVE validation, events last.
+        // Ordering matters: CPUID gates MSR and XSAVE validation, SREGS
+        // restores the APIC base MSR the LAPIC depends on, the LAPIC must be
+        // configured before the timer MSRs are written, the TSC frequency
+        // must be in place before the TSC itself, and SET_REGS clears the
+        // pending exceptions SET_VCPU_EVENTS restores.
         self.cpuid = state.cpuid.clone();
         self.fd
             .set_cpuid2(&state.cpuid)
             .map_err(VcpuError::SetSupportedCpusFailed)?;
-        for chunk in &state.msrs {
-            let expected = chunk.as_fam_struct_ref().nmsrs as usize;
-            let nmsrs = self.fd.set_msrs(chunk).map_err(VcpuError::Kvm)?;
-            if nmsrs != expected {
-                return Err(VcpuError::MsrsIncomplete {
-                    id: self.id,
-                    processed: nmsrs,
-                    requested: expected,
-                });
-            }
-        }
         self.fd.set_sregs(&state.sregs).map_err(VcpuError::Kvm)?;
         // SAFETY: the xsave area was obtained from KVM_GET_XSAVE with the
         // standard fixed-size `kvm_xsave` region, so it cannot exceed the
@@ -318,6 +376,15 @@ impl<'a> dbs_snapshot::Persist<'a> for Vcpu {
             .set_debug_regs(&state.debug_regs)
             .map_err(VcpuError::Kvm)?;
         self.fd.set_lapic(&state.lapic).map_err(VcpuError::Kvm)?;
+        if let Some(tsc_khz) = state.tsc_khz {
+            // Best effort: hosts without KVM_CAP_TSC_CONTROL cannot set it.
+            if let Err(e) = self.fd.set_tsc_khz(tsc_khz) {
+                warn!("vcpu {}: failed to restore TSC frequency: {}", self.id, e);
+            }
+        }
+        for batch in plan_msr_restore(&state.msrs) {
+            self.set_msr_entries(&batch)?;
+        }
         self.fd
             .set_mp_state(state.mp_state)
             .map_err(VcpuError::Kvm)?;
@@ -325,12 +392,6 @@ impl<'a> dbs_snapshot::Persist<'a> for Vcpu {
         self.fd
             .set_vcpu_events(&state.vcpu_events)
             .map_err(VcpuError::Kvm)?;
-        if let Some(tsc_khz) = state.tsc_khz {
-            // Best effort: hosts without KVM_CAP_TSC_CONTROL cannot set it.
-            if let Err(e) = self.fd.set_tsc_khz(tsc_khz) {
-                warn!("vcpu {}: failed to restore TSC frequency: {}", self.id, e);
-            }
-        }
         Ok(())
     }
 }
@@ -419,5 +480,184 @@ mod tests {
             dst.fd.get_mp_state().unwrap().mp_state,
             state.mp_state.mp_state
         );
+    }
+
+    // Offset of the LVT timer register within `kvm_lapic_state::regs`, and the
+    // value of its mode field (bits 18:17) selecting TSC-deadline mode.
+    const APIC_LVTT: usize = 0x320;
+    const APIC_LVT_TIMER_TSCDEADLINE: u32 = 0b10 << 17;
+    // CPUID.01H:ECX.TSC_DEADLINE[bit 24].
+    const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
+
+    // KVM only widens the LVT timer mode field to two bits, and so only lets
+    // the LVT timer enter TSC-deadline mode, once the guest CPUID advertises
+    // the feature (see kvm_vcpu_after_set_cpuid()). `configure()` does this on
+    // a real vCPU; do the same here so the LAPIC below behaves as it does in
+    // production.
+    fn enable_tsc_deadline_cpuid(vcpu: &mut Vcpu) {
+        let mut cpuid = vcpu.cpuid.clone();
+        let leaf = cpuid
+            .as_mut_slice()
+            .iter_mut()
+            .find(|e| e.function == 1 && e.index == 0)
+            .expect("no CPUID leaf 1");
+        leaf.ecx |= CPUID_ECX_TSC_DEADLINE;
+        vcpu.fd.set_cpuid2(&cpuid).unwrap();
+        vcpu.cpuid = cpuid;
+    }
+
+    fn read_msr(vcpu: &Vcpu, index: u32) -> u64 {
+        let mut msrs = Msrs::from_entries(&[kvm_msr_entry {
+            index,
+            ..Default::default()
+        }])
+        .unwrap();
+        assert_eq!(vcpu.fd.get_msrs(&mut msrs).unwrap(), 1);
+        msrs.as_slice()[0].data
+    }
+
+    fn write_msr(vcpu: &Vcpu, index: u32, data: u64) {
+        let msrs = Msrs::from_entries(&[kvm_msr_entry {
+            index,
+            data,
+            ..Default::default()
+        }])
+        .unwrap();
+        assert_eq!(vcpu.fd.set_msrs(&msrs).unwrap(), 1);
+    }
+
+    // A vCPU whose LAPIC timer is armed in TSC-deadline mode must come back
+    // with that deadline still armed. KVM discards a MSR_IA32_TSCDEADLINE
+    // write while the LVT timer is in any other mode, so restoring the MSRs
+    // before KVM_SET_LAPIC silently drops the deadline and leaves the guest
+    // with a LAPIC timer that never fires again.
+    #[test]
+    fn test_restore_preserves_armed_tsc_deadline() {
+        skip_if_kvm_unaccessable!();
+
+        let (mut src, msr_list) = create_vcpu_with_irqchip();
+        enable_tsc_deadline_cpuid(&mut src);
+
+        // Put the LVT timer into TSC-deadline mode, which is what makes the
+        // deadline MSR writable, then arm a deadline far enough ahead that it
+        // cannot expire while the test runs.
+        let mut lapic = src.fd.get_lapic().unwrap();
+        let lvtt = (APIC_LVT_TIMER_TSCDEADLINE).to_le_bytes();
+        for (i, byte) in lvtt.iter().enumerate() {
+            lapic.regs[APIC_LVTT + i] = *byte as i8 as _;
+        }
+        src.fd.set_lapic(&lapic).unwrap();
+
+        let deadline = read_msr(&src, dbs_arch::msr::MSR_IA32_TSC) + (1 << 32);
+        write_msr(&src, dbs_arch::msr::MSR_IA32_TSCDEADLINE, deadline);
+        assert_eq!(
+            read_msr(&src, dbs_arch::msr::MSR_IA32_TSCDEADLINE),
+            deadline,
+            "the source vCPU did not accept the deadline"
+        );
+
+        let state = dbs_snapshot::Persist::save_state(&mut src, msr_list.as_slice()).unwrap();
+        assert!(
+            state
+                .msrs
+                .iter()
+                .flat_map(|chunk| chunk.as_slice().iter())
+                .any(|e| e.index == dbs_arch::msr::MSR_IA32_TSCDEADLINE && e.data == deadline),
+            "the snapshot did not capture the armed deadline"
+        );
+
+        let (mut dst, _) = create_vcpu_with_irqchip();
+        dbs_snapshot::Persist::restore_state(&mut dst, &state, ()).unwrap();
+
+        assert_eq!(
+            read_msr(&dst, dbs_arch::msr::MSR_IA32_TSCDEADLINE),
+            deadline,
+            "the restored vCPU has no armed LAPIC timer"
+        );
+    }
+    fn msr_chunk(entries: &[(u32, u64)]) -> Msrs {
+        let entries: Vec<kvm_msr_entry> = entries
+            .iter()
+            .map(|(index, data)| kvm_msr_entry {
+                index: *index,
+                data: *data,
+                ..Default::default()
+            })
+            .collect();
+        Msrs::from_entries(&entries).unwrap()
+    }
+
+    fn planned_order(chunks: &[Msrs]) -> Vec<kvm_msr_entry> {
+        plan_msr_restore(chunks).into_iter().flatten().collect()
+    }
+
+    // KVM arms the LAPIC timer against the guest TSC as it handles the write
+    // to MSR_IA32_TSCDEADLINE, but `build_msrs_list()` orders the deadline
+    // ahead of MSR_IA32_TSC, so a verbatim replay primes the timer against a
+    // TSC the restore has not set up yet. The plan has to invert that, whether
+    // the two land in one chunk or in separate ones.
+    #[test]
+    fn test_plan_msr_restore_defers_deadline_after_tsc() {
+        let one_chunk = [msr_chunk(&[
+            (dbs_arch::msr::MSR_IA32_TSCDEADLINE, 0x2000),
+            (dbs_arch::msr::MSR_IA32_SYSENTER_CS, 0x10),
+            (dbs_arch::msr::MSR_IA32_TSC, 0x1000),
+        ])];
+        let split = [
+            msr_chunk(&[(dbs_arch::msr::MSR_IA32_TSCDEADLINE, 0x2000)]),
+            msr_chunk(&[(dbs_arch::msr::MSR_IA32_TSC, 0x1000)]),
+        ];
+
+        for chunks in [one_chunk.as_slice(), split.as_slice()] {
+            let order: Vec<u32> = planned_order(chunks).iter().map(|e| e.index).collect();
+            let tsc = order
+                .iter()
+                .position(|i| *i == dbs_arch::msr::MSR_IA32_TSC)
+                .expect("the TSC was dropped from the plan");
+            let deadline = order
+                .iter()
+                .position(|i| *i == dbs_arch::msr::MSR_IA32_TSCDEADLINE)
+                .expect("the deadline was dropped from the plan");
+
+            assert!(
+                deadline > tsc,
+                "the deadline must be restored after the TSC, got {:?}",
+                order
+            );
+            let saved: usize = chunks.iter().map(|c| c.as_slice().len()).sum();
+            assert_eq!(order.len(), saved, "the plan changed the MSR count");
+        }
+    }
+
+    // A deadline captured as zero is a timer that expired without delivering
+    // its interrupt. Restoring the zero verbatim leaves the guest with nothing
+    // armed, so it is rearmed at the restored TSC to fire immediately.
+    #[test]
+    fn test_plan_msr_restore_arms_zero_deadline() {
+        let chunks = [msr_chunk(&[
+            (dbs_arch::msr::MSR_IA32_TSCDEADLINE, 0),
+            (dbs_arch::msr::MSR_IA32_TSC, 0x1000),
+        ])];
+
+        let deadline = planned_order(&chunks)
+            .into_iter()
+            .find(|e| e.index == dbs_arch::msr::MSR_IA32_TSCDEADLINE)
+            .expect("the deadline was dropped from the plan");
+        assert_eq!(deadline.data, 0x1000);
+    }
+
+    // Only a zero deadline is rewritten; an armed one is restored untouched.
+    #[test]
+    fn test_plan_msr_restore_keeps_armed_deadline() {
+        let chunks = [msr_chunk(&[
+            (dbs_arch::msr::MSR_IA32_TSCDEADLINE, 0x2000),
+            (dbs_arch::msr::MSR_IA32_TSC, 0x1000),
+        ])];
+
+        let deadline = planned_order(&chunks)
+            .into_iter()
+            .find(|e| e.index == dbs_arch::msr::MSR_IA32_TSCDEADLINE)
+            .expect("the deadline was dropped from the plan");
+        assert_eq!(deadline.data, 0x2000);
     }
 }

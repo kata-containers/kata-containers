@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Helm template tests for kata-deploy scheduling options (podLabels,
-# podAnnotations, affinity). No cluster required.
+# podAnnotations, affinity, imagePullSecrets). No cluster required.
 #
 # The pod-template metadata (podLabels, podAnnotations) is asserted in both
 # deployment modes: on the DaemonSet pod template (deploymentMode: daemonset)
@@ -69,6 +69,40 @@ refute_match() {
 		echo "unexpected in rendered output: ${pattern}" >&2
 		return 1
 	fi
+}
+
+# Render every workload the chart has in one deployment mode. The opt-in ones
+# are switched on so they are covered too. NFD is a subchart with a pull-secret
+# value of its own, so it stays out.
+render_all_workloads() {
+	local mode="${1}"
+	shift
+	local -a mode_values=()
+	if [[ "${mode}" == "job" ]]; then
+		mode_values=(--set job.reconcile.enabled=true)
+	fi
+	helm template kata-deploy "${CHART_PATH}" \
+		--set image.reference=quay.io/kata-containers/kata-deploy \
+		--set image.tag=latest \
+		--set "deploymentMode=${mode}" \
+		--set monitor.enabled=true \
+		--set-string verification.pod='apiVersion: v1' \
+		--set node-feature-discovery.enabled=false \
+		"${mode_values[@]}" \
+		"$@"
+}
+
+# The "# Source:" of every workload document (DaemonSet, Deployment, Job,
+# CronJob) in a rendered stream that carries no imagePullSecrets.
+workloads_without_pull_secrets() {
+	awk '
+		function flush() { if (workload && !secret) { print src } workload = 0; secret = 0 }
+		/^---$/ { flush(); next }
+		/^# Source: / { src = $3 }
+		/^kind: (DaemonSet|Deployment|Job|CronJob)$/ { workload = 1 }
+		/^ *imagePullSecrets:$/ { secret = 1 }
+		END { flush() }
+	'
 }
 
 # Extract one per-node Job manifest (stage: install|cleanup) from the rendered
@@ -895,4 +929,36 @@ EOF
 		--set job.ttlSecondsAfterFinished=30
 	[ "${status}" -ne 0 ]
 	echo "${output}" | grep -q "too short for the dispatcher to observe"
+}
+
+@test "Helm template: imagePullSecrets reach every workload the chart renders" {
+	# A private mirror is all or nothing: one pod template without the secret is
+	# one workload stuck in ImagePullBackOff, and for a hook Job that fails the
+	# install (verify) or the uninstall (rb-cleanup) outright. The hooks that run
+	# kubectlImage rather than the kata-deploy image are the easy ones to miss.
+	local mode rendered missing
+	for mode in daemonset job; do
+		rendered=$(render_all_workloads "${mode}" --set 'imagePullSecrets[0].name=regcred')
+		missing=$(echo "${rendered}" | workloads_without_pull_secrets)
+		if [[ -n "${missing}" ]]; then
+			echo "workloads rendered without imagePullSecrets (${mode} mode):" >&2
+			echo "${missing}" >&2
+			return 1
+		fi
+	done
+
+	# The per-node Jobs are strings in a ConfigMap, not documents of their own,
+	# so the walk above does not see them.
+	render_job_templates --set 'imagePullSecrets[0].name=regcred'
+	local stage
+	for stage in install cleanup; do
+		extract_pernode_job "${stage}" | grep -A1 'imagePullSecrets:' | grep -q -- '- name: regcred'
+	done
+}
+
+@test "Helm template: no imagePullSecrets are rendered unless set" {
+	local mode
+	for mode in daemonset job; do
+		refute_match "$(render_all_workloads "${mode}")" 'imagePullSecrets'
+	done
 }

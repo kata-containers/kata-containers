@@ -10,7 +10,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/containerd/cgroups/stats/v1"
+	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"

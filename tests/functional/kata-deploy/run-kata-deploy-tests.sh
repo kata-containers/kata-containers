@@ -16,7 +16,7 @@ source "${kata_deploy_dir}/../../common.bash"
 export BATS_TEST_FAIL_FAST="${BATS_TEST_FAIL_FAST:-no}"
 
 if [[ -n "${KATA_DEPLOY_TEST_UNION:-}" ]]; then
-	KATA_DEPLOY_TEST_UNION=("${KATA_DEPLOY_TEST_UNION}")
+	read -r -a KATA_DEPLOY_TEST_UNION <<< "${KATA_DEPLOY_TEST_UNION}"
 else
 	KATA_DEPLOY_TEST_UNION=()
 
@@ -29,13 +29,18 @@ else
 	KATA_DEPLOY_TEST_UNION+=( \
 		"kata-deploy.bats" \
 		"kata-deploy-custom-runtimes.bats" \
+		"kata-deploy-variant-toggle.bats" \
 		"kata-deploy-lifecycle.bats" \
 		"kata-deploy-scheduling.bats" \
 		"kata-deploy-tee-keys.bats" \
 		"kata-deploy-distribution.bats" \
 		"kata-deploy-privileges.bats" \
+		"kata-deploy-reporting.bats" \
 		"kata-deploy-multi-install.bats" \
+		"kata-deploy-user-drop-in.bats" \
 		"kata-deploy-reconcile.bats" \
+		"kata-deploy-node-binaries.bats" \
+		"kata-deploy-installation-prefix.bats" \
 	)
 fi
 

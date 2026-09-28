@@ -231,6 +231,11 @@ pub struct Config {
     /// removes the taint as its final install step, closing the window in which a
     /// pod could land on a not-yet-ready node.
     pub startup_taints: Vec<String>,
+    /// Extra containerd `pod_annotations` patterns for every runtime.
+    pub containerd_extra_pod_annotations: Vec<String>,
+    /// Extra containerd `pod_annotations` patterns per shim, as
+    /// `shim:pattern1,pattern2` entries.
+    pub containerd_shim_extra_pod_annotations_for_arch: Vec<String>,
     /// This node's `status.nodeInfo.containerRuntimeVersion`, supplied by
     /// whoever launched this process (`CONTAINER_RUNTIME_VERSION`).
     ///
@@ -240,12 +245,16 @@ pub struct Config {
     /// of the install, and the less they can reach the better. Absent (the
     /// DaemonSet), the value is read from the Node.
     pub container_runtime_version: Option<String>,
-    /// The Kubernetes flavour the chart was configured for (`K8S_DISTRIBUTION`),
-    /// which is what chose the host directory mounted at /etc/containerd.
+    /// The Kubernetes flavour the chart was configured for (`K8S_DISTRIBUTION`).
     ///
-    /// Absent when the operator pinned that directory themselves, or when this
-    /// process was not started by the chart.
+    /// Absent when this process was not started by the chart.
     pub k8s_distribution: Option<String>,
+    /// The host directory holding containerd's configuration, when the operator
+    /// pinned it themselves (`CONTAINERD_CONFIG_DIR`). Its presence means the
+    /// flavour above no longer chose that directory, so the two cannot be
+    /// cross-checked against each other. Never used as a path: it is mounted at
+    /// /etc/containerd in this pod either way.
+    pub containerd_config_dir: Option<String>,
 }
 
 impl Config {
@@ -458,6 +467,25 @@ impl Config {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        let containerd_config_dir = env::var("CONTAINERD_CONFIG_DIR")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let containerd_extra_pod_annotations = env::var("CONTAINERD_EXTRA_POD_ANNOTATIONS")
+            .unwrap_or_default()
+            .split([',', ' ', '\t', '\n'])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let containerd_shim_extra_pod_annotations_for_arch =
+            get_arch_var("CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS", "", &arch)
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+
         let config = Config {
             node_name,
             debug,
@@ -493,6 +521,9 @@ impl Config {
             startup_taints,
             container_runtime_version,
             k8s_distribution,
+            containerd_config_dir,
+            containerd_extra_pod_annotations,
+            containerd_shim_extra_pod_annotations_for_arch,
         };
 
         // Validate the configuration
@@ -569,6 +600,20 @@ impl Config {
                             self.shims_for_arch.join(", ")
                         ));
                     }
+                }
+            }
+        }
+
+        for annotation in &self.containerd_shim_extra_pod_annotations_for_arch {
+            if let Some((shim, _)) = annotation.split_once(':') {
+                let shim = shim.trim();
+                if !shim.is_empty() && !self.shims_for_arch.contains(&shim.to_string()) {
+                    return Err(anyhow::anyhow!(
+                        "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS for current architecture references unknown shim '{}'. \
+                         Valid shims: [{}]",
+                        shim,
+                        self.shims_for_arch.join(", ")
+                    ));
                 }
             }
         }
@@ -720,6 +765,23 @@ impl Config {
         Ok(())
     }
 
+    /// The global patterns plus `shim`'s own.
+    pub fn extra_pod_annotations_for(&self, shim: &str) -> Vec<String> {
+        let mut extras = self.containerd_extra_pod_annotations.clone();
+        for entry in &self.containerd_shim_extra_pod_annotations_for_arch {
+            if let Some((name, rest)) = entry.split_once(':') {
+                if name == shim {
+                    extras.extend(
+                        rest.split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty()),
+                    );
+                }
+            }
+        }
+        extras
+    }
+
     /// `full` prints the resolved configuration too. See its caller for why the
     /// later stages of a staged run leave it out.
     pub fn print_info(&self, action: &str, full: bool) {
@@ -765,6 +827,17 @@ impl Config {
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
+        info!("* K8S_DISTRIBUTION: {:?}", self.k8s_distribution);
+        info!("* CONTAINERD_CONFIG_DIR: {:?}", self.containerd_config_dir);
+        info!(
+            "* CONTAINERD_EXTRA_POD_ANNOTATIONS: {}",
+            self.containerd_extra_pod_annotations.join(",")
+        );
+        info!(
+            "* CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS: {}",
+            self.containerd_shim_extra_pod_annotations_for_arch
+                .join(" ")
+        );
         info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
         info!(
             "* CONTAINERD_USER_DROP_IN_SOURCE_FILE: {:?}",
@@ -808,6 +881,15 @@ impl Config {
         }
     }
 
+    /// One per installation: uninstall removes the whole drop-in, so a name two
+    /// of them share takes the other's runtime handlers with it.
+    fn drop_in_file_name(&self) -> String {
+        match self.multi_install_suffix.as_ref() {
+            Some(suffix) => format!("kata-deploy-{suffix}.toml"),
+            None => "kata-deploy.toml".to_string(),
+        }
+    }
+
     /// Get containerd configuration file paths based on runtime type and containerd version
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
@@ -829,7 +911,7 @@ impl Config {
                 config_file: "/etc/containerd/containerd.toml".to_string(),
                 backup_file: "/etc/containerd/containerd.toml.bak".to_string(), // Never used, but needed for consistency
                 imports_file: None, // k0s auto-loads from containerd.d/, imports not needed
-                drop_in_file: "/etc/containerd/containerd.d/kata-deploy.toml".to_string(),
+                drop_in_file: format!("/etc/containerd/containerd.d/{}", self.drop_in_file_name()),
                 use_drop_in,
                 plugin_id: None,
             },
@@ -874,9 +956,10 @@ impl Config {
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/etc/containerd".to_string());
                 let drop_in_file = format!(
-                    "{}/{}/kata-deploy.toml",
+                    "{}/{}/{}",
                     template_dir,
                     k3s_rke2_drop_in_dir_name(use_v3),
+                    self.drop_in_file_name(),
                 );
                 let backup_file = format!("{config_file}.bak");
                 ContainerdPaths {
@@ -901,11 +984,7 @@ impl Config {
                     .unwrap_or(false);
 
                 let (imports_file, drop_in_file) = if supports_conf_d {
-                    let drop_in = if let Some(ref suffix) = self.multi_install_suffix {
-                        format!("/etc/containerd/conf.d/kata-deploy-{suffix}.toml")
-                    } else {
-                        "/etc/containerd/conf.d/kata-deploy.toml".to_string()
-                    };
+                    let drop_in = format!("/etc/containerd/conf.d/{}", self.drop_in_file_name());
                     (None, drop_in)
                 } else {
                     (
@@ -1205,8 +1284,27 @@ mod tests {
     //! `cargo test -p kata-deploy config::tests -- --test-threads=1`.
 
     use super::*;
+    use crate::artifacts::install::tests::test_config;
     use rstest::rstest;
     use serial_test::serial;
+
+    /// k0s and K3s name the drop-in themselves, so the suffix has to reach
+    /// those names too: uninstall removes the file, not the stanzas in it.
+    #[rstest]
+    #[case::unsuffixed(None, "/etc/containerd/containerd.d/kata-deploy.toml")]
+    #[case::suffixed(Some("beta"), "/etc/containerd/containerd.d/kata-deploy-beta.toml")]
+    #[tokio::test]
+    async fn k0s_drop_in_is_this_installations_own(
+        #[case] suffix: Option<&str>,
+        #[case] expected: &str,
+    ) {
+        let mut config = test_config("qemu", "/opt/kata");
+        config.multi_install_suffix = suffix.map(str::to_string);
+
+        let paths = config.get_containerd_paths("k0s-worker").await.unwrap();
+
+        assert_eq!(paths.drop_in_file, expected);
+    }
 
     // NOTE: Env-var tests use #[serial] (see above) for safe parallel execution with other modules.
 
@@ -1251,6 +1349,12 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
             "CONTAINERD_CONFIG_FILE_NAME",
+            "CONTAINERD_EXTRA_POD_ANNOTATIONS",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_X86_64",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_AARCH64",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_S390X",
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS_PPC64LE",
             "STARTUP_TAINTS",
             "CUSTOM_RUNTIMES_ENABLED",
             "DEVKIT",
@@ -2111,6 +2215,37 @@ mod tests {
         assert_eq!(shim_handler("qemu", None), "kata-qemu");
         assert_eq!(shim_handler("qemu", Some("")), "kata-qemu");
         assert_eq!(shim_handler("qemu", Some("dev")), "kata-qemu-dev");
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_extra_pod_annotations_are_scoped_by_shim() {
+        setup_minimal_env();
+        std::env::set_var(
+            "CONTAINERD_EXTRA_POD_ANNOTATIONS",
+            "sgx.intel.com/epc,example.com/global-*",
+        );
+        set_arch_var(
+            "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS",
+            "qemu:example.com/qemu-*,example.com/qemu-exact",
+        );
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.extra_pod_annotations_for("qemu"),
+            vec![
+                "sgx.intel.com/epc",
+                "example.com/global-*",
+                "example.com/qemu-*",
+                "example.com/qemu-exact",
+            ]
+        );
+        assert_eq!(
+            config.extra_pod_annotations_for("clh"),
+            vec!["sgx.intel.com/epc", "example.com/global-*"]
+        );
+
+        cleanup_env_vars();
     }
 
     #[serial]

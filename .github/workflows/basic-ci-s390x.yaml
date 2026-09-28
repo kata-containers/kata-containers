@@ -36,6 +36,7 @@ jobs:
     # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
     if: false
     runs-on: s390x-large
+    timeout-minutes: 40
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -100,6 +101,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: s390x-large
+    timeout-minutes: 25
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -146,6 +148,7 @@ jobs:
           - qemu
           - qemu-runtime-rs
     runs-on: s390x-large
+    timeout-minutes: 15
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:

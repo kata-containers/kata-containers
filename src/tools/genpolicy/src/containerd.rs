@@ -168,9 +168,17 @@ pub fn get_linux(privileged_container: bool) -> policy::KataLinux {
     }
 }
 
-pub fn get_default_unix_env(env: &mut Vec<String>) {
-    assert!(env.is_empty());
+/// The value of defaultUnixEnv from containerd.
+pub const DEFAULT_PATH_ENV: &str =
+    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
-    // Return the value of defaultUnixEnv from containerd.
-    env.push("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+/// Adds containerd's default PATH unless the image env already sets one.
+/// The CRI plugin applies oci.WithDefaultPathEnv before the image env, so
+/// every container gets a PATH: the image's when the image config defines
+/// one, containerd's default otherwise - even when the image config defines
+/// other variables.
+pub fn add_default_path_env(env: &mut Vec<String>) {
+    if !env.iter().any(|var| var.starts_with("PATH=")) {
+        env.push(DEFAULT_PATH_ENV.to_string());
+    }
 }

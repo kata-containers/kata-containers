@@ -1,40 +1,58 @@
-[
-  {
-    "allowed": true,
-    "description": "no pidns",
-    "kind": "CreateSandboxRequest",
-    "request": {
-      "sandbox_pidns": false
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "sandbox_pidns": false
+      }
     }
   },
-  {
-    "allowed": false,
-    "description": "pidns",
-    "kind": "CreateSandboxRequest",
-    "request": {
-      "sandbox_pidns": true
-    }
-  },
-  {
-    "allowed": false,
-    "description": "kernel modules",
-    "kind": "CreateSandboxRequest",
-    "request": {
-      "kernel_modules": [
+  "cases": [
+    {
+      "description": "no pidns",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "pidns",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
         {
-          "name": "evil.ko"
+          "op": "replace",
+          "path": "/sandbox_pidns",
+          "value": true
         }
-      ],
-      "sandbox_pidns": false
+      ]
+    },
+    {
+      "description": "kernel modules",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/kernel_modules",
+          "value": [
+            {
+              "name": "evil.ko"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "guest hooks",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/guest_hook_path",
+          "value": "/attacker/controlled/path"
+        }
+      ]
     }
-  },
-  {
-    "allowed": false,
-    "description": "guest hooks",
-    "kind": "CreateSandboxRequest",
-    "request": {
-      "guest_hook_path": "/attacker/controlled/path",
-      "sandbox_pidns": false
-    }
-  }
-]
+  ]
+}

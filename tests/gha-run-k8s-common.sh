@@ -22,6 +22,13 @@ HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
 HELM_AGENT_HTTPS_PROXY="${HELM_AGENT_HTTPS_PROXY:-}"
 HELM_AGENT_NO_PROXY="${HELM_AGENT_NO_PROXY:-}"
 HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
+# Runtime annotations the suites set on their pods. Only the hypervisor ones a
+# configuration enables are forwarded by default, and these are not hypervisor
+# annotations, so containerd would drop them before the shim ever saw them.
+HELM_EXTRA_POD_ANNOTATIONS="${HELM_EXTRA_POD_ANNOTATIONS:-\
+io.katacontainers.config.runtime.create_container_timeout,\
+io.katacontainers.config.runtime.disable_guest_seccomp,\
+io.katacontainers.config.runtime.sandbox_cgroup_only}"
 HELM_CREATE_RUNTIME_CLASSES="${HELM_CREATE_RUNTIME_CLASSES:-}"
 HELM_CREATE_DEFAULT_RUNTIME_CLASS="${HELM_CREATE_DEFAULT_RUNTIME_CLASS:-}"
 HELM_DEBUG="${HELM_DEBUG:-}"
@@ -45,6 +52,41 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 EROFS_SNAPSHOTTER_MODE="${EROFS_SNAPSHOTTER_MODE:-}"
 EROFS_MERGE_MODE="${EROFS_MERGE_MODE:-}"
+# What kata-deploy takes erofs-utils from, the runners having none new enough of
+# their own. Only amd64 and arm64 are published, which is every runner the erofs
+# jobs use.
+EROFS_UTILS_IMAGE="${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}"
+
+helm_release_registered() {
+	helm status "${1}" -n "${2}" &>/dev/null
+}
+
+# `helm upgrade --install` installs only when there is no release at all; one
+# with no deployed revision takes the upgrade path, which refuses.
+helm_release_has_deployed_revision() {
+	helm history "${1}" -n "${2}" -o json 2>/dev/null |
+		jq -e 'any(.[]; .status == "deployed")' &>/dev/null
+}
+
+# A last resort: an uninstall re-runs the release's own pre-delete hooks, so a
+# release whose hooks cannot succeed is otherwise never removed. The nodes keep
+# whatever the install put on them.
+helm_purge_release() {
+	local release_name="${1}"
+	local namespace="${2}"
+
+	echo "Purging the '${release_name}' release with its hooks skipped" >&2
+	helm uninstall "${release_name}" -n "${namespace}" \
+		--ignore-not-found --no-hooks --wait --timeout 5m || true
+
+	helm_release_registered "${release_name}" "${namespace}" || return 0
+
+	# helm will not touch a release it cannot uninstall, and its storage for one
+	# is a Secret per revision.
+	echo "The '${release_name}' release outlived --no-hooks; deleting its storage" >&2
+	kubectl -n "${namespace}" delete secret \
+		-l "owner=helm,name=${release_name}" --ignore-not-found || true
+}
 
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
@@ -70,6 +112,47 @@ wait_for_api_and_retry_uninstall() {
 
 	helm uninstall "${release_name}" -n "${namespace}" \
 		--ignore-not-found --wait --timeout 5m || true
+
+	# A release left registered fails the next job, not this one.
+	if helm_release_registered "${release_name}" "${namespace}"; then
+		helm_purge_release "${release_name}" "${namespace}"
+	fi
+}
+
+# True when every node reports Ready. An unreachable API answers nothing, so
+# that counts as false here and leaves the caller to ask again.
+all_nodes_ready() {
+	local ready
+
+	ready="$(kubectl get nodes -o json --request-timeout=10s 2>/dev/null |
+		jq -r '.items[].status.conditions[] | select(.type == "Ready") | .status')" ||
+		return 1
+
+	[[ -n "${ready}" ]] || return 1
+
+	! grep -qv '^True$' <<< "${ready}"
+}
+
+# Wait for every node to report Ready, which after an uninstall means waiting
+# for the API to come back too.
+#
+# `kubectl wait` is a single watch and gives up when its connection breaks,
+# which is exactly what a control plane restarting under it does - and on
+# microk8s the control plane runs on the very containerd the SIGTERM cleanup
+# restarts. Polling makes an API that is still on its way back a retry rather
+# than a verdict.
+# Arguments:
+#   $1 - (Optional) seconds to wait, default 300
+wait_for_nodes_ready() {
+	local timeout="${1:-300}"
+
+	if waitForProcess "${timeout}" 5 all_nodes_ready; then
+		return 0
+	fi
+
+	echo "not every node became Ready within ${timeout}s" >&2
+	kubectl get nodes || true
+	return 1
 }
 
 function _print_instance_type() {
@@ -207,8 +290,7 @@ function delete_cluster() {
 	rg="$(_print_rg_name "${test_type}")"
 
 	if [[ "$(az group exists -g "${rg}")" == "true" ]]; then
-		az group delete -g "${rg}" --yes || \
-			warn "Failed to delete the resource group ${rg}"
+		az group delete -g "${rg}" --yes
 	fi
 }
 
@@ -222,20 +304,21 @@ function get_nodes_and_pods_info() {
 	kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
+function setup_crio() {
+	local k0s_latest_url
+	k0s_latest_url=$(curl -sI -L -o /dev/null -w '%{url_effective}' https://github.com/k0sproject/k0s/releases/latest)
+	local k0s_version=${k0s_latest_url##*/}
+	local crio_version=${k0s_version%.*+*}
+	crio_version=${crio_version#v}
+
+	install_crio "${crio_version}"
+	overwrite_crio_config
+
+	install_cri_tools
+}
+
 function deploy_k0s() {
-	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
-		url=$(get_from_kata_deps ".externals.k0s.url")
-
-		k0s_version_param=""
-		version=$(get_from_kata_deps ".externals.k0s.version")
-		if [[ -n "${version}" ]]; then
-			k0s_version_param="K0S_VERSION=${version}"
-		fi
-
-		curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
-	else
-		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
-	fi
+	curl -sSLf https://get.k0s.sh | sudo sh
 
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.
@@ -323,7 +406,7 @@ function create_cluster_kcli() {
 		-P ctlplanes="${CLUSTER_CONTROL_NODES:-1}" \
 		-P workers="${CLUSTER_WORKERS:-1}" \
 		-P network="${LIBVIRT_NETWORK:-default}" \
-		-P image="${CLUSTER_IMAGE:-ubuntu2204}" \
+		-P image="${CLUSTER_IMAGE:-ubuntu2404}" \
 		-P sdn=flannel \
 		-P nfs=false \
 		-P disk_size="${CLUSTER_DISK_SIZE:-20}" \
@@ -572,19 +655,19 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		kubeadm|vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				install_erofs_utils
+				# No erofs-utils is installed on the node on purpose: these
+				# runners package nothing new enough, which is the very case
+				# nodeBinaries exists for, so the install has to bring its
+				# own.
 
 				# fsverity is only needed here because, unlike
 				# the docker and nerdctl jobs, these do enable
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# The kata-deploy host module job leaves these unloaded, so that
-				# its own privileged stage is what has to load them.
-				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]] &&
-					[[ "${KATA_DEPLOY_MANAGES_HOST_MODULES:-no}" != "yes" ]]; then
-					load_dm_verity_modules
-				fi
+				# erofs, loop and the dm-verity targets are left unloaded on
+				# purpose: kata-deploy's own privileged stage loads and persists
+				# them, and pre-loading them here would hide it failing to.
 
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
@@ -899,6 +982,12 @@ function helm_helper() {
 			done
 		fi
 
+		# The node has no erofs-utils of its own; see deploy_k8s.
+		if [[ "${SNAPSHOTTER}" == "erofs" ]]; then
+			yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
+			yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
+		fi
+
 		if [[ -n "${EROFS_SNAPSHOTTER_MODE}" ]]; then
 			if [[ "${SNAPSHOTTER}" != "erofs" ]]; then
 				die "EROFS_SNAPSHOTTER_MODE is only supported with SNAPSHOTTER=erofs"
@@ -1020,6 +1109,17 @@ function helm_helper() {
 							yq -i ".shims.${shim}.allowedHypervisorAnnotations += [\"${annotation}\"]" "${values_yaml}"
 						fi
 					done
+				fi
+			done
+		fi
+
+		if [[ -n "${HELM_EXTRA_POD_ANNOTATIONS}" ]]; then
+			yq -i '.containerd.extraPodAnnotations = []' "${values_yaml}"
+			IFS=',' read -ra extra_annotations <<< "${HELM_EXTRA_POD_ANNOTATIONS}"
+			for annotation in "${extra_annotations[@]}"; do
+				annotation=$(echo "${annotation}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+				if [[ -n "${annotation}" ]]; then
+					yq -i ".containerd.extraPodAnnotations += [\"${annotation}\"]" "${values_yaml}"
 				fi
 			done
 		fi

@@ -47,9 +47,8 @@
   "devkit" -> kata-<shim>-devkit),
   useShimNodeSelectors, nfdRulesActive.
 
-  nfdRulesActive is passed in rather than resolved here: answering it involves
-  listing every DaemonSet and Deployment in the cluster, and this template is
-  rendered once per shim, per variant.
+  Resolve NFD once and pass both flags because this template runs for every
+  shim and variant.
 
   Name/handler precedence: variant > multiInstallSuffix > nameOverride > default.
   A variant RuntimeClass mirrors the handler kata-deploy registers for the same
@@ -168,9 +167,7 @@ scheduling:
 {{- $multiInstallSuffix := .Values.env.multiInstallSuffix }}
 {{- $createDefaultRC := .Values.runtimeClasses.createDefault }}
 {{- $defaultRCName := .Values.runtimeClasses.defaultName }}
-{{- $nfdEnabled := index .Values "node-feature-discovery" "enabled" | default false }}
-{{- $externalNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
-{{- $useShimNodeSelectors := or $nfdEnabled (ne $externalNFDNamespace "") -}}
+{{- $useShimNodeSelectors := eq (include "kata-deploy.nfdPresent" . | trim) "true" -}}
 {{- $nfdRulesActive := eq (include "kata-deploy.nfdRulesActive" . | trim) "true" -}}
 
 {{- $disableAll := .Values.shims.disableAll | default false -}}

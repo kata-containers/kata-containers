@@ -9,6 +9,31 @@ When used with Kata Containers `runtime-rs`, the EROFS snapshotter enables
 entirely. This delivers lower overhead, better performance, and smaller memory
 footprints compared to traditional shared-filesystem approaches.
 
+> **Deploying with kata-deploy? It does all of this for you**: a
+> [kata-deploy](../helm-configuration.md) deployment in `job` mode sets all of this
+> up on every node it selects: containerd's EROFS snapshotter and differ
+> configuration, the shims you enable pointed at the snapshotter, and the `erofs`
+> and dm-verity modules loaded and recorded so they come back after a reboot.
+>
+> Those settings need erofs-utils 1.8.2 or newer. Where a node packages something
+> older, or nothing at all, [`nodeBinaries`](../helm-configuration.md#nodebinaries)
+> takes it from a container image instead:
+>
+> ```yaml
+> deploymentMode: job
+> snapshotter:
+>   setup: ["erofs"]
+> nodeBinaries:
+>   erofs-utils:
+>     image: quay.io/kata-containers/erofs-utils:1.9.3
+>     binaries: [mkfs.erofs, dump.erofs, fsck.erofs]
+> ```
+>
+> [`try-kata-nvidia-cpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-cpu.values.yaml)
+> sets the EROFS side of this up and carries that block commented out, to uncomment
+> on nodes needing it. Read on for what any of it means, or to set a host up without
+> kata-deploy.
+
 ## Quick Start Guide
 
 This section provides a quick overview of the steps to get started with EROFS snapshotter and Kata Containers. For detailed instructions, see the [Installation Guide](#installation-guide) section.

@@ -100,6 +100,9 @@ setup() {
 }
 
 @test "Empty dir volume sizeLimit evicts pod" {
+	# CRI-O does not report stats for kata (VM-based) sandboxes,
+	# so kubelet cannot detect sizeLimit violations and never evicts the pod.
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "sizeLimit eviction not supported: CRI-O omits kata pods from stats"
 	volume_name="host-empty-vol"
 	mountpoint="/host/cache"
 	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"

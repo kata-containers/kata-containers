@@ -162,6 +162,43 @@ pub fn delete_toml_value(file_path: &Path, path: &str) -> Result<()> {
     Ok(())
 }
 
+/// The keys of the table at `path`, or an empty Vec if it does not exist.
+pub fn get_toml_table_keys(file_path: &Path, path: &str) -> Result<Vec<String>> {
+    let content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
+
+    let (_header, toml_content) = split_non_toml_header(&content);
+    let doc = toml_content
+        .parse::<DocumentMut>()
+        .context("Failed to parse TOML")?;
+
+    let parts = parse_toml_path(path)?;
+
+    let mut current_table = doc.as_table();
+    for (i, part) in parts.iter().enumerate() {
+        let Some(item) = current_table.get(part.as_str()) else {
+            return Ok(Vec::new());
+        };
+
+        if i == parts.len() - 1 {
+            return match item {
+                Item::Table(table) => Ok(table.iter().map(|(key, _)| key.to_string()).collect()),
+                Item::Value(Value::InlineTable(table)) => {
+                    Ok(table.iter().map(|(key, _)| key.to_string()).collect())
+                }
+                _ => Err(anyhow::anyhow!("Path '{path}' is not a table")),
+            };
+        }
+
+        match item {
+            Item::Table(table) => current_table = table,
+            _ => return Ok(Vec::new()),
+        }
+    }
+
+    Ok(Vec::new())
+}
+
 /// Get a TOML value at a given path
 pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
     let content = std::fs::read_to_string(file_path)
@@ -390,6 +427,46 @@ pub fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
     }
 
     Ok(Vec::new())
+}
+
+/// `enable_annotations` lists keyed by hypervisor name.
+///
+/// Only the hypervisors setting the key are returned: a drop-in's empty list
+/// means something different from its absence.
+pub fn get_hypervisor_enable_annotations(
+    file_path: &Path,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    let content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
+
+    let (_header, toml_content) = split_non_toml_header(&content);
+    let doc = toml_content
+        .parse::<DocumentMut>()
+        .context("Failed to parse TOML")?;
+
+    let mut result = std::collections::BTreeMap::new();
+    let Some(hypervisor) = doc.get("hypervisor").and_then(|item| item.as_table()) else {
+        return Ok(result);
+    };
+
+    for (name, item) in hypervisor.iter() {
+        let Some(table) = item.as_table() else {
+            continue;
+        };
+        let Some(Item::Value(Value::Array(arr))) = table.get("enable_annotations") else {
+            continue;
+        };
+        let values: Vec<String> = arr
+            .iter()
+            .map(|v| match v {
+                Value::String(s) => s.value().to_string(),
+                _ => format!("{v:?}"),
+            })
+            .collect();
+        result.insert(name.to_string(), values);
+    }
+
+    Ok(result)
 }
 
 /// Set a TOML array value
@@ -756,6 +833,24 @@ mod tests {
 
         let values = get_toml_array(path, "hypervisor.qemu.enable_annotations").unwrap();
         assert_eq!(values.len(), 0);
+    }
+
+    #[test]
+    fn test_get_hypervisor_enable_annotations() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(
+            path,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\", \"cc_init_data\"]\n[hypervisor.clh]\npath = \"/usr/bin/cloud-hypervisor\"\n",
+        )
+        .unwrap();
+
+        let values = get_hypervisor_enable_annotations(path).unwrap();
+        assert_eq!(
+            values.get("qemu").unwrap(),
+            &vec!["default_vcpus".to_string(), "cc_init_data".to_string()]
+        );
+        assert!(!values.contains_key("clh"));
     }
 
     #[test]
@@ -1754,6 +1849,50 @@ imports = ["/etc/containerd/conf.d/*.toml", "/opt/kata/containerd/config.d/kata-
         )
         .unwrap();
         assert_eq!(runtime_type, "io.containerd.kata-qemu.v2");
+    }
+
+    #[test]
+    fn test_get_toml_table_keys() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        std::fs::write(
+            temp_path,
+            concat!(
+                "[plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu]\n",
+                "runtime_type = \"io.containerd.kata-qemu.v2\"\n",
+                "[plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.options]\n",
+                "ConfigPath = \"/opt/kata/configuration.toml\"\n",
+                "[plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.runc]\n",
+                "runtime_type = \"io.containerd.runc.v2\"\n",
+            ),
+        )
+        .unwrap();
+
+        let keys = get_toml_table_keys(
+            temp_path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes",
+        )
+        .unwrap();
+        assert_eq!(keys, vec!["kata-qemu", "runc"]);
+
+        assert!(get_toml_table_keys(temp_path, ".plugins.\"nope\".runtimes")
+            .unwrap()
+            .is_empty());
+        assert!(get_toml_table_keys(
+            temp_path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.runc.runtime_type"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_get_toml_table_keys_inline_table() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        std::fs::write(temp_path, "runtimes = { kata-qemu = {}, runc = {} }\n").unwrap();
+
+        let keys = get_toml_table_keys(temp_path, ".runtimes").unwrap();
+        assert_eq!(keys, vec!["kata-qemu", "runc"]);
     }
 
     #[test]

@@ -9,6 +9,7 @@ use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -20,11 +21,85 @@ struct ContainerdRuntimeParams {
     /// Path to the kata configuration file
     config_path: String,
     /// Pod annotations to allow
-    pod_annotations: &'static str,
+    pod_annotations: String,
     /// Container annotations to allow
-    container_annotations: &'static str,
+    container_annotations: String,
     /// Optional snapshotter to configure
     snapshotter: Option<String>,
+}
+
+const DEFAULT_CONTAINER_ANNOTATIONS: &str = "[\"io.kubernetes.container.terminationMessage*\"]";
+
+fn format_toml_string_array(values: &[String]) -> String {
+    let quoted: Vec<String> = values.iter().map(|v| format!("\"{v}\"")).collect();
+    format!("[{}]", quoted.join(", "))
+}
+
+fn hypervisor_annotation_pattern(name: &str) -> String {
+    let name = name.trim();
+    if name.starts_with("io.katacontainers.") {
+        name.to_string()
+    } else {
+        format!("io.katacontainers.config.hypervisor.{name}")
+    }
+}
+
+/// Read in the order Kata itself merges them: a drop-in setting the key
+/// replaces that hypervisor's list rather than adding to it.
+fn effective_enable_annotations(kata_config_file: &Path) -> Result<Vec<String>> {
+    let mut by_hypervisor = toml_utils::get_hypervisor_enable_annotations(kata_config_file)?;
+
+    if let Some(drop_in_dir) = kata_config_file.parent().map(|p| p.join("config.d")) {
+        if drop_in_dir.is_dir() {
+            let mut files: Vec<PathBuf> = fs::read_dir(&drop_in_dir)
+                .with_context(|| format!("Failed to read drop-in directory {drop_in_dir:?}"))?
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
+                .collect();
+            files.sort();
+            for file in files {
+                for (hypervisor, annotations) in
+                    toml_utils::get_hypervisor_enable_annotations(&file)?
+                {
+                    by_hypervisor.insert(hypervisor, annotations);
+                }
+            }
+        }
+    }
+
+    let mut annotations: Vec<String> = by_hypervisor.into_values().flatten().collect();
+    annotations.sort();
+    annotations.dedup();
+    Ok(annotations)
+}
+
+fn pod_annotations_for_kata_config(kata_config_file: &Path, extra: &[String]) -> Result<String> {
+    if !kata_config_file.exists() {
+        anyhow::bail!(
+            "Kata configuration {} not found; cannot derive containerd pod_annotations",
+            kata_config_file.display()
+        );
+    }
+
+    let mut annotations = Vec::new();
+
+    for name in effective_enable_annotations(kata_config_file)? {
+        if name.trim().is_empty() {
+            continue;
+        }
+        annotations.push(hypervisor_annotation_pattern(&name));
+    }
+
+    annotations.extend(
+        extra
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+    );
+    annotations.sort();
+    annotations.dedup();
+    Ok(format_toml_string_array(&annotations))
 }
 
 /// Plugin ID for CRI runtime in containerd config v3 (version = 3).
@@ -88,6 +163,26 @@ fn containerd_debug_level_toml_path(_config_schema_version: Option<u32>) -> &'st
     ".debug.level"
 }
 
+/// Installs only add keys, so debug going off has to remove the level. Only
+/// ours: another value belongs to whoever set it.
+fn write_containerd_debug_level(
+    configuration_file: &Path,
+    debug_path: &str,
+    debug: bool,
+) -> Result<()> {
+    if debug {
+        return toml_utils::set_toml_value(configuration_file, debug_path, "\"debug\"");
+    }
+
+    if toml_utils::get_toml_value(configuration_file, debug_path)
+        .is_ok_and(|level| level == "debug")
+    {
+        toml_utils::delete_toml_value(configuration_file, debug_path)?;
+    }
+
+    Ok(())
+}
+
 /// Reads config and returns the CRI plugin ID used for *runtime* config (runtimes, snapshotter-per-runtime).
 /// `runtime` selects K3s/RKE2 fallbacks when `config_file` is a template without `version`.
 pub(crate) fn get_containerd_pluginid(config_file: &str, runtime: &str) -> Result<&'static str> {
@@ -148,7 +243,9 @@ pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Opt
     let paths = config.get_containerd_paths(runtime).await.ok()?;
 
     let mut files = vec![get_containerd_output_path(&paths)];
-    if let Ok((user_drop_in, _)) = get_user_containerd_drop_in_output_path(&paths) {
+    if let Ok((user_drop_in, _)) =
+        get_user_containerd_drop_in_output_path(&paths, config.multi_install_suffix.as_deref())
+    {
         files.push(user_drop_in);
     }
     if let Some(imports_file) = &paths.imports_file {
@@ -162,29 +259,29 @@ pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Opt
     Some(files)
 }
 
-fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(PathBuf, String)> {
+/// Suffixed, so two installations no longer share one file. `zz-` sorts it
+/// after the kata drop-in, which makes it an override.
+fn get_user_containerd_drop_in_output_path(
+    paths: &ContainerdPaths,
+    multi_install_suffix: Option<&str>,
+) -> Result<(PathBuf, String)> {
     if !paths.use_drop_in {
         anyhow::bail!(
             "Containerd user drop-in requires drop-in support, but runtime config is in non-drop-in mode"
         );
     }
 
-    let base_drop_in = Path::new(&paths.drop_in_file).to_path_buf();
-    let base_import_path = paths.drop_in_file.clone();
+    let user_file_name = match multi_install_suffix {
+        Some(suffix) if !suffix.is_empty() => format!("zz-kata-deploy-user-{suffix}.toml"),
+        _ => "zz-kata-deploy-user.toml".to_string(),
+    };
 
+    let base_drop_in = Path::new(&paths.drop_in_file);
     let parent = base_drop_in.parent().ok_or_else(|| {
-        anyhow::anyhow!("Failed to resolve parent directory for {:?}", base_drop_in)
+        anyhow::anyhow!("Failed to resolve parent directory for {base_drop_in:?}")
     })?;
-    let user_file_name = "zz-kata-deploy-user.toml";
-    let host_path = parent.join(user_file_name);
-
-    let import_parent = Path::new(&base_import_path)
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Failed to resolve import parent for {base_import_path}"))?;
-    let import_path = import_parent
-        .join(user_file_name)
-        .to_string_lossy()
-        .to_string();
+    let host_path = parent.join(&user_file_name);
+    let import_path = host_path.to_string_lossy().to_string();
 
     Ok((host_path, import_path))
 }
@@ -203,7 +300,7 @@ fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -
     }
 
     let (user_drop_in_path, user_drop_in_import_path) =
-        get_user_containerd_drop_in_output_path(paths)?;
+        get_user_containerd_drop_in_output_path(paths, config.multi_install_suffix.as_deref())?;
     if let Some(parent) = user_drop_in_path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!("Failed to create user containerd drop-in directory: {parent:?}")
@@ -230,14 +327,26 @@ fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -
     Ok(())
 }
 
+fn containerd_runtimes_table(pluginid: &str) -> String {
+    format!(".plugins.{pluginid}.containerd.runtimes")
+}
+
+fn containerd_runtime_platforms_table(handler: &str) -> String {
+    format!(
+        ".plugins.{}.runtime_platforms.\"{}\"",
+        CONTAINERD_CRI_IMAGES_PLUGIN_ID, handler
+    )
+}
+
 fn write_containerd_runtime_config(
     config_file: &Path,
     pluginid: &str,
     params: &ContainerdRuntimeParams,
 ) -> Result<()> {
     let runtime_table = format!(
-        ".plugins.{}.containerd.runtimes.{}",
-        pluginid, params.runtime_name
+        "{}.{}",
+        containerd_runtimes_table(pluginid),
+        params.runtime_name
     );
     let runtime_options_table = format!("{runtime_table}.options");
     let runtime_type = format!("\"io.containerd.{}.v2\"", params.runtime_name);
@@ -260,12 +369,12 @@ fn write_containerd_runtime_config(
     toml_utils::set_toml_value(
         config_file,
         &format!("{runtime_table}.pod_annotations"),
-        params.pod_annotations,
+        &params.pod_annotations,
     )?;
     toml_utils::set_toml_value(
         config_file,
         &format!("{runtime_table}.container_annotations"),
-        params.container_annotations,
+        &params.container_annotations,
     )?;
     toml_utils::set_toml_value(
         config_file,
@@ -292,8 +401,8 @@ fn write_containerd_runtime_config(
             toml_utils::set_toml_value(
                 config_file,
                 &format!(
-                    ".plugins.{}.runtime_platforms.\"{}\".snapshotter",
-                    CONTAINERD_CRI_IMAGES_PLUGIN_ID, params.runtime_name
+                    "{}.snapshotter",
+                    containerd_runtime_platforms_table(&params.runtime_name)
                 ),
                 snapshotter,
             )?;
@@ -326,8 +435,16 @@ pub async fn configure_containerd_runtime(
         pluginid
     );
 
-    let pod_annotations = "[\"io.katacontainers.*\"]";
-    let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
+    let kata_config_path = format!(
+        "{}/{}.toml",
+        utils::get_kata_containers_config_path(shim, &config.dest_dir),
+        configuration
+    );
+    let pod_annotations = pod_annotations_for_kata_config(
+        Path::new(&kata_config_path),
+        &config.extra_pod_annotations_for(shim),
+    )?;
+    let container_annotations = DEFAULT_CONTAINER_ANNOTATIONS.to_string();
 
     // Determine snapshotter if configured
     let snapshotter = config
@@ -361,11 +478,7 @@ pub async fn configure_containerd_runtime(
             "\"{}\"",
             utils::get_kata_containers_runtime_path(shim, &config.dest_dir)
         ),
-        config_path: format!(
-            "\"{}/{}.toml\"",
-            utils::get_kata_containers_config_path(shim, &config.dest_dir),
-            configuration
-        ),
+        config_path: format!("\"{kata_config_path}\""),
         pod_annotations,
         container_annotations,
         snapshotter,
@@ -373,11 +486,12 @@ pub async fn configure_containerd_runtime(
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
 
-    if config.debug {
-        let schema = containerd_config_schema_version(&paths, runtime);
-        let debug_path = containerd_debug_level_toml_path(schema);
-        toml_utils::set_toml_value(&configuration_file, debug_path, "\"debug\"")?;
-    }
+    let schema = containerd_config_schema_version(&paths, runtime);
+    write_containerd_debug_level(
+        &configuration_file,
+        containerd_debug_level_toml_path(schema),
+        config.debug,
+    )?;
 
     Ok(())
 }
@@ -406,8 +520,21 @@ pub async fn configure_custom_containerd_runtime(
         pluginid
     );
 
-    let pod_annotations = "[\"io.katacontainers.*\"]";
-    let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
+    let kata_config_path = format!(
+        "{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml",
+        config.dest_dir, custom_runtime.handler, custom_runtime.base_config
+    );
+    let mut extras = config.extra_pod_annotations_for(&custom_runtime.handler);
+    // Variants are this install's own copy of a shim, so they inherit what the
+    // chart asked for that shim. A user's custom runtime only shares its base
+    // configuration, and gets what it was configured with.
+    if custom_runtime.debug_variant {
+        extras.extend(config.extra_pod_annotations_for(&custom_runtime.base_config));
+    }
+    extras.sort();
+    extras.dedup();
+    let pod_annotations = pod_annotations_for_kata_config(Path::new(&kata_config_path), &extras)?;
+    let container_annotations = DEFAULT_CONTAINER_ANNOTATIONS.to_string();
 
     // Determine snapshotter if specified
     let snapshotter = custom_runtime.containerd_snapshotter.as_ref().map(|s| {
@@ -427,10 +554,7 @@ pub async fn configure_custom_containerd_runtime(
             "\"{}\"",
             utils::get_kata_containers_runtime_path(&custom_runtime.base_config, &config.dest_dir)
         ),
-        config_path: format!(
-            "\"{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml\"",
-            config.dest_dir, custom_runtime.handler, custom_runtime.base_config
-        ),
+        config_path: format!("\"{kata_config_path}\""),
         pod_annotations,
         container_annotations,
         snapshotter,
@@ -438,10 +562,82 @@ pub async fn configure_custom_containerd_runtime(
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
 
-    if config.debug {
-        let schema = containerd_config_schema_version(&paths, runtime);
-        let debug_path = containerd_debug_level_toml_path(schema);
-        toml_utils::set_toml_value(&configuration_file, debug_path, "\"debug\"")?;
+    let schema = containerd_config_schema_version(&paths, runtime);
+    write_containerd_debug_level(
+        &configuration_file,
+        containerd_debug_level_toml_path(schema),
+        config.debug,
+    )?;
+
+    Ok(())
+}
+
+fn configured_containerd_handlers(config: &Config) -> HashSet<String> {
+    let mut handlers: HashSet<String> = config.shim_handlers().into_iter().collect();
+    if config.custom_runtimes_enabled {
+        handlers.extend(config.custom_runtimes.iter().map(|r| r.handler.clone()));
+    }
+    handlers
+}
+
+/// Not always ours alone: without drop-in support this is the node's own
+/// config, where handlers of the host's or another application's also live.
+fn containerd_handler_is_owned_by_installation(
+    config_file: &Path,
+    pluginid: &str,
+    handler: &str,
+    dest_dir: &str,
+) -> bool {
+    let runtime_table = format!("{}.\"{}\"", containerd_runtimes_table(pluginid), handler);
+    // Trailing separator, or /opt/kata claims the handlers of /opt/kata-dev.
+    let owned_prefix = format!("{}/", dest_dir.trim_end_matches('/'));
+
+    [
+        format!("{runtime_table}.runtime_path"),
+        format!("{runtime_table}.options.ConfigPath"),
+    ]
+    .iter()
+    .any(|path| {
+        toml_utils::get_toml_value(config_file, path)
+            .is_ok_and(|value| value.starts_with(&owned_prefix))
+    })
+}
+
+/// Installs only add, so a dropped handler stays advertised, config gone.
+fn reconcile_containerd_runtimes(
+    config_file: &Path,
+    pluginid: &str,
+    dest_dir: &str,
+    configured: &HashSet<String>,
+) -> Result<()> {
+    let runtimes_table = containerd_runtimes_table(pluginid);
+
+    for handler in toml_utils::get_toml_table_keys(config_file, &runtimes_table)? {
+        if configured.contains(&handler)
+            || !containerd_handler_is_owned_by_installation(
+                config_file,
+                pluginid,
+                &handler,
+                dest_dir,
+            )
+        {
+            continue;
+        }
+
+        info!(
+            "Removing stale containerd runtime handler '{}' from {}",
+            handler,
+            config_file.display()
+        );
+        toml_utils::delete_toml_value(config_file, &format!("{runtimes_table}.\"{handler}\""))?;
+
+        // The images plugin registers it again, for the snapshotter.
+        if is_containerd_v3_config(pluginid) {
+            toml_utils::delete_toml_value(
+                config_file,
+                &containerd_runtime_platforms_table(&handler),
+            )?;
+        }
     }
 
     Ok(())
@@ -538,6 +734,18 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
     }
 
+    let configuration_file = get_containerd_output_path(&paths);
+    let pluginid = match paths.plugin_id.as_deref() {
+        Some(plugin_id) => plugin_id,
+        None => get_containerd_pluginid(&paths.config_file, runtime)?,
+    };
+    reconcile_containerd_runtimes(
+        &configuration_file,
+        pluginid,
+        &config.dest_dir,
+        &configured_containerd_handlers(config),
+    )?;
+
     configure_user_containerd_drop_in(config, &paths)?;
 
     utils::debug_log_file_contents(
@@ -617,7 +825,10 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
     if paths.use_drop_in {
         if config.containerd_user_drop_in_source_file.is_some() {
             let (user_drop_in_path, user_drop_in_import_path) =
-                get_user_containerd_drop_in_output_path(&paths)?;
+                get_user_containerd_drop_in_output_path(
+                    &paths,
+                    config.multi_install_suffix.as_deref(),
+                )?;
             if let Some(imports_file) = &paths.imports_file {
                 toml_utils::remove_from_toml_array(
                     Path::new(imports_file),
@@ -725,13 +936,14 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             }
         }
         "k0s-worker" | "k0s-controller" => {
-            // k0s uses /etc/containerd/containerd.d/ for drop-ins.
-            // Path is fixed for k0s, so we can hardcode it here
-            let drop_in_file_path = "/etc/containerd/containerd.d/kata-deploy.toml";
-            if let Some(parent) = Path::new(drop_in_file_path).parent() {
+            // k0s auto-loads /etc/containerd/containerd.d/, so the file only has
+            // to be there; which file it is depends on the install suffix.
+            let paths = config.get_containerd_paths(runtime).await?;
+            let drop_in_path = Path::new(&paths.drop_in_file).to_path_buf();
+            if let Some(parent) = drop_in_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::File::create(drop_in_file_path)?;
+            fs::File::create(&drop_in_path)?;
         }
         "containerd" if !Path::new(&config.containerd_conf_file).exists() => {
             if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {
@@ -911,10 +1123,59 @@ pub fn snapshotter_handler_mapping_validation_check(config: &Config) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifacts::install::tests::test_config;
+    use crate::config::CustomRuntime;
     use crate::utils::toml as toml_utils;
     use rstest::rstest;
     use std::path::Path;
     use tempfile::NamedTempFile;
+
+    /// The handler set every reconcile is measured against, so a shim or a
+    /// custom runtime missing here is one the next redeploy withdraws.
+    #[test]
+    fn configured_handlers_cover_shims_and_custom_runtimes() {
+        let mut config = test_config("qemu", "/opt/kata");
+        config.shims_for_arch = vec!["qemu".to_string(), "clh".to_string()];
+        config.custom_runtimes_enabled = true;
+        config.custom_runtimes = vec![CustomRuntime {
+            handler: "kata-my-custom".to_string(),
+            base_config: "qemu".to_string(),
+            drop_in_file: None,
+            containerd_snapshotter: None,
+            crio_pull_type: None,
+            debug_variant: false,
+            devkit: false,
+        }];
+
+        assert_eq!(
+            configured_containerd_handlers(&config),
+            HashSet::from([
+                "kata-qemu".to_string(),
+                "kata-clh".to_string(),
+                "kata-my-custom".to_string(),
+            ])
+        );
+
+        // Disabled, so its handler is one to withdraw rather than keep.
+        config.custom_runtimes_enabled = false;
+
+        assert_eq!(
+            configured_containerd_handlers(&config),
+            HashSet::from(["kata-qemu".to_string(), "kata-clh".to_string()])
+        );
+    }
+
+    /// A suffixed installation answers for its own handler names only.
+    #[test]
+    fn configured_handlers_carry_the_install_suffix() {
+        let mut config = test_config("qemu", "/opt/kata-beta");
+        config.multi_install_suffix = Some("beta".to_string());
+
+        assert_eq!(
+            configured_containerd_handlers(&config),
+            HashSet::from(["kata-qemu-beta".to_string()])
+        );
+    }
 
     fn make_params(runtime_name: &str, snapshotter: Option<&str>) -> ContainerdRuntimeParams {
         ContainerdRuntimeParams {
@@ -922,10 +1183,205 @@ mod tests {
             runtime_path: "\"/opt/kata/bin/kata-runtime\"".to_string(),
             config_path: "\"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml\""
                 .to_string(),
-            pod_annotations: "[\"io.katacontainers.*\"]",
-            container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]",
+            pod_annotations: "[\"io.katacontainers.config.agent.*\"]".to_string(),
+            container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]".to_string(),
             snapshotter: snapshotter.map(|s| s.to_string()),
         }
+    }
+
+    fn make_drop_in_paths(drop_in_file: &str, use_drop_in: bool) -> ContainerdPaths {
+        ContainerdPaths {
+            config_file: "/etc/containerd/config.toml".to_string(),
+            backup_file: "/etc/containerd/config.toml.bak".to_string(),
+            imports_file: None,
+            drop_in_file: drop_in_file.to_string(),
+            use_drop_in,
+            plugin_id: None,
+        }
+    }
+
+    #[test]
+    fn a_suffixed_installation_gets_its_own_user_drop_in() {
+        let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy-beta.toml", true);
+
+        let (host_path, import_path) =
+            get_user_containerd_drop_in_output_path(&paths, Some("beta")).unwrap();
+
+        assert_eq!(
+            host_path,
+            Path::new("/etc/containerd/conf.d/zz-kata-deploy-user-beta.toml")
+        );
+        assert_eq!(
+            import_path,
+            "/etc/containerd/conf.d/zz-kata-deploy-user-beta.toml"
+        );
+    }
+
+    /// The name it has always written, so an upgrade still finds its file.
+    #[rstest]
+    #[case(None)]
+    #[case(Some(""))]
+    fn an_unsuffixed_installation_keeps_the_name_it_had(#[case] suffix: Option<&str>) {
+        let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy.toml", true);
+
+        let (host_path, _) = get_user_containerd_drop_in_output_path(&paths, suffix).unwrap();
+
+        assert_eq!(
+            host_path,
+            Path::new("/etc/containerd/conf.d/zz-kata-deploy-user.toml")
+        );
+    }
+
+    #[test]
+    fn the_user_drop_in_still_sorts_after_the_kata_one() {
+        for suffix in [None, Some("beta")] {
+            let kata = match suffix {
+                Some(s) => format!("/etc/containerd/conf.d/kata-deploy-{s}.toml"),
+                None => "/etc/containerd/conf.d/kata-deploy.toml".to_string(),
+            };
+            let (user, _) =
+                get_user_containerd_drop_in_output_path(&make_drop_in_paths(&kata, true), suffix)
+                    .unwrap();
+
+            let kata_name = Path::new(&kata).file_name().unwrap();
+            assert!(
+                user.file_name().unwrap() > kata_name,
+                "{:?} must sort after {kata_name:?}",
+                user.file_name().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn a_user_drop_in_needs_drop_in_support() {
+        let paths = make_drop_in_paths("/etc/containerd/conf.d/kata-deploy-beta.toml", false);
+
+        assert!(get_user_containerd_drop_in_output_path(&paths, Some("beta")).is_err());
+    }
+
+    #[test]
+    fn pod_annotations_come_from_the_runtimes_enable_annotations() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\", \"cc_init_data\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"));
+        assert!(rendered.contains("io.katacontainers.config.hypervisor.cc_init_data"));
+        assert!(!rendered.contains("io.katacontainers.config.agent."));
+        assert!(!rendered.contains("io.katacontainers.config.runtime."));
+        assert!(!rendered.contains("io.katacontainers.container.resource."));
+        assert!(
+            !rendered.contains("io.katacontainers.*\""),
+            "must not forward the unrestricted wildcard: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_runtime_enabling_no_annotation_still_gets_the_extras() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(&config_file, "[hypervisor.qemu]\nenable_annotations = []\n").unwrap();
+
+        let rendered = pod_annotations_for_kata_config(
+            &config_file,
+            &[
+                "sgx.intel.com/epc".to_string(),
+                "io.katacontainers.*".to_string(),
+            ],
+        )
+        .unwrap();
+        assert!(rendered.contains("sgx.intel.com/epc"));
+        assert!(rendered.contains("io.katacontainers.*"));
+        assert!(!rendered.contains("io.katacontainers.config.agent."));
+        assert!(!rendered.contains("io.katacontainers.config.hypervisor."));
+    }
+
+    #[test]
+    fn a_drop_in_replaces_the_list_it_sets() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir_all(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.qemu]\nenable_annotations = [\"cc_init_data\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(rendered.contains("io.katacontainers.config.hypervisor.cc_init_data"));
+        assert!(!rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"));
+    }
+
+    #[test]
+    fn a_drop_in_overriding_one_hypervisor_leaves_the_other_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n\
+             [hypervisor.clh]\nenable_annotations = [\"default_memory\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir_all(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.qemu]\nenable_annotations = [\"cc_init_data\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.cc_init_data"),
+            "drop-in qemu annotation must be present: {rendered}"
+        );
+        assert!(
+            !rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"),
+            "overridden qemu annotation must be gone: {rendered}"
+        );
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.default_memory"),
+            "untouched clh annotation must survive: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_drop_in_adding_a_new_hypervisor_contributes_its_annotations() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir_all(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.clh]\nenable_annotations = [\"default_memory\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.default_vcpus"),
+            "base qemu annotation must be present: {rendered}"
+        );
+        assert!(
+            rendered.contains("io.katacontainers.config.hypervisor.default_memory"),
+            "drop-in clh annotation must be present: {rendered}"
+        );
     }
 
     /// Uninstall may only delete a whole-file configuration it can prove an install
@@ -963,6 +1419,45 @@ mod tests {
         assert_eq!(containerd_debug_level_toml_path(Some(4)), ".debug.level");
         assert_eq!(containerd_debug_level_toml_path(Some(3)), ".debug.level");
         assert_eq!(containerd_debug_level_toml_path(None), ".debug.level");
+    }
+
+    #[test]
+    fn the_debug_level_goes_away_with_debug() {
+        let f = NamedTempFile::new().unwrap();
+        std::fs::write(f.path(), "version = 3\n").unwrap();
+        let debug_path = containerd_debug_level_toml_path(Some(3));
+
+        write_containerd_debug_level(f.path(), debug_path, true).unwrap();
+        assert_eq!(
+            toml_utils::get_toml_value(f.path(), debug_path).unwrap(),
+            "debug"
+        );
+
+        write_containerd_debug_level(f.path(), debug_path, false).unwrap();
+        assert!(toml_utils::get_toml_value(f.path(), debug_path).is_err());
+    }
+
+    #[test]
+    fn a_level_we_did_not_write_survives_debug_going_off() {
+        let f = NamedTempFile::new().unwrap();
+        std::fs::write(f.path(), "version = 3\n\n[debug]\nlevel = \"trace\"\n").unwrap();
+        let debug_path = containerd_debug_level_toml_path(Some(3));
+
+        write_containerd_debug_level(f.path(), debug_path, false).unwrap();
+        assert_eq!(
+            toml_utils::get_toml_value(f.path(), debug_path).unwrap(),
+            "trace"
+        );
+    }
+
+    #[test]
+    fn debug_off_leaves_a_file_without_the_key_alone() {
+        let f = NamedTempFile::new().unwrap();
+        std::fs::write(f.path(), "version = 3\n").unwrap();
+
+        write_containerd_debug_level(f.path(), containerd_debug_level_toml_path(Some(3)), false)
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(f.path()).unwrap(), "version = 3\n");
     }
 
     #[test]
@@ -1196,6 +1691,102 @@ mod tests {
             version,
             expected_error
         );
+    }
+
+    const DEST_DIR: &str = "/opt/kata";
+
+    fn write_handler(path: &Path, pluginid: &str, handler: &str, dest_dir: &str) {
+        let mut params = make_params(handler, Some("\"nydus\""));
+        params.runtime_path = format!("\"{dest_dir}/bin/containerd-shim-kata-v2\"");
+        params.config_path = format!(
+            "\"{dest_dir}/share/defaults/kata-containers/custom-runtimes/{handler}/configuration-qemu.toml\""
+        );
+        write_containerd_runtime_config(path, pluginid, &params).unwrap();
+    }
+
+    fn handler_exists(path: &Path, pluginid: &str, handler: &str) -> bool {
+        toml_utils::get_toml_value(
+            path,
+            &format!(
+                "{}.\"{}\".runtime_type",
+                containerd_runtimes_table(pluginid),
+                handler
+            ),
+        )
+        .is_ok()
+    }
+
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
+    fn stale_kata_handlers_are_removed(#[case] pluginid: &str) {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "").unwrap();
+
+        write_handler(path, pluginid, "kata-qemu", DEST_DIR);
+        write_handler(path, pluginid, "kata-qemu-debug", DEST_DIR);
+        write_handler(path, pluginid, "kata-qemu-devkit", DEST_DIR);
+
+        let configured = HashSet::from(["kata-qemu".to_string()]);
+        reconcile_containerd_runtimes(path, pluginid, DEST_DIR, &configured).unwrap();
+
+        assert!(handler_exists(path, pluginid, "kata-qemu"));
+        assert!(!handler_exists(path, pluginid, "kata-qemu-debug"));
+        assert!(!handler_exists(path, pluginid, "kata-qemu-devkit"));
+
+        if !is_containerd_v3_config(pluginid) {
+            return;
+        }
+
+        let snapshotter_of = |handler: &str| {
+            toml_utils::get_toml_value(
+                path,
+                &format!(
+                    "{}.snapshotter",
+                    containerd_runtime_platforms_table(handler)
+                ),
+            )
+        };
+        assert_eq!(snapshotter_of("kata-qemu").unwrap(), "nydus");
+        assert!(snapshotter_of("kata-qemu-debug").is_err());
+        assert!(snapshotter_of("kata-qemu-devkit").is_err());
+    }
+
+    #[test]
+    fn handlers_of_others_are_left_alone() {
+        let pluginid = CONTAINERD_V3_RUNTIME_PLUGIN_ID;
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "").unwrap();
+
+        write_handler(path, pluginid, "kata-qemu-debug", "/opt/kata-dev");
+        let mut runc = make_params("runc", None);
+        runc.runtime_path = "\"/usr/bin/runc\"".to_string();
+        runc.config_path = "\"/etc/runc/config.toml\"".to_string();
+        write_containerd_runtime_config(path, pluginid, &runc).unwrap();
+
+        reconcile_containerd_runtimes(path, pluginid, DEST_DIR, &HashSet::new()).unwrap();
+
+        assert!(handler_exists(path, pluginid, "kata-qemu-debug"));
+        assert!(handler_exists(path, pluginid, "runc"));
+    }
+
+    #[test]
+    fn reconcile_containerd_runtimes_without_handlers_is_noop() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "version = 3\n").unwrap();
+
+        reconcile_containerd_runtimes(
+            path,
+            CONTAINERD_V3_RUNTIME_PLUGIN_ID,
+            DEST_DIR,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "version = 3\n");
     }
 
     const LEGACY_IMPORT: &str = "/opt/kata/containerd/config.d/kata-deploy.toml";

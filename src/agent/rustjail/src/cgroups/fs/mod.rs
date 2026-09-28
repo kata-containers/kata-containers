@@ -694,6 +694,14 @@ lazy_static! {
     };
 }
 
+fn get_throttled_time(stats: &HashMap<String, u64>, is_cgroup_v2: bool) -> u64 {
+    if is_cgroup_v2 {
+        *stats.get("throttled_usec").unwrap_or(&0) * 1000
+    } else {
+        *stats.get("throttled_time").unwrap_or(&0)
+    }
+}
+
 fn get_cpu_stats(cg: &cgroups::Cgroup) -> MessageField<ThrottlingData> {
     let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
@@ -702,7 +710,7 @@ fn get_cpu_stats(cg: &cgroups::Cgroup) -> MessageField<ThrottlingData> {
     MessageField::some(ThrottlingData {
         periods: *h.get("nr_periods").unwrap_or(&0),
         throttled_periods: *h.get("nr_throttled").unwrap_or(&0),
-        throttled_time: *h.get("throttled_time").unwrap_or(&0),
+        throttled_time: get_throttled_time(&h, cg.v2()),
         ..Default::default()
     })
 }
@@ -1430,7 +1438,7 @@ mod tests {
 
     use super::{cgroup_path_under_root, default_allowed_devices, load_cgroup};
     use crate::cgroups::fs::{
-        line_to_vec, lines_to_map, Manager, DEFAULT_ALLOWED_DEVICES, WILDCARD,
+        get_throttled_time, line_to_vec, lines_to_map, Manager, DEFAULT_ALLOWED_DEVICES, WILDCARD,
     };
     use crate::cgroups::DevicesCgroupInfo;
     use crate::container::DEFAULT_DEVICES;
@@ -1512,6 +1520,15 @@ mod tests {
                 test_case.1, test_case.0
             );
         }
+    }
+
+    #[test]
+    fn test_get_throttled_time() {
+        let v1_stats = lines_to_map("throttled_time 123");
+        assert_eq!(get_throttled_time(&v1_stats, false), 123);
+
+        let v2_stats = lines_to_map("throttled_usec 123");
+        assert_eq!(get_throttled_time(&v2_stats, true), 123_000);
     }
 
     struct MockSandbox {

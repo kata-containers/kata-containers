@@ -4,7 +4,7 @@
 # Usage:
 #   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
 #     --version VERSION \
-#     -f try-kata-tee.values.yaml
+#     -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-tee.values.yaml
 
 debug: false
 

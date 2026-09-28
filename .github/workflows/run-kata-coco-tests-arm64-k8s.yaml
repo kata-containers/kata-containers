@@ -48,6 +48,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-coco-k8s-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: arm64-k8s
+    timeout-minutes: 100
     environment:
       name: ci
       deployment: false

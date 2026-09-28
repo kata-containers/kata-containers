@@ -39,12 +39,13 @@ jobs:
           { vmm: qemu-runtime-rs, k8s: k3s },
           { vmm: qemu-runtime-rs, k8s: rke2 },
           { vmm: qemu-runtime-rs, k8s: microk8s },
-          { vmm: qemu-nvidia-cpu-runtime-rs, k8s: kubeadm, snapshotter: erofs, erofs_snapshotter_mode: disk, erofs_dmverity: dmverity, manages_host_modules: "yes" },
+          { vmm: qemu-nvidia-cpu-runtime-rs, k8s: kubeadm, snapshotter: erofs, erofs_snapshotter_mode: disk, erofs_dmverity: dmverity },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-26.04
+    timeout-minutes: 30
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -55,12 +56,11 @@ jobs:
       # Only used when deploying the kubeadm flavour
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: latest
-      # Only the kubeadm path prepares EROFS on the runner, so that is where the
-      # host module coverage lives.
+      # Only the kubeadm flavour runs EROFS, so that is where the host module
+      # coverage lives: nothing loads them but the install itself.
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
       EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.erofs_snapshotter_mode }}
       EROFS_DMVERITY: ${{ matrix.environment.erofs_dmverity }}
-      KATA_DEPLOY_MANAGES_HOST_MODULES: ${{ matrix.environment.manages_host_modules }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -99,6 +99,45 @@ jobs:
         run: bash tests/functional/kata-deploy/gha-run.sh install-bats
 
       - name: Run tests
+        run: bash tests/functional/kata-deploy/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/functional/kata-deploy/gha-run.sh report-tests
+
+  # This runner is a cluster on an enforcing node.
+  run-kata-deploy-selinux-tests:
+    name: run-kata-deploy-selinux-tests
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    runs-on: kata-deploy-selinux
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: qemu-runtime-rs
+      KUBERNETES: rke2
+      # The rest of the suite is not SELinux-specific and stays on the hosted runners.
+      KATA_DEPLOY_TEST_UNION: >-
+        kata-deploy-selinux-job.bats
+        kata-deploy-selinux-daemonset.bats
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Run tests
+        timeout-minutes: 60
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
 
       - name: Report tests

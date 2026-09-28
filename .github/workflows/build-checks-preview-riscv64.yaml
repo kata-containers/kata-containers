@@ -23,6 +23,7 @@ jobs:
   check:
     name: check
     runs-on: ${{ inputs.instance }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:

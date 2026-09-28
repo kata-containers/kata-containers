@@ -4,87 +4,87 @@
 #
 
 [package]
-name = "kata-ctl"
-version = "0.0.1"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "kata-ctl"
+version = "0.0.1"
 
 [dependencies]
 anyhow.workspace = true
-clap = { workspace = true, features = ["derive", "cargo"] }
-serde_json.workspace = true
-thiserror.workspace = true
-privdrop = "0.5.2"
+base64.workspace = true
+clap = { features = ["cargo", "derive"], workspace = true }
+futures.workspace = true
 nix = { workspace = true }
+privdrop = "0.5.2"
+serde.workspace = true
+serde_json.workspace = true
 strum = "0.24.1"
 strum_macros = "0.24.3"
-serde.workspace = true
-url.workspace = true
-futures.workspace = true
-base64.workspace = true
-tar.workspace = true
-toml.workspace = true
 sys-info = "0.9.1"
+tar.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+url.workspace = true
 
-shim-interface.workspace = true
-kata-types.workspace = true
-kata-sys-util.workspace = true
 agent.workspace = true
-virt_container.workspace = true
-serial_test.workspace = true
-vmm-sys-util.workspace = true
 epoll = "4.0.1"
+kata-sys-util.workspace = true
+kata-types.workspace = true
 libc.workspace = true
+serial_test.workspace = true
+shim-interface.workspace = true
+virt_container.workspace = true
+vmm-sys-util.workspace = true
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
-logging.workspace = true
-slog.workspace = true
-slog-scope.workspace = true
 bytes = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
-tokio = { workspace = true, features = ["signal"] }
+logging.workspace = true
+slog.workspace = true
+slog-scope.workspace = true
+tokio = { features = ["signal"], workspace = true }
 
-prometheus.workspace = true
-procfs.workspace = true
 lazy_static.workspace = true
+procfs.workspace = true
+prometheus.workspace = true
 
 # for log-parser
-serde_yaml = "0.9"
-ron = "0.8"
-quick-xml = { version = "0.41.0", features = ["serialize"] }
+chrono = { features = ["serde"], version = "0.4" }
 csv = "1.2"
-serde_with = "3.21"
-chrono = { version = "0.4", features = ["serde"] }
+quick-xml = { features = ["serialize"], version = "0.41.0" }
+ron = "0.8"
 rstest = { workspace = true }
+serde_with = "3.21"
+serde_yaml = "0.9"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
-reqwest = { version = "0.12", default-features = false, features = [
-    "json",
-    "blocking",
-    "native-tls",
-] }
+reqwest = { default-features = false, features = [
+  "blocking",
+  "json",
+  "native-tls",
+], version = "0.12" }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
-reqwest = { version = "0.12", default-features = false, features = [
-    "json",
-    "blocking",
-    "rustls-tls",
-] }
+reqwest = { default-features = false, features = [
+  "blocking",
+  "json",
+  "rustls-tls",
+], version = "0.12" }
 
 [dev-dependencies]
+micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
+nix = { workspace = true }
 semver = "1.0.12"
 tempfile.workspace = true
-nix = { workspace = true }
 test-utils.workspace = true
-micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
 
 [features]
-default = ["cloud-hypervisor"]
 cloud-hypervisor = ["virt_container/cloud-hypervisor"]
+default = ["cloud-hypervisor"]
 dragonball = ["virt_container/dragonball"]
 
 [package.metadata.cargo-machete]

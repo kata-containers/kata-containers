@@ -14,7 +14,10 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
     api::v1::{BootSourceConfig, VcpuResizeInfo},
-    device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
+    device_manager::{
+        balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
+        rng_dev_mgr::RngDeviceConfigInfo,
+    },
     vm::VmConfigInfo,
 };
 
@@ -38,6 +41,10 @@ const DRAGONBALL_INITRD: &str = "initrd";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 const BALLOON_DEVICE_ID: &str = "balloon0";
 const MEM_DEVICE_ID: &str = "memmr0";
+
+fn should_insert_host_rng(entropy_source: &str, confidential_guest: bool) -> bool {
+    !entropy_source.is_empty() && !confidential_guest
+}
 
 #[derive(Debug)]
 pub struct DragonballInner {
@@ -140,8 +147,54 @@ impl DragonballInner {
         info!(sl!(), "start sandbox cold");
 
         self.set_vm_base_config().context("set vm base config")?;
+        self.configure_boot_source()?;
 
-        // get kernel params
+        // insert the virtio-rng device before boot: it is cold-plug only
+        let entropy_source = &self.config.machine_info.entropy_source;
+        let confidential_guest = self.config.security_info.confidential_guest;
+        if should_insert_host_rng(entropy_source, confidential_guest) {
+            // The VMM opens the entropy source while creating the devices and
+            // reports a failure there as a fatal boot error. Probe it first so
+            // that a source which is configured but not readable at runtime
+            // only costs the VM its virtio-rng device instead of preventing
+            // every container on the host from starting.
+            match std::fs::File::open(entropy_source) {
+                Ok(_) => {
+                    let rng_config = RngDeviceConfigInfo {
+                        src: entropy_source.clone(),
+                        use_shared_irq: None,
+                        use_generic_irq: None,
+                    };
+                    self.vmm_instance
+                        .insert_rng_device(rng_config)
+                        .context("insert rng device")?;
+                }
+                Err(e) => warn!(
+                    sl!(),
+                    "skip virtio-rng, entropy source {} is not readable: {}", entropy_source, e
+                ),
+            }
+        } else if confidential_guest && !entropy_source.is_empty() {
+            warn!(sl!(), "skip host-backed virtio-rng for confidential guest");
+        }
+
+        // add pending devices
+        while let Some(dev) = self.pending_devices.pop() {
+            self.add_device(dev).await.context("add_device")?;
+        }
+
+        // start vmm and wait ready
+        self.start_vmm_instance().context("start vmm instance")?;
+        self.wait_vmm_ready(timeout).context("wait vmm")?;
+
+        Ok(())
+    }
+
+    fn configure_boot_source(&mut self) -> Result<()> {
+        if self.config.vm_template.boot_from_template {
+            return Ok(());
+        }
+
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
 
         if self.config.boot_info.initrd.is_empty() {
@@ -171,18 +224,7 @@ impl DragonballInner {
                 .to_string()
                 .context("kernel params to string")?,
         )
-        .context("set_boot_source")?;
-
-        // add pending devices
-        while let Some(dev) = self.pending_devices.pop() {
-            self.add_device(dev).await.context("add_device")?;
-        }
-
-        // start vmm and wait ready
-        self.start_vmm_instance().context("start vmm instance")?;
-        self.wait_vmm_ready(timeout).context("wait vmm")?;
-
-        Ok(())
+        .context("set_boot_source")
     }
 
     pub(crate) fn run_vmm_server(&mut self) -> Result<()> {
@@ -590,5 +632,27 @@ impl Persist for DragonballInner {
             balloon_size: 0,
             passfd_listener_port: hypervisor_state.passfd_listener_port,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_restore_skips_boot_source_configuration() {
+        let (tx, _) = mpsc::channel(1);
+        let mut inner = DragonballInner::new(tx);
+        inner.config.vm_template.boot_from_template = true;
+        inner.config.boot_info.kernel = "/kernel-must-not-be-opened".to_string();
+
+        inner.configure_boot_source().unwrap();
+    }
+
+    #[test]
+    fn test_should_insert_host_rng() {
+        assert!(should_insert_host_rng("/dev/urandom", false));
+        assert!(!should_insert_host_rng("", false));
+        assert!(!should_insert_host_rng("/dev/urandom", true));
     }
 }

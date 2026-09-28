@@ -4,7 +4,7 @@
 //
 
 use anyhow::{anyhow, Context, Result};
-use pcilibs_rs::{IOMMUFD_SYSFS_CLASS, IOMMUFD_VFIO_DIR};
+use pcilibs_rs::{Sysfs, IOMMUFD_VFIO_DIR};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -496,7 +496,7 @@ fn discover_vfio_cdev_by_name(
         } else {
             Some(minor)
         },
-        sysfs_path: Path::new(IOMMUFD_SYSFS_CLASS).join(vfio_name),
+        sysfs_path: Sysfs::default().vfio_dev(vfio_name),
         bdf,
         group_id: gid,
     })
@@ -519,12 +519,8 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
         .to_string();
 
     // /sys/class/vfio-dev/<name>/device -> .../0000:01:00.0
-    let dev_link = fs::read_link(
-        Path::new(IOMMUFD_SYSFS_CLASS)
-            .join(&vfio_name)
-            .join("device"),
-    )
-    .with_context(|| format!("failed to read sysfs device link for {}", vfio_name))?;
+    let dev_link = fs::read_link(Sysfs::default().vfio_dev(&vfio_name).join("device"))
+        .with_context(|| format!("failed to read sysfs device link for {}", vfio_name))?;
 
     let bdf_str = dev_link
         .file_name()

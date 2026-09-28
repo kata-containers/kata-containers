@@ -67,6 +67,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-k8s-tee-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 130
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -167,6 +168,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     permissions:
       contents: read
     environment:
@@ -294,6 +296,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     environment:
       name: ci
       deployment: false

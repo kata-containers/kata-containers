@@ -55,7 +55,7 @@ create_vendor_tarball() {
 		done
 
 	# shellcheck disable=SC2086
-	tar -cvzf "${tarball_path}" ${vendor_dir_list}
+	tar -cvzf "${tarball_path}" ${vendor_dir_list} && rm -rf ${vendor_dir_list}
 	popd
 }
 

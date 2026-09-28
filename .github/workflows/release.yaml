@@ -11,7 +11,8 @@ permissions: {}
 jobs:
   release:
     name: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release create` command
     steps:
@@ -93,7 +94,8 @@ jobs:
 
   publish-multi-arch-images:
     name: publish-multi-arch-images
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: write # needed for the `gh release` commands
@@ -134,7 +136,8 @@ jobs:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: write # needed for the `gh release` commands
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -267,7 +270,8 @@ jobs:
   upload-versions-yaml:
     name: upload-versions-yaml
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
     steps:
@@ -285,7 +289,8 @@ jobs:
   upload-cargo-vendored-tarball:
     name: upload-cargo-vendored-tarball
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
     steps:
@@ -303,7 +308,8 @@ jobs:
   upload-libseccomp-tarball:
     name: upload-libseccomp-tarball
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
     steps:
@@ -321,7 +327,8 @@ jobs:
   upload-helm-chart-tarball:
     name: upload-helm-chart-tarball
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
       packages: write # needed to push the helm chart to ghcr.io
@@ -338,6 +345,12 @@ jobs:
       - name: Generate and upload helm chart tarball
         run: |
           ./tools/packaging/release/release.sh upload-helm-chart-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload the helm chart values presets
+        run: |
+          ./tools/packaging/release/release.sh upload-helm-chart-values-files
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -358,8 +371,9 @@ jobs:
 
   publish-release:
     name: publish-release
-    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, publish-kata-monitor-image, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
-    runs-on: ubuntu-22.04
+    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, publish-kata-monitor-image, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball, upload-helm-chart-tarball ]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write # needed for the `gh release` commands
     steps:

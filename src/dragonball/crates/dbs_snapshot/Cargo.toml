@@ -1,13 +1,13 @@
 [package]
-name = "dbs-snapshot"
-version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 description = "Snapshot (checkpoint/restore) contract shared by dragonball components"
-keywords = ["kata-containers", "sandbox", "vmm", "dragonball", "snapshot"]
-homepage = "https://katacontainers.io/"
-repository = "https://github.com/kata-containers/kata-containers.git"
-license = "Apache-2.0"
 edition = "2018"
+homepage = "https://katacontainers.io/"
+keywords = ["dragonball", "kata-containers", "sandbox", "snapshot", "vmm"]
+license = "Apache-2.0"
+name = "dbs-snapshot"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [dependencies]
 serde_json = { workspace = true }

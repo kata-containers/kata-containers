@@ -38,6 +38,16 @@
 #   come back after a reboot. Uninstall drops that file but never unloads a
 #   module, because module state is host-global and may be in use by something
 #   else.
+#
+# NOTE on finding out what went wrong in "job" mode:
+#   A failed rollout names the nodes that failed and what stopped each of them,
+#   in the `helm install` output, as an Event on each node, and afterwards under
+#   `kubectl get nodes -l kata-deploy-job-dispatcher/result=failed`. None of it
+#   is configured here; it is what a rollout does.
+#
+#   Each stage writes why it is giving up to /dev/termination-log, so the reason
+#   is in the pod's status rather than only in a log that
+#   job.ttlSecondsAfterFinished deletes along with the pod.
 deploymentMode: job  # daemonset | job
 
 # Settings specific to deploymentMode: job
@@ -48,7 +58,7 @@ job:
   # released independently of Kata Containers, so its version is pinned here.
   dispatcherImage:
     reference: ghcr.io/kata-containers/k8s-job-dispatcher
-    tag: "0.2.0"
+    tag: "0.3.0"
   # Where the dispatcher pods themselves may run (install and uninstall). Nothing
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
@@ -204,6 +214,21 @@ job:
   # failed. One node failing never aborts the others.
   backoffLimit: 3
 
+# SELinux confinement for the installer's own containers. On an enforcing node
+# the unprivileged install stages are otherwise denied the host work they exist
+# to do; this loads a Kata-owned policy module and gives each stage a
+# least-privilege domain instead, so they can stay unprivileged.
+#
+# Needs policycoreutils (for semodule) on the SELinux-enabled nodes, unless their
+# policy already defines the domains. Nodes with SELinux off are unaffected, so it
+# is safe to set across a mixed cluster.
+#
+# Off by default because it mutates the node's policy store, and the modules are
+# left loaded on uninstall: list them with `semodule --list-modules=full | grep
+# kata-deploy` and remove each with `semodule -X <priority> -r <name>`.
+selinux:
+  enabled: false
+
 imagePullPolicy: Always
 
 imagePullSecrets: []
@@ -229,6 +254,17 @@ monitor:
   # debug:true implies debug; otherwise defaults to info.
   logLevel: ""
   port: 8090
+  tls:
+    # Name of a Secret containing cert.pem and key.pem. When set,
+    # kata-monitor serves HTTPS on the configured port instead of plain HTTP.
+    # The Secret must exist in the same namespace before the DaemonSet rolls out.
+    secretName: ""
+    # Minimum TLS version: VersionTLS12 or VersionTLS13. Defaults to VersionTLS12
+    # when TLS is enabled. Ignored when secretName is empty.
+    minVersion: ""
+    # Comma-separated list of IANA cipher suite names for TLS 1.2 and below.
+    # Must not be set when minVersion is VersionTLS13. Ignored when secretName is empty.
+    cipherSuites: ""
   securityContext:
     privileged: false
     runAsUser: 0
@@ -242,20 +278,33 @@ monitor:
       memory: 300Mi
 
 # Which Kubernetes flavour this cluster runs. It picks the host directory that
-# holds containerd's configuration, which is mounted into the install.
+# holds containerd's configuration, which is mounted into the install, and where
+# the kubelet keeps its root directory: k0s and microk8s both move it, and only
+# the right one leads to a Kata workload's ConfigMap/Secret updates and to the
+# Pod Resources API socket that GPU cold plug asks for its devices.
 #
 # Getting it wrong used to pass unnoticed: the install detects the runtime on the
 # node itself, so it would write a correct configuration into whichever directory
 # was mounted - and if that is not the one this node's containerd reads, Kata is
 # configured where nothing looks for it. The install now refuses to continue when
 # the two disagree, naming the value to set. Setting containerd.configDir takes
-# that check out of the way, being an explicit override of this derivation.
+# that check out of the way, being an explicit override of this derivation; it
+# says nothing about the kubelet, so this value still applies there.
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
 # Containerd configuration overrides
 # These override the auto-detected paths based on k8sDistribution.
 # Use these when your containerd setup doesn't match any built-in distribution preset.
 containerd:
+  # Extra pod annotation patterns containerd passes to every Kata runtime,
+  # matched with filepath.Match.
+  #
+  # Whatever each runtime's Kata configuration enables is already forwarded.
+  # Agent, runtime, and container-resource annotations are not, nor is anything
+  # from another component. Add those patterns here.
+  # ["io.katacontainers.*"] restores the old unrestricted forwarding and is a
+  # security risk: any Kata annotation reaches the runtime.
+  extraPodAnnotations: []
   # Override the host directory where containerd config lives.
   # When empty, derived automatically from k8sDistribution.
   # Example: "/etc/my-containerd/"
@@ -271,7 +320,8 @@ containerd:
   configFileName: ""
   # Optional user-provided containerd drop-in TOML content.
   # This is written as an extra drop-in loaded after kata-deploy's generated drop-in,
-  # so user keys can override kata-deploy defaults.
+  # so user keys can override kata-deploy defaults. Its file name carries
+  # env.multiInstallSuffix, so side-by-side installations each own their own.
   # NOTE: default_size = "0" selects memory-backed rw layers even when
   # erofsSnapshotterMode is "disk"; do not set it when disk backing is intended.
   # Example: disable erofs fs-verity when the host backing filesystem may not
@@ -550,6 +600,43 @@ snapshotter:
   # Enable dm-verity integrity verification for EROFS lower layers.
   # Independent of erofsSnapshotterMode — works with both disk and memory.
   erofsDmverity: false
+  # Nodes packaging an erofs-utils older than the 1.8.2 these settings need, or
+  # none at all, can be given one through nodeBinaries below.
+
+# Binaries to put on each node's PATH, taken from container images, for what a
+# node's own distribution packages too old a version of or not at all. Empty
+# (the default) installs nothing.
+#
+# Each key names an entry and becomes the name of the container staging it, so
+# it has to be a valid container name. Each entry needs an image and the list of
+# binaries to take out of it:
+#
+#   nodeBinaries:
+#     erofs-utils:
+#       image: quay.io/kata-containers/erofs-utils:1.9.3
+#       binaries: [mkfs.erofs, dump.erofs, fsck.erofs]
+#       pullPolicy: IfNotPresent  # optional, defaults to imagePullPolicy
+#
+# The image needs a POSIX shell, cp, and each listed binary statically built in
+# one of /usr/local/bin, /usr/local/sbin, /usr/bin, /usr/sbin, /bin, /sbin or
+# its root. Only the listed binaries are taken, so an image built on a
+# distribution does not put the rest of its userland on the node, and each one
+# names a single binary rather than a path or a pattern.
+#
+# They are copied into /usr/local/bin, ahead of /usr/bin in containerd's PATH,
+# and removed again on uninstall. Changing an entry replaces what it installed.
+# A file already there that kata-deploy did not install fails the install rather
+# than being replaced, and two entries offering the same name fail it too;
+# either way nothing on the node is touched, so it keeps the set it had. Marker
+# files are named after env.multiInstallSuffix, so side-by-side installs own
+# separate sets.
+#
+# Requires deploymentMode: job, the install being staged so the binaries are in
+# place before the host check looks for them. Private images use the chart's
+# imagePullSecrets. An image with no manifest for a node's architecture stalls
+# that node's install on the pull, so cover every architecture being deployed
+# to; the erofs-utils image above is amd64 and arm64 only.
+nodeBinaries: {}
 
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
@@ -570,6 +657,7 @@ snapshotter:
 #       containerd:
 #         snapshotter: ""             # e.g. nydus, erofs, devmapper, or "" for default
 #         forceGuestPull: false       # force guest-side image pull in containerd
+#         extraPodAnnotations: []     # extra containerd pod annotations for this shim
 #       crio:
 #         guestPull: false            # enable guest-pull in CRI-O
 #       agent:

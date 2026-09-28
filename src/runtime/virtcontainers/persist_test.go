@@ -22,6 +22,9 @@ func TestSandboxRestore(t *testing.T) {
 	assert := assert.New(t)
 	sconfig := SandboxConfig{
 		ID: "test-exp",
+		HypervisorConfig: HypervisorConfig{
+			DisableNestedVirtualization: true,
+		},
 	}
 	container := make(map[string]*Container)
 	container["test-exp"] = &Container{}
@@ -52,6 +55,11 @@ func TestSandboxRestore(t *testing.T) {
 	// disk data are empty
 	err = sandbox.Save()
 	assert.NoError(err)
+
+	restoredConfig, err := loadSandboxConfig(sandbox.id)
+	if assert.NoError(err) {
+		assert.True(restoredConfig.HypervisorConfig.DisableNestedVirtualization)
+	}
 
 	err = sandbox.Restore()
 	assert.NoError(err)

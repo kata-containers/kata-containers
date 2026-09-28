@@ -389,6 +389,14 @@ $ helm install kata-deploy \
 
 > **Note:**
 >
+> QEMU seccomp sandboxing is enabled by default for the NVIDIA QEMU runtime
+> classes. If you have performance concerns, disable it by commenting out
+> `seccomp_sandbox` in the configuration file used by the relevant
+> runtime class. See [Using seccomp with runtime-rs](../how-to/how-to-use-seccomp-with-runtime-rs.md)
+> for details.
+
+> **Note:**
+>
 > For node lifecycle management, see the
 > [lifecycle-manager](https://github.com/kata-containers/lifecycle-manager)
 > repository which enables Argo Workflows-based lifecycle management for your

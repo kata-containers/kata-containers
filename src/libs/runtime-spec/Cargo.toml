@@ -1,9 +1,9 @@
 [package]
-name = "runtime-spec"
-version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2021"
 license = "Apache-2.0"
+name = "runtime-spec"
+version = "0.1.0"
 
 [dependencies]
 serde = "1.0.131"
