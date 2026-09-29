@@ -47,8 +47,9 @@ RUN KATA_VERSION="${KATA_VERSION:-$(cat /tmp/kata-version)}" && \
         './opt/kata/libexec/virtiofsd' \
         './opt/kata/lib/kata-qemu/*' \
         './opt/kata/include/*' \
-        './opt/kata/share/kata-qemu/qemu/*' \
-        './opt/kata/share/defaults/kata-containers' && \
+        './opt/kata/share/*' \
+        --exclude \
+        './opt/kata/share/kata-containers/*' && \
     # kata bundles edk2 UEFI firmware for every arch (~290MB of cross-arch
     # blobs); keep only the target arch's. arm64 uses aarch64, not 32-bit arm.
     case "${TARGETARCH}" in \
