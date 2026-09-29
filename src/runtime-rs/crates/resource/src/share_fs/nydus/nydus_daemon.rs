@@ -292,22 +292,28 @@ impl Nydusd {
     }
 
     pub async fn stop(&self) -> Result<()> {
-        let (pid, child) = {
-            let mut inner = self.inner.write().await;
-            (inner.pid.take(), inner.child.take())
-        };
-
-        if let Some(pid) = pid {
+        let mut inner = self.inner.write().await;
+        if let Some(pid) = inner.pid {
             info!(sl!(), "stopping nydusd with pid {}", pid);
 
-            if let Some(mut child) = child {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
+            if let Some(child) = inner.child.as_mut() {
+                if child.try_wait().context("check nydusd status")?.is_none() {
+                    child.kill().await.context("kill nydusd")?;
+                }
             }
+            inner.child = None;
+            inner.pid = None;
 
-            // Clean up the socket files created by nydusd
-            cleanup_socket(&self.config.sock_path).await?;
-            cleanup_socket(&self.config.api_sock_path).await?;
+            for path in [&self.config.sock_path, &self.config.api_sock_path] {
+                if let Err(err) = cleanup_socket(path).await {
+                    warn!(
+                        sl!(),
+                        "failed to remove nydusd socket {}: {}",
+                        path.display(),
+                        err
+                    );
+                }
+            }
 
             info!(sl!(), "nydusd stopped");
         }
@@ -318,6 +324,11 @@ impl Nydusd {
     pub async fn get_pid(&self) -> Option<u32> {
         let inner = self.inner.read().await;
         inner.pid
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn hold_stop_lock_for_test(&self) -> impl Drop {
+        self.inner.clone().write_owned().await
     }
 }
 
