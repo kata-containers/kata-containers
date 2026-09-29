@@ -208,6 +208,38 @@ impl FcInner {
         Ok(())
     }
 
+    // Restore a drive to the empty placeholder file created by
+    // prepare_vmm_resources, mirroring the golang runtime's
+    // hotplugBlockDevice remove path: unmount the jailed resource so the
+    // path resolves to the placeholder again, then PATCH the drive so
+    // Firecracker reopens it and releases the previous backing device.
+    pub(crate) async fn patch_drive_to_placeholder(&mut self, drive_id: &str) -> Result<()> {
+        let drive_name = [DRIVE_PREFIX, drive_id].concat();
+
+        // The bind mount sits on top of the placeholder file; MNT_DETACH is
+        // lazy, so Firecracker's open handle stays valid until the PATCH
+        // below swaps the backing file.
+        if self.jailed {
+            self.umount_jail_resource(&drive_name)
+                .with_context(|| format!("umount jailed resource {drive_name}"))?;
+        }
+
+        let placeholder_path = match self.jailed {
+            true => format!("/{drive_name}"),
+            false => format!("{}/{}/{}", self.vm_path, ROOT, drive_name),
+        };
+
+        let body: String = json!({
+            "drive_id": drive_name,
+            "path_on_host": placeholder_path,
+        })
+        .to_string();
+
+        self.request_with_retry(Method::PATCH, &format!("/drives/{drive_name}"), body)
+            .await
+            .with_context(|| format!("patch {drive_name} back to placeholder"))
+    }
+
     pub(crate) async fn add_net_device(
         &mut self,
         config: &NetworkConfig,
