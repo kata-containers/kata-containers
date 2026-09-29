@@ -18,6 +18,7 @@ Name | Type | Description | Notes
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
 **Id** | Pointer to **string** |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
+**PciDeviceId** | Pointer to **int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 **OffloadTso** | Pointer to **bool** |  | [optional] [default to true]
 **OffloadUfo** | Pointer to **bool** |  | [optional] [default to true]
@@ -391,6 +392,31 @@ SetPciSegment sets PciSegment field to given value.
 `func (o *NetConfig) HasPciSegment() bool`
 
 HasPciSegment returns a boolean if a field has been set.
+
+### GetPciDeviceId
+
+`func (o *NetConfig) GetPciDeviceId() int32`
+
+GetPciDeviceId returns the PciDeviceId field if non-nil, zero value otherwise.
+
+### GetPciDeviceIdOk
+
+`func (o *NetConfig) GetPciDeviceIdOk() (*int32, bool)`
+
+GetPciDeviceIdOk returns a tuple with the PciDeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciDeviceId
+
+`func (o *NetConfig) SetPciDeviceId(v int32)`
+
+SetPciDeviceId sets PciDeviceId field to given value.
+
+### HasPciDeviceId
+
+`func (o *NetConfig) HasPciDeviceId() bool`
+
+HasPciDeviceId returns a boolean if a field has been set.
 
 ### GetRateLimiterConfig
 

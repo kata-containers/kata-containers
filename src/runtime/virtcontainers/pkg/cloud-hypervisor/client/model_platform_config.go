@@ -16,14 +16,26 @@ import (
 
 // PlatformConfig struct for PlatformConfig
 type PlatformConfig struct {
-	NumPciSegments    *int32    `json:"num_pci_segments,omitempty"`
-	IommuSegments     *[]int32  `json:"iommu_segments,omitempty"`
-	IommuAddressWidth *int32    `json:"iommu_address_width,omitempty"`
-	SerialNumber      *string   `json:"serial_number,omitempty"`
-	Uuid              *string   `json:"uuid,omitempty"`
-	OemStrings        *[]string `json:"oem_strings,omitempty"`
-	Tdx               *bool     `json:"tdx,omitempty"`
-	SevSnp            *bool     `json:"sev_snp,omitempty"`
+	NumPciSegments        *int32   `json:"num_pci_segments,omitempty"`
+	IommuSegments         *[]int32 `json:"iommu_segments,omitempty"`
+	IommuAddressWidthBits *int32   `json:"iommu_address_width_bits,omitempty"`
+	SystemSerialNumber    *string  `json:"system_serial_number,omitempty"`
+	// Deprecated
+	SerialNumber *string `json:"serial_number,omitempty"`
+	SystemUuid   *string `json:"system_uuid,omitempty"`
+	// Deprecated
+	Uuid               *string   `json:"uuid,omitempty"`
+	OemStrings         *[]string `json:"oem_strings,omitempty"`
+	SystemManufacturer *string   `json:"system_manufacturer,omitempty"`
+	SystemProductName  *string   `json:"system_product_name,omitempty"`
+	SystemVersion      *string   `json:"system_version,omitempty"`
+	SystemFamily       *string   `json:"system_family,omitempty"`
+	SystemSkuNumber    *string   `json:"system_sku_number,omitempty"`
+	ChassisAssetTag    *string   `json:"chassis_asset_tag,omitempty"`
+	Tdx                *bool     `json:"tdx,omitempty"`
+	SevSnp             *bool     `json:"sev_snp,omitempty"`
+	Iommufd            *bool     `json:"iommufd,omitempty"`
+	VfioP2pDma         *bool     `json:"vfio_p2p_dma,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -36,6 +48,10 @@ func NewPlatformConfig() *PlatformConfig {
 	this.Tdx = &tdx
 	var sevSnp bool = false
 	this.SevSnp = &sevSnp
+	var iommufd bool = false
+	this.Iommufd = &iommufd
+	var vfioP2pDma bool = true
+	this.VfioP2pDma = &vfioP2pDma
 	return &this
 }
 
@@ -48,6 +64,10 @@ func NewPlatformConfigWithDefaults() *PlatformConfig {
 	this.Tdx = &tdx
 	var sevSnp bool = false
 	this.SevSnp = &sevSnp
+	var iommufd bool = false
+	this.Iommufd = &iommufd
+	var vfioP2pDma bool = true
+	this.VfioP2pDma = &vfioP2pDma
 	return &this
 }
 
@@ -115,39 +135,72 @@ func (o *PlatformConfig) SetIommuSegments(v []int32) {
 	o.IommuSegments = &v
 }
 
-// GetIommuAddressWidth returns the IommuAddressWidth field value if set, zero value otherwise.
-func (o *PlatformConfig) GetIommuAddressWidth() int32 {
-	if o == nil || o.IommuAddressWidth == nil {
+// GetIommuAddressWidthBits returns the IommuAddressWidthBits field value if set, zero value otherwise.
+func (o *PlatformConfig) GetIommuAddressWidthBits() int32 {
+	if o == nil || o.IommuAddressWidthBits == nil {
 		var ret int32
 		return ret
 	}
-	return *o.IommuAddressWidth
+	return *o.IommuAddressWidthBits
 }
 
-// GetIommuAddressWidthOk returns a tuple with the IommuAddressWidth field value if set, nil otherwise
+// GetIommuAddressWidthBitsOk returns a tuple with the IommuAddressWidthBits field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *PlatformConfig) GetIommuAddressWidthOk() (*int32, bool) {
-	if o == nil || o.IommuAddressWidth == nil {
+func (o *PlatformConfig) GetIommuAddressWidthBitsOk() (*int32, bool) {
+	if o == nil || o.IommuAddressWidthBits == nil {
 		return nil, false
 	}
-	return o.IommuAddressWidth, true
+	return o.IommuAddressWidthBits, true
 }
 
-// HasIommuAddressWidth returns a boolean if a field has been set.
-func (o *PlatformConfig) HasIommuAddressWidth() bool {
-	if o != nil && o.IommuAddressWidth != nil {
+// HasIommuAddressWidthBits returns a boolean if a field has been set.
+func (o *PlatformConfig) HasIommuAddressWidthBits() bool {
+	if o != nil && o.IommuAddressWidthBits != nil {
 		return true
 	}
 
 	return false
 }
 
-// SetIommuAddressWidth gets a reference to the given int32 and assigns it to the IommuAddressWidth field.
-func (o *PlatformConfig) SetIommuAddressWidth(v int32) {
-	o.IommuAddressWidth = &v
+// SetIommuAddressWidthBits gets a reference to the given int32 and assigns it to the IommuAddressWidthBits field.
+func (o *PlatformConfig) SetIommuAddressWidthBits(v int32) {
+	o.IommuAddressWidthBits = &v
+}
+
+// GetSystemSerialNumber returns the SystemSerialNumber field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemSerialNumber() string {
+	if o == nil || o.SystemSerialNumber == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemSerialNumber
+}
+
+// GetSystemSerialNumberOk returns a tuple with the SystemSerialNumber field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemSerialNumberOk() (*string, bool) {
+	if o == nil || o.SystemSerialNumber == nil {
+		return nil, false
+	}
+	return o.SystemSerialNumber, true
+}
+
+// HasSystemSerialNumber returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemSerialNumber() bool {
+	if o != nil && o.SystemSerialNumber != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemSerialNumber gets a reference to the given string and assigns it to the SystemSerialNumber field.
+func (o *PlatformConfig) SetSystemSerialNumber(v string) {
+	o.SystemSerialNumber = &v
 }
 
 // GetSerialNumber returns the SerialNumber field value if set, zero value otherwise.
+// Deprecated
 func (o *PlatformConfig) GetSerialNumber() string {
 	if o == nil || o.SerialNumber == nil {
 		var ret string
@@ -158,6 +211,7 @@ func (o *PlatformConfig) GetSerialNumber() string {
 
 // GetSerialNumberOk returns a tuple with the SerialNumber field value if set, nil otherwise
 // and a boolean to check if the value has been set.
+// Deprecated
 func (o *PlatformConfig) GetSerialNumberOk() (*string, bool) {
 	if o == nil || o.SerialNumber == nil {
 		return nil, false
@@ -175,11 +229,45 @@ func (o *PlatformConfig) HasSerialNumber() bool {
 }
 
 // SetSerialNumber gets a reference to the given string and assigns it to the SerialNumber field.
+// Deprecated
 func (o *PlatformConfig) SetSerialNumber(v string) {
 	o.SerialNumber = &v
 }
 
+// GetSystemUuid returns the SystemUuid field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemUuid() string {
+	if o == nil || o.SystemUuid == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemUuid
+}
+
+// GetSystemUuidOk returns a tuple with the SystemUuid field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemUuidOk() (*string, bool) {
+	if o == nil || o.SystemUuid == nil {
+		return nil, false
+	}
+	return o.SystemUuid, true
+}
+
+// HasSystemUuid returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemUuid() bool {
+	if o != nil && o.SystemUuid != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemUuid gets a reference to the given string and assigns it to the SystemUuid field.
+func (o *PlatformConfig) SetSystemUuid(v string) {
+	o.SystemUuid = &v
+}
+
 // GetUuid returns the Uuid field value if set, zero value otherwise.
+// Deprecated
 func (o *PlatformConfig) GetUuid() string {
 	if o == nil || o.Uuid == nil {
 		var ret string
@@ -190,6 +278,7 @@ func (o *PlatformConfig) GetUuid() string {
 
 // GetUuidOk returns a tuple with the Uuid field value if set, nil otherwise
 // and a boolean to check if the value has been set.
+// Deprecated
 func (o *PlatformConfig) GetUuidOk() (*string, bool) {
 	if o == nil || o.Uuid == nil {
 		return nil, false
@@ -207,6 +296,7 @@ func (o *PlatformConfig) HasUuid() bool {
 }
 
 // SetUuid gets a reference to the given string and assigns it to the Uuid field.
+// Deprecated
 func (o *PlatformConfig) SetUuid(v string) {
 	o.Uuid = &v
 }
@@ -241,6 +331,198 @@ func (o *PlatformConfig) HasOemStrings() bool {
 // SetOemStrings gets a reference to the given []string and assigns it to the OemStrings field.
 func (o *PlatformConfig) SetOemStrings(v []string) {
 	o.OemStrings = &v
+}
+
+// GetSystemManufacturer returns the SystemManufacturer field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemManufacturer() string {
+	if o == nil || o.SystemManufacturer == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemManufacturer
+}
+
+// GetSystemManufacturerOk returns a tuple with the SystemManufacturer field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemManufacturerOk() (*string, bool) {
+	if o == nil || o.SystemManufacturer == nil {
+		return nil, false
+	}
+	return o.SystemManufacturer, true
+}
+
+// HasSystemManufacturer returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemManufacturer() bool {
+	if o != nil && o.SystemManufacturer != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemManufacturer gets a reference to the given string and assigns it to the SystemManufacturer field.
+func (o *PlatformConfig) SetSystemManufacturer(v string) {
+	o.SystemManufacturer = &v
+}
+
+// GetSystemProductName returns the SystemProductName field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemProductName() string {
+	if o == nil || o.SystemProductName == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemProductName
+}
+
+// GetSystemProductNameOk returns a tuple with the SystemProductName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemProductNameOk() (*string, bool) {
+	if o == nil || o.SystemProductName == nil {
+		return nil, false
+	}
+	return o.SystemProductName, true
+}
+
+// HasSystemProductName returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemProductName() bool {
+	if o != nil && o.SystemProductName != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemProductName gets a reference to the given string and assigns it to the SystemProductName field.
+func (o *PlatformConfig) SetSystemProductName(v string) {
+	o.SystemProductName = &v
+}
+
+// GetSystemVersion returns the SystemVersion field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemVersion() string {
+	if o == nil || o.SystemVersion == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemVersion
+}
+
+// GetSystemVersionOk returns a tuple with the SystemVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemVersionOk() (*string, bool) {
+	if o == nil || o.SystemVersion == nil {
+		return nil, false
+	}
+	return o.SystemVersion, true
+}
+
+// HasSystemVersion returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemVersion() bool {
+	if o != nil && o.SystemVersion != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemVersion gets a reference to the given string and assigns it to the SystemVersion field.
+func (o *PlatformConfig) SetSystemVersion(v string) {
+	o.SystemVersion = &v
+}
+
+// GetSystemFamily returns the SystemFamily field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemFamily() string {
+	if o == nil || o.SystemFamily == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemFamily
+}
+
+// GetSystemFamilyOk returns a tuple with the SystemFamily field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemFamilyOk() (*string, bool) {
+	if o == nil || o.SystemFamily == nil {
+		return nil, false
+	}
+	return o.SystemFamily, true
+}
+
+// HasSystemFamily returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemFamily() bool {
+	if o != nil && o.SystemFamily != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemFamily gets a reference to the given string and assigns it to the SystemFamily field.
+func (o *PlatformConfig) SetSystemFamily(v string) {
+	o.SystemFamily = &v
+}
+
+// GetSystemSkuNumber returns the SystemSkuNumber field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSystemSkuNumber() string {
+	if o == nil || o.SystemSkuNumber == nil {
+		var ret string
+		return ret
+	}
+	return *o.SystemSkuNumber
+}
+
+// GetSystemSkuNumberOk returns a tuple with the SystemSkuNumber field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSystemSkuNumberOk() (*string, bool) {
+	if o == nil || o.SystemSkuNumber == nil {
+		return nil, false
+	}
+	return o.SystemSkuNumber, true
+}
+
+// HasSystemSkuNumber returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSystemSkuNumber() bool {
+	if o != nil && o.SystemSkuNumber != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSystemSkuNumber gets a reference to the given string and assigns it to the SystemSkuNumber field.
+func (o *PlatformConfig) SetSystemSkuNumber(v string) {
+	o.SystemSkuNumber = &v
+}
+
+// GetChassisAssetTag returns the ChassisAssetTag field value if set, zero value otherwise.
+func (o *PlatformConfig) GetChassisAssetTag() string {
+	if o == nil || o.ChassisAssetTag == nil {
+		var ret string
+		return ret
+	}
+	return *o.ChassisAssetTag
+}
+
+// GetChassisAssetTagOk returns a tuple with the ChassisAssetTag field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetChassisAssetTagOk() (*string, bool) {
+	if o == nil || o.ChassisAssetTag == nil {
+		return nil, false
+	}
+	return o.ChassisAssetTag, true
+}
+
+// HasChassisAssetTag returns a boolean if a field has been set.
+func (o *PlatformConfig) HasChassisAssetTag() bool {
+	if o != nil && o.ChassisAssetTag != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetChassisAssetTag gets a reference to the given string and assigns it to the ChassisAssetTag field.
+func (o *PlatformConfig) SetChassisAssetTag(v string) {
+	o.ChassisAssetTag = &v
 }
 
 // GetTdx returns the Tdx field value if set, zero value otherwise.
@@ -307,6 +589,70 @@ func (o *PlatformConfig) SetSevSnp(v bool) {
 	o.SevSnp = &v
 }
 
+// GetIommufd returns the Iommufd field value if set, zero value otherwise.
+func (o *PlatformConfig) GetIommufd() bool {
+	if o == nil || o.Iommufd == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Iommufd
+}
+
+// GetIommufdOk returns a tuple with the Iommufd field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetIommufdOk() (*bool, bool) {
+	if o == nil || o.Iommufd == nil {
+		return nil, false
+	}
+	return o.Iommufd, true
+}
+
+// HasIommufd returns a boolean if a field has been set.
+func (o *PlatformConfig) HasIommufd() bool {
+	if o != nil && o.Iommufd != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetIommufd gets a reference to the given bool and assigns it to the Iommufd field.
+func (o *PlatformConfig) SetIommufd(v bool) {
+	o.Iommufd = &v
+}
+
+// GetVfioP2pDma returns the VfioP2pDma field value if set, zero value otherwise.
+func (o *PlatformConfig) GetVfioP2pDma() bool {
+	if o == nil || o.VfioP2pDma == nil {
+		var ret bool
+		return ret
+	}
+	return *o.VfioP2pDma
+}
+
+// GetVfioP2pDmaOk returns a tuple with the VfioP2pDma field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetVfioP2pDmaOk() (*bool, bool) {
+	if o == nil || o.VfioP2pDma == nil {
+		return nil, false
+	}
+	return o.VfioP2pDma, true
+}
+
+// HasVfioP2pDma returns a boolean if a field has been set.
+func (o *PlatformConfig) HasVfioP2pDma() bool {
+	if o != nil && o.VfioP2pDma != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetVfioP2pDma gets a reference to the given bool and assigns it to the VfioP2pDma field.
+func (o *PlatformConfig) SetVfioP2pDma(v bool) {
+	o.VfioP2pDma = &v
+}
+
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.NumPciSegments != nil {
@@ -315,11 +661,17 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	if o.IommuSegments != nil {
 		toSerialize["iommu_segments"] = o.IommuSegments
 	}
-	if o.IommuAddressWidth != nil {
-		toSerialize["iommu_address_width"] = o.IommuAddressWidth
+	if o.IommuAddressWidthBits != nil {
+		toSerialize["iommu_address_width_bits"] = o.IommuAddressWidthBits
+	}
+	if o.SystemSerialNumber != nil {
+		toSerialize["system_serial_number"] = o.SystemSerialNumber
 	}
 	if o.SerialNumber != nil {
 		toSerialize["serial_number"] = o.SerialNumber
+	}
+	if o.SystemUuid != nil {
+		toSerialize["system_uuid"] = o.SystemUuid
 	}
 	if o.Uuid != nil {
 		toSerialize["uuid"] = o.Uuid
@@ -327,11 +679,35 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	if o.OemStrings != nil {
 		toSerialize["oem_strings"] = o.OemStrings
 	}
+	if o.SystemManufacturer != nil {
+		toSerialize["system_manufacturer"] = o.SystemManufacturer
+	}
+	if o.SystemProductName != nil {
+		toSerialize["system_product_name"] = o.SystemProductName
+	}
+	if o.SystemVersion != nil {
+		toSerialize["system_version"] = o.SystemVersion
+	}
+	if o.SystemFamily != nil {
+		toSerialize["system_family"] = o.SystemFamily
+	}
+	if o.SystemSkuNumber != nil {
+		toSerialize["system_sku_number"] = o.SystemSkuNumber
+	}
+	if o.ChassisAssetTag != nil {
+		toSerialize["chassis_asset_tag"] = o.ChassisAssetTag
+	}
 	if o.Tdx != nil {
 		toSerialize["tdx"] = o.Tdx
 	}
 	if o.SevSnp != nil {
 		toSerialize["sev_snp"] = o.SevSnp
+	}
+	if o.Iommufd != nil {
+		toSerialize["iommufd"] = o.Iommufd
+	}
+	if o.VfioP2pDma != nil {
+		toSerialize["vfio_p2p_dma"] = o.VfioP2pDma
 	}
 	return json.Marshal(toSerialize)
 }

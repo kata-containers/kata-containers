@@ -16,6 +16,7 @@ Method | HTTP request | Description
 [**VmAddDevicePut**](DefaultApi.md#VmAddDevicePut) | **Put** /vm.add-device | Add a new device to the VM
 [**VmAddDiskPut**](DefaultApi.md#VmAddDiskPut) | **Put** /vm.add-disk | Add a new disk to the VM
 [**VmAddFsPut**](DefaultApi.md#VmAddFsPut) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
+[**VmAddGenericVhostUserPut**](DefaultApi.md#VmAddGenericVhostUserPut) | **Put** /vm.add-generic-vhost-user | Add a new generic vhost-user device to the VM
 [**VmAddNetPut**](DefaultApi.md#VmAddNetPut) | **Put** /vm.add-net | Add a new network device to the VM
 [**VmAddPmemPut**](DefaultApi.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
 [**VmAddUserDevicePut**](DefaultApi.md#VmAddUserDevicePut) | **Put** /vm.add-user-device | Add a new userspace device to the VM
@@ -24,6 +25,7 @@ Method | HTTP request | Description
 [**VmCoredumpPut**](DefaultApi.md#VmCoredumpPut) | **Put** /vm.coredump | Takes a VM coredump.
 [**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+[**VmNmiPut**](DefaultApi.md#VmNmiPut) | **Put** /vm.nmi | Inject an NMI.
 [**VmReceiveMigrationPut**](DefaultApi.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
 [**VmRemoveDevicePut**](DefaultApi.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
 [**VmResizeDiskPut**](DefaultApi.md#VmResizeDiskPut) | **Put** /vm.resize-disk | Resize a disk
@@ -32,7 +34,6 @@ Method | HTTP request | Description
 [**VmRestorePut**](DefaultApi.md#VmRestorePut) | **Put** /vm.restore | Restore a VM from a snapshot.
 [**VmSendMigrationPut**](DefaultApi.md#VmSendMigrationPut) | **Put** /vm.send-migration | Send a VM migration to URL
 [**VmSnapshotPut**](DefaultApi.md#VmSnapshotPut) | **Put** /vm.snapshot | Returns a VM snapshot.
-[**VmmNmiPut**](DefaultApi.md#VmmNmiPut) | **Put** /vmm.nmi | Inject an NMI.
 [**VmmPingGet**](DefaultApi.md#VmmPingGet) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
@@ -574,7 +575,7 @@ import (
 )
 
 func main() {
-    deviceConfig := *openapiclient.NewDeviceConfig("Path_example") // DeviceConfig | The path of the new device
+    deviceConfig := *openapiclient.NewDeviceConfig() // DeviceConfig | The path of the new device
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)
@@ -728,6 +729,70 @@ Other parameters are passed through a pointer to a apiVmAddFsPutRequest struct v
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **fsConfig** | [**FsConfig**](FsConfig.md) | The details of the new virtio-fs | 
+
+### Return type
+
+[**PciDeviceInfo**](PciDeviceInfo.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmAddGenericVhostUserPut
+
+> PciDeviceInfo VmAddGenericVhostUserPut(ctx).GenericVhostUserConfig(genericVhostUserConfig).Execute()
+
+Add a new generic vhost-user device to the VM
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    genericVhostUserConfig := *openapiclient.NewGenericVhostUserConfig("Socket_example", []int32{int32(123)}, int32(123)) // GenericVhostUserConfig | The details of the new generic vhost-user device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddGenericVhostUserPut(context.Background()).GenericVhostUserConfig(genericVhostUserConfig).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddGenericVhostUserPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddGenericVhostUserPut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddGenericVhostUserPut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddGenericVhostUserPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **genericVhostUserConfig** | [**GenericVhostUserConfig**](GenericVhostUserConfig.md) | The details of the new generic vhost-user device | 
 
 ### Return type
 
@@ -1247,6 +1312,63 @@ No authorization required
 [[Back to README]](../README.md)
 
 
+## VmNmiPut
+
+> VmNmiPut(ctx).Execute()
+
+Inject an NMI.
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmNmiPut(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmNmiPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmNmiPutRequest struct via the builder pattern
+
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
 ## VmReceiveMigrationPut
 
 > VmReceiveMigrationPut(ctx).ReceiveMigrationData(receiveMigrationData).Execute()
@@ -1736,63 +1858,6 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: Not defined
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
-[[Back to Model list]](../README.md#documentation-for-models)
-[[Back to README]](../README.md)
-
-
-## VmmNmiPut
-
-> VmmNmiPut(ctx).Execute()
-
-Inject an NMI.
-
-### Example
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "os"
-    openapiclient "./openapi"
-)
-
-func main() {
-
-    configuration := openapiclient.NewConfiguration()
-    api_client := openapiclient.NewAPIClient(configuration)
-    resp, r, err := api_client.DefaultApi.VmmNmiPut(context.Background()).Execute()
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmmNmiPut``: %v\n", err)
-        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-    }
-}
-```
-
-### Path Parameters
-
-This endpoint does not need any parameter.
-
-### Other Parameters
-
-Other parameters are passed through a pointer to a apiVmmNmiPutRequest struct via the builder pattern
-
-
-### Return type
-
- (empty response body)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
 - **Accept**: Not defined
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)

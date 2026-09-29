@@ -277,6 +277,28 @@ paths:
         500:
           description: The new device could not be added to the VM instance.
 
+  /vm.add-generic-vhost-user:
+    put:
+      summary: Add a new generic vhost-user device to the VM
+      requestBody:
+        description: The details of the new generic vhost-user device
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenericVhostUserConfig"
+        required: true
+      responses:
+        200:
+          description: The new device was successfully added to the VM instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PciDeviceInfo"
+        204:
+          description: The new device was successfully (cold) added to the VM instance.
+        500:
+          description: The new device could not be added to the VM instance.
+
   /vm.add-pmem:
     put:
       summary: Add a new pmem device to the VM
@@ -423,7 +445,7 @@ paths:
         405:
           description: The VM instance could not be coredumped because it is not booted.
 
-  /vmm.nmi:
+  /vm.nmi:
     put:
       summary: Inject an NMI.
       responses:
@@ -498,6 +520,10 @@ components:
             type: string
       description: Virtual Machine Monitor information
 
+    VmState:
+      type: string
+      enum: [Created, Running, Shutdown, Paused]
+
     VmInfo:
       required:
         - config
@@ -507,8 +533,8 @@ components:
         config:
           $ref: "#/components/schemas/VmConfig"
         state:
-          type: string
-          enum: [Created, Running, Shutdown, Paused]
+          $ref: "#/components/schemas/VmState"
+
         memory_actual_size:
           type: integer
           format: int64
@@ -603,12 +629,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FsConfig"
+        generic-vhost-user:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenericVhostUserConfig"
         pmem:
           type: array
           items:
             $ref: "#/components/schemas/PmemConfig"
         serial:
-          $ref: "#/components/schemas/ConsoleConfig"
+          $ref: "#/components/schemas/SerialConfig"
         console:
           $ref: "#/components/schemas/ConsoleConfig"
         debug_console:
@@ -617,6 +647,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DeviceConfig"
+        user_devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDeviceConfig'
         vdpa:
           type: array
           items:
@@ -633,6 +667,8 @@ components:
         watchdog:
           type: boolean
           default: false
+        rtc:
+          $ref: "#/components/schemas/RtcConfig"
         pvpanic:
           type: boolean
           default: false
@@ -684,6 +720,11 @@ components:
         packages:
           type: integer
 
+    CoreSchedulingMode:
+      type: string
+      enum: ["Vm", "Vcpu", "Off"]
+      default: "Vm"
+
     CpusConfig:
       required:
         - boot_vcpus
@@ -712,6 +753,9 @@ components:
             $ref: "#/components/schemas/CpuAffinity"
         features:
           $ref: "#/components/schemas/CpuFeatures"
+        core_scheduling:
+          $ref: "#/components/schemas/CoreSchedulingMode"
+
 
     PciSegmentConfig:
       required:
@@ -739,23 +783,47 @@ components:
           items:
             type: integer
             format: int16
-        iommu_address_width:
+        iommu_address_width_bits:
           type: integer
           format: uint8
+        system_serial_number:
+          type: string
         serial_number:
+          type: string
+          deprecated: true
+        system_uuid:
           type: string
         uuid:
           type: string
+          deprecated: true
         oem_strings:
           type: array
           items:
             type: string
+        system_manufacturer:
+          type: string
+        system_product_name:
+          type: string
+        system_version:
+          type: string
+        system_family:
+          type: string
+        system_sku_number:
+          type: string
+        chassis_asset_tag:
+          type: string
         tdx:
           type: boolean
           default: false
         sev_snp:
           type: boolean
           default: false
+        iommufd:
+          type: boolean
+          default: false
+        vfio_p2p_dma:
+          type: boolean
+          default: true
 
     MemoryZoneConfig:
       required:
@@ -794,6 +862,9 @@ components:
         prefault:
           type: boolean
           default: false
+        reserve:
+          type: boolean
+          default: false
 
     MemoryConfig:
       required:
@@ -825,6 +896,9 @@ components:
           type: integer
           format: int64
         prefault:
+          type: boolean
+          default: false
+        reserve:
           type: boolean
           default: false
         thp:
@@ -901,6 +975,15 @@ components:
           items:
             type: integer
 
+    ImageType:
+      type: string
+      enum: ["FixedVhd", "Qcow2", "Raw", "Vhdx", "Unknown"]
+
+    LockGranularity:
+      type: string
+      enum: [ByteRange, Full]
+      default: ByteRange
+
     DiskConfig:
       type: object
       properties:
@@ -931,6 +1014,9 @@ components:
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         id:
           type: string
         serial:
@@ -948,9 +1034,9 @@ components:
           type: boolean
           default: true
         image_type:
-          type: string
-          enum: [FixedVhd, Qcow2, Raw, Vhdx, Unknown]
-
+          $ref: "#/components/schemas/ImageType"
+        lock_granularity:
+          $ref: "#/components/schemas/LockGranularity"
 
     NetConfig:
       type: object
@@ -993,6 +1079,9 @@ components:
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         rate_limiter_config:
           $ref: "#/components/schemas/RateLimiterConfig"
         offload_tso:
@@ -1010,8 +1099,31 @@ components:
         - src
       type: object
       properties:
+        id:
+          type: string
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
+        iommu:
+          type: boolean
+          default: false
         src:
           type: string
+
+    RtcConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         iommu:
           type: boolean
           default: false
@@ -1021,6 +1133,17 @@ components:
         - size
       type: object
       properties:
+        id:
+          type: string
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
+        iommu:
+          type: boolean
+          default: false
         size:
           type: integer
           format: int64
@@ -1054,8 +1177,35 @@ components:
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         id:
           type: string
+
+    GenericVhostUserConfig:
+      required:
+        - queue_sizes
+        - socket
+        - device_type
+      type: object
+      properties:
+        socket:
+          type: string
+        queue_sizes:
+          type: array
+          items:
+            type: integer
+            format: uint16
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
+        device_type:
+          type: integer
+          format: uint32
 
     PmemConfig:
       required:
@@ -1076,8 +1226,15 @@ components:
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         id:
           type: string
+
+    ConsoleMode:
+      type: string
+      enum: ["Off", "Pty", "Tty", "File", "Socket", "Null"]
 
     ConsoleConfig:
       required:
@@ -1089,11 +1246,30 @@ components:
         socket:
           type: string
         mode:
-          type: string
-          enum: ["Off", "Pty", "Tty", "File", "Socket", "Null"]
+          $ref: "#/components/schemas/ConsoleMode"
         iommu:
           type: boolean
           default: false
+        id:
+          type: string
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
+
+    SerialConfig:
+      required:
+        - mode
+      type: object
+      properties:
+        file:
+          type: string
+        socket:
+          type: string
+        mode:
+          $ref: "#/components/schemas/ConsoleMode"
 
     DebugConsoleConfig:
       required:
@@ -1103,29 +1279,56 @@ components:
         file:
           type: string
         mode:
-          type: string
-          enum: ["Off", "Pty", "Tty", "File", "Null"]
+          $ref: "#/components/schemas/ConsoleMode"
         iobase:
           type: integer
 
     DeviceConfig:
-      required:
-        - path
       type: object
       properties:
         path:
           type: string
+          description: |
+            Sysfs path of the VFIO device. Exactly one of `path` or an
+            externally-opened cdev FD must be supplied; an FD is passed
+            out of band via SCM_RIGHTS on the UNIX domain socket, never
+            in this body.
         iommu:
           type: boolean
           default: false
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         id:
           type: string
         x_nv_gpudirect_clique:
           type: integer
           format: int8
+        x_exclude_mmap_bars:
+          type: array
+          items:
+            type: integer
+            format: int64
+
+    UserDeviceConfig:
+      required:
+        - socket
+      type: object
+      properties:
+        socket:
+          type: string
+        id:
+          type: string
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
+
     TpmConfig:
       required:
         - socket
@@ -1151,6 +1354,9 @@ components:
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         id:
           type: string
 
@@ -1174,6 +1380,9 @@ components:
         pci_segment:
           type: integer
           format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
         id:
           type: string
 
@@ -1273,6 +1482,11 @@ components:
         destination_url:
           type: string
 
+    MemoryRestoreMode:
+      type: string
+      enum: [Copy, OnDemand]
+      default: Copy
+
     RestoreConfig:
       required:
         - source_url
@@ -1282,6 +1496,10 @@ components:
           type: string
         prefault:
           type: boolean
+        memory_restore_mode:
+          $ref: "#/components/schemas/MemoryRestoreMode"
+        resume:
+          type: boolean
 
     ReceiveMigrationData:
       required:
@@ -1290,6 +1508,32 @@ components:
       properties:
         receiver_url:
           type: string
+        tls_dir:
+          type: string
+          description: >
+            Directory containing the TLS server certificate (server-cert.pem), the TLS
+            server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem).
+            TLS is only supported with tcp:<host>:<port> receiver URLs.
+        memory_mode:
+          $ref: "#/components/schemas/MigrationMode"
+
+    MigrationMode:
+      type: string
+      enum: ["Precopy", "Postcopy"]
+      default: "Precopy"
+      description: >
+        Memory transfer mode. Precopy transfers all guest memory before the
+        destination resumes. Postcopy resumes the destination first and faults
+        guest pages in on demand.
+
+    TimeoutStrategy:
+      type: string
+      enum: ["Cancel", "Ignore"]
+      default: "Cancel"
+      description: >
+        The strategy to apply when the migration timeout is reached.
+        Cancel will abort the migration and keep the VM running on the source.
+        Ignore will proceed with the migration regardless of the downtime requirement.
 
     SendMigrationData:
       required:
@@ -1300,6 +1544,42 @@ components:
           type: string
         local:
           type: boolean
+        downtime_ms:
+          type: integer
+          format: int64
+          minimum: 1
+          default: 300
+          description: >
+            The maximum downtime the migration aims for, in milliseconds.
+            Defaults to 300ms.
+        timeout_s:
+          type: integer
+          format: int64
+          minimum: 1
+          default: 3600
+          description: >
+            The timeout for the migration (maximum total duration), in seconds.
+            Defaults to 3600s (one hour).
+        timeout_strategy:
+          $ref: "#/components/schemas/TimeoutStrategy"
+        connections:
+          type: integer
+          format: int64
+          default: 1
+          minimum: 1
+          maximum: 128
+          description: >
+            The number of parallel TCP connections to use for migration.
+            Must be between 1 and 128. Multiple connections are not supported
+            with local UNIX-socket migration.
+        tls_dir:
+          type: string
+          description: >
+            Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client
+            certificate (client-cert.pem), and TLS client key (client-key.pem).
+            TLS is only supported with tcp:<host>:<port> destination URLs.
+        memory_mode:
+          $ref: "#/components/schemas/MigrationMode"
 
     VmAddUserDevice:
       required:
@@ -1308,6 +1588,12 @@ components:
       properties:
         socket:
           type: string
+        pci_segment:
+          type: integer
+          format: int16
+        pci_device_id:
+          type: integer
+          format: uint8
 
     LandlockConfig:
       required:

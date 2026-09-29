@@ -16,7 +16,9 @@ import (
 
 // VmAddUserDevice struct for VmAddUserDevice
 type VmAddUserDevice struct {
-	Socket string `json:"socket"`
+	Socket      string `json:"socket"`
+	PciSegment  *int32 `json:"pci_segment,omitempty"`
+	PciDeviceId *int32 `json:"pci_device_id,omitempty"`
 }
 
 // NewVmAddUserDevice instantiates a new VmAddUserDevice object
@@ -61,10 +63,80 @@ func (o *VmAddUserDevice) SetSocket(v string) {
 	o.Socket = v
 }
 
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *VmAddUserDevice) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmAddUserDevice) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *VmAddUserDevice) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *VmAddUserDevice) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *VmAddUserDevice) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmAddUserDevice) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *VmAddUserDevice) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *VmAddUserDevice) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
 func (o VmAddUserDevice) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
 		toSerialize["socket"] = o.Socket
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	return json.Marshal(toSerialize)
 }

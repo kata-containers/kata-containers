@@ -27,6 +27,7 @@ type MemoryZoneConfig struct {
 	HotplugSize    *int64  `json:"hotplug_size,omitempty"`
 	HotpluggedSize *int64  `json:"hotplugged_size,omitempty"`
 	Prefault       *bool   `json:"prefault,omitempty"`
+	Reserve        *bool   `json:"reserve,omitempty"`
 }
 
 // NewMemoryZoneConfig instantiates a new MemoryZoneConfig object
@@ -45,6 +46,8 @@ func NewMemoryZoneConfig(id string, size int64) *MemoryZoneConfig {
 	this.Hugepages = &hugepages
 	var prefault bool = false
 	this.Prefault = &prefault
+	var reserve bool = false
+	this.Reserve = &reserve
 	return &this
 }
 
@@ -61,6 +64,8 @@ func NewMemoryZoneConfigWithDefaults() *MemoryZoneConfig {
 	this.Hugepages = &hugepages
 	var prefault bool = false
 	this.Prefault = &prefault
+	var reserve bool = false
+	this.Reserve = &reserve
 	return &this
 }
 
@@ -400,6 +405,38 @@ func (o *MemoryZoneConfig) SetPrefault(v bool) {
 	o.Prefault = &v
 }
 
+// GetReserve returns the Reserve field value if set, zero value otherwise.
+func (o *MemoryZoneConfig) GetReserve() bool {
+	if o == nil || o.Reserve == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Reserve
+}
+
+// GetReserveOk returns a tuple with the Reserve field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *MemoryZoneConfig) GetReserveOk() (*bool, bool) {
+	if o == nil || o.Reserve == nil {
+		return nil, false
+	}
+	return o.Reserve, true
+}
+
+// HasReserve returns a boolean if a field has been set.
+func (o *MemoryZoneConfig) HasReserve() bool {
+	if o != nil && o.Reserve != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetReserve gets a reference to the given bool and assigns it to the Reserve field.
+func (o *MemoryZoneConfig) SetReserve(v bool) {
+	o.Reserve = &v
+}
+
 func (o MemoryZoneConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -434,6 +471,9 @@ func (o MemoryZoneConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Prefault != nil {
 		toSerialize["prefault"] = o.Prefault
+	}
+	if o.Reserve != nil {
+		toSerialize["reserve"] = o.Reserve
 	}
 	return json.Marshal(toSerialize)
 }
