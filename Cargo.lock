@@ -977,7 +977,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api_client",
- "kata-sys-util",
  "kata-types",
  "nix 0.31.3",
  "serde",

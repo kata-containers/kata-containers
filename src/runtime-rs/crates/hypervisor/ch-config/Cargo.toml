@@ -25,5 +25,4 @@ tokio = { features = ["rt", "sync"], workspace = true }
 api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", tag = "v51.0" }
 
 # Local dependencies
-kata-sys-util = { workspace = true }
 kata-types = { workspace = true }

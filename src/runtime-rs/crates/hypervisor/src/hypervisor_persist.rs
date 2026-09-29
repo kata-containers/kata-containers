@@ -5,7 +5,6 @@
 //
 
 use crate::HypervisorConfig;
-use kata_sys_util::protection::GuestProtection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
@@ -34,6 +33,4 @@ pub struct HypervisorState {
     pub cached_block_devices: HashSet<String>,
     pub virtiofs_daemon_pid: i32,
     pub passfd_listener_port: Option<u32>,
-    /// guest protection
-    pub guest_protection_to_use: GuestProtection,
 }

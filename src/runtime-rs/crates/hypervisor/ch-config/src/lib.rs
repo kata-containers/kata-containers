@@ -10,7 +10,6 @@ pub mod ch_api;
 pub mod convert;
 pub mod net_util;
 
-use kata_sys_util::protection::GuestProtection;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::RateLimiterConfig;
 pub use net_util::MacAddr;
@@ -259,7 +258,6 @@ pub struct MemoryZoneConfig {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ProtectionDevConfig {
-    pub mrconfigid: Option<String>,
     pub host_data: Option<String>,
 }
 
@@ -365,8 +363,6 @@ pub struct PayloadConfig {
     #[serde(default)]
     pub initramfs: Option<PathBuf>,
     #[serde(default)]
-    pub mrconfigid: Option<String>,
-    #[serde(default)]
     pub host_data: Option<String>,
 }
 
@@ -382,8 +378,6 @@ pub struct PlatformConfig {
     pub uuid: Option<String>,
     #[serde(default)]
     pub oem_strings: Option<Vec<String>>,
-    #[serde(default)]
-    pub tdx: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -544,12 +538,6 @@ pub struct NamedHypervisorConfig {
 
     pub boot_disks: Option<Vec<DiskConfig>>,
 
-    // Set to the available guest protection *iff* BOTH of the following
-    // conditions are true:
-    //
-    // - The hardware supports guest protection.
-    // - The user has requested that guest protection be used.
-    pub guest_protection_to_use: GuestProtection,
     pub protection_device: Option<ProtectionDevConfig>,
 }
 
@@ -579,15 +567,9 @@ pub enum State {
     Paused,
 }
 
-// Returns true if the enabled guest protection is Intel TDX.
-pub fn guest_protection_is_tdx(guest_protection_to_use: GuestProtection) -> bool {
-    matches!(guest_protection_to_use, GuestProtection::Tdx)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::SevSnpDetails;
 
     #[test]
     fn test_vm_resize_serialization_preserves_256_vcpus() {
@@ -604,64 +586,5 @@ mod tests {
                 "desired_balloon": null,
             })
         );
-    }
-
-    #[test]
-    fn test_guest_protection_is_tdx() {
-        let sev_snp_details = SevSnpDetails {
-            cbitpos: 42,
-            phys_addr_reduction: 42,
-        };
-
-        #[derive(Debug)]
-        struct TestData {
-            protection: GuestProtection,
-            result: bool,
-        }
-
-        let tests = &[
-            TestData {
-                protection: GuestProtection::NoProtection,
-                result: false,
-            },
-            TestData {
-                protection: GuestProtection::Pef,
-                result: false,
-            },
-            TestData {
-                protection: GuestProtection::Se,
-                result: false,
-            },
-            TestData {
-                protection: GuestProtection::Sev(sev_snp_details.clone()),
-                result: false,
-            },
-            TestData {
-                protection: GuestProtection::Snp(sev_snp_details.clone()),
-                result: false,
-            },
-            TestData {
-                protection: GuestProtection::Tdx,
-                result: true,
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = guest_protection_is_tdx(d.protection.clone());
-
-            let msg = format!("{}: actual result: {:?}", msg, result);
-
-            if std::env::var("DEBUG").is_ok() {
-                eprintln!("DEBUG: {}", msg);
-            }
-
-            if d.result {
-                assert!(result, "{}", msg);
-            } else {
-                assert!(!result, "{}", msg);
-            }
-        }
     }
 }

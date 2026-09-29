@@ -55,7 +55,7 @@ impl CloudHypervisorInner {
             //
             // Note that:
             //
-            // - ShareFs (virtiofsd) is only needed in an non-DM and non-TDX scenario
+            // - ShareFs (virtiofsd) is only needed in a non-DM scenario
             //   for the container rootfs.
             //
             // - A DeviceType::BlockModern requested before the VM is running
@@ -492,9 +492,6 @@ impl CloudHypervisorInner {
                             if sevsnp_cfg.is_snp {
                                 protection_device.host_data = sevsnp_cfg.host_data;
                             }
-                        }
-                        ProtectionDeviceConfig::Tdx(tdx_config) => {
-                            protection_device.mrconfigid = tdx_config.mrconfigid;
                         }
                         _ => info!(sl!(), "CH: unsupported protection device type"),
                     }
