@@ -6,6 +6,7 @@
 
 mod physical_endpoint;
 pub use physical_endpoint::PhysicalEndpoint;
+pub(crate) use physical_endpoint::PhysicalEndpointSource;
 mod veth_endpoint;
 pub use veth_endpoint::VethEndpoint;
 mod ipvlan_endpoint;

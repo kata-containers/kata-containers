@@ -9,6 +9,8 @@ use std::sync::Arc;
 mod dan;
 mod endpoint;
 pub use dan::{dan_config_path, Dan, DanNetworkConfig};
+// Sandbox preparation in virt_container counts VFIO NICs before creating VM ports.
+pub use dan::dan_vfio_device_count;
 pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
@@ -38,7 +40,13 @@ pub enum NetworkConfig {
 
 #[async_trait]
 pub trait Network: Send + Sync {
+    /// Attach devices before VM start, so the hypervisor can cold-plug them.
     async fn setup(&self) -> Result<()>;
+    /// Attach devices that require a running VM (such as DAN VFIO NICs).
+    /// Runs before the interfaces are handed to the agent.
+    async fn setup_after_start_vm(&self) -> Result<()> {
+        Ok(())
+    }
     async fn interfaces(&self) -> Result<Vec<agent::Interface>>;
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
