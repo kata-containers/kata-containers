@@ -468,24 +468,7 @@ func (clh *cloudHypervisor) enableProtection() error {
 
 	switch protection {
 	case tdxProtection:
-		firmwarePath, err := clh.config.FirmwareAssetPath()
-		if err != nil {
-			return err
-		}
-
-		if firmwarePath == "" {
-			return errors.New("Firmware path is not specified")
-		}
-
-		clh.vmconfig.Payload.SetFirmware(firmwarePath)
-
-		if clh.vmconfig.Platform == nil {
-			clh.vmconfig.Platform = chclient.NewPlatformConfig()
-		}
-		clh.vmconfig.Platform.SetTdx(true)
-
-		return nil
-
+		return errors.New("TDX protection is not supported by Cloud Hypervisor")
 	case sevProtection:
 		return errors.New("SEV protection is not supported by Cloud Hypervisor")
 	case snpProtection:
