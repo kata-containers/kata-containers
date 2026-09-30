@@ -38,7 +38,7 @@ Key features:
 
 ### shim
 
-Entry point implementing [containerd shim v2 binary protocol](https://github.com/containerd/containerd/tree/main/runtime/v2#commands):
+Entry point implementing [containerd shim v2 binary protocol](https://github.com/containerd/containerd/blob/main/docs/runtime-v2.md#commands):
 
 - `start`: Start new shim process
 - `delete`: Delete existing shim process
