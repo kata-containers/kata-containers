@@ -222,16 +222,7 @@ impl Container {
             .await?;
         if let Some(linux) = &mut spec.linux_mut() {
             linux.set_resources(resources);
-
-            // Only CPU and Memory constraints are supported in the guest.
-            // Clear unsupported resource fields to match the Go runtime
-            // and satisfy the agent policy checks.
-            if let Some(resource) = linux.resources_mut() {
-                resource.set_devices(None);
-                resource.set_pids(None);
-                resource.set_block_io(None);
-                resource.set_network(None);
-            }
+            strip_unsupported_resources(linux);
 
             // VFIO device filtering depends on vfio_mode configuration:
             //
@@ -880,6 +871,16 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     false
 }
 
+/// Keep the resource constraints the guest applies (CPU, memory and pids)
+/// and clear the rest, which the agent policy checks expect to be absent.
+fn strip_unsupported_resources(linux: &mut oci::Linux) {
+    if let Some(resource) = linux.resources_mut() {
+        resource.set_devices(None);
+        resource.set_block_io(None);
+        resource.set_network(None);
+    }
+}
+
 /// Filter VFIO devices from the Linux device list based on vfio_mode configuration.
 /// - vfio mode: Keeps all devices including /dev/vfio/*
 /// - guest-kernel mode: Removes /dev/vfio/* devices as they're managed by guest kernel
@@ -1065,6 +1066,54 @@ mod tests {
                 d.desc
             );
         }
+    }
+
+    #[test]
+    fn test_strip_unsupported_resources_keeps_cpu_memory_and_pids() {
+        let resources = oci::LinuxResourcesBuilder::default()
+            .cpu(
+                oci::LinuxCpuBuilder::default()
+                    .quota(100000i64)
+                    .period(100000u64)
+                    .build()
+                    .unwrap(),
+            )
+            .memory(
+                oci::LinuxMemoryBuilder::default()
+                    .limit(1i64 << 30)
+                    .build()
+                    .unwrap(),
+            )
+            .pids(oci::LinuxPidsBuilder::default().limit(8).build().unwrap())
+            .block_io(
+                oci::LinuxBlockIoBuilder::default()
+                    .weight(10u16)
+                    .build()
+                    .unwrap(),
+            )
+            .network(
+                oci::LinuxNetworkBuilder::default()
+                    .class_id(1u32)
+                    .build()
+                    .unwrap(),
+            )
+            .devices(vec![oci::LinuxDeviceCgroup::default()])
+            .build()
+            .unwrap();
+        let mut linux = oci::LinuxBuilder::default()
+            .resources(resources)
+            .build()
+            .unwrap();
+
+        strip_unsupported_resources(&mut linux);
+
+        let resources = linux.resources().as_ref().unwrap();
+        assert!(resources.cpu().is_some());
+        assert!(resources.memory().is_some());
+        assert_eq!(resources.pids().as_ref().unwrap().limit(), 8);
+        assert!(resources.devices().is_none());
+        assert!(resources.block_io().is_none());
+        assert!(resources.network().is_none());
     }
 
     #[test]

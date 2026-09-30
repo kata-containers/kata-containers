@@ -151,7 +151,6 @@ allow_create_container_input if {
     is_null(i_linux.IntelRdt)
     is_null(i_linux.Resources.BlockIO)
     is_null(i_linux.Resources.Network)
-    is_null(i_linux.Resources.Pids)
     is_null(i_linux.Seccomp)
 
     i_process := i_oci.Process
