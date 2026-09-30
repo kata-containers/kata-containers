@@ -96,6 +96,46 @@ func TestNewTtyIOFifoReopen(t *testing.T) {
 	checkFifoRead(errr)
 }
 
+// A process created without a stdin stream never gets a stdin io copy
+// goroutine, so ioCopy() has to release stdinCloser itself.  Otherwise
+// CloseIO() waits on it forever, with the service lock held.
+func TestIoCopyClosesStdinCloserWithoutStdin(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.TODO()
+
+	fifoPath := t.TempDir()
+	stdoutPath := filepath.Join(fifoPath, "stdout")
+
+	stdoutR, err := fifo.OpenFifo(ctx, stdoutPath, syscall.O_RDONLY|syscall.O_CREAT|syscall.O_NONBLOCK, 0700)
+	assert.NoError(err)
+	defer stdoutR.Close()
+
+	tty, err := newTtyIO(ctx, "", "", "", stdoutPath, "", false)
+	assert.NoError(err)
+	defer tty.close()
+	assert.Nil(tty.io.Stdin())
+
+	exitioch := make(chan struct{})
+	stdinCloser := make(chan struct{})
+	stdoutPipe, stdoutPipeW := io.Pipe()
+
+	go ioCopy(logrus.WithContext(ctx), exitioch, stdinCloser, tty, nil, stdoutPipe, nil)
+
+	select {
+	case <-stdinCloser:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for stdinCloser to be closed")
+	}
+
+	// let ioCopy() finish before the fifos are closed under it
+	stdoutPipeW.Close()
+	select {
+	case <-exitioch:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ioCopy() to exit")
+	}
+}
+
 func TestIoCopy(t *testing.T) {
 	// This test fails on aarch64 regularly, temporarily skip it
 	if runtime.GOARCH == "arm64" {
