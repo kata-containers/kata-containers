@@ -23,8 +23,7 @@ setup() {
 	mount_path="/tmp/foo.txt"
 
     # Create a 2 GB temporary file
-    tmp_file_size=2147483648
-	exec_host "$node" "dd if=/dev/zero of=$tmp_file bs=1M count=2048"
+	exec_host "$node" "truncate -s 2147483648 $tmp_file"
 
 	# Create test yaml
 	test_yaml="${pod_config_dir}/test-pod-large-file-volume.yaml"
