@@ -26,6 +26,15 @@ source "${BATS_TEST_DIRNAME}/lib/selinux.bash"
 
 NODE_BINARY="/host/usr/local/bin/mkfs.erofs"
 
+# udev_rules_t, which the confined artifacts stages only ever remove: the
+# privileged stage that writes this rule raises no denial, so an uninstall is the
+# only place a missing rule for it shows up.
+ROOTLESS_UDEV_RULE="/host/etc/udev/rules.d/99-kata-containers-rootless-default.rules"
+
+# Whichever shim is under test, qemu-runtime-rs is enabled on every architecture,
+# so the rule gets written wherever this runs.
+ROOTLESS_VALUES=(--set shims.qemu-runtime-rs.hypervisor.rootless=true)
+
 # Configured directly rather than through the EROFS snapshotter, so the domain
 # is covered wherever this runs.
 NODE_BINARIES_VALUES=(
@@ -41,6 +50,9 @@ setup_file() {
 	ensure_helm
 	assert_chart_supports_selinux
 
+	KVM_BEFORE=$(revoke_host_kvm)
+	export KVM_BEFORE
+
 	mark_audit_log
 	echo "# Deploying kata-deploy in job mode with SELinux confinement..." >&3
 	# A denial is deterministic, so per-node retries only delay the report.
@@ -49,7 +61,8 @@ setup_file() {
 		--set selinux.enabled=true \
 		--set job.backoffLimit=0 \
 		--set "job.ttlSecondsAfterFinished=${JOB_TTL}" \
-		"${NODE_BINARIES_VALUES[@]}"
+		"${NODE_BINARIES_VALUES[@]}" \
+		"${ROOTLESS_VALUES[@]}"
 	show_policy_loader_log
 }
 
@@ -69,6 +82,14 @@ setup_file() {
 	[[ "${output}" == *"INSTALLED"* ]]
 }
 
+@test "The rootless stage leaves the udev rule the cleanup has to remove" {
+	# Asserted before the uninstall so the removal below cannot pass by removing
+	# nothing, which is what a missing udev_rules_t rule would look like.
+	run run_on_host "test -e ${ROOTLESS_UDEV_RULE} && echo PRESENT || echo MISSING"
+	echo "# ${ROOTLESS_UDEV_RULE}: ${output}" >&3
+	[[ "${output}" == *"PRESENT"* ]]
+}
+
 @test "The confined install logged no AVC denials" {
 	assert_no_kata_deploy_denials "the job-mode install"
 }
@@ -79,10 +100,18 @@ setup_file() {
 	kubectl wait nodes --timeout=300s --all --for condition=Ready=True
 
 	assert_artifacts_removed
+
+	# udev_rules_t: confined removal, and the reason kata_deploy_artifacts_t is
+	# granted it at all.
+	run run_on_host "test -e ${ROOTLESS_UDEV_RULE} && echo PRESENT || echo GONE"
+	echo "# ${ROOTLESS_UDEV_RULE} after uninstall: ${output}" >&3
+	[[ "${output}" == *"GONE"* ]]
+
 	assert_no_kata_deploy_denials "the job-mode uninstall"
 	assert_module_still_loaded
 }
 
 teardown_file() {
 	uninstall_kata 2>/dev/null || true
+	restore_host_kvm "${KVM_BEFORE:-}" || true
 }
