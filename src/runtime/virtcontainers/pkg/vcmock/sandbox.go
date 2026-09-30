@@ -77,6 +77,9 @@ func (s *Sandbox) Start(ctx context.Context) error {
 
 // Stop implements the VCSandbox function of the same name.
 func (s *Sandbox) Stop(ctx context.Context, force bool) error {
+	if s.StopFunc != nil {
+		return s.StopFunc(force)
+	}
 	return nil
 }
 
@@ -92,6 +95,9 @@ func (s *Sandbox) Resume() error {
 
 // Delete implements the VCSandbox function of the same name.
 func (s *Sandbox) Delete(ctx context.Context) error {
+	if s.DeleteFunc != nil {
+		return s.DeleteFunc()
+	}
 	return nil
 }
 
@@ -105,6 +111,9 @@ func (s *Sandbox) CreateContainer(ctx context.Context, conf vc.ContainerConfig) 
 
 // DeleteContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) DeleteContainer(ctx context.Context, contID string) (vc.VCContainer, error) {
+	if s.DeleteContainerFunc != nil {
+		return s.DeleteContainerFunc(contID)
+	}
 	return &Container{}, nil
 }
 
@@ -115,6 +124,9 @@ func (s *Sandbox) StartContainer(ctx context.Context, contID string) (vc.VCConta
 
 // StopContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StopContainer(ctx context.Context, contID string, force bool) (vc.VCContainer, error) {
+	if s.StopContainerFunc != nil {
+		return s.StopContainerFunc(contID, force)
+	}
 	return &Container{}, nil
 }
 
@@ -168,6 +180,9 @@ func (s *Sandbox) UpdateContainer(ctx context.Context, containerID string, resou
 
 // WaitProcess implements the VCSandbox function of the same name.
 func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string) (int32, error) {
+	if s.WaitProcessFunc != nil {
+		return s.WaitProcessFunc(containerID, processID)
+	}
 	return 0, nil
 }
 
