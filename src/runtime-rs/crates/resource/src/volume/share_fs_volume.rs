@@ -593,11 +593,14 @@ impl ShareFsVolume {
         guest_path: &str,
         agent: &Arc<dyn Agent>,
     ) -> Result<()> {
-        // Read file metadata
         let file_metadata = std::fs::metadata(src)
             .with_context(|| format!("Failed to read metadata from file: {src:?}"))?;
-
-        // Open file
+        let file_size = i64::try_from(file_metadata.len()).with_context(|| {
+            format!(
+                "File size is too large to fit in i64: {src:?}, size: {}",
+                file_metadata.len()
+            )
+        })?;
         let mut file = File::open(src)
             .await
             .with_context(|| format!("Failed to open file: {src:?}"))?;
@@ -614,7 +617,7 @@ impl ShareFsVolume {
 
             let r = agent::CopyFileRequest {
                 path: guest_path.to_owned(),
-                file_size: file_metadata.len() as i64,
+                file_size,
                 uid: file_metadata.uid() as i32,
                 gid: file_metadata.gid() as i32,
                 file_mode: file_metadata.mode(),
@@ -880,9 +883,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
             } else if metadata.is_file() {
                 ShareFsVolume::copy_file_to_guest(&entry_path, &dest_path, agent)
                     .await
-                    .context(format!(
-                        "copy file: {entry_path:?} -> {dest_path:?}"
-                    ))?;
+                    .context(format!("copy file: {entry_path:?} -> {dest_path:?}"))?;
             }
         }
     }
