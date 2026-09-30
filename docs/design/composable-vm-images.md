@@ -355,6 +355,7 @@ select      = "${attester_variant}"
 id          = "confidential-data-hub"
 level       = 2
 path        = "usr/local/bin/confidential-data-hub"
+optional_args = [{ when = "guest_services_dir", args = ["--services-dir", "${guest_services_dir}"] }]
 config      = "${cdh_config_path}"
 env         = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket = "${cdh_socket}"

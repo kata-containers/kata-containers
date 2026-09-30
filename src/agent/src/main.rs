@@ -520,6 +520,10 @@ fn build_substitution_ctx(
     ctx.insert("cdh_config_path".to_string(), CDH_CONFIG_PATH.to_string());
     ctx.insert("cdh_socket".to_string(), CDH_SOCKET.to_string());
     ctx.insert(
+        "guest_services_dir".to_string(),
+        confidential_data_hub::GUEST_SERVICES_DIR.to_string(),
+    );
+    ctx.insert(
         "ocicrypt_config_path".to_string(),
         ocicrypt_config_path.to_string_lossy().into_owned(),
     );
