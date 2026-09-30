@@ -32,6 +32,8 @@ pub struct TdxConfig {
     pub id: String,
     // Firmware path
     pub firmware: String,
+    // Firmware volume path (for UEFI variable store, e.g., OVMF_VARS.fd)
+    pub firmware_volume: String,
     // Quote Qeneration Socket port
     pub qgs_port: u32,
     // mrconfigid
