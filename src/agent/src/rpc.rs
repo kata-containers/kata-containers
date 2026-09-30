@@ -99,7 +99,7 @@ use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::{do_set_policy, is_allowed, is_allowed_with_entrypoint};
+use crate::policy::{do_set_policy, is_allowed, is_allowed_stateful, is_allowed_with_entrypoint};
 
 use opentelemetry::global;
 use tracing::span;
@@ -177,6 +177,21 @@ fn sandbox_err_to_ttrpc(err: SandboxError) -> ttrpc::Error {
 #[cfg(not(feature = "agent-policy"))]
 async fn is_allowed(_req: &impl serde::Serialize) -> ttrpc::Result<()> {
     Ok(())
+}
+
+#[cfg(not(feature = "agent-policy"))]
+struct PolicyStateGuard;
+
+#[cfg(not(feature = "agent-policy"))]
+impl PolicyStateGuard {
+    async fn commit(self) -> ttrpc::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(not(feature = "agent-policy"))]
+async fn is_allowed_stateful(_req: &impl serde::Serialize) -> ttrpc::Result<PolicyStateGuard> {
+    Ok(PolicyStateGuard)
 }
 
 fn same<E>(e: E) -> E {
@@ -953,8 +968,9 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
         self.do_create_container(req).await.map_ttrpc_err(same)?;
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 
@@ -975,8 +991,25 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
-        is_allowed(&req).await?;
-        self.do_remove_container(req).await.map_ttrpc_err(same)?;
+        let policy_state = is_allowed_stateful(&req).await?;
+        let result = self.do_remove_container(req).await;
+        let should_commit = match &result {
+            Ok(()) => true,
+            Err(err) => {
+                // When ETIME gets returned, the container might have not been
+                // removed from the guest VM completely yet. The policy state
+                // change will be committed here, and that might allow another
+                // container matching the same policy data to start. This is a
+                // reasonable policy behavior while the possibility of removing
+                // this timeout is being discussed in:
+                // https://github.com/kata-containers/kata-containers/issues/13920.
+                err.downcast_ref::<Errno>() == Some(&Errno::ETIME)
+            }
+        };
+        if should_commit {
+            policy_state.commit().await?;
+        }
+        result.map_ttrpc_err(same)?;
         Ok(Empty::new())
     }
 
@@ -986,8 +1019,9 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
         self.do_exec_process(req).await.map_ttrpc_err(same)?;
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 
@@ -1537,7 +1571,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_sandbox", req);
-        is_allowed(&req).await?;
+        let policy_state = is_allowed_stateful(&req).await?;
 
         {
             let mut s = self.sandbox.lock().await;
@@ -1586,6 +1620,7 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 

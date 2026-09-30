@@ -59,6 +59,7 @@ else
 		"k8s-policy-job.bats" \
 		"k8s-policy-logs.bats" \
 		"k8s-policy-pod.bats" \
+		"k8s-policy-pod2.bats" \
 		"k8s-policy-pvc.bats" \
 		"k8s-policy-rc.bats" \
 		"k8s-trusted-ephemeral-data-storage.bats" \

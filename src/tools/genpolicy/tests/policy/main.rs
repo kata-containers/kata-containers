@@ -52,6 +52,18 @@ mod tests {
         }
     }
 
+    impl TestRequest {
+        fn is_stateful(&self) -> bool {
+            matches!(
+                self,
+                Self::CreateContainerRequest(_)
+                    | Self::CreateSandboxRequest(_)
+                    | Self::ExecProcessRequest(_)
+                    | Self::RemoveContainerRequest(_)
+            )
+        }
+    }
+
     fn serialize_request_only(value: &TestRequest) -> serde_json::Result<serde_json::Value> {
         if let serde_json::Value::Object(map) = serde_json::to_value(value)? {
             for (k, v) in map {
@@ -194,9 +206,24 @@ mod tests {
                 )
             });
 
-            let results = pol
-                .allow_request(&base.to_string(), &serde_json::to_string(&request).unwrap())
-                .await;
+            let ep = base.to_string();
+            let request = serde_json::to_string(&request).unwrap();
+            let results = if base.is_stateful() {
+                match pol.evaluate_request(&ep, &request).await {
+                    Ok(decision) => {
+                        let allowed = decision.allowed();
+                        let prints = decision.prints().to_owned();
+                        if allowed {
+                            decision.commit(&mut pol).await.map(|_| (allowed, prints))
+                        } else {
+                            Ok((allowed, prints))
+                        }
+                    }
+                    Err(err) => Err(err),
+                }
+            } else {
+                pol.allow_request(&ep, &request).await
+            };
 
             let logs = fs::read_to_string(workdir.join("policy.log")).unwrap();
             let results = results.unwrap();
