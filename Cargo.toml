@@ -155,6 +155,7 @@ async-trait = "0.1.48"
 awaitgroup = "0.7.0"
 base64 = "0.22"
 bilge = "0.3.0"
+byte-unit = "5.2.3"
 bytes = "1.0"
 capctl = "0.2.0"
 cfg-if = "1.0.0"
@@ -166,9 +167,11 @@ containerd-shim = { features = ["async"], version = "0.11.0" }
 containerd-shim-protos = { features = ["async"], version = "0.11.0" }
 derivative = "2.2.0"
 devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
+flate2 = "1.1.5"
 futures = "0.3.30"
 go-flag = "0.1.0"
 gpt = "4.1.0"
+hex = "0.4.3"
 http-body-util = "0.1"
 hyper = { features = ["client", "http1", "server"], version = "1.10.1" }
 hyper-util = { features = [

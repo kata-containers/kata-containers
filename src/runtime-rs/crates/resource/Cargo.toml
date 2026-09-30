@@ -17,12 +17,12 @@ actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
-byte-unit = "5.1.6"
+byte-unit = { workspace = true }
 bytes = { workspace = true }
 cgroups.workspace = true
-flate2 = "1.1"
+flate2 = { workspace = true }
 futures = { workspace = true }
-hex = "0.4"
+hex = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }

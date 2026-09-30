@@ -66,14 +66,14 @@ reqwest = { default-features = false, features = [
   "blocking",
   "json",
   "native-tls",
-], version = "0.12" }
+], version = "0.13" }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
 reqwest = { default-features = false, features = [
   "blocking",
   "json",
-  "rustls-tls",
-], version = "0.12" }
+  "rustls",
+], version = "0.13" }
 
 [dev-dependencies]
 micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
