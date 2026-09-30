@@ -671,6 +671,15 @@ pub struct CpuInfo {
     /// If unspecified, the option is omitted from the Cloud Hypervisor configuration.
     #[serde(default)]
     pub disable_nested_virtualization: Option<bool>,
+
+    /// Pin the QEMU hypervisor process (and all its vCPU/I/O threads) to a
+    /// specific set of host physical CPUs via `sched_setaffinity(2)`, applied
+    /// in the `pre_exec` hook before QEMU starts.
+    ///    
+    /// Format: Linux cpuset syntax — comma-separated CPU IDs and/or ranges,
+    /// e.g. `"0,2,4-7,10"` or `"0-3"`.
+    #[serde(default)]
+    pub cpu_set: String,
 }
 
 impl CpuInfo {
@@ -2032,14 +2041,14 @@ mod tests {
                     default_vcpus: 0.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 0,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
             },
             TestData {
@@ -2049,14 +2058,14 @@ mod tests {
                     default_vcpus: 9999999.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 9999999,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: node_cpus,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
             },
             TestData {
@@ -2066,14 +2075,14 @@ mod tests {
                     default_vcpus: -1.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: 1.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
             },
             TestData {
@@ -2083,14 +2092,14 @@ mod tests {
                     default_vcpus: 0.0,
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
                 output: CpuInfo {
                     cpu_features: "x,y".to_string(),
                     default_vcpus,
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
-                    disable_nested_virtualization: None,
+                    ..Default::default()
                 },
             },
         ];
@@ -2283,5 +2292,23 @@ mod tests {
             blockdev_info_with_sectors(65536, 512).validate().is_err(),
             "logical > physical should be rejected"
         );
+    }
+
+    #[test]
+    fn test_cpu_set_field_default_is_empty() {
+        // cpu_set defaults to empty string — pinning disabled by default.
+        let cpu_info = CpuInfo::default();
+        assert!(cpu_info.cpu_set.is_empty());
+    }
+
+    #[test]
+    fn test_cpu_set_field_preserved_by_adjust_config() {
+        // adjust_config() must not touch cpu_set.
+        let mut cpu_info = CpuInfo {
+            cpu_set: "0-3,8".to_string(),
+            ..Default::default()
+        };
+        cpu_info.adjust_config().unwrap();
+        assert_eq!(cpu_info.cpu_set, "0-3,8");
     }
 }

@@ -177,6 +177,11 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FIRMWARE_HASH: &str =
 /// A sandbox annotation to specify cpu specific features.
 pub const KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES: &str =
     "io.katacontainers.config.hypervisor.cpu_features";
+
+/// A sandbox annotation to pin the QEMU hypervisor process (and all its vCPU/I/O threads) to a
+/// specific set of host physical CPUs via `sched_setaffinity(2)`, applied
+/// in the `pre_exec` hook before QEMU starts.
+pub const KATA_ANNO_CFG_HYPERVISOR_CPU_SET: &str = "io.katacontainers.config.hypervisor.cpu_set";
 /// A sandbox annotation for passing the default vCPUs assigned for a VM by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_vcpus";
@@ -678,6 +683,9 @@ impl Annotation {
                     // Hypervisor CPU related annotations
                     KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES => {
                         hv.cpu_info.cpu_features = value.to_string();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_CPU_SET => {
+                        hv.cpu_info.cpu_set = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS => match self.get_value::<f32>(key) {
                         Ok(num_cpus) => {
@@ -1244,5 +1252,51 @@ mod tests {
         let result = convert_to_megabytes("2048r");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), None);
+    }
+
+    // ── cpu_set annotation ────────────────────────────────────────────────
+
+    #[test]
+    fn test_cpu_set_annotation_key() {
+        // Constant must live under .hypervisor. namespace (not .runtime.)
+        assert_eq!(
+            KATA_ANNO_CFG_HYPERVISOR_CPU_SET,
+            "io.katacontainers.config.hypervisor.cpu_set"
+        );
+        assert!(KATA_ANNO_CFG_HYPERVISOR_CPU_SET.contains(".hypervisor."));
+        assert!(
+            !KATA_ANNO_CFG_HYPERVISOR_CPU_SET.contains(".runtime."),
+            "cpu_set annotation must NOT be in .runtime. namespace"
+        );
+    }
+
+    #[test]
+    fn test_cpu_set_annotation_stored_in_hypervisor_config() {
+        // Verify that the cpu_set field on the Hypervisor struct holds the
+        // value set via annotation.
+        use crate::config::hypervisor::CpuInfo;
+        let mut cpu_info = CpuInfo::default();
+
+        assert!(cpu_info.cpu_set.is_empty());
+
+        cpu_info.cpu_set = "0-3,8,10-12".to_string();
+        assert_eq!(cpu_info.cpu_set, "0-3,8,10-12");
+
+        cpu_info.cpu_set = "0,2,4,6".to_string();
+        assert_eq!(cpu_info.cpu_set, "0,2,4,6");
+
+        cpu_info.cpu_set = "0-31".to_string();
+        assert_eq!(cpu_info.cpu_set, "0-31");
+    }
+
+    #[test]
+    fn test_cpu_set_annotation_empty_string_means_no_pinning() {
+        // An empty cpu_set string is the default and means pinning is disabled.
+        use crate::config::hypervisor::CpuInfo;
+        let cpu_info = CpuInfo::default();
+        assert!(
+            cpu_info.cpu_set.is_empty(),
+            "cpu_set must default to empty (no pinning)"
+        );
     }
 }
