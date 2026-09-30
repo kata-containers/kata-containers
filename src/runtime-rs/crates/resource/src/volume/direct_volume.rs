@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{get_mount_path, get_mount_type};
-use kata_types::mount::DirectVolumeMountInfo;
+use kata_types::mount::{record_sandbox_id, DirectVolumeMountInfo};
 use nix::sys::{stat, stat::SFlag};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
@@ -48,7 +48,8 @@ pub(crate) async fn handle_direct_volume(
     // If the source is not in the path with error kind *NotFound*, we ignore the error
     // and we treat it as block volume with oci Mount.type *bind*. Just fill in the block
     // volume info in the DirectVolumeMountInfo
-    let mount_info: DirectVolumeMountInfo = match volume_mount_info(&get_mount_path(m.source())) {
+    let volume_path = get_mount_path(m.source());
+    let mount_info: DirectVolumeMountInfo = match volume_mount_info(&volume_path) {
         Ok(mount_info) => mount_info,
         Err(e) => {
             // First, We need filter the non-io::ErrorKind.
@@ -75,6 +76,19 @@ pub(crate) async fn handle_direct_volume(
             return Ok(None);
         }
     };
+
+    // Record the association between this sandbox and the direct volume so that
+    // `kata-ctl direct-volume {stats,resize}` can locate the owning sandbox by
+    // scanning the direct-volume directory. This mirrors runtime-go's
+    // `createBlockDevices` -> `volume.RecordSandboxID`. A failure here must not
+    // abort volume setup (matches Go behaviour: log and continue), it only means
+    // online stats/resize via kata-ctl will be unavailable.
+    if let Err(e) = record_sandbox_id(sid, &volume_path) {
+        warn!(
+            sl!(),
+            "failed to record sandbox id {} for direct volume {}: {:?}", sid, volume_path, e
+        );
+    }
 
     let direct_volume: Arc<dyn Volume> = match to_volume_type(mount_info.volume_type.as_str()) {
         DirectVolumeType::RawBlock => Arc::new(
