@@ -108,6 +108,27 @@ impl QemuInner {
         Ok(())
     }
 
+    /// Host BDFs of the PCI VFIO devices assigned to this sandbox for cold plug.
+    async fn assigned_vfio_bdfs(&self) -> Vec<String> {
+        let mut bdfs = Vec::new();
+        for device in &self.devices {
+            if let DeviceType::VfioModern(vfio_dev) = device {
+                let vfio_device = vfio_dev.lock().await;
+                if vfio_device.device.device_type == VfioDeviceType::MediatedAp {
+                    continue;
+                }
+                let devices = vfio_device
+                    .device
+                    .iommu_group
+                    .as_ref()
+                    .map(|g| &g.devices)
+                    .unwrap_or(&vfio_device.device.devices);
+                bdfs.extend(devices.iter().map(|d| d.addr.to_string()));
+            }
+        }
+        bdfs
+    }
+
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
@@ -124,6 +145,54 @@ impl QemuInner {
         // open until spawn() is called to launch qemu later in this function,
         // 'cmdline' has to live at least until spawn() is called
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
+
+        // Phase 7: with cold_plug_vfio = "auto" the machine-centric Platform
+        // owns the machine options, guest memory/NUMA and the passthrough PCIe
+        // topology for the VFIO devices assigned to this sandbox; the legacy
+        // generator keeps everything else.
+        let platform = if self.config.device_info.cold_plug_vfio == "auto" {
+            let assigned = self.assigned_vfio_bdfs().await;
+            match Platform::for_assigned_devices(&self.config, &assigned)
+                .context("cold_plug_vfio=auto: probing host topology")?
+            {
+                Some(mut platform) => {
+                    if matches!(
+                        self.config.shared_fs.shared_fs.as_deref(),
+                        Some("virtio-fs") | Some("virtio-fs-nydus")
+                    ) {
+                        return Err(anyhow!(
+                            "cold_plug_vfio=auto binds guest RAM per NUMA node and does not \
+                             yet provide the shared file-backed memory virtio-fs needs; \
+                             set shared_fs = \"none\""
+                        ));
+                    }
+                    if cmdline.has_memory_hotplug_region() {
+                        platform.add_hotplug_placeholder_node();
+                    }
+                    cmdline.apply_platform(&platform.machine_options(), platform.topology_args()?);
+                    info!(
+                        sl!(),
+                        "cold_plug_vfio=auto: Platform owns the topology for {:?}", assigned
+                    );
+                    Some(platform)
+                }
+                None => {
+                    info!(
+                        sl!(),
+                        "cold_plug_vfio=auto: no modelled passthrough device among {:?}, \
+                         using the legacy topology",
+                        assigned
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let platform_paths = platform
+            .as_ref()
+            .map(|p| p.guest_pci_paths())
+            .unwrap_or_default();
 
         for device in &mut self.devices {
             match device {
@@ -285,6 +354,11 @@ impl QemuInner {
                         // PCI cold plug devices
                         for (index, dev) in devices.iter().enumerate() {
                             let host_bdf = dev.addr.to_string();
+                            if platform_paths.contains_key(&host_bdf.to_ascii_lowercase()) {
+                                // Placed by the Platform: pxb, root port and vfio device
+                                // are already in the topology args.
+                                continue;
+                            }
 
                             let mut vfio_cfg = VfioDeviceConfig::new(
                                 host_bdf,
@@ -305,9 +379,17 @@ impl QemuInner {
                             cmdline.add_pcie_vfio_device(vfio_cfg)?;
                         }
 
-                        // Write back guest PCI path
-                        let pci_path =
-                            PciPath::try_from(format!("{:02x}/00", bus_port_id.1).as_str())?;
+                        // Write back guest PCI path: where the Platform put the
+                        // device, or the legacy root port slot on pcie.0.
+                        let platform_path = devices.first().and_then(|dev| {
+                            platform_paths.get(&dev.addr.to_string().to_ascii_lowercase())
+                        });
+                        let pci_path = match platform_path {
+                            Some(path) => PciPath::try_from(path.as_str())?,
+                            None => {
+                                PciPath::try_from(format!("{:02x}/00", bus_port_id.1).as_str())?
+                            }
+                        };
                         {
                             let mut vfio_device = vfio_dev.lock().await;
                             vfio_device.config.guest_pci_path = Some(pci_path.clone());
@@ -392,22 +474,24 @@ impl QemuInner {
         let qemu_args = cmdline.build().await?;
         info!(sl!(), "qemu args: {}", qemu_args.join(" "));
 
-        // Probe host topology and log the machine-centric Platform args for
-        // comparison / dry-run inspection.  Errors are non-fatal: the legacy
-        // cmdline path is used regardless.
-        match Platform::from_config_with_probe(&self.config) {
-            Ok(platform) => match platform.to_qemu_args() {
-                Ok(platform_args) if !platform_args.is_empty() => {
-                    info!(
-                        sl!(),
-                        "platform args (GPU topology): {}",
-                        platform_args.join(" ")
-                    );
-                }
-                Ok(_) => {}
-                Err(e) => info!(sl!(), "platform args error: {e}"),
-            },
-            Err(e) => info!(sl!(), "platform probe error: {e}"),
+        // Outside auto mode, probe the host and log what the machine-centric
+        // Platform would emit, for comparison.  Errors are non-fatal: the
+        // legacy command line is used regardless.
+        if platform.is_none() {
+            match Platform::from_config_with_probe(&self.config) {
+                Ok(platform) => match platform.to_qemu_args() {
+                    Ok(platform_args) if !platform_args.is_empty() => {
+                        info!(
+                            sl!(),
+                            "platform args (GPU topology): {}",
+                            platform_args.join(" ")
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(e) => info!(sl!(), "platform args error: {e}"),
+                },
+                Err(e) => info!(sl!(), "platform probe error: {e}"),
+            }
         }
 
         let mut command = Command::new(&self.config.path);

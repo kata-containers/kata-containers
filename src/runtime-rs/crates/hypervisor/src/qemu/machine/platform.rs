@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use anyhow::{bail, Result};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use super::{
-    probe::{probe_host_topology, HostTopology, ProtectionDevice, SocketInfo},
+    probe::{equal_share, probe_host_topology, HostTopology, ProtectionDevice, SocketInfo},
     pseries::Pseries,
     q35::Q35,
     s390x::S390xCcwVirtio,
@@ -206,10 +207,92 @@ impl Platform {
     /// Returns the Platform as-is (no GPU args emitted) when no NVIDIA devices
     /// are found, which is correct for bare x86 CI runners.
     pub fn from_config_with_probe(config: &HypervisorConfig) -> Result<Self> {
+        Self::from_config_and_topology(config, probe_host_topology()?)
+    }
+
+    /// Lay a probed host topology out as a guest, then build the Platform:
+    /// guest vCPUs (up to maxcpus) spread over the sockets, guest RAM split per
+    /// socket, hugepage backing when the config asks for it.
+    pub(crate) fn from_config_and_topology(
+        config: &HypervisorConfig,
+        mut topo: HostTopology,
+    ) -> Result<Self> {
         let mut platform = Self::from_config(config)?;
-        let topo = probe_host_topology()?;
+        topo.map_guest_vcpus(guest_max_vcpus(config));
+        topo.fill_guest_memory(u64::from(config.memory_info.default_memory) << 20);
         platform.apply_host_defaults(&topo);
+        if config.memory_info.enable_hugepages {
+            platform = platform.with_hugepages("/dev/hugepages/");
+        }
         Ok(platform)
+    }
+
+    /// Probe the host, keep only the devices assigned to this sandbox and lay
+    /// the result out as a guest.  `Ok(None)` when none of the assigned devices
+    /// is one the prober models, so the caller can stay on the legacy
+    /// command line.
+    pub fn for_assigned_devices(
+        config: &HypervisorConfig,
+        assigned: &[String],
+    ) -> Result<Option<Self>> {
+        let mut topo = probe_host_topology()?;
+        topo.retain_devices(assigned);
+        if topo.gpu_smmu_groups.is_empty() && topo.nic_smmu_groups.is_empty() {
+            return Ok(None);
+        }
+        if !topo.egm_sockets.is_empty() {
+            // vEGM makes the EGM regions the guest's RAM: -m has to match their
+            // size and every GPU of the tray has to be assigned.  Neither is
+            // wired yet, so back the guest with plain RAM instead.
+            warn!(
+                sl!(),
+                "cold_plug_vfio=auto: {} EGM device(s) found but vEGM is not wired yet, \
+                 backing the guest with RAM",
+                topo.egm_sockets.len()
+            );
+            topo.egm_sockets.clear();
+        }
+        Self::from_config_and_topology(config, topo).map(Some)
+    }
+
+    /// Guest PCI path of every placed passthrough device, keyed by host BDF:
+    /// `<bus_nr>/<port index>/00` in hex, i.e. the pxb root complex, the root
+    /// port's slot on it (QEMU assigns functions on an expander bus in
+    /// emission order) and the device at function 0 behind the port.  The
+    /// kata-agent parses this form when the first segment is >= 0x20, which
+    /// `pxb_bus_nr` guarantees.
+    /// The `key=value` options of the machine line without the type and
+    /// `accel=`, for merging into a machine line rendered elsewhere.
+    pub fn machine_options(&self) -> Vec<String> {
+        emit_machine(&self.machine, self.numa_has_memdev())
+            .split(',')
+            .skip(2)
+            .map(String::from)
+            .collect()
+    }
+
+    /// Everything `to_qemu_args` emits except the `-machine` pair.
+    pub fn topology_args(&self) -> Result<Vec<String>> {
+        let mut args = self.to_qemu_args()?;
+        if let Some(pos) = args.iter().position(|a| a == "-machine") {
+            args.drain(pos..pos + 2);
+        }
+        Ok(args)
+    }
+
+    pub fn guest_pci_paths(&self) -> HashMap<String, String> {
+        let mut paths = HashMap::new();
+        for root in &self.pci.roots {
+            for (port_idx, port) in root.root_ports.iter().enumerate() {
+                if let Some(dev) = &port.device {
+                    paths.insert(
+                        dev.host.to_ascii_lowercase(),
+                        format!("{:02x}/{:02x}/00", root.bus_nr, port_idx),
+                    );
+                }
+            }
+        }
+        paths
     }
 
     #[cfg(test)]
@@ -363,10 +446,8 @@ impl Platform {
         let mut gpu_idx = 0usize;
 
         for (group_idx, group) in topo.gpu_smmu_groups.iter().enumerate() {
-            // 32-bus spacing between pxb complexes: each pxb may have up to 31
-            // subordinate buses (one per root port + potential downstream buses).
             // Production captures show bus_nr=32 for pxb-numa0, 64 for pxb-numa1.
-            let bus_nr = 32u8 + (group_idx as u8) * 32;
+            let bus_nr = pxb_bus_nr(group_idx);
 
             let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
             let pxb_id = format!("pxb-numa{group_idx}");
@@ -434,6 +515,46 @@ impl Platform {
                     is_egm: true,
                 });
             }
+        } else if topo.sockets.len() > 1 {
+            // Multi-socket without EGM: one RAM backend per socket, bound to
+            // that socket's host node, so guest node i is backed by host node
+            // i (the model apply_q35_defaults uses).  A single socket keeps the
+            // seed m0 spanning all guest RAM.
+            let seed_size = match self.objects.memory_backends.first() {
+                Some(MemoryBackend::Ram { size, .. }) => *size,
+                _ => 0,
+            };
+            let n = topo.sockets.len();
+            self.objects.memory_backends = topo
+                .sockets
+                .iter()
+                .enumerate()
+                .map(|(i, socket)| {
+                    let id = format!("m{i}");
+                    let size = socket
+                        .mem_size
+                        .unwrap_or_else(|| equal_share(seed_size, n, i));
+                    let policy = socket.host_node.map(|_| "bind".to_owned());
+                    match &socket.mem_path {
+                        Some(path) => MemoryBackend::File {
+                            id,
+                            size,
+                            path: path.clone(),
+                            prealloc: false,
+                            share: true,
+                            host_nodes: socket.host_node,
+                            policy,
+                            is_egm: false,
+                        },
+                        None => MemoryBackend::Ram {
+                            id,
+                            size,
+                            host_nodes: socket.host_node,
+                            policy,
+                        },
+                    }
+                })
+                .collect();
         }
 
         let total_gpus: usize = topo
@@ -449,10 +570,8 @@ impl Platform {
                     .iter()
                     .position(|e| e.socket == socket.id)
                     .map(|egm_pos| format!("m{egm_pos}"))
-            } else if socket_idx == 0 {
-                Some(PRIMARY_RAM_ID.to_owned())
             } else {
-                None
+                Some(format!("m{socket_idx}"))
             };
             self.objects.numa_nodes.push(NumaNode {
                 nodeid: socket_idx as u32,
@@ -597,14 +716,19 @@ impl Platform {
             .memory_backends
             .into_iter()
             .map(|b| match b {
-                MemoryBackend::Ram { id, size, .. } => MemoryBackend::File {
+                MemoryBackend::Ram {
+                    id,
+                    size,
+                    host_nodes,
+                    policy,
+                } => MemoryBackend::File {
                     id,
                     size,
                     path: path.to_owned(),
                     prealloc: true,
                     share: true,
-                    host_nodes: None,
-                    policy: None,
+                    host_nodes,
+                    policy,
                     is_egm: false,
                 },
                 other => other,
@@ -651,6 +775,19 @@ impl Platform {
         self.objects.numa_nodes.iter().any(|n| n.memdev.is_some())
     }
 
+    /// Append a NUMA node with neither CPUs nor memory after every other node.
+    /// QEMU attaches the memory hot-plug region (`-m ...,slots=,maxmem=`) to
+    /// the last NUMA node it was given; without this node that is the last GPU
+    /// initiator node, and hot-plugged RAM would share a node with GPU memory.
+    pub fn add_hotplug_placeholder_node(&mut self) {
+        let nodeid = self.objects.numa_nodes.len() as u32;
+        self.objects.numa_nodes.push(NumaNode {
+            nodeid,
+            memdev: None,
+            cpus: None,
+        });
+    }
+
     /// Q35 emission order:
     ///   1. protection object (sev-snp-guest / tdx-guest), if any
     ///   2. -machine q35,...
@@ -677,6 +814,16 @@ impl Platform {
         {
             args.push("-object".to_owned());
             args.push(emit_backend(backend, backend_id(backend)));
+            args.push("-numa".to_owned());
+            args.push(emit_numa_node(node));
+        }
+        // Nodes beyond the memory-backed ones (the hot-plug placeholder).
+        for node in self
+            .objects
+            .numa_nodes
+            .iter()
+            .skip(self.objects.memory_backends.len())
+        {
             args.push("-numa".to_owned());
             args.push(emit_numa_node(node));
         }
@@ -1099,6 +1246,18 @@ fn emit_vfio_grace(vfio: &VfioDevice, port_id: &str, iommufd: Option<&IommufdBac
 /// complexes fit below 0x100.
 fn pxb_bus_nr(complex_idx: usize) -> u8 {
     0x20u8 * (complex_idx as u8 + 1)
+}
+
+/// Highest vCPU count the guest can reach, mirroring the legacy `-smp`
+/// derivation: hot-plug up to `default_maxvcpus` unless the guest is
+/// confidential, in which case CPU hot-plug is disabled.
+fn guest_max_vcpus(config: &HypervisorConfig) -> u32 {
+    let vcpus = config.cpu_info.default_vcpus.ceil() as u32;
+    if config.security_info.confidential_guest {
+        vcpus
+    } else {
+        config.cpu_info.default_maxvcpus.max(vcpus)
+    }
 }
 
 // Socket IDs are not guaranteed contiguous; use position to get a dense NUMA node number.
