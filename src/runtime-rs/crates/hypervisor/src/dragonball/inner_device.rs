@@ -155,6 +155,8 @@ impl DragonballInner {
                     .context("add vhost-user-net device")?;
                 Ok(DeviceType::VhostUserNetwork(dev))
             }
+            #[cfg(target_arch = "x86_64")]
+            DeviceType::Protection(dev) => Ok(DeviceType::Protection(dev)),
             _ => Err(anyhow!("unsupported device {:?}", device)),
         }
     }

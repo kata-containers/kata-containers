@@ -57,6 +57,18 @@ impl Dragonball {
         }
     }
 
+    pub fn new_with_hypervisor_config(config: HypervisorConfig) -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
+        Self {
+            inner: Arc::new(RwLock::new(DragonballInner::new_with_hypervisor_config(
+                exit_notify,
+                config,
+            ))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
+        }
+    }
+
     pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
