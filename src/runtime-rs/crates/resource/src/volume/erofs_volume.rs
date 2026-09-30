@@ -10,10 +10,13 @@
 //! and directory.
 
 use std::collections::hash_map::DefaultHasher;
-use std::fs;
+use std::ffi::{OsStr, OsString};
+use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
-use std::os::unix::fs::{chown, lchown, symlink, MetadataExt, PermissionsExt};
-use std::path::{Path, PathBuf};
+use std::io;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{chown, OpenOptionsExt, PermissionsExt};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -27,6 +30,10 @@ use hypervisor::{
 use kata_sys_util::mount::get_mount_path;
 use kata_types::k8s::{is_configmap, is_downward_api, is_projected, is_secret};
 use kata_types::prefix_with_rootless_dir;
+use nix::dir::Dir;
+use nix::errno::Errno;
+use nix::fcntl::{openat, readlinkat, AtFlags, OFlag};
+use nix::sys::stat::{fstat, fstatat, FileStat, Mode, SFlag};
 use oci_spec::runtime as oci;
 use tokio::process::Command;
 use tokio::sync::RwLock;
@@ -61,10 +68,6 @@ const EROFS_IMAGE_UUID: &str = "00000000-0000-0000-0000-000000000000";
 
 /// Kubelet's atomic writer points this at the directory holding the payload.
 const ATOMIC_WRITER_DATA_LINK: &str = "..data";
-
-/// What we point it at instead. Kubelet rejects keys beginning with "..", so
-/// this cannot collide with one.
-const CANONICAL_DATA_DIR: &str = "..content";
 
 const IMAGE_MODE: u32 = 0o600;
 
@@ -290,27 +293,14 @@ async fn build_image(src: &Path, entry_name: &str, image_path: &Path) -> Result<
         .with_context(|| format!("create erofs volume directory {}", dir.display()))?;
 
     // mkfs.erofs images a directory tree, so a file source needs one of its own.
-    let mut staging = None;
-    let tree = if src.is_dir() {
-        match stage_directory(src, dir)? {
-            Some(scratch) => {
-                let path = scratch.path().to_path_buf();
-                staging = Some(scratch);
-                path
-            }
-            None => src.to_path_buf(),
-        }
+    let staging = tempfile::tempdir_in(dir).context("create erofs staging directory")?;
+    if src.is_dir() {
+        stage_directory(src, staging.path())?;
     } else {
-        let scratch = tempfile::tempdir_in(dir).context("create erofs staging directory")?;
-        let staged = scratch.path().join(entry_name);
-        stage_file(src, &staged)?;
-        clone_metadata(src, &staged)?;
-        let path = scratch.path().to_path_buf();
-        staging = Some(scratch);
-        path
-    };
+        stage_file(src, &staging.path().join(entry_name))?;
+    }
 
-    let result = run_mkfs(&tree, image_path).await;
+    let result = run_mkfs(staging.path(), image_path).await;
     drop(staging);
     result?;
 
@@ -323,14 +313,13 @@ async fn build_image(src: &Path, entry_name: &str, image_path: &Path) -> Result<
 }
 
 fn stage_file(src: &Path, staged: &Path) -> Result<()> {
-    // A hard link avoids the copy, but only within one filesystem.
-    if fs::hard_link(src, staged).is_ok() {
-        return Ok(());
-    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(src)
+        .with_context(|| format!("open {}", src.display()))?;
 
-    fs::copy(src, staged)
-        .with_context(|| format!("stage {} for imaging", src.display()))
-        .map(|_| ())
+    copy_file(file, src, staged)
 }
 
 /// What the guest needs in order to check the image against what we measured.
@@ -433,82 +422,171 @@ fn parse_root_hash(output: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("no root hash in {VERITYSETUP} output: {output}"))
 }
 
-/// Kubelet's atomic writer keeps the payload in a directory named after the
-/// moment it was written and points `..data` at it, so the same content
-/// mounted twice does not image to the same bytes. Restage it under a fixed
-/// name, which leaves the layout the container sees otherwise as it was.
+/// Copy the tree at `src` into `root`, flattening kubelet's atomic writer
+/// layout into the files its links point at.
 ///
-/// Returns None for a tree that is not laid out this way, which can be imaged
-/// where it lies.
-fn stage_directory(src: &Path, dir: &Path) -> Result<Option<tempfile::TempDir>> {
-    let Ok(payload) = fs::read_link(src.join(ATOMIC_WRITER_DATA_LINK)) else {
-        return Ok(None);
-    };
+/// Symlinks are not supported. A link staged into the image resolves inside
+/// the guest, against whatever the container sees there, and following one
+/// here would copy in whatever the host path leads to. Nothing is followed:
+/// the walk goes through file descriptors opened with O_NOFOLLOW, so a link
+/// swapped in while it runs is refused rather than taken.
+fn stage_directory(src: &Path, root: &Path) -> Result<()> {
+    let mut dir = Dir::open(src, DIR_FLAGS, Mode::empty())
+        .with_context(|| format!("open {}", src.display()))?;
+    let data = atomic_writer_payload(&dir, src)?
+        .map(|payload| {
+            let path = src.join(&payload);
+            open_dir_at(&dir, &payload, &path).map(|d| (d, path))
+        })
+        .transpose()?;
 
-    let scratch = tempfile::tempdir_in(dir).context("create erofs staging directory")?;
-    let root = scratch.path();
-    clone_metadata(src, root)?;
+    for name in entry_names(&mut dir)? {
+        let from = src.join(&name);
+        let to = root.join(&name);
 
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        let from = entry.path();
-
-        if Path::new(&name) == payload {
-            copy_tree(&from, &root.join(CANONICAL_DATA_DIR))?;
-        } else if name == std::ffi::OsStr::new(ATOMIC_WRITER_DATA_LINK) {
-            stage_symlink(Path::new(CANONICAL_DATA_DIR), &from, &root.join(&name))?;
-        } else {
-            copy_entry(&entry, &from, &root.join(&name))?;
+        match &data {
+            // ..data and the timestamped payload. Kubelet rejects keys
+            // beginning with "..", so none of the pod's keys is dropped.
+            Some(_) if name.as_bytes().starts_with(b"..") => {}
+            Some((payload, payload_path)) if kind_at(&dir, &name, &from)? == SFlag::S_IFLNK => {
+                let target = readlinkat(&dir, name.as_os_str())
+                    .with_context(|| format!("read link {}", from.display()))?;
+                if Path::new(&target) != Path::new(ATOMIC_WRITER_DATA_LINK).join(&name) {
+                    return Err(anyhow!(
+                        "{} links to {:?} rather than into {ATOMIC_WRITER_DATA_LINK}, and EROFS volumes do not support symlinks",
+                        from.display(),
+                        target
+                    ));
+                }
+                copy_entry(payload, &name, &payload_path.join(&name), &to)?;
+            }
+            _ => copy_entry(&dir, &name, &from, &to)?,
         }
     }
 
-    Ok(Some(scratch))
+    set_metadata(root, &fstat(&dir)?)
 }
 
-fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    clone_metadata(src, dst)?;
+const DIR_FLAGS: OFlag = OFlag::O_RDONLY
+    .union(OFlag::O_DIRECTORY)
+    .union(OFlag::O_NOFOLLOW)
+    .union(OFlag::O_CLOEXEC);
 
-    for entry in fs::read_dir(src)? {
+/// The payload directory `..data` points at, provided it is a sibling named
+/// the way kubelet names it, `..` followed by a timestamp.
+fn atomic_writer_payload(dir: &Dir, src: &Path) -> Result<Option<OsString>> {
+    match fstatat(dir, ATOMIC_WRITER_DATA_LINK, AtFlags::AT_SYMLINK_NOFOLLOW) {
+        Ok(stat) if kind(&stat) == SFlag::S_IFLNK => {}
+        Ok(_) | Err(Errno::ENOENT) => return Ok(None),
+        Err(e) => return Err(e).context(format!("stat {}", src.display())),
+    }
+
+    let payload = readlinkat(dir, ATOMIC_WRITER_DATA_LINK)
+        .with_context(|| format!("read {ATOMIC_WRITER_DATA_LINK} in {}", src.display()))?;
+
+    let mut components = Path::new(&payload).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(name)), None)
+            if name.as_bytes().starts_with(b"..") && name != ATOMIC_WRITER_DATA_LINK =>
+        {
+            Ok(Some(name.to_owned()))
+        }
+        _ => Err(anyhow!(
+            "{ATOMIC_WRITER_DATA_LINK} in {} points at {:?}, outside the volume",
+            src.display(),
+            payload
+        )),
+    }
+}
+
+fn entry_names(dir: &mut Dir) -> Result<Vec<OsString>> {
+    let mut names = Vec::new();
+    for entry in dir.iter() {
         let entry = entry?;
-        let from = entry.path();
-        copy_entry(&entry, &from, &dst.join(entry.file_name()))?;
+        let name = OsStr::from_bytes(entry.file_name().to_bytes());
+        if name != "." && name != ".." {
+            names.push(name.to_owned());
+        }
     }
-
-    Ok(())
+    Ok(names)
 }
 
-fn copy_entry(entry: &fs::DirEntry, from: &Path, to: &Path) -> Result<()> {
-    let file_type = entry.file_type()?;
+fn copy_entry(parent: &Dir, name: &OsStr, from: &Path, to: &Path) -> Result<()> {
+    let entry_kind = kind_at(parent, name, from)?;
 
-    if file_type.is_symlink() {
-        stage_symlink(&fs::read_link(from)?, from, to)
-    } else if file_type.is_dir() {
-        copy_tree(from, to)
+    if entry_kind == SFlag::S_IFDIR {
+        copy_tree(open_dir_at(parent, name, from)?, from, to)
+    } else if entry_kind == SFlag::S_IFREG {
+        let fd = openat(
+            parent,
+            name,
+            OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .with_context(|| format!("open {}", from.display()))?;
+        copy_file(File::from(fd), from, to)
     } else {
-        stage_file(from, to)?;
-        clone_metadata(from, to)
+        Err(unsupported(from, entry_kind))
     }
 }
 
-fn stage_symlink(target: &Path, src: &Path, dst: &Path) -> Result<()> {
-    symlink(target, dst)?;
+fn copy_tree(mut dir: Dir, from: &Path, to: &Path) -> Result<()> {
+    fs::create_dir(to).with_context(|| format!("create {}", to.display()))?;
 
-    let meta = fs::symlink_metadata(src)?;
-    lchown(dst, Some(meta.uid()), Some(meta.gid()))?;
+    for name in entry_names(&mut dir)? {
+        copy_entry(&dir, &name, &from.join(&name), &to.join(&name))?;
+    }
 
-    Ok(())
+    set_metadata(to, &fstat(&dir)?)
+}
+
+fn copy_file(mut file: File, from: &Path, to: &Path) -> Result<()> {
+    let stat = fstat(&file).with_context(|| format!("stat {}", from.display()))?;
+    if kind(&stat) != SFlag::S_IFREG {
+        return Err(unsupported(from, kind(&stat)));
+    }
+
+    let mut staged = File::create_new(to).with_context(|| format!("create {}", to.display()))?;
+    io::copy(&mut file, &mut staged).with_context(|| format!("copy {}", from.display()))?;
+
+    set_metadata(to, &stat)
+}
+
+fn open_dir_at(parent: &Dir, name: &OsStr, path: &Path) -> Result<Dir> {
+    Dir::openat(parent, name, DIR_FLAGS, Mode::empty())
+        .with_context(|| format!("open {}", path.display()))
+}
+
+fn kind_at(parent: &Dir, name: &OsStr, path: &Path) -> Result<SFlag> {
+    fstatat(parent, name, AtFlags::AT_SYMLINK_NOFOLLOW)
+        .map(|stat| kind(&stat))
+        .with_context(|| format!("stat {}", path.display()))
+}
+
+fn kind(stat: &FileStat) -> SFlag {
+    SFlag::from_bits_truncate(stat.st_mode & SFlag::S_IFMT.bits())
+}
+
+fn unsupported(path: &Path, kind: SFlag) -> anyhow::Error {
+    if kind == SFlag::S_IFLNK {
+        anyhow!(
+            "{} is a symlink, and EROFS volumes do not support symlinks",
+            path.display()
+        )
+    } else {
+        anyhow!(
+            "{} is neither a regular file nor a directory, which is all EROFS volumes support",
+            path.display()
+        )
+    }
 }
 
 /// Mode and ownership reach the image and the container sees them, so a staged
 /// copy has to carry the originals rather than whatever the runtime would
 /// create them as.
-fn clone_metadata(src: &Path, dst: &Path) -> Result<()> {
-    let meta = fs::metadata(src)?;
-
-    fs::set_permissions(dst, meta.permissions())?;
-    chown(dst, Some(meta.uid()), Some(meta.gid()))?;
+fn set_metadata(dst: &Path, stat: &FileStat) -> Result<()> {
+    fs::set_permissions(dst, fs::Permissions::from_mode(stat.st_mode & 0o7777))?;
+    chown(dst, Some(stat.st_uid), Some(stat.st_gid))?;
 
     Ok(())
 }
@@ -592,7 +670,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_directory_source_preserves_symlink_layout() {
+    async fn test_atomic_writer_volume_is_flattened() {
         if !erofs_utils_available() {
             println!("skipping: erofs-utils not installed");
             return;
@@ -614,11 +692,16 @@ mod tests {
 
         let out = tmp.path().join("extract");
         extract(&image, &out);
-        assert_eq!(
-            fs::read_link(out.join("key-a")).unwrap(),
-            Path::new("..data/key-a")
-        );
+        assert!(fs::symlink_metadata(out.join("key-a")).unwrap().is_file());
         assert_eq!(fs::read(out.join("key-a")).unwrap(), b"value-a");
+        assert_eq!(fs::read(out.join("key-b")).unwrap(), b"value-b");
+
+        let mut names: Vec<_> = fs::read_dir(&out)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["key-a", "key-b"]);
     }
 
     #[tokio::test]
@@ -704,33 +787,175 @@ mod tests {
         );
     }
 
+    fn assert_no_symlinks(dir: &Path) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let meta = fs::symlink_metadata(&path).unwrap();
+            assert!(!meta.is_symlink(), "{} is a symlink", path.display());
+            if meta.is_dir() {
+                assert_no_symlinks(&path);
+            }
+        }
+    }
+
     #[tokio::test]
-    async fn test_staging_keeps_the_layout_the_container_sees() {
+    async fn test_images_hold_no_symlinks() {
         if !erofs_utils_available() {
             println!("skipping: erofs-utils not installed");
             return;
         }
 
         let tmp = TempDir::new().unwrap();
-        let tree = tmp.path().join("configmap");
+        let tree = tmp.path().join("projected");
         fs::create_dir_all(&tree).unwrap();
         atomic_writer_tree(&tree);
+        let data = tree.join("..2026_01_01_00_00_00.1234");
+        fs::create_dir_all(data.join("nested")).unwrap();
+        fs::write(data.join("nested/key-c"), b"value-c").unwrap();
+        symlink("..data/nested", tree.join("nested")).unwrap();
+        // Where kubelet mounts a volume nested inside this one.
+        fs::create_dir(tree.join("mnt")).unwrap();
 
         let image = tmp.path().join("out.erofs");
-        build_image(&tree, "configmap", &image).await.unwrap();
+        build_image(&tree, "projected", &image).await.unwrap();
 
         let out = tmp.path().join("extract");
         extract(&image, &out);
+        assert_no_symlinks(&out);
+        assert_eq!(fs::read(out.join("nested/key-c")).unwrap(), b"value-c");
+        assert!(out.join("mnt").is_dir());
+    }
 
+    fn stage(tree: &Path) -> Result<TempDir> {
+        let out = TempDir::new().unwrap();
+        stage_directory(tree, out.path()).map(|_| out)
+    }
+
+    fn assert_rejected(tree: &Path, expected: &str) {
+        let err = format!("{:#}", stage(tree).unwrap_err());
+        assert!(err.contains(expected), "unexpected error: {}", err);
+    }
+
+    #[test]
+    fn test_plain_trees_are_copied_with_their_metadata() {
+        let tmp = TempDir::new().unwrap();
+        let tree = tmp.path().join("plain");
+        fs::create_dir_all(tree.join("sub")).unwrap();
+        fs::write(tree.join("sub/file"), b"data").unwrap();
+        fs::set_permissions(tree.join("sub/file"), fs::Permissions::from_mode(0o640)).unwrap();
+        fs::write(tree.join("..data"), b"not kubelet's").unwrap();
+
+        let out = stage(&tree).unwrap();
+
+        let staged = out.path().join("sub/file");
+        assert_eq!(fs::read(&staged).unwrap(), b"data");
         assert_eq!(
-            fs::read_link(out.join("key-a")).unwrap(),
-            Path::new("..data/key-a")
+            fs::metadata(&staged).unwrap().permissions().mode() & 0o7777,
+            0o640
         );
         assert_eq!(
-            fs::read_link(out.join("..data")).unwrap(),
-            Path::new(CANONICAL_DATA_DIR)
+            fs::read(out.path().join("..data")).unwrap(),
+            b"not kubelet's"
         );
-        assert_eq!(fs::read(out.join("key-a")).unwrap(), b"value-a");
+    }
+
+    #[test]
+    fn test_symlinks_are_rejected() {
+        let tmp = TempDir::new().unwrap();
+
+        let top = tmp.path().join("top");
+        fs::create_dir_all(&top).unwrap();
+        symlink("/etc/passwd", top.join("passwd")).unwrap();
+        assert_rejected(&top, "is a symlink");
+
+        let nested = tmp.path().join("nested");
+        fs::create_dir_all(nested.join("sub")).unwrap();
+        symlink("../..", nested.join("sub/up")).unwrap();
+        assert_rejected(&nested, "is a symlink");
+
+        let dangling = tmp.path().join("dangling");
+        fs::create_dir_all(&dangling).unwrap();
+        symlink("missing", dangling.join("link")).unwrap();
+        assert_rejected(&dangling, "is a symlink");
+    }
+
+    #[test]
+    fn test_data_link_escaping_the_volume_is_rejected() {
+        let tmp = TempDir::new().unwrap();
+
+        for (i, target) in [
+            "/etc",
+            "../elsewhere",
+            "..2026/nested",
+            "..2026/../../etc",
+            "..2026/..",
+            "..data",
+            "plain",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let tree = tmp.path().join(i.to_string());
+            fs::create_dir_all(&tree).unwrap();
+            symlink(target, tree.join("..data")).unwrap();
+            assert_rejected(&tree, "outside the volume");
+        }
+    }
+
+    #[test]
+    fn test_key_links_must_point_into_the_payload() {
+        let tmp = TempDir::new().unwrap();
+
+        for (i, target) in [
+            "/etc/passwd",
+            "..data/../../../etc/passwd",
+            "..data/evil/../../../etc/passwd",
+            "..data/evil/..",
+            "..data/key-a",
+            "..2026_01_01_00_00_00.1234/key-a",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let tree = tmp.path().join(i.to_string());
+            fs::create_dir_all(&tree).unwrap();
+            atomic_writer_tree(&tree);
+            symlink(target, tree.join("evil")).unwrap();
+            assert_rejected(&tree, "rather than into ..data");
+        }
+    }
+
+    #[test]
+    fn test_symlinks_inside_the_payload_are_rejected() {
+        let tmp = TempDir::new().unwrap();
+        let tree = tmp.path().join("configmap");
+        fs::create_dir_all(&tree).unwrap();
+        atomic_writer_tree(&tree);
+        let data = tree.join("..2026_01_01_00_00_00.1234");
+        symlink("/etc/shadow", data.join("key-c")).unwrap();
+        symlink("..data/key-c", tree.join("key-c")).unwrap();
+
+        assert_rejected(&tree, "is a symlink");
+    }
+
+    #[test]
+    fn test_special_files_are_rejected() {
+        let tmp = TempDir::new().unwrap();
+        let tree = tmp.path().join("fifo");
+        fs::create_dir_all(&tree).unwrap();
+        nix::unistd::mkfifo(&tree.join("pipe"), Mode::from_bits_truncate(0o600)).unwrap();
+
+        assert_rejected(&tree, "neither a regular file nor a directory");
+    }
+
+    #[test]
+    fn test_symlinked_file_sources_are_rejected() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("real"), b"data").unwrap();
+        symlink("real", tmp.path().join("link")).unwrap();
+
+        assert!(stage_file(&tmp.path().join("link"), &tmp.path().join("staged")).is_err());
+        assert!(!tmp.path().join("staged").exists());
     }
 
     #[test]
@@ -759,16 +984,6 @@ mod tests {
         assert!(options.contains(&"X-kata.dmverity.roothash=9c4a1e2f".to_string()));
         assert!(options.contains(&"X-kata.dmverity.hashoffset=8192".to_string()));
         assert!(options.iter().all(|o| o.starts_with("X-kata.")));
-    }
-
-    #[test]
-    fn test_a_plain_directory_is_imaged_where_it_lies() {
-        let tmp = TempDir::new().unwrap();
-        let tree = tmp.path().join("plain");
-        fs::create_dir_all(&tree).unwrap();
-        fs::write(tree.join("a"), b"a").unwrap();
-
-        assert!(stage_directory(&tree, tmp.path()).unwrap().is_none());
     }
 
     #[tokio::test]
