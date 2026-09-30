@@ -816,7 +816,7 @@ func TestCloudHypervisorColdPlugVFIODevice(t *testing.T) {
 	// Verify the device was added to vmconfig.Devices
 	assert.NotNil(clh.vmconfig.Devices)
 	assert.Len(*clh.vmconfig.Devices, 1)
-	assert.Equal("/sys/bus/pci/devices/0000:41:00.0", (*clh.vmconfig.Devices)[0].Path)
+	assert.Equal("/sys/bus/pci/devices/0000:41:00.0", (*clh.vmconfig.Devices)[0].GetPath())
 	assert.Equal("gpu0", clh.devicesIds["gpu0"])
 
 	// Cold-plug a second device

@@ -28,15 +28,13 @@ use ch_config::{
     },
     VmResize,
 };
-use ch_config::{guest_protection_is_tdx, NamedHypervisorConfig, State, VmConfig};
+use ch_config::{NamedHypervisorConfig, State, VmConfig};
 use core::future::poll_fn;
 use futures::future::join_all;
-use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
 use kata_types::config::hypervisor::RootlessUser;
 use kata_types::rootless::is_rootless;
-use lazy_static::lazy_static;
 use nix::sched::{setns, CloneFlags};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -46,7 +44,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{Arc, RwLock};
 use tokio::io::BufReader;
 use tokio::process::{Child, Command};
 use tokio::sync::watch::Receiver;
@@ -59,12 +56,6 @@ const CH_NAME: &str = "clh";
 
 /// Number of milliseconds to wait before retrying a CH operation.
 const CH_POLL_TIME_MS: u64 = 50;
-
-// The name of the CH JSON key for the build-time features list.
-const CH_FEATURES_KEY: &str = "features";
-
-// The name of the CH build-time feature for Intel TDX.
-const CH_FEATURE_TDX: &str = "tdx";
 
 const CLH_TEMPLATE_STATE_FILE: &str = "state.json";
 const CLH_TEMPLATE_CONFIG_FILE: &str = "config.json";
@@ -80,21 +71,8 @@ enum CloudHypervisorLogLevel {
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum GuestProtectionError {
-    #[error("guest protection requested but no guest protection available")]
-    NoProtectionAvailable,
-
-    // LIMITATION: Current CH TDX limitation.
-    //
-    // When built to support TDX, if Cloud Hypervisor determines the host
-    // system supports TDX, it can only create TD's (as opposed to VMs).
-    // Hence, on a TDX capable system, confidential_guest *MUST* be set to
-    // "true".
-    #[error("TDX guest protection available and must be used with Cloud Hypervisor (set 'confidential_guest=true')")]
-    TDXProtectionMustBeUsedWithCH,
-
-    // TDX is the only tested CH protection currently.
-    #[error("Expected TDX protection, found {0}")]
-    ExpectedTDXProtection(GuestProtection),
+    #[error("confidential guests are not supported with Cloud Hypervisor")]
+    ConfidentialGuestNotSupported,
 }
 
 impl CloudHypervisorInner {
@@ -111,14 +89,6 @@ impl CloudHypervisorInner {
             .await
             .context("hypervisor running check failed")?;
 
-        if guest_protection_is_tdx(self.guest_protection_to_use.clone()) {
-            if let Some(features) = &self.ch_features {
-                if !features.contains(&CH_FEATURE_TDX.to_string()) {
-                    return Err(anyhow!("Cloud Hypervisor is not built with TDX support"));
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -126,8 +96,6 @@ impl CloudHypervisorInner {
         let cfg = &self.config;
 
         let enable_debug = cfg.debug_info.enable_debug;
-
-        let confidential_guest = cfg.security_info.confidential_guest;
 
         // Note that the configuration option hypervisor.block_device_driver is not used.
         // NVDIMM is not supported for Cloud Hypervisor.
@@ -155,11 +123,7 @@ impl CloudHypervisorInner {
         )?;
 
         let mut console_params = if enable_debug {
-            if confidential_guest {
-                KernelParams::from_string("console=hvc0")
-            } else {
-                console_param_debug
-            }
+            console_param_debug
         } else {
             KernelParams::from_string("quiet")
         };
@@ -211,7 +175,6 @@ impl CloudHypervisorInner {
             sandbox_path,
             vsock_socket_path,
             cfg: self.config.clone(),
-            guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
             host_devices,
             boot_disks,
@@ -505,9 +468,6 @@ impl CloudHypervisorInner {
         }
 
         if debug {
-            // Note that with TDX enabled, this results in a lot of additional
-            // CH output, particularly if the user adds "earlyprintk" to the
-            // guest kernel command line (by modifying "kernel_params=").
             cmd.arg("-v");
         }
 
@@ -652,33 +612,6 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    // Check the specified ping API response to see if it contains CH's
-    // build-time features list. If so, save them.
-    async fn handle_ch_build_features(&mut self, ping_response: &str) -> Result<()> {
-        let v: Value = serde_json::from_str(ping_response)?;
-
-        let got = &v[CH_FEATURES_KEY];
-
-        if got.is_null() {
-            return Ok(());
-        }
-
-        let features_list = got
-            .as_array()
-            .ok_or("expected CH to return array of features")
-            .map_err(|e| anyhow!(e))?;
-
-        let features: Vec<String> = features_list
-            .iter()
-            .map(Value::to_string)
-            .map(|s| s.trim_start_matches('"').trim_end_matches('"').to_string())
-            .collect();
-
-        self.ch_features = Some(features);
-
-        Ok(())
-    }
-
     async fn cloud_hypervisor_ping_until_ready(&mut self, _poll_time_ms: u64) -> Result<()> {
         loop {
             let response = cloud_hypervisor_vmm_ping(&self.api_socket)
@@ -687,11 +620,7 @@ impl CloudHypervisorInner {
 
             if let Ok(response) = response {
                 if let Some(detail) = response {
-                    // Check for a list of built-in features, returned by this
-                    // API call in newer versions of CH.
                     debug!(sl!(), "ping response: {:?}", detail);
-
-                    self.handle_ch_build_features(&detail).await?;
                 }
                 break;
             }
@@ -713,7 +642,7 @@ impl CloudHypervisorInner {
 
         self.setup_environment().await?;
 
-        self.handle_guest_protection().await?;
+        self.handle_guest_protection()?;
 
         self.netns = netns;
 
@@ -727,47 +656,12 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    // Check if guest protection is available and also check if the user
-    // actually wants to use it.
-    //
-    // Note: This method must be called as early as possible since after this
-    // call, if confidential_guest is set, a confidential
-    // guest will be created.
-    async fn handle_guest_protection(&mut self) -> Result<()> {
-        let cfg = &self.config;
-
-        let confidential_guest = cfg.security_info.confidential_guest;
-
-        if confidential_guest {
-            info!(sl!(), "confidential guest requested");
-        }
-
-        let protection =
-            task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })
-                .await??;
-
-        self.guest_protection_to_use = protection.clone();
-
-        info!(sl!(), "guest protection {:?}", protection.to_string());
-
-        if confidential_guest {
-            if protection == GuestProtection::NoProtection {
-                // User wants protection, but none available.
-                return Err(anyhow!(GuestProtectionError::NoProtectionAvailable));
-            } else if let GuestProtection::Tdx = protection {
-                info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
-            } else {
-                return Err(anyhow!(GuestProtectionError::ExpectedTDXProtection(
-                    protection
-                )));
-            }
-        } else if protection == GuestProtection::NoProtection {
-            debug!(sl!(), "no guest protection available");
-        } else if let GuestProtection::Tdx = protection {
-            // CH requires TDX protection to be used.
-            return Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH));
-        } else {
-            info!(sl!(), "guest protection available but not requested"; "guest-protection" => protection.to_string());
+    // Cloud Hypervisor does not support any form of guest protection, so
+    // refuse to create a confidential guest rather than silently booting a
+    // non-confidential one.
+    fn handle_guest_protection(&self) -> Result<()> {
+        if self.config.security_info.confidential_guest {
+            return Err(anyhow!(GuestProtectionError::ConfidentialGuestNotSupported));
         }
 
         Ok(())
@@ -976,21 +870,12 @@ impl CloudHypervisorInner {
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
 
-        let flags = if guest_protection_is_tdx(self.guest_protection_to_use.clone()) {
-            // TDX does not permit the use of virtio-fs.
-            CapabilityBits::BlockDeviceSupport
-                | CapabilityBits::BlockDeviceHotplugSupport
-                | CapabilityBits::BlockDeviceDiscardSupport
-                | CapabilityBits::HybridVsockSupport
-                | CapabilityBits::NetworkDeviceHotplugSupport
-        } else {
-            CapabilityBits::BlockDeviceSupport
-                | CapabilityBits::BlockDeviceHotplugSupport
-                | CapabilityBits::BlockDeviceDiscardSupport
-                | CapabilityBits::FsSharingSupport
-                | CapabilityBits::HybridVsockSupport
-                | CapabilityBits::NetworkDeviceHotplugSupport
-        };
+        let flags = CapabilityBits::BlockDeviceSupport
+            | CapabilityBits::BlockDeviceHotplugSupport
+            | CapabilityBits::BlockDeviceDiscardSupport
+            | CapabilityBits::FsSharingSupport
+            | CapabilityBits::HybridVsockSupport
+            | CapabilityBits::NetworkDeviceHotplugSupport;
 
         caps.set(flags);
 
@@ -1187,51 +1072,6 @@ fn parse_ch_log_level(line: &str) -> CloudHypervisorLogLevel {
     CloudHypervisorLogLevel::Info
 }
 
-lazy_static! {
-    // Store the fake guest protection value used by
-    // get_fake_guest_protection() and set_fake_guest_protection().
-    //
-    // Note that if this variable is set to None, get_fake_guest_protection()
-    // will fall back to checking the actual guest protection by calling
-    // get_guest_protection().
-    static ref FAKE_GUEST_PROTECTION: Arc<RwLock<Option<GuestProtection>>> =
-        Arc::new(RwLock::new(Some(GuestProtection::NoProtection)));
-}
-
-// Return the _fake_ GuestProtection value set by set_guest_protection().
-fn get_fake_guest_protection() -> Result<GuestProtection> {
-    let existing_ref = FAKE_GUEST_PROTECTION.clone();
-
-    let existing = existing_ref.read().unwrap();
-
-    let real_protection = available_guest_protection()?;
-
-    let protection = if let Some(ref protection) = *existing {
-        protection
-    } else {
-        // XXX: If no fake value is set, fall back to the real function.
-        &real_protection
-    };
-
-    Ok(protection.clone())
-}
-
-// Return available hardware protection, or GuestProtection::NoProtection
-// if none available.
-//
-// XXX: Note that this function wraps the low-level function to determine
-// guest protection. It does this to allow us to force a particular guest
-// protection type in the unit tests.
-fn get_guest_protection() -> Result<GuestProtection> {
-    let guest_protection = if cfg!(test) {
-        get_fake_guest_protection()
-    } else {
-        available_guest_protection().map_err(|e| anyhow!(e.to_string()))
-    }?;
-
-    Ok(guest_protection)
-}
-
 // Return a VCPU/TID map from a specified /proc/{pid} path. Cloud Hypervisor
 // names its vCPU backing threads "vcpu${number}"; the shared scanner in
 // crate::utils reads those names from /proc/<pid>/task/<tid>/comm.
@@ -1248,26 +1088,11 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::SevSnpDetails;
-
-    #[cfg(target_arch = "x86_64")]
-    use kata_sys_util::protection::TDX_KVM_PARAMETER_PATH;
 
     use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, SecurityInfo};
-    use serial_test::serial;
-    use test_utils::{assert_result, skip_if_not_root};
 
     use std::fs::{self, File};
     use tempfile::Builder;
-
-    fn set_fake_guest_protection(protection: Option<GuestProtection>) {
-        let existing_ref = FAKE_GUEST_PROTECTION.clone();
-
-        let mut existing = existing_ref.write().unwrap();
-
-        // Modify the lazy static global config structure
-        *existing = protection;
-    }
 
     #[actix_rt::test]
     async fn test_network_device_hotplug_capability() {
@@ -1280,204 +1105,34 @@ mod tests {
             .is_network_device_hotplug_supported());
     }
 
-    #[serial]
-    #[actix_rt::test]
-    async fn test_get_guest_protection() {
-        // available_guest_protection() requires super user privs.
-        skip_if_not_root!();
-
-        let sev_snp_details = SevSnpDetails {
-            cbitpos: 42,
-            phys_addr_reduction: 42,
-        };
-
-        #[derive(Debug)]
-        struct TestData {
-            value: Option<GuestProtection>,
-            result: Result<GuestProtection>,
-        }
-
-        let tests = &[
-            TestData {
-                value: Some(GuestProtection::NoProtection),
-                result: Ok(GuestProtection::NoProtection),
-            },
-            TestData {
-                value: Some(GuestProtection::Pef),
-                result: Ok(GuestProtection::Pef),
-            },
-            TestData {
-                value: Some(GuestProtection::Se),
-                result: Ok(GuestProtection::Se),
-            },
-            TestData {
-                value: Some(GuestProtection::Sev(sev_snp_details.clone())),
-                result: Ok(GuestProtection::Sev(sev_snp_details.clone())),
-            },
-            TestData {
-                value: Some(GuestProtection::Snp(sev_snp_details.clone())),
-                result: Ok(GuestProtection::Snp(sev_snp_details.clone())),
-            },
-            TestData {
-                value: Some(GuestProtection::Tdx),
-                result: Ok(GuestProtection::Tdx),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{i}]: {d:?}");
-
-            set_fake_guest_protection(d.value.clone());
-
-            let result =
-                task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })
-                    .await
-                    .unwrap();
-
-            let msg = format!("{msg}: actual result: {result:?}");
-
-            if std::env::var("DEBUG").is_ok() {
-                eprintln!("DEBUG: {msg}");
-            }
-
-            assert_result!(d.result, result, msg);
-        }
-
-        // Reset
-        set_fake_guest_protection(None);
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    #[serial]
-    #[actix_rt::test]
-    async fn test_get_guest_protection_tdx() {
-        // available_guest_protection() requires super user privs.
-        skip_if_not_root!();
-
-        // Use the hosts protection, not a fake one.
-        set_fake_guest_protection(None);
-
-        let have_tdx = fs::read(TDX_KVM_PARAMETER_PATH)
-            .is_ok_and(|content| !content.is_empty() && content[0] == b'Y');
-
-        let protection =
-            task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })
-                .await
-                .unwrap()
-                .unwrap();
-
-        if std::env::var("DEBUG").is_ok() {
-            let msg = format!("have_tdx: {have_tdx:?}, protection: {protection:?}");
-
-            eprintln!("DEBUG: {msg}");
-        }
-
-        if have_tdx {
-            assert_eq!(protection, GuestProtection::Tdx);
-        } else {
-            assert_eq!(protection, GuestProtection::NoProtection);
-        }
-    }
-
-    #[serial]
-    #[actix_rt::test]
-    async fn test_handle_guest_protection() {
-        // available_guest_protection() requires super user privs.
-        skip_if_not_root!();
-
-        #[derive(Debug)]
-        struct TestData {
-            confidential_guest: bool,
-            available_protection: Option<GuestProtection>,
-
-            result: Result<()>,
-
-            // The expected result (internal state)
-            guest_protection_to_use: GuestProtection,
-        }
-
-        let tests = &[
-            TestData {
-                confidential_guest: false,
-                available_protection: Some(GuestProtection::NoProtection),
-                result: Ok(()),
-                guest_protection_to_use: GuestProtection::NoProtection,
-            },
-            TestData {
-                confidential_guest: true,
-                available_protection: Some(GuestProtection::NoProtection),
-                result: Err(anyhow!(GuestProtectionError::NoProtectionAvailable)),
-                guest_protection_to_use: GuestProtection::NoProtection,
-            },
-            TestData {
-                confidential_guest: false,
-                available_protection: Some(GuestProtection::Tdx),
-                result: Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH)),
-                guest_protection_to_use: GuestProtection::Tdx,
-            },
-            TestData {
-                confidential_guest: true,
-                available_protection: Some(GuestProtection::Tdx),
-                result: Ok(()),
-                guest_protection_to_use: GuestProtection::Tdx,
-            },
-            TestData {
-                confidential_guest: false,
-                available_protection: Some(GuestProtection::Pef),
-                result: Ok(()),
-                guest_protection_to_use: GuestProtection::NoProtection,
-            },
-            TestData {
-                confidential_guest: true,
-                available_protection: Some(GuestProtection::Pef),
-                result: Err(anyhow!(GuestProtectionError::ExpectedTDXProtection(
-                    GuestProtection::Pef
-                ))),
-                guest_protection_to_use: GuestProtection::Pef,
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{i}]: {d:?}");
-
-            set_fake_guest_protection(d.available_protection.clone());
-
+    #[test]
+    fn test_handle_guest_protection() {
+        for confidential_guest in [false, true] {
             let mut ch = CloudHypervisorInner::default();
 
-            let cfg = HypervisorConfig {
+            ch.set_hypervisor_config(HypervisorConfig {
                 security_info: SecurityInfo {
-                    confidential_guest: d.confidential_guest,
+                    confidential_guest,
 
                     ..Default::default()
                 },
 
                 ..Default::default()
-            };
+            });
 
-            ch.set_hypervisor_config(cfg);
+            let result = ch.handle_guest_protection();
 
-            let result = ch.handle_guest_protection().await;
-
-            let msg = format!("{msg}: actual result: {result:?}");
-
-            if std::env::var("DEBUG").is_ok() {
-                eprintln!("DEBUG: {msg}");
+            if confidential_guest {
+                let err = result.unwrap_err();
+                assert_eq!(
+                    err.downcast_ref::<GuestProtectionError>(),
+                    Some(&GuestProtectionError::ConfidentialGuestNotSupported),
+                    "confidential_guest=true: {err:?}"
+                );
+            } else {
+                assert!(result.is_ok(), "confidential_guest=false: {:?}", result);
             }
-
-            if d.result.is_ok() && result.is_ok() {
-                continue;
-            }
-
-            assert_result!(d.result, result, msg);
-
-            assert_eq!(
-                ch.guest_protection_to_use, d.guest_protection_to_use,
-                "{msg}"
-            );
         }
-
-        // Reset
-        set_fake_guest_protection(None);
     }
 
     #[actix_rt::test]
@@ -1485,7 +1140,6 @@ mod tests {
         #[derive(Debug)]
         struct TestData<'a> {
             cfg: Option<HypervisorConfig>,
-            confidential_guest: bool,
             debug: bool,
             fails: bool,
             contains: Vec<&'a str>,
@@ -1494,14 +1148,12 @@ mod tests {
         let tests = &[
             TestData {
                 cfg: None,
-                confidential_guest: false,
                 debug: false,
                 fails: true, // No hypervisor config
                 contains: vec![],
             },
             TestData {
                 cfg: Some(HypervisorConfig::default()),
-                confidential_guest: false,
                 debug: false,
                 fails: false,
                 contains: vec![],
@@ -1516,10 +1168,6 @@ mod tests {
             if let Some(ref mut cfg) = d.cfg.clone() {
                 if d.debug {
                     cfg.debug_info.enable_debug = true;
-                }
-
-                if d.confidential_guest {
-                    cfg.security_info.confidential_guest = true;
                 }
 
                 ch.set_hypervisor_config(cfg.clone());

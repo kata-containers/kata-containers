@@ -15,6 +15,7 @@ Name | Type | Description | Notes
 **HotplugSize** | Pointer to **int64** |  | [optional] 
 **HotpluggedSize** | Pointer to **int64** |  | [optional] 
 **Prefault** | Pointer to **bool** |  | [optional] [default to false]
+**Reserve** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods
 
@@ -299,6 +300,31 @@ SetPrefault sets Prefault field to given value.
 `func (o *MemoryZoneConfig) HasPrefault() bool`
 
 HasPrefault returns a boolean if a field has been set.
+
+### GetReserve
+
+`func (o *MemoryZoneConfig) GetReserve() bool`
+
+GetReserve returns the Reserve field if non-nil, zero value otherwise.
+
+### GetReserveOk
+
+`func (o *MemoryZoneConfig) GetReserveOk() (*bool, bool)`
+
+GetReserveOk returns a tuple with the Reserve field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetReserve
+
+`func (o *MemoryZoneConfig) SetReserve(v bool)`
+
+SetReserve sets Reserve field to given value.
+
+### HasReserve
+
+`func (o *MemoryZoneConfig) HasReserve() bool`
+
+HasReserve returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

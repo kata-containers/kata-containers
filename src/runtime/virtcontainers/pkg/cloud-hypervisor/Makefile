@@ -16,6 +16,7 @@ generate-client-code: clean-generated-code
 		-v $${PWD}:/local openapitools/openapi-generator-cli:v5.3.0 generate \
 		-i /local/cloud-hypervisor.yaml \
 		-g go \
+		--additional-properties enumClassPrefix=true \
 		-o /local/client
 go-fmt:
 	rm client/go.mod; \

@@ -9,7 +9,6 @@ use crate::VmmState;
 use anyhow::Result;
 use async_trait::async_trait;
 use ch_config::ch_api::ApiSocket;
-use kata_sys_util::protection::GuestProtection;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -54,25 +53,12 @@ pub struct CloudHypervisorInner {
     pub(crate) shutdown_rx: Option<Receiver<bool>>,
     pub(crate) tasks: Option<Vec<JoinHandle<Result<()>>>>,
 
-    // Set if the hardware supports creating a protected guest *AND* if the
-    // user has requested creating a protected guest.
-    //
-    // For example, on Intel TDX capable systems with `confidential_guest=true`,
-    // this will be set to "tdx".
-    pub(crate) guest_protection_to_use: GuestProtection,
-
     // Store mapping between device-ids created by runtime-rs device manager
     // and device-ids returned by cloud-hypervisor when the device is added to the VM.
     //
     // The cloud-hypervisor device-id is later looked up and used while
     // removing the device.
     pub(crate) device_ids: HashMap<String, String>,
-
-    // List of Cloud Hypervisor features enabled at Cloud Hypervisor build-time.
-    //
-    // If the version of CH does not provide these details, the value will be
-    // None.
-    pub(crate) ch_features: Option<Vec<String>>,
 
     /// Size of memory block of guest OS in MB
     pub(crate) guest_memory_block_size_mb: u32,
@@ -116,8 +102,6 @@ impl CloudHypervisorInner {
             shutdown_tx: Some(tx),
             shutdown_rx: Some(rx),
             tasks: None,
-            guest_protection_to_use: GuestProtection::NoProtection,
-            ch_features: None,
             guest_memory_block_size_mb: 0,
 
             exit_notify,
@@ -160,7 +144,6 @@ impl Persist for CloudHypervisorInner {
             netns: self.netns.clone(),
             config: self.hypervisor_config(),
             run_dir: self.run_dir.clone(),
-            guest_protection_to_use: self.guest_protection_to_use.clone(),
 
             ..Default::default()
         })
@@ -180,7 +163,6 @@ impl Persist for CloudHypervisorInner {
             vm_path: hypervisor_state.vm_path,
             run_dir: hypervisor_state.run_dir,
             netns: hypervisor_state.netns,
-            guest_protection_to_use: hypervisor_state.guest_protection_to_use.clone(),
 
             pending_devices: vec![],
             device_ids: HashMap::<String, String>::new(),
@@ -189,7 +171,6 @@ impl Persist for CloudHypervisorInner {
             shutdown_rx: Some(rx),
             timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
             jailer_root: String::default(),
-            ch_features: None,
             exit_notify: Some(exit_notify),
 
             ..Default::default()
@@ -214,14 +195,11 @@ mod tests {
         clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
         clh.run_dir = String::from("/var/run/kata-containers/") + &clh.id;
 
-        clh.guest_protection_to_use = GuestProtection::Tdx;
-
         let state = clh.save().await.unwrap();
         assert_eq!(state.id, clh.id);
         assert_eq!(state.netns, clh.netns);
         assert_eq!(state.vm_path, clh.vm_path);
         assert_eq!(state.run_dir, clh.run_dir);
-        assert_eq!(state.guest_protection_to_use, clh.guest_protection_to_use);
         assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
 
@@ -232,6 +210,5 @@ mod tests {
         assert_eq!(clh.netns, state.netns);
         assert_eq!(clh.vm_path, state.vm_path);
         assert_eq!(clh.run_dir, state.run_dir);
-        assert_eq!(clh.guest_protection_to_use, state.guest_protection_to_use);
     }
 }

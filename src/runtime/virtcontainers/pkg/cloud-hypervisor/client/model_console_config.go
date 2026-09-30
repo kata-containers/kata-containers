@@ -16,17 +16,20 @@ import (
 
 // ConsoleConfig struct for ConsoleConfig
 type ConsoleConfig struct {
-	File   *string `json:"file,omitempty"`
-	Socket *string `json:"socket,omitempty"`
-	Mode   string  `json:"mode"`
-	Iommu  *bool   `json:"iommu,omitempty"`
+	File        *string     `json:"file,omitempty"`
+	Socket      *string     `json:"socket,omitempty"`
+	Mode        ConsoleMode `json:"mode"`
+	Iommu       *bool       `json:"iommu,omitempty"`
+	Id          *string     `json:"id,omitempty"`
+	PciSegment  *int32      `json:"pci_segment,omitempty"`
+	PciDeviceId *int32      `json:"pci_device_id,omitempty"`
 }
 
 // NewConsoleConfig instantiates a new ConsoleConfig object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewConsoleConfig(mode string) *ConsoleConfig {
+func NewConsoleConfig(mode ConsoleMode) *ConsoleConfig {
 	this := ConsoleConfig{}
 	this.Mode = mode
 	var iommu bool = false
@@ -109,9 +112,9 @@ func (o *ConsoleConfig) SetSocket(v string) {
 }
 
 // GetMode returns the Mode field value
-func (o *ConsoleConfig) GetMode() string {
+func (o *ConsoleConfig) GetMode() ConsoleMode {
 	if o == nil {
-		var ret string
+		var ret ConsoleMode
 		return ret
 	}
 
@@ -120,7 +123,7 @@ func (o *ConsoleConfig) GetMode() string {
 
 // GetModeOk returns a tuple with the Mode field value
 // and a boolean to check if the value has been set.
-func (o *ConsoleConfig) GetModeOk() (*string, bool) {
+func (o *ConsoleConfig) GetModeOk() (*ConsoleMode, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -128,7 +131,7 @@ func (o *ConsoleConfig) GetModeOk() (*string, bool) {
 }
 
 // SetMode sets field value
-func (o *ConsoleConfig) SetMode(v string) {
+func (o *ConsoleConfig) SetMode(v ConsoleMode) {
 	o.Mode = v
 }
 
@@ -164,6 +167,102 @@ func (o *ConsoleConfig) SetIommu(v bool) {
 	o.Iommu = &v
 }
 
+// GetId returns the Id field value if set, zero value otherwise.
+func (o *ConsoleConfig) GetId() string {
+	if o == nil || o.Id == nil {
+		var ret string
+		return ret
+	}
+	return *o.Id
+}
+
+// GetIdOk returns a tuple with the Id field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ConsoleConfig) GetIdOk() (*string, bool) {
+	if o == nil || o.Id == nil {
+		return nil, false
+	}
+	return o.Id, true
+}
+
+// HasId returns a boolean if a field has been set.
+func (o *ConsoleConfig) HasId() bool {
+	if o != nil && o.Id != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetId gets a reference to the given string and assigns it to the Id field.
+func (o *ConsoleConfig) SetId(v string) {
+	o.Id = &v
+}
+
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *ConsoleConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ConsoleConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *ConsoleConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *ConsoleConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *ConsoleConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ConsoleConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *ConsoleConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *ConsoleConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
 func (o ConsoleConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.File != nil {
@@ -177,6 +276,15 @@ func (o ConsoleConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu
+	}
+	if o.Id != nil {
+		toSerialize["id"] = o.Id
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	return json.Marshal(toSerialize)
 }

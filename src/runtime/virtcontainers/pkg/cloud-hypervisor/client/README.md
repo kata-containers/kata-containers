@@ -90,6 +90,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddDevicePut**](docs/DefaultApi.md#vmadddeviceput) | **Put** /vm.add-device | Add a new device to the VM
 *DefaultApi* | [**VmAddDiskPut**](docs/DefaultApi.md#vmadddiskput) | **Put** /vm.add-disk | Add a new disk to the VM
 *DefaultApi* | [**VmAddFsPut**](docs/DefaultApi.md#vmaddfsput) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
+*DefaultApi* | [**VmAddGenericVhostUserPut**](docs/DefaultApi.md#vmaddgenericvhostuserput) | **Put** /vm.add-generic-vhost-user | Add a new generic vhost-user device to the VM
 *DefaultApi* | [**VmAddNetPut**](docs/DefaultApi.md#vmaddnetput) | **Put** /vm.add-net | Add a new network device to the VM
 *DefaultApi* | [**VmAddPmemPut**](docs/DefaultApi.md#vmaddpmemput) | **Put** /vm.add-pmem | Add a new pmem device to the VM
 *DefaultApi* | [**VmAddUserDevicePut**](docs/DefaultApi.md#vmadduserdeviceput) | **Put** /vm.add-user-device | Add a new userspace device to the VM
@@ -98,6 +99,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmCoredumpPut**](docs/DefaultApi.md#vmcoredumpput) | **Put** /vm.coredump | Takes a VM coredump.
 *DefaultApi* | [**VmCountersGet**](docs/DefaultApi.md#vmcountersget) | **Get** /vm.counters | Get counters from the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+*DefaultApi* | [**VmNmiPut**](docs/DefaultApi.md#vmnmiput) | **Put** /vm.nmi | Inject an NMI.
 *DefaultApi* | [**VmReceiveMigrationPut**](docs/DefaultApi.md#vmreceivemigrationput) | **Put** /vm.receive-migration | Receive a VM migration from URL
 *DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
 *DefaultApi* | [**VmResizeDiskPut**](docs/DefaultApi.md#vmresizediskput) | **Put** /vm.resize-disk | Resize a disk
@@ -106,7 +108,6 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmRestorePut**](docs/DefaultApi.md#vmrestoreput) | **Put** /vm.restore | Restore a VM from a snapshot.
 *DefaultApi* | [**VmSendMigrationPut**](docs/DefaultApi.md#vmsendmigrationput) | **Put** /vm.send-migration | Send a VM migration to URL
 *DefaultApi* | [**VmSnapshotPut**](docs/DefaultApi.md#vmsnapshotput) | **Put** /vm.snapshot | Returns a VM snapshot.
-*DefaultApi* | [**VmmNmiPut**](docs/DefaultApi.md#vmmnmiput) | **Put** /vmm.nmi | Inject an NMI.
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
@@ -114,6 +115,8 @@ Class | Method | HTTP request | Description
 
  - [BalloonConfig](docs/BalloonConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
+ - [ConsoleMode](docs/ConsoleMode.md)
+ - [CoreSchedulingMode](docs/CoreSchedulingMode.md)
  - [CpuAffinity](docs/CpuAffinity.md)
  - [CpuFeatures](docs/CpuFeatures.md)
  - [CpuTopology](docs/CpuTopology.md)
@@ -123,9 +126,14 @@ Class | Method | HTTP request | Description
  - [DeviceNode](docs/DeviceNode.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
+ - [GenericVhostUserConfig](docs/GenericVhostUserConfig.md)
+ - [ImageType](docs/ImageType.md)
  - [LandlockConfig](docs/LandlockConfig.md)
+ - [LockGranularity](docs/LockGranularity.md)
  - [MemoryConfig](docs/MemoryConfig.md)
+ - [MemoryRestoreMode](docs/MemoryRestoreMode.md)
  - [MemoryZoneConfig](docs/MemoryZoneConfig.md)
+ - [MigrationMode](docs/MigrationMode.md)
  - [NetConfig](docs/NetConfig.md)
  - [NumaConfig](docs/NumaConfig.md)
  - [NumaDistance](docs/NumaDistance.md)
@@ -139,9 +147,13 @@ Class | Method | HTTP request | Description
  - [ReceiveMigrationData](docs/ReceiveMigrationData.md)
  - [RestoreConfig](docs/RestoreConfig.md)
  - [RngConfig](docs/RngConfig.md)
+ - [RtcConfig](docs/RtcConfig.md)
  - [SendMigrationData](docs/SendMigrationData.md)
+ - [SerialConfig](docs/SerialConfig.md)
+ - [TimeoutStrategy](docs/TimeoutStrategy.md)
  - [TokenBucket](docs/TokenBucket.md)
  - [TpmConfig](docs/TpmConfig.md)
+ - [UserDeviceConfig](docs/UserDeviceConfig.md)
  - [VdpaConfig](docs/VdpaConfig.md)
  - [VirtQueueAffinity](docs/VirtQueueAffinity.md)
  - [VmAddUserDevice](docs/VmAddUserDevice.md)
@@ -153,6 +165,7 @@ Class | Method | HTTP request | Description
  - [VmResizeDisk](docs/VmResizeDisk.md)
  - [VmResizeZone](docs/VmResizeZone.md)
  - [VmSnapshotConfig](docs/VmSnapshotConfig.md)
+ - [VmState](docs/VmState.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
  - [VsockConfig](docs/VsockConfig.md)
 

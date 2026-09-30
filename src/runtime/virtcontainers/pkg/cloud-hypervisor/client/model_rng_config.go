@@ -16,8 +16,11 @@ import (
 
 // RngConfig struct for RngConfig
 type RngConfig struct {
-	Src   string `json:"src"`
-	Iommu *bool  `json:"iommu,omitempty"`
+	Id          *string `json:"id,omitempty"`
+	PciSegment  *int32  `json:"pci_segment,omitempty"`
+	PciDeviceId *int32  `json:"pci_device_id,omitempty"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	Src         string  `json:"src"`
 }
 
 // NewRngConfig instantiates a new RngConfig object
@@ -26,9 +29,9 @@ type RngConfig struct {
 // will change when the set of required properties is changed
 func NewRngConfig(src string) *RngConfig {
 	this := RngConfig{}
-	this.Src = src
 	var iommu bool = false
 	this.Iommu = &iommu
+	this.Src = src
 	return &this
 }
 
@@ -42,28 +45,100 @@ func NewRngConfigWithDefaults() *RngConfig {
 	return &this
 }
 
-// GetSrc returns the Src field value
-func (o *RngConfig) GetSrc() string {
-	if o == nil {
+// GetId returns the Id field value if set, zero value otherwise.
+func (o *RngConfig) GetId() string {
+	if o == nil || o.Id == nil {
 		var ret string
 		return ret
 	}
-
-	return o.Src
+	return *o.Id
 }
 
-// GetSrcOk returns a tuple with the Src field value
+// GetIdOk returns a tuple with the Id field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RngConfig) GetSrcOk() (*string, bool) {
-	if o == nil {
+func (o *RngConfig) GetIdOk() (*string, bool) {
+	if o == nil || o.Id == nil {
 		return nil, false
 	}
-	return &o.Src, true
+	return o.Id, true
 }
 
-// SetSrc sets field value
-func (o *RngConfig) SetSrc(v string) {
-	o.Src = v
+// HasId returns a boolean if a field has been set.
+func (o *RngConfig) HasId() bool {
+	if o != nil && o.Id != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetId gets a reference to the given string and assigns it to the Id field.
+func (o *RngConfig) SetId(v string) {
+	o.Id = &v
+}
+
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *RngConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RngConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *RngConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *RngConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *RngConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RngConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *RngConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *RngConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
@@ -98,13 +173,46 @@ func (o *RngConfig) SetIommu(v bool) {
 	o.Iommu = &v
 }
 
+// GetSrc returns the Src field value
+func (o *RngConfig) GetSrc() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.Src
+}
+
+// GetSrcOk returns a tuple with the Src field value
+// and a boolean to check if the value has been set.
+func (o *RngConfig) GetSrcOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Src, true
+}
+
+// SetSrc sets field value
+func (o *RngConfig) SetSrc(v string) {
+	o.Src = v
+}
+
 func (o RngConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if true {
-		toSerialize["src"] = o.Src
+	if o.Id != nil {
+		toSerialize["id"] = o.Id
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	if o.Iommu != nil {
 		toSerialize["iommu"] = o.Iommu
+	}
+	if true {
+		toSerialize["src"] = o.Src
 	}
 	return json.Marshal(toSerialize)
 }
