@@ -790,17 +790,33 @@ function install_tarball() {
 	popd || return
 }
 
+function link_binaries() {
+	declare -r target_dir="${1:-/usr/local/bin}"
+	shift
+
+	local linked_names
+	declare -A linked_names=()
+	for b in "$@"; do
+		[[ -e "${b}" ]] || continue
+		local name
+		name="$(basename "${b}")"
+		# First entry in this invocation wins, so earlier globs take
+		# precedence over later ones.
+		[[ -n "${linked_names[${name}]+_}" ]] && continue
+		sudo ln -sfT "${b}" "${target_dir}/${name}"
+		linked_names["${name}"]=1
+	done
+}
+
 function install_kata_tools() {
 	declare -r katadir="/opt/kata"
 	declare -r tarballdir="${1:-kata-tools-artifacts}"
-	declare -r local_bin_dir="/usr/local/bin/"
+	declare -r local_bin_dir="/usr/local/bin"
 
 	install_tarball "${katadir}" "${tarballdir}" "kata-tools-static.tar.zst" false
 
 	# create symbolic links to kata-tools components
-	for b in "${katadir}"/bin/* ; do
-		sudo ln -sf "${b}" "${local_bin_dir}/$(basename "${b}")"
-	done
+	link_binaries "${local_bin_dir}" "${katadir}"/bin/*
 }
 
 # Install the standalone agent component tarball (provides /usr/bin/kata-agent).
@@ -815,7 +831,7 @@ function install_kata_agent() {
 function install_kata() {
 	declare -r katadir="/opt/kata"
 	declare -r tarballdir="kata-artifacts"
-	declare -r local_bin_dir="/usr/local/bin/"
+	declare -r local_bin_dir="/usr/local/bin"
 	local tarball="kata-static.tar.zst"
 
 	case "${KATA_HYPERVISOR:-qemu-runtime-rs}" in
@@ -830,10 +846,7 @@ function install_kata() {
 	install_tarball "${katadir}" "${tarballdir}" "${tarball}" true
 
 	# create symbolic links to kata components
-	for b in "${katadir}"/bin/* "${katadir}"/runtime-rs/bin/* ; do
-		[[ -e "${b}" ]] || continue
-		sudo ln -sf "${b}" "${local_bin_dir}/$(basename "${b}")"
-	done
+	link_binaries "${local_bin_dir}" "${katadir}"/bin/* "${katadir}"/runtime-rs/bin/*
 
 	if [[ "${CONTAINER_ENGINE:=containerd}" = "containerd" ]]; then
 		check_containerd_config_for_kata

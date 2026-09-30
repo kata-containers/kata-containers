@@ -231,6 +231,17 @@ externals:
       version: "595.58.03"
       # yamllint disable-line rule:line-length
       url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
+      # Optional dedicated driver userspace repository - drivers released
+      # separately from the toolkit ship pinning/libnvidia-*/fabricmanager/
+      # nvlsm/imex in their own repo, not the CUDA one. Empty: the packages
+      # resolve from the repositories above as before.
+      repo:
+        x86_64:
+          url: ""
+          pkg: ""
+        aarch64:
+          url: ""
+          pkg: ""
     cuda:
       desc: "NVIDIA CUDA repository"
       repo:

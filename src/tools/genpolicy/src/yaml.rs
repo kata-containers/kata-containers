@@ -34,6 +34,16 @@ use std::boxed;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 
+/// Kubernetes `IntOrString`: a field that accepts either an integer or a
+/// string, such as a probe `port` (`8080` or `"http"`) or a rolling-update
+/// `maxSurge` (`1` or `"25%"`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum IntOrString {
+    Int(i32),
+    String(String),
+}
+
 /// K8s API version and resource type.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct YamlHeader {
