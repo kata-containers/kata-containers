@@ -163,6 +163,9 @@ node selectors, TEE shims, drop-in configuration files and more), see the
 
 ### Use a Kata RuntimeClass
 
+Use the [kata-deploy RuntimeClass guide](kata-deploy-runtimeclasses.md#choosing-a-runtimeclass)
+to choose a class based on your workload, hardware, and guest requirements.
+
 The chart creates one `RuntimeClass` per enabled shim. `runtime-rs`-based
 runtimes use the `-runtime-rs` suffix (for example `kata-qemu-runtime-rs`);
 `kata-dragonball` (the built-in Dragonball VMM) is `runtime-rs` only. The
