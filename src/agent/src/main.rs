@@ -31,7 +31,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::ErrorKind;
-use std::os::unix::fs::{self as unixfs, FileTypeExt};
+use std::os::unix::fs as unixfs;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::path::Path;
 use std::process::exit;
@@ -106,8 +106,7 @@ const AA_ATTESTATION_SOCKET: &str =
 const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SOCKET);
 
 const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
-const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
-const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
+const CDH_SOCKET: &str = confidential_data_hub::LEGACY_CDH_SOCKET;
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
@@ -422,7 +421,13 @@ async fn start_sandbox(
             "attestation binaries requested for launch not available"
         );
     } else {
-        init_attestation_components(logger, &launch_plan).await?;
+        launch_guest_component_procs(logger, &launch_plan).await?;
+    }
+
+    // The guest services may also have been started by the guest init (systemd
+    // units on a full-distro base), so connect even if nothing was launched above.
+    if guest_components_max_level(gc_procs) >= CDH_LEVEL {
+        confidential_data_hub::init_multi_cdh_clients().await?;
     }
 
     // if policy is given via initdata, use it
@@ -464,6 +469,8 @@ async fn start_sandbox(
 
     Ok(())
 }
+
+const CDH_LEVEL: u32 = 2;
 
 // Map the requested guest-components level to the numeric gating level used by
 // extension manifests. A process is launched only when its declared `level` is
@@ -576,7 +583,7 @@ fn builtin_coco_plan(
         });
     }
 
-    if max_level >= 2 {
+    if max_level >= CDH_LEVEL {
         plan.push(guest_extension_image::LaunchSpec {
             id: "confidential-data-hub".to_string(),
             path: Path::new(CDH_PATH).to_path_buf(),
@@ -666,6 +673,19 @@ async fn launch_guest_component_procs(
             .path
             .to_str()
             .ok_or_else(|| anyhow!("non-utf8 component path {}", spec.path.display()))?;
+
+        // launch_process() removes a pre-existing socket, which would orphan a
+        // component the guest init already started.
+        if let Some(socket) = spec.wait_socket.as_deref() {
+            if confidential_data_hub::is_live_socket(Path::new(socket)) {
+                info!(
+                    logger,
+                    "{} already running (socket {} is live), not launching", spec.id, socket
+                );
+                continue;
+            }
+        }
+
         debug!(logger, "spawning extension component process {}", spec.id);
 
         let args: Vec<&str> = spec.args.iter().map(String::as_str).collect();
@@ -686,34 +706,6 @@ async fn launch_guest_component_procs(
         )
         .await
         .map_err(|e| anyhow!("launch_process {} failed: {:?}", path, e))?;
-    }
-
-    Ok(())
-}
-
-// Start-up attestation-agent, CDH and api-server-rest if they are packaged in the rootfs
-// and the corresponding procs are enabled in the agent configuration. the process will be
-// launched in the background and the function will return immediately.
-// If the CDH is started, a CDH client will be instantiated and returned.
-async fn init_attestation_components(
-    logger: &Logger,
-    plan: &[guest_extension_image::LaunchSpec],
-) -> Result<()> {
-    launch_guest_component_procs(logger, plan).await?;
-
-    // If a CDH socket exists, initialize the CDH client and enable ocicrypt
-    match tokio::fs::metadata(CDH_SOCKET).await {
-        Ok(md) => {
-            if md.file_type().is_socket() {
-                confidential_data_hub::init_cdh_client(CDH_SOCKET_URI).await?;
-            } else {
-                debug!(logger, "File {} is not a socket", CDH_SOCKET);
-            }
-        }
-        Err(err) => warn!(
-            logger,
-            "Failed to probe CDH socket file {}: {:?}", CDH_SOCKET, err
-        ),
     }
 
     Ok(())

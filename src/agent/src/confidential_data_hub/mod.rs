@@ -9,28 +9,28 @@
 // https://github.com/confidential-containers/guest-components/tree/main/confidential-data-hub
 
 use crate::AGENT_CONFIG;
+use anyhow::anyhow;
 use anyhow::{bail, Context, Result};
-use derivative::Derivative;
 use protocols::{
     confidential_data_hub,
     confidential_data_hub::GetResourceRequest,
-    confidential_data_hub_ttrpc_async,
     confidential_data_hub_ttrpc_async::{
         GetResourceServiceClient, ImagePullServiceClient, SealedSecretServiceClient,
         SecureMountServiceClient,
     },
 };
 use safe_path::scoped_join;
-use std::fs;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read};
+use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
+use std::{fmt, fs};
 use std::{os::unix::fs::symlink, path::PathBuf};
 use tokio::sync::OnceCell;
+use ttrpc::asynchronous::Client as TtrpcClient;
 
 pub mod image;
-
-pub static CDH_CLIENT: OnceCell<CDHClient> = OnceCell::const_new();
 
 const SEALED_SECRET_PREFIX: &str = "sealed.";
 
@@ -39,128 +39,155 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "cdh"))
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug)]
-pub struct CDHClient {
-    #[derivative(Debug = "ignore")]
-    sealed_secret_client: SealedSecretServiceClient,
-    #[derivative(Debug = "ignore")]
-    secure_mount_client: SecureMountServiceClient,
-    #[derivative(Debug = "ignore")]
-    get_resource_client: GetResourceServiceClient,
-    #[derivative(Debug = "ignore")]
-    image_pull_client: ImagePullServiceClient,
+pub static CDH_MULTI_CLIENTS: OnceCell<MultiCdhClients> = OnceCell::const_new();
+
+pub const GUEST_SERVICES_DIR: &str = "/run/guest-services";
+pub const LEGACY_CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+
+pub async fn init_multi_cdh_clients() -> Result<()> {
+    init_multi_cdh_clients_at(Path::new(GUEST_SERVICES_DIR), Path::new(LEGACY_CDH_SOCKET)).await
 }
 
-impl CDHClient {
-    pub async fn new(cdh_socket_uri: &str) -> Result<Self> {
-        let client = ttrpc::asynchronous::Client::connect(cdh_socket_uri).await?;
-        let sealed_secret_client =
-            confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client.clone());
-        let image_pull_client =
-            confidential_data_hub_ttrpc_async::ImagePullServiceClient::new(client.clone());
-        let secure_mount_client =
-            confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client.clone());
-        let get_resource_client =
-            confidential_data_hub_ttrpc_async::GetResourceServiceClient::new(client);
-        Ok(CDHClient {
-            sealed_secret_client,
-            secure_mount_client,
-            get_resource_client,
-            image_pull_client,
-        })
+async fn init_multi_cdh_clients_at(services_dir: &Path, legacy_socket: &Path) -> Result<()> {
+    let mgr = MultiCdhClientsManager::connect(services_dir, legacy_socket).await?;
+    if mgr.connections.is_empty() {
+        info!(sl(), "no guest services found, CDH clients not initialized");
+        return Ok(());
     }
 
-    pub async fn unseal_secret_async(&self, sealed_secret: &str) -> Result<Vec<u8>> {
-        let mut input = confidential_data_hub::UnsealSecretInput::new();
-        input.set_secret(sealed_secret.into());
-
-        let unsealed_secret = self
-            .sealed_secret_client
-            .unseal_secret(
-                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
-                &input,
-            )
-            .await?;
-        Ok(unsealed_secret.plaintext)
-    }
-
-    pub async fn secure_mount(
-        &self,
-        volume_type: &str,
-        options: &std::collections::HashMap<String, String>,
-        flags: Vec<String>,
-        mount_point: &str,
-    ) -> Result<()> {
-        let req = confidential_data_hub::SecureMountRequest {
-            volume_type: volume_type.to_string(),
-            options: options.clone(),
-            flags,
-            mount_point: mount_point.to_string(),
-            ..Default::default()
-        };
-        self.secure_mount_client
-            .secure_mount(
-                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
-                &req,
-            )
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_resource(&self, resource_path: &str) -> Result<Vec<u8>> {
-        let req = GetResourceRequest {
-            ResourcePath: resource_path.to_string(),
-            ..Default::default()
-        };
-        let res = self
-            .get_resource_client
-            .get_resource(
-                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
-                &req,
-            )
-            .await?;
-        Ok(res.Resource)
-    }
-
-    pub async fn pull_image(&self, image: &str, bundle_path: &str) -> Result<()> {
-        let req = confidential_data_hub::ImagePullRequest {
-            image_url: image.to_string(),
-            bundle_path: bundle_path.to_string(),
-            ..Default::default()
-        };
-
-        let _ = self
-            .image_pull_client
-            .pull_image(
-                ttrpc::context::with_timeout(AGENT_CONFIG.image_pull_timeout.as_nanos() as i64),
-                &req,
-            )
-            .await?;
-
-        Ok(())
-    }
-}
-
-pub async fn init_cdh_client(cdh_socket_uri: &str) -> Result<()> {
-    CDH_CLIENT
-        .get_or_try_init(|| async {
-            CDHClient::new(cdh_socket_uri)
-                .await
-                .context("Failed to create CDH Client")
-        })
+    CDH_MULTI_CLIENTS
+        .get_or_try_init(|| async { MultiCdhClients::new(&mgr) })
         .await?;
-
     Ok(())
 }
 
-/// Check if the CDH client is initialized
-pub fn is_cdh_client_initialized() -> bool {
-    CDH_CLIENT.get().is_some() // Returns true if CDH_CLIENT is initialized, false otherwise
+pub fn is_multi_cdh_clients_initialized() -> bool {
+    CDH_MULTI_CLIENTS.get().is_some()
+}
+
+#[macro_export]
+macro_rules! skip_if_cdh_client_uninitialized {
+    () => {{
+        $crate::skip_if_cdh_client_uninitialized!(());
+    }};
+
+    ($ret:expr) => {{
+        if !$crate::confidential_data_hub::is_multi_cdh_clients_initialized() {
+            eprintln!(
+                "INFO: skipping {} because CDH_MULTI_CLIENTS is not initialized",
+                module_path!()
+            );
+            return Ok($ret);
+        }
+    }};
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Service {
+    ImagePull,
+    SealedSecrets,
+    SecureMount,
+    GetResource,
+}
+
+impl Service {
+    pub fn socket_path(&self, services_dir: &Path) -> PathBuf {
+        services_dir.join(format!("{self}.sock"))
+    }
+}
+
+impl fmt::Display for Service {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Service::ImagePull => write!(f, "imagepull"),
+            Service::SealedSecrets => write!(f, "sealedsecrets"),
+            Service::SecureMount => write!(f, "securemount"),
+            Service::GetResource => write!(f, "getresource"),
+        }
+    }
+}
+
+const REQUIRED_SERVICES: &[Service] = &[
+    Service::GetResource,
+    Service::ImagePull,
+    Service::SealedSecrets,
+    Service::SecureMount,
+];
+
+#[derive(Clone)]
+pub struct MultiCdhClientsManager {
+    connections: HashMap<Service, TtrpcClient>,
+}
+
+impl MultiCdhClientsManager {
+    pub async fn connect(services_dir: &Path, legacy_socket: &Path) -> Result<Self> {
+        let mut connections = HashMap::new();
+        let mut legacy_client: Option<TtrpcClient> = None;
+
+        for svc in REQUIRED_SERVICES.iter().copied() {
+            let dedicated = svc.socket_path(services_dir);
+            let client = if is_socket(&dedicated) {
+                Self::connect_socket(&dedicated).await?
+            } else if is_socket(legacy_socket) {
+                match &legacy_client {
+                    Some(client) => client.clone(),
+                    None => {
+                        let client = Self::connect_socket(legacy_socket).await?;
+                        legacy_client = Some(client.clone());
+                        client
+                    }
+                }
+            } else {
+                debug!(sl(), "no socket found for guest service {}", svc);
+                continue;
+            };
+
+            info!(sl(), "connected cdh client for guest service {}", svc);
+            connections.insert(svc, client);
+        }
+
+        Ok(Self { connections })
+    }
+
+    async fn connect_socket(socket_path: &Path) -> Result<TtrpcClient> {
+        let sock_addr = format!("unix://{}", socket_path.display());
+        TtrpcClient::connect(&sock_addr)
+            .await
+            .with_context(|| format!("failed to connect to socket '{sock_addr}'"))
+    }
+
+    pub fn get_client(&self, service: Service) -> Option<&TtrpcClient> {
+        self.connections.get(&service)
+    }
+
+    pub fn has_required_clients_connected(&self) -> Result<()> {
+        let missing: Vec<String> = REQUIRED_SERVICES
+            .iter()
+            .copied()
+            .filter(|s| !self.connections.contains_key(s))
+            .map(|s| s.to_string())
+            .collect();
+
+        if missing.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!("missing required cdh clients: {:?}", missing))
+        }
+    }
+}
+
+pub fn is_live_socket(path: &Path) -> bool {
+    is_socket(path) && std::os::unix::net::UnixStream::connect(path).is_ok()
+}
+
+fn is_socket(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|md| md.file_type().is_socket())
+        .unwrap_or(false)
 }
 
 pub async fn unseal_env(env: &str) -> Result<String> {
-    let cdh_client = CDH_CLIENT
+    let cdh_client = CDH_MULTI_CLIENTS
         .get()
         .expect("Confidential Data Hub not initialized");
 
@@ -186,7 +213,7 @@ pub async fn pull_image(image: &str, bundle_path: PathBuf) -> Result<String> {
     fs::create_dir_all(&bundle_path)?;
     info!(sl(), "pull image {image:?}, bundle path {bundle_path:?}");
 
-    let cdh_client = CDH_CLIENT
+    let cdh_client = CDH_MULTI_CLIENTS
         .get()
         .expect("Confidential Data Hub not initialized");
 
@@ -199,7 +226,7 @@ pub async fn pull_image(image: &str, bundle_path: PathBuf) -> Result<String> {
 }
 
 pub async fn unseal_file(path: &str) -> Result<()> {
-    let cdh_client = CDH_CLIENT
+    let cdh_client = CDH_MULTI_CLIENTS
         .get()
         .expect("Confidential Data Hub not initialized");
 
@@ -283,7 +310,7 @@ pub async fn secure_mount(
     flags: Vec<String>,
     mount_point: &str,
 ) -> Result<()> {
-    let cdh_client = CDH_CLIENT
+    let cdh_client = CDH_MULTI_CLIENTS
         .get()
         .expect("Confidential Data Hub not initialized");
 
@@ -295,19 +322,129 @@ pub async fn secure_mount(
 
 #[allow(dead_code)]
 pub async fn get_cdh_resource(resource_path: &str) -> Result<Vec<u8>> {
-    let cdh_client = CDH_CLIENT
+    let cdh_client = CDH_MULTI_CLIENTS
         .get()
         .expect("Confidential Data Hub not initialized");
 
     cdh_client.get_resource(resource_path).await
 }
 
+#[derive(Clone)]
+pub struct MultiCdhClients {
+    sealed_secret_client: SealedSecretServiceClient,
+    secure_mount_client: SecureMountServiceClient,
+    get_resource_client: GetResourceServiceClient,
+    image_pull_client: ImagePullServiceClient,
+}
+
+impl MultiCdhClients {
+    pub fn new(mgr: &MultiCdhClientsManager) -> Result<Self> {
+        mgr.has_required_clients_connected()?;
+
+        let sealed = mgr
+            .get_client(Service::SealedSecrets)
+            .ok_or_else(|| anyhow!("SealedSecrets service not connected"))?
+            .clone();
+        let secure = mgr
+            .get_client(Service::SecureMount)
+            .ok_or_else(|| anyhow!("SecureMount service not connected"))?
+            .clone();
+        let getres = mgr
+            .get_client(Service::GetResource)
+            .ok_or_else(|| anyhow!("GetResource service not connected"))?
+            .clone();
+        let image = mgr
+            .get_client(Service::ImagePull)
+            .ok_or_else(|| anyhow!("ImagePull service not connected"))?
+            .clone();
+
+        Ok(Self {
+            sealed_secret_client: SealedSecretServiceClient::new(sealed),
+            secure_mount_client: SecureMountServiceClient::new(secure),
+            get_resource_client: GetResourceServiceClient::new(getres),
+            image_pull_client: ImagePullServiceClient::new(image),
+        })
+    }
+
+    pub async fn unseal_secret_async(&self, sealed_secret: &str) -> Result<Vec<u8>> {
+        let mut input = confidential_data_hub::UnsealSecretInput::new();
+        input.set_secret(sealed_secret.into());
+
+        let res = self
+            .sealed_secret_client
+            .unseal_secret(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &input,
+            )
+            .await?;
+        Ok(res.plaintext)
+    }
+
+    pub async fn secure_mount(
+        &self,
+        volume_type: &str,
+        options: &std::collections::HashMap<String, String>,
+        flags: Vec<String>,
+        mount_point: &str,
+    ) -> Result<()> {
+        let req = confidential_data_hub::SecureMountRequest {
+            volume_type: volume_type.to_string(),
+            options: options.clone(),
+            flags,
+            mount_point: mount_point.to_string(),
+            ..Default::default()
+        };
+
+        self.secure_mount_client
+            .secure_mount(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_resource(&self, resource_path: &str) -> Result<Vec<u8>> {
+        let req = GetResourceRequest {
+            ResourcePath: resource_path.to_string(),
+            ..Default::default()
+        };
+
+        let res = self
+            .get_resource_client
+            .get_resource(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
+            .await?;
+        Ok(res.Resource)
+    }
+
+    pub async fn pull_image(&self, image: &str, bundle_path: &str) -> Result<()> {
+        let req = confidential_data_hub::ImagePullRequest {
+            image_url: image.to_string(),
+            bundle_path: bundle_path.to_string(),
+            ..Default::default()
+        };
+
+        self.image_pull_client
+            .pull_image(
+                ttrpc::context::with_timeout(AGENT_CONFIG.image_pull_timeout.as_nanos() as i64),
+                &req,
+            )
+            .await?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use protocols::confidential_data_hub_ttrpc_async;
     use std::fs::File;
     use std::io::{Read, Write};
+    use std::os::unix::net::UnixListener;
     use std::sync::Arc;
     use tempfile::{tempdir, NamedTempFile};
     use test_utils::skip_if_not_root;
@@ -376,23 +513,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_connect_without_sockets() {
+        let services_dir = tempdir().unwrap();
+        let legacy_socket = services_dir.path().join("cdh.sock");
+
+        let mgr = MultiCdhClientsManager::connect(services_dir.path(), &legacy_socket)
+            .await
+            .unwrap();
+        assert!(mgr.connections.is_empty());
+        assert!(mgr.has_required_clients_connected().is_err());
+
+        init_multi_cdh_clients_at(services_dir.path(), &legacy_socket)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_connect_falls_back_to_legacy_socket() {
+        let services_dir = tempdir().unwrap();
+        let legacy_dir = tempdir().unwrap();
+        let legacy_socket = legacy_dir.path().join("cdh.sock");
+        let _legacy = UnixListener::bind(&legacy_socket).unwrap();
+
+        let mgr = MultiCdhClientsManager::connect(services_dir.path(), &legacy_socket)
+            .await
+            .unwrap();
+        assert!(mgr.has_required_clients_connected().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_connect_partial_dedicated_sockets() {
+        let services_dir = tempdir().unwrap();
+        let legacy_socket = services_dir.path().join("cdh.sock");
+        let _image_pull =
+            UnixListener::bind(Service::ImagePull.socket_path(services_dir.path())).unwrap();
+
+        let mgr = MultiCdhClientsManager::connect(services_dir.path(), &legacy_socket)
+            .await
+            .unwrap();
+        assert!(mgr.get_client(Service::ImagePull).is_some());
+        assert!(mgr.get_client(Service::SealedSecrets).is_none());
+        assert!(mgr.has_required_clients_connected().is_err());
+        assert!(
+            init_multi_cdh_clients_at(services_dir.path(), &legacy_socket)
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_is_live_socket() {
+        let dir = tempdir().unwrap();
+        let socket = dir.path().join("svc.sock");
+        assert!(!is_live_socket(&socket));
+
+        let listener = UnixListener::bind(&socket).unwrap();
+        assert!(is_live_socket(&socket));
+
+        drop(listener);
+        assert!(!is_live_socket(&socket));
+
+        let regular = dir.path().join("regular");
+        File::create(&regular).unwrap();
+        assert!(!is_live_socket(&regular));
+    }
+
+    #[tokio::test]
     async fn test_sealed_secret() {
         skip_if_not_root!();
         let test_dir = tempdir().expect("failed to create tmpdir");
         let test_dir_path = test_dir.path();
-        let cdh_sock_uri = &format!(
-            "unix://{}",
-            test_dir_path.join("cdh.sock").to_str().unwrap()
-        );
+        let services_dir = tempdir().expect("failed to create tmpdir");
+        let cdh_sock = test_dir_path.join("cdh.sock");
+        let cdh_sock_uri = &format!("unix://{}", cdh_sock.to_str().unwrap());
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let _guard = rt.enter();
         start_ttrpc_server(cdh_sock_uri.to_string());
         std::thread::sleep(std::time::Duration::from_secs(2));
-        init_cdh_client(cdh_sock_uri).await.unwrap();
+        init_multi_cdh_clients_at(services_dir.path(), &cdh_sock)
+            .await
+            .unwrap();
         assert!(
-            is_cdh_client_initialized(),
-            "CDH client should be initialized after init_cdh_client"
+            is_multi_cdh_clients_initialized(),
+            "CDH clients should be initialized after init_multi_cdh_clients_at"
         );
 
         // Test sealed secret as env vars
