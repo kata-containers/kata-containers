@@ -64,6 +64,7 @@ fn build_device_id(disk_image: &dyn Ufile) -> Vec<u8> {
 pub struct Block<AS: DbsGuestAddressSpace> {
     pub(crate) device_info: VirtioDeviceInfo,
     disk_images: Vec<Box<dyn Ufile>>,
+    serial: Option<Vec<u8>>,
     rate_limiters: Vec<RateLimiter>,
     queue_sizes: Arc<Vec<u16>>,
     subscriber_id: Option<SubscriberId>,
@@ -137,6 +138,7 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
                 epoll_mgr,
             ),
             disk_images,
+            serial: None,
             rate_limiters,
             queue_sizes,
             subscriber_id: None,
@@ -145,6 +147,24 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
             kill_evts: Vec::with_capacity(num_queues),
             epoll_threads: Vec::with_capacity(num_queues),
         })
+    }
+
+    /// Set the guest-visible serial before activating the device.
+    /// The virtio-blk ID has a fixed size, so reject serials that would be truncated.
+    pub fn set_serial(&mut self, serial: &str) -> Result<()> {
+        if serial.len() > VIRTIO_BLK_ID_BYTES as usize {
+            return Err(Error::InvalidInput);
+        }
+        let mut disk_id = vec![0; VIRTIO_BLK_ID_BYTES as usize];
+        disk_id[..serial.len()].copy_from_slice(serial.as_bytes());
+        self.serial = Some(disk_id);
+        Ok(())
+    }
+
+    fn disk_image_id(&self, disk_image: &dyn Ufile) -> Vec<u8> {
+        self.serial
+            .clone()
+            .unwrap_or_else(|| build_device_id(disk_image))
     }
 
     fn build_config_space(disk_size: u64, max_size: u32, num_queues: u16, sparse: bool) -> Vec<u8> {
@@ -291,7 +311,7 @@ where
         config.queues.reverse();
         while let Some(queue) = config.queues.pop() {
             let disk_image = self.disk_images.pop().unwrap();
-            let disk_image_id = build_device_id(disk_image.as_ref());
+            let disk_image_id = self.disk_image_id(disk_image.as_ref());
 
             let data_desc_vec =
                 vec![Vec::with_capacity(CONFIG_MAX_SEG as usize); self.queue_sizes[0] as usize];
@@ -527,6 +547,71 @@ mod tests {
             }
             Ok(v)
         }
+    }
+
+    #[test]
+    fn test_block_serial_override() {
+        let mut file = DummyFile::new();
+        file.device_id = Some("backing-file-id".into());
+        file.capacity = 4096;
+        let mut block = Block::<Arc<GuestMemoryMmap<()>>>::new(
+            vec![Box::new(file)],
+            true,
+            false,
+            Arc::new(vec![128]),
+            EpollManager::default(),
+            vec![],
+            false,
+        )
+        .unwrap();
+
+        let disk = block.disk_images[0].as_ref();
+        assert_eq!(block.disk_image_id(disk), build_device_id(disk));
+
+        for serial in ["extension-coco", "extension-0123456789"] {
+            block.set_serial(serial).unwrap();
+            let disk_id = block.disk_image_id(block.disk_images[0].as_ref());
+            assert_eq!(disk_id.len(), VIRTIO_BLK_ID_BYTES as usize);
+            assert_eq!(&disk_id[..serial.len()], serial.as_bytes());
+            assert!(disk_id[serial.len()..].iter().all(|byte| *byte == 0));
+        }
+        assert!(matches!(
+            block.set_serial("extension-01234567890"),
+            Err(Error::InvalidInput)
+        ));
+        assert_eq!(
+            block
+                .disk_image_id(block.disk_images[0].as_ref())
+                .as_slice(),
+            b"extension-0123456789"
+        );
+
+        // Verify the ID reaches guest memory through a GET_ID request.
+        let mem = GuestMemoryMmap::<()>::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        vq.avail.ring(0).store(0);
+        vq.avail.idx().store(1);
+        vq.dtable(0).set(0x1000, 0x1000, VIRTQ_DESC_F_NEXT, 1);
+        vq.dtable(1)
+            .set(0x2000, 20, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2);
+        vq.dtable(2).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 1);
+        mem.write_obj::<u32>(VIRTIO_BLK_T_GET_ID, GuestAddress(0x1000))
+            .unwrap();
+        let mut queue = vq.create_queue();
+        let mut data_descs = Vec::new();
+        let request = Request::parse(
+            &mut queue.pop_descriptor_chain(&mem).unwrap(),
+            &mut data_descs,
+            0x100000,
+        )
+        .unwrap();
+        let disk_id = block.disk_image_id(block.disk_images[0].as_ref());
+        request
+            .execute(&mut block.disk_images[0], &mem, &data_descs, &disk_id)
+            .unwrap();
+        let mut guest_id = [0; 20];
+        mem.read_slice(&mut guest_id, GuestAddress(0x2000)).unwrap();
+        assert_eq!(&guest_id, b"extension-0123456789");
     }
 
     #[test]

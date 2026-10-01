@@ -184,6 +184,9 @@ impl BlockDeviceConfigUpdateInfo {
 pub struct BlockDeviceConfigInfo {
     /// Unique identifier of the drive.
     pub drive_id: String,
+    /// Optional guest-visible virtio-blk serial, at most 20 bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial: Option<String>,
     /// Type of low level storage/protocol.
     pub device_type: BlockDeviceType,
     /// Path of the drive.
@@ -224,6 +227,7 @@ impl std::default::Default for BlockDeviceConfigInfo {
     fn default() -> Self {
         Self {
             drive_id: String::default(),
+            serial: None,
             device_type: BlockDeviceType::RawBlock,
             path_on_host: PathBuf::default(),
             is_root_device: false,
@@ -749,7 +753,7 @@ impl BlockDeviceMgr {
         #[cfg(target_arch = "x86_64")]
         let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
 
-        Ok(Box::new(Block::new(
+        let mut block = Block::new(
             block_files,
             cfg.is_read_only,
             cfg.sparse,
@@ -757,7 +761,11 @@ impl BlockDeviceMgr {
             epoll_mgr,
             limiters,
             f_access_platform,
-        )?))
+        )?;
+        if let Some(serial) = &cfg.serial {
+            block.set_serial(serial)?;
+        }
+        Ok(Box::new(block))
     }
 
     #[cfg(feature = "vhost-user-blk")]
@@ -1138,6 +1146,24 @@ mod tests {
     use std::sync::mpsc::channel;
 
     #[test]
+    fn test_block_serial_config_compatibility() {
+        let config = BlockDeviceConfigInfo::default();
+        let legacy = serde_json::to_value(&config).unwrap();
+        assert!(legacy.get("serial").is_none());
+        let restored: BlockDeviceConfigInfo = serde_json::from_value(legacy).unwrap();
+        assert_eq!(restored.serial, None);
+
+        let config = BlockDeviceConfigInfo {
+            serial: Some("extension-coco".into()),
+            ..config
+        };
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["serial"], "extension-coco");
+        let restored: BlockDeviceConfigInfo = serde_json::from_value(json).unwrap();
+        assert_eq!(restored, config);
+    }
+
+    #[test]
     fn test_block_device_type() {
         let dev_type = BlockDeviceType::get_type("spool:/device1");
         assert_eq!(dev_type, BlockDeviceType::Spool);
@@ -1177,6 +1203,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1254,6 +1281,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
         let (sender, _receiver) = channel();
         vm.device_manager_mut()
@@ -1333,6 +1361,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1376,6 +1405,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1396,6 +1426,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1435,6 +1466,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1455,6 +1487,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let dummy_file_3 = TempFile::new().unwrap();
@@ -1475,6 +1508,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1537,6 +1571,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1557,6 +1592,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let dummy_file_3 = TempFile::new().unwrap();
@@ -1577,6 +1613,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1640,6 +1677,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1660,6 +1698,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1758,6 +1797,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
         let root_block_device_new = BlockDeviceConfigInfo {
             path_on_host: dummy_path_2,
@@ -1775,6 +1815,7 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: Some(true),
+            serial: None,
         };
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()

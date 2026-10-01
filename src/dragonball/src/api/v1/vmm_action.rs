@@ -1686,6 +1686,7 @@ mod tests {
                     use_shared_irq: None,
                     use_generic_irq: None,
                     use_pci_bus: Some(true),
+                    serial: None,
                 }),
                 InstanceState::Uninitialized,
                 &|result| {
