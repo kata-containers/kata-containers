@@ -127,6 +127,16 @@ var runtimeCommands = []cli.Command{
 	kataVolumeCommand,
 	kataIPTablesCommand,
 	kataPolicyCommand,
+
+	// OCI lifecycle commands (required for Podman and Docker without shimv2)
+	stateCLICommand,
+	killCLICommand,
+	deleteCLICommand,
+	createCLICommand,
+	startCLICommand,
+	runCLICommand,
+	pauseCLICommand,
+	resumeCLICommand,
 }
 
 // runtimeBeforeSubcommands is the function to run before command-line

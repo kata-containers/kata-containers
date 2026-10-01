@@ -90,4 +90,5 @@ type VCMock struct {
 
 	CreateSandboxFunc    func(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error)
 	CleanupContainerFunc func(ctx context.Context, sandboxID, containerID string, force bool) error
+	FetchSandboxFunc     func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
 }
