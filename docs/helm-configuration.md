@@ -14,6 +14,11 @@ helm show values --version X.Y.Z oci://ghcr.io/kata-containers/kata-deploy-chart
 
 ### shims
 
+Each `shims` entry selects a runtime configuration exposed as a Kubernetes
+RuntimeClass. See the [kata-deploy RuntimeClass guide](kata-deploy-runtimeclasses.md#choosing-a-runtimeclass)
+for the purpose and prerequisites of every built-in class before selecting
+which configurations to enable.
+
 Kata ships a number of pre-built hypervisor artifacts, and the chart creates one
 `RuntimeClass` per **enabled** shim. Every shim `values.yaml` lists is enabled by
 default, and the file lists exactly those shims that run on an ordinary node —
@@ -47,7 +52,6 @@ actually start a pod on the node you installed on.
     [`try-kata-remote.values.yaml`](#try-kata-remotevaluesyaml).
 
 You may selectively enable or disable specific shims. For example:
-
 ```yaml
 shims:
   disableAll: true
