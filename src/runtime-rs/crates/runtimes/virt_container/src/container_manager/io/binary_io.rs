@@ -23,6 +23,7 @@ use tokio::{
     net::unix::pipe::Sender,
     process::{Child, Command},
 };
+use tokio_util::sync::CancellationToken;
 use url::Url;
 
 const BINARY_IO_PROC_DRAIN_TIMEOUT: Duration = Duration::from_secs(12);
@@ -39,7 +40,30 @@ pub(crate) struct BinaryLogger {
 }
 
 impl BinaryLogger {
-    pub(crate) async fn shutdown(mut self) {
+    pub(crate) async fn shutdown(mut self, cancel: &CancellationToken) {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => {},
+            _ = self.wait_for_exit() => return,
+        }
+
+        // A destructive operation must not wait for a stalled logger to drain.
+        // Keep ownership until it has actually been killed and reaped.
+        if let Err(err) = self.child.kill().await {
+            warn!(
+                sl!(),
+                "failed to kill binary logger during teardown: {}", err
+            );
+        }
+        if let Err(err) = self.child.wait().await {
+            warn!(
+                sl!(),
+                "failed to reap binary logger during teardown: {}", err
+            );
+        }
+    }
+
+    async fn wait_for_exit(&mut self) {
         match tokio::time::timeout(BINARY_IO_PROC_DRAIN_TIMEOUT, self.child.wait()).await {
             Ok(Ok(status)) => {
                 info!(sl!(), "binary logger exited with {}", status);
@@ -215,6 +239,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn destructive_cancellation_kills_and_reaps_logger() {
+        for cancel_before_wait in [false, true] {
+            let dir =
+                std::env::temp_dir().join(format!("kata-logger-cancel-{}", uuid::Uuid::new_v4()));
+            fs::create_dir(&dir).unwrap();
+            let helper = dir.join("logger");
+            // exec retains the PID and creates no child that could outlive the logger.
+            fs::write(
+                &helper,
+                "#!/bin/sh\ntrap '' TERM\nprintf x >&5\nexec /bin/sleep 300\n",
+            )
+            .unwrap();
+            fs::set_permissions(&helper, fs::Permissions::from_mode(0o755)).unwrap();
+            let io = open(
+                &Url::parse(&format!("binary://{}", helper.display())).unwrap(),
+                "test",
+                "test",
+            )
+            .await
+            .unwrap();
+            let pid = io.logger.child.id().unwrap() as i32;
+            let cancel = CancellationToken::new();
+            if cancel_before_wait {
+                cancel.cancel();
+            }
+            let shutdown = io.logger.shutdown(&cancel);
+            tokio::pin!(shutdown);
+            if !cancel_before_wait {
+                tokio::select! {
+                    biased;
+                    _ = &mut shutdown => panic!("logger exited before cancellation"),
+                    _ = tokio::task::yield_now() => {},
+                }
+                cancel.cancel();
+            }
+            tokio::time::timeout(Duration::from_secs(2), shutdown)
+                .await
+                .unwrap();
+            assert_eq!(
+                kill(Pid::from_raw(pid), None),
+                Err(nix::errno::Errno::ESRCH)
+            );
+            assert_eq!(
+                nix::sys::wait::waitpid(
+                    Pid::from_raw(pid),
+                    Some(nix::sys::wait::WaitPidFlag::WNOHANG)
+                ),
+                Err(nix::errno::Errno::ECHILD)
+            );
+            drop(io.stdout);
+            drop(io.stderr);
+            fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[tokio::test]
     async fn streams_to_binary_logger_and_passes_metadata() {
         let dir = std::env::temp_dir().join(format!(
             "kata-binary-logger-test-{}",
@@ -249,7 +329,7 @@ printf '%s\n%s\n%s\n%s\n' "$CONTAINER_ID" "$CONTAINER_NAMESPACE" "$1" "$2" > "$2
         io.stderr.write_all(b"stderr data\n").await.unwrap();
         drop(io.stdout);
         drop(io.stderr);
-        io.logger.shutdown().await;
+        io.logger.shutdown(&CancellationToken::new()).await;
 
         assert_eq!(
             fs::read(output.with_extension("stdout")).unwrap(),

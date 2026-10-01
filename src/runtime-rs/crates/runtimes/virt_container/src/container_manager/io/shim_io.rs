@@ -4,21 +4,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    io,
-    os::unix::{
-        fs::{FileTypeExt, OpenOptionsExt},
-        io::RawFd,
-        prelude::AsRawFd,
-    },
-    pin::Pin,
-    task::{Context as TaskContext, Poll},
+use std::os::unix::{
+    fs::{FileTypeExt, OpenOptionsExt},
+    io::RawFd,
+    prelude::AsRawFd,
 };
 
 use anyhow::{Context, Result};
 use tokio::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::{AsyncRead, AsyncWrite},
+    net::unix::pipe::{Receiver, Sender},
 };
 use url::Url;
 
@@ -37,7 +33,23 @@ fn set_flag_with_blocking(fd: RawFd) {
     }
 }
 
-fn open_fifo_write(path: &str) -> Result<File> {
+async fn open_fifo_read(path: &str) -> Result<Box<dyn AsyncRead + Send + Unpin>> {
+    let file = tokio::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .await
+        .with_context(|| format!("open fifo for read: {path}"))?;
+    if file.metadata().await?.file_type().is_fifo() {
+        return Ok(Box::new(Receiver::from_owned_fd(
+            file.into_std().await.into(),
+        )?));
+    }
+    set_flag_with_blocking(file.as_raw_fd());
+    Ok(Box::new(file))
+}
+
+fn open_fifo_write(path: &str) -> Result<Box<dyn AsyncWrite + Send + Unpin>> {
     let std_file = std::fs::OpenOptions::new()
         .write(true)
         // It's not for non-block openning FIFO but for non-block stream which
@@ -46,15 +58,13 @@ fn open_fifo_write(path: &str) -> Result<File> {
         .open(path)
         .with_context(|| format!("open fifo for write: {path}"))?;
 
-    // Debug
-    let meta = std_file.metadata()?;
-    if !meta.file_type().is_fifo() {
-        debug!(sl!(), "[DEBUG]{} is not a fifo (type mismatch)", path);
+    if std_file.metadata()?.file_type().is_fifo() {
+        return Ok(Box::new(Sender::from_owned_fd(std_file.into())?));
     }
 
     set_flag_with_blocking(std_file.as_raw_fd());
 
-    Ok(File::from_std(std_file))
+    Ok(Box::new(File::from_std(std_file)))
 }
 
 pub struct ShimIo {
@@ -82,17 +92,8 @@ impl ShimIo {
 
             // Since we had opened the stdin as write mode in the Process::new function,
             // thus it wouldn't be blocked to open it as read mode.
-            match OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_NONBLOCK)
-                .open(&stdin)
-                .await
-            {
-                Ok(file) => {
-                    // Set it to blocking to avoid infinitely handling EAGAIN when the reader is empty
-                    set_flag_with_blocking(file.as_raw_fd());
-                    Some(Box::new(file))
-                }
+            match open_fifo_read(stdin).await {
+                Ok(file) => Some(file),
                 Err(err) => {
                     error!(sl!(), "failed to open {} error {:?}", &stdin, err);
                     None
@@ -138,7 +139,7 @@ impl ShimIo {
                 if url.scheme() == "fifo" {
                     let path = url.path();
                     match open_fifo_write(path) {
-                        Ok(f) => return Some(Box::new(ShimIoWrite::File(f))),
+                        Ok(f) => return Some(f),
                         Err(err) => error!(sl!(), "failed to open fifo {} error {:?}", path, err),
                     }
                 } else {
@@ -160,32 +161,65 @@ impl ShimIo {
     }
 }
 
-#[derive(Debug)]
-enum ShimIoWrite {
-    File(File),
-    // TODO: support other type
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-impl AsyncWrite for ShimIoWrite {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut TaskContext<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        match &mut *self {
-            ShimIoWrite::File(f) => Pin::new(f).poll_write(cx, buf),
-        }
+    #[test]
+    fn stdin_open_uses_blocking_pool() {
+        let path = std::env::temp_dir().join(format!("kata-file-{}", uuid::Uuid::new_v4()));
+        std::fs::write(&path, b"stdin payload").unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                entered_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            });
+            entered_rx.recv().unwrap();
+            let open = open_fifo_read(path.to_str().unwrap());
+            tokio::pin!(open);
+            let synchronous = tokio::select! {
+                biased;
+                _ = &mut open => true,
+                _ = tokio::task::yield_now() => false,
+            };
+            // Release before asserting so even a regression cannot hang runtime drop.
+            release_tx.send(()).unwrap();
+            blocker.await.unwrap();
+            assert!(!synchronous, "stdin open bypassed the blocking pool");
+            let mut reader = open.await.unwrap();
+            let mut data = Vec::new();
+            reader.read_to_end(&mut data).await.unwrap();
+            assert_eq!(data, b"stdin payload");
+        });
+        std::fs::remove_file(path).unwrap();
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
-        match &mut *self {
-            ShimIoWrite::File(f) => Pin::new(f).poll_flush(cx),
-        }
-    }
-
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
-        match &mut *self {
-            ShimIoWrite::File(f) => Pin::new(f).poll_shutdown(cx),
-        }
+    #[tokio::test]
+    async fn regular_file_fallback_preserves_flags_and_flush() {
+        let dir = std::env::temp_dir().join(format!("kata-file-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let input = dir.join("input");
+        let output = dir.join("output");
+        std::fs::write(&input, b"abcdef").unwrap();
+        std::fs::write(&output, b"XXXXXXXX-tail").unwrap();
+        let mut reader = open_fifo_read(input.to_str().unwrap()).await.unwrap();
+        let mut writer = open_fifo_write(output.to_str().unwrap()).unwrap();
+        assert_eq!(tokio::io::copy(&mut reader, &mut writer).await.unwrap(), 6);
+        writer.flush().await.unwrap();
+        drop(writer);
+        assert_eq!(std::fs::read(&output).unwrap(), b"abcdefXX-tail");
+        assert!(open_fifo_write(dir.join("missing").to_str().unwrap()).is_err());
+        let mut null = open_fifo_write("/dev/null").unwrap();
+        null.write_all(b"discard").await.unwrap();
+        null.flush().await.unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

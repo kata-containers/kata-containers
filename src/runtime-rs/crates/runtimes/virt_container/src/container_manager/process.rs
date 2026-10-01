@@ -13,6 +13,7 @@ use awaitgroup::{WaitGroup, Worker as WaitGroupWorker};
 use common::types::{ContainerProcess, ProcessExitStatus, ProcessStateInfo, ProcessStatus, PID};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{watch, RwLock};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use super::container::Container;
 use super::io::{BinaryLogger, ContainerIo, PassfdIo, ShimIo};
@@ -77,6 +78,9 @@ pub struct Process {
 
     // io streams using vsock fd passthrough feature
     pub passfd_io: Option<PassfdIo>,
+    // Only destructive host operations cancel legacy stdio. Normal exit drains it.
+    pub(crate) io_cancel: CancellationToken,
+    pub(crate) io_tasks: TaskTracker,
 }
 
 fn open_fifo(path: &str, is_read: bool, is_write: bool) -> Result<File> {
@@ -134,6 +138,8 @@ impl Process {
             exit_watcher_rx: Some(receiver),
             exit_watcher_tx: Some(sender),
             passfd_io: None,
+            io_cancel: CancellationToken::new(),
+            io_tasks: TaskTracker::new(),
         }
     }
 
@@ -265,6 +271,8 @@ impl Process {
         container_io: ContainerIo,
     ) -> Result<()> {
         info!(self.logger, "start io and wait");
+        let _starting_io = self.io_tasks.token();
+        anyhow::ensure!(!self.io_cancel.is_cancelled(), "process I/O was cancelled");
 
         self.pre_fifos_open()?;
         // new shim io
@@ -325,33 +333,42 @@ impl Process {
 
         info!(self.logger, "run_io_copy[{}] starts", io_name);
         let logger = self.logger.new(o!("io_name" => io_name.clone()));
+        let io_cancel = self.io_cancel.clone();
+        let io_done = self.io_tasks.token();
 
         tokio::spawn(async move {
-            match tokio::io::copy(&mut reader, &mut writer).await {
-                Err(e) => {
+            let result = tokio::select! {
+                biased;
+                _ = io_cancel.cancelled() => {
+                    info!(logger, "run_io_copy[{}]: cancelled for teardown", io_name);
+                    None
+                }
+                result = tokio::io::copy(&mut reader, &mut writer) => Some(result),
+            };
+            match result {
+                None => {}
+                Some(Err(e)) => {
                     warn!(
                         logger,
                         "run_io_copy[{}]: failed to copy stream: {}", io_name, e
                     );
                 }
-                Ok(length) => {
+                Some(Ok(length)) => {
                     info!(
                         logger,
                         "run_io_copy[{}]: stop to copy stream length {}", io_name, length
                     );
                     // Send EOF to agent by calling rpc write_stdin with 0 length data
                     if io_type == StdIoType::Stdin {
-                        writer
-                            .shutdown()
-                            .await
-                            .map_err(|e| {
-                                error!(
-                                    logger,
-                                    "run_io_copy[{}]: failed to shutdown: {:?}", io_name, e
-                                );
-                                e
-                            })
-                            .ok();
+                        tokio::select! {
+                            biased;
+                            _ = io_cancel.cancelled() => {},
+                            result = writer.shutdown() => {
+                                if let Err(e) = result {
+                                    error!(logger, "run_io_copy[{}]: failed to shutdown: {:?}", io_name, e);
+                                }
+                            }
+                        }
                     }
                 }
             };
@@ -359,6 +376,8 @@ impl Process {
             // Close the destination before notifying the waiter. Binary
             // loggers must see pipe EOF before their shutdown signal.
             drop(writer);
+            drop(reader);
+            drop(io_done);
             if let Some(w) = wgw {
                 w.done()
             }
@@ -367,9 +386,8 @@ impl Process {
         Ok(())
     }
 
-    /// A container is considered exited once its IO ended.
-    /// This function waits for IO to end. And then, do some cleanup
-    /// things.
+    /// Drain stdio before WaitProcess, which reaps the guest's stream state.
+    /// Destructive operations can cancel the copies to unblock this wait.
     async fn run_io_wait(
         &mut self,
         containers: Arc<RwLock<HashMap<String, Container>>>,
@@ -383,22 +401,26 @@ impl Process {
         let exit_status = self.exit_status.clone();
         let exit_notifier = self.exit_watcher_tx.take();
         let status = self.status.clone();
+        let io_cancel = self.io_cancel.clone();
+        let io_done = self.io_tasks.token();
 
         tokio::spawn(async move {
-            // wait on all of the container's io stream terminated
             info!(logger, "begin wait group io");
             wg.wait().await;
             info!(logger, "end wait group for io");
 
             if let Some(binary_logger) = binary_logger {
-                binary_logger.shutdown().await;
+                binary_logger.shutdown(&io_cancel).await;
             }
+            // Shutdown joins only host I/O, never agent wait or container cleanup.
+            drop(io_done);
 
             let req = agent::WaitProcessRequest {
                 process_id: process.clone().into(),
             };
 
             info!(logger, "begin wait process");
+
             // If wait_process fails (e.g., VM died), we still set status to Stopped
             // This ensures that subsequent Kill() calls see the process as already stopped and return success.
             let exit_code = match agent.wait_process(req).await {
@@ -439,6 +461,7 @@ impl Process {
             drop(status);
 
             drop(exit_notifier);
+
             info!(logger, "end io wait thread");
         });
         Ok(())
@@ -493,7 +516,190 @@ impl Process {
 
 #[cfg(test)]
 mod tests {
-    use super::is_binary_stdio;
+    use super::*;
+    use std::{io::Read, os::fd::AsRawFd, path::PathBuf, time::Duration};
+
+    struct Fifo {
+        path: PathBuf,
+        reader: File,
+        capacity: usize,
+    }
+
+    impl Fifo {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!("kata-stdio-{}", uuid::Uuid::new_v4()));
+            let name = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+            let reader = open_fifo_read(path.to_str().unwrap()).unwrap();
+            let capacity = unsafe { libc::fcntl(reader.as_raw_fd(), libc::F_SETPIPE_SZ, 4096) };
+            assert!(capacity > 0);
+            Self {
+                path,
+                reader,
+                capacity: capacity as usize,
+            }
+        }
+
+        async fn full(&self) {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let mut bytes = 0_i32;
+                    assert_eq!(
+                        unsafe { libc::ioctl(self.reader.as_raw_fd(), libc::FIONREAD, &mut bytes) },
+                        0
+                    );
+                    if bytes as usize == self.capacity {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+    }
+
+    impl Drop for Fifo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    async fn copy_to_fifo(
+        fifo: &Fifo,
+        token: CancellationToken,
+        data: Vec<u8>,
+    ) -> (Process, WaitGroup) {
+        let id = ContainerProcess::new("stdio-test", "exec-test").unwrap();
+        let mut process = Process::new(
+            &id,
+            0,
+            "",
+            None,
+            Some(fifo.path.to_str().unwrap().into()),
+            None,
+            false,
+        );
+        process.io_cancel = token;
+        process.pre_fifos_open().unwrap();
+        let shim = ShimIo::new(&None, &process.stdout, &None, "stdio-test", "test")
+            .await
+            .unwrap();
+        let wg = WaitGroup::new();
+        process
+            .run_io_copy(
+                StdIoType::Stdout,
+                Some(wg.worker()),
+                Box::new(std::io::Cursor::new(data)),
+                shim.stdout.unwrap(),
+            )
+            .await
+            .unwrap();
+        (process, wg)
+    }
+
+    #[tokio::test]
+    async fn cancelled_full_fifo_releases_wait_group_without_reading() {
+        let fifo = Fifo::new();
+        let token = CancellationToken::new();
+        let (process, mut wg) =
+            copy_to_fifo(&fifo, token.clone(), vec![0; fifo.capacity * 2]).await;
+        fifo.full().await;
+        // Keep both read ends open and never consume any output.
+        token.cancel();
+        tokio::time::timeout(Duration::from_secs(2), wg.wait())
+            .await
+            .unwrap();
+        assert!(process.stdout_r.is_some());
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_copy_start_and_sibling_isolation() {
+        let parent = CancellationToken::new();
+        let first = parent.child_token();
+        let sibling = parent.child_token();
+        first.cancel();
+        let fifo = Fifo::new();
+        let (_process, mut wg) = copy_to_fifo(&fifo, first, vec![0; fifo.capacity * 2]).await;
+        tokio::time::timeout(Duration::from_secs(2), wg.wait())
+            .await
+            .unwrap();
+        assert!(!sibling.is_cancelled());
+        assert!(!parent.is_cancelled());
+        parent.cancel();
+        assert!(sibling.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn stdin_keeper_defers_eof_until_writer_is_closed() {
+        use std::io::Write;
+        use tokio::io::AsyncReadExt;
+        let fifo = Fifo::new();
+        let id = ContainerProcess::new("stdio-test", "exec-test").unwrap();
+        let mut process = Process::new(
+            &id,
+            0,
+            "",
+            Some(fifo.path.to_str().unwrap().into()),
+            None,
+            None,
+            false,
+        );
+        let mut shim = ShimIo::new(&process.stdin, &None, &None, "stdio-test", "test")
+            .await
+            .unwrap();
+        process.post_fifos_open().unwrap();
+        let mut external_writer = open_fifo_write(fifo.path.to_str().unwrap()).unwrap();
+        external_writer.write_all(b"stdin").unwrap();
+        drop(external_writer);
+        let reader = shim.stdin.as_mut().unwrap();
+        let mut data = [0; 5];
+        reader.read_exact(&mut data).await.unwrap();
+        assert_eq!(&data, b"stdin");
+        let mut byte = [0];
+        tokio::select! {
+            biased;
+            result = reader.read(&mut byte) => panic!("stdin keeper did not defer EOF: {:?}", result),
+            _ = tokio::task::yield_now() => {},
+        }
+        process.stdin_w.take();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), reader.read(&mut byte))
+                .await
+                .unwrap()
+                .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn normal_backpressured_fifo_keeps_every_byte_and_reaches_eof() {
+        let mut fifo = Fifo::new();
+        let mut expected = vec![0; (1024 * 1024).max(fifo.capacity * 2)];
+        expected.extend_from_slice(b"STDOUT-END\n");
+        let (process, mut wg) =
+            copy_to_fifo(&fifo, CancellationToken::new(), expected.clone()).await;
+        fifo.full().await;
+        let mut actual = Vec::new();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let mut buf = [0; 1024];
+            loop {
+                match fifo.reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => actual.extend_from_slice(&buf[..n]),
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(e) => panic!("read failed: {}", e),
+                }
+                tokio::task::yield_now().await;
+            }
+            wg.wait().await;
+        })
+        .await
+        .unwrap();
+        assert_eq!(actual, expected);
+        // A keeper is still present: EOF must depend on writers, not this read end.
+        assert!(process.stdout_r.is_some());
+    }
 
     #[test]
     fn identifies_binary_logger_uri() {
