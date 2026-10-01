@@ -92,6 +92,11 @@ path = "/opt/kata/share/kata-containers/kata-containers-coco-extension.img"
 verity_params = "root_hash=abc...,salt=def...,data_blocks=1234,hash_block_size=4096,data_block_size=4096"
 ```
 
+The Rust Cloud Hypervisor runtime uses the same entries under
+`[[hypervisor.clh.guest_extension_images]]`. Its virtio-blk serial is limited to
+20 bytes, so extension names must be at most 10 ASCII characters to leave room
+for the `extension-` prefix.
+
 Each entry maps to a Rust struct:
 
 ```rust
@@ -806,11 +811,14 @@ appropriate `After=`/`Requires=` relationships.
 
 ### Other hypervisor backends
 
-The current proposal covers QEMU only. Extending to other backends
-requires implementing block device cold-plug for each:
+QEMU and the Rust Cloud Hypervisor runtime support extension images. The Rust
+Cloud Hypervisor runtime cold-plugs them through `VmConfig.disks`, including
+their read-only setting and `extension-<name>` serial, and emits the same
+`kata.extension.<name>.verity_params` kernel parameters as QEMU. The Go Cloud
+Hypervisor runtime does not support extension images.
 
-- **Cloud Hypervisor** — add `--disk` entries with the guest extension image path and
-  serial. Cloud Hypervisor natively supports virtio-blk serial numbers.
+Extending to other backends requires implementing block device cold-plug for each:
+
 - **Dragonball** — attach additional virtio-blk devices through the
   Dragonball VMM's block device configuration, mapping each `GuestExtensionImage`
   to a drive with the corresponding serial.

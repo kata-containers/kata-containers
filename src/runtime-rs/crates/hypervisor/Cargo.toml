@@ -40,6 +40,7 @@ thiserror = { workspace = true }
 tokio = { features = ["fs", "io-util", "process", "sync"], workspace = true }
 tracing = { workspace = true }
 ttrpc = { features = ["async"], workspace = true }
+virtio-bindings = { workspace = true }
 vmm-sys-util = "0.15.0"
 # Local dependencies
 ch-config = { optional = true, workspace = true }
