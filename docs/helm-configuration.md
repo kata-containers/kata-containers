@@ -14,6 +14,11 @@ helm show values --version X.Y.Z oci://ghcr.io/kata-containers/kata-deploy-chart
 
 ### shims
 
+Each `shims` entry selects a runtime configuration exposed as a Kubernetes
+RuntimeClass. See the [kata-deploy RuntimeClass guide](kata-deploy-runtimeclasses.md#choosing-a-runtimeclass)
+for the purpose and prerequisites of every built-in class before selecting
+which configurations to enable.
+
 Kata ships a number of pre-built hypervisor artifacts, and the chart creates one
 `RuntimeClass` per **enabled** shim. Every shim `values.yaml` lists is enabled by
 default, and the file lists exactly those shims that run on an ordinary node —
@@ -47,7 +52,6 @@ actually start a pod on the node you installed on.
     [`try-kata-remote.values.yaml`](#try-kata-remotevaluesyaml).
 
 You may selectively enable or disable specific shims. For example:
-
 ```yaml
 shims:
   disableAll: true
@@ -458,7 +462,12 @@ fails the render rather than deploying something that cannot work.
 ## Deployment Modes (DaemonSet vs Job)
 
 The chart can install Kata on nodes in one of two ways, selected with the
-top-level `deploymentMode` value:
+top-level `deploymentMode` value.
+
+Both modes install all enabled runtimes and their RuntimeClasses, including
+the TEE, NVIDIA, Firecracker and remote configurations supplied by profiles,
+subject to their supported architectures. Choosing a mode does not change the
+runtime selection; it changes how kata-deploy prepares and manages the nodes.
 
 - **`daemonset`**: the long-running `kata-deploy` DaemonSet installs
   Kata on every matching node and reverts it when the pod is terminated (i.e. on
@@ -503,6 +512,19 @@ behavior:
     ```yaml title="values.yaml"
     deploymentMode: daemonset
     ```
+
+The main tradeoffs are:
+
+| | `job` | `daemonset` |
+| --- | --- | --- |
+| After installation | Per-node Jobs exit, freeing their pod resources; privileged host work carries no API token. | A kata-deploy pod and its API token remain on every selected node for the life of the release. |
+| New matching nodes | Require a [Helm upgrade or scheduled reconciliation](#adding-nodes-in-job-mode). | The DaemonSet automatically places an installer pod on each new matching node. |
+| Additional node preparation | The staged pipeline can install host binaries through [`nodeBinaries`](#nodebinaries) and provision [rootless VMM access](#shimsshimhypervisorrootless). | Install required host binaries yourself before deploying; `nodeBinaries` and the chart's rootless option require Job mode. |
+
+The runtime prerequisites still apply in either mode: selecting a profile does
+not provide missing hardware, firmware, GPU passthrough setup or external
+services. See the [RuntimeClass guide](kata-deploy-runtimeclasses.md#default-installation-and-opt-in-profiles)
+for the requirements of each profile.
 
 !!! warning "Upgrading a release installed before `job` became the default"
     `deploymentMode` is [immutable for the life of a release](#how-installations-keep-out-of-each-others-way-on-a-node),
@@ -1207,6 +1229,15 @@ instead as a ready-made values file — a *profile* — that you pass to helm wi
 `-f`/`--values`, and that brings along the snapshotter setup, CRI settings and
 `defaultShim` its shims need.
 
+All profiles default to `job` mode and can install their runtimes using either
+deployment mode. To use a DaemonSet for a new release, pass
+`--set deploymentMode=daemonset` after the profile's `-f` argument. Prepare the
+required host binaries first (for EROFS, `mkfs.erofs` from `erofs-utils` 1.8.2 or
+newer), and leave `nodeBinaries` empty. The optional `nodeBinaries` block in the
+NVIDIA profiles requires Job mode. See [nodeBinaries](#nodebinaries) and
+[Deployment Modes](#deployment-modes-daemonset-vs-job) for the preparation and
+lifecycle differences.
+
 The profiles are packaged with the chart, so you can get a copy to read and edit
 without cloning the repository:
 
@@ -1287,8 +1318,10 @@ Includes:
 
 ### [`try-kata-nvidia-gpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml)
 
-The NVIDIA GPU shims, including their confidential variants. Also installs using
-the [`job` deployment mode](#deployment-modes-daemonset-vs-job), and sets up both
+The NVIDIA GPU shims, including their confidential variants. The profile defaults
+to [`job` deployment mode](#deployment-modes-daemonset-vs-job); all six runtimes
+can also be installed with `daemonset`, with the node preparation described
+[above](#examples). It sets up both
 snapshotters the shim set needs: erofs for the plain GPU handlers, nydus for the
 TEE ones.
 
