@@ -16,6 +16,7 @@ use std::borrow::Cow;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_types::config::default::DEFAULT_SNP_CPU_MODEL;
 use kata_types::config::hypervisor::{VIRTIO_BLK_PCI, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
 use serde::{Deserialize, Serialize};
@@ -411,6 +412,88 @@ impl Cpu {
     fn set_type(&mut self, cpu_type: &str) -> &mut Self {
         self.r#type = cpu_type.to_owned();
         self
+    }
+}
+
+// SNP_CPU_MODEL_QUERY_TIMEOUT bounds how long we wait for the QEMU binary to
+// answer `-cpu help` when validating the configured SEV-SNP guest CPU model,
+// so that a hung or misbehaving QEMU binary cannot stall VM creation
+// indefinitely.
+const SNP_CPU_MODEL_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+// query_snp_supported_cpu_models asks the given QEMU binary which AMD EPYC
+// CPU models it supports, by parsing the output of `<qemu_path> -cpu help`.
+// SEV-SNP is AMD-only, so only EPYC-family model names are relevant here.
+async fn query_snp_supported_cpu_models(qemu_path: &str) -> Result<Vec<String>> {
+    let child = tokio::process::Command::new(qemu_path)
+        .arg("-cpu")
+        .arg("help")
+        .output();
+
+    let output = tokio::time::timeout(SNP_CPU_MODEL_QUERY_TIMEOUT, child)
+        .await
+        .context("timed out querying QEMU for supported SEV-SNP CPU models")?
+        .context("failed to run QEMU to query supported SEV-SNP CPU models")?;
+
+    if !output.status.success() {
+        return Err(anyhow!(
+            "QEMU exited with {} while querying supported SEV-SNP CPU models",
+            output.status
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let models = stdout
+        .lines()
+        .filter_map(|line| {
+            let model = line.split_whitespace().next()?;
+            model.starts_with("EPYC").then(|| model.to_owned())
+        })
+        .collect();
+
+    Ok(models)
+}
+
+// validate_snp_cpu_model checks the configured SEV-SNP guest CPU model
+// against the list of CPU models the QEMU binary in use actually supports.
+//
+// "host" is always allowed, bypassing the check entirely. If QEMU cannot be
+// queried, the configured value is trusted as is.
+// If the query succeeds but the configured value is not among the supported
+// models, a warning is logged and the default CPU model is used instead.
+async fn validate_snp_cpu_model(cpu_model: &str, qemu_path: &str) -> String {
+    let cpu_model = cpu_model.trim();
+    if cpu_model.is_empty() {
+        return DEFAULT_SNP_CPU_MODEL.to_owned();
+    }
+
+    if cpu_model == "host" {
+        return cpu_model.to_owned();
+    }
+
+    match query_snp_supported_cpu_models(qemu_path).await {
+        Ok(supported_models) => {
+            if supported_models.iter().any(|m| m == cpu_model) {
+                cpu_model.to_owned()
+            } else {
+                warn!(
+                    sl!(),
+                    "cpu_model {} is not supported by QEMU, falling back to default cpu_model {}",
+                    cpu_model,
+                    DEFAULT_SNP_CPU_MODEL
+                );
+                DEFAULT_SNP_CPU_MODEL.to_owned()
+            }
+        }
+        Err(err) => {
+            warn!(
+                sl!(),
+                "unable to query QEMU for supported SEV-SNP CPU models, using the configured cpu_model {}: {:?}",
+                cpu_model,
+                err
+            );
+            cpu_model.to_owned()
+        }
     }
 }
 
@@ -3491,7 +3574,7 @@ impl<'a> QemuCmdLine<'a> {
             .set_nvdimm(false);
     }
 
-    pub fn add_sev_snp_protection_device(
+    pub async fn add_sev_snp_protection_device(
         &mut self,
         cbitpos: u32,
         phys_addr_reduction: u32,
@@ -3514,7 +3597,9 @@ impl<'a> QemuCmdLine<'a> {
             .set_confidential_guest_support("snp")
             .set_nvdimm(false);
 
-        self.cpu.set_type("EPYC-v4");
+        let cpu_model =
+            validate_snp_cpu_model(&self.config.cpu_info.cpu_model, &self.config.path).await;
+        self.cpu.set_type(&cpu_model);
     }
 
     pub fn add_tdx_protection_device(
@@ -4342,6 +4427,24 @@ mod tests {
             .collect();
 
         assert_eq!(values, expected_values);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_sev_snp_cpu_model_from_config() {
+        let mut config = test_qemu_config(Some("none"), false);
+        config.cpu_info.cpu_model = "EPYC-Milan".to_owned();
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("sev-snp-cpu-model", &config).unwrap();
+        cmdline
+            .add_sev_snp_protection_device(1, 1, "/usr/share/ovmf/OVMF.fd", &None)
+            .await;
+        let params = cmdline.build().await.unwrap();
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-cpu" && args[1].split(',').next() == Some("EPYC-Milan")
+        }));
     }
 
     #[actix_rt::test]
