@@ -215,20 +215,7 @@ pub async fn add_devices(
                     }
 
                     let mut sb = sandbox.lock().await;
-                    let mut host_guest: PciHostGuestMapping = HashMap::new();
-                    for (host, guest) in update.pci {
-                        if let Some(other_guest) = host_guest.insert(host, guest) {
-                            return Err(anyhow!(
-                                "Conflicting guest address for host device {} ({} versus {})",
-                                host,
-                                guest,
-                                other_guest
-                            ));
-                        }
-                    }
-                    // Save all the host -> guest mappings per container upon
-                    // removal of the container, the mappings will be removed
-                    sb.pcimap.insert(cid.clone(), host_guest);
+                    add_pci_mappings(&mut sb.pcimap, cid, update.pci)?;
                 }
                 Err(e) => {
                     error!(logger, "failed to add devices, error: {e:?}");
@@ -263,6 +250,30 @@ pub async fn add_devices(
     }
 
     update_spec_devices(logger, spec, dev_updates)
+}
+
+/// Adds a device's host -> guest PCI address mappings to the mappings of
+/// container `cid`, which accumulate over all the container's devices and
+/// are removed together with the container.
+fn add_pci_mappings(
+    pcimap: &mut HashMap<String, PciHostGuestMapping>,
+    cid: &str,
+    pci: Vec<(pci::Address, pci::Address)>,
+) -> Result<()> {
+    let host_guest = pcimap.entry(cid.to_string()).or_default();
+    for (host, guest) in pci {
+        if let Some(other_guest) = host_guest.insert(host, guest) {
+            if other_guest != guest {
+                return Err(anyhow!(
+                    "Conflicting guest address for host device {} ({} versus {})",
+                    host,
+                    guest,
+                    other_guest
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Returns true if `devices` contains at least one entry whose
@@ -2089,6 +2100,60 @@ mod tests {
 
         let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
         assert_eq!(env, &vec!["PCIDEVICE_x=0000:02:00.0".to_string()]);
+    }
+
+    #[test]
+    fn test_add_pci_mappings() {
+        let addr = |s| pci::Address::from_str(s).unwrap();
+        let mut pcimap = HashMap::new();
+
+        // Mappings of a container's devices accumulate.
+        add_pci_mappings(
+            &mut pcimap,
+            "c1",
+            vec![(addr("0000:00:02.1"), addr("0000:02:00.0"))],
+        )
+        .unwrap();
+        add_pci_mappings(
+            &mut pcimap,
+            "c1",
+            vec![(addr("0000:00:02.2"), addr("0000:03:00.0"))],
+        )
+        .unwrap();
+        // Other containers' mappings are kept separately.
+        add_pci_mappings(
+            &mut pcimap,
+            "c2",
+            vec![(addr("0000:00:02.3"), addr("0000:02:00.0"))],
+        )
+        .unwrap();
+
+        assert_eq!(
+            pcimap["c1"],
+            HashMap::from([
+                (addr("0000:00:02.1"), addr("0000:02:00.0")),
+                (addr("0000:00:02.2"), addr("0000:03:00.0")),
+            ])
+        );
+        assert_eq!(
+            pcimap["c2"],
+            HashMap::from([(addr("0000:00:02.3"), addr("0000:02:00.0"))])
+        );
+
+        // Repeating a mapping is fine, mapping a host device to another
+        // guest address is not.
+        add_pci_mappings(
+            &mut pcimap,
+            "c1",
+            vec![(addr("0000:00:02.1"), addr("0000:02:00.0"))],
+        )
+        .unwrap();
+        assert!(add_pci_mappings(
+            &mut pcimap,
+            "c1",
+            vec![(addr("0000:00:02.1"), addr("0000:04:00.0"))]
+        )
+        .is_err());
     }
 
     #[tokio::test]
