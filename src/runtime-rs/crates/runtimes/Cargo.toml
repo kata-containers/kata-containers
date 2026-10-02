@@ -6,6 +6,7 @@ name = "runtimes"
 version = "0.1.0"
 
 [dev-dependencies]
+async-trait = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 
