@@ -57,7 +57,7 @@ pub(crate) async fn setup_virtio_fs(
     let shared_fs = shared_fs_info.shared_fs.clone().unwrap_or_default();
 
     if !shared_fs.as_str().eq(VIRTIO_FS) {
-        return Err(anyhow!("Unsupported virtio-fs type: {:?}", &shared_fs));
+        return Err(anyhow!("Unsupported virtio-fs type: {:?}", shared_fs));
     }
 
     // Create the rootfs dir
