@@ -756,6 +756,10 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 	// !0Mbits/sec
 	rxRateLimiterMaxRate := uint64(10000000)
 	txRateLimiterMaxRate := uint64(10000000)
+	diskRateLimiterBwMaxRate := int64(384000000)
+	diskRateLimiterBwOneTimeBurst := int64(2048000000)
+	diskRateLimiterOpsMaxRate := int64(3000)
+	diskRateLimiterOpsOneTimeBurst := int64(6000)
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
@@ -771,6 +775,11 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 		BlockDeviceDriver:     blockDeviceDriver,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
+
+		DiskRateLimiterBwMaxRate:       diskRateLimiterBwMaxRate,
+		DiskRateLimiterBwOneTimeBurst:  diskRateLimiterBwOneTimeBurst,
+		DiskRateLimiterOpsMaxRate:      diskRateLimiterOpsMaxRate,
+		DiskRateLimiterOpsOneTimeBurst: diskRateLimiterOpsOneTimeBurst,
 	}
 
 	files := []string{hypervisorPath, kernelPath, imagePath, jailerPath}
@@ -829,6 +838,22 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 
 	if config.TxRateLimiterMaxRate != txRateLimiterMaxRate {
 		t.Errorf("Expected value for tx rate limiter %v, got %v", txRateLimiterMaxRate, config.TxRateLimiterMaxRate)
+	}
+
+	if config.DiskRateLimiterBwMaxRate != diskRateLimiterBwMaxRate {
+		t.Errorf("Expected value for disk bw rate limiter %v, got %v", diskRateLimiterBwMaxRate, config.DiskRateLimiterBwMaxRate)
+	}
+
+	if config.DiskRateLimiterBwOneTimeBurst != diskRateLimiterBwOneTimeBurst {
+		t.Errorf("Expected value for disk bw one time burst %v, got %v", diskRateLimiterBwOneTimeBurst, config.DiskRateLimiterBwOneTimeBurst)
+	}
+
+	if config.DiskRateLimiterOpsMaxRate != diskRateLimiterOpsMaxRate {
+		t.Errorf("Expected value for disk ops rate limiter %v, got %v", diskRateLimiterOpsMaxRate, config.DiskRateLimiterOpsMaxRate)
+	}
+
+	if config.DiskRateLimiterOpsOneTimeBurst != diskRateLimiterOpsOneTimeBurst {
+		t.Errorf("Expected value for disk ops one time burst %v, got %v", diskRateLimiterOpsOneTimeBurst, config.DiskRateLimiterOpsOneTimeBurst)
 	}
 }
 

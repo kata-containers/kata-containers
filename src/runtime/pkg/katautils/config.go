@@ -906,6 +906,11 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableAnnotations:     h.EnableAnnotations,
 		DisableSeLinux:        h.DisableSeLinux,
 		DisableGuestSeLinux:   true, // Guest SELinux is not supported in Firecracker
+
+		DiskRateLimiterBwMaxRate:       h.getDiskRateLimiterBwMaxRate(),
+		DiskRateLimiterBwOneTimeBurst:  h.getDiskRateLimiterBwOneTimeBurst(),
+		DiskRateLimiterOpsMaxRate:      h.getDiskRateLimiterOpsMaxRate(),
+		DiskRateLimiterOpsOneTimeBurst: h.getDiskRateLimiterOpsOneTimeBurst(),
 	}, nil
 }
 

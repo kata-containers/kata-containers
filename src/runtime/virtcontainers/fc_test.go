@@ -237,6 +237,59 @@ func TestFCCreateJailedDrive(t *testing.T) {
 	assert.NoError(err)
 }
 
+func TestFCDiskRateLimiter(t *testing.T) {
+	assert := assert.New(t)
+
+	fc := firecracker{}
+	assert.Nil(fc.fcDiskRateLimiter())
+
+	// 384000000 bits/sec in kata units is 48 MiB/sec in firecracker units.
+	fc.config.DiskRateLimiterBwMaxRate = 384000000
+	fc.config.DiskRateLimiterBwOneTimeBurst = 2048000000
+	fc.config.DiskRateLimiterOpsMaxRate = 3000
+	fc.config.DiskRateLimiterOpsOneTimeBurst = 6000
+
+	rl := fc.fcDiskRateLimiter()
+	assert.NotNil(rl)
+	assert.NotNil(rl.Bandwidth)
+	assert.Equal(int64(48*1024*1024), *rl.Bandwidth.Size)
+	assert.Equal(int64(256*1024*1024), *rl.Bandwidth.OneTimeBurst)
+	assert.Equal(int64(1000), *rl.Bandwidth.RefillTime)
+	assert.NotNil(rl.Ops)
+	assert.Equal(int64(3000), *rl.Ops.Size)
+	assert.Equal(int64(6000), *rl.Ops.OneTimeBurst)
+	assert.Equal(int64(1000), *rl.Ops.RefillTime)
+
+	// Only the ops limit set, without a burst.
+	fc.config = HypervisorConfig{DiskRateLimiterOpsMaxRate: 3000}
+	rl = fc.fcDiskRateLimiter()
+	assert.NotNil(rl)
+	assert.Nil(rl.Bandwidth)
+	assert.NotNil(rl.Ops)
+	assert.Nil(rl.Ops.OneTimeBurst)
+}
+
+func TestFCCreateDiskPoolRateLimiter(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	fc := firecracker{jailerRoot: t.TempDir(), fcConfig: &types.FcConfig{}}
+	assert.NoError(fc.createDiskPool(ctx))
+	assert.Len(fc.fcConfig.Drives, fcDiskPoolSize)
+	for _, d := range fc.fcConfig.Drives {
+		assert.Nil(d.RateLimiter)
+	}
+
+	fc = firecracker{jailerRoot: t.TempDir(), fcConfig: &types.FcConfig{}}
+	fc.config.DiskRateLimiterOpsMaxRate = 3000
+	assert.NoError(fc.createDiskPool(ctx))
+	assert.Len(fc.fcConfig.Drives, fcDiskPoolSize)
+	for _, d := range fc.fcConfig.Drives {
+		assert.NotNil(d.RateLimiter)
+		assert.Equal(int64(3000), *d.RateLimiter.Ops.Size)
+	}
+}
+
 func TestFcSetConfig(t *testing.T) {
 	assert := assert.New(t)
 

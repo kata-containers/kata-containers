@@ -884,6 +884,7 @@ func (fc *firecracker) createDiskPool(ctx context.Context) error {
 			IsReadOnly:   &isReadOnly,
 			IsRootDevice: &isRootDevice,
 			PathOnHost:   &jailedDrive,
+			RateLimiter:  fc.fcDiskRateLimiter(),
 		}
 
 		if fc.config.BlockDeviceCacheSet {
@@ -901,6 +902,46 @@ func (fc *firecracker) createDiskPool(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// fcDiskRateLimiter builds the Firecracker rate limiter applied to writable
+// drives from the disk_rate_limiter_* settings. It returns nil when neither
+// the bandwidth nor the ops rate is set, leaving the drive unlimited.
+func (fc *firecracker) fcDiskRateLimiter() *models.RateLimiter {
+	bwSize := fc.config.DiskRateLimiterBwMaxRate
+	opsSize := fc.config.DiskRateLimiterOpsMaxRate
+	if bwSize <= 0 && opsSize <= 0 {
+		return nil
+	}
+
+	newTokenBucket := func(size, oneTimeBurst int64) *models.TokenBucket {
+		refillTime := int64(utils.DefaultRateLimiterRefillTimeMilliSecs)
+		tb := &models.TokenBucket{
+			RefillTime: &refillTime,
+			Size:       &size,
+		}
+		if oneTimeBurst > 0 {
+			tb.OneTimeBurst = &oneTimeBurst
+		}
+		return tb
+	}
+
+	rateLimiter := &models.RateLimiter{}
+
+	if bwSize > 0 {
+		// kata-defined bandwidth is in bits with scaling factors of 1000, but
+		// firecracker-defined bandwidth is in bytes with scaling factors of
+		// 1024, need reversion.
+		bwSize = int64(utils.RevertBytes(uint64(bwSize / 8)))
+		bwOneTimeBurst := int64(utils.RevertBytes(uint64(fc.config.DiskRateLimiterBwOneTimeBurst / 8)))
+		rateLimiter.Bandwidth = newTokenBucket(bwSize, bwOneTimeBurst)
+	}
+
+	if opsSize > 0 {
+		rateLimiter.Ops = newTokenBucket(opsSize, fc.config.DiskRateLimiterOpsOneTimeBurst)
+	}
+
+	return rateLimiter
 }
 
 func (fc *firecracker) umountResource(jailedPath string) {
@@ -1059,6 +1100,7 @@ func (fc *firecracker) fcAddBlockDrive(ctx context.Context, drive config.BlockDr
 		IsReadOnly:   &isReadOnly,
 		IsRootDevice: &isRootDevice,
 		PathOnHost:   &jailedDrive,
+		RateLimiter:  fc.fcDiskRateLimiter(),
 	}
 
 	fc.fcConfig.Drives = append(fc.fcConfig.Drives, driveFc)
@@ -1076,9 +1118,11 @@ func (fc *firecracker) fcUpdateBlockDrive(ctx context.Context, path, id string) 
 	driveParams := ops.NewPatchGuestDriveByIDParams()
 	driveParams.SetDriveID(id)
 
+	// Only the backing file is replaced. The drive keeps the rate limiter it
+	// was created with in createDiskPool.
 	driveFc := &models.PartialDrive{
 		DriveID:    &id,
-		PathOnHost: path, //This is the only property that can be modified
+		PathOnHost: path,
 	}
 
 	driveParams.SetBody(driveFc)
