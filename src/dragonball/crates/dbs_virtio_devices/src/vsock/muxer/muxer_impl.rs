@@ -418,7 +418,7 @@ impl VsockMuxer {
         match self.listener_map.get_mut(&fd) {
             // This event needs to be forwarded to a `VsockConnection` that is
             // listening for it.
-            Some(EpollListener::Connection { key, evset: _, .. }) => {
+            Some(EpollListener::Connection { key, .. }) => {
                 let key_copy = *key;
 
                 // If the hybrid connection's local peer closed, then the epoll handler wouldn't
