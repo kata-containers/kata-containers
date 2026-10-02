@@ -81,7 +81,7 @@ clearly and concisely will generally get your work reviewed and merged more quic
 
 This applies especially to CVE reports: AI can be a useful tool for finding vulnerabilities, but you should
 understand the trust model and the implications yourself, and ensure that the finding is a genuine vulnerability
-that breaks the trust model and not just a bug (in which case an issue is welcomed),then write your own focused
+that breaks the trust model and not just a bug (in which case an issue is welcomed), then write your own focused
 description rather than submitting whatever the AI produced.
 
 ## Pull requests
@@ -141,14 +141,14 @@ To report a bug that is not already documented, please open a GitHub issue for t
 
 ### Closing issues
 
-If you are fixing an issues with a commit, then it's helpful to add a `Fixes` comment to at
+If you are fixing an issue with a commit, then it's helpful to add a `Fixes` comment to at
 least one commit in the PR, which triggers GitHub to automatically close the issue once the
 PR is merged:
 
 ```
 pod: Remove token from Cmd structure
 
-The token and pid data will be hold by the new Process structure and
+The token and pid data will be held by the new Process structure and
 they are related to a container.
 
 Fixes: #123
@@ -584,7 +584,7 @@ The following is an example of a full patch description for the main change that
 ```
 pod: Remove token from Cmd structure
 
-The token and pid data will be hold by the new Process structure and
+The token and pid data will be held by the new Process structure and
 they are related to a container.
 
 Fixes: #123
