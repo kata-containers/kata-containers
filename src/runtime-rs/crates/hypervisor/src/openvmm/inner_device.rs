@@ -12,7 +12,10 @@ use crate::device::DeviceType;
 use crate::{VmmState, KATA_BLK_DEV_TYPE};
 
 impl OpenVmmInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+    pub(crate) async fn add_device(&mut self, mut device: DeviceType) -> Result<DeviceType> {
+        if let DeviceType::Network(network) = &mut device {
+            network.config.queue_num = 1;
+        }
         if self.state == VmmState::NotReady {
             info!(sl!(), "openvmm: VMM not ready, queueing device {}", device);
             self.pending_devices.push(device.clone());

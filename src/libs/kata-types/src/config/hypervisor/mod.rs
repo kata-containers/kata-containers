@@ -1811,6 +1811,11 @@ fn yes() -> bool {
 }
 
 impl Hypervisor {
+    /// Queue-pair limit shared by multiqueue network backends.
+    pub fn network_queue_limit(&self) -> u32 {
+        (self.cpu_info.default_vcpus.ceil() as u32).clamp(1, MAX_NETWORK_QUEUES)
+    }
+
     /// Validates the path of the hypervisor executable against configured patterns.
     pub fn validate_hypervisor_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_hypervisor_paths, path)
