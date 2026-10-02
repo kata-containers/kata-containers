@@ -253,7 +253,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let (blob_cache_dir, blob_ondemand_cfg) = match config.as_ref() {
             Some(cfg) => {
                 let conf = ConfigV2::from_str(cfg).map_err(|e| {
-                    error!("failed to load rafs config {} error: {:?}", &cfg, e);
+                    error!("failed to load rafs config {} error: {:?}", cfg, e);
                     FsError::InvalidData
                 })?;
 
@@ -277,7 +277,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                         "bootstrap_path": "{}",
                         "blob_cache_dir": "{}"
                     }}"#,
-                    cfg, source, &work_dir
+                    cfg, source, work_dir
                 );
 
                 (work_dir, blob_ondemand_cfg)
