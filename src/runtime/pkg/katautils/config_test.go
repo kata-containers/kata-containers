@@ -190,6 +190,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
 		MeasurementAlgo:       defaultMeasurementAlgo,
+		CPUModel:              defaultSNPCPUModel,
 	}
 
 	if goruntime.GOARCH == "arm64" && len(hypervisorConfig.PFlash) == 0 && hypervisorConfig.FirmwarePath == "" {
@@ -580,6 +581,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		ColdPlugVFIO:          defaultColdPlugVFIO,
 		PCIeRootPort:          defaultPCIeRootPort,
 		PCIeSwitchPort:        defaultPCIeSwitchPort,
+		CPUModel:              defaultSNPCPUModel,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{
@@ -1448,6 +1450,16 @@ func TestDefaultCPUFeatures(t *testing.T) {
 	cpuFeatures = "abc,123"
 	h.CPUFeatures = ",, abc ,,, 123 ,,"
 	assert.Equal(cpuFeatures, h.cpuFeatures())
+}
+
+func TestDefaultCPUModel(t *testing.T) {
+	assert := assert.New(t)
+
+	h := hypervisor{CPUModel: "EPYC-Genoa"}
+	assert.Equal("EPYC-Genoa", h.cpuModel())
+
+	h.CPUModel = ""
+	assert.Equal(defaultSNPCPUModel, h.cpuModel())
 }
 
 func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {

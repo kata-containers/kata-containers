@@ -1081,6 +1081,12 @@ func addHypervisorNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfi
 		}
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.CPUModel]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.CPUModel = value
+		}
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableVhostNet).setBool(func(disableVhostNet bool) {
 		sbConfig.HypervisorConfig.DisableVhostNet = disableVhostNet
 	}); err != nil {

@@ -92,6 +92,7 @@ type hypervisor struct {
 	FirmwareVolume                 string                    `toml:"firmware_volume"`
 	MachineAccelerators            string                    `toml:"machine_accelerators"`
 	CPUFeatures                    string                    `toml:"cpu_features"`
+	CPUModel                       string                    `toml:"cpu_model"`
 	KernelParams                   string                    `toml:"kernel_params"`
 	KernelVerityParams             string                    `toml:"kernel_verity_params"`
 	MachineType                    string                    `toml:"machine_type"`
@@ -428,6 +429,14 @@ func (h hypervisor) machineType() string {
 	}
 
 	return h.MachineType
+}
+
+func (h hypervisor) cpuModel() string {
+	if h.CPUModel == "" {
+		return defaultSNPCPUModel
+	}
+
+	return h.CPUModel
 }
 
 func (h hypervisor) qgsPort() uint32 {
@@ -1058,6 +1067,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		PFlash:                        pflashes,
 		MachineAccelerators:           machineAccelerators,
 		CPUFeatures:                   cpuFeatures,
+		CPUModel:                      h.cpuModel(),
 		KernelParams:                  vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:            h.kernelVerityParams(),
 		HypervisorMachineType:         machineType,
@@ -1650,6 +1660,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		FirmwareVolumePath:       defaultFirmwareVolumePath,
 		MachineAccelerators:      defaultMachineAccelerators,
 		CPUFeatures:              defaultCPUFeatures,
+		CPUModel:                 defaultSNPCPUModel,
 		HypervisorMachineType:    defaultMachineType,
 		NumVCPUsF:                float32(defaultVCPUCount),
 		DefaultMaxVCPUs:          defaultMaxVCPUCount,

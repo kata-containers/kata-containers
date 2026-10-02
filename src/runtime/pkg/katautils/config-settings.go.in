@@ -53,6 +53,7 @@ var defaultFirmwarePath = ""
 var defaultFirmwareVolumePath = ""
 var defaultMachineAccelerators = ""
 var defaultCPUFeatures = ""
+var defaultSNPCPUModel = "EPYC-Milan"
 var systemdUnitName = "kata-containers.target"
 
 const defaultKernelParams = ""
