@@ -328,13 +328,9 @@ impl Config {
             None => DEFAULT_KATA_INSTALL_DIR.to_string(),
         };
 
-        let multi_install_suffix = env::var("MULTI_INSTALL_SUFFIX").ok().and_then(|s| {
-            if s.trim().is_empty() {
-                None
-            } else {
-                Some(s)
-            }
-        });
+        let multi_install_suffix = env::var("MULTI_INSTALL_SUFFIX")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
         let dest_dir = if let Some(ref suffix) = multi_install_suffix {
             format!("{dest_dir}-{suffix}")
         } else {
