@@ -145,7 +145,7 @@ impl<S: UpcallClientService + Send> UpcallClientInfo<S> {
             .read(&mut buffer)
             .map_err(UpcallClientError::ServerConnect)?;
 
-        if !(len > 2 && buffer[0..2] == [b'O', b'K']) {
+        if !(len > 2 && buffer[0..2] == *b"OK") {
             return Err(UpcallClientError::InvalidMessage(format!(
                 "upcall server expect ok, but received {}",
                 String::from_utf8_lossy(&buffer[0..2]),
