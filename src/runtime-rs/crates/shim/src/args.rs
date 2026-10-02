@@ -41,7 +41,7 @@ impl Args {
         if self.id.is_empty() || self.namespace.is_empty() || self.publish_binary.is_empty() {
             return Err(anyhow!(Error::ArgumentIsEmpty(format!(
                 "id: {} namespace: {} address: {} publish_binary: {}",
-                &self.id, &self.namespace, &self.address, &self.publish_binary
+                self.id, self.namespace, self.address, self.publish_binary
             ))));
         }
 
@@ -127,7 +127,7 @@ mod tests {
                 should_check_bundle: false,
                 result: Err(anyhow!(Error::ArgumentIsEmpty(format!(
                     "id: {} namespace: {} address: {} publish_binary: {}",
-                    &arg.id, &arg.namespace, &arg.address, &arg.publish_binary
+                    arg.id, arg.namespace, arg.address, arg.publish_binary
                 )))),
             },
             TestData {
@@ -146,7 +146,7 @@ mod tests {
                 should_check_bundle: false,
                 result: Err(anyhow!(Error::ArgumentIsEmpty(format!(
                     "id: {} namespace: {} address: {} publish_binary: {}",
-                    &arg.id, &arg.namespace, &arg.address, &arg.publish_binary
+                    arg.id, arg.namespace, arg.address, arg.publish_binary
                 )))),
             },
             TestData {
@@ -181,7 +181,7 @@ mod tests {
                 should_check_bundle: false,
                 result: Err(anyhow!(Error::ArgumentIsEmpty(format!(
                     "id: {} namespace: {} address: {} publish_binary: {}",
-                    &arg.id, &arg.namespace, &arg.address, &arg.publish_binary
+                    arg.id, arg.namespace, arg.address, arg.publish_binary
                 )))),
             },
             TestData {

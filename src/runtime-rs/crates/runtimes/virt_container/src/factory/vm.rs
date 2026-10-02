@@ -237,7 +237,7 @@ impl TemplateVm {
                 let agent = KataAgent::new(agent_config.clone());
                 Ok(Arc::new(agent))
             }
-            _ => Err(anyhow!("Unsupported agent {}", &agent_name)),
+            _ => Err(anyhow!("Unsupported agent {}", agent_name)),
         }
     }
 

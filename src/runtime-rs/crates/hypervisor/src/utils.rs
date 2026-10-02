@@ -884,7 +884,7 @@ mod tests {
             let slice: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
             let err = first_valid_executable_path(&slice).unwrap_err();
-            let expected = format!("No valid executable found in paths: {:?}", &slice);
+            let expected = format!("No valid executable found in paths: {:?}", slice);
             assert_eq!(
                 err.to_string(),
                 expected,
@@ -906,7 +906,7 @@ mod tests {
             let slice: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
             let err = first_valid_executable_path(&slice).unwrap_err();
-            let expected = format!("No valid executable found in paths: {:?}", &slice);
+            let expected = format!("No valid executable found in paths: {:?}", slice);
             assert_eq!(err.to_string(), expected, "non-exec file should be invalid");
         }
 

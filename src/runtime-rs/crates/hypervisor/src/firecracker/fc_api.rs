@@ -58,7 +58,7 @@ impl FcInner {
         let localpath = [self.vm_path.clone(), ROOT.to_string()].join("/");
         let _ = fs::create_dir_all(&localpath)
             .await
-            .context(format!("failed to create directory {:?}", &localpath));
+            .context(format!("failed to create directory {:?}", localpath));
         mount::bind_mount_unchecked(&localpath, &localpath, false, MsFlags::MS_SHARED)
             .context("bind mount jailer root")?;
 
@@ -143,7 +143,7 @@ impl FcInner {
         let rel_path = "/".to_string();
         let _ = fs::create_dir_all(&abs_path)
             .await
-            .context(format!("failed to create directory {:?}", &abs_path));
+            .context(format!("failed to create directory {:?}", abs_path));
 
         // We create some placeholder drives to be used for patching block devices while the vmm is
         // running, as firecracker does not support device hotplug.
@@ -152,7 +152,7 @@ impl FcInner {
 
             let _ = File::create(&full_path_name)
                 .await
-                .context(format!("failed to create file {:?}", &full_path_name));
+                .context(format!("failed to create file {:?}", full_path_name));
 
             let path_on_host = match self.jailed {
                 false => abs_path.clone(),
@@ -345,6 +345,6 @@ impl FcInner {
             .join("/"),
         };
         nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", &path))
+            .with_context(|| format!("umount path {}", path))
     }
 }

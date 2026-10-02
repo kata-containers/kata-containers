@@ -70,7 +70,7 @@ pub fn do_check_iommu_on() -> Result<bool> {
 fn override_driver(bdf: &str, driver: &str) -> Result<()> {
     let driver_override = format!("/sys/bus/pci/devices/{bdf}/driver_override");
     fs::write(&driver_override, driver)
-        .with_context(|| format!("echo {} > {}", driver, &driver_override))?;
+        .with_context(|| format!("echo {} > {}", driver, driver_override))?;
     info!(sl!(), "echo {} > {}", driver, driver_override);
     Ok(())
 }
@@ -503,7 +503,7 @@ impl VfioDevice {
             let mut hostdev: HostDevice = self
                 .set_vfio_config(iommu_devs_path.clone(), device)
                 .context("set vfio config failed")?;
-            let dev_prefix = format!("{}_{}", self.get_vfio_prefix(), &vfio_group);
+            let dev_prefix = format!("{}_{}", self.get_vfio_prefix(), vfio_group);
             hostdev.hostdev_id = make_device_nameid(&dev_prefix, index, MAX_DEV_ID_SIZE);
 
             self.devices.push(hostdev);
@@ -706,7 +706,7 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
     let unbind_path = format!("/sys/bus/pci/devices/{bdf}/driver/unbind");
     // echo bdf > /sys/bus/pci/drivers/virtio-pci/unbind"
     fs::write(&unbind_path, bdf)
-        .with_context(|| format!("Failed to echo {} > {}", bdf, &unbind_path))?;
+        .with_context(|| format!("Failed to echo {} > {}", bdf, unbind_path))?;
 
     info!(sl!(), "{} is unbound from {}", bdf, host_driver);
 
