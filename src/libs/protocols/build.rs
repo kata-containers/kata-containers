@@ -135,7 +135,7 @@ fn codegen(path: &str, protos: &[&str], async_all: bool) -> Result<(), std::io::
     // Tell Cargo that if the .proto files changed, to rerun this build script.
     protos
         .iter()
-        .for_each(|p| println!("cargo:rerun-if-changed={}", &p));
+        .for_each(|p| println!("cargo:rerun-if-changed={}", p));
 
     let ttrpc_options = Customize {
         async_all,
