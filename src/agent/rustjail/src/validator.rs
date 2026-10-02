@@ -105,7 +105,7 @@ fn security(oci: &Spec) -> Result<()> {
         {
             return Err(anyhow!(
                 "SELinux label for the process is invalid format: {:?}",
-                &process.selinux_label()
+                process.selinux_label()
             ));
         }
     }
@@ -276,7 +276,7 @@ fn rootless_euid_mount(oci: &Spec) -> Result<()> {
                 let id = fields[1]
                     .trim()
                     .parse::<u32>()
-                    .context(format!("parse field {}", &fields[1]))?;
+                    .context(format!("parse field {}", fields[1]))?;
 
                 if opt.starts_with("uid=")
                     && !has_idmapping(linux.uid_mappings().as_ref().unwrap_or(&vec![]), id)

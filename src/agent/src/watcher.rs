@@ -319,7 +319,7 @@ impl Storage {
                 format!(
                     "Failed to strip prefix: {} - {}",
                     source_file_path.as_ref().display(),
-                    &self.source_mount_point.display()
+                    self.source_mount_point.display()
                 )
             })?;
 

@@ -79,14 +79,14 @@ async fn register_memory_event_v2(
     // watching oom kill
     let ev_wd = inotify
         .add_watch(&event_control_path, WatchMask::MODIFY)
-        .context(format!("failed to add watch for {:?}", &event_control_path))?;
+        .context(format!("failed to add watch for {:?}", event_control_path))?;
 
     // Because no `unix.IN_DELETE|unix.IN_DELETE_SELF` event for cgroup file system, so watching all process exited
     let cg_wd = inotify
         .add_watch(&cgroup_event_control_path, WatchMask::MODIFY)
         .context(format!(
             "failed to add watch for {:?}",
-            &cgroup_event_control_path
+            cgroup_event_control_path
         ))?;
 
     info!(sl(), "ev_wd: {:?}", ev_wd);

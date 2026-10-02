@@ -205,7 +205,7 @@ pub async fn add_devices(
                         {
                             return Err(anyhow!(
                                 "Conflicting device updates for {}",
-                                &device.container_path
+                                device.container_path
                             ));
                         }
 
