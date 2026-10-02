@@ -244,8 +244,7 @@ pub async fn add_devices(
     }
 
     if let Some(process) = spec.process_mut() {
-        let env_vec: &mut Vec<String> =
-            &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
+        let env_vec = process.env_mut().get_or_insert_with(Vec::new);
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
 
@@ -2058,6 +2057,38 @@ mod tests {
         let name = example_get_device_name(&sandbox, root_complex, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), devname);
+    }
+
+    #[tokio::test]
+    async fn test_add_devices_updates_spec_env_pci() {
+        let logger = create_test_logger();
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let cid = "0".to_string();
+
+        let host = pci::Address::from_str("0000:00:02.1").unwrap();
+        let guest = pci::Address::from_str("0000:02:00.0").unwrap();
+        sandbox
+            .lock()
+            .await
+            .pcimap
+            .insert(cid.clone(), HashMap::from([(host, guest)]));
+
+        let mut spec = SpecBuilder::default()
+            .process(
+                oci::ProcessBuilder::default()
+                    .env(vec!["PCIDEVICE_x=0000:00:02.1".to_string()])
+                    .build()
+                    .unwrap(),
+            )
+            .linux(Linux::default())
+            .build()
+            .unwrap();
+
+        let res = add_devices(&cid, &logger, &[], &mut spec, &sandbox).await;
+        assert!(res.is_ok(), "{}", res.unwrap_err());
+
+        let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
+        assert_eq!(env, &vec!["PCIDEVICE_x=0000:02:00.0".to_string()]);
     }
 
     #[tokio::test]
