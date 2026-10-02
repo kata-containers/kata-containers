@@ -348,6 +348,10 @@ impl RuntimeHandlerManager {
                     .await
                     .context("failed to restore the sandbox")?;
                 sandbox
+                    .confirm_restored_vmm_exit()
+                    .await
+                    .context("failed to stop the restored VMM")?;
+                sandbox
                     .cleanup()
                     .await
                     .context("failed to cleanup the resource")?;
@@ -704,17 +708,14 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::ShutdownContainer)
             }
             TaskRequest::WaitProcess(process_id) => {
+                // Wait returns when the process exits, as the Go runtime does;
+                // the VM teardown runs in Sandbox::wait_process. containerd
+                // treats the Wait reply as the exit, so for the sandbox
+                // container it must not run ahead of TaskExit, which a
+                // rootless or passthrough sandbox holds until its teardown.
                 let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
                 if cm.is_sandbox_container(&process_id).await {
-                    sandbox.stop().await.context("stop sandbox")?;
-
-                    // Release sandbox resources (cgroup, network, mounts, ...)
-                    // as soon as the sandbox container exits instead of waiting
-                    // for an explicit ShutdownContainer/Delete RPC.  Engines
-                    // like Docker only send those when the container is removed
-                    // (e.g. with `--rm`); without this the sandbox cgroup would
-                    // leak and collide with the next run.
-                    sandbox.cleanup().await.context("cleanup sandbox")?;
+                    sandbox.wait_exit_published().await;
                 }
                 Ok(TaskResponse::WaitProcess(exit_status))
             }

@@ -84,9 +84,16 @@ impl Hypervisor for Qemu {
         //wait until the qemu process exited.
         waiter.0.recv().await;
 
-        let inner = self.inner.read().await;
-        if let Ok(exit_code) = inner.wait_vm().await {
-            waiter.1 = exit_code;
+        // Take ownership while holding the lock, then release it before
+        // waiting. stop_vm() must remain able to signal a slow-exiting QEMU.
+        let process = {
+            let inner = self.inner.read().await;
+            inner.take_qemu_process().await
+        };
+        if let Ok(mut process) = process {
+            let status = process.wait().await?;
+            waiter.1 = status.code().unwrap_or(0);
+            self.inner.read().await.mark_exited();
         }
 
         Ok(waiter.1)

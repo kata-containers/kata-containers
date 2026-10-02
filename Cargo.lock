@@ -7196,6 +7196,7 @@ dependencies = [
  "containerd-shim-protos",
  "kata-types",
  "logging",
+ "persist",
  "runtimes",
  "slog",
  "slog-scope",
