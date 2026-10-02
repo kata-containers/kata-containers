@@ -742,12 +742,18 @@ impl RuntimeHandlerManager {
                 let pid = shim_pid.pid;
                 let process_type = process_id.process_type;
                 let container_id = process_id.container_id().to_string();
-                tokio::spawn(async move {
-                    let result = sandbox.wait_process(cm, process_id, pid).await;
-                    if let Err(e) = result {
-                        error!(sl!(), "sandbox wait process error: {:?}", e);
-                    }
-                });
+                // CreateContainer already spawned the container's waiter. A
+                // second one would publish TaskExit twice, and for the sandbox
+                // container it queues behind the first waiter's teardown and
+                // then fails to find the deleted container.
+                if process_type == ProcessType::Exec {
+                    tokio::spawn(async move {
+                        let result = sandbox.wait_process(cm, process_id, pid).await;
+                        if let Err(e) = result {
+                            error!(sl!(), "sandbox wait process error: {:?}", e);
+                        }
+                    });
+                }
 
                 if process_type == ProcessType::Container {
                     let event = TaskStart {
@@ -1132,6 +1138,195 @@ mod tests {
             .try_recv()
             .expect("an Action::Shutdown message must be sent to stop the daemon");
         assert!(matches!(msg.action, Action::Shutdown));
+    }
+
+    // Records every process a waiter is spawned for.
+    struct WaiterRecordingSandbox {
+        waiters: tokio::sync::mpsc::UnboundedSender<ContainerProcess>,
+    }
+
+    #[async_trait::async_trait]
+    impl Sandbox for WaiterRecordingSandbox {
+        async fn start(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn start_template(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn stop(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn cleanup(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn shutdown(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn status(&self) -> Result<common::types::SandboxStatus> {
+            unimplemented!()
+        }
+        async fn wait(&self) -> Result<common::types::SandboxExitInfo> {
+            unimplemented!()
+        }
+        async fn set_iptables(&self, _is_ipv6: bool, _data: Vec<u8>) -> Result<Vec<u8>> {
+            unimplemented!()
+        }
+        async fn get_iptables(&self, _is_ipv6: bool) -> Result<Vec<u8>> {
+            unimplemented!()
+        }
+        async fn direct_volume_stats(&self, _volume_path: &str) -> Result<String> {
+            unimplemented!()
+        }
+        async fn direct_volume_resize(&self, _req: agent::ResizeVolumeRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn agent_sock(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn wait_process(
+            &self,
+            _cm: Arc<dyn common::ContainerManager>,
+            process_id: ContainerProcess,
+            _shim_pid: u32,
+        ) -> Result<()> {
+            self.waiters.send(process_id).unwrap();
+            Ok(())
+        }
+        async fn wait_exit_published(&self) {}
+        async fn rescan_network(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn agent_metrics(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn hypervisor_metrics(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn set_policy(&self, _policy: &str) -> Result<()> {
+            unimplemented!()
+        }
+    }
+
+    struct StartingContainerManager;
+
+    #[async_trait::async_trait]
+    impl common::ContainerManager for StartingContainerManager {
+        async fn create_container(
+            &self,
+            _config: common::types::ContainerConfig,
+            _spec: oci::Spec,
+        ) -> Result<common::types::PID> {
+            unimplemented!()
+        }
+        async fn pause_container(&self, _id: &common::types::ContainerID) -> Result<()> {
+            unimplemented!()
+        }
+        async fn resume_container(&self, _id: &common::types::ContainerID) -> Result<()> {
+            unimplemented!()
+        }
+        async fn stats_container(
+            &self,
+            _id: &common::types::ContainerID,
+        ) -> Result<common::types::StatsInfo> {
+            unimplemented!()
+        }
+        async fn update_container(&self, _req: common::types::UpdateRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn connect_container(
+            &self,
+            _id: &common::types::ContainerID,
+        ) -> Result<common::types::PID> {
+            unimplemented!()
+        }
+        async fn close_process_io(&self, _process_id: &ContainerProcess) -> Result<()> {
+            unimplemented!()
+        }
+        async fn delete_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::ProcessStateInfo> {
+            unimplemented!()
+        }
+        async fn exec_process(&self, _req: common::types::ExecProcessRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn kill_process(&self, _req: &common::types::KillRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn resize_process_pty(&self, _req: &common::types::ResizePTYRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn start_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::PID> {
+            Ok(common::types::PID::new(42))
+        }
+        async fn state_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::ProcessStateInfo> {
+            unimplemented!()
+        }
+        async fn wait_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::ProcessExitStatus> {
+            unimplemented!()
+        }
+        async fn pid(&self) -> Result<common::types::PID> {
+            unimplemented!()
+        }
+        async fn need_shutdown_sandbox(&self, _req: &ShutdownRequest) -> bool {
+            unimplemented!()
+        }
+        async fn is_sandbox_container(&self, _process_id: &ContainerProcess) -> bool {
+            false
+        }
+    }
+
+    // CreateContainer already spawns the waiter for a container, so a second
+    // one from StartProcess would publish TaskExit twice, and for the sandbox
+    // container fail to find it once DeleteProcess has removed it. Execs never
+    // go through CreateContainer and rely on the StartProcess waiter.
+    #[rstest]
+    #[case::container_has_no_second_waiter("", false)]
+    #[case::exec_gets_its_waiter("exec-1", true)]
+    #[tokio::test]
+    async fn test_start_process_spawns_waiter_only_for_exec(
+        #[case] exec_id: &str,
+        #[case] waiter_expected: bool,
+    ) {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox {
+                waiters: waiters_tx,
+            }),
+            container_manager: Arc::new(StartingContainerManager),
+        }));
+
+        let process_id = ContainerProcess::new("test-cid", exec_id).unwrap();
+        let resp = manager
+            .handler_task_request(TaskRequest::StartProcess(process_id))
+            .await
+            .unwrap();
+        assert!(matches!(resp, TaskResponse::StartProcess(pid) if pid.pid == 42));
+
+        let waiter = tokio::time::timeout(std::time::Duration::from_millis(500), waiters_rx.recv())
+            .await
+            .ok()
+            .flatten();
+        match (waiter, waiter_expected) {
+            (Some(waited), true) => assert_eq!(waited.exec_id(), exec_id),
+            (None, false) => {}
+            (waited, _) => panic!(
+                "exec id {:?}: expected a waiter: {}, got {:?}",
+                exec_id, waiter_expected, waited
+            ),
+        }
     }
 
     #[test]
