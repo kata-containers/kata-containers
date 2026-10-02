@@ -304,7 +304,7 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
         "@NYDUS_OVERLAYFS_PATH@",
         &format!(
             "{}/{NYDUS_FOR_KATA_TEE}/nydus-overlayfs",
-            &config.host_install_dir
+            config.host_install_dir
         ),
     );
 
@@ -313,14 +313,14 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
         "@CONTAINERD_NYDUS_GRPC_BINARY@",
         &format!(
             "{}/{NYDUS_FOR_KATA_TEE}/containerd-nydus-grpc",
-            &config.host_install_dir
+            config.host_install_dir
         ),
     );
     service_content = service_content.replace(
         "@CONFIG_GUEST_PULLING@",
         &format!(
             "{}/{NYDUS_FOR_KATA_TEE}/config-guest-pulling.toml",
-            &config.host_install_dir
+            config.host_install_dir
         ),
     );
 
