@@ -36,6 +36,7 @@ pub mod remote;
 pub mod selinux;
 pub use kernel_param::Param;
 pub mod utils;
+pub(crate) mod vmdk;
 use std::collections::HashMap;
 
 #[cfg(all(
