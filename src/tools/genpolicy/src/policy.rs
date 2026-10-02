@@ -564,11 +564,11 @@ impl AgentPolicy {
                 // ConfigMap and Secret documents contain additional input for policy generation.
                 if kind.eq("ConfigMap") {
                     let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
-                    debug!("{:#?}", &config_map);
+                    debug!("{:#?}", config_map);
                     config_maps.push(config_map);
                 } else if kind.eq("Secret") {
                     let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
-                    debug!("{:#?}", &secret);
+                    debug!("{:#?}", secret);
                     secrets.push(secret);
                 }
 
@@ -605,7 +605,7 @@ impl AgentPolicy {
             })
         } else {
             panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -p parameter.",
-                &config.rego_rules_path);
+                config.rego_rules_path);
         }
     }
 
@@ -649,7 +649,7 @@ impl AgentPolicy {
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
-        let policy = format!("{}\npolicy_data := {json_data}", &self.rules);
+        let policy = format!("{}\npolicy_data := {json_data}", self.rules);
         let mut initdata = self.config.initdata.clone();
         initdata.insert_data("policy.rego", policy.clone());
         let encoded = kata_types::initdata::encode_initdata(&initdata);
@@ -960,7 +960,7 @@ impl AgentPolicy {
         let mut process = containerd::get_process(is_privileged, &self.config.settings.common);
         debug!(
             "get_container_process: after containerd::get_process: process = {:?}",
-            &process
+            process
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -968,7 +968,7 @@ impl AgentPolicy {
         yaml_container.apply_capabilities(&mut process.Capabilities, &self.config.settings.common);
         debug!(
             "get_container_process: after apply_capabilities: process = {:?}",
-            &process
+            process
         );
 
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
@@ -983,7 +983,7 @@ impl AgentPolicy {
         );
         debug!(
             "get_container_process: after registry.get_processs: process = {:?}",
-            &process
+            process
         );
 
         // containerd applies WithAdditionalGIDs to workload containers even
@@ -1020,19 +1020,19 @@ impl AgentPolicy {
         );
         debug!(
             "get_container_process: after get_env_variables: User = {:?}",
-            &process.User
+            process.User
         );
 
         substitute_env_variables(&mut process.Env);
         debug!(
             "get_container_process: after substitute_env_variables: User = {:?}",
-            &process.User
+            process.User
         );
 
         substitute_args_env_variables(&mut process.Args, &process.Env);
         debug!(
             "get_container_process: after substitute_args_env_variables: User = {:?}",
-            &process.User
+            process.User
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -1040,7 +1040,7 @@ impl AgentPolicy {
         c_settings.apply_process_defaults(&mut process);
         debug!(
             "get_container_process: after c_settings.apply_process_defaults: Args = {:?}, Env = {:?}",
-            &process.Args, &process.Env
+            process.Args, process.Env
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -1049,7 +1049,7 @@ impl AgentPolicy {
         resource.get_process_fields(&mut process, &mut must_check_passwd, is_pause_container);
         debug!(
             "get_container_process: after resource.get_process_fields: must_check_passwd = {must_check_passwd}, User = {:?}",
-            &process.User
+            process.User
         );
 
         if must_check_passwd {
@@ -1066,19 +1066,19 @@ impl AgentPolicy {
             process.User.GID = gid;
             debug!(
                 "get_container_process: after registry.get_gid_from_passwd_uid: User = {:?}",
-                &process.User
+                process.User
             );
 
             process.User.AdditionalGids.clear();
             debug!(
                 "get_container_process: cleared AdditionalGids due to runAsUser = {}, User = {:?}",
-                process.User.UID, &process.User
+                process.User.UID, process.User
             );
 
             process.User.AdditionalGids.insert(gid);
             debug!(
                 "get_container_process: inserted GID = {gid} into AdditionalGids: User = {:?}",
-                &process.User
+                process.User
             );
         }
 
@@ -1090,7 +1090,7 @@ impl AgentPolicy {
         );
         debug!(
             "get_container_process: after apply_pod_fs_group_and_supplemental_groups: User = {:?}",
-            &process.User
+            process.User
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -1098,12 +1098,12 @@ impl AgentPolicy {
         yaml_container.get_process_fields(&mut process);
         debug!(
             "get_container_process: after yaml_container.get_process_fields: User = {:?}",
-            &process.User
+            process.User
         );
 
         debug!(
             "get_container_process: returning: User = {:?}",
-            &process.User
+            process.User
         );
         self.exit_if_guest_pull_needs_security_context(
             resource,
@@ -1165,11 +1165,11 @@ async fn parse_config_file(
             // ConfigMap and Secret documents contain additional input for policy generation.
             if kind.eq("ConfigMap") {
                 let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
-                debug!("{:#?}", &config_map);
+                debug!("{:#?}", config_map);
                 k8sRes.push(K8sEnvFromSource::ConfigMap(config_map));
             } else if kind.eq("Secret") {
                 let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
-                debug!("{:#?}", &secret);
+                debug!("{:#?}", secret);
                 k8sRes.push(K8sEnvFromSource::Secret(secret));
             }
         }
@@ -1187,8 +1187,8 @@ fn substitute_env_variables(env: &mut Vec<String>) {
             if components.len() == 2 {
                 if let Some((start, end)) = find_subst_target(components[1]) {
                     if let Some(new_value) = substitute_variable(components[1], start, end, env) {
-                        let new_var = format!("{}={new_value}", &components[0]);
-                        debug!("Replacing env variable <{}> with <{new_var}>", &env[i]);
+                        let new_var = format!("{}={new_value}", components[0]);
+                        debug!("Replacing env variable <{}> with <{new_var}>", env[i]);
                         env[i] = new_var;
                         substituted = true;
                     }
@@ -1236,12 +1236,12 @@ fn substitute_variable(
     assert!(name_start < name_end);
     assert!(name_end < env_var.len());
     let name = env_var[name_start..name_end].to_string();
-    debug!("Searching for the value of <{}>", &name);
+    debug!("Searching for the value of <{}>", name);
 
     for other_var in env {
         let components: Vec<&str> = other_var.split('=').collect();
         if components[0].eq(&name) {
-            debug!("Found {} in <{}>", &name, &other_var);
+            debug!("Found {} in <{}>", name, other_var);
             if components.len() == 2 {
                 let mut replace = true;
                 let value = &components[1];
@@ -1284,7 +1284,7 @@ fn substitute_arg_env_variables(arg: &mut String, env: &Vec<String>) {
                 debug!(
                     "substitute_arg_env_variables: replacing {} with {}",
                     &arg[start..end],
-                    &new_value
+                    new_value
                 );
                 *arg = new_value;
                 substituted = true;

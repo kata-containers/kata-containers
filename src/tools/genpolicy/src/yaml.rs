@@ -165,7 +165,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &config_map);
+            debug!("{:#?}", config_map);
             Ok((boxed::Box::new(config_map), header.kind))
         }
         "DaemonSet" => {
@@ -173,7 +173,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &daemon);
+            debug!("{:#?}", daemon);
             Ok((boxed::Box::new(daemon), header.kind))
         }
         "Deployment" => {
@@ -181,7 +181,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &deployment);
+            debug!("{:#?}", deployment);
             Ok((boxed::Box::new(deployment), header.kind))
         }
         "Job" => {
@@ -189,7 +189,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &job);
+            debug!("{:#?}", job);
             Ok((boxed::Box::new(job), header.kind))
         }
         "CronJob" => {
@@ -197,7 +197,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &cronJob);
+            debug!("{:#?}", cronJob);
             Ok((boxed::Box::new(cronJob), header.kind))
         }
         "List" => {
@@ -205,7 +205,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &list);
+            debug!("{:#?}", list);
             Ok((boxed::Box::new(list), header.kind))
         }
         "Pod" => {
@@ -213,7 +213,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &pod);
+            debug!("{:#?}", pod);
             Ok((boxed::Box::new(pod), header.kind))
         }
         "ReplicaSet" => {
@@ -221,7 +221,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &set);
+            debug!("{:#?}", set);
             Ok((boxed::Box::new(set), header.kind))
         }
         "ReplicationController" => {
@@ -230,7 +230,7 @@ pub fn new_k8s_resource(
                     handle_unused_field(&path.to_string(), silent_unsupported_fields);
                 })
                 .unwrap();
-            debug!("{:#?}", &controller);
+            debug!("{:#?}", controller);
             Ok((boxed::Box::new(controller), header.kind))
         }
         "Secret" => {
@@ -238,7 +238,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &secret);
+            debug!("{:#?}", secret);
             Ok((boxed::Box::new(secret), header.kind))
         }
         "StatefulSet" => {
@@ -246,7 +246,7 @@ pub fn new_k8s_resource(
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
             })
             .unwrap();
-            debug!("{:#?}", &set);
+            debug!("{:#?}", set);
             Ok((boxed::Box::new(set), header.kind))
         }
         "ClusterRole"
@@ -265,7 +265,7 @@ pub fn new_k8s_resource(
             let no_policy = no_policy::NoPolicyResource {
                 yaml: yaml.to_string(),
             };
-            debug!("{:#?}", &no_policy);
+            debug!("{:#?}", no_policy);
             Ok((boxed::Box::new(no_policy), header.kind))
         }
         _ => todo!("Unsupported YAML spec kind: {}", kind),
@@ -332,7 +332,7 @@ pub fn get_container_mounts_and_storages(
     // configuration layer.
     if let Some(volumes) = &container.registry.config_layer.config.Volumes {
         for volume in volumes {
-            debug!("get_container_mounts_and_storages: {:?}", &volume);
+            debug!("get_container_mounts_and_storages: {:?}", volume);
 
             mount_and_storage::get_image_mount_and_storage(settings, policy_mounts, volume.0);
         }
@@ -418,7 +418,7 @@ pub fn apply_pod_fs_group_and_supplemental_groups(
         process.User.AdditionalGids.insert(gid);
         debug!(
             "apply_pod_fs_group_and_supplemental_groups: inserted fs_group = {gid} into AdditionalGids, User = {:?}",
-            &process.User
+            process.User
         );
     }
 
@@ -428,7 +428,7 @@ pub fn apply_pod_fs_group_and_supplemental_groups(
         });
         debug!(
             "apply_pod_fs_group_and_supplemental_groups: inserted supplementalGroups = {:?} into AdditionalGids, User = {:?}",
-            &supplemental_groups, &process.User
+            supplemental_groups, process.User
         );
     }
 }
@@ -449,7 +449,7 @@ pub fn get_process_fields(
             process.User.UID = uid.try_into().unwrap();
             debug!(
                 "get_process_fields: set UID from runAsUser = {}, User = {:?}",
-                process.User.UID, &process.User
+                process.User.UID, process.User
             );
 
             // Changing the UID can break the GID mapping
@@ -473,19 +473,19 @@ pub fn get_process_fields(
             process.User.GID = gid.try_into().unwrap();
             debug!(
                 "get_process_fields: set GID from runAsGroup = {}, User = {:?}",
-                process.User.GID, &process.User
+                process.User.GID, process.User
             );
 
             process.User.AdditionalGids.clear();
             debug!(
                 "get_process_fields: cleared AdditionalGids due to runAsGroup = {}, User = {:?}",
-                process.User.GID, &process.User
+                process.User.GID, process.User
             );
 
             process.User.AdditionalGids.insert(process.User.GID);
             debug!(
                 "get_process_fields: inserted GID = {} into AdditionalGids, User = {:?}",
-                process.User.GID, &process.User
+                process.User.GID, process.User
             );
 
             *must_check_passwd = false;
@@ -495,7 +495,7 @@ pub fn get_process_fields(
             process.NoNewPrivileges = !allow
         }
 
-        debug!("get_process_fields: returning User = {:?}", &process.User);
+        debug!("get_process_fields: returning User = {:?}", process.User);
     }
 }
 
