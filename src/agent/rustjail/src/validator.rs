@@ -202,7 +202,7 @@ fn sysctl(oci: &Spec) -> Result<()> {
     let sysctl_hash = linux.sysctl().as_ref().unwrap_or(&default_hash);
     let default_vec = vec![];
     let linux_namespaces = linux.namespaces().as_ref().unwrap_or(&default_vec);
-    for (key, _) in sysctl_hash.iter() {
+    for key in sysctl_hash.keys() {
         if SYSCTLS.contains_key(key.as_str()) || key.starts_with("fs.mqueue.") {
             if contain_namespace(linux_namespaces, "ipc") {
                 continue;

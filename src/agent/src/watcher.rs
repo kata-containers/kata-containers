@@ -577,7 +577,7 @@ impl BindWatcher {
                 interval.tick().await;
 
                 debug!(&logger, "Looking for changed files");
-                for (_, entries) in sandbox_storages.lock().await.iter_mut() {
+                for entries in sandbox_storages.lock().await.values_mut() {
                     if let Err(err) = entries.check(&logger).await {
                         // We don't fail background loop, but rather log error instead.
                         warn!(logger, "Check failed: {}", err);
