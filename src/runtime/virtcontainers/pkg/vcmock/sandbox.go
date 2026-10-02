@@ -131,7 +131,7 @@ func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 // StatsContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatsContainer(ctx context.Context, contID string) (vc.ContainerStats, error) {
 	if s.StatsContainerFunc != nil {
-		return s.StatsContainerFunc(contID)
+		return s.StatsContainerFunc(ctx, contID)
 	}
 	return vc.ContainerStats{}, nil
 }
@@ -173,6 +173,9 @@ func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string
 
 // SignalProcess implements the VCSandbox function of the same name.
 func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error {
+	if s.SignalProcessFunc != nil {
+		return s.SignalProcessFunc(ctx, containerID, processID, signal, all)
+	}
 	return nil
 }
 

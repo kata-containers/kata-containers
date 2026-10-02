@@ -47,7 +47,7 @@ type Sandbox struct {
 	StopContainerFunc        func(contID string, force bool) (vc.VCContainer, error)
 	KillContainerFunc        func(contID string, signal syscall.Signal, all bool) error
 	StatusContainerFunc      func(contID string) (vc.ContainerStatus, error)
-	StatsContainerFunc       func(contID string) (vc.ContainerStats, error)
+	StatsContainerFunc       func(ctx context.Context, contID string) (vc.ContainerStats, error)
 	PauseContainerFunc       func(contID string) error
 	ResumeContainerFunc      func(contID string) error
 	StatusFunc               func() vc.SandboxStatus
@@ -55,7 +55,7 @@ type Sandbox struct {
 	MonitorFunc              func() (chan error, error)
 	UpdateContainerFunc      func(containerID string, resources specs.LinuxResources) error
 	WaitProcessFunc          func(containerID, processID string) (int32, error)
-	SignalProcessFunc        func(containerID, processID string, signal syscall.Signal, all bool) error
+	SignalProcessFunc        func(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcessFunc       func(containerID, processID string, height, width uint32) error
 	IOStreamFunc             func(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
 	AddDeviceFunc            func(info config.DeviceInfo) (api.Device, error)
