@@ -303,7 +303,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "eae0bf63a3a9db7721f86e0a2b0b9941a7fcba3a"
+    version: "0a1c89629750f422b7f23e5436fd14e32367b5af"
     # Guest Ubuntu release qualifier published by coco-extension-image.yml
     # (tags are "<version>-<variant>", e.g. "<sha>-ubuntu26.04"). The
     # extension ships no libc, so this must match the guest rootfs ABI.
@@ -311,11 +311,11 @@ externals:
     # Scratch OCI container image (guest-components "Publish OCI container
     # image" step). Consumed by monolithic confidential rootfs builds.
     # yamllint disable-line rule:line-length
-    container_image: "ghcr.io/confidential-containers/guest-components/coco-extension"
+    container_image: "ghcr.io/confidential-containers/guest-components/coco-extension-pr"
     # EROFS + dm-verity disk image (guest-components "Publish disk image with
     # ORAS" step). Consumed by the runtime-rs composable extension path.
     # yamllint disable-line rule:line-length
-    extension_image: "ghcr.io/confidential-containers/guest-components/coco-extension-disk"
+    extension_image: "ghcr.io/confidential-containers/guest-components/coco-extension-disk-pr"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"

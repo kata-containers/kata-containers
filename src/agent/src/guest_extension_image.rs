@@ -510,6 +510,7 @@ select        = "${attester_variant}"
 id           = "confidential-data-hub"
 level        = 2
 path         = "usr/local/bin/confidential-data-hub"
+optional_args = [{ when = "guest_services_dir", args = ["--services-dir", "${guest_services_dir}"] }]
 config       = "${cdh_config_path}"
 env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket  = "${cdh_socket}"
@@ -692,6 +693,25 @@ schema_version = 1
                 "/run/initdata/initdata.toml"
             ]
         );
+    }
+
+    #[test]
+    fn cdh_services_dir_follows_context() {
+        let dir = tempdir().unwrap();
+        write_manifest(dir.path(), COCO_EXTENSION_NAME, COCO_MANIFEST);
+
+        let specs = launch_plan_in_root(dir.path(), COCO_EXTENSION_NAME, 2, &ctx())
+            .unwrap()
+            .unwrap();
+        assert!(specs[1].args.is_empty());
+
+        let mut ctx = ctx();
+        ctx.insert("guest_services_dir".into(), "/run/guest-services".into());
+        let specs = launch_plan_in_root(dir.path(), COCO_EXTENSION_NAME, 2, &ctx)
+            .unwrap()
+            .unwrap();
+        assert_eq!(specs[1].id, "confidential-data-hub");
+        assert_eq!(specs[1].args, vec!["--services-dir", "/run/guest-services"]);
     }
 
     #[test]
