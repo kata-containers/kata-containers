@@ -4,9 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{fs::File, os::unix::io::AsRawFd};
+use std::{fs::File, io::ErrorKind, os::unix::io::AsRawFd, path::Path};
 
 use anyhow::{Context, Result};
+use nix::errno::Errno;
+use nix::mount::{umount2, MntFlags};
 use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use rand::rng as thread_rng;
@@ -67,6 +69,23 @@ pub fn generate_netns_name() -> String {
     )
 }
 
+/// Unmount a network namespace and remove its file, ignoring an absent mount or file.
+///
+/// The caller must verify that Kata owns the namespace before calling this function;
+/// ownership is not checked here, and caller-owned namespaces must survive teardown.
+pub fn remove_netns(path: &Path) -> Result<()> {
+    match umount2(path, MntFlags::MNT_DETACH) {
+        Ok(()) | Err(Errno::EINVAL) | Err(Errno::ENOENT) => {}
+        Err(e) => return Err(e).with_context(|| format!("unmount netns {}", path.display())),
+    }
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != ErrorKind::NotFound => {
+            Err(e).with_context(|| format!("remove netns file {}", path.display()))
+        }
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +112,35 @@ mod tests {
         assert_ne!(name1, name2);
         assert_ne!(name2, name3);
         assert_ne!(name1, name3);
+    }
+
+    #[test]
+    fn test_remove_netns() {
+        skip_if_not_root!();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(generate_netns_name());
+        File::create(&path).unwrap();
+        nix::mount::mount(
+            Some("/proc/self/ns/net"),
+            &path,
+            None::<&str>,
+            nix::mount::MsFlags::MS_BIND,
+            None::<&str>,
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::remove_file(&path).unwrap_err().raw_os_error(),
+            Some(libc::EBUSY)
+        );
+        remove_netns(&path).unwrap();
+        assert!(!path.exists());
+        remove_netns(&path).unwrap();
+
+        // File exists but was never mounted.
+        File::create(&path).unwrap();
+        remove_netns(&path).unwrap();
+        assert!(!path.exists());
     }
 }

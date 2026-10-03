@@ -59,6 +59,7 @@ use hypervisor::{
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
+use kata_sys_util::netns::remove_netns;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
@@ -186,6 +187,7 @@ pub struct VirtSandbox {
 struct CleanupSteps {
     hypervisor: bool,
     resources: bool,
+    netns: bool,
     rootless_runtime_dir: bool,
 }
 
@@ -1196,6 +1198,15 @@ impl VirtSandbox {
             .unwrap_or(false)
     }
 
+    fn created_netns(&self) -> Option<&str> {
+        let network_env = &self.sandbox_config.as_ref()?.network_env;
+        if network_env.network_created {
+            network_env.netns.as_deref()
+        } else {
+            None
+        }
+    }
+
     async fn should_defer_network(&self) -> Result<bool> {
         if !self.is_factory_enabled() {
             return Ok(false);
@@ -1725,7 +1736,7 @@ impl Sandbox for VirtSandbox {
         // that arrives later blocks rather than skipping, so the shim does not
         // exit on top of a teardown that is still running.
         let mut steps = self.cleanup_steps.lock().await;
-        if steps.hypervisor && steps.resources && steps.rootless_runtime_dir {
+        if steps.hypervisor && steps.resources && steps.netns && steps.rootless_runtime_dir {
             return Ok(());
         }
 
@@ -1759,7 +1770,18 @@ impl Sandbox for VirtSandbox {
             }
         }
 
-        if steps.resources && steps.hypervisor && !steps.rootless_runtime_dir {
+        // A mounted rootless namespace prevents removal of the runtime directory.
+        if steps.resources && steps.hypervisor && !steps.netns {
+            match self.created_netns() {
+                Some(path) => match remove_netns(Path::new(path)) {
+                    Ok(()) => steps.netns = true,
+                    Err(e) => errors.push(e),
+                },
+                None => steps.netns = true,
+            }
+        }
+
+        if steps.netns && !steps.rootless_runtime_dir {
             if let Some(uid) = rootless_uid {
                 let path = vmm_user_runtime_dir(uid);
                 match remove_vmm_user_runtime_dir(uid).with_context(|| {
