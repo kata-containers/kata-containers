@@ -5,20 +5,20 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Exercises the devkit debug guest extension through the agent debug console
-# (kata-ctl exec <sandbox-id>) on the NVIDIA CPU runtime-rs class: with the
-# kata-<shim>-devkit RuntimeClass, the console drops into the rich Ubuntu-based
+# (kata-ctl exec <sandbox-id>) on the NVIDIA CPU, Cloud Hypervisor, and Dragonball
+# runtime-rs classes. With the kata-<shim>-devkit RuntimeClass, the console drops
+# into the rich Ubuntu-based
 # devkit shell overlaid on the read-only guest rootfs.
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
-# The devkit debug console is a non-confidential debugging aid. For now it is
-# validated only on the (non-confidential) NVIDIA CPU runtime-rs class; other
-# hypervisors don't ship it in CI.
+# The devkit debug console is a non-confidential debugging aid, validated on
+# runtime-rs classes with guest extension support.
 devkit_supported() {
 	case "${KATA_HYPERVISOR}" in
-		qemu-nvidia-cpu-runtime-rs) return 0 ;;
+		qemu-nvidia-cpu-runtime-rs | clh-runtime-rs | dragonball) return 0 ;;
 		*) return 1 ;;
 	esac
 }

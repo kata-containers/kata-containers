@@ -142,6 +142,15 @@ impl CloudHypervisorInner {
         let mut extra_params = KernelParams::from_string(&extra_options.join(" "));
         params.append(&mut extra_params);
 
+        // Emit an activation parameter even for extensions without dm-verity.
+        // An empty value renders as a bare key, as it does for QEMU.
+        for extra in &cfg.guest_extension_images {
+            params.append(&mut KernelParams::from_string(&format!(
+                "kata.extension.{}.verity_params={}",
+                extra.name, extra.verity_params
+            )));
+        }
+
         // Finally, add the user-specified options at the end
         // (so they will take priority).
         params.append(&mut KernelParams::from_string(&cfg.boot_info.kernel_params));
@@ -1133,6 +1142,36 @@ mod tests {
                 assert!(result.is_ok(), "confidential_guest=false: {:?}", result);
             }
         }
+    }
+
+    #[actix_rt::test]
+    async fn test_guest_extension_kernel_params() {
+        use kata_types::config::hypervisor::GuestExtensionImage;
+
+        let mut ch = CloudHypervisorInner::default();
+        ch.config.guest_extension_images = vec![
+            GuestExtensionImage {
+                name: "coco".into(),
+                path: "/coco.img".into(),
+                verity_params: "root_hash=abc,salt=def,data_blocks=1234".into(),
+            },
+            GuestExtensionImage {
+                name: "devkit".into(),
+                path: "/devkit.img".into(),
+                verity_params: String::new(),
+            },
+        ];
+
+        let params = ch.get_kernel_params().await.unwrap();
+        let tokens: Vec<&str> = params.split_whitespace().collect();
+        assert!(tokens.contains(
+            &"kata.extension.coco.verity_params=root_hash=abc,salt=def,data_blocks=1234"
+        ));
+        assert!(tokens.contains(&"kata.extension.devkit.verity_params"));
+
+        ch.config.guest_extension_images.clear();
+        let params = ch.get_kernel_params().await.unwrap();
+        assert!(!params.contains("kata.extension."));
     }
 
     #[actix_rt::test]

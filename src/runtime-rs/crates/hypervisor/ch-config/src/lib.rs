@@ -140,6 +140,8 @@ pub struct DiskConfig {
     pub rate_limiter_config: Option<RateLimiterConfig>,
     #[serde(default)]
     pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial: Option<String>,
     // For testing use only. Not exposed in API.
     #[serde(default)]
     pub disable_io_uring: bool,
@@ -168,6 +170,7 @@ impl Default for DiskConfig {
             vhost_socket: None,
             rate_limiter_config: None,
             id: None,
+            serial: None,
             disable_io_uring: false,
             pci_segment: 0,
             sparse: default_diskconfig_sparse(),

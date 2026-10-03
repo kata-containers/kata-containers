@@ -29,6 +29,7 @@ use dragonball::device_manager::{
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
 };
 use kata_types::config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME;
+use virtio_bindings::bindings::virtio_blk::VIRTIO_BLK_ID_BYTES;
 
 const MB_TO_B: u32 = 1024 * 1024;
 const DEFAULT_VIRTIO_FS_NUM_QUEUES: i32 = 1;
@@ -71,6 +72,7 @@ impl DragonballInner {
                     is_direct,
                     driver_option,
                     sparse,
+                    serial_override,
                 ) = {
                     let dev = block_device.lock().await;
                     let cfg = &dev.config;
@@ -82,6 +84,7 @@ impl DragonballInner {
                         cfg.is_direct,
                         cfg.driver_option.clone(),
                         cfg.discard_unmap,
+                        cfg.serial_override.clone(),
                     )
                 };
 
@@ -109,6 +112,11 @@ impl DragonballInner {
                         is_direct,
                         use_pci_bus,
                         sparse,
+                        if serial_override.is_empty() {
+                            None
+                        } else {
+                            Some(serial_override.as_str())
+                        },
                     )
                     .context("add block modern device")?;
 
@@ -137,6 +145,7 @@ impl DragonballInner {
                     None,
                     None,
                     false,
+                    None,
                 )
                 .context("add vhost user based block device")?;
                 Ok(DeviceType::VhostUserBlk(block))
@@ -268,7 +277,13 @@ impl DragonballInner {
         is_direct: Option<bool>,
         use_pci_bus: Option<bool>,
         sparse: bool,
+        serial: Option<&str>,
     ) -> Result<Option<i32>> {
+        if serial.is_some_and(|serial| serial.len() > VIRTIO_BLK_ID_BYTES as usize) {
+            return Err(anyhow!(
+                "virtio-blk serial must not exceed {VIRTIO_BLK_ID_BYTES} bytes"
+            ));
+        }
         let jailed_drive = self.get_resource(path, id).context("get resource")?;
         self.cached_block_devices.insert(id.to_string());
 
@@ -295,6 +310,7 @@ impl DragonballInner {
 
         let blk_cfg = BlockDeviceConfigInfo {
             drive_id: id.to_string(),
+            serial: serial.map(str::to_owned),
             device_type: BlockDeviceType::get_type(path),
             path_on_host: PathBuf::from(jailed_drive.clone()),
             is_direct: is_direct.unwrap_or(self.config.blockdev_info.block_device_cache_direct),
@@ -542,6 +558,44 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::dragonball::DragonballInner;
+
+    #[actix_rt::test]
+    async fn test_queue_guest_extension_images_before_boot() {
+        use crate::{BlockConfigModern, BlockDeviceModern, DeviceType};
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let (tx, _) = mpsc::channel(1);
+        let mut dragonball = DragonballInner::new(tx);
+        for name in ["coco", "devkit"] {
+            let device = BlockDeviceModern {
+                device_id: name.into(),
+                attach_count: 0,
+                config: BlockConfigModern {
+                    path_on_host: format!("/{name}.img"),
+                    is_readonly: true,
+                    driver_option: crate::KATA_BLK_DEV_TYPE.into(),
+                    serial_override: format!("extension-{name}"),
+                    ..Default::default()
+                },
+            };
+            dragonball
+                .add_device(DeviceType::BlockModern(Arc::new(Mutex::new(device))))
+                .await
+                .unwrap();
+        }
+        for name in ["coco", "devkit"] {
+            let DeviceType::BlockModern(device) = dragonball.pending_devices.pop().unwrap() else {
+                panic!("expected a cold-plugged block device");
+            };
+            let device = device.lock().await;
+            assert_eq!(device.config.path_on_host, format!("/{name}.img"));
+            assert_eq!(device.config.serial_override, format!("extension-{name}"));
+            assert!(device.config.is_readonly);
+            assert_eq!(device.config.driver_option, crate::KATA_BLK_DEV_TYPE);
+        }
+        assert!(dragonball.pending_devices.is_empty());
+    }
 
     #[test]
     fn test_parse_inline_virtiofs_args() {

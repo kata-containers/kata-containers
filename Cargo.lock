@@ -3046,6 +3046,7 @@ dependencies = [
  "tracing",
  "ttrpc",
  "ttrpc-codegen",
+ "virtio-bindings",
  "vmm-sys-util",
 ]
 

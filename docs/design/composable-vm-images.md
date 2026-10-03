@@ -92,6 +92,12 @@ path = "/opt/kata/share/kata-containers/kata-containers-coco-extension.img"
 verity_params = "root_hash=abc...,salt=def...,data_blocks=1234,hash_block_size=4096,data_block_size=4096"
 ```
 
+The Rust Cloud Hypervisor and Dragonball runtimes use the same entries under
+`[[hypervisor.clh.guest_extension_images]]` and
+`[[hypervisor.dragonball.guest_extension_images]]`, respectively. Their virtio-blk
+serials are limited to 20 bytes, so extension names must be at most 10 ASCII
+characters to leave room for the `extension-` prefix.
+
 Each entry maps to a Rust struct:
 
 ```rust
@@ -806,14 +812,23 @@ appropriate `After=`/`Requires=` relationships.
 
 ### Other hypervisor backends
 
-The current proposal covers QEMU only. Extending to other backends
-requires implementing block device cold-plug for each:
+QEMU, the Rust Cloud Hypervisor runtime, and Dragonball support extension images.
+The Rust Cloud Hypervisor runtime cold-plugs them through `VmConfig.disks`, including
+their read-only setting and `extension-<name>` serial, and emits the same
+`kata.extension.<name>.verity_params` kernel parameters as QEMU. The Go Cloud
+Hypervisor runtime does not support extension images.
 
-- **Cloud Hypervisor** — add `--disk` entries with the guest extension image path and
-  serial. Cloud Hypervisor natively supports virtio-blk serial numbers.
-- **Dragonball** — attach additional virtio-blk devices through the
-  Dragonball VMM's block device configuration, mapping each `GuestExtensionImage`
-  to a drive with the corresponding serial.
+Dragonball queues extension devices before boot and cold-plugs them through its
+block device manager. The runtime passes each read-only image's
+`extension-<name>` serial through `BlockDeviceConfigInfo.serial` to the virtio-blk
+device, which exposes it through `VIRTIO_BLK_T_GET_ID` on every queue. Disks
+without an override retain their backing-file-derived IDs. The optional serial
+is also saved with the block device configuration and reapplied on snapshot
+restore. Dragonball emits the same extension activation and verity kernel
+parameters for both image and initrd boot.
+
+Extending to other backends requires implementing block device cold-plug for each:
+
 - **Firecracker** — add block device entries via the Firecracker API with
   the appropriate drive ID. Serial-based discovery may need adaptation since
   Firecracker exposes drive IDs differently.

@@ -26,7 +26,7 @@ use ch_config::ch_api::{
     cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add_with_fds,
     cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
 };
-use ch_config::convert::DEFAULT_NUM_PCI_SEGMENTS;
+use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
 use ch_config::ImageType;
 use ch_config::{
@@ -44,6 +44,7 @@ use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use virtio_bindings::bindings::virtio_blk::VIRTIO_BLK_ID_BYTES;
 
 const VIRTIO_FS: &str = "virtio-fs";
 
@@ -504,18 +505,6 @@ impl CloudHypervisorInner {
                         continue;
                     }
 
-                    // The disk configuration has no serial field, so a device
-                    // the guest finds by serial would be unusable.
-                    if !config.serial_override.is_empty() {
-                        warn!(
-                            sl!(),
-                            "not cold-plugging block device {:?}: its serial {:?} cannot be expressed",
-                            config.path_on_host,
-                            config.serial_override
-                        );
-                        continue;
-                    }
-
                     info!(sl!(), "cold-plugging block device {:?}", &config);
 
                     boot_disks.push(self.make_disk_config(&config)?);
@@ -559,11 +548,31 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
     type Error = anyhow::Error;
 
     fn try_from(blkcfg: BlockConfigModern) -> Result<Self, Self::Error> {
+        // Cloud Hypervisor rejects serials longer than the virtio-blk ID.
+        if blkcfg.serial_override.len() > VIRTIO_BLK_ID_BYTES as usize {
+            return Err(anyhow!(
+                "virtio-blk serial must not exceed {VIRTIO_BLK_ID_BYTES} bytes"
+            ));
+        }
+
         let disk_config: DiskConfig = DiskConfig {
             path: Some(blkcfg.path_on_host.as_str().into()),
+            serial: if blkcfg.serial_override.is_empty() {
+                None
+            } else {
+                Some(blkcfg.serial_override)
+            },
             readonly: blkcfg.is_readonly,
-            num_queues: blkcfg.num_queues,
-            queue_size: blkcfg.queue_size as u16,
+            // Boot-time devices such as extensions leave queue settings unset.
+            // Cloud Hypervisor requires nonzero values even for cold-plugged disks.
+            num_queues: match blkcfg.num_queues {
+                0 => DEFAULT_DISK_QUEUES,
+                n => n,
+            },
+            queue_size: match blkcfg.queue_size {
+                0 => DEFAULT_DISK_QUEUE_SIZE,
+                sz => u16::try_from(sz)?,
+            },
             sparse: blkcfg.discard_unmap,
             image_type: ImageType::Raw,
             ..Default::default()
@@ -617,6 +626,104 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 mod tests {
     use super::*;
     use crate::Address;
+    use rstest::rstest;
+
+    #[actix_rt::test]
+    async fn test_cold_plug_guest_extension_images() {
+        let mut ch = CloudHypervisorInner::default();
+        ch.config.boot_info.image = "/rootfs.img".into();
+
+        for (path, serial) in [
+            ("/rootfs.img", ""),
+            ("/coco.img", "extension-coco"),
+            ("/devkit.img", "extension-devkit"),
+            ("/initdata.img", ""),
+        ] {
+            let device = BlockDeviceModern {
+                device_id: path.into(),
+                attach_count: 0,
+                config: BlockConfigModern {
+                    path_on_host: path.into(),
+                    serial_override: serial.into(),
+                    is_readonly: true,
+                    ..Default::default()
+                },
+            };
+            ch.add_device(DeviceType::BlockModern(Arc::new(Mutex::new(device))))
+                .await
+                .unwrap();
+        }
+
+        let (_, _, _, _, disks) = ch.get_shared_devices().await.unwrap();
+        let disks = disks.unwrap();
+        // The boot rootfs is configured separately, so only extensions and
+        // initdata belong in the shared disks returned here.
+        assert!(disks
+            .iter()
+            .all(|disk| disk.path.as_ref() != Some(&PathBuf::from("/rootfs.img"))));
+        assert_eq!(disks.len(), 3);
+        for (disk, (path, serial)) in disks.iter().zip([
+            ("/coco.img", Some("extension-coco")),
+            ("/devkit.img", Some("extension-devkit")),
+            ("/initdata.img", None),
+        ]) {
+            assert_eq!(disk.path, Some(PathBuf::from(path)));
+            assert!(disk.readonly);
+            assert_eq!(disk.serial.as_deref(), serial);
+            assert_eq!(disk.num_queues, DEFAULT_DISK_QUEUES);
+            assert_eq!(disk.queue_size, DEFAULT_DISK_QUEUE_SIZE);
+            let json = serde_json::to_value(disk).unwrap();
+            if let Some(serial) = serial {
+                assert_eq!(json["serial"], serial);
+            } else {
+                assert!(json.get("serial").is_none());
+            }
+        }
+        assert!(ch.pending_devices.is_empty());
+    }
+
+    #[rstest]
+    #[case(0, 0, DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE)]
+    #[case(2, 256, 2, 256)]
+    #[case(0, 256, DEFAULT_DISK_QUEUES, 256)]
+    #[case(2, 0, 2, DEFAULT_DISK_QUEUE_SIZE)]
+    fn test_disk_queue_settings(
+        #[case] num_queues: usize,
+        #[case] queue_size: u32,
+        #[case] expected_queues: usize,
+        #[case] expected_size: u16,
+    ) {
+        let disk = DiskConfig::try_from(BlockConfigModern {
+            num_queues,
+            queue_size,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(disk.num_queues, expected_queues);
+        assert_eq!(disk.queue_size, expected_size);
+    }
+
+    #[test]
+    fn test_disk_queue_size_overflow() {
+        assert!(DiskConfig::try_from(BlockConfigModern {
+            queue_size: u16::MAX as u32 + 1,
+            ..Default::default()
+        })
+        .is_err());
+    }
+
+    #[rstest]
+    #[case("", true)]
+    #[case("extension-012345678", true)]
+    #[case("extension-0123456789", true)]
+    #[case("extension-01234567890", false)]
+    fn test_disk_serial_length(#[case] serial: &str, #[case] is_valid: bool) {
+        let result = DiskConfig::try_from(BlockConfigModern {
+            serial_override: serial.into(),
+            ..Default::default()
+        });
+        assert_eq!(result.is_ok(), is_valid);
+    }
 
     #[test]
     fn test_networkconfig_to_netconfig() {
