@@ -1571,7 +1571,19 @@ impl Sandbox for VirtSandbox {
             }
         });
 
-        self.monitor.start(id, self.agent.clone());
+        let sandbox = self.clone();
+        self.monitor
+            .start(id, self.agent.clone(), move || async move {
+                // Report the failure now: the stop waits for the VMM to exit,
+                // which a VMM stuck in uninterruptible sleep can hold back.
+                sandbox
+                    .record_stop(UNKNOWN_EXIT_STATUS as u32, SystemTime::now(), false)
+                    .await;
+                if let Err(e) = sandbox.stop().await {
+                    error!(sl!(), "failed to stop sandbox: {:?}", e);
+                }
+                sandbox.vmm_exit_confirmed.is_cancelled()
+            });
         self.save().await.context("save state")?;
 
         Ok(())
@@ -1910,8 +1922,7 @@ impl Sandbox for VirtSandbox {
             eid.to_string()
         };
 
-        // A dead VM makes the health check fail, and the monitor answers that
-        // with process::exit(1), aborting the teardown below.
+        // Stop health checks before teardown so VM exit does not trigger another stop.
         if is_sandbox_container {
             info!(sl!(), "stop monitor");
             self.monitor.stop().await;
