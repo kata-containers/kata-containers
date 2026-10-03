@@ -739,9 +739,9 @@ fn get_longest_common_prefix(opts: &[String]) -> Option<PathBuf> {
 
     let mut paths = Vec::with_capacity(opts.len());
     for opt in opts.iter() {
-        match Path::new(opt).parent() {
-            None => return None,
-            Some(v) => paths.push(v),
+        {
+            let v = Path::new(opt).parent()?;
+            paths.push(v)
         }
     }
 

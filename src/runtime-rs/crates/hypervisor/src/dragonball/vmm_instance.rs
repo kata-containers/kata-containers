@@ -145,7 +145,7 @@ impl VmmInstance {
                         if let Some(netns_path) = netns {
                             info!(sl!(), "set netns for vmm master {}", &netns_path);
                             let netns_fd = File::open(&netns_path)
-                                .with_context(|| format!("open netns path {}", &netns_path))?;
+                                .with_context(|| format!("open netns path {}", netns_path))?;
                             setns(&netns_fd, CloneFlags::CLONE_NEWNET).context("set netns ")?;
                         }
                         let exit_code =

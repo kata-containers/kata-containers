@@ -113,7 +113,7 @@ pub fn get_mount_and_storage(
 ) {
     debug!(
         "get_mount_and_storage: adding mount and storage for: {:?}",
-        &yaml_volume
+        yaml_volume
     );
 
     if let Some(emptyDir) = &yaml_volume.emptyDir {
@@ -237,7 +237,7 @@ fn get_guest_empty_dir_mount_and_storage(
             fstype: settings_empty_dir.fstype.clone(),
             options,
             mount_point: if settings_empty_dir.mount_point.ends_with('/') {
-                format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name)
+                format!("{}{}$", settings_empty_dir.mount_point, yaml_mount.name)
             } else {
                 settings_empty_dir.mount_point.clone()
             },
@@ -250,11 +250,11 @@ fn get_guest_empty_dir_mount_and_storage(
     let source = if yaml_mount.subPathExpr.is_some() {
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
-        format!("{}{name}$", &settings.volumes.configMap.mount_source)
+        format!("{}{name}$", settings.volumes.configMap.mount_source)
     } else if settings_empty_dir.mount_source.is_empty() {
         String::new()
     } else {
-        format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name)
+        format!("{}{}$", settings_empty_dir.mount_source, yaml_mount.name)
     };
 
     let mount_type = if yaml_mount.subPathExpr.is_some() {
@@ -362,10 +362,10 @@ fn get_config_map_mount_and_storage(
         storages.push(agent::Storage {
             driver: settings_config_map.driver.clone(),
             driver_options: Vec::new(),
-            source: format!("{}{}$", &settings_config_map.mount_source, &mount_path_str),
+            source: format!("{}{}$", settings_config_map.mount_source, mount_path_str),
             fstype: settings_config_map.fstype.clone(),
             options: settings_config_map.options.clone(),
-            mount_point: format!("{}{mount_path_str}$", &settings_config_map.mount_point),
+            mount_point: format!("{}{mount_path_str}$", settings_config_map.mount_point),
             fs_group: protobuf::MessageField::none(),
             shared: false,
             special_fields: ::protobuf::SpecialFields::new(),
@@ -377,7 +377,7 @@ fn get_config_map_mount_and_storage(
     p_mounts.push(policy::KataMount {
         destination: yaml_mount.mountPath.clone(),
         type_: settings_config_map.mount_type.clone(),
-        source: format!("{}{name}$", &settings_config_map.mount_point),
+        source: format!("{}{name}$", settings_config_map.mount_point),
         options: settings_config_map.options.clone(),
     });
 }
@@ -529,7 +529,7 @@ pub fn get_image_mount_and_storage(
 
     let file_name = Path::new(&destination_string).file_name().unwrap();
     let name = OsString::from(file_name).into_string().unwrap();
-    let source = format!("{}{name}$", &settings_image.mount_source);
+    let source = format!("{}{name}$", settings_image.mount_source);
 
     p_mounts.push(policy::KataMount {
         destination: destination_string,

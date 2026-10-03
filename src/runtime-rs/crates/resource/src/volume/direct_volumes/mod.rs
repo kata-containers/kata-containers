@@ -33,7 +33,7 @@ pub fn get_direct_volume_path(volume_path: &str) -> Result<String> {
     } else {
         Err(anyhow!(format!(
             "direct volume path  {:?} Not Found",
-            &volume_full_path
+            volume_full_path
         )))
     }
 }

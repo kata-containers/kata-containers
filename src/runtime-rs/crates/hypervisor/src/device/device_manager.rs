@@ -706,7 +706,7 @@ mod tests {
         let hypervisor_config = toml_config
             .hypervisor
             .get(hypervisor_name)
-            .ok_or_else(|| anyhow!("failed to get hypervisor for {}", &hypervisor_name))?;
+            .ok_or_else(|| anyhow!("failed to get hypervisor for {}", hypervisor_name))?;
 
         let hypervisor = Qemu::new();
         hypervisor

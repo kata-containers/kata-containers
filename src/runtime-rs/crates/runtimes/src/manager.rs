@@ -138,7 +138,7 @@ impl RuntimeHandlerManagerInner {
             name if name == VirtContainer::name() || name.is_empty() => {
                 VirtContainer::new_handler()
             }
-            _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
+            _ => return Err(anyhow!("Unsupported runtime: {}", config.runtime.name)),
         };
         let runtime_instance = runtime_handler
             .new_instance(

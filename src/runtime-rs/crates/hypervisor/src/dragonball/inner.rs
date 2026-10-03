@@ -302,7 +302,7 @@ impl DragonballInner {
     pub(crate) fn umount_jail_resource(&self, jailed_path: &str) -> Result<()> {
         let path = [self.jailer_root.as_str(), jailed_path].join("/");
         nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", &path))
+            .with_context(|| format!("umount path {}", path))
     }
 
     pub(crate) fn get_resource(&self, src: &str, dst: &str) -> Result<String> {

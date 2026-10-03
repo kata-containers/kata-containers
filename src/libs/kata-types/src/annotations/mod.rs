@@ -1095,7 +1095,7 @@ impl Annotation {
                                 io::ErrorKind::InvalidData,
                                 format!(
                                     "runtime specified in annotation {} is not in {:?}",
-                                    &value, &runtime
+                                    value, runtime
                                 ),
                             ));
                         }

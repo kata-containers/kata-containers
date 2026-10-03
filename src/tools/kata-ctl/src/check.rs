@@ -563,7 +563,7 @@ mod tests {
                 continue;
             }
 
-            let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
             let actual_error = result.unwrap_err().to_string();
             println!("testing for {}", d.module_name);
             assert!(actual_error == expected_error, "{}", msg);

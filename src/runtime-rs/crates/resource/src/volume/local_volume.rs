@@ -48,7 +48,7 @@ impl LocalStorage {
 
         let file_name = Path::new(source)
             .file_name()
-            .context(format!("get file name from {:?}", &m.source()))?;
+            .context(format!("get file name from {:?}", m.source()))?;
 
         // Set the mount source path to a the desired directory point in the VM.
         // In this case it is located in the sandbox directory.

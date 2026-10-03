@@ -443,7 +443,7 @@ impl ShareFsVolume {
                     Err(err) => {
                         return Err(anyhow!(format!(
                             "failed to canonicalize file {} {:?}",
-                            &source_path, err
+                            source_path, err
                         )))
                     }
                     Ok(src) => src,

@@ -1414,7 +1414,7 @@ impl Sandbox for VirtSandbox {
         self.agent
             .start(&address)
             .await
-            .context(format!("connect to address {:?}", &address))?;
+            .context(format!("connect to address {:?}", address))?;
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
         Self::reseed_rng(self.agent.as_ref(), &hypervisor_config).await?;
         Self::sync_time(self.agent.as_ref(), &hypervisor_config).await?;
@@ -2063,7 +2063,7 @@ impl Persist for VirtSandbox {
                 let hypervisor = Arc::new(OpenVmm::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
-            _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),
+            _ => Err(anyhow!("Unsupported hypervisor {}", h.hypervisor_type)),
         }?;
         let agent = Arc::new(KataAgent::new(kata_types::config::Agent::default()));
         let sid = sandbox_args.sid;

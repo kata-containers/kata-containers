@@ -423,7 +423,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> EpollHelperHandler for InnerBlockEpoll
                         KillEvent::BucketUpdate(bytes, ops) => {
                             info!(
                                 "virtio-blk: patch the io limiter bucket: {:?}, {:?}",
-                                &bytes, &ops
+                                bytes, ops
                             );
                             self.get_patch_rate_limiters(bytes, ops);
                         }

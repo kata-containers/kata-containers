@@ -76,7 +76,7 @@ impl RemoteInner {
             None => {
                 let c = Client::connect(&format!(
                     "unix://{}",
-                    &self.config.remote_info.hypervisor_socket
+                    self.config.remote_info.hypervisor_socket
                 ))
                 .await
                 .context("connect to ")?;
@@ -257,7 +257,7 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {
-        Ok(format!("{}://{}", REMOTE_SCHEME, &self.agent_socket_path))
+        Ok(format!("{}://{}", REMOTE_SCHEME, self.agent_socket_path))
     }
 
     pub(crate) async fn disconnect(&mut self) {

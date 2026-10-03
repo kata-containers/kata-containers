@@ -34,7 +34,7 @@ impl ShareFsRootfs {
             let bundle_rootfs = format!("{bundle_path}/{ROOTFS}");
             rootfs.mount(&bundle_rootfs).context(format!(
                 "mount rootfs from {:?} to {}",
-                &rootfs, &bundle_rootfs
+                rootfs, bundle_rootfs
             ))?;
             bundle_rootfs
         } else {

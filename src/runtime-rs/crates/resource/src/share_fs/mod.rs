@@ -226,6 +226,6 @@ pub fn new(id: &str, config: &SharedFsInfo) -> Result<ShareFsInstance> {
                 nydus_share_fs: Some(nydus as Arc<dyn NydusShareFs>),
             })
         }
-        _ => Err(anyhow!("unsupported shared fs {:?}", &shared_fs)),
+        _ => Err(anyhow!("unsupported shared fs {:?}", shared_fs)),
     }
 }

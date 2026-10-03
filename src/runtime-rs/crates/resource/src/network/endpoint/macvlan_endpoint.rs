@@ -49,7 +49,7 @@ impl MacVlanEndpoint {
         let guest_mac = utils::parse_mac(&iface.hard_addr).ok_or_else(|| {
             Error::new(
                 io::ErrorKind::InvalidData,
-                format!("hard_addr {}", &iface.hard_addr),
+                format!("hard_addr {}", iface.hard_addr),
             )
         })?;
 

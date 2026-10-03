@@ -385,7 +385,7 @@ impl SwapResource {
 
         fs::create_dir_all(&runtime_path)
             .await
-            .context(format!("fs::create_dir_all {:?}", &runtime_path))?;
+            .context(format!("fs::create_dir_all {:?}", runtime_path))?;
         match fs::set_permissions(&runtime_path, Permissions::from_mode(0o700)).await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -397,7 +397,7 @@ impl SwapResource {
                 }
                 Err(anyhow!(
                     "swap: set_permissions {:?} failed: {:?}",
-                    &runtime_path,
+                    runtime_path,
                     e
                 ))
             }

@@ -78,7 +78,7 @@ pub fn share_rootfs(bundle_dir: &str, host_path: &str, id: &str) -> Result<Strin
     .with_context(|| {
         format!(
             "share_rootfs:: failed to bind mount {} to {}",
-            &rootfs_src_path, &rootfs_host_path
+            rootfs_src_path, rootfs_host_path
         )
     })?;
 

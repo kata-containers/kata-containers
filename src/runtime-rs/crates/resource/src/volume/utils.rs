@@ -111,7 +111,7 @@ pub(crate) async fn generate_shared_path(
     let host_path = do_get_host_path(&mount_name, sid, device_id, true, false);
 
     if get_mount_path(&Some(dest)).starts_with("/dev") {
-        fs::File::create(&host_path).context(format!("failed to create file {:?}", &host_path))?;
+        fs::File::create(&host_path).context(format!("failed to create file {:?}", host_path))?;
     } else {
         std::fs::create_dir_all(&host_path)
             .map_err(|e| anyhow!("failed to create dir {}: {:?}", host_path, e))?;

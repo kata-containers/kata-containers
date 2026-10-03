@@ -140,7 +140,7 @@ impl Settings {
 
         let settings: Self = serde_json::from_value(base)
             .unwrap_or_else(|e| panic!("Merged settings are invalid: {}", e));
-        debug!("settings = {:?}", &settings);
+        debug!("settings = {:?}", settings);
         Self::validate_settings(&settings);
         settings
     }

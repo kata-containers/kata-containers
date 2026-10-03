@@ -1556,7 +1556,7 @@ impl ToQemuParams for DeviceVirtioNet {
 
         //params.push(format!("driver={}", &self.device_driver.to_string()));
         params.push(self.device_driver.clone());
-        params.push(format!("netdev={}", &self.netdev_id));
+        params.push(format!("netdev={}", self.netdev_id));
 
         params.push(format!("mac={:?}", self.mac_address));
 
