@@ -177,12 +177,7 @@ impl RuntimeHandlerManagerInner {
         spec: Option<&oci::Spec>,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
-        #[cfg(feature = "linux")]
-        LinuxContainer::init().context("init linux container")?;
-        #[cfg(feature = "wasm")]
-        WasmContainer::init().context("init wasm container")?;
-        #[cfg(feature = "virt")]
-        VirtContainer::init().context("init virt container")?;
+        init_runtime_handlers()?;
 
         let mut config =
             load_config(&sandbox_config.annotations, options).context("load config")?;
@@ -314,6 +309,9 @@ impl RuntimeHandlerManager {
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
+
+        // A fresh Delete process never ran try_init(), which registers the config plugins.
+        init_runtime_handlers()?;
 
         let config = if let Ok(spec) = load_oci_spec() {
             let annotations = spec.annotations().clone().unwrap_or_default();
@@ -827,6 +825,16 @@ impl Env for RootlessEnv {
     }
 }
 
+fn init_runtime_handlers() -> Result<()> {
+    #[cfg(feature = "linux")]
+    LinuxContainer::init().context("init linux container")?;
+    #[cfg(feature = "wasm")]
+    WasmContainer::init().context("init wasm container")?;
+    #[cfg(feature = "virt")]
+    VirtContainer::init().context("init virt container")?;
+    Ok(())
+}
+
 /// Config override ordering(high to low):
 /// 1. environment variable
 /// 2. shimv2 create task option
@@ -1187,5 +1195,27 @@ mod tests {
             path_case,
             config_path,
         );
+    }
+
+    #[test]
+    fn test_load_config_in_fresh_process() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let path = tmpdir.path().join("configuration.toml");
+        std::fs::write(
+            &path,
+            "[hypervisor.qemu]\npath = \"/bin/sh\"\nkernel = \"/bin/sh\"\nimage = \"/bin/sh\"\n\
+             [agent.kata]\n[runtime]\nname = \"virt_container\"\nhypervisor_name = \"qemu\"\n\
+             agent_name = \"kata\"\n",
+        )
+        .unwrap();
+        let options = protocols::runtimeoptions::Options {
+            config_path: path.to_string_lossy().to_string(),
+            ..Default::default()
+        };
+        let options = Some(options.write_to_bytes().unwrap());
+
+        init_runtime_handlers().unwrap();
+        let config = load_config(&HashMap::new(), &options).unwrap();
+        assert_eq!(config.runtime.hypervisor_name, "qemu");
     }
 }
