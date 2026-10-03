@@ -234,10 +234,6 @@ pub fn connect(sandbox_id: &str, vport: u32) -> Result<UnixStream> {
     setup_client(server_url, vport)
 }
 
-/// End-of-transmission. The guest terminal stays in canonical mode, so this at
-/// the start of a line is what closes the stdin of a running command.
-pub const EOT: u8 = 0x04;
-
 /// Appended to the marker to frame the output of a command. Neither is ever
 /// spelled out in what we write to the shell - both are only ever produced by
 /// expanding the variable holding the marker - so a terminal that echoes our
