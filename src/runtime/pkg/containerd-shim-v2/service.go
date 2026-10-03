@@ -917,6 +917,7 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *em
 
 	stdin := c.stdinPipe
 	stdinCloser := c.stdinCloser
+	hostIO := c.ttyio
 
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
@@ -925,6 +926,17 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *em
 		}
 		stdin = execs.stdinPipe
 		stdinCloser = execs.stdinCloser
+		hostIO = execs.ttyio
+	}
+
+	if hostIO != nil {
+		if pi, ok := hostIO.io.(*pipeIO); ok {
+			if stdinFIFO, ok := pi.in.(*stdinFIFO); ok {
+				if err := stdinFIFO.finishOpen(); err != nil {
+					return nil, errors.Wrap(err, "finish stdin FIFO open")
+				}
+			}
+		}
 	}
 
 	// wait until the stdin io copy terminated, otherwise
