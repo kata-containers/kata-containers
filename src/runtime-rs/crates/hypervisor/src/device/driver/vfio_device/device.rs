@@ -23,6 +23,15 @@ use crate::Hypervisor;
 /// bus_name = rp<port_id>
 pub type BusPortId = (String, u32, u32);
 
+/// Resource types identifies resource-specific VFIO handling logics.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum VfioDeviceResourceType {
+    #[default]
+    Generic,
+    /// A host network interface passed through as a physical endpoint.
+    PhysicalEndpoint,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct VfioDeviceBase {
     /// Host device path, typically /dev/vfio/N (legacy)
@@ -67,6 +76,9 @@ pub struct VfioDeviceBase {
     /// - VFIO Volume:     "vfio_vol_"
     /// - VFIO NVMe:       "vfio_nvme_"
     pub hostdev_prefix: String,
+
+    /// Resource category used by VMM backends for resource handling.
+    pub resource_type: VfioDeviceResourceType,
 
     /// APQNs assigned to this device (s390x VFIO-AP only).
     /// Each entry is a string like "0a.0001" read from the mdev matrix sysfs file.
@@ -326,7 +338,15 @@ impl PCIeDevice for VfioDeviceModernHandle {
         }
 
         let device_id = self.device_id().await;
-        let port_type = self.with(|d| d.config.port).await;
+        let configured_port = self.with(|d| d.config.port).await;
+        // Legacy Vfio selected the active topology mode at registration time.
+        let port_type = if configured_port == PCIePort::NoPort {
+            topo.get_pcie_port()
+                .map(|(port, _)| port)
+                .unwrap_or(PCIePort::NoPort)
+        } else {
+            configured_port
+        };
 
         // Reserve the bus based on the specified port type
         let bus_port_id = match topo.reserve_bus_for_device(&device_id, port_type)? {
