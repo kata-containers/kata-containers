@@ -63,13 +63,18 @@ impl Device for VhostUserBlkDevice {
             return Ok(());
         }
 
-        if let Err(e) = h.add_device(DeviceType::VhostUserBlk(self.clone())).await {
-            self.decrease_attach_count().await?;
-
-            return Err(e);
+        match h.add_device(DeviceType::VhostUserBlk(self.clone())).await {
+            Ok(dev) => {
+                if let DeviceType::VhostUserBlk(blk) = dev {
+                    self.config = blk.config;
+                }
+                Ok(())
+            }
+            Err(e) => {
+                self.decrease_attach_count().await?;
+                Err(e)
+            }
         }
-
-        return Ok(());
     }
 
     async fn detach(
