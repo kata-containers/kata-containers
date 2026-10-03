@@ -56,6 +56,22 @@ impl NetworkModel for L3ForwardingModel {
         }
         let pod_ipv4 = pod_addrs.first().copied();
 
+        // The workload IP remains configured on the CNI-provided interface in the host-side
+        // netns while the guest uses the same address. Packets from the guest therefore arrive
+        // on the tap with a source address that is local to this netns. Allow those packets so
+        // the route lookup used by proxy ARP can succeed.
+        fs::write(
+            format!(
+                "/proc/sys/net/ipv4/conf/{}/accept_local",
+                pair.tap.tap_iface.name
+            ),
+            "1",
+        )
+        .context(format!(
+            "enable accept_local on {}",
+            pair.tap.tap_iface.name
+        ))?;
+
         // Enable proxy arp so we can respond to ARP requests using the tap and virt interfaces.
         fs::write(
             format!(
