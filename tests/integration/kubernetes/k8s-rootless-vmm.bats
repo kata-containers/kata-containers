@@ -45,28 +45,6 @@ wait_for_rootless_host_resources() {
 	return 1
 }
 
-# Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
-# by default. Until then, explicitly request a GPU so this test exercises the
-# runtime-rs VFIO file-descriptor path.
-nvidia_gpu_request_supported() {
-	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
-	is_runtime_rs || return 1
-	is_nvidia_gpu_platform || return 1
-}
-
-request_gpu_for_nvidia_gpu_runtime_rs() {
-	local available_gpus
-	local config="$1"
-
-	available_gpus="$(kubectl get node "${node}" \
-		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
-	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
-		die "${node} has no allocatable nvidia.com/pgpu resource"
-
-	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
-		"${config}"
-}
-
 # Print why the current runtime cannot run this rootless VMM smoke test. A
 # non-zero return means the runtime is supported.
 rootless_vmm_skip_reason() {
@@ -88,15 +66,6 @@ qemu_rootless_skip_reason() {
 		return 0
 	fi
 
-	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
-	# actual confidential handlers excluded until rootless QEMU can access
-	# resources such as /dev/sev and the configured TDX QGS endpoint.
-	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
-		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
-		echo "rootless QEMU confidential host-resource access is not enabled yet"
-		return 0
-	fi
-
 	# Rootless policy testing is supported only by shared_fs=none runtime-rs
 	# handlers. Generated policy does not authorize the rootless host paths
 	# used with filesystem sharing. With shared_fs=none, policy adds an
@@ -110,6 +79,37 @@ qemu_rootless_skip_reason() {
 			echo "rootless QEMU with generated policy requires runtime-rs block-source FD transport"
 			return 0
 		fi
+	fi
+
+	# The NVIDIA GPU TEE (SNP, TDX) handlers are enabled. The SNP runner uses
+	# the kata-deploy rootless profile, which grants scoped access to /dev/sev.
+	# For the NVIDIA TDX path, no CI runner exists yet, but will be configured
+	# accordingly for access to the QGS socket.
+	# The non-TEE qemu-coco-dev handlers are enabled as these do not need
+	# device/socket access provisioning. This leaves us with the following
+	# exclusions:
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		case "${KATA_HYPERVISOR}" in
+			# Standard SNP CI runners do not yet provision /dev/sev with
+			# scoped non-root access. Enable after the AMD setup is in place.
+			# runner configuration provides it.
+			qemu-snp | qemu-snp-runtime-rs)
+				echo "rootless standard SNP host access provisioning is pending"
+				return 0
+				;;
+			# TDX runners need the QGS UDS deployed with a group that the
+			# rootless VMM can join. Enable after the TDX runner setup is in place.
+			qemu-tdx | qemu-tdx-runtime-rs)
+				echo "rootless TDX QGS socket provisioning is pending"
+				return 0
+				;;
+			# IBM Secure Execution runners need /dev/uv to have scoped non-root
+			# access. Enable after the runner setup provides is in place.
+			qemu-se | qemu-se-runtime-rs)
+				echo "rootless IBM Secure Execution host access provisioning is pending"
+				return 0
+				;;
+		esac
 	fi
 
 	return 1
@@ -226,17 +226,11 @@ setup() {
 		' "${pod_config}"
 	fi
 	set_container_command "${pod_config}" 0 sleep 30
-	if nvidia_gpu_request_supported; then
-		request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
-	fi
 
 	watchable_pod_config="${BATS_FILE_TMPDIR}/inotify-configmap-pod.yaml"
 	cp "${pod_config_dir}/inotify-configmap-pod.yaml" "${watchable_pod_config}"
 	yq -i ".spec.runtimeClassName = \"$(get_test_runtime_class)\"" "${watchable_pod_config}"
 	set_node "${watchable_pod_config}" "${node}"
-	if nvidia_gpu_request_supported; then
-		request_gpu_for_nvidia_gpu_runtime_rs "${watchable_pod_config}"
-	fi
 
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 	auto_generate_policy "${pod_config_dir}" "${watchable_pod_config}"

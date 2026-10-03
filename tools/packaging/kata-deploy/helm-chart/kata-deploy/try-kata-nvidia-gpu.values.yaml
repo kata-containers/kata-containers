@@ -78,6 +78,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: true
     containerd:
       snapshotter: "erofs"
     runtimeClass:
@@ -111,6 +113,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: true
     containerd:
       snapshotter: "nydus"
       forceGuestPull: false
@@ -151,6 +155,8 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: true
     containerd:
       snapshotter: "nydus"
       forceGuestPull: false
