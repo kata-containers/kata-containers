@@ -182,6 +182,20 @@ impl ShareFsMount for VirtiofsShareMount {
             }
         }
 
+        if !config.cid.is_empty() {
+            if let Some(container_dir) = Path::new(&host_dest).parent() {
+                match fs::remove_dir(container_dir) {
+                    Err(e)
+                        if e.kind() != std::io::ErrorKind::NotFound
+                            && e.kind() != std::io::ErrorKind::DirectoryNotEmpty =>
+                    {
+                        return Err(e).context("remove the container directory");
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         Ok(())
     }
 
