@@ -89,6 +89,7 @@ impl ResourceManagerInner {
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
+        cgroup_parent: Option<&str>,
     ) -> Result<Self> {
         let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
@@ -97,7 +98,7 @@ impl ResourceManagerInner {
             .context("failed to create device manager")?;
         let device_manager = Arc::new(RwLock::new(dev_manager));
 
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config, cgroup_parent)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
         let mem_resource = MemResource::new(init_size_manager)?;
         let swap_resource = if hypervisor
