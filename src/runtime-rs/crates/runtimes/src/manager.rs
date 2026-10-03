@@ -190,10 +190,13 @@ impl RuntimeHandlerManagerInner {
 
         set_rootless(hypervisor.security_info.rootless);
         let mut rootless_setup_guard = if is_rootless() {
-            Some(
-                configure_non_root_hypervisor(hypervisor)
-                    .context("configure non-root hypervisor")?,
-            )
+            let guard = configure_non_root_hypervisor(hypervisor)
+                .context("configure non-root hypervisor")?;
+            if let Some(user) = hypervisor.security_info.rootless_user.as_ref() {
+                persist::record_rootless_uid(&self.id, user.uid)
+                    .context("record the rootless VMM user")?;
+            }
+            Some(guard)
         } else {
             None
         };
@@ -307,6 +310,11 @@ impl RuntimeHandlerManager {
     pub async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         let sender = inner.msg_sender.clone();
+        if let Some(uid) = persist::recorded_rootless_uid(&inner.id)
+            .context("failed to read the rootless VMM user")?
+        {
+            restore_rootless_mode(uid)?;
+        }
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
 
@@ -1036,6 +1044,21 @@ impl Drop for RootlessSetupGuard {
             }
         }
     }
+}
+
+fn restore_rootless_mode(uid: u32) -> Result<()> {
+    let dir = vmm_user_runtime_dir(uid);
+    env::set_var("XDG_RUNTIME_DIR", &dir);
+    set_rootless(true);
+    // Set rootless mode before the first rootless_dir() call caches its value.
+    if Path::new(&rootless_dir()) != dir {
+        return Err(anyhow!(
+            "rootless dir is already {}, not {}",
+            rootless_dir(),
+            dir.display()
+        ));
+    }
+    Ok(())
 }
 
 fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
