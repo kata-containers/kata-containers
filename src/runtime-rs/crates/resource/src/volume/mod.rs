@@ -80,12 +80,31 @@ impl VolumeResource {
         cid: &str,
         spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
+        let mut volumes = vec![];
+        if let Err(e) = self.add_volumes(ctx, cid, spec, &mut volumes).await {
+            // On error the caller never receives these volumes and cannot clean them up.
+            for v in volumes.iter().rev() {
+                if let Err(err) = v.cleanup(ctx.d).await {
+                    warn!(sl!(), "failed to clean up volume: {:?}", err);
+                }
+            }
+            return Err(e);
+        }
+        Ok(volumes)
+    }
+
+    async fn add_volumes(
+        &self,
+        ctx: &VolumeContext<'_>,
+        cid: &str,
+        spec: &oci::Spec,
+        volumes: &mut Vec<Arc<dyn Volume>>,
+    ) -> Result<()> {
         let share_fs = ctx.share_fs;
         let d = ctx.d;
         let sid = ctx.sid;
         let emptydir_mode = ctx.emptydir_mode;
         let fs_sharing_supported = ctx.fs_sharing_supported;
-        let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts().clone().unwrap_or_default();
         info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
         // handle mounts
@@ -183,7 +202,7 @@ impl VolumeResource {
             inner.volumes.push(volume);
         }
 
-        Ok(volumes)
+        Ok(())
     }
 
     pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
