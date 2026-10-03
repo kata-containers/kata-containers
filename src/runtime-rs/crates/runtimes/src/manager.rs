@@ -179,6 +179,9 @@ impl RuntimeHandlerManagerInner {
     ) -> Result<()> {
         init_runtime_handlers()?;
 
+        // The namespace already exists. Hold it across config loading so a
+        // failure here still removes it.
+        let created_netns = CreatedNetnsGuard::new(&sandbox_config.network_env);
         let (mut config, config_path) =
             load_config_with_path(&sandbox_config.annotations, options).context("load config")?;
         record_sandbox_config_path(&sandbox_config_path_file(&self.id), &config_path)
@@ -218,6 +221,10 @@ impl RuntimeHandlerManagerInner {
                 sandbox_config.network_env.netns = path;
             }
         }
+        // Declare after rootless_setup_guard so this guard drops first and unmounts
+        // the namespace before the runtime directory is removed.
+        let mut created_netns = created_netns;
+        created_netns.track(&sandbox_config.network_env);
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -253,11 +260,13 @@ impl RuntimeHandlerManagerInner {
         if config.runtime.disable_new_netns || dan_path.exists() {
             discard_created_netns(&mut sandbox_config.network_env)?;
             sandbox_config.network_env.netns = None;
+            created_netns.track(&sandbox_config.network_env);
         }
 
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
             .await
             .context("init runtime handler")?;
+        created_netns.disarm();
 
         // Rootless resource ownership now passes to the runtime instance and
         // its normal teardown paths.
@@ -831,6 +840,41 @@ fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
     Ok(())
 }
 
+/// Setup failures occur before a sandbox can take ownership of namespace cleanup.
+struct CreatedNetnsGuard(Option<String>);
+
+impl CreatedNetnsGuard {
+    fn new(network_env: &SandboxNetworkEnv) -> Self {
+        let mut guard = Self(None);
+        guard.track(network_env);
+        guard
+    }
+
+    fn track(&mut self, network_env: &SandboxNetworkEnv) {
+        self.0 = network_env
+            .netns
+            .clone()
+            .filter(|_| network_env.network_created);
+    }
+
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for CreatedNetnsGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            if let Err(err) = remove_netns(Path::new(&path)) {
+                warn!(
+                    sl!(),
+                    "failed to remove network namespace {}: {:#}", path, err
+                );
+            }
+        }
+    }
+}
+
 // RootlessEnv implements netns_rs::Env trait to provide the rootless directory path
 // for creating network namespace in rootless mode.
 #[derive(Copy, Clone, Default, Debug)]
@@ -1112,6 +1156,32 @@ mod tests {
         drop(guard);
 
         assert_eq!(runtime_dir.exists(), runtime_dir_survives);
+    }
+
+    #[test]
+    fn test_created_netns_guard() {
+        let created = |netns: Option<&str>| SandboxNetworkEnv {
+            netns: netns.map(String::from),
+            network_created: true,
+        };
+
+        let mut guard = CreatedNetnsGuard::new(&SandboxNetworkEnv {
+            netns: Some("/run/netns/from-spec".to_string()),
+            network_created: false,
+        });
+        assert_eq!(guard.0, None);
+
+        guard.track(&created(Some("/run/netns/created")));
+        assert_eq!(guard.0.as_deref(), Some("/run/netns/created"));
+
+        guard.track(&created(Some("/run/user/1001/netns/created")));
+        assert_eq!(guard.0.as_deref(), Some("/run/user/1001/netns/created"));
+        guard.track(&created(None));
+        assert_eq!(guard.0, None);
+
+        guard.track(&created(Some("/run/netns/created")));
+        guard.disarm();
+        assert_eq!(guard.0, None);
     }
 
     #[test]
