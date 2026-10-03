@@ -15,3 +15,6 @@ serde_json = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 safe-path = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

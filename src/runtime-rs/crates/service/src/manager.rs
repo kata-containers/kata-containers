@@ -6,7 +6,6 @@
 
 use std::fs;
 use std::os::unix::io::RawFd;
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -125,9 +124,8 @@ impl ServiceManager {
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
         let temp_dir = [KATA_PATH, sid].join("/");
         if let Err(e) = handler.cleanup().await {
-            // The state is the only record of what is left on the host, so a
-            // later delete can still retry.
-            if Path::new(&temp_dir).join(persist::PERSIST_FILE).exists() {
+            // Keep the only recovery records so a later Delete can retry failed cleanup.
+            if persist::has_cleanup_record(sid) {
                 error!(
                     sl!(),
                     "failed to clean up runtime state, keeping {} for a retry: {:#}", temp_dir, e
