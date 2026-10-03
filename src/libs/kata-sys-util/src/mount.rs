@@ -215,6 +215,44 @@ fn get_linux_mount_info_from_reader<R: io::BufRead>(
     Err(Error::NoMountEntry(mount_point.to_owned()))
 }
 
+/// Nested and stacked mounts must be detached before the mounts containing them.
+pub fn get_mount_points_under<P: AsRef<Path>>(root: P) -> Result<Vec<PathBuf>> {
+    let mount_file = fs::File::open(PROC_MOUNTS_FILE)?;
+    get_mount_points_under_from_reader(root.as_ref(), io::BufReader::new(mount_file))
+}
+
+fn get_mount_points_under_from_reader<R: io::BufRead>(
+    root: &Path,
+    reader: R,
+) -> Result<Vec<PathBuf>> {
+    // Match resolved paths because /proc/mounts does not retain symlink aliases.
+    let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+
+    let mut mount_points = Vec::new();
+    for line in reader.lines() {
+        let mount = line?;
+        let fields: Vec<&str> = mount.split(' ').collect();
+
+        if fields.len() != PROC_FIELDS_PER_LINE {
+            return Err(Error::InvalidMountEntry(
+                PROC_FIELDS_PER_LINE,
+                fields.len(),
+                mount,
+            ));
+        }
+
+        let path = PathBuf::from(unescape_mount_field(fields[PROC_PATH_INDEX]));
+        if path.starts_with(&root) {
+            mount_points.push(path);
+        }
+    }
+
+    // Later entries cover earlier mounts at the same depth.
+    mount_points.reverse();
+    mount_points.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+    Ok(mount_points)
+}
+
 /// Recursively create destination for a mount.
 ///
 /// For a normal mount, the destination will always be a directory. For bind mount, the destination
@@ -918,6 +956,45 @@ mod tests {
 
         assert!(matches!(
             get_linux_mount_info_from_reader(mount_point, "invalid entry\n".as_bytes()),
+            Err(Error::InvalidMountEntry(6, 2, _))
+        ));
+    }
+
+    #[test]
+    fn test_get_mount_points_under() {
+        let root = "/__kata_mount_test__/sbx";
+        let mounts = format!(
+            "tmpfs /__kata_mount_test__ tmpfs rw 0 0\n\
+             none {root}/rw/passthrough/vol ext4 rw 0 0\n\
+             none /__kata_mount_test__/sbx-other/rw ext4 rw 0 0\n\
+             none {root}/ro ext4 ro 0 0\n\
+             none {root}/rw/passthrough/c/rootfs ext4 rw 0 0\n\
+             none {root}/rw/passthrough/vol ext4 ro 0 0\n\
+             none {root}/rw/space\\040dir ext4 rw 0 0\n"
+        );
+
+        let mount_points =
+            get_mount_points_under_from_reader(Path::new(root), mounts.as_bytes()).unwrap();
+
+        assert_eq!(
+            mount_points,
+            [
+                format!("{root}/rw/passthrough/c/rootfs"),
+                format!("{root}/rw/passthrough/vol"),
+                format!("{root}/rw/passthrough/vol"),
+                format!("{root}/rw/space dir"),
+                format!("{root}/ro"),
+            ]
+            .map(PathBuf::from)
+        );
+
+        assert!(
+            get_mount_points_under_from_reader(Path::new("/not-mounted"), mounts.as_bytes())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(matches!(
+            get_mount_points_under_from_reader(Path::new(root), "invalid entry\n".as_bytes()),
             Err(Error::InvalidMountEntry(6, 2, _))
         ));
     }
