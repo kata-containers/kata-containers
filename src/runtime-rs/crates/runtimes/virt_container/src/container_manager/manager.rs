@@ -170,9 +170,20 @@ impl ContainerManager for VirtContainerManager {
         match process.process_type {
             ProcessType::Container => {
                 let mut containers = self.containers.write().await;
-                let c = containers
+                let mut c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+
+                // A task that never started has no exit-driven cleanup to release its mounts.
+                let status = c.state_process(process).await.context("state process")?;
+                if status.status == ProcessStatus::Created {
+                    if let Err(e) = c.cleanup().await {
+                        warn!(
+                            logger_with_process(process),
+                            "failed to clean up container deleted before start: {:?}", e
+                        );
+                    }
+                }
 
                 // Poststop Hooks:
                 // * should be run in runtime namespace
