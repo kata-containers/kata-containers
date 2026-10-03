@@ -34,6 +34,11 @@ setup() {
 
 	auto_generate_policy "${policy_settings_dir}" "${pod_yaml_file}" "${configmap_yaml_file}"
 	auto_generate_policy "${policy_settings_dir}" "${pod_volume_yaml_file}" "${configmap_yaml_file}"
+
+	pod_script_name="configmap-script-test-pod"
+	configmap_script_yaml_file="${pod_config_dir}/configmap-script.yaml"
+	pod_script_yaml_file="${pod_config_dir}/pod-configmap-script.yaml"
+	auto_generate_policy "${policy_settings_dir}" "${pod_script_yaml_file}" "${configmap_script_yaml_file}"
 }
 
 @test "ConfigMap for a pod" {
@@ -55,6 +60,7 @@ setup() {
 }
 
 @test "ConfigMap propagation to volume-mounted pod" {
+	erofs_volumes_enabled && skip "a volume shipped as an EROFS image does not see updates"
 	original_value="value-1"
 	updated_value="updated-value-1"
 
@@ -88,10 +94,30 @@ setup() {
 	fi
 }
 
+@test "ConfigMap scripts run through an interpreter only as EROFS images" {
+	kubectl create -f "${configmap_script_yaml_file}"
+	kubectl create -f "${pod_script_yaml_file}"
+	kubectl wait --for jsonpath=status.phase=Succeeded --timeout="${timeout}" pod "${pod_script_name}"
+
+	output="$(kubectl logs "${pod_script_name}")"
+	echo "${output}"
+
+	grep -q "hello-from-configmap" <<< "${output}"
+	# Content volumes shipped as EROFS images are mounted noexec, since they
+	# hold data rather than programs.
+	if erofs_volumes_enabled; then
+		grep -q "direct-exec-denied" <<< "${output}"
+	else
+		grep -q "direct-exec-allowed" <<< "${output}"
+	fi
+}
+
 teardown() {
 	kubectl delete pod "${pod_env_name}" --ignore-not-found=true
 	kubectl delete pod "${pod_volume_name}" --ignore-not-found=true
+	kubectl delete pod "${pod_script_name}" --ignore-not-found=true
 	kubectl delete configmap "${config_name}" --ignore-not-found=true
+	kubectl delete configmap test-configmap-script --ignore-not-found=true
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 	teardown_common "${node}" "${node_start_time:-}"

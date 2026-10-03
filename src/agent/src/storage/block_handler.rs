@@ -30,14 +30,25 @@ use crate::device::block_device_handler::{
 };
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
+use crate::storage::multi_layer_erofs::is_dmverity_enabled;
+#[cfg(feature = "devicemapper")]
+use crate::storage::multi_layer_erofs::parse_dmverity_options;
+#[cfg(feature = "devicemapper")]
+use crate::storage::StorageDeviceGeneric;
 use crate::storage::{
     common_storage_handler, new_device, set_ownership, StorageContext, StorageHandler,
 };
+#[cfg(feature = "devicemapper")]
+use kata_types::dmverity::{create_dmverity_device, destroy_partition_dmverity_device};
 use slog::Logger;
 #[cfg(target_arch = "s390x")]
 use std::str::FromStr;
 
 const EPHEMERAL_ENCRYPTION_DRIVER_OPTION: &str = "encryption_key=ephemeral";
+
+/// Marks options meant for the agent rather than for mount(2).
+#[cfg(feature = "devicemapper")]
+const X_KATA_PREFIX: &str = "X-kata.";
 const MKFS_EXT4: &str = "mkfs.ext4";
 const BLOCK_EMPTYDIR_EXT4_MKFS_OPTS: [&str; 8] =
     ["-O", "^has_journal", "-m", "0", "-i", "163840", "-I", "128"];
@@ -83,8 +94,70 @@ async fn handle_block_storage(
         if options.should_create_filesystem {
             ensure_block_filesystem(logger, storage).await?;
         }
+        if is_dmverity_enabled(storage) {
+            return mount_verified(logger, storage).await;
+        }
         let path = common_storage_handler(logger, storage)?;
         new_device(path)
+    }
+}
+
+/// Mount the storage through dm-verity, so that every block read is checked
+/// against the root hash rather than taken on trust from the device.
+#[cfg(feature = "devicemapper")]
+async fn mount_verified(logger: &Logger, storage: &Storage) -> Result<Arc<dyn StorageDevice>> {
+    let info = parse_dmverity_options(storage).context("parse dm-verity options")?;
+    let verity_device = create_dmverity_device(&info, Path::new(&storage.source))
+        .await
+        .context("create dm-verity device")?;
+
+    // Mount the verified device rather than the bare one, and keep the
+    // X-kata options away from mount(2), which knows nothing about them.
+    let mut verified = storage.clone();
+    verified.source = verity_device.clone();
+    verified.options.retain(|o| !o.starts_with(X_KATA_PREFIX));
+
+    match common_storage_handler(logger, &verified) {
+        Ok(path) => Ok(Arc::new(VerityStorageDevice {
+            inner: StorageDeviceGeneric::new(path),
+            verity_device,
+            logger: logger.clone(),
+        })),
+        Err(e) => {
+            destroy_partition_dmverity_device(&verity_device, logger).ok();
+            Err(e)
+        }
+    }
+}
+
+/// Refusing is the point: mounting the image unverified would quietly give
+/// back exactly the guarantee the root hash was there to provide.
+#[cfg(not(feature = "devicemapper"))]
+async fn mount_verified(_logger: &Logger, storage: &Storage) -> Result<Arc<dyn StorageDevice>> {
+    Err(anyhow!(
+        "storage {} asks for dm-verity, but this agent was built without devicemapper support",
+        storage.source
+    ))
+}
+
+/// Unmounting is not enough for verified storage; the device mapper device
+/// outlives it and has to be torn down too.
+#[cfg(feature = "devicemapper")]
+struct VerityStorageDevice {
+    inner: StorageDeviceGeneric,
+    verity_device: String,
+    logger: Logger,
+}
+
+#[cfg(feature = "devicemapper")]
+impl StorageDevice for VerityStorageDevice {
+    fn path(&self) -> Option<&str> {
+        self.inner.path()
+    }
+
+    fn cleanup(&self) -> Result<()> {
+        self.inner.cleanup()?;
+        destroy_partition_dmverity_device(&self.verity_device, &self.logger)
     }
 }
 
