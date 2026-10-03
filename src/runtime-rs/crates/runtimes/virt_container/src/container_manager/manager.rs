@@ -295,7 +295,7 @@ impl ContainerManager for VirtContainerManager {
         // agent returns ProcessAlreadyTerminated error.
         // For SIGKILL/SIGTERM, we should treat these as success since the
         // container is effectively terminated.
-        c.kill_process(&req.process, req.signal, req.all)
+        c.kill_process(self.containers.clone(), &req.process, req.signal, req.all)
             .await
             .or_else(|err| {
                 let is_term_signal = is_termination_signal(req.signal);

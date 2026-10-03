@@ -472,6 +472,7 @@ impl Container {
 
     pub async fn kill_process(
         &self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
         container_process: &ContainerProcess,
         signal: u32,
         all: bool,
@@ -503,7 +504,7 @@ impl Container {
         }
 
         match inner.signal_process(container_process, signal, all).await {
-            Ok(()) => Ok(()),
+            Ok(()) => {}
             Err(e) if is_term_signal && is_no_such_process_error(&e) => {
                 info!(
                     self.logger,
@@ -512,10 +513,25 @@ impl Container {
                     "process" => ?container_process,
                     "signal" => signal
                 );
-                Ok(())
             }
-            Err(e) => Err(e),
+            Err(e) => return Err(e),
         }
+
+        // Without a waiter, killing a Created task leaves Wait and force-delete blocked.
+        // Start has not set up IO, so this waiter must not copy it.
+        if is_term_signal
+            && container_process.exec_id.is_empty()
+            && process_status == ProcessStatus::Created
+            && inner.init_process.exit_watcher_tx.is_some()
+        {
+            inner
+                .init_process
+                .passfd_io_wait(containers, self.agent.clone())
+                .await
+                .context("wait for killed created container")?;
+        }
+
+        Ok(())
     }
 
     pub async fn exec_process(
