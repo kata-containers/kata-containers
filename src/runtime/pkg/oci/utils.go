@@ -201,7 +201,21 @@ type RuntimeConfig struct {
 	// KubeletRootDir is the kubelet root directory used to match ConfigMap/Secret
 	// volume paths (e.g. /var/lib/k0s/kubelet for k0s). If empty, default is used.
 	KubeletRootDir string
+
+	// PodResourceDeviceSources selects which PodResources API sources feed
+	// the cold-plug device list. Defaults to ["device-plugin"].
+	PodResourceDeviceSources []string
 }
+
+const (
+	// PodResourceDeviceSourceDevicePlugin selects devices allocated via the
+	// legacy device-plugin API (container.Devices).
+	PodResourceDeviceSourceDevicePlugin = "device-plugin"
+
+	// PodResourceDeviceSourceDRA selects devices allocated via Dynamic
+	// Resource Allocation (container.DynamicResources, KEP-3695).
+	PodResourceDeviceSourceDRA = "dra"
+)
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
 // hypervisor configuration stored inside the current runtime configuration.
