@@ -1694,6 +1694,55 @@ func TestCheckEmptyDirMode(t *testing.T) {
 	assert.Error(err)
 }
 
+func TestUpdateRuntimeConfigRuntimeEmptyDirNoInitItable(t *testing.T) {
+	assert := assert.New(t)
+
+	update := func(mode string, noInitItable bool) oci.RuntimeConfig {
+		tomlConf := tomlConfig{Runtime: runtime{EmptyDirMode: mode, EmptyDirNoInitItable: noInitItable}}
+		config := oci.RuntimeConfig{}
+		assert.NoError(updateRuntimeConfigRuntime("test", tomlConf, &config))
+		return config
+	}
+
+	// Off by default, so the option list pinned in genpolicy-settings.json
+	// keeps matching what the runtime sends.
+	config := update(vc.EmptyDirModeVirtioBlkPlain, false)
+	assert.False(config.EmptyDirNoInitItable)
+
+	config = update(vc.EmptyDirModeVirtioBlkPlain, true)
+	assert.True(config.EmptyDirNoInitItable)
+
+	// The key is carried through unchanged in other modes; setupEphemeralDisk
+	// ignores it there and the load only logs a warning.
+	config = update(vc.EmptyDirModeSharedFs, true)
+	assert.True(config.EmptyDirNoInitItable)
+}
+
+func TestDecodeConfigEmptyDirNoInitItable(t *testing.T) {
+	assert := assert.New(t)
+
+	decode := func(fileData string) tomlConfig {
+		configPath := filepath.Join(t.TempDir(), "configuration.toml")
+		assert.NoError(createConfig(configPath, fileData))
+		tomlConf, _, err := decodeConfig(configPath)
+		assert.NoError(err)
+		return tomlConf
+	}
+
+	tomlConf := decode(`
+[runtime]
+emptydir_mode = "block-plain"
+emptydir_noinit_itable = true
+`)
+	assert.True(tomlConf.Runtime.EmptyDirNoInitItable)
+
+	tomlConf = decode(`
+[runtime]
+emptydir_mode = "block-plain"
+`)
+	assert.False(tomlConf.Runtime.EmptyDirNoInitItable)
+}
+
 func TestCheckFactoryConfig(t *testing.T) {
 	assert := assert.New(t)
 
