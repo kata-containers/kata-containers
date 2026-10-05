@@ -79,6 +79,12 @@ const (
 	// blockVolumeDiscardOption requests discard support for block volume mounts.
 	blockVolumeDiscardOption = "discard"
 
+	// blockVolumeNoInitItableOption tells the guest kernel not to zero the
+	// ext4 inode tables of a block volume in the background after mount.
+	// Inode table blocks are then written only when inodes in them are
+	// allocated and dirtied.
+	blockVolumeNoInitItableOption = "noinit_itable"
+
 	// encryptionKeyDriverOption is the driver option used to specify
 	// an encryption key for a Storage struct.
 	encryptionKeyDriverOption = "encryption_key"
