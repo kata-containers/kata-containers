@@ -723,11 +723,20 @@ type HypervisorConfig struct {
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUsF float32
 
+	// OverheadVCPUsF specifies the vCPU overhead added to the workload CPU
+	// limits when static sandbox resource management sizes the VM.
+	OverheadVCPUsF float32
+
 	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
 	DefaultMaxVCPUs uint32
 
 	// DefaultMem specifies default memory size in MiB for the VM.
 	MemorySize uint32
+
+	// OverheadMemMB specifies the memory overhead in MiB added to the
+	// workload memory limits when static sandbox resource management sizes
+	// the VM.
+	OverheadMemMB uint32
 
 	// DefaultMaxMemorySize specifies the maximum amount of RAM in MiB for the VM.
 	DefaultMaxMemorySize uint64

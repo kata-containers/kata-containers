@@ -136,11 +136,13 @@ type hypervisor struct {
 	VirtioFSQueueSize              uint32                    `toml:"virtio_fs_queue_size"`
 	DefaultMaxVCPUs                uint32                    `toml:"default_maxvcpus"`
 	MemorySize                     uint32                    `toml:"default_memory"`
+	OverheadMemMB                  uint32                    `toml:"overhead_memory"`
 	MemSlots                       uint32                    `toml:"memory_slots"`
 	DefaultBridges                 uint32                    `toml:"default_bridges"`
 	Msize9p                        uint32                    `toml:"msize_9p"`
 	RemoteHypervisorTimeout        uint32                    `toml:"remote_hypervisor_timeout"`
 	NumVCPUs                       float32                   `toml:"default_vcpus"`
+	OverheadVCPUs                  float32                   `toml:"overhead_vcpus"`
 	BlockDeviceCacheSet            bool                      `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect         bool                      `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush        bool                      `toml:"block_device_cache_noflush"`
@@ -525,6 +527,23 @@ func (h hypervisor) defaultMemSz() uint32 {
 	return h.MemorySize
 }
 
+// overheadMemSz is the guest-side memory overhead, so it is a delta rather
+// than a VM size and the MinHypervisorMemory floor does not apply. A value of
+// zero is meaningful and is preserved.
+func (h hypervisor) overheadMemSz() uint32 {
+	return h.OverheadMemMB
+}
+
+// overheadVCPUs is the guest-side vCPU overhead. As with overheadMemSz, zero
+// is a valid value that is preserved.
+func (h hypervisor) overheadVCPUs() float32 {
+	if h.OverheadVCPUs < 0 {
+		return 0
+	}
+
+	return h.OverheadVCPUs
+}
+
 func (h hypervisor) defaultMemSlots() uint32 {
 	slots := h.MemSlots
 	if slots == 0 {
@@ -885,8 +904,10 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:    h.kernelVerityParams(),
 		NumVCPUsF:             h.defaultVCPUs(),
+		OverheadVCPUsF:        h.overheadVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
+		OverheadMemMB:         h.overheadMemSz(),
 		MemSlots:              h.defaultMemSlots(),
 		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
@@ -1063,8 +1084,10 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HypervisorMachineType:         machineType,
 		QgsPort:                       h.qgsPort(),
 		NumVCPUsF:                     h.defaultVCPUs(),
+		OverheadVCPUsF:                h.overheadVCPUs(),
 		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),
 		MemorySize:                    h.defaultMemSz(),
+		OverheadMemMB:                 h.overheadMemSz(),
 		MemSlots:                      h.defaultMemSlots(),
 		MemOffset:                     h.defaultMemOffset(),
 		DefaultMaxMemorySize:          h.defaultMaxMemSz(),
@@ -1253,9 +1276,11 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelVerityParams:             h.kernelVerityParams(),
 		HypervisorMachineType:          machineType,
 		NumVCPUsF:                      h.defaultVCPUs(),
+		OverheadVCPUsF:                 h.overheadVCPUs(),
 		DefaultMaxVCPUs:                h.defaultMaxVCPUs(),
 		DisableNestedVirtualization:    h.DisableNestedVirtualization,
 		MemorySize:                     h.defaultMemSz(),
+		OverheadMemMB:                  h.overheadMemSz(),
 		MemSlots:                       h.defaultMemSlots(),
 		MemOffset:                      h.defaultMemOffset(),
 		DefaultMaxMemorySize:           h.defaultMaxMemSz(),
@@ -1333,8 +1358,10 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelParams:       vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams: h.kernelVerityParams(),
 		NumVCPUsF:          h.defaultVCPUs(),
+		OverheadVCPUsF:     h.overheadVCPUs(),
 		DefaultMaxVCPUs:    h.defaultMaxVCPUs(),
 		MemorySize:         h.defaultMemSz(),
+		OverheadMemMB:      h.overheadMemSz(),
 		MemSlots:           h.defaultMemSlots(),
 		EntropySource:      h.GetEntropySource(),
 		Debug:              h.Debug,
@@ -1429,8 +1456,10 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelVerityParams:            h.kernelVerityParams(),
 		HypervisorMachineType:         machineType,
 		NumVCPUsF:                     h.defaultVCPUs(),
+		OverheadVCPUsF:                h.overheadVCPUs(),
 		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),
 		MemorySize:                    h.defaultMemSz(),
+		OverheadMemMB:                 h.overheadMemSz(),
 		MemSlots:                      h.defaultMemSlots(),
 		MemOffset:                     h.defaultMemOffset(),
 		DefaultMaxMemorySize:          h.defaultMaxMemSz(),
