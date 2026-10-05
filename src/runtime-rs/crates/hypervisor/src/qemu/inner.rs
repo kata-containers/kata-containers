@@ -1249,15 +1249,6 @@ impl QemuInner {
                 qmp.hotunplug_block_device(&driver, index)
                     .context("hotunplug block device")?;
             }
-            DeviceType::Vfio(ref vfio_device) => {
-                let hostdev_id = vfio_device
-                    .devices
-                    .first()
-                    .map(|device| device.hostdev_id.as_str())
-                    .ok_or_else(|| anyhow!("VFIO device has no host device to hotunplug"))?;
-                qmp.hotunplug_vfio_device(hostdev_id)
-                    .context("hotunplug VFIO device")?;
-            }
             DeviceType::VfioModern(ref vfio_device) => {
                 let (hostdev_id, device_count) = {
                     let vfio = vfio_device.lock().await;
