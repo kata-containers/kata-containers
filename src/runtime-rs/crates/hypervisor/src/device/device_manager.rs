@@ -157,6 +157,14 @@ impl DeviceManager {
                             .release_device_index(device.config.virt_path.unwrap().0, false);
                     }
                 }
+                DeviceType::VfioModern(device) => {
+                    let config = &device.lock().await.config;
+                    if config.dev_type == DEVICE_TYPE_BLOCK {
+                        if let Some((index, _)) = config.virt_path.as_ref() {
+                            self.shared_info.release_device_index(*index, false);
+                        }
+                    }
+                }
                 DeviceType::VhostUserBlk(device) => {
                     self.shared_info
                         .release_device_index(device.config.index, false);
@@ -349,10 +357,15 @@ impl DeviceManager {
                 vfio_base.iommu_group_devnode = PathBuf::from(dev_host_path);
                 vfio_base.virt_path = virt_path;
 
-                Arc::new(Mutex::new(VfioDeviceModernHandle::new(
-                    device_id.clone(),
-                    &vfio_base,
-                )?))
+                match VfioDeviceModernHandle::new(device_id.clone(), &vfio_base) {
+                    Ok(device) => Arc::new(Mutex::new(device)),
+                    Err(err) => {
+                        if let Some((index, _)) = vfio_base.virt_path.as_ref() {
+                            self.shared_info.release_device_index(*index, false);
+                        }
+                        return Err(err);
+                    }
+                }
             }
             DeviceConfig::VhostUserBlkCfg(config) => {
                 // try to find the device, found and just return id.
@@ -775,6 +788,8 @@ mod tests {
         d.write().await.try_remove_device(&device_id).await.unwrap();
 
         let device_info = d.read().await.get_device_info(&device_id).await.unwrap();
-        assert!(matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1));
+        assert!(
+            matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
+        );
     }
 }
