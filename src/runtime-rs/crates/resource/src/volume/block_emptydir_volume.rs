@@ -37,6 +37,7 @@ const METADATA_CREATE_FILESYSTEM: &str = "createFilesystem";
 const METADATA_ENCRYPTION_KEY: &str = "encryptionKey";
 const METADATA_FS_GROUP: &str = "fsGroup";
 const DISCARD_MOUNT_OPTION: &str = "discard";
+const NOINIT_ITABLE_MOUNT_OPTION: &str = "noinit_itable";
 
 /// Information about an ephemeral disk created on the host, needed for
 /// sandbox-level cleanup.
@@ -60,11 +61,14 @@ impl BlockEmptyDirVolume {
         m: &oci::Mount,
         sid: &str,
         emptydir_mode: &str,
+        emptydir_noinit_itable: bool,
         block_device_discard_supported: bool,
     ) -> Result<Self> {
         let encrypted = emptydir_mode == EMPTYDIR_MODE_BLOCK_ENCRYPTED;
-        let discard_unmap =
-            emptydir_mode == EMPTYDIR_MODE_BLOCK_PLAIN && block_device_discard_supported;
+        let plain = emptydir_mode == EMPTYDIR_MODE_BLOCK_PLAIN;
+        let discard_unmap = plain && block_device_discard_supported;
+        let mount_options =
+            block_emptydir_mount_options(plain, discard_unmap, emptydir_noinit_itable);
         let source = m
             .source()
             .as_ref()
@@ -95,7 +99,7 @@ impl BlockEmptyDirVolume {
                 device: disk_path.display().to_string(),
                 fs_type: "ext4".to_string(),
                 metadata: block_emptydir_metadata(encrypted, dir_gid),
-                options: block_emptydir_mount_options(discard_unmap),
+                options: mount_options.clone(),
             };
 
             add_volume_mount_info(&source, &mount_info)
@@ -135,7 +139,7 @@ impl BlockEmptyDirVolume {
         mount.set_typ(Some("bind".to_string()));
 
         let mut storage = storage;
-        configure_block_emptydir_storage(&mut storage, encrypted, discard_unmap);
+        configure_block_emptydir_storage(&mut storage, encrypted, &mount_options);
 
         // Mirror the Go runtime's handleBlkOCIMounts: the agent mounts the
         // block device at $(spath)/$(b64_device_id) which genpolicy expands to
@@ -188,18 +192,40 @@ fn block_emptydir_metadata(encrypted: bool, dir_gid: u32) -> HashMap<String, Str
     metadata
 }
 
-fn block_emptydir_mount_options(discard_unmap: bool) -> Vec<String> {
-    if discard_unmap {
-        vec![DISCARD_MOUNT_OPTION.to_string()]
-    } else {
-        vec![]
+/// Mount options for the guest ext4 filesystem of a block emptyDir.
+///
+/// Only block-plain takes mount options from the shim; the block-encrypted
+/// image is formatted and mounted by the guest's confidential data hub. The
+/// backing image is sparse and as large as the host filesystem, so the guest
+/// must not write to blocks the workload never used: `discard` hands blocks
+/// back as guest files are deleted, and `noinit_itable`, when the operator
+/// enables `emptydir_noinit_itable`, stops ext4 from zeroing every inode
+/// table in the background after the first mount. `noinit_itable` does not
+/// depend on the hypervisor's discard support. The list is computed once and
+/// copied into both mountInfo.json and the agent storage so the two agree,
+/// which matters because the agent policy compares it exactly and in order.
+fn block_emptydir_mount_options(
+    plain: bool,
+    discard_unmap: bool,
+    noinit_itable: bool,
+) -> Vec<String> {
+    let mut options = Vec::new();
+    if !plain {
+        return options;
     }
+    if discard_unmap {
+        options.push(DISCARD_MOUNT_OPTION.to_string());
+    }
+    if noinit_itable {
+        options.push(NOINIT_ITABLE_MOUNT_OPTION.to_string());
+    }
+    options
 }
 
 fn configure_block_emptydir_storage(
     storage: &mut agent::Storage,
     encrypted: bool,
-    discard_unmap: bool,
+    mount_options: &[String],
 ) {
     if encrypted {
         storage.driver_options.push(format!(
@@ -210,9 +236,7 @@ fn configure_block_emptydir_storage(
     storage
         .driver_options
         .push(KATA_BLOCK_VOLUME_CREATE_FS.to_string());
-    if discard_unmap {
-        storage.options.push(DISCARD_MOUNT_OPTION.to_string());
-    }
+    storage.options.extend_from_slice(mount_options);
     storage.shared = true;
 }
 
@@ -288,36 +312,64 @@ mod tests {
         );
         assert!(!metadata.contains_key(METADATA_ENCRYPTION_KEY));
         assert!(!metadata.contains_key(METADATA_FS_GROUP));
-        assert_eq!(
-            block_emptydir_mount_options(true),
-            vec![DISCARD_MOUNT_OPTION.to_string()]
-        );
+
+        // The default list is what genpolicy-settings.json pins for
+        // emptyDir_plain.
+        let mount_options = block_emptydir_mount_options(true, true, false);
+        assert_eq!(mount_options, vec![DISCARD_MOUNT_OPTION.to_string()]);
 
         let mut storage = agent::Storage::default();
 
-        configure_block_emptydir_storage(&mut storage, false, true);
+        configure_block_emptydir_storage(&mut storage, false, &mount_options);
 
         assert_eq!(
             storage.driver_options,
             vec![KATA_BLOCK_VOLUME_CREATE_FS.to_string()]
         );
-        assert_eq!(storage.options, vec![DISCARD_MOUNT_OPTION.to_string()]);
+        assert_eq!(storage.options, mount_options);
+        assert!(storage.shared);
+    }
+
+    #[test]
+    fn block_plain_emptydir_adds_noinit_itable_after_discard_when_enabled() {
+        let mount_options = block_emptydir_mount_options(true, true, true);
+        assert_eq!(
+            mount_options,
+            vec![
+                DISCARD_MOUNT_OPTION.to_string(),
+                NOINIT_ITABLE_MOUNT_OPTION.to_string()
+            ]
+        );
+
+        let mut storage = agent::Storage::default();
+
+        configure_block_emptydir_storage(&mut storage, false, &mount_options);
+
+        assert_eq!(
+            storage.driver_options,
+            vec![KATA_BLOCK_VOLUME_CREATE_FS.to_string()]
+        );
+        assert_eq!(storage.options, mount_options);
         assert!(storage.shared);
     }
 
     #[test]
     fn block_plain_emptydir_skips_discard_when_hypervisor_cannot_expose_it() {
-        assert!(block_emptydir_mount_options(false).is_empty());
+        assert!(block_emptydir_mount_options(true, false, false).is_empty());
+
+        // noinit_itable needs nothing from the host block device.
+        let mount_options = block_emptydir_mount_options(true, false, true);
+        assert_eq!(mount_options, vec![NOINIT_ITABLE_MOUNT_OPTION.to_string()]);
 
         let mut storage = agent::Storage::default();
 
-        configure_block_emptydir_storage(&mut storage, false, false);
+        configure_block_emptydir_storage(&mut storage, false, &mount_options);
 
         assert_eq!(
             storage.driver_options,
             vec![KATA_BLOCK_VOLUME_CREATE_FS.to_string()]
         );
-        assert!(storage.options.is_empty());
+        assert_eq!(storage.options, mount_options);
         assert!(storage.shared);
     }
 
@@ -334,11 +386,15 @@ mod tests {
             Some(ENCRYPTION_KEY_VALUE)
         );
         assert!(!metadata.contains_key(METADATA_FS_GROUP));
-        assert!(block_emptydir_mount_options(false).is_empty());
+
+        // block-encrypted takes no mount options from the shim, even with
+        // emptydir_noinit_itable enabled.
+        let mount_options = block_emptydir_mount_options(false, false, true);
+        assert!(mount_options.is_empty());
 
         let mut storage = agent::Storage::default();
 
-        configure_block_emptydir_storage(&mut storage, true, false);
+        configure_block_emptydir_storage(&mut storage, true, &mount_options);
 
         assert_eq!(
             storage.driver_options,
