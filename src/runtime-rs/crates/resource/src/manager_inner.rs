@@ -980,6 +980,8 @@ impl ResourceManagerInner {
     }
 
     pub async fn cleanup(&self) -> Result<()> {
+        // Cleanup may be called repeatedly, including by sandbox shutdown retries.
+        // Only successful stages are marked complete; errors leave stages pending.
         // Hold this lock across the attempt: a concurrent caller can retry
         // failed stages, but cannot run them while the first attempt is active.
         let mut steps = self.cleanup_steps.lock().await;

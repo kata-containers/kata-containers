@@ -202,6 +202,8 @@ impl ShareFsMount for VirtiofsShareMount {
     }
 
     async fn cleanup(&self, sid: &str) -> Result<()> {
+        // Cleanup can run multiple times when a previous attempt fails. Return errors
+        // so the resource manager keeps this stage pending for a later retry.
         // Unmount ro path
         let host_ro_dest = get_host_ro_shared_path(sid);
         umount_all(host_ro_dest.clone(), true).context("failed to umount ro path")?;
