@@ -2292,6 +2292,9 @@ impl ToQemuParams for ObjectTdxGuest {
 const DEFAULT_START_ADDR: &str = "0x5";
 //const DEFAULT_ADDR: &str = "0x0";
 
+/// ID of the IOMMUFD object shared by all cold-plugged VFIO devices.
+const VFIO_IOMMUFD_ID: &str = "iommufd0";
+
 /// Configuration for the IOMMUFD object backend.
 #[derive(Debug)]
 pub struct ObjectIommufd {
@@ -2986,6 +2989,9 @@ pub struct QemuCmdLine<'a> {
     block_fdsets: HashMap<String, Vec<i64>>,
     next_fdset_id: i64,
     requires_memlock: bool,
+    // Set once the IOMMUFD object shared by all cold-plugged VFIO devices
+    // has been emitted.
+    vfio_iommufd_added: bool,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -3010,6 +3016,7 @@ impl<'a> QemuCmdLine<'a> {
             block_fdsets: HashMap::new(),
             next_fdset_id: 1,
             requires_memlock: false,
+            vfio_iommufd_added: false,
         };
 
         // add_virtiofs_share() installs the file-backed memory backend when
@@ -3630,15 +3637,22 @@ impl<'a> QemuCmdLine<'a> {
             }
         };
 
-        let iommufd_name = format!("iommufd{}", config.bus);
+        // All cold-plugged VFIO devices share one IOMMUFD object. The kernel
+        // requires every device of an IOMMU group to bind to the same IOMMUFD
+        // context, so one object per device fails with EPERM for devices that
+        // share a group (e.g. NVSwitches behind a switch port without ACS).
+        let iommufd_name = VFIO_IOMMUFD_ID;
         let fd_config = config.fd_config.as_ref();
-        if let Some(fd_config) = fd_config {
-            self.devices.push(Box::new(ObjectIommufd::with_fd(
-                &iommufd_name,
-                &fd_config.iommufd_dev,
-            )?));
-        } else {
-            self.add_iommufd(&iommufd_name)?;
+        if !self.vfio_iommufd_added {
+            if let Some(fd_config) = fd_config {
+                self.devices.push(Box::new(ObjectIommufd::with_fd(
+                    iommufd_name,
+                    &fd_config.iommufd_dev,
+                )?));
+            } else {
+                self.add_iommufd(iommufd_name)?;
+            }
+            self.vfio_iommufd_added = true;
         }
 
         let root_port_id = config.bus.clone();
@@ -3649,7 +3663,7 @@ impl<'a> QemuCmdLine<'a> {
             .with_addr(format!("0x{:02x}", config.port));
         info!(sl!(), "PCIe Root Port: {:?}", root_port.clone());
 
-        let mut vfio_device = PCIeVfioDevice::new(&config.host_bdf, root_port_id, &iommufd_name);
+        let mut vfio_device = PCIeVfioDevice::new(&config.host_bdf, root_port_id, iommufd_name);
         if let Some(fd_config) = fd_config {
             vfio_device = vfio_device
                 .with_id(&fd_config.qemu_device_id)
@@ -4129,7 +4143,7 @@ mod tests {
             .windows(2)
             .find(|args| args[0] == "-object" && args[1].starts_with("iommufd,"))
             .expect("missing IOMMUFD object");
-        assert!(contains_param(&iommufd[1..2], "id=iommufdrp0"));
+        assert!(contains_param(&iommufd[1..2], "id=iommufd0"));
         assert!(iommufd[1].split(',').any(|param| param.starts_with("fd=")));
 
         let vfio = params
@@ -4137,7 +4151,7 @@ mod tests {
             .find(|args| args[0] == "-device" && args[1].starts_with("vfio-pci,"))
             .expect("missing VFIO device");
         assert!(contains_param(&vfio[1..2], "id=vfio-test"));
-        assert!(contains_param(&vfio[1..2], "iommufd=iommufdrp0"));
+        assert!(contains_param(&vfio[1..2], "iommufd=iommufd0"));
         assert!(vfio[1].split(',').any(|param| param.starts_with("fd=")));
         assert!(!vfio[1].split(',').any(|param| param.starts_with("host=")));
         assert!(cmdline.requires_memlock());
@@ -4146,7 +4160,7 @@ mod tests {
 
     #[actix_rt::test]
     #[serial]
-    async fn test_multiple_vfio_devices_use_independent_fds() {
+    async fn test_multiple_vfio_devices_share_iommufd() {
         let config = test_qemu_config(Some("none"), false);
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
         let mut cmdline = QemuCmdLine::new("multiple-vfio-device-fds", &config).unwrap();
@@ -4169,13 +4183,10 @@ mod tests {
                     .then_some(args[1].as_str())
             })
             .collect();
-        assert_eq!(iommufds.len(), 2);
-        assert!(iommufds
-            .iter()
-            .any(|arg| arg.split(',').any(|param| param == "id=iommufdrp0")));
-        assert!(iommufds
-            .iter()
-            .any(|arg| arg.split(',').any(|param| param == "id=iommufdrp1")));
+        // Devices in the same host IOMMU group must bind to the same
+        // IOMMUFD context, so every device shares a single object.
+        assert_eq!(iommufds.len(), 1);
+        assert!(iommufds[0].split(',').any(|param| param == "id=iommufd0"));
 
         let vfio_devices: Vec<&str> = params
             .windows(2)
@@ -4187,11 +4198,11 @@ mod tests {
         assert_eq!(vfio_devices.len(), 2);
         assert!(vfio_devices.iter().any(|arg| {
             arg.split(',').any(|param| param == "id=vfio-gpu-0")
-                && arg.split(',').any(|param| param == "iommufd=iommufdrp0")
+                && arg.split(',').any(|param| param == "iommufd=iommufd0")
         }));
         assert!(vfio_devices.iter().any(|arg| {
             arg.split(',').any(|param| param == "id=vfio-gpu-1")
-                && arg.split(',').any(|param| param == "iommufd=iommufdrp1")
+                && arg.split(',').any(|param| param == "iommufd=iommufd0")
         }));
         assert!(vfio_devices
             .iter()
@@ -4208,8 +4219,53 @@ mod tests {
             .collect();
         inherited_fds.sort_unstable();
         inherited_fds.dedup();
-        assert_eq!(inherited_fds.len(), 4);
+        // One IOMMUFD fd plus one VFIO cdev fd per device.
+        assert_eq!(inherited_fds.len(), 3);
         assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_devices_without_fds_share_iommufd() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-shared-iommufd", &config).unwrap();
+
+        // e.g. four NVSwitches in one IOMMU group
+        let bdfs = [
+            "0000:bd:00.0",
+            "0000:be:00.0",
+            "0000:bf:00.0",
+            "0000:c0:00.0",
+        ];
+        for (idx, bdf) in bdfs.iter().enumerate() {
+            let vfio = VfioDeviceConfig::new(*bdf, 9 + idx as u16, 10 + idx as u32)
+                .with_vfio_bus(format!("rp{idx}"));
+            cmdline.add_pcie_vfio_device(vfio).unwrap();
+        }
+        let params = cmdline.build().await.unwrap();
+
+        let iommufds: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| {
+                (args[0] == "-object" && args[1].starts_with("iommufd,"))
+                    .then_some(args[1].as_str())
+            })
+            .collect();
+        assert_eq!(iommufds, vec!["iommufd,id=iommufd0"]);
+
+        let vfio_devices: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| {
+                (args[0] == "-device" && args[1].starts_with("vfio-pci,"))
+                    .then_some(args[1].as_str())
+            })
+            .collect();
+        assert_eq!(vfio_devices.len(), bdfs.len());
+        assert!(vfio_devices
+            .iter()
+            .all(|arg| arg.split(',').any(|param| param == "iommufd=iommufd0")));
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 
