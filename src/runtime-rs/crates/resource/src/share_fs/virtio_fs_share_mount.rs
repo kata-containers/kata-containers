@@ -184,6 +184,8 @@ impl ShareFsMount for VirtiofsShareMount {
 
         if !config.cid.is_empty() {
             if let Some(container_dir) = Path::new(&host_dest).parent() {
+                // Remove only the empty container directory. If entries remain, leave them
+                // for their owning cleanup paths rather than deleting them recursively.
                 match fs::remove_dir(container_dir) {
                     Err(e)
                         if e.kind() != std::io::ErrorKind::NotFound
