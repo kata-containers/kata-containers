@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-pub mod overlap;
 pub mod v1;
 
 use v1::pod_resources_lister_client::PodResourcesListerClient;
@@ -115,8 +114,7 @@ fn dedup_strings(input: &[String]) -> Vec<String> {
 }
 
 /// Cold-plug CDI device names selected from a PodResources response, kept per
-/// source so the caller can run cross-source enforcement (the physical overlap
-/// check) before flattening for attachment.
+/// source until the caller flattens them for attachment.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct SelectedColdPlugDevices {
     /// Devices from `container.devices` (device-plugin allocations).
@@ -127,12 +125,8 @@ pub struct SelectedColdPlugDevices {
 
 impl SelectedColdPlugDevices {
     /// The final plug list: device-plugin devices first, then DRA devices,
-    /// deduplicated preserving order.
-    ///
-    /// Precondition when both lists are non-empty: run
-    /// `overlap::check_cross_source_physical_overlap` on the two lists
-    /// first. Flattening erases the source, and a same-physical-device
-    /// collision that was not rejected would be cold-plugged twice.
+    /// deduplicated preserving order. Two names for one physical device are
+    /// not caught here; the device manager rejects that when it registers them.
     pub fn flattened(&self) -> Vec<String> {
         let mut all = self.device_plugin.clone();
         all.extend(self.dra.iter().cloned());
@@ -147,8 +141,7 @@ impl SelectedColdPlugDevices {
 /// error, so misconfiguration cannot silently boot the guest without its
 /// devices; data that never resolves in the CDI cache is not cold-pluggable
 /// and is exempt. No cross-source policy is applied here: the response is
-/// passed through per source, and the overlap check runs in the caller's
-/// device path.
+/// passed through per source.
 fn select_cold_plug_devices(
     pod_resources: &PodResources,
     sources: &[DeviceSource],
@@ -235,9 +228,8 @@ fn select_cold_plug_devices(
 /// migrating between the two runs both for a while. The sets have to stay
 /// disjoint, because kubelet counts a device advertised via both APIs twice
 /// at scheduling. This function passes each source's devices through as-is;
-/// the caller runs `overlap::check_cross_source_physical_overlap` on the
-/// returned lists before attaching, where a same-device collision is
-/// rejected instead of being plugged twice.
+/// a same-device collision is rejected by the device manager when the
+/// devices are registered, instead of being plugged twice.
 pub async fn get_pod_cdi_devices(
     socket: &str,
     annotations: &HashMap<String, String>,

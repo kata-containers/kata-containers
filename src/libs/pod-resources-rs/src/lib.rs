@@ -54,7 +54,7 @@ fn new_cdi_cache(spec_dirs: &[&str]) -> Arc<Mutex<Cache>> {
 
 /// Resolve CDI device names to their host device-node paths; names that do
 /// not resolve in the cache are omitted from the map. A cache build/refresh
-/// failure is a hard error so the fail-closed overlap guard can propagate it.
+/// failure is a hard error.
 pub fn cdi_device_node_host_paths(
     spec_dirs: &[&str],
     names: &[String],

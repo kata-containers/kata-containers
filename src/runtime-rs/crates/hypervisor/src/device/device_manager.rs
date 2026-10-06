@@ -18,7 +18,7 @@ use kata_types::config::hypervisor::{
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
+    vfio_device::{DeviceAddress, DeviceInfo, VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
     BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor, NetworkDevice,
     PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
@@ -34,6 +34,14 @@ use super::{
 };
 
 pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
+
+/// The first address the candidate shares with an already registered device.
+fn vfio_alias(existing: &[DeviceInfo], candidate: &[DeviceInfo]) -> Option<DeviceAddress> {
+    candidate
+        .iter()
+        .find(|c| existing.iter().any(|e| e.addr == c.addr))
+        .map(|c| c.addr.clone())
+}
 
 macro_rules! declare_index {
     ($self:ident, $index:ident, $released_index:ident) => {{
@@ -281,6 +289,27 @@ impl DeviceManager {
         None
     }
 
+    // find_device matches host paths, but one physical device can arrive under two
+    // paths (its iommu-group cdev and its per-device cdev). The VMM would then open
+    // it twice and fail with an error that names neither path, so refuse it here.
+    async fn reject_vfio_modern_alias(&self, candidate: &VfioDeviceModernHandle) -> Result<()> {
+        let cand = candidate.vfio_device().await;
+        let cand_path = candidate.vfio_config().await.host_path;
+        for dev in self.devices.values() {
+            if let DeviceType::VfioModern(existing) = dev.lock().await.get_device_info().await {
+                let existing = existing.lock().await;
+                if let Some(addr) = vfio_alias(&existing.device.devices, &cand.devices) {
+                    return Err(anyhow!(
+                        "vfio device {addr} is already registered as {:?} and cannot be added again as {:?}",
+                        existing.config.host_path,
+                        cand_path
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn get_dev_virt_path(
         &mut self,
         dev_type: &str,
@@ -343,10 +372,9 @@ impl DeviceManager {
                 vfio_base.iommu_group_devnode = PathBuf::from(dev_host_path);
                 vfio_base.virt_path = virt_path;
 
-                Arc::new(Mutex::new(VfioDeviceModernHandle::new(
-                    device_id.clone(),
-                    &vfio_base,
-                )?))
+                let handle = VfioDeviceModernHandle::new(device_id.clone(), &vfio_base)?;
+                self.reject_vfio_modern_alias(&handle).await?;
+                Arc::new(Mutex::new(handle))
             }
             DeviceConfig::VhostUserBlkCfg(config) => {
                 // try to find the device, found and just return id.
@@ -698,6 +726,23 @@ mod tests {
     use std::sync::Arc;
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
+
+    #[test]
+    fn test_vfio_alias() {
+        use crate::vfio_device::{BdfAddress, DeviceAddress, DeviceInfo};
+        let pci = |bus: u8| DeviceAddress::Pci(BdfAddress::new(0, bus, 0, 0));
+        let dev = |bus: u8| DeviceInfo {
+            addr: pci(bus),
+            ..Default::default()
+        };
+
+        // an iommu-group cdev covering two functions vs a per-device cdev for one of them
+        let group = vec![dev(0x4c), dev(0x4d)];
+        assert_eq!(super::vfio_alias(&group, &[dev(0x4c)]), Some(pci(0x4c)));
+        assert_eq!(super::vfio_alias(&[dev(0x4c)], &group), Some(pci(0x4c)));
+        assert_eq!(super::vfio_alias(&group, &[dev(0x19)]), None);
+        assert_eq!(super::vfio_alias(&[], &[dev(0x19)]), None);
+    }
 
     async fn new_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
         let hypervisor_name: &str = "qemu";

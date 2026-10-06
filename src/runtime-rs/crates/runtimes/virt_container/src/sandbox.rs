@@ -686,16 +686,6 @@ impl VirtSandbox {
             .await
             .context("failed to query Pod Resources CDI devices")?;
 
-            // Cross-source enforcement belongs to the device path, not the
-            // PodResources parser: this is the last point where a device
-            // still carries its source, right before attachment.
-            pod_resources_rs::pod_resources::overlap::check_cross_source_physical_overlap(
-                &selected.device_plugin,
-                &selected.dra,
-                &pod_resources_rs::DEFAULT_CDI_SPEC_DIRS,
-            )
-            .context("cold plug: cross-source physical overlap")?;
-
             let cdi_devices = selected.flattened();
             info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
 
