@@ -380,6 +380,41 @@ func TestAppendDeviceVFIO(t *testing.T) {
 	testAppend(vfioDevice, deviceVFIOString, t)
 }
 
+func TestAppendDeviceVFIOSharedIommufd(t *testing.T) {
+	// e.g. NVSwitches that share one IOMMU group
+	var config Config
+	for i := 0; i < 4; i++ {
+		config.Devices = append(config.Devices, VFIODevice{
+			ID:        fmt.Sprintf("vfio%d", i),
+			BDF:       fmt.Sprintf("0000:%02x:00.0", 0xbd+i),
+			Bus:       fmt.Sprintf("rp%d", i),
+			Transport: TransportPCI,
+			DevfsDev:  fmt.Sprintf("/dev/vfio/devices/vfio%d", i),
+		})
+	}
+	config.appendDevices(nil)
+
+	var objects, devices int
+	for i, param := range config.qemuParams {
+		if param == "-object" && strings.HasPrefix(config.qemuParams[i+1], "iommufd,") {
+			if config.qemuParams[i+1] != "iommufd,id="+IommufdObjectID {
+				t.Fatalf("unexpected iommufd object: %s", config.qemuParams[i+1])
+			}
+			objects++
+		}
+		if strings.HasPrefix(param, "vfio-pci,") {
+			if !strings.Contains(param, ",iommufd="+IommufdObjectID) {
+				t.Fatalf("vfio device does not use the shared iommufd: %s", param)
+			}
+			devices++
+		}
+	}
+	if objects != 1 || devices != 4 {
+		t.Fatalf("expected 1 iommufd object and 4 vfio devices, got %d and %d: %v",
+			objects, devices, config.qemuParams)
+	}
+}
+
 func TestAppendDevicePXBPCIe(t *testing.T) {
 	pxb := PXBPCIeDevice{
 		ID:       "pxb-numa1",

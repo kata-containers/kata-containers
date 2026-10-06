@@ -1233,12 +1233,18 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 	romfile := ""
 
 	for _, tc := range []struct {
-		name      string
-		iommufdID string
+		name          string
+		iommufdID     string
+		iommufdExists bool
 	}{
 		{
-			name:      "with IOMMUFD",
-			iommufdID: "0",
+			name:      "with new IOMMUFD object",
+			iommufdID: "iommufd0",
+		},
+		{
+			name:          "with existing IOMMUFD object",
+			iommufdID:     "iommufd0",
+			iommufdExists: true,
 		},
 		{
 			name:      "without IOMMUFD",
@@ -1255,7 +1261,12 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 			// support verifying parameters passed to object-add and device_add.
 			// So we just verify that the commands are sent in the correct order.
 			if tc.iommufdID != "" {
-				buf.AddCommand("object-add", nil, "return", nil)
+				if tc.iommufdExists {
+					buf.AddCommand("qom-get", nil, "return", "iommufd")
+				} else {
+					buf.AddCommand("qom-get", nil, "error", nil)
+					buf.AddCommand("object-add", nil, "return", nil)
+				}
 			}
 			buf.AddCommand("device_add", nil, "return", nil)
 
