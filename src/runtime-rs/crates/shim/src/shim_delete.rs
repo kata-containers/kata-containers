@@ -10,16 +10,36 @@ use kata_sys_util::spec::{get_bundle_path, get_container_type, load_oci_spec};
 use kata_types::container::ContainerType;
 use nix::{sys::signal::kill, sys::signal::SIGKILL, unistd::Pid};
 use protobuf::Message;
-use std::{fs, path::Path};
+use std::{fs, io::Write, path::Path};
 
-use crate::{shim::ShimExecutor, Error};
+use crate::{logger, shim::ShimExecutor, Error};
 
 impl ShimExecutor {
     pub async fn delete(&mut self) -> Result<()> {
+        let _logger_guard = match logger::set_logger("", &self.args.id, self.args.debug) {
+            Ok(guard) => Some(guard),
+            Err(err) => {
+                eprintln!("failed to set the delete logger, errors go to stderr only: {err:#}");
+                None
+            }
+        };
+        logging::register_subsystem_logger("runtimes", "shim");
+
+        self.do_delete()
+            .await
+            .inspect_err(|err| error!(sl!(), "failed to delete shim: {err:?}"))
+    }
+
+    async fn do_delete(&mut self) -> Result<()> {
         self.args.validate(true).context("validate")?;
         let rsp = self.do_cleanup().await.context("shim do cleanup")?;
-        rsp.write_to_writer(&mut std::io::stdout())
+        // Drop ignores buffered flush errors, so flush explicitly while errors can be reported.
+        let mut stdout = std::io::stdout().lock();
+        rsp.write_to_writer(&mut stdout)
             .context(Error::FileWrite(format!("write {rsp:?} to stdout")))?;
+        stdout
+            .flush()
+            .context(Error::FileWrite("flush stdout".to_owned()))?;
         Ok(())
     }
 
