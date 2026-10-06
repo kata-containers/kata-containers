@@ -151,7 +151,7 @@ impl CpuResource {
         // to reach that magnitude.
         let mut total_quota: f64 = 0.0;
 
-        for (_, cpu_resource) in resources.iter() {
+        for cpu_resource in resources.values() {
             cpuset_vcpu.extend(cpu_resource.cpuset().iter());
 
             let quota = cpu_resource.quota() as f64;

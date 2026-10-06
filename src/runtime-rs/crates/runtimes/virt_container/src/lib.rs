@@ -228,7 +228,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     let hypervisor_config = toml_config
         .hypervisor
         .get(hypervisor_name)
-        .ok_or_else(|| anyhow!("failed to get hypervisor for {}", &hypervisor_name))
+        .ok_or_else(|| anyhow!("failed to get hypervisor for {}", hypervisor_name))
         .context("get hypervisor")?;
 
     // TODO: support other hypervisor
@@ -294,7 +294,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
                 .await;
             Ok(Arc::new(hypervisor))
         }
-        _ => Err(anyhow!("Unsupported hypervisor {}", &hypervisor_name)),
+        _ => Err(anyhow!("Unsupported hypervisor {}", hypervisor_name)),
     }
 }
 
@@ -303,14 +303,14 @@ fn new_agent(toml_config: &TomlConfig) -> Result<Arc<KataAgent>> {
     let agent_config = toml_config
         .agent
         .get(agent_name)
-        .ok_or_else(|| anyhow!("failed to get agent for {}", &agent_name))
+        .ok_or_else(|| anyhow!("failed to get agent for {}", agent_name))
         .context("get agent")?;
     match agent_name.as_str() {
         AGENT_KATA => {
             let agent = KataAgent::new(agent_config.clone());
             Ok(Arc::new(agent))
         }
-        _ => Err(anyhow!("Unsupported agent {}", &agent_name)),
+        _ => Err(anyhow!("Unsupported agent {}", agent_name)),
     }
 }
 

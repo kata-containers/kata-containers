@@ -786,7 +786,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let exec_file = Path::new(&args[0]);
     log_child!(cfd_log, "process command: {:?}", &args);
     if !exec_file.exists() {
-        find_file(exec_file).ok_or_else(|| anyhow!("the file {} was not found", &args[0]))?;
+        find_file(exec_file).ok_or_else(|| anyhow!("the file {} was not found", args[0]))?;
     }
 
     // notify parent that the child's ready to start
@@ -979,7 +979,7 @@ impl BaseContainer for LinuxContainer {
         }
 
         let tty = p.tty;
-        let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
+        let fifo_file = format!("{}/{}", self.root, EXEC_FIFO_FILENAME);
         info!(logger, "enter container.start!");
         let mut fifofd: RawFd = -1;
         if p.init {
@@ -1369,7 +1369,7 @@ impl BaseContainer for LinuxContainer {
     }
 
     async fn exec(&mut self) -> Result<()> {
-        let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
+        let fifo = format!("{}/{}", self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
         unistd::write(&fd, data)?;

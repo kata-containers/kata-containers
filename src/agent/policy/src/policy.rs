@@ -683,13 +683,13 @@ mod tests {
         for test_case in test_cases {
             let output_res: Result<PolicyCopyFileRequest> = (&test_case.input).try_into();
             if let Some(ref expected) = test_case.output {
-                let output = output_res.unwrap_or_else(|_| panic!("test case {}", &test_case.name));
-                assert_eq!(*expected, output, "test case {}", &test_case.name)
+                let output = output_res.unwrap_or_else(|_| panic!("test case {}", test_case.name));
+                assert_eq!(*expected, output, "test case {}", test_case.name)
             } else {
                 assert!(
                     output_res.is_err(),
                     "test case {}\nunexpected success: {:?}",
-                    &test_case.name,
+                    test_case.name,
                     output_res
                 )
             }

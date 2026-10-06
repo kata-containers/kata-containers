@@ -171,7 +171,7 @@ impl NydusExtraOptions {
         if options.len() != 1 {
             return Err(anyhow!(
                 "get_nydus_extra_options: Invalid nydus options: {:?}",
-                &mount.options
+                mount.options
             ));
         }
         let config_raw_data = options[0].trim_start_matches("extraoption=");

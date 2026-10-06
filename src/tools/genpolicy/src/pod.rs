@@ -716,7 +716,7 @@ impl Container {
                     resource,
                     service_account_name,
                 );
-                let src_string = format!("{}={value}", &env_variable.name);
+                let src_string = format!("{}={value}", env_variable.name);
 
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
@@ -828,7 +828,7 @@ impl EnvFromSource {
             } else {
                 panic!(
                     "Couldn't get values from configmap ref: {}: the ConfigMap {}",
-                    &config_map_env_source.name, UNRESOLVED_SOURCE_HINT
+                    config_map_env_source.name, UNRESOLVED_SOURCE_HINT
                 );
             }
         }
@@ -839,7 +839,7 @@ impl EnvFromSource {
             } else {
                 panic!(
                     "Couldn't get values from secret ref: {}: the Secret {}",
-                    &secret_env_source.name, UNRESOLVED_SOURCE_HINT
+                    secret_env_source.name, UNRESOLVED_SOURCE_HINT
                 );
             }
         }
@@ -886,7 +886,7 @@ impl EnvVar {
                     config_map::get_value(value_from, config_maps).unwrap_or_else(|| {
                         panic!(
                             "Couldn't get the value of env var: {}: ConfigMap {:?} key {:?} {}",
-                            &self.name,
+                            self.name,
                             key_ref.name.as_deref().unwrap_or_default(),
                             key_ref.key,
                             UNRESOLVED_SOURCE_HINT
@@ -899,7 +899,7 @@ impl EnvVar {
                 return Some(secret::get_value(value_from, secrets).unwrap_or_else(|| {
                     panic!(
                         "Couldn't get the value of env var: {}: Secret {:?} key {:?} {}",
-                        &self.name,
+                        self.name,
                         key_ref.name.as_deref().unwrap_or_default(),
                         key_ref.key,
                         UNRESOLVED_SOURCE_HINT
@@ -919,7 +919,7 @@ impl EnvVar {
                 return Some("$(resource-field)".to_string());
             }
 
-            panic!("Couldn't get the value of env var: {}", &self.name);
+            panic!("Couldn't get the value of env var: {}", self.name);
         }
 
         None
@@ -956,7 +956,7 @@ impl EnvVar {
                     } else {
                         panic!(
                             "Env var: unsupported field reference: {}",
-                            &field_ref.fieldPath
+                            field_ref.fieldPath
                         )
                     }
                 }
@@ -985,7 +985,7 @@ impl EnvVar {
                 } else {
                     warn!(
                         "Can't find the value of annotation {}. Allowing any value.",
-                        &annotation
+                        annotation
                     );
                 }
             }
@@ -1008,7 +1008,7 @@ impl EnvVar {
                 if let Some(value) = labels.get(&label) {
                     return Some(value.clone());
                 } else {
-                    panic!("Can't find the value of label {}.", &label);
+                    panic!("Can't find the value of label {}.", label);
                 }
             }
         }
@@ -1193,13 +1193,13 @@ impl Container {
                 process.User.GID = new_gid;
                 debug!(
                     "get_process_fields: set GID = {new_gid}, User = {:?}",
-                    &process.User
+                    process.User
                 );
 
                 process.User.AdditionalGids.insert(new_gid);
                 debug!(
                     "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
-                    &process.User
+                    process.User
                 );
             }
 
@@ -1212,7 +1212,7 @@ impl Container {
                 process.User.AdditionalGids.insert(new_gid);
                 debug!(
                     "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
-                    &process.User
+                    process.User
                 );
             }
 

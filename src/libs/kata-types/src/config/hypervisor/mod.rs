@@ -1593,13 +1593,13 @@ impl SharedFsInfo {
         if !l.contains(&self.virtio_fs_cache.as_str()) {
             return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs cache mode: {}",
-                &self.virtio_fs_cache,
+                self.virtio_fs_cache,
             )));
         }
         if self.virtio_fs_is_dax && self.virtio_fs_cache_size == 0 {
             return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs DAX window size: {}",
-                &self.virtio_fs_cache_size,
+                self.virtio_fs_cache_size,
             )));
         }
         Ok(())
