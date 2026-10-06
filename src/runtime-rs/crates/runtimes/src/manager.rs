@@ -840,7 +840,7 @@ fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
     Ok(())
 }
 
-/// Setup failures occur before a sandbox can take ownership of namespace cleanup.
+// Setup failures occur before a sandbox can take ownership of namespace cleanup.
 struct CreatedNetnsGuard(Option<String>);
 
 impl CreatedNetnsGuard {
