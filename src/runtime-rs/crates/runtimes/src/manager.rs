@@ -310,7 +310,9 @@ impl RuntimeHandlerManager {
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
 
-        // A fresh Delete process never ran try_init(), which registers the config plugins.
+        // After the shim disconnects, containerd invokes the shim binary's `delete`
+        // subcommand in a separate process. This path bypasses try_init(), so register
+        // the config plugins here before loading the sandbox configuration.
         init_runtime_handlers()?;
 
         let config = if let Ok(spec) = load_oci_spec() {
