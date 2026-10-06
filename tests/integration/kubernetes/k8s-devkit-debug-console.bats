@@ -189,15 +189,18 @@ setup() {
 	# being single-quoted for the remote shell.
 	local script="set -e"
 	script+="; printf %s ${token} > ${src}"
+	script+="; echo Copying payload to guest >&2"
 	script+="; /opt/kata/bin/kata-ctl cp ${src} ${sandbox_id}:${guest}"
+	script+="; echo Copying payload from guest >&2"
 	script+="; /opt/kata/bin/kata-ctl cp ${sandbox_id}:${guest} ${dst}"
+	script+="; cmp ${src} ${dst}"
 	script+="; cat ${dst}"
 	script+="; rm -f ${src} ${dst}"
 
-	local output
-	output="$(exec_host "${node}" "timeout 120 nsenter --mount=/proc/1/ns/mnt sh -c '${script}'")"
+	run exec_host "${node}" "timeout 120 nsenter --mount=/proc/1/ns/mnt sh -c '${script}'"
 	echo "kata-ctl cp output:"
 	echo "${output}"
+	[[ "${status}" -eq 0 ]] || die "kata-ctl cp round trip failed with status ${status}"
 
 	echo "${output}" | grep -q "${token}" \
 		|| die "kata-ctl cp did not round-trip the payload through the guest"
