@@ -49,9 +49,39 @@ const LOG_LEVELS: &[(&str, slog::Level)] = &[
 
 const DEFAULT_SUBSYSTEM: &str = "root";
 
-// Creates a logger which prints output as human readable text to the terminal
+// Creates a logger which prints human-readable text to standard output.
+//
+// stdout is used so callers can silence logs with `>/dev/null` (for example
+// `kata-ctl check all >/dev/null`). slog_term::term_compact() writes to stderr
+// by default, which is why that redirection previously left INFO lines visible.
 pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::AsyncGuard) {
-    let term_drain = slog_term::term_compact().fuse();
+    let decorator = slog_term::TermDecorator::new().stdout().build();
+    let term_drain = slog_term::CompactFormat::new(decorator).build();
+    build_term_logger(level, term_drain)
+}
+
+// XXX: 'writer' param used to make testing possible (including closed pipes).
+pub fn create_term_logger_with_writer<W>(
+    level: slog::Level,
+    writer: W,
+) -> (slog::Logger, slog_async::AsyncGuard)
+where
+    W: Write + Send + Sync + 'static,
+{
+    let decorator = slog_term::PlainDecorator::new(writer);
+    let term_drain = slog_term::CompactFormat::new(decorator).build();
+    build_term_logger(level, term_drain)
+}
+
+fn build_term_logger<D>(level: slog::Level, term_drain: D) -> (slog::Logger, slog_async::AsyncGuard)
+where
+    D: Drain<Ok = (), Err = io::Error> + Send + 'static,
+{
+    // Do not `.fuse()` the raw term drain. Fuse panics on any error, including
+    // EPIPE when stdout is a closed pipe (`cmd | head`, cargo test capture).
+    // That panic was the CI failure in kata-containers/kata-containers#8839.
+    // Map BrokenPipe to success first; other IO errors still panic via Fuse.
+    let term_drain = IgnoreBrokenPipe::new(term_drain).fuse();
 
     // Ensure only a unique set of key/value fields is logged
     let unique_drain = UniqueDrain::new(term_drain).fuse();
@@ -275,6 +305,33 @@ impl slog::Serializer for HashSerializer {
     fn emit_arguments(&mut self, key: Key, value: &std::fmt::Arguments) -> slog::Result {
         self.add_field(format!("{key}"), format!("{value}"));
         Ok(())
+    }
+}
+
+// Treats EPIPE as success so a closed stdout pipe does not panic via Fuse.
+struct IgnoreBrokenPipe<D> {
+    drain: D,
+}
+
+impl<D> IgnoreBrokenPipe<D> {
+    fn new(drain: D) -> Self {
+        IgnoreBrokenPipe { drain }
+    }
+}
+
+impl<D> Drain for IgnoreBrokenPipe<D>
+where
+    D: Drain<Err = io::Error>,
+{
+    type Ok = ();
+    type Err = io::Error;
+
+    fn log(&self, record: &Record, values: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
+        match self.drain.log(record, values) {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -777,5 +834,110 @@ mod tests {
             // No explicit subsystem, so should be the default
             assert_eq!(field_subsystem, &json!(DEFAULT_SUBSYSTEM), "{msg}");
         }
+    }
+
+    #[test]
+    fn test_create_term_logger_write_to_writer() {
+        let writer = NamedTempFile::new().expect("failed to create tempfile");
+        let mut writer_ref = writer.reopen().expect("failed to clone tempfile");
+
+        let (logger, guard) = create_term_logger_with_writer(slog::Level::Info, writer);
+        let msg = "term-logger-stdout-message";
+        info!(&logger, "{}", msg);
+
+        drop(guard);
+        drop(logger);
+
+        let mut contents = String::new();
+        writer_ref
+            .read_to_string(&mut contents)
+            .expect("failed to read tempfile contents");
+
+        assert!(
+            contents.contains(msg),
+            "expected term logger output to contain the message, got {}",
+            contents
+        );
+        assert!(
+            contents.contains("INFO"),
+            "expected INFO in term logger output, got {}",
+            contents
+        );
+    }
+
+    #[test]
+    fn test_create_term_logger_pipe_then_close_does_not_panic() {
+        let (mut reader, writer) = io::pipe().expect("failed to create pipe");
+        let (logger, guard) = create_term_logger_with_writer(slog::Level::Info, writer);
+
+        let msg = "term-logger-pipe-message";
+        info!(&logger, "{}", msg);
+
+        drop(guard);
+        drop(logger);
+
+        let mut contents = String::new();
+        reader
+            .read_to_string(&mut contents)
+            .expect("failed to read pipe");
+        assert!(
+            contents.contains(msg),
+            "expected piped term logger output to contain the message, got {}",
+            contents
+        );
+    }
+
+    #[test]
+    fn test_create_term_logger_closed_pipe_does_not_panic() {
+        // Reproduce the #8839 CI failure: slog-async writes after the reader
+        // has gone away. Fuse would panic with BrokenPipe; IgnoreBrokenPipe
+        // must treat EPIPE as success so dropping the async guard joins cleanly.
+        let (reader, writer) = io::pipe().expect("failed to create pipe");
+        drop(reader);
+
+        let (logger, guard) = create_term_logger_with_writer(slog::Level::Info, writer);
+        info!(&logger, "log after stdout pipe closed");
+        info!(&logger, "second log after stdout pipe closed");
+
+        drop(guard);
+        drop(logger);
+    }
+
+    struct FailingDrain {
+        kind: io::ErrorKind,
+    }
+
+    impl Drain for FailingDrain {
+        type Ok = ();
+        type Err = io::Error;
+
+        fn log(&self, _record: &Record, _values: &OwnedKVList) -> Result<(), io::Error> {
+            Err(io::Error::new(self.kind, "injected log drain error"))
+        }
+    }
+
+    #[test]
+    fn test_ignore_broken_pipe_maps_epipe_to_ok() {
+        let rs = record_static!(slog::Level::Info, "");
+        let kv = o!();
+        let msg = format_args!("msg");
+        let record = Record::new(&rs, &msg, BorrowedKV(&kv));
+        let values = OwnedKVList::from(o!());
+
+        let epipe = IgnoreBrokenPipe::new(FailingDrain {
+            kind: io::ErrorKind::BrokenPipe,
+        });
+        assert!(
+            epipe.log(&record, &values).is_ok(),
+            "BrokenPipe must be treated as success"
+        );
+
+        let other = IgnoreBrokenPipe::new(FailingDrain {
+            kind: io::ErrorKind::PermissionDenied,
+        });
+        let err = other
+            .log(&record, &values)
+            .expect_err("non-EPIPE errors must still be returned");
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
     }
 }
