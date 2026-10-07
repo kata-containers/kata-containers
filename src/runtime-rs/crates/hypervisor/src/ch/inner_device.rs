@@ -575,6 +575,11 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
             },
             sparse: blkcfg.discard_unmap,
             image_type: ImageType::Raw,
+            serial: if blkcfg.serial_override.is_empty() {
+                None
+            } else {
+                Some(blkcfg.serial_override)
+            },
             ..Default::default()
         };
 
@@ -762,5 +767,20 @@ mod tests {
         let net = NetConfig::try_from(cfg);
         assert!(net.is_ok());
         assert_eq!(net.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_blockconfigmodern_to_diskconfig_serial() {
+        let mut cfg = BlockConfigModern {
+            path_on_host: "/tmp/disk.img".to_owned(),
+            ..Default::default()
+        };
+
+        let disk = DiskConfig::try_from(cfg.clone()).unwrap();
+        assert_eq!(disk.serial, None);
+
+        cfg.serial_override = "initdata".to_owned();
+        let disk = DiskConfig::try_from(cfg).unwrap();
+        assert_eq!(disk.serial.as_deref(), Some("initdata"));
     }
 }
