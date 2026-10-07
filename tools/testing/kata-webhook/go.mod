@@ -1,7 +1,7 @@
 module module-path
 
 // Keep in sync with version in versions.yaml
-go 1.26.7
+go 1.26.8
 
 require (
 	github.com/sirupsen/logrus v1.9.4
