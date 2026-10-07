@@ -155,6 +155,12 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn remove_device(&self, device: DeviceType) -> Result<()>;
     async fn update_device(&self, device: DeviceType) -> Result<()>;
 
+    /// Whether VFIO devices must reserve placement through runtime-rs's shared
+    /// PCIe topology before being passed to the hypervisor.
+    fn requires_generic_vfio_topology(&self) -> bool {
+        true
+    }
+
     // utils
     async fn get_agent_socket(&self) -> Result<String>;
     async fn disconnect(&self);
