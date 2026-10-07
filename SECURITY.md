@@ -26,7 +26,9 @@ These are independent objectives, not sequential steps.
 | **Initial acknowledgement** | ≤ 14 calendar days | Maintainers confirm receipt and start triage. |
 | **Triage & CVSS-v3.1 scoring** | ≤ 30 days | We assign severity and plan remediation. |
 | **Fix availability** | Next scheduled monthly release<br />(or an out-of-band patch for Critical/High issues) | We may cut a `vX.Y.Z` patch if waiting a month poses undue risk. |
-| **CVE assignment** | Before public disclosure | GitHub automatically requests a CVE ID when we publish the security advisory. |
+| **CVE assignment** | Before public disclosure | A CVE is requested after the report is confirmed, as part of the [VMT process].<br />Github is Kata's CNA and controls the assignment. |
+
+[VMT process]: https://github.com/kata-containers/community/blob/main/VMT/VMT.md
 
 ---
 
