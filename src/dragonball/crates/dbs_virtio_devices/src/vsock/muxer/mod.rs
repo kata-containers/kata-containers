@@ -17,7 +17,7 @@ use super::backend::{VsockBackend, VsockBackendType};
 use super::{VsockChannel, VsockEpollListener};
 pub use muxer_impl::VsockMuxer;
 
-mod defs {
+pub(crate) mod defs {
     /// Maximum number of established connections that we can handle.
     pub const MAX_CONNECTIONS: usize = 1023;
 
@@ -26,6 +26,15 @@ mod defs {
 
     /// Size of the muxer connection kill queue.
     pub const MUXER_KILLQ_SIZE: usize = 128;
+
+    /// Upper bound on the restore resets a muxer will accept.
+    ///
+    /// This must cover everything one save pass can emit, or a snapshot this
+    /// build produced would be one it refuses to restore: every live
+    /// connection, plus every standalone RST the RX queue can hold. It is a
+    /// guard against corrupt input, not a capacity limit -- each entry is a
+    /// port pair, so even the whole bound costs a few kilobytes.
+    pub const MAX_RESTORE_RESETS: usize = MAX_CONNECTIONS + MUXER_RXQ_SIZE;
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

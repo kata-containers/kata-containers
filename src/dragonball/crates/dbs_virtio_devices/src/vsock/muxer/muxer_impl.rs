@@ -35,7 +35,7 @@
 ///       other pollable FDs are then registered under this nested epoll FD. To
 ///       route all these events to their handlers, the muxer uses another
 ///       `HashMap` object, mapping `RawFd`s to `EpollListener`s.
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::Read;
 use std::os::fd::FromRawFd;
@@ -48,6 +48,7 @@ use super::super::backend::{HybridStream, VsockBackend, VsockBackendType, VsockS
 use super::super::csm::{ConnState, VsockConnection};
 use super::super::defs::uapi;
 use super::super::packet::VsockPacket;
+use super::super::persist::VsockConnectionId;
 use super::super::{Result as VsockResult, VsockChannel, VsockEpollListener, VsockError};
 use super::muxer_killq::MuxerKillQ;
 use super::muxer_rxq::MuxerRxQ;
@@ -59,6 +60,15 @@ use super::{defs, Error, Result, VsockGenericMuxer};
 pub struct ConnMapKey {
     local_port: u32,
     pub(crate) peer_port: u32,
+}
+
+impl From<ConnMapKey> for VsockConnectionId {
+    fn from(key: ConnMapKey) -> Self {
+        VsockConnectionId {
+            local_port: key.local_port,
+            peer_port: key.peer_port,
+        }
+    }
 }
 
 /// A muxer RX queue item.
@@ -126,6 +136,17 @@ pub struct VsockMuxer {
     backend_map: HashMap<VsockBackendType, Box<dyn VsockBackend>>,
     /// the backend which can accept peer-initiated connection.
     peer_backend: Option<VsockBackendType>,
+    /// Resets owed to the guest for connections that were live when the
+    /// snapshot this VM was restored from was taken.
+    ///
+    /// These live in a queue of their own, drained by `recv_pkt()` ahead of
+    /// `rxq`, rather than in `rxq` itself: `MuxerRxQ` holds fewer entries
+    /// than the connection pool and lets an RST evict a queued connection
+    /// key, and a mandatory reset must not take part in a scheduler that can
+    /// drop or reorder it. Draining it first also guarantees that nothing
+    /// belonging to a new connection reaches the guest before every stale
+    /// connection has been reset.
+    restore_rstq: VecDeque<VsockConnectionId>,
 }
 
 impl VsockChannel for VsockMuxer {
@@ -135,6 +156,20 @@ impl VsockChannel for VsockMuxer {
     /// - `Ok(())`: `pkt` has been successfully filled in; or
     /// - `Err(VsockError::NoData)`: there was no available data with which to fill in the packet.
     fn recv_pkt(&mut self, pkt: &mut VsockPacket) -> VsockResult<()> {
+        // Restore resets come first: the guest must not see anything
+        // belonging to a new connection before every connection that was live
+        // when the snapshot was taken has been reset.
+        if let Some(id) = self.restore_rstq.pop_front() {
+            self.build_rst_pkt(pkt, id.local_port, id.peer_port);
+            trace!(
+                "vsock: muxer.recv[restore reset, lp={}, pp={}, left={}]",
+                id.local_port,
+                id.peer_port,
+                self.restore_rstq.len()
+            );
+            return Ok(());
+        }
+
         // We'll look for instructions on how to build the RX packet in the RX
         // queue. If the queue is empty, that doesn't necessarily mean we don't
         // have any pending RX, since the queue might be out-of-sync. If that's
@@ -152,16 +187,7 @@ impl VsockChannel for VsockMuxer {
                     local_port,
                     peer_port,
                 } => {
-                    pkt.set_op(uapi::VSOCK_OP_RST)
-                        .set_src_cid(uapi::VSOCK_HOST_CID)
-                        .set_dst_cid(self.cid)
-                        .set_src_port(local_port)
-                        .set_dst_port(peer_port)
-                        .set_len(0)
-                        .set_type(uapi::VSOCK_TYPE_STREAM)
-                        .set_flags(0)
-                        .set_buf_alloc(0)
-                        .set_fwd_cnt(0);
+                    self.build_rst_pkt(pkt, local_port, peer_port);
                     self.rxq.pop().unwrap();
                     trace!(
                         "vsock: muxer.recv[rxq.len={}, type={}, op={}, sp={}, sc={}, dp={}, dc={}]: {:?}",
@@ -329,7 +355,7 @@ impl VsockChannel for VsockMuxer {
     /// Check if the muxer has any pending RX data, with which to fill a
     /// guest-provided RX buffer.
     fn has_pending_rx(&self) -> bool {
-        !self.rxq.is_empty() || !self.rxq.is_synced()
+        !self.restore_rstq.is_empty() || !self.rxq.is_empty() || !self.rxq.is_synced()
     }
 }
 
@@ -408,7 +434,51 @@ impl VsockMuxer {
             local_port_set: HashSet::with_capacity(defs::MAX_CONNECTIONS),
             backend_map: HashMap::new(),
             peer_backend: None,
+            restore_rstq: VecDeque::new(),
         })
+    }
+
+    pub fn connections_to_reset(&self) -> Vec<VsockConnectionId> {
+        // Every live connection, plus every reset the muxer already owes the
+        // guest but has not emitted yet:
+        //
+        // - `conn_map` covers connections that have been killed but not yet
+        //   reset too, since the muxer only drops one once its RST has
+        //   actually gone out;
+        // - a standalone RST -- one answering a packet for a tuple with no
+        //   connection -- is held only in `rxq`;
+        // - `restore_rstq` holds resets inherited from an earlier restore
+        //   that the guest has not taken yet.
+        //
+        // A `BTreeSet` sorts and deduplicates, so the serialized snapshot is
+        // deterministic and a tuple present in two of the three is reported
+        // once. One RST per tuple is all a guest with one socket per tuple
+        // needs.
+        let mut ids: BTreeSet<VsockConnectionId> =
+            self.conn_map.keys().map(|key| (*key).into()).collect();
+        ids.extend(self.rxq.q.iter().filter_map(|rx| match rx {
+            MuxerRx::RstPkt {
+                local_port,
+                peer_port,
+            } => Some(VsockConnectionId {
+                local_port: *local_port,
+                peer_port: *peer_port,
+            }),
+            MuxerRx::ConnRx(_) => None,
+        }));
+        ids.extend(self.restore_rstq.iter().copied());
+        ids.into_iter().collect()
+    }
+
+    pub fn queue_restore_resets(&mut self, ids: &[VsockConnectionId]) -> Result<()> {
+        // Bounded so a corrupt snapshot cannot make the muxer allocate
+        // without limit. The bound covers everything `connections_to_reset()`
+        // can emit, so a snapshot this build produced is always restorable.
+        if self.restore_rstq.len() + ids.len() > defs::MAX_RESTORE_RESETS {
+            return Err(Error::TooManyConnections);
+        }
+        self.restore_rstq.extend(ids.iter().copied());
+        Ok(())
     }
 
     /// Handle/dispatch an epoll event to its listener.
@@ -979,6 +1049,25 @@ impl VsockMuxer {
         if !pushed {
             warn!("vsock: muxer.rxq full; dropping RST packet for lp={local_port}, pp={peer_port}");
         }
+    }
+
+    /// Fill in `pkt` as an RST going from `local_port` on the host to
+    /// `peer_port` on the guest.
+    ///
+    /// A connection's port tuple is all it takes to build a complete reset,
+    /// which is why a snapshot need record nothing else, and why restore
+    /// queues reset instructions rather than packets.
+    fn build_rst_pkt(&self, pkt: &mut VsockPacket, local_port: u32, peer_port: u32) {
+        pkt.set_op(uapi::VSOCK_OP_RST)
+            .set_src_cid(uapi::VSOCK_HOST_CID)
+            .set_dst_cid(self.cid)
+            .set_src_port(local_port)
+            .set_dst_port(peer_port)
+            .set_len(0)
+            .set_type(uapi::VSOCK_TYPE_STREAM)
+            .set_flags(0)
+            .set_buf_alloc(0)
+            .set_fwd_cnt(0);
     }
 }
 
@@ -1639,5 +1728,262 @@ mod tests {
         fs::remove_file(Path::new(&host_sock_path_1)).unwrap_or_default();
         fs::remove_file(Path::new(&host_sock_path_2)).unwrap_or_default();
         fs::remove_file(Path::new(&host_sock_path_3)).unwrap_or_default();
+    }
+
+    fn conn_id(local_port: u32, peer_port: u32) -> VsockConnectionId {
+        VsockConnectionId {
+            local_port,
+            peer_port,
+        }
+    }
+
+    /// Assert that `pkt` is a well-formed reset for `id`.
+    fn assert_is_rst_for(pkt: &VsockPacket, id: VsockConnectionId) {
+        assert_eq!(pkt.op(), uapi::VSOCK_OP_RST);
+        assert_eq!(pkt.type_(), uapi::VSOCK_TYPE_STREAM);
+        assert_eq!(pkt.src_cid(), uapi::VSOCK_HOST_CID);
+        assert_eq!(pkt.dst_cid(), PEER_CID);
+        assert_eq!(pkt.src_port(), id.local_port);
+        assert_eq!(pkt.dst_port(), id.peer_port);
+        assert_eq!(pkt.len(), 0);
+    }
+
+    #[test]
+    fn test_connections_to_reset_follows_conn_map() {
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/reset_set_conn_map");
+        assert!(ctx.muxer.connections_to_reset().is_empty());
+
+        let (_stream, local_port) = ctx.local_connect(PEER_PORT);
+        assert_eq!(
+            ctx.muxer.connections_to_reset(),
+            vec![conn_id(local_port, PEER_PORT)]
+        );
+
+        // The guest resets the connection, so the muxer drops it.
+        ctx.init_pkt(local_port, PEER_PORT, uapi::VSOCK_OP_RST);
+        ctx.send();
+        assert!(!ctx.muxer.conn_map.contains_key(&ConnMapKey {
+            local_port,
+            peer_port: PEER_PORT,
+        }));
+        assert!(ctx.muxer.connections_to_reset().is_empty());
+    }
+
+    #[test]
+    fn test_connections_to_reset_keeps_killed_connection() {
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/reset_set_killed_conn");
+        let (_stream, local_port) = ctx.local_connect(PEER_PORT);
+        let key = ConnMapKey {
+            local_port,
+            peer_port: PEER_PORT,
+        };
+
+        // A killed connection still owes the guest an RST, and the muxer only
+        // drops it once that RST actually goes out. Until then a snapshot
+        // must still capture it.
+        ctx.muxer.kill_connection(key);
+        assert!(ctx.muxer.conn_map.contains_key(&key));
+        assert_eq!(
+            ctx.muxer.connections_to_reset(),
+            vec![conn_id(local_port, PEER_PORT)]
+        );
+
+        ctx.recv();
+        assert_is_rst_for(&ctx.pkt, conn_id(local_port, PEER_PORT));
+        assert!(ctx.muxer.connections_to_reset().is_empty());
+    }
+
+    #[test]
+    fn test_connections_to_reset_records_standalone_rst() {
+        const LOCAL_PORT: u32 = 1026;
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/reset_set_orphan_rst");
+
+        // An orphan packet gets answered with a standalone RST, which lives
+        // in the RX queue and nowhere else -- so `conn_map` cannot account
+        // for it.
+        ctx.init_pkt(LOCAL_PORT, PEER_PORT, uapi::VSOCK_OP_RW);
+        ctx.send();
+        assert!(ctx.muxer.conn_map.is_empty());
+        assert_eq!(
+            ctx.muxer.connections_to_reset(),
+            vec![conn_id(LOCAL_PORT, PEER_PORT)]
+        );
+
+        ctx.recv();
+        assert_is_rst_for(&ctx.pkt, conn_id(LOCAL_PORT, PEER_PORT));
+        assert!(ctx.muxer.connections_to_reset().is_empty());
+    }
+
+    #[test]
+    fn test_connections_to_reset_carries_undelivered_restore_resets() {
+        // A reset queued by a restore but not yet taken by the guest is still
+        // owed to it. Snapshotting such a VM must carry the obligation
+        // forward rather than drop it on the floor.
+        let mut ctx = MuxerTestContext::new("/tmp/reset_set_restore_carry");
+        let stale = [conn_id(1030, 7), conn_id(1031, 8)];
+        ctx.muxer.queue_restore_resets(&stale).unwrap();
+
+        assert_eq!(ctx.muxer.connections_to_reset(), stale.to_vec());
+
+        ctx.recv();
+        assert_is_rst_for(&ctx.pkt, stale[0]);
+        assert_eq!(ctx.muxer.connections_to_reset(), vec![stale[1]]);
+
+        ctx.recv();
+        assert!(ctx.muxer.connections_to_reset().is_empty());
+    }
+
+    #[test]
+    fn test_connections_to_reset_is_sorted_and_deduplicated() {
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/reset_set_sorted");
+        let (_stream, local_port) = ctx.local_connect(PEER_PORT);
+
+        // A tuple can be owed a reset from more than one source at once; the
+        // guest has a single socket per tuple and needs a single RST.
+        ctx.muxer
+            .queue_restore_resets(&[conn_id(local_port, PEER_PORT), conn_id(1, 1)])
+            .unwrap();
+        ctx.muxer.enq_rst(u32::MAX, 9);
+
+        let ids = ctx.muxer.connections_to_reset();
+        assert_eq!(
+            ids,
+            vec![
+                conn_id(1, 1),
+                conn_id(local_port, PEER_PORT),
+                conn_id(u32::MAX, 9),
+            ]
+        );
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(ids, sorted);
+    }
+
+    #[test]
+    fn test_restore_resets_precede_new_connection_traffic() {
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/restore_resets_order");
+        let stale = [conn_id(1030, 7), conn_id(1031, 8)];
+        ctx.muxer.queue_restore_resets(&stale).unwrap();
+        assert!(ctx.muxer.has_pending_rx());
+
+        // Restore creates no connection object: the host half of those
+        // connections no longer exists, and neither does their local port
+        // reservation.
+        assert!(ctx.muxer.conn_map.is_empty());
+        assert!(ctx.muxer.local_port_set.is_empty());
+        // But they are still owed to the guest, so a snapshot taken before
+        // they go out must carry them forward.
+        assert_eq!(ctx.muxer.connections_to_reset(), stale.to_vec());
+
+        // A new host-initiated connection arrives after the restore, so the
+        // muxer has traffic of its own queued behind the resets.
+        let mut stream = UnixStream::connect(ctx.host_sock_path.clone()).unwrap();
+        stream.set_nonblocking(true).unwrap();
+        ctx.notify_muxer();
+        stream
+            .write_all(format!("CONNECT {PEER_PORT}\n").as_bytes())
+            .unwrap();
+        ctx.notify_muxer();
+        let local_port = ctx.muxer.local_port_last;
+        assert_eq!(ctx.muxer.conn_map.len(), 1);
+
+        // Every stale connection is reset before anything belonging to the
+        // new connection reaches the guest.
+        for id in stale {
+            assert!(ctx.muxer.has_pending_rx());
+            ctx.recv();
+            assert_is_rst_for(&ctx.pkt, id);
+        }
+        ctx.recv();
+        assert_eq!(ctx.pkt.op(), uapi::VSOCK_OP_REQUEST);
+        assert_eq!(ctx.pkt.src_port(), local_port);
+        assert_eq!(ctx.pkt.dst_port(), PEER_PORT);
+    }
+
+    #[test]
+    fn test_restore_resets_bypass_the_rx_queue() {
+        let mut ctx = MuxerTestContext::new("/tmp/restore_resets_capacity");
+
+        // The RX queue holds fewer entries than the connection pool, and lets
+        // an RST evict a queued connection key. Mandatory resets take part in
+        // neither: the connection limit is what bounds them.
+        let stale: Vec<_> = (0..defs::MAX_CONNECTIONS)
+            .map(|i| conn_id(1030 + i as u32, 7))
+            .collect();
+        assert!(stale.len() > defs::MUXER_RXQ_SIZE);
+        ctx.muxer.queue_restore_resets(&stale).unwrap();
+        assert!(ctx.muxer.rxq.is_empty());
+
+        for id in &stale {
+            ctx.recv();
+            assert_is_rst_for(&ctx.pkt, *id);
+        }
+        assert!(!ctx.muxer.has_pending_rx());
+    }
+
+    #[test]
+    fn test_queue_restore_resets_refuses_excess() {
+        let mut ctx = MuxerTestContext::new("/tmp/restore_resets_excess");
+        let too_many: Vec<_> = (0..=defs::MAX_RESTORE_RESETS)
+            .map(|i| conn_id(1030 + i as u32, 7))
+            .collect();
+
+        assert!(matches!(
+            ctx.muxer.queue_restore_resets(&too_many),
+            Err(Error::TooManyConnections)
+        ));
+        assert!(!ctx.muxer.has_pending_rx());
+
+        // The limit applies to the queue as a whole, not to one call.
+        ctx.muxer
+            .queue_restore_resets(&too_many[..defs::MAX_RESTORE_RESETS])
+            .unwrap();
+        assert!(matches!(
+            ctx.muxer.queue_restore_resets(&too_many[..1]),
+            Err(Error::TooManyConnections)
+        ));
+    }
+
+    #[test]
+    fn test_restore_accepts_everything_save_can_emit() {
+        // The save path unions the connection pool with the RX queue's
+        // standalone RSTs, so it can emit more tuples than there are
+        // connections. If the restore bound were the connection limit, this
+        // build would produce snapshots it then refused to restore.
+        let mut ctx = MuxerTestContext::new("/tmp/restore_resets_roundtrip");
+
+        let mut expected = Vec::new();
+        for i in 0..defs::MUXER_RXQ_SIZE {
+            let id = conn_id(2000 + i as u32, 7);
+            ctx.muxer.enq_rst(id.local_port, id.peer_port);
+            expected.push(id);
+        }
+        // Plus a full restore queue inherited from an earlier restore.
+        let inherited: Vec<_> = (0..defs::MAX_CONNECTIONS)
+            .map(|i| conn_id(9000 + i as u32, 7))
+            .collect();
+        ctx.muxer.queue_restore_resets(&inherited).unwrap();
+        expected.extend_from_slice(&inherited);
+        expected.sort_unstable();
+
+        let saved = ctx.muxer.connections_to_reset();
+        assert_eq!(saved, expected);
+        assert!(saved.len() > defs::MAX_CONNECTIONS);
+
+        // A fresh muxer must accept that state back.
+        let mut restored = VsockMuxer::new(PEER_CID).unwrap();
+        restored.queue_restore_resets(&saved).unwrap();
+        assert_eq!(restored.connections_to_reset(), saved);
     }
 }
