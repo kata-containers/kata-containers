@@ -42,7 +42,7 @@ pub async fn wait_for_pci_net_interface(
     pcipath: &pci::Path,
 ) -> Result<()> {
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, root_complex, pcipath)?;
     let matcher = NetPciMatcher::new(&sysfs_rel_path, root_complex);
     let pattern = format!(
         r"[./]+{}/[a-z0-9/]*net/[a-z0-9/]*",
