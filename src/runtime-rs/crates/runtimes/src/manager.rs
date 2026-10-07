@@ -23,7 +23,7 @@ use hypervisor::{
     },
     Param,
 };
-use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
+use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation,
     config::{
@@ -209,6 +209,7 @@ impl RuntimeHandlerManagerInner {
             // This makes it inaccessible to non-root users. We need to create a non-root accessible
             // netns and replace the original network namespace path in the config.
             if sandbox_config.network_env.network_created {
+                discard_created_netns(&mut sandbox_config.network_env)?;
                 let ns_name = generate_netns_name();
                 let rootless_raw_netns = NetNs::new_with_env(ns_name, RootlessEnv)?;
                 let path = Some(
@@ -252,6 +253,7 @@ impl RuntimeHandlerManagerInner {
         let dan_path = dan_config_path(&config, &self.id);
         // set netns to None if we want no network for the VM
         if config.runtime.disable_new_netns || dan_path.exists() {
+            discard_created_netns(&mut sandbox_config.network_env)?;
             sandbox_config.network_env.netns = None;
         }
 
@@ -809,6 +811,17 @@ impl RuntimeHandlerManager {
     }
 }
 
+// Remove before replacing the path: no other owner can clean up the old namespace.
+fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
+    if network_env.network_created {
+        if let Some(path) = network_env.netns.as_deref() {
+            remove_netns(Path::new(path)).context("remove unused network namespace")?;
+            network_env.netns = None;
+        }
+    }
+    Ok(())
+}
+
 // RootlessEnv implements netns_rs::Env trait to provide the rootless directory path
 // for creating network namespace in rootless mode.
 #[derive(Copy, Clone, Default, Debug)]
@@ -1107,6 +1120,27 @@ mod tests {
         drop(guard);
 
         assert_eq!(runtime_dir.exists(), runtime_dir_survives);
+    }
+
+    #[test]
+    fn test_discard_created_netns_keeps_path_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().display().to_string();
+
+        let mut network_env = SandboxNetworkEnv {
+            netns: Some(path.clone()),
+            network_created: true,
+        };
+        assert!(discard_created_netns(&mut network_env).is_err());
+        assert_eq!(network_env.netns, Some(path.clone()));
+
+        let mut network_env = SandboxNetworkEnv {
+            netns: Some(path.clone()),
+            network_created: false,
+        };
+        discard_created_netns(&mut network_env).unwrap();
+        assert_eq!(network_env.netns, Some(path));
+        assert!(dir.path().exists());
     }
 
     // A ShutdownContainer RPC that arrives before any runtime instance was
