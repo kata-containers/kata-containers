@@ -802,7 +802,10 @@ pub struct DeviceInfo {
 
     /// Cold-plug VFIO devices to a PCIe port type.
     ///
-    /// Accepted values: `"no-port"` (default, disabled), `"root-port"`.
+    /// Accepted values: `"no-port"` (default, disabled), `"root-port"`,
+    /// `"auto"`.  `"auto"` cold-plugs like `"root-port"` but lets the QEMU
+    /// runtime-rs probe the host and derive the guest NUMA and PCIe topology
+    /// (expander buses, IOMMUs, initiator nodes) for the assigned devices.
     /// In confidential compute environments hot-plugging can compromise
     /// security, so devices are cold-plugged instead.
     #[serde(default)]
