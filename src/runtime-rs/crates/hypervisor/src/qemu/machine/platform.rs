@@ -523,6 +523,55 @@ impl Platform {
                 root_ports,
             });
         }
+
+        // NIC groups: own pxb+smmuv3 complex, no GI links, no extra NUMA nodes.
+        // pxb numbering continues from where GPU groups left off.
+        let gpu_group_count = topo.gpu_smmu_groups.len();
+        let mut nic_dev_idx = gpu_idx;
+        for (nic_group_idx, group) in topo.nic_smmu_groups.iter().enumerate() {
+            let global_group_idx = gpu_group_count + nic_group_idx;
+            let bus_nr = pxb_bus_nr(global_group_idx);
+
+            let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
+            let pxb_id = format!("pcie.{}", global_group_idx + 1);
+
+            let mut root_ports = Vec::new();
+            for pci_addr in &group.pci_bus_addrs {
+                let dev_id = format!("dev{nic_dev_idx}");
+                let rp_id = format!("pcie.port{port_idx}");
+
+                root_ports.push(PciRootPort {
+                    id: rp_id,
+                    chassis: (nic_dev_idx + 1) as u8,
+                    slot: None,
+                    multifunction: None,
+                    io_reserve: Some(0),
+                    device: Some(VfioDevice {
+                        id: dev_id,
+                        host: pci_addr.clone(),
+                        rombar: Some(false),
+                        kind: VfioDeviceKind::Nic,
+                        iommufd_id: None,
+                        pci_vendor_id: None,
+                        pci_device_id: None,
+                    }),
+                });
+
+                nic_dev_idx += 1;
+                port_idx += 1;
+            }
+
+            self.pci.roots.push(PciRootComplex {
+                id: pxb_id,
+                bus_nr,
+                numa_node: Some(cpu_mem_node),
+                iommu: Some(BusIommu::SmmuV3(SmmuV3Config {
+                    id: format!("smmuv3.{}", global_group_idx + 1),
+                    ..SmmuV3Config::default()
+                })),
+                root_ports,
+            });
+        }
     }
 
     pub(crate) fn with_hugepages(self, path: &str) -> Self {
@@ -581,6 +630,10 @@ impl Platform {
         }
     }
 
+    fn numa_has_memdev(&self) -> bool {
+        self.objects.numa_nodes.iter().any(|n| n.memdev.is_some())
+    }
+
     /// Q35 emission order:
     ///   1. protection object (sev-snp-guest / tdx-guest), if any
     ///   2. -machine q35,...
@@ -588,10 +641,6 @@ impl Platform {
     ///   4. -numa dist entries
     ///   5. pxb-pcie GPU roots (pxb + root ports + per-device iommufd + vfio)
     ///   6. cold-plug root ports on pcie.0
-    fn numa_has_memdev(&self) -> bool {
-        self.objects.numa_nodes.iter().any(|n| n.memdev.is_some())
-    }
-
     fn emit_q35_args(&self) -> Result<Vec<String>> {
         let mut args: Vec<String> = Vec::new();
 
