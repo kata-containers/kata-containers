@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	cioutil "github.com/containerd/containerd/pkg/ioutil"
+	cioutil "github.com/containerd/containerd/v2/pkg/ioutil"
 )
 
 var (
