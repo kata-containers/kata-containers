@@ -225,8 +225,8 @@ externals:
     # "oci://ghcr.io/nvidia/nvrc/nvrc-pr" and version to its head sha
     # (published by adding the "publish-nvrc-from-pr" label there). The
     # check-nvrc-is-released static check blocks merging that.
-    version: "v0.1.7"
-    url: "https://github.com/NVIDIA/nvrc/releases/download/"
+    version: "fcea9177fdcaa034766cec1efc86d3f4f30daeef"
+    url: "oci://ghcr.io/nvidia/nvrc/nvrc-pr"
 
   nvidia:
     desc: "NVIDIA compute stack"
