@@ -1,0 +1,11 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# SELinux context NVRC mounts each guest extension with, as
+# "<extension-name> <context>". "*" applies to any extension not listed.
+# The selinux extension itself is mounted before the policy is loaded and is
+# never listed here.
+gpu  system_u:object_r:kata_gpu_extension_t:s0
+coco system_u:object_r:kata_coco_extension_t:s0
+*    system_u:object_r:kata_extension_t:s0
