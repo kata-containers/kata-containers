@@ -245,6 +245,8 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
 
     announce(&logger, config);
 
+    ensure_guest_selinux_policy(&logger)?;
+
     // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
     let global_logger = slog_scope::set_global_logger(logger.new(o!("subsystem" => "rpc")));
@@ -774,6 +776,22 @@ async fn launch_process(
         wait_for_path_to_exist(logger, unix_socket_path, timeout_secs).await?;
     }
 
+    Ok(())
+}
+
+// The runtime asks for guest SELinux with `selinux=1` and relies on the
+// workloads it labels being confined. The guest init (NVRC, or systemd on a
+// full-distro base) owns loading the policy; if it did not, the labels would
+// never be applied, so refuse to serve rather than run them unconfined.
+fn ensure_guest_selinux_policy(logger: &Logger) -> Result<()> {
+    let cmdline = fs::read_to_string("/proc/cmdline").context("read /proc/cmdline")?;
+    if !rustjail::selinux::requested_on_cmdline(&cmdline) {
+        return Ok(());
+    }
+    if !rustjail::selinux::policy_loaded() {
+        bail!("guest SELinux was requested (selinux=1) but no SELinux policy is loaded");
+    }
+    info!(logger, "guest SELinux policy is loaded");
     Ok(())
 }
 
