@@ -491,8 +491,9 @@ disable_selinux = @DEFDISABLESELINUX@
 
 # disable applying SELinux on the container process
 # If set to false, the type `container_t` is applied to the container process by default.
-# Note: To enable guest SELinux, the guest rootfs must be CentOS that is created and built
-# with `SELINUX=yes`.
+# NVRC loads the policy shipped in the "selinux" guest extension (see
+# guest_extension_images below). kernel_params carries `enforcing=1`; append
+# `enforcing=0` to boot permissive while debugging.
 # (default: true)
 disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
@@ -730,6 +731,15 @@ agent_name = "@PROJECT_TYPE@"
 # (default: true)
 disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 
+# SELinux label applied to container processes inside the guest, as
+# "user:role:type[:level]". Only used when disable_guest_selinux = false.
+# When the host passes a label, its level (MCS categories) is kept and only
+# user, role and type are taken from here; hosts without SELinux pass none, and
+# this label is then used as is (at s0 if it has no level).
+# When empty, the host label's type is replaced by container_t.
+# Example: "system_u:system_r:container_t"
+guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
+
 # vCPUs pinning settings
 # if enabled, each vCPU thread will be scheduled to a fixed CPU
 # qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
@@ -852,3 +862,11 @@ pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK_NV@"
 name = "gpu"
 path = "@IMAGEPATH_NV_EXTENSION@"
 verity_params = "@NVIDIAGPUEXTENSIONVERITYPARAMS@"
+
+# The guest SELinux policy ships in its own extension. NVRC always mounts it and
+# only loads the policy when guest SELinux is enabled (disable_guest_selinux =
+# false); every other extension is then mounted with an SELinux context.
+[[hypervisor.qemu.guest_extension_images]]
+name = "selinux"
+path = "@IMAGEPATH_SELINUX_EXTENSION@"
+verity_params = "@SELINUXEXTENSIONVERITYPARAMS@"

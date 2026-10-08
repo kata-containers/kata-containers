@@ -232,6 +232,7 @@ DEFEMPTYDIRMODE_NV := block-plain
 ##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled
 DEFAULTEXPFEATURES := []
 DEFDISABLESELINUX := false
+DEFGUESTSELINUXLABEL :=
 DEFENABLEVIRTIOMEM ?= false
 ##VAR DEFENTROPYSOURCE=[entropy_source] Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
@@ -520,16 +521,23 @@ endif
     IMAGEPATH_NV_BASE = $(PKGDATADIR)/$(IMAGENAME_NV_BASE)
     IMAGENAME_NV_EXTENSION = $(PROJECT_TAG)-nvidia-gpu-extension.img
     IMAGEPATH_NV_EXTENSION = $(PKGDATADIR)/$(IMAGENAME_NV_EXTENSION)
-    KERNELPARAMS_NV := cgroup_no_v1=all pci=realloc pci=nocrs pci=assign-busses
+    # Guest SELinux policy extension, loaded by NVRC (mounted at /run/kata-extensions/selinux).
+    IMAGENAME_SELINUX_EXTENSION = $(PROJECT_TAG)-selinux-extension.img
+    IMAGEPATH_SELINUX_EXTENSION = $(PKGDATADIR)/$(IMAGENAME_SELINUX_EXTENSION)
+    # enforcing=1 only matters with guest SELinux on (selinux=1): the guest kernel
+    # otherwise boots permissive.
+    KERNELPARAMS_NV := cgroup_no_v1=all pci=realloc pci=nocrs pci=assign-busses enforcing=1
 
     KERNELPARAMS_CONFIDENTIAL_NV = $(KERNELPARAMS_NV)
     KERNELPARAMS_CONFIDENTIAL_NV += "nvrc.smi.srs=1"
 
-    # Verity params for the nvidia base boot image (root_hash_nvidia.txt)
-    # and for the gpu extension (root_hash_nvidia-gpu-extension.txt); filled in by the
-    # shim-v2 build from the emitted root-hash files.
+    # Verity params for the nvidia base boot image (root_hash_nvidia.txt), the
+    # gpu extension (root_hash_nvidia-gpu-extension.txt) and the selinux extension
+    # (root_hash_selinux-extension.txt); filled in by the shim-v2 build from the
+    # emitted root-hash files.
     KERNELVERITYPARAMS_NV ?=
     NVIDIAGPUEXTENSIONVERITYPARAMS ?=
+    SELINUXEXTENSIONVERITYPARAMS ?=
     DEFAULTVCPUS_NV := 1
     DEFAULTMEMORY_NV := 8192
     DEFOVERHEADVCPUS_NV := 0.5
@@ -753,6 +761,9 @@ USER_VARS += IMAGEPATH_NV_BASE
 USER_VARS += IMAGENAME_NV_EXTENSION
 USER_VARS += IMAGEPATH_NV_EXTENSION
 USER_VARS += NVIDIAGPUEXTENSIONVERITYPARAMS
+USER_VARS += IMAGENAME_SELINUX_EXTENSION
+USER_VARS += IMAGEPATH_SELINUX_EXTENSION
+USER_VARS += SELINUXEXTENSIONVERITYPARAMS
 USER_VARS += IMAGECONFIDENTIALPATH
 USER_VARS += COCOIMAGENAME
 USER_VARS += COCOIMAGEPATH
@@ -835,6 +846,7 @@ USER_VARS += DEFEMPTYDIRMODE_NV
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFDISABLEGUESTSELINUX
+USER_VARS += DEFGUESTSELINUXLABEL
 USER_VARS += DEFAULTEXPFEATURES
 USER_VARS += DEFBLOCKSTORAGEDRIVER_DB
 USER_VARS += DEFBLOCKSTORAGEDRIVER_QEMU
