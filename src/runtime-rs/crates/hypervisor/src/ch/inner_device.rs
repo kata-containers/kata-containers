@@ -6,6 +6,7 @@
 
 use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_rootless_symlink_sandbox_jailer_root;
+use crate::ch::utils::{give_disk_to_vmm_user, restore_disk_owner};
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::utils::create_dir_all_with_inherit_owner;
@@ -125,8 +126,12 @@ impl CloudHypervisorInner {
         match device {
             DeviceType::Vfio(vfiodev) => self.inner_remove_device(vfiodev.device_id.as_str()).await,
             DeviceType::BlockModern(blockdev) => {
-                let device_id = blockdev.lock().await.device_id.clone();
-                self.inner_remove_device(device_id.as_str()).await
+                let (device_id, path) = {
+                    let dev = blockdev.lock().await;
+                    (dev.device_id.clone(), dev.config.path_on_host.clone())
+                };
+                self.inner_remove_device(device_id.as_str()).await?;
+                self.return_disk_from_vmm(&path)
             }
             _ => Ok(()),
         }
@@ -308,6 +313,36 @@ impl CloudHypervisorInner {
             || (!boot_info.initrd.is_empty() && path == boot_info.initrd)
     }
 
+    /// In rootless mode, make the disk at `path` accessible to this VMM's
+    /// user alone before the VMM opens it. Every rootless VMM user shares the
+    /// /dev/kvm group, so group access would expose the disk to all of them.
+    fn give_disk_to_vmm(&mut self, path: &str) -> Result<()> {
+        if !is_rootless() || self.disk_owners.contains_key(path) {
+            return Ok(());
+        }
+
+        let user = self
+            .config
+            .security_info
+            .rootless_user
+            .as_ref()
+            .ok_or_else(|| anyhow!("rootless user not specified in security_info"))?;
+
+        let previous = give_disk_to_vmm_user(path, user.uid, user.gid)?;
+        self.disk_owners.insert(path.to_string(), previous);
+
+        Ok(())
+    }
+
+    /// Give the disk at `path` back the owner it had before
+    /// `give_disk_to_vmm`.
+    fn return_disk_from_vmm(&mut self, path: &str) -> Result<()> {
+        match self.disk_owners.remove(path) {
+            Some(previous) => restore_disk_owner(path, &previous),
+            None => Ok(()),
+        }
+    }
+
     async fn handle_block_device(
         &mut self,
         device: Arc<Mutex<BlockDeviceModern>>,
@@ -320,7 +355,17 @@ impl CloudHypervisorInner {
 
         let disk_config = self.make_disk_config(&config)?;
 
-        let response = cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await?;
+        self.give_disk_to_vmm(&config.path_on_host)?;
+
+        let response = match cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await {
+            Ok(response) => response,
+            Err(e) => {
+                if let Err(restore_err) = self.return_disk_from_vmm(&config.path_on_host) {
+                    error!(sl!(), "failed to restore disk owner: {:?}", restore_err);
+                }
+                return Err(e);
+            }
+        };
 
         if let Some(detail) = response {
             debug!(sl!(), "blockdev add response: {:?}", detail);
@@ -521,6 +566,7 @@ impl CloudHypervisorInner {
 
                     info!(sl!(), "cold-plugging block device {:?}", &config);
 
+                    self.give_disk_to_vmm(&config.path_on_host)?;
                     boot_disks.push(self.make_disk_config(&config)?);
                 }
                 _ => continue,

@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use super::utils::DiskOwner;
 use super::HypervisorState;
 use crate::device::DeviceType;
 use crate::VmmState;
@@ -68,6 +69,10 @@ pub struct CloudHypervisorInner {
     // removing the device.
     pub(crate) device_ids: HashMap<String, String>,
 
+    // In rootless mode, the previous owner of each disk handed to the VMM
+    // user, keyed by host path, so it can be given back on removal or cleanup.
+    pub(crate) disk_owners: HashMap<String, DiskOwner>,
+
     // List of Cloud Hypervisor features enabled at Cloud Hypervisor build-time.
     //
     // If the version of CH does not provide these details, the value will be
@@ -112,6 +117,7 @@ impl CloudHypervisorInner {
             netns: None,
             pending_devices: vec![],
             device_ids: HashMap::<String, String>::new(),
+            disk_owners: HashMap::new(),
             _capabilities: capabilities,
             shutdown_tx: Some(tx),
             shutdown_rx: Some(rx),

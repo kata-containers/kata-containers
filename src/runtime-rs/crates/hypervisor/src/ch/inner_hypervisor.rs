@@ -7,6 +7,7 @@ use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_rootless_symlink_sandbox_path;
 use crate::ch::utils::get_vsock_path;
+use crate::ch::utils::restore_disk_owner;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
 use crate::utils::create_dir_all_with_inherit_owner;
@@ -897,6 +898,14 @@ impl CloudHypervisorInner {
         info!(sl!(), "CloudHypervisor::cleanup()");
         if is_rootless() {
             remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(self.id.as_str()).as_str())?;
+        }
+        // Give every disk back before vm_cleanup() deletes the VMM user, so a
+        // later VMM user created with the same uid cannot open it.
+        // A failure is logged rather than returned so the user is still deleted.
+        for (path, previous) in &self.disk_owners {
+            if let Err(e) = restore_disk_owner(path, previous) {
+                error!(sl!(), "failed to restore owner of disk {}: {:?}", path, e);
+            }
         }
         vm_cleanup(&self.config, self.vm_path.as_str())
     }
