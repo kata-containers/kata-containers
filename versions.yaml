@@ -221,6 +221,10 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
+    # To test an NVRC pull request, set url to
+    # "oci://ghcr.io/nvidia/nvrc/nvrc-pr" and version to its head sha
+    # (published by adding the "publish-nvrc-from-pr" label there). The
+    # check-nvrc-is-released static check blocks merging that.
     version: "v0.1.7"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
