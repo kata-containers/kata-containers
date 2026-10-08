@@ -773,6 +773,8 @@ install_image() {
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 		latest_artefact+="-$(get_latest_upx_version)"
+		# Its erofs image is labeled from the guest SELinux policy's file_contexts.
+		latest_artefact+="-$(get_last_modification "${guest_selinux_dir}")"
 	fi
 
 	# The base guest image (empty variant) is built as a measured rootfs so
@@ -1233,7 +1235,19 @@ install_image_nvidia() {
 	version=$(get_latest_nvidia_driver_version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
+
+	# Label the base image (kata-agent -> kata_agent_exec_t, ...) with the same
+	# file_contexts the selinux extension ships, so NVRC can transition into
+	# the agent's domain once it has loaded the policy.
+	local selinux_tree
+	selinux_tree="$(mktemp -d "${repo_root_dir}/.guest-selinux-tree.XXXX")"
+	build_guest_selinux_tree "${selinux_tree}"
+	export SELINUX_FILE_CONTEXTS="${selinux_tree}/etc/selinux/kata/file_contexts"
+
 	install_image "nvidia"
+
+	unset SELINUX_FILE_CONTEXTS
+	rm -rf "${selinux_tree:?}"
 }
 
 # build_guest_selinux_tree <dir>
