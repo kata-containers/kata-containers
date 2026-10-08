@@ -1725,6 +1725,8 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // Container exit and shutdown can invoke cleanup repeatedly. Completed
+        // stages are skipped, and finish_cleanup() retries failures during shutdown.
         // A stop timeout does not prove that the VMM released its mounts,
         // cgroup, or rootless user. Leave them in place while it may be alive.
         if self.inner.read().await.vmm_start_attempted && !self.vmm_exit_confirmed.is_cancelled() {
