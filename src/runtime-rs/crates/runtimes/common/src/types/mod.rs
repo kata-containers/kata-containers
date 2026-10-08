@@ -177,6 +177,7 @@ pub struct SandboxConfig {
     pub hostname: String,
     pub dns: Vec<String>,
     pub network_env: SandboxNetworkEnv,
+    pub cgroup_parent: Option<String>,
     pub annotations: HashMap<String, String, RandomState>,
     pub hooks: Option<oci::Hooks>,
     pub state: runtime_spec::State,
