@@ -147,6 +147,7 @@ mapping:
       - Static checks / check-agent-policy-coverage
       - Static checks / check-broken-symlinks
       - Static checks / check-kernel-config-version
+      - Static checks / check-nvrc-is-released
       - Static checks / codegen
       - Static checks / static-checks (make static-checks)
       - Spelling check / check-spelling
