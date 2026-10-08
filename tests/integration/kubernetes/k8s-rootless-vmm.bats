@@ -88,15 +88,6 @@ qemu_rootless_skip_reason() {
 		return 0
 	fi
 
-	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
-	# actual confidential handlers excluded until rootless QEMU can access
-	# resources such as /dev/sev and the configured TDX QGS endpoint.
-	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
-		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
-		echo "rootless QEMU confidential host-resource access is not enabled yet"
-		return 0
-	fi
-
 	# Rootless policy testing is supported only by shared_fs=none runtime-rs
 	# handlers. Generated policy does not authorize the rootless host paths
 	# used with filesystem sharing. With shared_fs=none, policy adds an
@@ -110,6 +101,43 @@ qemu_rootless_skip_reason() {
 			echo "rootless QEMU with generated policy requires runtime-rs block-source FD transport"
 			return 0
 		fi
+	fi
+
+	# Inclusions:
+	# - the NVIDIA GPU TEE (SNP, TDX) runtime-rs handlers: for NVIDIA's TEE
+	# CI machine path, we will make use of kata-deploy to configure for rootless
+	# execution. For the time being, The SNP machine was configured by hand.
+	# - the non-TEE qemu-coco-dev handlers: these do not need device/socket access
+	# provisioning.
+	# Exclusions: as documented below.
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		# TEE device/socket access provisioning is only implement for runtime-rs.
+		if is_confidential_hardware "${KATA_HYPERVISOR}" && ! is_runtime_rs; then
+			echo "rootless TEE host-resource access requires runtime-rs"
+			return 0
+		fi
+
+		case "${KATA_HYPERVISOR}" in
+			# Standard SNP CI runners do not yet provision /dev/sev with
+			# scoped non-root access. Enable after the AMD setup is in place.
+			# runner configuration provides it.
+			qemu-snp-runtime-rs)
+				echo "rootless standard SNP host access provisioning is pending"
+				return 0
+				;;
+			# TDX runners need the QGS UDS deployed with a group that the
+			# rootless VMM can join. Enable after the TDX runner setup is in place.
+			qemu-tdx-runtime-rs)
+				echo "rootless TDX QGS socket provisioning is pending"
+				return 0
+				;;
+			# IBM Secure Execution runners need /dev/uv to have scoped non-root
+			# access. Enable after the runner setup is in place.
+			qemu-se-runtime-rs)
+				echo "rootless IBM Secure Execution host access provisioning is pending"
+				return 0
+				;;
+		esac
 	fi
 
 	return 1
