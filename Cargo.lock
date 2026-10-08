@@ -6574,6 +6574,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "anyhow",
+ "async-trait",
  "bytes 1.11.1",
  "common",
  "containerd-shim-protos",
