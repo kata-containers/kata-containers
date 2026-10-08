@@ -196,6 +196,17 @@ install_nvidia_dcgm() {
 	# Both are version-locked because the repository only ever offers the newest
 	# DCGM, so an unpinned install re-bases the guest on whatever NVIDIA
 	# published last.
+	#
+	# -core depends on its sub-packages at exactly its own version, but apt
+	# picks the newest candidate for each of them, so pinning -core alone
+	# breaks as soon as NVIDIA respins the release (e.g. 1:4.7.0-1 -> -2).
+	# Pin the whole family so apt resolves it at ${dcgm_version}.
+	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-dcgm
+		Package: datacenter-gpu-manager-4-* dcgmi libdcgm nv-hostengine
+		Pin: version ${dcgm_version}
+		Pin-Priority: 1001
+	CHROOT_EOF
+
 	eval "${APT_INSTALL}" datacenter-gpu-manager-4-core="${dcgm_version}" \
 		datacenter-gpu-manager-exporter="${dcgm_exporter_version}"
 
