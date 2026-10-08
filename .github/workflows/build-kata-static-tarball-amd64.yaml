@@ -222,6 +222,7 @@ jobs:
           - rootfs-image-nvidia-gpu-confidential
           - rootfs-image-nvidia
           - rootfs-image-nvidia-gpu-extension
+          - rootfs-image-selinux-extension
           - rootfs-initrd
           - rootfs-initrd-confidential
     concurrency:

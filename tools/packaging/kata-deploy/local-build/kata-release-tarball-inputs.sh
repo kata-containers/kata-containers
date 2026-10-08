@@ -47,6 +47,7 @@ kata-static-rootfs-image-devkit-extension.tar.zst
 kata-static-rootfs-image-mariner.tar.zst
 kata-static-rootfs-image-nvidia-gpu-extension.tar.zst
 kata-static-rootfs-image-nvidia.tar.zst
+kata-static-rootfs-image-selinux-extension.tar.zst
 kata-static-rootfs-image.tar.zst
 kata-static-rootfs-initrd-confidential.tar.zst
 kata-static-rootfs-initrd.tar.zst
@@ -70,6 +71,7 @@ kata-static-rootfs-image-coco-extension.tar.zst
 kata-static-rootfs-image-devkit-extension.tar.zst
 kata-static-rootfs-image-nvidia-gpu-extension.tar.zst
 kata-static-rootfs-image-nvidia.tar.zst
+kata-static-rootfs-image-selinux-extension.tar.zst
 kata-static-rootfs-image.tar.zst
 kata-static-rootfs-initrd.tar.zst
 kata-static-shim-v2-rust.tar.zst

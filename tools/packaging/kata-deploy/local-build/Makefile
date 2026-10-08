@@ -40,6 +40,7 @@ BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-nvidia-gpu-confidential-tarball \
 	rootfs-image-nvidia-tarball \
 	rootfs-image-nvidia-gpu-extension-tarball \
+	rootfs-image-selinux-extension-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball
@@ -79,6 +80,7 @@ BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-nvidia-gpu-tarball \
 	rootfs-image-nvidia-tarball \
 	rootfs-image-nvidia-gpu-extension-tarball \
+	rootfs-image-selinux-extension-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball
 else ifeq ($(ARCH), ppc64le)
@@ -152,6 +154,7 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-rootfs-image-nvidia.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu-extension.tar.zst \
 	kata-static-rootfs-image-coco-extension.tar.zst \
+	kata-static-rootfs-image-selinux-extension.tar.zst \
 	kata-static-shim-v2-go.tar.zst \
 	kata-static-shim-v2-rust.tar.zst
 
@@ -160,7 +163,7 @@ ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
 	MEASURED_ROOTFS=yes ${MAKE} -f $(MK_PATH) kata-tarball \
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
-		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball rootfs-image-coco-extension-tarball" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball rootfs-image-coco-extension-tarball rootfs-image-selinux-extension-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
@@ -377,6 +380,12 @@ rootfs-image-nvidia-tarball: $(DEPS)
 # ships neither the agent nor NVRC/busybox; it only needs the Kata NVIDIA modules.
 DEPS := kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-extension-tarball: $(DEPS)
+	${MAKE} $@-build
+
+# The guest SELinux policy is built from its own Fedora builder and ships no
+# kata binaries, so it has no build-time dependency on any other target.
+DEPS :=
+rootfs-image-selinux-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 
 shim-v2-go-tarball:

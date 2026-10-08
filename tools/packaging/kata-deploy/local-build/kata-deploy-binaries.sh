@@ -28,6 +28,8 @@ readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
 readonly busybox_builder="${static_build_dir}/busybox/build.sh"
+readonly guest_selinux_dir="${static_build_dir}/guest-selinux"
+readonly guest_selinux_builder="${guest_selinux_dir}/build.sh"
 readonly agent_builder="${static_build_dir}/agent/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly openvmm_builder="${static_build_dir}/openvmm/build.sh"
@@ -86,6 +88,7 @@ readonly MEASURED_ROOTFS_VARIANTS=(
 	nvidia-gpu-confidential
 	nvidia
 	nvidia-gpu-extension
+	selinux-extension
 )
 
 die() {
@@ -1233,6 +1236,60 @@ install_image_nvidia() {
 	install_image "nvidia"
 }
 
+# build_guest_selinux_tree <dir>
+# Build the guest SELinux policy tree (tools/packaging/static-build/guest-selinux)
+# into <dir>, which must live under the repo root so the nested builder
+# container (Docker-in-Docker uses host paths) can reach it.
+build_guest_selinux_tree() {
+	local tree="$1"
+	DESTDIR="${tree}" "${guest_selinux_builder}" || die "building the guest SELinux policy failed"
+}
+
+# Install the guest SELinux policy extension image (erofs+verity), mounted by
+# NVRC at /run/kata-extensions/selinux.  NVRC loads its policy before mounting
+# any other extension, then mounts those with the contexts it lists.
+install_image_selinux_extension() {
+	local component="rootfs-image-selinux-extension"
+
+	latest_artefact="$(get_kata_version)-selinux-extension"
+	latest_artefact+="-$(get_last_modification "${guest_selinux_dir}")"
+	latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/osbuilder/image-builder")"
+	latest_builder_image="$(get_guest_selinux_image_name)"
+
+	install_cached_tarball_component \
+		"${component}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "Create selinux extension image"
+
+	local extension_rootfs
+	extension_rootfs="$(mktemp -d "${repo_root_dir}/.selinux-extension-rootfs.XXXX")"
+	build_guest_selinux_tree "${extension_rootfs}"
+
+	local install_dir="${destdir}/${prefix}/share/kata-containers/"
+	mkdir -p "${install_dir}"
+
+	export USE_DOCKER="1"
+	export BUILD_VARIANT="selinux-extension"
+	export FS_TYPE="erofs"
+	export MEASURED_ROOTFS="yes"
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+
+	"${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh" \
+		-o "${install_dir}/kata-containers-selinux-extension.img" "${extension_rootfs}"
+
+	[[ -e "${install_dir}/root_hash_selinux-extension.txt" ]] || \
+		die "Expected ${install_dir}/root_hash_selinux-extension.txt"
+	info "Root hash file: ${install_dir}/root_hash_selinux-extension.txt"
+
+	rm -rf "${extension_rootfs:?}"
+}
+
 # Install the gpu extension image: driver userspace selected directly from the
 # package-installed rootfs and laid out for /run/kata-extensions/gpu (see
 # docs/design/composable-vm-images.md).  It is an erofs+verity image
@@ -2103,6 +2160,8 @@ handle_build() {
 	rootfs-image-nvidia) install_image_nvidia ;;
 
 	rootfs-image-nvidia-gpu-extension) install_image_nvidia_gpu_extension ;;
+
+	rootfs-image-selinux-extension) install_image_selinux_extension ;;
 
 	shim-v2-go) install_shim_v2_go ;;
 

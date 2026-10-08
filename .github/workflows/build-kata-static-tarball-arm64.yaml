@@ -213,6 +213,7 @@ jobs:
           - rootfs-image-nvidia-gpu
           - rootfs-image-nvidia
           - rootfs-image-nvidia-gpu-extension
+          - rootfs-image-selinux-extension
           - rootfs-initrd
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
