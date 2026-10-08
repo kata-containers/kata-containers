@@ -1,0 +1,145 @@
+; Copyright (c) 2026 NVIDIA Corporation
+;
+; SPDX-License-Identifier: Apache-2.0
+;
+; Kata guest SELinux module, installed on top of Fedora's targeted policy and
+; container-selinux. Workloads run as container_t exactly as on an SELinux host;
+; this module only adds the guest-side domains and the labels for content that
+; carries no security.selinux xattrs (extensions and container rootfs layers).
+;
+; NVRC loads the resulting binary policy as PID 1, so it and everything it
+; spawns before exec'ing the agent start out as kernel_t. Domains are entered
+; through the file types below:
+;
+;   kata_agent_exec_t      /usr/bin/kata-agent in the base  -> kata_agent_t
+;   kata_gpu_extension_t   gpu extension (context= mount)   -> kata_nvidia_t
+;   kata_coco_extension_t  coco extension (context= mount)  -> kata_coco_t
+;   kata_extension_t       any other extension              (no transition)
+;
+; Read README.md before changing this file.
+
+(type kata_agent_t)
+(type kata_coco_t)
+(type kata_nvidia_t)
+
+(type kata_agent_exec_t)
+(type kata_coco_extension_t)
+(type kata_gpu_extension_t)
+(type kata_extension_t)
+
+(roletype system_r kata_agent_t)
+(roletype system_r kata_coco_t)
+(roletype system_r kata_nvidia_t)
+(roletype object_r kata_agent_exec_t)
+(roletype object_r kata_coco_extension_t)
+(roletype object_r kata_gpu_extension_t)
+(roletype object_r kata_extension_t)
+
+(typeattribute kata_guest_domain)
+(typeattributeset kata_guest_domain (kata_agent_t kata_coco_t kata_nvidia_t))
+
+(typeattribute kata_extension_file_type)
+(typeattributeset kata_extension_file_type
+    (kata_coco_extension_t kata_gpu_extension_t kata_extension_t))
+
+(typeattributeset domain (kata_guest_domain))
+(typeattributeset daemon (kata_guest_domain))
+(typeattributeset nsswitch_domain (kata_guest_domain))
+(typeattributeset syslog_client_type (kata_guest_domain))
+(typeattributeset kernel_system_state_reader (kata_guest_domain))
+(typeattributeset can_receive_kernel_messages (kata_guest_domain))
+
+(typeattributeset file_type (kata_agent_exec_t kata_extension_file_type))
+(typeattributeset non_security_file_type (kata_agent_exec_t kata_extension_file_type))
+(typeattributeset non_auth_file_type (kata_agent_exec_t kata_extension_file_type))
+; Only the agent binary is an exec_type: container-selinux lets every sandbox
+; domain run any exec_type, which would expose the extensions to containers.
+(typeattributeset exec_type (kata_agent_exec_t))
+(typeattributeset entry_type (kata_agent_exec_t kata_coco_extension_t kata_gpu_extension_t))
+
+; The agent is the guest's container runtime, so it mirrors container_runtime_t
+; minus everything that could undo the guest's own confinement: loading or
+; reloading policy, toggling enforcement or booleans, and loading kernel
+; modules (NVRC disables module loading before exec'ing the agent anyway).
+(typeattributeset container_runtime_domain (kata_agent_t))
+(typeattributeset unconfined_domain_type (kata_agent_t))
+(typeattributeset can_change_object_identity (kata_agent_t))
+(typeattributeset can_change_process_identity (kata_agent_t))
+(typeattributeset can_change_process_role (kata_agent_t))
+(typeattributeset can_dump_kernel (kata_agent_t))
+(typeattributeset corenet_unconfined_type (kata_agent_t))
+(typeattributeset corenet_unlabeled_type (kata_agent_t))
+(typeattributeset devices_unconfined_type (kata_agent_t))
+(typeattributeset files_unconfined_type (kata_agent_t))
+(typeattributeset filesystem_unconfined_type (kata_agent_t))
+(typeattributeset fixed_disk_raw_read (kata_agent_t))
+(typeattributeset fixed_disk_raw_write (kata_agent_t))
+(typeattributeset kern_unconfined (kata_agent_t))
+(typeattributeset named_filetrans_domain (kata_agent_t))
+(typeattributeset process_uncond_exempt (kata_agent_t))
+(typeattributeset storage_unconfined_type (kata_agent_t))
+
+; The guest components and the NVIDIA userspace have no harvested rule set yet,
+; so they log instead of being denied. container_t is enforced regardless.
+(typepermissive kata_coco_t)
+(typepermissive kata_nvidia_t)
+
+; Base rootfs label, applied by mkfs.erofs --file-contexts at image build.
+(filecon "/usr/bin/kata-agent" file (system_u object_r kata_agent_exec_t ((s0) (s0))))
+
+; Entering the domains. NVRC runs as kernel_t: it execs the agent and spawns the
+; NVIDIA daemons and tools from the gpu extension. The agent launches the guest
+; components from the coco extension.
+(typetransition kernel_t kata_agent_exec_t process kata_agent_t)
+(typetransition kernel_t kata_gpu_extension_t process kata_nvidia_t)
+(typetransition kata_agent_t kata_coco_extension_t process kata_coco_t)
+
+(allow kernel_t kata_agent_exec_t (file (getattr open read map execute)))
+(allow kernel_t kata_gpu_extension_t (file (getattr open read map execute)))
+(allow kernel_t kata_agent_t (process (transition siginh rlimitinh noatsecure)))
+(allow kernel_t kata_nvidia_t (process (transition siginh rlimitinh noatsecure)))
+(allow kata_agent_t kata_coco_t (process (transition siginh rlimitinh noatsecure)))
+
+(allow kata_agent_t kata_agent_exec_t (file (entrypoint getattr open read map execute)))
+(allow kata_nvidia_t kata_gpu_extension_t (file (entrypoint getattr open read map execute)))
+(allow kata_coco_t kata_coco_extension_t (file (entrypoint getattr open read map execute)))
+
+; NVRC mounts every extension but the selinux one with context=<type>, which
+; needs the type to be associable with its own superblock.
+(allow kata_extension_file_type self (filesystem (associate)))
+(allow kernel_t kata_extension_file_type (filesystem (mount unmount getattr relabelfrom relabelto)))
+; context= is checked as relabelfrom the superblock's initial SID, unlabeled.
+(allow kernel_t unlabeled_t (filesystem (relabelfrom)))
+
+; Guest services read extension content (libraries, configs, the pause bundle,
+; which the agent copies into the container's own rootfs).
+(typeattribute kata_extension_reader)
+(typeattributeset kata_extension_reader (and (domain) (not (container_domain))))
+(allow kata_extension_reader kata_extension_file_type (dir (getattr search open read)))
+(allow kata_extension_reader kata_extension_file_type (file (getattr open read map)))
+(allow kata_extension_reader kata_extension_file_type (lnk_file (getattr read)))
+
+; CDI bind-mounts the NVIDIA userspace (libraries, nvidia-smi, ...) from the gpu
+; extension into GPU containers, which run it in place. No other extension is
+; visible to containers.
+(allow container_domain kata_gpu_extension_t (dir (getattr search open read)))
+(allow container_domain kata_gpu_extension_t (file (getattr open read map execute execute_no_trans)))
+(allow container_domain kata_gpu_extension_t (lnk_file (getattr read)))
+
+; Container rootfs content. Neither snapshotter delivers security.selinux
+; xattrs:
+;
+;  - erofs: the agent mounts the container overlay with context=<mountLabel>.
+;  - nydus (guest pull): CDH unpacks layers under /run/kata-containers/image,
+;    on /run (tmpfs, created before policy load, so tmpfs_t) or on a freshly
+;    formatted ext4 secure mount whose root has no label (unlabeled_t). The
+;    transitions below give that content container_file_t at creation, which
+;    the overlay CDH builds then exposes to container_t.
+(typetransition kata_agent_t tmpfs_t dir "kata-containers" container_file_t)
+(typetransition kernel_t tmpfs_t dir "kata-containers" container_file_t)
+(typetransition kata_coco_t unlabeled_t dir container_file_t)
+(typetransition kata_coco_t unlabeled_t file container_file_t)
+(typetransition kata_coco_t unlabeled_t lnk_file container_file_t)
+(allow kata_coco_t container_file_t (dir (getattr search open read write add_name remove_name create setattr rmdir reparent rename)))
+(allow kata_coco_t container_file_t (file (getattr open read write append create setattr unlink rename link map)))
+(allow kata_coco_t container_file_t (lnk_file (getattr read create setattr unlink rename)))
