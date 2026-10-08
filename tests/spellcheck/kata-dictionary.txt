@@ -104,6 +104,8 @@ Lowerdir
 lowerdir
 Upperdir
 upperdir
+selinuxfs
+xattrs
 
 
 # Networking & Communication

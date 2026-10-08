@@ -767,6 +767,10 @@ The architecture is designed to support multiple guest extension images:
   the CoCo extension (NVML resolution, attester selection) is covered in
   "Runtime dependencies" and "Attester variant selection" above.
 
+- **SELinux extension** — the guest SELinux policy for the NVIDIA runtime-rs
+  guests, loaded by NVRC before any other extension is mounted. See
+  [Guest SELinux Extension](guest-selinux-extension.md).
+
 - **Custom extensions** — users can build their own guest extension images for
   workload-specific libraries, models, or configurations.
 
