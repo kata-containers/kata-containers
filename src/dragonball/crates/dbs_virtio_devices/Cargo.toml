@@ -11,8 +11,8 @@ repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/
 version = "0.3.1"
 
 [dependencies]
-byteorder = "1.4.3"
-caps = "0.5.3"
+byteorder = { workspace = true }
+caps = { workspace = true }
 dbs-address-space = { workspace = true }
 dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
@@ -23,26 +23,26 @@ dbs-interrupt = { features = [
 ], workspace = true }
 dbs-snapshot = { workspace = true }
 dbs-utils = { workspace = true }
-epoll = ">=4.3.1, <4.3.2"
-fuse-backend-rs = { optional = true, version = "0.14.0" }
-io-uring = "0.5.2"
+epoll = { workspace = true }
+fuse-backend-rs = { optional = true, workspace = true }
+io-uring = { workspace = true }
 kata-sys-util = { workspace = true }
 kvm-bindings = { workspace = true }
 kvm-ioctls = { workspace = true }
-libc = "0.2.119"
-log = "0.4.14"
+libc = { workspace = true }
+log = { workspace = true }
 nix = { workspace = true }
-nydus-api = "0.4.1"
-nydus-rafs = "0.4.1"
-nydus-storage = "0.7.2"
-rlimit = "0.7.0"
-sendfd = "0.4.3"
-serde = { features = ["derive"], version = "1.0.27" }
-serde_json = "1.0.9"
+nydus-api = { workspace = true }
+nydus-rafs = { workspace = true }
+nydus-storage = { workspace = true }
+rlimit = { workspace = true }
+sendfd = { workspace = true }
+serde = { features = ["derive"], workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
-threadpool = "1"
-timerfd = "1.0"
-vhost-rs = { optional = true, package = "vhost", version = "0.15.0" }
+threadpool = { workspace = true }
+timerfd = { workspace = true }
+vhost-rs = { optional = true, workspace = true }
 virtio-bindings = { workspace = true }
 virtio-queue = { workspace = true }
 vm-memory = { features = ["backend-mmap"], workspace = true }
