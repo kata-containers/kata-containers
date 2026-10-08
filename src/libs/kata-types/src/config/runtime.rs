@@ -147,6 +147,17 @@ pub struct Runtime {
     #[serde(default)]
     pub disable_guest_seccomp: bool,
 
+    /// SELinux label applied to container processes inside the guest, as
+    /// `user:role:type[:level]`. Only used when guest SELinux is enabled.
+    ///
+    /// When the host passes a process label (SELinux-enabled host), its user,
+    /// role and type are replaced by this label's and its level (MCS categories)
+    /// is kept. Without a host label this label is used as is, at `s0` if it
+    /// carries no level. When empty, the host label's type is replaced by
+    /// `container_t`, since the host labels the VM rather than the workload.
+    #[serde(default)]
+    pub guest_selinux_label: String,
+
     /// Specifies how Kubernetes emptyDir volumes are handled.
     ///
     /// Options:
@@ -290,6 +301,24 @@ impl ConfigOps for Runtime {
             )));
         }
 
+        let guest_selinux_label = &conf.runtime.guest_selinux_label;
+        if !guest_selinux_label.is_empty() {
+            if guest_selinux_label.splitn(4, ':').count() < 3 {
+                return Err(std::io::Error::other(format!(
+                    "Invalid guest_selinux_label `{guest_selinux_label}`, expected user:role:type[:level]",
+                )));
+            }
+            let guest_selinux_disabled = conf
+                .hypervisor
+                .get(&conf.runtime.hypervisor_name)
+                .is_none_or(|h| h.disable_guest_selinux);
+            if guest_selinux_disabled {
+                return Err(std::io::Error::other(
+                    "guest_selinux_label is set, but guest SELinux is disabled (disable_guest_selinux = true)",
+                ));
+            }
+        }
+
         for shared_mount in &conf.runtime.shared_mounts {
             shared_mount.validate()?;
         }
@@ -386,6 +415,34 @@ vfio_mode = "guest_kernel"
 "#;
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap_err();
+    }
+
+    #[test]
+    fn test_guest_selinux_label() {
+        let mut config = TomlConfig::default();
+        config.runtime.hypervisor_name = "qemu".to_string();
+        config.runtime.emptydir_mode = EMPTYDIR_MODE_SHARED_FS.to_string();
+        config.hypervisor.insert(
+            "qemu".to_string(),
+            crate::config::hypervisor::Hypervisor {
+                disable_guest_selinux: false,
+                ..Default::default()
+            },
+        );
+
+        config.runtime.guest_selinux_label = "system_u:system_r:container_t".to_string();
+        Runtime::validate(&config).unwrap();
+
+        config.runtime.guest_selinux_label = "container_t".to_string();
+        Runtime::validate(&config).unwrap_err();
+
+        config.runtime.guest_selinux_label = "system_u:system_r:container_t:s0:c1,c2".to_string();
+        config
+            .hypervisor
+            .get_mut("qemu")
+            .unwrap()
+            .disable_guest_selinux = true;
+        Runtime::validate(&config).unwrap_err();
     }
 
     #[test]
