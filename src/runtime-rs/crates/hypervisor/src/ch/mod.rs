@@ -144,6 +144,10 @@ impl Hypervisor for CloudHypervisor {
         inner.hypervisor_config()
     }
 
+    async fn network_queue_limit(&self) -> usize {
+        self.inner.read().await.network_queue_limit()
+    }
+
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
         let inner = self.inner.read().await;
         inner.get_thread_ids().await
