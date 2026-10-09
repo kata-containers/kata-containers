@@ -82,6 +82,44 @@ struct ResourceCleanupSteps {
     ephemeral_disks: bool,
 }
 
+// A hypervisor that places VFIO devices itself may report the guest PCI path
+// of every assigned function. The agent only looks up the functions listed in
+// the options, so a mapping is only used when it covers the primary function
+// and every other assigned function; otherwise fall back to the primary one.
+fn vfio_agent_options(
+    configured_options: &[String],
+    assigned_bdfs: &[String],
+    primary_bdf: &str,
+    primary_guest_path: &str,
+) -> Vec<String> {
+    let primary_option = vec![format!("{primary_bdf}={primary_guest_path}")];
+    if configured_options.is_empty() {
+        return primary_option;
+    }
+
+    let mapped_bdfs: std::collections::HashSet<&str> = configured_options
+        .iter()
+        .filter_map(|option| option.split_once('=').map(|(bdf, _)| bdf))
+        .collect();
+    let missing_bdfs: Vec<&str> = std::iter::once(primary_bdf)
+        .chain(assigned_bdfs.iter().map(String::as_str))
+        .filter(|bdf| !mapped_bdfs.contains(bdf))
+        .collect();
+    if missing_bdfs.is_empty() {
+        return configured_options.to_vec();
+    }
+
+    warn!(
+        sl!(),
+        "VFIO device options {:?} do not map assigned functions {:?}; \
+         only reporting the primary function {}",
+        configured_options,
+        missing_bdfs,
+        primary_bdf
+    );
+    primary_option
+}
+
 impl ResourceManagerInner {
     pub(crate) async fn new(
         sid: &str,
@@ -774,7 +812,18 @@ impl ResourceManagerInner {
                             "vfio" => "vfio-pci".to_string(),
                             _ => "vfio-pci-gk".to_string(),
                         };
-                        let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
+                        let assigned_bdfs: Vec<String> = vfio_device
+                            .device
+                            .devices
+                            .iter()
+                            .map(|device| device.addr.to_string())
+                            .collect();
+                        let device_options = vfio_agent_options(
+                            &vfio_device.device_options,
+                            &assigned_bdfs,
+                            &host_bdf,
+                            &guest_pci_path.to_string(),
+                        );
                         // The Go runtime sets the device Id to
                         // filepath.Base(dev.ContainerPath), e.g. "vfio0".
                         // The agent policy validates this with:
@@ -1428,7 +1477,7 @@ fn block_device_node_is_readonly(major: i64, minor: i64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::device_cgroup_access_is_readonly;
+    use super::{device_cgroup_access_is_readonly, vfio_agent_options};
     use oci_spec::runtime::{
         Linux, LinuxBuilder, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder, LinuxDeviceType,
         LinuxResourcesBuilder,
@@ -1508,5 +1557,39 @@ mod tests {
             MAJOR,
             MINOR
         ));
+    }
+
+    #[test]
+    fn vfio_agent_options_preserve_complete_mapping_with_primary_fallback() {
+        let assigned = vec!["0000:02:00.0".to_string(), "0000:03:00.0".to_string()];
+        let complete = vec![
+            "0000:02:00.0=08.1/00".to_string(),
+            "0000:03:00.0=09.1/00".to_string(),
+        ];
+        assert_eq!(
+            vfio_agent_options(&complete, &assigned, "0000:03:00.0", "09.1/00"),
+            complete
+        );
+        assert_eq!(
+            vfio_agent_options(&[], &assigned, "0000:03:00.0", "09.1/00"),
+            ["0000:03:00.0=09.1/00"]
+        );
+    }
+
+    #[test]
+    fn vfio_agent_options_fall_back_on_partial_mapping() {
+        let assigned = vec!["0000:02:00.0".to_string(), "0000:03:00.0".to_string()];
+
+        let missing_function = vec!["0000:03:00.0=09.1/00".to_string()];
+        assert_eq!(
+            vfio_agent_options(&missing_function, &assigned, "0000:03:00.0", "09.1/00"),
+            ["0000:03:00.0=09.1/00"]
+        );
+
+        let missing_primary = vec!["0000:02:00.0=08.1/00".to_string()];
+        assert_eq!(
+            vfio_agent_options(&missing_primary, &[], "0000:03:00.0", "09.1/00"),
+            ["0000:03:00.0=09.1/00"]
+        );
     }
 }
