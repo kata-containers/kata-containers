@@ -338,12 +338,17 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
+        let mount_label = oci
+            .linux()
+            .as_ref()
+            .and_then(|linux| linux.mount_label().clone());
         let m = add_storages(
             sl(),
             req.storages.clone(),
             &self.sandbox,
             Some(req.container_id),
             is_pod_sandbox,
+            mount_label.as_deref(),
         )
         .await?;
 
@@ -1593,7 +1598,7 @@ impl agent_ttrpc::AgentService for AgentService {
             s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
         }
 
-        let m = add_storages(sl(), req.storages.clone(), &self.sandbox, None, false)
+        let m = add_storages(sl(), req.storages.clone(), &self.sandbox, None, false, None)
             .await
             .map_ttrpc_err(same)?;
         self.sandbox.lock().await.mounts = m;
