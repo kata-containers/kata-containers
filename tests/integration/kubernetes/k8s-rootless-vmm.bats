@@ -59,11 +59,11 @@ request_gpu_for_nvidia_gpu_runtime_rs() {
 	local config="$1"
 
 	available_gpus="$(kubectl get node "${node}" \
-		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
+		-o jsonpath='{.status.allocatable.nvidia\.com/gpu}')"
 	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
-		die "${node} has no allocatable nvidia.com/pgpu resource"
+		die "${node} has no allocatable nvidia.com/gpu resource"
 
-	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
+	yq -i '.spec.containers[0].resources.limits."nvidia.com/gpu" = "1"' \
 		"${config}"
 }
 

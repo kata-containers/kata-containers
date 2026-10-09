@@ -65,7 +65,7 @@ NUMA_SUPPORTED=(
 # Hypervisors that support GPU passthrough (VFIO).  qemu-nvidia-cpu is a CPU-only
 # NVIDIA class that deliberately disables passthrough, so the GPU NUMA tests
 # must skip there even on a GPU-equipped host (they'd otherwise fail rather
-# than skip once nvidia.com/pgpu resources are present).
+# than skip once nvidia.com/gpu resources are present).
 NUMA_GPU_SUPPORTED=(
     "qemu-nvidia-gpu"
     "qemu-nvidia-gpu-snp"
@@ -248,11 +248,11 @@ get_qemu_cmdline() {
     sudo cat "/proc/${1}/cmdline" | tr '\0' ' '
 }
 
-# host_has_pgpu returns 0 if the node has allocatable nvidia.com/pgpu
+# host_has_gpu returns 0 if the node has allocatable nvidia.com/gpu
 # resources, 1 otherwise.
-host_has_pgpu() {
+host_has_gpu() {
     local count
-    count=$(kubectl get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/pgpu}' 2>/dev/null)
+    count=$(kubectl get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null)
     [[ -n "${count}" && "${count}" -gt 0 ]] 2>/dev/null
 }
 
@@ -270,8 +270,8 @@ gpu_numa_skip_reason() {
         echo "GPU passthrough not supported on ${KATA_HYPERVISOR} (CPU-only NVIDIA class)"
         return 0
     fi
-    if ! host_has_pgpu; then
-        echo "No nvidia.com/pgpu resources available on the cluster"
+    if ! host_has_gpu; then
+        echo "No nvidia.com/gpu resources available on the cluster"
     fi
 }
 
