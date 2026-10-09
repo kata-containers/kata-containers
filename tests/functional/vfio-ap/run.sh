@@ -223,7 +223,7 @@ run_test() {
     # Create a container and run the test
     if sudo ctr run --runtime "${runtime_type}" --rm \
         --privileged --privileged-without-host-devices \
-        --device "${dev_base}/${dev_index}" "${test_image_name}" test \
+        --device "${dev_base}/${dev_index}" "${test_image_name}" "test-${run_index}" \
         -- bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"; then
         result=0
     else
