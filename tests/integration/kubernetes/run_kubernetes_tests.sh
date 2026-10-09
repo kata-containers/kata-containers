@@ -87,6 +87,7 @@ else
 		"k8s-graceful-termination.bats" \
 		"k8s-hostname.bats" \
 		"k8s-hostpath-volume.bats" \
+		"k8s-hosts.bats" \
 		"k8s-inotify.bats" \
 		"k8s-ip6tables.bats" \
 		"k8s-job.bats" \

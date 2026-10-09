@@ -317,6 +317,9 @@ jobs:
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       EROFS_SNAPSHOTTER_MODE: ${{ matrix.erofs-mode }}
       EROFS_DMVERITY: ${{ matrix.erofs-dmverity }}
+      # The dm-verity legs also exercise volumes as EROFS images, the other
+      # legs keeping copy_file covered.
+      EROFS_VOLUMES: ${{ matrix.erofs-dmverity == 'dmverity' && 'yes' || '' }}
       USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
       K8S_TEST_HOST_TYPE: "all"
       # We are skipping the auto generated policy tests for now,
