@@ -584,38 +584,6 @@ This modification is applied via the genpolicy drop-in configuration file
 When using a newer (or older) containerd version, the OCI version field
 may need to be adjusted accordingly.
 
-#### Run Kata CI tests locally
-
-Upstream Kata CI runs the CUDA vectorAdd, NUMA, composite attestation, and
-NIM/RAG tests. For TEE GPU scenarios, KBS is required for the
-attestation and NIM tests, but not for CUDA or NUMA. The best place to get
-started running these tests locally is to look into our
-[NVIDIA CI workflow manifest](https://github.com/kata-containers/kata-containers/blob/main/.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml)
-and into the underlying
-[run_kubernetes_nv_tests.sh](https://github.com/kata-containers/kata-containers/blob/main/tests/integration/kubernetes/run_kubernetes_nv_tests.sh)
-script. For example, to run the CUDA vectorAdd scenario against the TEE GPU
-runtime class use the following commands. These tests generate Kata agent
-security policies, so first install `genpolicy` as described in
-[Deploy pods with Kata agent security policies](#deploy-pods-with-kata-agent-security-policies).
-Run the tests from a Kata Containers source tree checked out at the tag
-matching `VERSION`. This keeps the deployed runtime, `genpolicy` binary and
-settings, and test scripts at the same release version.
-
-```bash
-# create the kata runtime class the test framework uses
-$ export KATA_HYPERVISOR=qemu-nvidia-gpu-snp
-$ kubectl delete runtimeclass kata --ignore-not-found
-$ kubectl get runtimeclass "kata-${KATA_HYPERVISOR}" -o json | \
-    jq '.metadata.name = "kata" | del(.metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp)' | \
-    kubectl apply -f -
-$ cd tests/integration/kubernetes
-$ K8S_TEST_NV="k8s-nvidia-cuda.bats" ./gha-run.sh run-nv-tests
-```
-
-> **Note:**
->
-> The NIM tests require `NGC_API_KEY` to contain a valid NGC API key.
-
 #### Deploy pods using attestation
 
 Attestation is a fundamental piece of the confidential containers solution.
