@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent::Agent;
 use anyhow::Context;
@@ -12,6 +14,10 @@ use tokio::sync::{mpsc, Mutex};
 
 /// monitor check interval 30s
 const HEALTH_CHECK_TIMER_INTERVAL: u64 = 30;
+
+/// A blocked in-process VMM can occupy runtime workers indefinitely.
+/// Allow all stop fallbacks to finish before forcing the shim to exit.
+const FAILURE_STOP_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// version check threshold 5min
 const VERSION_CHECK_THRESHOLD: u64 = 5 * 60 / HEALTH_CHECK_TIMER_INTERVAL;
@@ -37,7 +43,11 @@ impl HealthCheck {
         }
     }
 
-    pub fn start(&self, id: &str, agent: Arc<dyn Agent>) {
+    pub fn start<F, Fut>(&self, id: &str, agent: Arc<dyn Agent>, on_failure: F)
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send + 'static,
+    {
         if !self.keep_alive {
             return;
         }
@@ -88,7 +98,22 @@ impl HealthCheck {
                                 if let Err(mpsc::error::TryRecvError::Empty) = stop_rx.try_recv() {
                                     error!(sl!(), "failed to receive stop monitor signal");
                                     if !keep_abnormal {
-                                        ::std::process::exit(1);
+                                        // Exiting the shim here would leave an external VMM running.
+                                        warn!(sl!(), "stopping the VM of sandbox {}", id);
+                                        let (done_tx, done_rx) = std::sync::mpsc::channel();
+                                        // A blocked stop can occupy runtime workers, so use a separate thread.
+                                        std::thread::spawn(move || {
+                                            if done_rx.recv_timeout(FAILURE_STOP_TIMEOUT).is_err() {
+                                                error!(sl!(), "VM stop did not finish, exiting");
+                                                ::std::process::exit(1);
+                                            }
+                                        });
+                                        if !on_failure().await {
+                                            error!(sl!(), "VM exit was not confirmed, exiting");
+                                            ::std::process::exit(1);
+                                        }
+                                        let _ = done_tx.send(());
+                                        break;
                                     }
                                 } else {
                                     info!(sl!(), "wait to exit {}", id);
