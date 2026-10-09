@@ -20,4 +20,4 @@ spec:
       limits:
         cpu: "${NUMA_TEST_VCPUS}"
         memory: "${NUMA_TEST_MEMORY}"
-        nvidia.com/pgpu: "1"
+        nvidia.com/gpu: "1"
