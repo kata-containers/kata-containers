@@ -75,7 +75,8 @@ const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const MAX_BRIDGE_SIZE: u32 = 5;
-const MAX_NETWORK_QUEUES: u32 = 256;
+/// Maximum number of RX/TX queue pairs per network device.
+pub const MAX_NETWORK_QUEUES: u32 = 256;
 
 const KERNEL_PARAM_DELIMITER: &str = " ";
 /// Block size (in bytes) used by dm-verity block size validation.

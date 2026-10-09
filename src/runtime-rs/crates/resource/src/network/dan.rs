@@ -84,10 +84,10 @@ impl DanInner {
         let mut entity_list = Vec::with_capacity(dan_config.devices.len());
         for (idx, device) in dan_config.devices.iter().enumerate() {
             let name = format!("eth{idx}");
-            // The `network_queues` is a queue *pair* count.
-            // Keep `queue_num` as a pair count and the hypervisor backend converts pairs into the actual virtqueue count.
-            // A JSON-provided non-zero `queue_num` (also a pair count) with a higher priority always wins.
+            // DAN queue_num overrides the configured default (both count RX/TX pairs),
+            // then the hypervisor limit applies to the selected request.
             let (qnum, qsize) = device.device.get_effective_queues(config.network_queues);
+            let qnum = dev_mgr.read().await.network_queue_pairs(qnum).await;
             let endpoint: Arc<dyn Endpoint> = match &device.device {
                 Device::VhostUser { path, .. } => Arc::new(
                     VhostUserEndpoint::new(dev_mgr, &name, &device.guest_mac, path, qnum, qsize)

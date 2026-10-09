@@ -214,7 +214,10 @@ queue_size = 128
 num_queues = 1
 
 # network_queues configures the number of virtio-net queue pairs (RX/TX) exposed to the guest.
-# Setting network_queues = N creates N RX queues and N TX queues (i.e., N queue pairs).
+# Queue pairs are capped at the VM's boot vCPUs, rounded up.
+# With static_sandbox_resource_mgmt, this is the pod's vCPU allocation;
+# otherwise it is default_vcpus, even if CPUs are added later.
+# Pre-created DAN TAPs must match the effective count: multiqueue only for >1 pair.
 # More queues can improve network throughput and reduce per-queue contention by allowing packet processing to scale
 # across multiple vCPUs/threads (subject to host/guest capabilities and backend configuration such as vhost-net).
 # Increasing this value consumes more resources (e.g., virtqueue state, interrupts/MSI-X vectors, backend threads),
