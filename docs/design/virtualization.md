@@ -301,7 +301,7 @@ The following versions are used in this release (from [versions.yaml](../../vers
 | Hypervisor | Version | Repository |
 |------------|---------|------------|
 | Cloud Hypervisor | v53.0 | https://github.com/cloud-hypervisor/cloud-hypervisor |
-| Firecracker | v1.12.1 | https://github.com/firecracker-microvm/firecracker |
+| Firecracker | v1.17.0 | https://github.com/firecracker-microvm/firecracker |
 | QEMU | v10.2.1 | https://github.com/qemu/qemu |
 | Dragonball | builtin | https://github.com/kata-containers/kata-containers/tree/main/src/dragonball |
 
