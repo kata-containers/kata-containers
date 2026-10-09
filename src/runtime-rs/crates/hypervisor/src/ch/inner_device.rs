@@ -19,7 +19,7 @@ use crate::ShareFsDevice;
 use crate::VfioDevice;
 use crate::VmmState;
 use crate::{BlockConfigModern, BlockDeviceModern};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
@@ -50,6 +50,13 @@ const VIRTIO_FS: &str = "virtio-fs";
 
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+        if let DeviceType::Network(net) = &device {
+            ensure!(
+                (1..=self.network_queue_limit()).contains(&net.config.queue_num),
+                "network queue pairs must be normalized before attaching {}",
+                net.config.host_dev_name
+            );
+        }
         if self.state != VmmState::VmRunning {
             // If the VM is not running, add the device to the pending list to
             // be handled later.
@@ -346,15 +353,8 @@ impl CloudHypervisorInner {
         // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
         clh_net_config.tap = None;
         clh_net_config.id = None;
-        // The `config.num_queues` is a queue *pair* count (1 RX + 1 TX per pair).
-        // Convert pairs into the actual queue count.
-        clh_net_config.num_queues = netdev.config.queue_num.max(1) * 2;
-
-        let files = open_named_tuntap(
-            &netdev.config.host_dev_name,
-            netdev.config.queue_num.max(1) as u32,
-        )
-        .context("open named tuntap")?;
+        let files = open_named_tuntap(&netdev.config.host_dev_name, netdev.config.queue_num as u32)
+            .context("open named tuntap")?;
 
         let fds = files.iter().map(|f| f.as_raw_fd()).collect();
 
@@ -435,15 +435,13 @@ impl CloudHypervisorInner {
                     shared_fs_devices.push(fs_cfg);
                 }
                 DeviceType::Network(net_device) => {
-                    let network_queues_pairs =
-                        self.hypervisor_config().network_info.network_queues as usize;
+                    let network_queues_pairs = net_device.config.queue_num;
 
                     let mut net_config = NetConfig::try_from(net_device.config.clone())?;
                     // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
                     net_config.tap = None;
                     net_config.id = None;
 
-                    net_config.num_queues = network_queues_pairs * 2;
                     info!(
                         sl!(),
                         "network device queue pairs {:?}", network_queues_pairs
@@ -531,7 +529,8 @@ impl TryFrom<NetworkConfig> for NetConfig {
             let net_config = NetConfig {
                 tap: Some(cfg.host_dev_name.clone()),
                 id: Some(cfg.virt_iface_name.clone()),
-                num_queues: cfg.queue_num,
+                // Kata counts RX/TX pairs; CLH counts individual virtqueues.
+                num_queues: cfg.queue_num * 2,
                 queue_size: cfg.queue_size as u16,
                 mac: MacAddr { bytes: mac.0 },
                 ..Default::default()
@@ -725,13 +724,16 @@ mod tests {
         assert_eq!(result.is_ok(), is_valid);
     }
 
-    #[test]
-    fn test_networkconfig_to_netconfig() {
+    #[rstest]
+    #[case(1)]
+    #[case(2)]
+    #[case(4)]
+    fn test_networkconfig_to_netconfig(#[case] queue_pairs: usize) {
         let mut cfg = NetworkConfig {
             host_dev_name: String::from("tap0"),
             virt_iface_name: String::from("eth0"),
             queue_size: 256,
-            queue_num: 2,
+            queue_num: queue_pairs,
             guest_mac: None,
             index: 1,
             allow_duplicate_mac: false,
@@ -753,7 +755,7 @@ mod tests {
         let expected = NetConfig {
             tap: Some(cfg.host_dev_name.clone()),
             id: Some(cfg.virt_iface_name.clone()),
-            num_queues: cfg.queue_num,
+            num_queues: cfg.queue_num * 2,
             queue_size: cfg.queue_size as u16,
             mac: MacAddr { bytes: v },
             ..Default::default()
@@ -762,5 +764,28 @@ mod tests {
         let net = NetConfig::try_from(cfg);
         assert!(net.is_ok());
         assert_eq!(net.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn test_network_queue_validation() {
+        let mut clh = CloudHypervisorInner::default();
+        clh.config.cpu_info.default_vcpus = 4.0;
+        for state in [VmmState::NotReady, VmmState::VmRunning] {
+            clh.state = state;
+            for queue_num in [0, 5] {
+                let device = NetworkDevice {
+                    config: NetworkConfig {
+                        queue_num,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let error = clh
+                    .add_device(DeviceType::Network(device))
+                    .await
+                    .unwrap_err();
+                assert!(error.to_string().contains("must be normalized"));
+            }
+        }
     }
 }

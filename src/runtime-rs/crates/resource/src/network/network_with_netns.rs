@@ -393,6 +393,7 @@ async fn create_endpoint(
             sl!(),
             "{} network interface found: {}", &link_type, &attrs.name
         );
+        let queues = d.read().await.network_queue_pairs(config.queues).await;
         match link_type {
             // "device" is the generic netlink type for interfaces whose
             // drivers do not register a more specific kind. This includes
@@ -401,26 +402,20 @@ async fn create_endpoint(
             // ethtool BusInfo. Handle them the same way as veth
             // endpoints, using the configured network model.
             "veth" | "device" => {
-                let ret = VethEndpoint::new(
-                    &d,
-                    handle,
-                    &attrs.name,
-                    idx,
-                    &config.network_model,
-                    config.queues,
-                )
-                .await
-                .context(anyhow!("{link_type} endpoint"))?;
+                let ret =
+                    VethEndpoint::new(&d, handle, &attrs.name, idx, &config.network_model, queues)
+                        .await
+                        .context(anyhow!("{link_type} endpoint"))?;
                 Arc::new(ret)
             }
             "vlan" => {
-                let ret = VlanEndpoint::new(&d, handle, &attrs.name, idx, config.queues)
+                let ret = VlanEndpoint::new(&d, handle, &attrs.name, idx, queues)
                     .await
                     .context("vlan endpoint")?;
                 Arc::new(ret)
             }
             "ipvlan" => {
-                let ret = IPVlanEndpoint::new(&d, handle, &attrs.name, idx, config.queues)
+                let ret = IPVlanEndpoint::new(&d, handle, &attrs.name, idx, queues)
                     .await
                     .context("ipvlan endpoint")?;
                 Arc::new(ret)
@@ -432,7 +427,7 @@ async fn create_endpoint(
                     &attrs.name,
                     idx,
                     &config.network_model,
-                    config.queues,
+                    queues,
                 )
                 .await
                 .context("macvlan endpoint")?;
