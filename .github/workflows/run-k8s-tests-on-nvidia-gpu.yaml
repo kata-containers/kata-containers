@@ -76,6 +76,20 @@ jobs:
       K8S_TEST_HOST_TYPE: baremetal
       TARGET_ARCH: ${{ inputs.arch == 'arm64' && 'aarch64' || 'x86_64' }}
     steps:
+      - name: Check ARM64 runner disk space
+        if: inputs.arch == 'arm64'
+        run: |
+          # Model images, snapshots and caches need space beyond kata-deploy.
+          # Fail before pulling images; keep existing workloads and caches intact.
+          df -h / /var/lib/containerd "${RUNNER_TEMP}" "${GITHUB_WORKSPACE}"
+          for path in / /var/lib/containerd "${RUNNER_TEMP}" "${GITHUB_WORKSPACE}"; do
+            available_kib=$(df -Pk "${path}" | awk 'NR == 2 { print $4 }')
+            if (( available_kib < 60 * 1024 * 1024 )); then
+              echo "::error::${path} has less than 60 GiB free; reclaim space before retrying."
+              exit 1
+            fi
+          done
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
@@ -164,3 +178,6 @@ jobs:
         run: |
           bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
 
+      - name: Report ARM64 runner disk space after cleanup
+        if: always() && inputs.arch == 'arm64'
+        run: df -h / /var/lib/containerd "${RUNNER_TEMP}" "${GITHUB_WORKSPACE}"
