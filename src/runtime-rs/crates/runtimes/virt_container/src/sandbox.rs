@@ -1742,19 +1742,8 @@ impl Sandbox for VirtSandbox {
             let sandbox = self.clone();
             tokio::spawn(async move {
                 sandbox.monitor.stop().await;
-                sandbox.teardown().await;
-                if let Err(err) = finish_cleanup(
-                    &sandbox.vmm_exit_confirmed,
-                    || {
-                        let sandbox = sandbox.clone();
-                        async move { sandbox.cleanup().await }
-                    },
-                    CLEANUP_RETRY_DELAY,
-                    LATE_VM_EXIT_TIMEOUT,
-                    CLEANUP_TIMEOUT,
-                )
-                .await
-                {
+                // Usually done already by Delete of the sandbox container.
+                if let Err(err) = sandbox.finish_teardown().await {
                     error!(
                         sl!(),
                         "shutting down with sandbox {} resources left on the host: {err:#}",
@@ -1774,9 +1763,27 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
+    async fn finish_teardown(&self) -> Result<()> {
+        self.teardown_started.store(true, Ordering::Release);
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        finish_cleanup(
+            &self.vmm_exit_confirmed,
+            || {
+                let sandbox = self.clone();
+                async move { sandbox.cleanup().await }
+            },
+            CLEANUP_RETRY_DELAY,
+            LATE_VM_EXIT_TIMEOUT,
+            CLEANUP_TIMEOUT,
+        )
+        .await
+    }
+
     async fn cleanup(&self) -> Result<()> {
         // Container exit and shutdown can invoke cleanup repeatedly. Completed
-        // stages are skipped, and finish_cleanup() retries failures during shutdown.
+        // stages are skipped, and finish_teardown() retries failures.
         // A stop timeout does not prove that the VMM released its mounts,
         // cgroup, or rootless user. Leave them in place while it may be alive.
         if self.inner.read().await.vmm_start_attempted && !self.vmm_exit_confirmed.is_cancelled() {
@@ -1927,7 +1934,7 @@ impl Sandbox for VirtSandbox {
             self.teardown().await;
         }
 
-        // Otherwise publish before the teardown: containerd acts on this event,
+        // Otherwise publish before stopping the VM: containerd acts on this event,
         // and a slow guest shutdown in front of it gets the shim SIGKILLed and
         // a clean exit reported as 255.
         let event = TaskExit {
@@ -1944,10 +1951,13 @@ impl Sandbox for VirtSandbox {
             lock_sender.send(msg).await.context("send exit event")?;
         }
         drop(pending_exit);
-        // Docker only sends ShutdownContainer once the container is removed, so
-        // release everything here instead of leaking it until then.
+        // Only stop the VM here. Host cleanup now would race the container
+        // cleanup done by Delete, which follows TaskExit (Docker sends it
+        // when the container exits) and runs the sandbox cleanup itself.
         if is_sandbox_container && !cleanup_before_exit {
-            self.teardown().await;
+            if let Err(e) = self.stop().await {
+                error!(sl!(), "failed to stop sandbox: {:?}", e);
+            }
         }
         drop(publishing_exit);
 

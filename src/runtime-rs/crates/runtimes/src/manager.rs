@@ -684,6 +684,18 @@ impl RuntimeHandlerManager {
             }
             TaskRequest::DeleteProcess(process_id) => {
                 let resp = cm.delete_process(&process_id).await.context("do delete")?;
+                // Unlike Shutdown, Delete has no short containerd deadline, and
+                // its caller treats the reply as the end of the task. Release
+                // the sandbox before replying, so a new sandbox with the same ID
+                // cannot start on top of this one's state. The containers'
+                // mounts are gone by now, so the first cleanup attempt can work.
+                if cm.is_sandbox_container(&process_id).await {
+                    if let Err(err) = sandbox.finish_teardown().await {
+                        // Failing Delete would keep containerd from calling
+                        // Shutdown and leave this shim running.
+                        error!(sl!(), "sandbox resources are left on the host: {err:#}");
+                    }
+                }
                 if process_id.process_type == ProcessType::Container {
                     let event = TaskDelete {
                         id: process_id.container_id().to_string(),
@@ -1167,9 +1179,10 @@ mod tests {
         assert!(matches!(msg.action, Action::Shutdown));
     }
 
-    // Records every process a waiter is spawned for.
+    // Records every process a waiter is spawned for, and every teardown.
     struct WaiterRecordingSandbox {
         waiters: tokio::sync::mpsc::UnboundedSender<ContainerProcess>,
+        teardowns: tokio::sync::mpsc::UnboundedSender<()>,
     }
 
     #[async_trait::async_trait]
@@ -1188,6 +1201,10 @@ mod tests {
         }
         async fn shutdown(&self) -> Result<()> {
             unimplemented!()
+        }
+        async fn finish_teardown(&self) -> Result<()> {
+            let _ = self.teardowns.send(());
+            Ok(())
         }
         async fn status(&self) -> Result<common::types::SandboxStatus> {
             unimplemented!()
@@ -1271,9 +1288,21 @@ mod tests {
         }
         async fn delete_process(
             &self,
-            _process_id: &ContainerProcess,
+            process_id: &ContainerProcess,
         ) -> Result<common::types::ProcessStateInfo> {
-            unimplemented!()
+            Ok(common::types::ProcessStateInfo {
+                container_id: process_id.container_id().to_string(),
+                exec_id: process_id.exec_id().to_string(),
+                pid: common::types::PID::new(42),
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: common::types::ProcessStatus::Stopped,
+                exit_status: 0,
+                exited_at: None,
+            })
         }
         async fn exec_process(&self, _req: common::types::ExecProcessRequest) -> Result<()> {
             unimplemented!()
@@ -1308,8 +1337,9 @@ mod tests {
         async fn need_shutdown_sandbox(&self, _req: &ShutdownRequest) -> bool {
             unimplemented!()
         }
-        async fn is_sandbox_container(&self, _process_id: &ContainerProcess) -> bool {
-            false
+        async fn is_sandbox_container(&self, process_id: &ContainerProcess) -> bool {
+            process_id.process_type == ProcessType::Container
+                && process_id.container_id() == "test-sid"
         }
     }
 
@@ -1328,9 +1358,11 @@ mod tests {
         let (sender, _receiver) = channel::<Message>(8);
         let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
         let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, _) = tokio::sync::mpsc::unbounded_channel();
         manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
             sandbox: Arc::new(WaiterRecordingSandbox {
                 waiters: waiters_tx,
+                teardowns,
             }),
             container_manager: Arc::new(StartingContainerManager),
         }));
@@ -1354,6 +1386,36 @@ mod tests {
                 exec_id, waiter_expected, waited
             ),
         }
+    }
+
+    // The Delete reply is the end of the task for containerd's caller, so the
+    // sandbox must be released before it, and only for the sandbox container.
+    #[rstest]
+    #[case::sandbox_container("test-sid", "", true)]
+    #[case::other_container("test-cid", "", false)]
+    #[case::sandbox_exec("test-sid", "exec-1", false)]
+    #[tokio::test]
+    async fn test_delete_releases_sandbox_before_reply(
+        #[case] container_id: &str,
+        #[case] exec_id: &str,
+        #[case] teardown_expected: bool,
+    ) {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (waiters, _) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, mut teardowns_rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox { waiters, teardowns }),
+            container_manager: Arc::new(StartingContainerManager),
+        }));
+
+        let process_id = ContainerProcess::new(container_id, exec_id).unwrap();
+        let resp = manager
+            .handler_task_request(TaskRequest::DeleteProcess(process_id))
+            .await
+            .unwrap();
+        assert!(matches!(resp, TaskResponse::DeleteProcess(_)));
+        assert_eq!(teardowns_rx.try_recv().is_ok(), teardown_expected);
     }
 
     #[test]
