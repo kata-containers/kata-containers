@@ -11,9 +11,13 @@
 
 #![allow(dead_code)] // some url's handler are *to be* developed
 
-use std::{fs, path::Path, sync::Arc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use common::Sandbox;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -23,45 +27,72 @@ use tokio::net::UnixListener;
 
 use super::handlers::handler_mux;
 
+fn socket_path(sid: &str) -> PathBuf {
+    Path::new(sb_storage_path())
+        .join(sid)
+        .join(SHIM_MGMT_SOCK_NAME)
+}
+
+/// The socket is only removed by a completed sandbox cleanup, so a leftover
+/// one means a previous shim for this ID is still running or failed to clean
+/// up. Its state must not be reused, so the socket is never removed here.
+pub fn ensure_no_leftover_sandbox(sid: &str) -> Result<()> {
+    ensure_no_leftover_socket(&socket_path(sid), sid)
+}
+
+fn ensure_no_leftover_socket(path: &Path, sid: &str) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Err(anyhow!(
+            "{} exists: a previous shim for sandbox {sid} is still running or did not \
+             finish its cleanup",
+            path.display()
+        )),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err).with_context(|| format!("check {}", path.display())),
+    }
+}
+
 /// The shim management server instance
 pub struct MgmtServer {
-    /// socket address(with prefix like hvsock://)
-    pub s_addr: String,
+    listener: UnixListener,
 
     /// The sandbox instance
-    pub sandbox: Arc<dyn Sandbox>,
+    sandbox: Arc<dyn Sandbox>,
 }
 
 impl MgmtServer {
-    /// construct a new management server
+    /// Binds the management socket, failing if a previous shim left one.
     pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Result<Self> {
-        // make sure the storage path exists, and the socket file will be created in that path
-        let kata_path = sb_storage_path();
-        fs::create_dir_all(kata_path)
-            .context(format!("failed to create kata path directory {kata_path}"))?;
+        let path = socket_path(sid);
+        if let Some(parent_dir) = path.parent() {
+            fs::create_dir_all(parent_dir)
+                .with_context(|| format!("create {}", parent_dir.display()))?;
+        }
+        ensure_no_leftover_sandbox(sid)?;
+        info!(sl!(), "mgmt-svr: binding to path {}", path.display());
+        let listener =
+            UnixListener::bind(&path).with_context(|| format!("bind {}", path.display()))?;
 
-        let s_addr = format!("unix://{kata_path}/{sid}/{SHIM_MGMT_SOCK_NAME}");
-
-        Ok(Self { s_addr, sandbox })
+        Ok(Self { listener, sandbox })
     }
 
     // TODO(when metrics is supported): write metric addresses to fs
     // TODO(when metrics is supported): register shim metrics
     // TODO(when metrics is supported): register sandbox metrics
     // running management http server in an infinite loop, able to serve concurrent requests
-    pub async fn run(self: Arc<Self>) {
-        let listener = listener_from_path(self.s_addr.clone()).await.unwrap();
+    pub async fn run(self) {
+        let Self { listener, sandbox } = self;
         // start an infinite loop, which serves the incomming uds stream
         loop {
             let (stream, _) = listener.accept().await.unwrap();
             let io = TokioIo::new(stream);
-            let me = self.clone();
+            let sandbox = sandbox.clone();
             // spawn a light weight thread to multiplex to the handler
             tokio::task::spawn(async move {
                 if let Err(err) = http1::Builder::new()
                     .serve_connection(
                         io,
-                        service_fn(|request| handler_mux(me.sandbox.clone(), request)),
+                        service_fn(|request| handler_mux(sandbox.clone(), request)),
                     )
                     .await
                 {
@@ -72,17 +103,19 @@ impl MgmtServer {
     }
 }
 
-// from path, return a unix listener corresponding to that path,
-// if the path(socket file) is not created, we create that here
-async fn listener_from_path(path: String) -> Result<UnixListener> {
-    // create the socket if not present
-    let trim_path = path.strip_prefix("unix:").context("trim path")?;
-    let file_path = Path::new("/").join(trim_path);
-    let file_path = file_path.as_path();
-    if let Some(parent_dir) = file_path.parent() {
-        fs::create_dir_all(parent_dir).context("create parent dir")?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_leftover_socket_is_reported_and_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SHIM_MGMT_SOCK_NAME);
+        ensure_no_leftover_socket(&path, "sid").unwrap();
+
+        let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let err = ensure_no_leftover_socket(&path, "sid").unwrap_err();
+        assert!(err.to_string().contains("did not finish its cleanup"));
+        assert!(path.exists());
     }
-    // bind the socket and return the listener
-    info!(sl!(), "mgmt-svr: binding to path {}", path);
-    UnixListener::bind(file_path).context("bind address")
 }
