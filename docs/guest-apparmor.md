@@ -1,73 +1,160 @@
 # Guest-side AppArmor
 
-This document records the current opt-in Guest AppArmor prototype and the
-validation boundary for the upstream discussion in
+This document describes how Kata applies AppArmor policy inside the guest, and
+the boundary of what has been validated, for the upstream discussion in
 [issue #7586](https://github.com/kata-containers/kata-containers/issues/7586).
 It intentionally does not define a final Kubernetes API or Kata runtime
 configuration format.
 
+## Where the pieces live
+
+Three components are involved, and keeping them separate is the point:
+
+| Component | Owns |
+| --- | --- |
+| Base guest image | `apparmor_parser` and its runtime dependencies |
+| AppArmor guest extension | All workload policy text, including anything profiles include |
+| Guest agent | Loading a requested profile and verifying it is enforced |
+
+Policy is not built into the base image. Policy changes far more often than the
+guest operating system does, and putting it in the base image would mean
+rebuilding and redistributing a rootfs for every policy change. It ships in a
+guest extension image instead, which is attached to the VM at start and mounted
+read-only before the agent runs.
+
+The extension carries policy text only. It contains no parser and no shared
+libraries, because those belong to the base image.
+
 ## Current execution model
 
 The OCI `process.apparmorProfile` value is preserved by `runtime-rs` and passed
-to the Guest agent as an opaque value. The Guest agent performs two separate
+to the guest agent as an opaque value. The agent performs two separate
 operations:
 
 1. Before container namespace and rootfs setup, it resolves the value against
-   trusted files already present in the Guest rootfs, verifies `securityfs`,
-   loads the profile with `apparmor_parser` when required, and verifies that
-   the profile is visible in the Guest kernel.
+   the mounted AppArmor guest extension, verifies `securityfs`, loads the
+   profile with `apparmor_parser` when it is not already loaded, and verifies
+   from the kernel that the profile is present and in enforce mode.
 2. After the container rootfs is prepared, but before credentials and
    capabilities are dropped, it writes `exec <profile>` to
    `/proc/self/attr/exec`. The following workload `execve()` then enters the
    selected profile.
 
-The profile loader never reads the workload container rootfs and never accepts
-profile text from the Host at runtime.
+The loader never reads the workload container rootfs and never accepts profile
+text from the host at runtime.
 
-Profile preparation is serialized inside the Guest with a short-lived lock
+Profile preparation is serialized inside the guest with a short-lived lock
 around the loaded-profile check, parser invocation, and post-load verification.
 Concurrent containers requesting the same profile therefore reuse one loaded
 kernel profile instead of racing to load it.
 
-## Profile behavior
+## The extension root is the policy root
 
-The following behavior is currently implemented:
+The contents of the extension are mounted at `/run/kata-extensions/apparmor`,
+and that directory is also the only include root given to `apparmor_parser`:
+
+```text
+/run/kata-extensions/apparmor/
+├── profiles/         profiles/<name>, requested by name
+├── abstractions/     #include <abstractions/...>
+├── tunables/         #include <tunables/...>
+├── local/            site-specific includes
+└── metadata/manifest version and provenance
+```
+
+Everything a profile can include must live under this root. If profiles could
+include the distribution's `/etc/apparmor.d`, their meaning would change
+whenever the base image's packages changed, which is exactly the coupling this
+layout exists to avoid. The include root is passed explicitly because
+`apparmor_parser` adds to its search path rather than replacing it.
+
+A profile's file name is what the agent resolves against, and the agent then
+verifies from the kernel that a profile with that name is loaded. A file named
+`example` that declares `profile something-else` therefore does not satisfy a
+request for `example`; the built-in build check rejects that combination.
+
+## Profile behavior
 
 | Input | Behavior |
 | --- | --- |
-| Empty or absent | No AppArmor operation |
+| Empty or absent | No AppArmor operation; the extension may be absent entirely |
 | `unconfined` | No AppArmor operation, following OCI semantics |
-| A validated profile name | Load or verify the Guest profile, then select it before `execve()` |
+| A validated profile name | Load or reuse the guest profile, verify it is enforced, then select it before `execve()` |
 | `localhost/<name>` | Temporary OCI-boundary compatibility normalization |
 | `runtime/default` | Temporary compatibility mapping to `kata-default` |
 | Missing or invalid profile | Container startup fails |
-| Parser failure or missing kernel profile | Container startup fails |
+| Parser failure, or profile not in enforce mode | Container startup fails |
+
+A profile that is loaded in **complain** mode is refused rather than accepted.
+Complain mode reports violations without preventing them, so treating it as
+success would leave the workload effectively unconstrained while appearing to
+have applied policy.
 
 The `localhost/` and `runtime/default` handling is an implementation aid for
-values observed at the OCI boundary. Ownership of Kubernetes semantic mapping,
-including the final location of `runtime/default -> kata-default`, remains an
-open design question for issue #7586.
+values observed at the OCI boundary. Containerd may already have resolved
+`RuntimeDefault` into a concrete profile name before the request reaches the
+guest, and where that mapping should live remains an open design question for
+issue #7586.
+
+## Failure modes
+
+Failures happen at different layers, which matters when diagnosing them:
+
+| Situation | Where it fails |
+| --- | --- |
+| Extension image missing, dm-verity failure, or mount failure | Guest boot. The mount unit runs before the agent and powers the VM off on failure, so the agent never starts |
+| No extension configured, but a profile is requested | Container creation, with an error saying the extension is not configured |
+| Extension configured but not mounted | Container creation, with an error naming the missing mount point |
+| Profile absent from a mounted extension | Container creation, with the resolved path in the error |
+| Parser missing, or parser failure | Container creation |
+| Profile loaded but not enforced | Container creation |
+| Writing `/proc/self/attr/exec` fails | Workload `execve()` in the container init process |
+
+A workload that requests no profile is unaffected by the extension being absent
+or unmounted.
+
+### Known limitation: `AGENT_INIT=yes`
+
+Only guests running systemd mount guest extension images, because the mount is
+performed by a systemd unit ordered before the agent. A guest built with
+`AGENT_INIT=yes` therefore cannot use this feature today. The agent detects
+this case and says so explicitly rather than reporting a missing profile, so
+the two situations are not confused.
+
+### Known limitation: exec processes
+
+`exec_process()` in `runtime-rs` no longer clears the container's AppArmor
+profile, so the value reaches the agent on the exec path as well. Whether an
+exec is allowed to request a profile different from its container's, and
+whether clearing it should remain the default, are open upstream questions.
+What is not acceptable is an exec silently running unconfined inside a confined
+container.
 
 ## Guest image requirements
 
-Ubuntu and Debian rootfs builds support the following existing opt-in settings:
+The base image provides the parser:
 
 ```bash
-GUEST_APPARMOR=yes
-GUEST_APPARMOR_PROFILE_TARBALL=/path/to/profiles.tar.zst
+PACKAGES+=" apparmor"     # in the ubuntu and debian rootfs configs
 ```
 
-The build installs the AppArmor userspace packages and unpacks trusted profile
-files into `/etc/apparmor.d`. The Guest kernel must provide AppArmor and the
-Guest must mount `securityfs`.
+`apparmor-utils` is deliberately not installed: it is a command line tool the
+agent never invokes, and it pulls in a python3 dependency chain.
 
-The current rootfs path also links the distribution AppArmor service for
-systemd-based Guests. This remains a prototype validation path. It is not yet
-the final preload contract and does not cover `AGENT_INIT=yes` Guests.
+The guest kernel must provide AppArmor, and `CONFIG_SECURITYFS` must be set;
+the agent mounts `securityfs` if it is not already mounted.
+
+The distribution's `apparmor.service` loads every profile in `/etc/apparmor.d`
+at boot. If it ran, workload profiles could already be in the kernel before the
+agent was asked to apply one, and the agent could not tell where a loaded
+profile came from. The base image therefore installs a systemd preset that
+disables it. This is weaker than masking the unit on purpose: the requirement
+is that the base image must not preload workload profiles, not that the service
+is forbidden, so it remains available for anyone who enables it explicitly.
 
 ## Host and CRI boundary
 
-Host-side AppArmor state must be recorded separately from Guest enforcement.
+Host-side AppArmor state must be recorded separately from guest enforcement.
 For Kubernetes `Localhost` profiles, containerd CRI may require the profile to
 already be loaded on the Host before it creates the OCI specification. If that
 check fails, the request never reaches `runtime-rs` or the Guest agent. This is
@@ -86,11 +173,27 @@ Workload enforcement
 The existing compatibility test uses the annotation form by default for the
 older Kubernetes 1.29 validation environment. Set
 `KATA_K8S_APPARMOR_API=field` when testing the
-`securityContext.appArmorProfile` form on a newer Kubernetes release. The
-separate new-cluster validation described below uses Kubernetes 1.28.2 and
-does not imply that Guest AppArmor is available there.
+`securityContext.appArmorProfile` form on a newer Kubernetes release.
 
-## Validation on the new Kubernetes cluster
+## Earlier prototype validation (historical)
+
+!!! warning "This describes the superseded prototype"
+    The results below were obtained while policy was delivered by unpacking a
+    profile tarball into `/etc/apparmor.d` at rootfs build time, using the
+    prototype's `GUEST_APPARMOR` and `GUEST_APPARMOR_PROFILE_TARBALL` build
+    options and a test profile named `kata-default`.
+
+    Those build options and that lookup path no longer exist. Policy now comes
+    from the guest extension described above, and the test profile is named
+    `kata-apparmor-test`. The results are kept because they are the only
+    end-to-end evidence collected so far, and because the failure modes they
+    record are still informative, but they **do not** validate the current
+    implementation.
+
+    Re-running these checks against the extension-based path is outstanding
+    work.
+
+### Validation on a separate Kubernetes cluster
 
 The implementation was checked against a separate three-node Kubernetes
 1.28.2 cluster. The control-plane node is ARM64 and the two worker nodes are
