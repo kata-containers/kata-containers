@@ -338,7 +338,7 @@ impl OpenVmmInner {
                         deferred_block_devices.push(dev.clone());
                     }
                 }
-                DeviceType::Vfio(_) => {
+                DeviceType::VfioModern(_) => {
                     return Err(anyhow!(
                         "openvmm: VFIO device pass-through is not yet wired in Kata. \
                          OpenVMM's ttrpc API now supports it (PcieDeviceKind::Vfio with a \
