@@ -1254,7 +1254,7 @@ fn synthesize_variant_runtimes(
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
         "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
-        "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu",
+        "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu-runtime-rs",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu qemu-runtime-rs",
         _ => "qemu", // Fallback to qemu for unknown architectures
@@ -1458,6 +1458,26 @@ mod tests {
     #[case("riscv64", "qemu")]
     fn test_get_default_shim_for_arch(#[case] arch: &str, #[case] expected: &str) {
         assert_eq!(get_default_shim_for_arch(arch), expected);
+    }
+
+    #[rstest]
+    #[case("x86_64")]
+    #[case("aarch64")]
+    #[case("s390x")]
+    #[case("ppc64le")]
+    fn test_default_shims_have_components(#[case] arch: &str) {
+        let manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../shim-components.json")).unwrap();
+
+        for shim in get_default_shims_for_arch(arch).split_whitespace() {
+            let components = manifest["shims"][shim][arch]
+                .as_array()
+                .unwrap_or_else(|| panic!("Default shim {shim} has no components for {arch}"));
+            assert!(
+                !components.is_empty(),
+                "Default shim {shim} has no components for {arch}"
+            );
+        }
     }
 
     #[serial]
