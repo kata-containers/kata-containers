@@ -1095,6 +1095,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "containerd-shim-protos",
+ "hypervisor",
  "kata-sys-util",
  "kata-types",
  "nix 0.31.3",
@@ -1102,10 +1103,15 @@ dependencies = [
  "protobuf",
  "protocols",
  "resource",
+ "rstest",
  "runtime-spec",
+ "slog",
+ "slog-scope",
  "strum 0.24.1",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3697,6 +3703,7 @@ dependencies = [
  "bytes 1.11.1",
  "chrono",
  "clap",
+ "common",
  "csv",
  "epoll",
  "futures",

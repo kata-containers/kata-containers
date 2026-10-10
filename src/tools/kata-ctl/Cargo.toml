@@ -28,6 +28,7 @@ toml.workspace = true
 url.workspace = true
 
 agent.workspace = true
+common.workspace = true
 epoll = "4.0.1"
 kata-sys-util.workspace = true
 kata-types.workspace = true
