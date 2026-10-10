@@ -219,9 +219,10 @@ impl ContainerManager for VirtContainerManager {
         let mut oci_process: OCIProcess =
             serde_json::from_slice(&req.spec_value).context("serde from slice")?;
 
-        // Exec happens in the guest agent. Preserve the OCI AppArmor profile
-        // as an opaque value so the Guest owns loading and selection; the shim
-        // does not apply host-side AppArmor itself.
+        // Exec happens inside the guest, where the agent selects the profile
+        // for the process it starts. Clearing the profile here would discard
+        // the container's AppArmor confinement on the exec path, so it is kept
+        // as an opaque value; the shim does not apply host-side AppArmor itself.
         oci_process.set_capabilities(None);
 
         // CRI-O derives an exec's process from the container's, so a container
