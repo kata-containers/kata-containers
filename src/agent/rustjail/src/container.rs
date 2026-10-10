@@ -413,7 +413,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
     // Load guest AppArmor policy before namespace/rootfs setup. The loader
-    // must resolve profiles from the Guest rootfs, not the workload rootfs.
+    // resolves profiles from the guest extension image, which the guest mounts
+    // read-only, and never from the workload rootfs.
     let prepared_apparmor_profile =
         crate::apparmor::prepare_profile(oci_process.apparmor_profile().as_deref())
             .context("prepare guest AppArmor profile")?;
