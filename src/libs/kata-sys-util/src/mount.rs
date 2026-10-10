@@ -800,6 +800,8 @@ fn get_longest_common_prefix(opts: &[String]) -> Option<PathBuf> {
 
 /// Umount a mountpoint with timeout.
 ///
+/// Cleanup may retry after an unmount succeeded but a later step failed.
+///
 /// # Safety
 /// Caller needs to ensure safety of the `path` to avoid possible file path based attacks.
 pub fn umount_timeout<P: AsRef<Path>>(path: P, timeout: u64) -> Result<()> {
@@ -810,10 +812,20 @@ pub fn umount_timeout<P: AsRef<Path>>(path: P, timeout: u64) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| Error::InvalidPath(path.to_path_buf()))?;
+    let path_is_symlink = match is_symlink(path) {
+        Ok(is_symlink) => is_symlink,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            info!(
+                sl!(),
+                "{} does not exist, nothing to umount",
+                path.display()
+            );
+            return Ok(());
+        }
+        Err(e) => return Err(Error::ReadMetadata(path.to_owned(), e)),
+    };
     // TODO: https://github.com/kata-containers/kata-containers/issues/3473
-    if is_symlink(path).map_err(|e| Error::ReadMetadata(path.to_owned(), e))?
-        || is_symlink(parent).map_err(|e| Error::ReadMetadata(path.to_owned(), e))?
-    {
+    if path_is_symlink || is_symlink(parent).map_err(|e| Error::ReadMetadata(path.to_owned(), e))? {
         warn!(
             sl!(),
             "unable to umount {} which is a symbol link",
@@ -824,8 +836,14 @@ pub fn umount_timeout<P: AsRef<Path>>(path: P, timeout: u64) -> Result<()> {
 
     if timeout == 0 {
         // Lazy unmounting the mountpoint with the MNT_DETACH flag.
-        umount2(path, true).map_err(|e| Error::Umount(path.to_owned(), e))?;
-        info!(sl!(), "lazy umount for {}", path.display());
+        match umount2(path, true) {
+            Ok(()) => info!(sl!(), "lazy umount for {}", path.display()),
+            // EINVAL also means a locked mount; do not hide it while the mount remains.
+            Err(e) if e.kind() == io::ErrorKind::InvalidInput && !is_mount_point(path) => {
+                info!(sl!(), "{} is not a mount point", path.display())
+            }
+            Err(e) => return Err(Error::Umount(path.to_owned(), e)),
+        }
     } else {
         let start_time = Instant::now();
         while let Err(e) = umount2(path, false) {
@@ -855,6 +873,11 @@ pub fn umount_timeout<P: AsRef<Path>>(path: P, timeout: u64) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn is_mount_point(path: &Path) -> bool {
+    path.to_str()
+        .is_none_or(|path| !matches!(get_linux_mount_info(path), Err(Error::NoMountEntry(_))))
 }
 
 /// Umount all filesystems mounted at the `mountpoint`.
@@ -1145,6 +1168,51 @@ mod tests {
         bind_mount_unchecked(&src, dst.as_ref(), false, MsFlags::MS_SLAVE).unwrap();
         assert!(dst.as_ref().is_file());
         umount_timeout(dst.as_ref(), 0).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires root and mount namespace capabilities"]
+    fn test_umount_timeout_lazy_retry() {
+        const CHILD: &str = "KATA_SYS_UTIL_MOUNT_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new("unshare")
+                .args(["--mount", "--propagation", "private", "--"])
+                .arg(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "mount::tests::test_umount_timeout_lazy_retry",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .output()
+                .expect("start private mount namespace (requires unshare)");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains("1 passed"),
+                "isolated umount test failed:\n{stdout}\n{}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            return;
+        }
+
+        let tmpdir = tempfile::tempdir().unwrap();
+        let src = tmpdir.path().join("src");
+        let dst = tmpdir.path().join("dst");
+        fs::create_dir(&src).unwrap();
+        fs::create_dir(&dst).unwrap();
+        let is_mounted = |p: &Path| get_linux_mount_info(p.to_str().unwrap()).is_ok();
+
+        bind_mount_unchecked(&src, &dst, false, MsFlags::MS_SLAVE).unwrap();
+        bind_mount_unchecked(&src, &dst, false, MsFlags::MS_SLAVE).unwrap();
+        umount_timeout(&dst, 0).unwrap();
+        assert!(is_mounted(&dst));
+        umount_timeout(&dst, 0).unwrap();
+        assert!(!is_mounted(&dst));
+
+        umount_timeout(&dst, 0).unwrap();
+        fs::remove_dir(&dst).unwrap();
+        umount_timeout(&dst, 0).unwrap();
     }
 
     #[test]
