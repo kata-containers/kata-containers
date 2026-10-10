@@ -988,7 +988,7 @@ impl ResourceManagerInner {
     }
 
     pub async fn cleanup(&self) -> Result<()> {
-        // Cleanup may be called repeatedly, including by sandbox shutdown retries.
+        // Cleanup may be called repeatedly, e.g. by Delete and then Shutdown.
         // Only successful stages are marked complete; errors leave stages pending.
         // Hold this lock across the attempt: a concurrent caller can retry
         // failed stages, but cannot run them while the first attempt is active.
@@ -1021,22 +1021,6 @@ impl ResourceManagerInner {
                 }
             } else {
                 steps.network = true;
-            }
-        }
-
-        if !steps.cgroup {
-            info!(sl!(), "begin cgroup cleanup");
-            match self
-                .cgroups_resource
-                .delete()
-                .await
-                .context("delete cgroup")
-            {
-                Ok(()) => {
-                    steps.cgroup = true;
-                    info!(sl!(), "cgroup cleanup finished");
-                }
-                Err(e) => errors.push(e),
             }
         }
 
@@ -1109,6 +1093,24 @@ impl ResourceManagerInner {
                 .context("cleanup ephemeral disks")
             {
                 Ok(()) => steps.ephemeral_disks = true,
+                Err(e) => errors.push(e),
+            }
+        }
+
+        // Last, as it may wait for exiting tasks and the share fs daemons
+        // are gone by now.
+        if !steps.cgroup {
+            info!(sl!(), "begin cgroup cleanup");
+            match self
+                .cgroups_resource
+                .delete()
+                .await
+                .context("delete cgroup")
+            {
+                Ok(()) => {
+                    steps.cgroup = true;
+                    info!(sl!(), "cgroup cleanup finished");
+                }
                 Err(e) => errors.push(e),
             }
         }

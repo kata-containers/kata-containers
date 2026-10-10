@@ -92,24 +92,15 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use strum::Display;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
-use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::vmm_process::VmmProcessIdentity;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
-
-const STOP_VM_TIMEOUT: Duration = Duration::from_secs(15);
-const LATE_VM_EXIT_TIMEOUT: Duration = Duration::from_secs(90);
-const CLEANUP_RETRY_DELAY: Duration = Duration::from_secs(5);
-const CLEANUP_TIMEOUT: Duration = Duration::from_secs(120);
-
-// Failed Cloud Hypervisor stops may never report an exit, so keep this short.
-const VMM_EXIT_RECORD_GRACE: Duration = Duration::from_millis(500);
 
 pub struct SandboxRestoreArgs {
     pub sid: String,
@@ -214,42 +205,49 @@ async fn wait_until_not_pending(mut exit_pending: watch::Receiver<bool>) {
     let _ = exit_pending.wait_for(|pending| !pending).await;
 }
 
+/// Either the exit watcher or the pidfd of the saved identity confirms the
+/// exit, whichever reports it first. Returns only once it is confirmed.
+async fn wait_for_vmm_exit(confirmed: &CancellationToken, identity: Option<&VmmProcessIdentity>) {
+    let Some(identity) = identity else {
+        return confirmed.cancelled().await;
+    };
+    tokio::select! {
+        _ = confirmed.cancelled() => {}
+        result = identity.wait_exit() => match result {
+            Ok(()) => confirmed.cancel(),
+            Err(err) => {
+                warn!(sl!(), "cannot watch the VMM exit through its pidfd: {err:#}");
+                confirmed.cancelled().await;
+            }
+        },
+    }
+}
+
+/// Returns whether the VMM exit is confirmed, which cleanup requires. The
+/// waits end on the exit itself; a VMM stuck in uninterruptible sleep is
+/// bounded by the deadline of the request that stops the sandbox.
 async fn stop_vm_with_confirmation(
     stop: impl std::future::Future<Output = Result<()>>,
     confirmed: &CancellationToken,
     identity: Option<VmmProcessIdentity>,
     exit_watched: bool,
-    stop_timeout: Duration,
 ) -> bool {
-    let reason = match timeout(stop_timeout, stop).await {
-        Ok(Ok(())) => {
-            if exit_watched && timeout(stop_timeout, confirmed.cancelled()).await.is_ok() {
-                return true;
-            }
-            "still running after stop".to_string()
+    let reason = match stop.await {
+        Ok(()) if exit_watched || identity.is_some() => {
+            wait_for_vmm_exit(confirmed, identity.as_ref()).await;
+            return true;
         }
-        Ok(Err(e)) => format!("{:?}", e),
-        Err(_) => format!("still running after {:?}", stop_timeout),
+        Ok(()) => "nothing watches the VMM exit".to_string(),
+        Err(e) => format!("{:?}", e),
     };
-
-    if exit_watched
-        && timeout(VMM_EXIT_RECORD_GRACE, confirmed.cancelled())
-            .await
-            .is_ok()
-    {
-        info!(
-            sl!(),
-            "VMM exit was confirmed after stop failed: {}", reason
-        );
-        return true;
-    }
 
     // A failed hypervisor stop may leave a VMM alive even with a watcher.
     // The saved identity can signal it without stealing the child reap.
     if let Some(identity) = identity {
-        match identity.terminate_and_wait(stop_timeout).await {
+        match identity.kill() {
             Ok(()) => {
-                confirmed.cancel();
+                wait_for_vmm_exit(confirmed, Some(&identity)).await;
+                info!(sl!(), "VMM killed after stop failed: {}", reason);
                 return true;
             }
             Err(err) => warn!(sl!(), "VMM stop fallback failed: {err:#}"),
@@ -266,58 +264,15 @@ async fn stop_vm_with_confirmation(
     false
 }
 
-/// The shim must exit eventually even when a step keeps failing, e.g. a
-/// mount held by a process stuck in D state. Cleanup is idempotent, so a
-/// teardown that already succeeded costs one extra call.
-async fn finish_cleanup<F, Fut>(
-    confirmed: &CancellationToken,
-    mut cleanup: F,
-    delay: Duration,
-    exit_wait: Duration,
-    cleanup_wait: Duration,
-) -> Result<()>
-where
-    F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<()>>,
-{
-    if timeout(exit_wait, confirmed.cancelled()).await.is_err() {
-        return Err(anyhow!("VMM exit was not confirmed within {exit_wait:?}"));
-    }
-
-    let mut last_err = None;
-    let retry = async {
-        loop {
-            match cleanup().await {
-                Ok(()) => return,
-                Err(err) => {
-                    warn!(sl!(), "sandbox cleanup failed, retrying: {err:#}");
-                    last_err = Some(err);
-                    tokio::time::sleep(delay).await;
-                }
-            }
-        }
-    };
-    if timeout(cleanup_wait, retry).await.is_ok() {
-        return Ok(());
-    }
-    Err(last_err
-        .unwrap_or_else(|| anyhow!("a cleanup attempt is still blocked"))
-        .context(format!(
-            "sandbox cleanup did not finish within {cleanup_wait:?}"
-        )))
-}
-
-async fn wait_for_exit_record(
-    wait: impl std::future::Future<Output = Result<SandboxExitInfo>>,
-    grace: Duration,
-) -> Result<bool> {
-    match timeout(grace, wait).await {
-        Ok(result) => {
-            result?;
-            Ok(true)
-        }
-        Err(_) => Ok(false),
-    }
+/// Cleanup steps wait for the events they depend on, so a failed attempt is
+/// not retried on a timer. Delete, Shutdown, a late VMM exit and the shim
+/// delete run by containerd each try again, skipping completed steps.
+async fn finish_cleanup(
+    vmm_exit: impl std::future::Future<Output = ()>,
+    cleanup: impl std::future::Future<Output = Result<()>>,
+) -> Result<()> {
+    vmm_exit.await;
+    cleanup.await
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -413,7 +368,7 @@ impl VirtSandbox {
             return Ok(());
         }
         self.resource_manager
-            .kill_sandbox_processes(STOP_VM_TIMEOUT)
+            .kill_sandbox_processes()
             .await
             .context("stop the processes left by the previous shim")?;
         self.vmm_exit_confirmed.cancel();
@@ -454,7 +409,6 @@ impl VirtSandbox {
             &self.vmm_exit_confirmed,
             identity,
             exit_watched,
-            STOP_VM_TIMEOUT,
         )
         .await
     }
@@ -481,8 +435,9 @@ impl VirtSandbox {
             }
         }
 
-        // A slow device reset can finish after stop() has timed out. The
-        // watcher is then the only caller that can complete guarded cleanup.
+        // A VMM can exit after stop() gave up on it, e.g. once a slow device
+        // reset finishes. The watcher is then the only caller that can
+        // complete guarded cleanup.
         if self.teardown_started.load(Ordering::Acquire) && self.vmm_exit_confirmed.is_cancelled() {
             if let Err(err) = self.cleanup().await {
                 error!(sl!(), "failed to cleanup sandbox after VM exit: {err:#}");
@@ -1717,16 +1672,12 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
-        // A verified exit may lack a watcher notification after identity fallback.
-        if !wait_for_exit_record(self.wait(), VMM_EXIT_RECORD_GRACE)
-            .await
-            .context("wait for vm exit after stop")?
-        {
-            info!(
-                sl!(),
-                "no exit status from the VMM watcher within {:?}, recording 255",
-                VMM_EXIT_RECORD_GRACE
-            );
+        // The watcher records the exit status once it reaps the VMM, which
+        // may come after the pidfd confirmed the exit.
+        if vmm_exit_watched {
+            self.wait().await.context("wait for vm exit after stop")?;
+        } else {
+            info!(sl!(), "no VMM watcher, recording exit status 255");
             self.record_stop(255, SystemTime::now(), true).await;
         }
         info!(sl!(), "sandbox stopped");
@@ -1768,23 +1719,18 @@ impl Sandbox for VirtSandbox {
         if let Err(e) = self.stop().await {
             error!(sl!(), "failed to stop sandbox: {:?}", e);
         }
+        let identity = self.vmm_process.read().await.clone();
         finish_cleanup(
-            &self.vmm_exit_confirmed,
-            || {
-                let sandbox = self.clone();
-                async move { sandbox.cleanup().await }
-            },
-            CLEANUP_RETRY_DELAY,
-            LATE_VM_EXIT_TIMEOUT,
-            CLEANUP_TIMEOUT,
+            wait_for_vmm_exit(&self.vmm_exit_confirmed, identity.as_ref()),
+            self.cleanup(),
         )
         .await
     }
 
     async fn cleanup(&self) -> Result<()> {
         // Container exit and shutdown can invoke cleanup repeatedly. Completed
-        // stages are skipped, and finish_teardown() retries failures.
-        // A stop timeout does not prove that the VMM released its mounts,
+        // stages are skipped, so each later call retries the failed ones.
+        // A failed stop does not prove that the VMM released its mounts,
         // cgroup, or rootless user. Leave them in place while it may be alive.
         if self.inner.read().await.vmm_start_attempted && !self.vmm_exit_confirmed.is_cancelled() {
             return Err(anyhow!(
@@ -2196,6 +2142,8 @@ impl Persist for VirtSandbox {
 #[cfg(test)]
 mod pending_exit_tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::time::timeout;
 
     #[tokio::test]
     async fn wait_does_not_block_without_a_watched_exit() {
@@ -2249,96 +2197,48 @@ mod stop_vm_tests {
 
     fn counting_cleanup(
         attempts: &Arc<AtomicUsize>,
-        failures: usize,
-    ) -> impl FnMut() -> std::future::Ready<Result<()>> {
+        result: Result<()>,
+    ) -> impl std::future::Future<Output = Result<()>> {
         let attempts = attempts.clone();
-        move || {
-            std::future::ready(if attempts.fetch_add(1, Ordering::AcqRel) < failures {
-                Err(anyhow!("temporary cleanup failure"))
-            } else {
-                Ok(())
-            })
+        async move {
+            attempts.fetch_add(1, Ordering::AcqRel);
+            result
+        }
+    }
+
+    /// Polls once: the future must still be waiting for its event.
+    async fn assert_pending(future: &mut (impl std::future::Future + Unpin)) {
+        tokio::select! {
+            biased;
+            _ = future => panic!("finished before its event"),
+            _ = std::future::ready(()) => {}
         }
     }
 
     #[tokio::test]
-    async fn cleanup_retries_until_it_succeeds() {
+    async fn failed_cleanup_is_reported_without_a_retry() {
         let confirmed = CancellationToken::new();
         confirmed.cancel();
         let attempts = Arc::new(AtomicUsize::new(0));
 
-        finish_cleanup(
-            &confirmed,
-            counting_cleanup(&attempts, 2),
-            Duration::from_millis(1),
-            Duration::from_secs(1),
-            Duration::from_secs(1),
+        let err = finish_cleanup(
+            confirmed.cancelled(),
+            counting_cleanup(&attempts, Err(anyhow!("cleanup failure"))),
         )
         .await
-        .unwrap();
-        assert_eq!(attempts.load(Ordering::Acquire), 3);
-    }
-
-    #[tokio::test]
-    async fn persistent_cleanup_failure_gives_up_with_the_last_error() {
-        let confirmed = CancellationToken::new();
-        confirmed.cancel();
-        let attempts = Arc::new(AtomicUsize::new(0));
-
-        let err = timeout(
-            Duration::from_secs(1),
-            finish_cleanup(
-                &confirmed,
-                counting_cleanup(&attempts, usize::MAX),
-                Duration::from_millis(1),
-                Duration::from_secs(1),
-                Duration::from_millis(50),
-            ),
-        )
-        .await
-        .expect("cleanup retries must be bounded")
         .unwrap_err();
-        assert!(format!("{err:#}").contains("temporary cleanup failure"));
-        assert!(attempts.load(Ordering::Acquire) > 1);
-    }
-
-    #[tokio::test]
-    async fn blocked_cleanup_attempt_is_bounded() {
-        let confirmed = CancellationToken::new();
-        confirmed.cancel();
-
-        let err = timeout(
-            Duration::from_secs(1),
-            finish_cleanup(
-                &confirmed,
-                std::future::pending::<Result<()>>,
-                Duration::from_millis(1),
-                Duration::from_secs(1),
-                Duration::from_millis(50),
-            ),
-        )
-        .await
-        .expect("a blocked cleanup must not hold the shim")
-        .unwrap_err();
-        assert!(format!("{err:#}").contains("still blocked"));
+        assert!(format!("{err:#}").contains("cleanup failure"));
+        assert_eq!(attempts.load(Ordering::Acquire), 1);
     }
 
     #[tokio::test]
     async fn late_exit_runs_cleanup_only_after_confirmation() {
         let confirmed = CancellationToken::new();
         let attempts = Arc::new(AtomicUsize::new(0));
-        let pending = finish_cleanup(
-            &confirmed,
-            counting_cleanup(&attempts, 0),
-            Duration::from_millis(1),
-            Duration::from_secs(1),
-            Duration::from_secs(1),
-        );
+        let pending = finish_cleanup(confirmed.cancelled(), counting_cleanup(&attempts, Ok(())));
         tokio::pin!(pending);
 
-        assert!(timeout(Duration::from_millis(20), &mut pending)
-            .await
-            .is_err());
+        assert_pending(&mut pending).await;
         assert_eq!(attempts.load(Ordering::Acquire), 0);
         confirmed.cancel();
         pending.await.unwrap();
@@ -2346,79 +2246,45 @@ mod stop_vm_tests {
     }
 
     #[tokio::test]
-    async fn late_exit_timeout_leaves_cleanup_unstarted() {
-        let confirmed = CancellationToken::new();
-        let attempts = Arc::new(AtomicUsize::new(0));
-
-        assert!(finish_cleanup(
-            &confirmed,
-            counting_cleanup(&attempts, 0),
-            Duration::from_millis(1),
-            Duration::from_millis(20),
-            Duration::from_secs(1),
-        )
-        .await
-        .is_err());
-        assert_eq!(attempts.load(Ordering::Acquire), 0);
-    }
-
-    #[tokio::test]
-    async fn confirmed_exit_does_not_wait_forever_for_watcher_record() {
-        let recorded = timeout(
-            Duration::from_secs(1),
-            wait_for_exit_record(
-                std::future::pending::<Result<SandboxExitInfo>>(),
-                Duration::from_millis(20),
-            ),
-        )
-        .await
-        .expect("watcher wait must remain bounded")
-        .unwrap();
-        assert!(!recorded);
-    }
-
-    #[tokio::test]
-    async fn confirmed_exit_keeps_watcher_record_when_available() {
-        assert!(wait_for_exit_record(
-            async { Ok(SandboxExitInfo::default()) },
-            Duration::from_secs(1),
-        )
-        .await
-        .unwrap());
-    }
-
-    #[tokio::test]
     async fn successful_stop_waits_for_watcher_confirmation() {
         let confirmed = CancellationToken::new();
-        let stop = stop_vm_with_confirmation(
-            async { Ok(()) },
-            &confirmed,
-            None,
-            true,
-            Duration::from_millis(100),
-        );
+        let stop = stop_vm_with_confirmation(async { Ok(()) }, &confirmed, None, true);
         tokio::pin!(stop);
 
-        assert!(timeout(Duration::from_millis(20), &mut stop).await.is_err());
+        assert_pending(&mut stop).await;
         assert!(!confirmed.is_cancelled());
         confirmed.cancel();
         assert!(stop.await);
     }
 
     #[tokio::test]
-    async fn successful_stop_without_confirmed_exit_is_not_safe_for_cleanup() {
+    async fn stop_without_a_way_to_confirm_the_exit_is_not_safe_for_cleanup() {
         let confirmed = CancellationToken::new();
-        assert!(
-            !stop_vm_with_confirmation(
-                async { Ok(()) },
-                &confirmed,
-                None,
-                true,
-                Duration::from_millis(20),
-            )
-            .await
-        );
+        assert!(!stop_vm_with_confirmation(async { Ok(()) }, &confirmed, None, false).await);
         assert!(!confirmed.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn successful_stop_waits_for_the_vmm_to_exit() {
+        let mut child = tokio::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let pid = child.id().unwrap();
+        let identity = VmmProcessIdentity::capture(pid).unwrap();
+        let confirmed = CancellationToken::new();
+        let stop = stop_vm_with_confirmation(async { Ok(()) }, &confirmed, Some(identity), true);
+        tokio::pin!(stop);
+
+        assert_pending(&mut stop).await;
+        nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(pid as i32),
+            nix::sys::signal::Signal::SIGKILL,
+        )
+        .unwrap();
+        assert!(stop.await);
+        assert!(confirmed.is_cancelled());
+        child.wait().await.unwrap();
     }
 
     #[tokio::test]
@@ -2436,7 +2302,6 @@ mod stop_vm_tests {
                 &confirmed,
                 Some(identity),
                 false,
-                Duration::from_secs(2),
             )
             .await
         );
@@ -2446,26 +2311,47 @@ mod stop_vm_tests {
 
     #[tokio::test]
     async fn unreaped_vmm_from_failed_start_is_confirmed_through_identity() {
+        use nix::sys::wait::{waitid, Id, WaitPidFlag};
         let mut child = tokio::process::Command::new("true").spawn().unwrap();
         let pid = child.id().unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while !std::fs::read_to_string(format!("/proc/{pid}/stat"))
-            .unwrap()
-            .contains(") Z ")
-        {
-            assert!(std::time::Instant::now() < deadline, "VMM did not exit");
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        // Waits for the exit but leaves the zombie in place.
+        waitid(
+            Id::Pid(nix::unistd::Pid::from_raw(pid as i32)),
+            WaitPidFlag::WEXITED | WaitPidFlag::WNOWAIT,
+        )
+        .unwrap();
+        let identity = VmmProcessIdentity::capture(pid).unwrap();
+        let confirmed = CancellationToken::new();
+
+        assert!(
+            stop_vm_with_confirmation(async { Ok(()) }, &confirmed, Some(identity), false).await
+        );
+        assert!(confirmed.is_cancelled());
+        child.wait().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn successful_stop_is_confirmed_by_the_pidfd_without_watcher() {
+        let mut child = tokio::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let pid = child.id().unwrap();
         let identity = VmmProcessIdentity::capture(pid).unwrap();
         let confirmed = CancellationToken::new();
 
         assert!(
             stop_vm_with_confirmation(
-                async { Ok(()) },
+                async move {
+                    nix::sys::signal::kill(
+                        nix::unistd::Pid::from_raw(pid as i32),
+                        nix::sys::signal::Signal::SIGTERM,
+                    )?;
+                    Ok(())
+                },
                 &confirmed,
                 Some(identity),
                 false,
-                Duration::from_secs(2),
             )
             .await
         );
@@ -2488,7 +2374,6 @@ mod stop_vm_tests {
                 &confirmed,
                 Some(identity),
                 true,
-                Duration::from_secs(2),
             )
             .await
         );

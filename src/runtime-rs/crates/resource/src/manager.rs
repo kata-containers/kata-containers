@@ -236,9 +236,9 @@ impl ResourceManager {
 
     /// Kills every process left in the sandbox cgroups and waits until
     /// they are empty. Only for a shim that does not run in them.
-    pub async fn kill_sandbox_processes(&self, wait: std::time::Duration) -> Result<()> {
+    pub async fn kill_sandbox_processes(&self) -> Result<()> {
         let inner = self.inner.read().await;
-        inner.cgroups_resource.kill_all_processes(wait).await
+        inner.cgroups_resource.kill_all_processes().await
     }
 }
 
