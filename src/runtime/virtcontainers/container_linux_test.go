@@ -15,7 +15,9 @@ import (
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/stretchr/testify/assert"
@@ -300,4 +302,98 @@ func TestContainerRootfsPath(t *testing.T) {
 
 	container.hotplugDrive(sandbox.ctx)
 	assert.Equal(t, container.rootfsSuffix, "rootfs")
+}
+
+func TestSetupEphemeralDiskBlockPlainMountOptions(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	container := Container{
+		id:        "ephemeraldisktestcontainerid",
+		sandboxID: "ephemeraldisktestsandboxid",
+	}
+
+	mountOptions := func(noInitItable bool) []string {
+		emptyDirPath := t.TempDir()
+		defer func() {
+			assert.NoError(volume.Remove(emptyDirPath))
+		}()
+
+		diskPath, err := container.setupEphemeralDisk(emptyDirPath, EmptyDirModeVirtioBlkPlain, noInitItable)
+		assert.NoError(err)
+		assert.Equal(filepath.Join(emptyDirPath, "disk.img"), diskPath)
+
+		mntInfo, err := volume.VolumeMountInfo(emptyDirPath)
+		assert.NoError(err)
+		assert.Equal("blk", mntInfo.VolumeType)
+		assert.Equal(diskPath, mntInfo.Device)
+		assert.Equal("ext4", mntInfo.FsType)
+		assert.Equal("true", mntInfo.Metadata[volume.CreateFilesystemMetadataKey])
+		return mntInfo.Options
+	}
+
+	// `discard` must stay in the list, in any position: createBlockDevices
+	// keys the host block drive's discard/unmap support off its presence.
+	assert.Equal([]string{blockVolumeDiscardOption}, mountOptions(false))
+	assert.Equal([]string{blockVolumeDiscardOption, blockVolumeNoInitItableOption}, mountOptions(true))
+}
+
+func TestCreateBlockDevicesBlockPlainEmptyDirDiscardUnmap(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	// createBlockDevices only handles the mount when its source is a
+	// disk-backed kubelet emptyDir and the sandbox uses a block emptyDir mode.
+	emptyDirPath := filepath.Join(t.TempDir(), K8sEmptyDir, "data")
+	assert.NoError(os.MkdirAll(emptyDirPath, 0755))
+	if !IsDiskEmptyDir(emptyDirPath) {
+		t.Skip("test needs a temporary directory that is not on tmpfs")
+	}
+	defer func() {
+		assert.NoError(volume.Remove(emptyDirPath))
+	}()
+
+	sandbox := &Sandbox{
+		ctx:        context.Background(),
+		id:         "ephemeraldisktestsandboxid",
+		devManager: manager.NewDeviceManager(config.VirtioBlock, false, "", 0, nil),
+		config: &SandboxConfig{
+			EmptyDirMode:         EmptyDirModeVirtioBlkPlain,
+			EmptyDirNoInitItable: true,
+			// Skip the agent and hypervisor capability probes; block
+			// emptyDirs are hotplugged regardless of their answer.
+			HypervisorConfig: HypervisorConfig{DisableBlockDeviceUse: true},
+		},
+	}
+	container := Container{
+		id:        "ephemeraldisktestcontainerid",
+		sandboxID: sandbox.id,
+		sandbox:   sandbox,
+		mounts: []Mount{{
+			Source:      emptyDirPath,
+			Destination: "/data",
+			Type:        "bind",
+		}},
+	}
+
+	_, err := container.setupEphemeralDisk(emptyDirPath, EmptyDirModeVirtioBlkPlain, sandbox.config.EmptyDirNoInitItable)
+	assert.NoError(err)
+	assert.NoError(container.createBlockDevices(sandbox.ctx))
+
+	// discard keeps enabling discard/unmap on the host drive with
+	// noinit_itable after it.
+	mount := container.mounts[0]
+	assert.True(mount.BlockDeviceCreateFs)
+	assert.Equal([]string{blockVolumeDiscardOption, blockVolumeNoInitItableOption}, mount.Options)
+	assert.NotEmpty(mount.BlockDeviceID)
+
+	device, ok := sandbox.devManager.GetDeviceByID(mount.BlockDeviceID).(*drivers.BlockDevice)
+	assert.True(ok)
+	assert.True(device.DeviceInfo.DiscardUnmap)
 }

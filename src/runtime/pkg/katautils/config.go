@@ -206,6 +206,7 @@ type runtime struct {
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 	EmptyDirMode              string   `toml:"emptydir_mode"`
+	EmptyDirNoInitItable      bool     `toml:"emptydir_noinit_itable"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
@@ -1552,6 +1553,11 @@ func updateRuntimeConfigRuntime(configPath string, tomlConf tomlConfig, config *
 		return fmt.Errorf("%v: %v", configPath, err)
 	}
 	config.EmptyDirMode = emptyDirMode
+
+	config.EmptyDirNoInitItable = tomlConf.Runtime.EmptyDirNoInitItable
+	if config.EmptyDirNoInitItable && emptyDirMode != vc.EmptyDirModeVirtioBlkPlain {
+		kataUtilsLogger.Warnf("%v: emptydir_noinit_itable is set but emptydir_mode is %q, so it has no effect", configPath, emptyDirMode)
+	}
 
 	return nil
 }

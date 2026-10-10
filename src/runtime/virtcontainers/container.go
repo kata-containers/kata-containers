@@ -905,7 +905,7 @@ func (c *Container) createEphemeralDisks() error {
 			continue
 		}
 
-		diskPath, err := c.setupEphemeralDisk(c.mounts[i].Source, c.sandbox.config.EmptyDirMode)
+		diskPath, err := c.setupEphemeralDisk(c.mounts[i].Source, c.sandbox.config.EmptyDirMode, c.sandbox.config.EmptyDirNoInitItable)
 		if err != nil {
 			return err
 		}
@@ -919,11 +919,29 @@ func (c *Container) createEphemeralDisks() error {
 	return nil
 }
 
+// blockPlainEmptyDirMountOptions returns the mount options for the guest
+// ext4 filesystem of a block-plain emptyDir. The disk image is sparse and
+// as large as the backing filesystem, so the guest must not write to blocks
+// the workload never used. `discard` releases blocks back to the image as
+// guest files are deleted and is always present: createBlockDevices keys
+// the host block drive's discard/unmap support off it. `noinit_itable`
+// additionally stops ext4 from zeroing the whole inode table in the
+// background right after the first mount. It is opt-in because the agent
+// policy pins the exact option list.
+func blockPlainEmptyDirMountOptions(noInitItable bool) []string {
+	options := []string{blockVolumeDiscardOption}
+	if noInitItable {
+		options = append(options, blockVolumeNoInitItableOption)
+	}
+	return options
+}
+
 // setupEphemeralDisk creates and configures an ephemeral disk image
-// inside the given emptyDir. It returns the path to the created disk
-// image. The fd is always closed and the disk image is removed if any
-// step after creation fails.
-func (c *Container) setupEphemeralDisk(emptyDirPath, emptyDirMode string) (diskPath string, err error) {
+// inside the given emptyDir. noInitItable adds the `noinit_itable` mount
+// option for a block-plain emptyDir and is ignored otherwise. It returns
+// the path to the created disk image. The fd is always closed and the
+// disk image is removed if any step after creation fails.
+func (c *Container) setupEphemeralDisk(emptyDirPath, emptyDirMode string, noInitItable bool) (diskPath string, err error) {
 	// Create the disk file in the same folder as the original
 	// emptyDir mount so that Kubelet can enforce the sizeLimit.
 	diskPath = filepath.Join(emptyDirPath, "disk.img")
@@ -967,7 +985,7 @@ func (c *Container) setupEphemeralDisk(emptyDirPath, emptyDirMode string) (diskP
 	if emptyDirMode == EmptyDirModeVirtioBlkEncrypted {
 		metadata[volume.EncryptionKeyMetadataKey] = "ephemeral"
 	} else if emptyDirMode == EmptyDirModeVirtioBlkPlain {
-		options = []string{blockVolumeDiscardOption}
+		options = blockPlainEmptyDirMountOptions(noInitItable)
 	}
 	if sourceStat.Gid != 0 {
 		metadata[volume.FSGroupMetadataKey] = strconv.FormatUint(uint64(sourceStat.Gid), 10)
