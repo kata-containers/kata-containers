@@ -9,9 +9,9 @@ use common::{
     config::{load_config, load_config_from, load_config_with_path},
     message::{Action, Message},
     types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+        ContainerProcess, PlatformInfo, ProcessStateInfo, ProcessType, SandboxConfig,
+        SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest,
+        TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -371,6 +371,13 @@ pub enum CleanupOutcome {
 
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
+    sandbox_deletion: SandboxDeletion,
+}
+
+#[derive(Default)]
+struct SandboxDeletion {
+    response: Arc<tokio::sync::OnceCell<ProcessStateInfo>>,
+    pending: Mutex<Option<tokio::task::JoinHandle<Result<ProcessStateInfo>>>>,
 }
 
 // todo: a more detailed impl for fmt::Debug
@@ -386,7 +393,40 @@ impl RuntimeHandlerManager {
             inner: Arc::new(RwLock::new(RuntimeHandlerManagerInner::new(
                 id, msg_sender,
             )?)),
+            sandbox_deletion: SandboxDeletion::default(),
         })
+    }
+
+    async fn delete_sandbox_process(
+        &self,
+        cm: Arc<dyn common::ContainerManager>,
+        sandbox: Arc<dyn Sandbox>,
+        process: ContainerProcess,
+    ) -> Result<ProcessStateInfo> {
+        let mut pending = self.sandbox_deletion.pending.lock().await;
+        if pending.is_none() {
+            let response = self.sandbox_deletion.response.clone();
+            // The task and its response belong to the shim. Cancelling the
+            // RPC must not strand a removed container or cancel its teardown.
+            *pending = Some(tokio::spawn(async move {
+                let resp = response
+                    .get_or_try_init(|| cm.delete_process(&process))
+                    .await?
+                    .clone();
+                if let Err(err) = sandbox.finish_teardown().await {
+                    // Preserve the response for a later Delete, which retries
+                    // teardown without deleting the container a second time.
+                    error!(sl!(), "sandbox resources are left on the host: {err:#}");
+                }
+                Ok(resp)
+            }));
+        }
+        let result = pending
+            .as_mut()
+            .context("missing sandbox deletion task")?
+            .await;
+        *pending = None;
+        result.context("sandbox deletion task failed")?
     }
 
     /// Clean up after a shim that is gone. The outcome tells the caller
@@ -814,7 +854,16 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::CloseProcessIO)
             }
             TaskRequest::DeleteProcess(process_id) => {
-                let resp = cm.delete_process(&process_id).await.context("do delete")?;
+                // CRI's event handler can time out Delete while GPU teardown
+                // is still running. Keep that work owned by the shim and retain
+                // the reply for retries, but only reply after teardown finishes
+                // so the sandbox ID cannot be reused over its old resources.
+                let resp = if cm.is_sandbox_container(&process_id).await {
+                    self.delete_sandbox_process(cm, sandbox, process_id.clone())
+                        .await?
+                } else {
+                    cm.delete_process(&process_id).await.context("do delete")?
+                };
                 if process_id.process_type == ProcessType::Container {
                     let event = TaskDelete {
                         id: process_id.container_id().to_string(),
@@ -917,10 +966,22 @@ impl RuntimeHandlerManager {
             }
 
             TaskRequest::StateProcess(process_id) => {
-                let state = cm
-                    .state_process(&process_id)
-                    .await
-                    .context("state process")?;
+                // CRI reloads the task before retrying a timed-out Delete. Its
+                // container-map entry is already gone, so keep the stopped task
+                // visible until Delete can return the saved reply and containerd
+                // can finish removing the task and shutting down the shim.
+                let deleted = if cm.is_sandbox_container(&process_id).await {
+                    self.sandbox_deletion.response.get().cloned()
+                } else {
+                    None
+                };
+                let state = match deleted {
+                    Some(state) => state,
+                    None => cm
+                        .state_process(&process_id)
+                        .await
+                        .context("state process")?,
+                };
                 Ok(TaskResponse::StateProcess(state))
             }
             TaskRequest::PauseContainer(container_id) => {
@@ -1448,9 +1509,13 @@ mod tests {
         assert!(matches!(msg.action, Action::Shutdown));
     }
 
-    // Records every process a waiter is spawned for.
+    // Records every process a waiter is spawned for, and every teardown.
     struct WaiterRecordingSandbox {
         waiters: tokio::sync::mpsc::UnboundedSender<ContainerProcess>,
+        teardowns: tokio::sync::mpsc::UnboundedSender<()>,
+        teardown_release: Option<Arc<tokio::sync::Notify>>,
+        teardown_failure: Option<Arc<std::sync::atomic::AtomicBool>>,
+        shutdown_sender: Option<Sender<Message>>,
     }
 
     #[async_trait::async_trait]
@@ -1468,7 +1533,22 @@ mod tests {
             unimplemented!()
         }
         async fn shutdown(&self) -> Result<()> {
-            unimplemented!()
+            if let Some(sender) = &self.shutdown_sender {
+                sender.send(Message::new(Action::Shutdown)).await?;
+            }
+            Ok(())
+        }
+        async fn finish_teardown(&self) -> Result<()> {
+            let _ = self.teardowns.send(());
+            if let Some(release) = &self.teardown_release {
+                release.notified().await;
+            }
+            if let Some(failed) = &self.teardown_failure {
+                if failed.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                    return Err(anyhow!("injected teardown failure"));
+                }
+            }
+            Ok(())
         }
         async fn status(&self) -> Result<common::types::SandboxStatus> {
             unimplemented!()
@@ -1521,7 +1601,11 @@ mod tests {
         }
     }
 
-    struct StartingContainerManager;
+    #[derive(Default)]
+    struct StartingContainerManager {
+        deletes: std::sync::atomic::AtomicUsize,
+        delete_release: Option<Arc<tokio::sync::Notify>>,
+    }
 
     #[async_trait::async_trait]
     impl common::ContainerManager for StartingContainerManager {
@@ -1558,9 +1642,31 @@ mod tests {
         }
         async fn delete_process(
             &self,
-            _process_id: &ContainerProcess,
+            process_id: &ContainerProcess,
         ) -> Result<common::types::ProcessStateInfo> {
-            unimplemented!()
+            if self
+                .deletes
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                != 0
+            {
+                return Err(anyhow!("container already deleted"));
+            }
+            if let Some(release) = &self.delete_release {
+                release.notified().await;
+            }
+            Ok(common::types::ProcessStateInfo {
+                container_id: process_id.container_id().to_string(),
+                exec_id: process_id.exec_id().to_string(),
+                pid: common::types::PID::new(42),
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: common::types::ProcessStatus::Stopped,
+                exit_status: 0,
+                exited_at: None,
+            })
         }
         async fn exec_process(&self, _req: common::types::ExecProcessRequest) -> Result<()> {
             unimplemented!()
@@ -1579,9 +1685,27 @@ mod tests {
         }
         async fn state_process(
             &self,
-            _process_id: &ContainerProcess,
+            process_id: &ContainerProcess,
         ) -> Result<common::types::ProcessStateInfo> {
-            unimplemented!()
+            if self.deletes.load(std::sync::atomic::Ordering::SeqCst) != 0 {
+                return Err(common::error::Error::ContainerNotFound(
+                    process_id.container_id().into(),
+                )
+                .into());
+            }
+            Ok(common::types::ProcessStateInfo {
+                container_id: process_id.container_id().into(),
+                exec_id: process_id.exec_id().into(),
+                pid: common::types::PID::new(42),
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: common::types::ProcessStatus::Stopped,
+                exit_status: 0,
+                exited_at: None,
+            })
         }
         async fn wait_process(
             &self,
@@ -1592,12 +1716,177 @@ mod tests {
         async fn pid(&self) -> Result<common::types::PID> {
             unimplemented!()
         }
-        async fn need_shutdown_sandbox(&self, _req: &ShutdownRequest) -> bool {
-            unimplemented!()
+        async fn need_shutdown_sandbox(&self, req: &ShutdownRequest) -> bool {
+            req.is_now || req.container_id == "test-sid"
         }
-        async fn is_sandbox_container(&self, _process_id: &ContainerProcess) -> bool {
-            false
+        async fn is_sandbox_container(&self, process_id: &ContainerProcess) -> bool {
+            process_id.process_type == ProcessType::Container
+                && process_id.container_id() == "test-sid"
         }
+    }
+
+    #[rstest]
+    #[case::cancelled_during_container_deletion(true)]
+    #[case::cancelled_during_teardown(false)]
+    #[tokio::test]
+    async fn test_cancelled_sandbox_delete_can_be_retried(#[case] during_delete: bool) {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = Arc::new(RuntimeHandlerManager::new("test-sid", sender).unwrap());
+        let (waiters, _) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, mut teardowns_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release = Arc::new(tokio::sync::Notify::new());
+        let cm = Arc::new(StartingContainerManager {
+            delete_release: during_delete.then(|| release.clone()),
+            ..Default::default()
+        });
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox {
+                waiters,
+                teardowns,
+                teardown_release: (!during_delete).then(|| release.clone()),
+                teardown_failure: None,
+                shutdown_sender: None,
+            }),
+            container_manager: cm.clone(),
+        }));
+        let first = manager.clone();
+        let rpc = tokio::spawn(async move {
+            first
+                .handler_task_request(TaskRequest::DeleteProcess(
+                    ContainerProcess::new("test-sid", "").unwrap(),
+                ))
+                .await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            if during_delete {
+                while cm.deletes.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                    tokio::task::yield_now().await;
+                }
+            } else {
+                teardowns_rx.recv().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        rpc.abort();
+        assert!(rpc.await.unwrap_err().is_cancelled());
+        release.notify_one();
+        let reply = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            manager.handler_task_request(TaskRequest::DeleteProcess(
+                ContainerProcess::new("test-sid", "").unwrap(),
+            )),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(matches!(reply, TaskResponse::DeleteProcess(state) if state.pid.pid == 42));
+        assert_eq!(cm.deletes.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_sandbox_delete_timeout_keeps_state_available_for_cri_retry() {
+        let (sender, mut receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender.clone()).unwrap();
+        let (waiters, _) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, mut teardowns_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release = Arc::new(tokio::sync::Notify::new());
+        let cm = Arc::new(StartingContainerManager::default());
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox {
+                waiters,
+                teardowns,
+                teardown_release: Some(release.clone()),
+                teardown_failure: None,
+                shutdown_sender: Some(sender),
+            }),
+            container_manager: cm.clone(),
+        }));
+        let process = ContainerProcess::new("test-sid", "").unwrap();
+        // CRI's event handler has a deadline. Use a short equivalent here;
+        // the local cross-repository test exercises its real ten seconds.
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_millis(20),
+            manager.handler_task_request(TaskRequest::DeleteProcess(process.clone())),
+        )
+        .await
+        .is_err());
+        teardowns_rx.recv().await.unwrap();
+        assert!(
+            common::ContainerManager::state_process(cm.as_ref(), &process)
+                .await
+                .is_err()
+        );
+        // containerd reloads the task with State before retrying Delete.
+        let state = manager
+            .handler_task_request(TaskRequest::StateProcess(process.clone()))
+            .await
+            .unwrap();
+        assert!(matches!(state, TaskResponse::StateProcess(state) if state.pid.pid == 42));
+        for process in [
+            ContainerProcess::new("other", "").unwrap(),
+            ContainerProcess::new("test-sid", "exec").unwrap(),
+        ] {
+            assert!(manager
+                .handler_task_request(TaskRequest::StateProcess(process))
+                .await
+                .is_err());
+        }
+        release.notify_one();
+        let reply = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            manager.handler_task_request(TaskRequest::DeleteProcess(process)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(matches!(reply, TaskResponse::DeleteProcess(state) if state.pid.pid == 42));
+        assert_eq!(cm.deletes.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(matches!(
+            receiver.recv().await.unwrap().action,
+            Action::Event(_)
+        ));
+        manager
+            .handler_task_request(TaskRequest::ShutdownContainer(ShutdownRequest {
+                container_id: "test-sid".into(),
+                is_now: false,
+            }))
+            .await
+            .unwrap();
+        assert!(matches!(
+            receiver.recv().await.unwrap().action,
+            Action::Shutdown
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_repeated_delete_retries_teardown_with_the_saved_response() {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (waiters, _) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, mut teardowns_rx) = tokio::sync::mpsc::unbounded_channel();
+        let cm = Arc::new(StartingContainerManager::default());
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox {
+                waiters,
+                teardowns,
+                teardown_release: None,
+                teardown_failure: Some(Arc::new(std::sync::atomic::AtomicBool::new(true))),
+                shutdown_sender: None,
+            }),
+            container_manager: cm.clone(),
+        }));
+        for _ in 0..2 {
+            let reply = manager
+                .handler_task_request(TaskRequest::DeleteProcess(
+                    ContainerProcess::new("test-sid", "").unwrap(),
+                ))
+                .await
+                .unwrap();
+            assert!(matches!(reply, TaskResponse::DeleteProcess(state) if state.pid.pid == 42));
+            teardowns_rx.try_recv().unwrap();
+        }
+        assert_eq!(cm.deletes.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     // CreateContainer already spawns the waiter for a container, so a second
@@ -1615,11 +1904,16 @@ mod tests {
         let (sender, _receiver) = channel::<Message>(8);
         let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
         let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, _) = tokio::sync::mpsc::unbounded_channel();
         manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
             sandbox: Arc::new(WaiterRecordingSandbox {
                 waiters: waiters_tx,
+                teardowns,
+                teardown_release: None,
+                teardown_failure: None,
+                shutdown_sender: None,
             }),
-            container_manager: Arc::new(StartingContainerManager),
+            container_manager: Arc::new(StartingContainerManager::default()),
         }));
 
         let process_id = ContainerProcess::new("test-cid", exec_id).unwrap();
@@ -1641,6 +1935,42 @@ mod tests {
                 exec_id, waiter_expected, waited
             ),
         }
+    }
+
+    // The Delete reply is the end of the task for containerd's caller, so the
+    // sandbox must be released before it, and only for the sandbox container.
+    #[rstest]
+    #[case::sandbox_container("test-sid", "", true)]
+    #[case::other_container("test-cid", "", false)]
+    #[case::sandbox_exec("test-sid", "exec-1", false)]
+    #[tokio::test]
+    async fn test_delete_releases_sandbox_before_reply(
+        #[case] container_id: &str,
+        #[case] exec_id: &str,
+        #[case] teardown_expected: bool,
+    ) {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (waiters, _) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, mut teardowns_rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox {
+                waiters,
+                teardowns,
+                teardown_release: None,
+                teardown_failure: None,
+                shutdown_sender: None,
+            }),
+            container_manager: Arc::new(StartingContainerManager::default()),
+        }));
+
+        let process_id = ContainerProcess::new(container_id, exec_id).unwrap();
+        let resp = manager
+            .handler_task_request(TaskRequest::DeleteProcess(process_id))
+            .await
+            .unwrap();
+        assert!(matches!(resp, TaskResponse::DeleteProcess(_)));
+        assert_eq!(teardowns_rx.try_recv().is_ok(), teardown_expected);
     }
 
     #[test]
