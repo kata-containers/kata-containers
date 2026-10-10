@@ -164,9 +164,20 @@ else
 		"k8s-nvidia-vllm.bats" \
 		"k8s-rootless-vmm.bats")
 
-	# Setting K8S_TEST_NV explicitly still runs the NIM tests by hand.
+	# NIM requests 16 CPUs per pod; the two-model path runs both together.
+	# Require headroom for cluster services regardless of runner architecture.
+	# An explicit K8S_TEST_NV still permits manually selecting NIM.
 	if is_nightly_run; then
-		K8S_TEST_NV+=("k8s-nvidia-nim.bats")
+		nim_cpus=32
+		if [[ "${SKIP_MULTI_GPU_TESTS:-false}" == "true" ]]; then
+			nim_cpus=16
+		fi
+		runner_cpus=$(nproc)
+		if (( runner_cpus > nim_cpus )); then
+			K8S_TEST_NV+=("k8s-nvidia-nim.bats")
+		else
+			info "Skipping nightly NIM tests: runner has ${runner_cpus} CPUs; need more than ${nim_cpus} to leave headroom for cluster services"
+		fi
 	fi
 fi
 
