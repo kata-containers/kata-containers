@@ -29,8 +29,6 @@ func TestTemplateFactory(t *testing.T) {
 
 	assert := assert.New(t)
 
-	templateWaitForAgent = 1 * time.Microsecond
-
 	testDir := t.TempDir()
 
 	hyperConfig := vc.HypervisorConfig{
