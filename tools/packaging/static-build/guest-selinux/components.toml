@@ -1,0 +1,11 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# The selinux extension launches nothing; it only exposes the policy artefacts.
+schema_version = 1
+
+[paths]
+"policy"             = "etc/selinux/kata/policy"
+"file-contexts"      = "etc/selinux/kata/file_contexts"
+"extension-contexts" = "etc/selinux/kata/extension_contexts"
