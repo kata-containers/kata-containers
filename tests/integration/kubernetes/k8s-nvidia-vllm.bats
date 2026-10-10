@@ -13,10 +13,11 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu-runtime-rs}"
 
-# Mirrors of docker.io/vllm/vllm-openai:v0.11.0 and of the qwen2.5-0.5b-instruct
-# and all-minilm-l6-v2 tags of quay.io/redhat-ai-services/modelcar-catalog.
+# Mirror of docker.io/vllm/vllm-openai:v0.11.0. Qwen model weights are
+# unchanged, with an ARM64 UBI base added alongside the original AMD64 image.
+# The all-minilm-l6-v2 mirror is AMD64-only; ARM64 runners skip multi-GPU tests.
 export VLLM_IMAGE="${VLLM_IMAGE:-quay.io/kata-containers/test-images/vllm/vllm-openai:sha256-014a95f21c9edf6abe0aea6b07353f96baa4ec291c427bb1176dc7c93a85845c}"
-export MODEL_IMAGE_INSTRUCT="${MODEL_IMAGE_INSTRUCT:-quay.io/kata-containers/test-images/redhat-ai-services/modelcar-catalog:sha256-e20441c23be795838409137576b9016e6bc941eec79e5765cf9de6319c0ec769}"
+export MODEL_IMAGE_INSTRUCT="${MODEL_IMAGE_INSTRUCT:-quay.io/kata-containers/test-images/redhat-ai-services/modelcar-catalog@sha256:97830286f84a3755aa61ef4945e75fd2fc6bcddb42d3469cf5c6f302692c8b31}"
 export MODEL_IMAGE_EMBED="${MODEL_IMAGE_EMBED:-quay.io/kata-containers/test-images/redhat-ai-services/modelcar-catalog:sha256-01ff684fd1f61a1d493ff912660ed5c9f4d860bef35d94f88b6ac0ef46abb604}"
 
 export MODEL_NAME_INSTRUCT="qwen2.5-0.5b-instruct"
