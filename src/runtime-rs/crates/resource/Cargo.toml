@@ -40,7 +40,7 @@ serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 tempfile = { workspace = true }
-tokio = { features = ["process", "time"], workspace = true }
+tokio = { features = ["net", "process", "time"], workspace = true }
 tracing = { workspace = true }
 uuid = { features = ["v4"], version = "0.4" }
 walkdir = "2.5.0"
