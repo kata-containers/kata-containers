@@ -901,13 +901,28 @@ impl CloudHypervisorInner {
         }
         // Give every disk back before vm_cleanup() deletes the VMM user, so a
         // later VMM user created with the same uid cannot open it.
-        // A failure is logged rather than returned so the user is still deleted.
-        for (path, previous) in &self.disk_owners {
-            if let Err(e) = restore_disk_owner(path, previous) {
-                error!(sl!(), "failed to restore owner of disk {}: {:?}", path, e);
-            }
+        // A failed restore does not stop the delete. It is returned after it.
+        let unrestored: Vec<&str> = self
+            .disk_owners
+            .iter()
+            .filter_map(
+                |(path, previous)| match restore_disk_owner(path, previous) {
+                    Ok(()) => None,
+                    Err(e) => {
+                        error!(sl!(), "failed to restore owner of disk {}: {:?}", path, e);
+                        Some(path.as_str())
+                    }
+                },
+            )
+            .collect();
+        vm_cleanup(&self.config, self.vm_path.as_str())?;
+        if !unrestored.is_empty() {
+            return Err(anyhow!(
+                "disks still owned by the deleted VMM user: {}",
+                unrestored.join(", ")
+            ));
         }
-        vm_cleanup(&self.config, self.vm_path.as_str())
+        Ok(())
     }
 
     pub(crate) async fn resize_vcpu(

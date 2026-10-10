@@ -316,8 +316,12 @@ impl CloudHypervisorInner {
     /// In rootless mode, make the disk at `path` accessible to this VMM's
     /// user alone before the VMM opens it. Every rootless VMM user shares the
     /// /dev/kvm group, so group access would expose the disk to all of them.
-    fn give_disk_to_vmm(&mut self, path: &str) -> Result<()> {
-        if !is_rootless() || self.disk_owners.contains_key(path) {
+    ///
+    /// A read-only disk keeps its owner. The VMM opens it read-only, and such
+    /// a disk can be shared between VMs (an EROFS layer, a ReadOnlyMany
+    /// volume), where each VM would record another VM's user as the owner.
+    fn give_disk_to_vmm(&mut self, path: &str, readonly: bool) -> Result<()> {
+        if readonly || !is_rootless() || self.disk_owners.contains_key(path) {
             return Ok(());
         }
 
@@ -337,8 +341,13 @@ impl CloudHypervisorInner {
     /// Give the disk at `path` back the owner it had before
     /// `give_disk_to_vmm`.
     fn return_disk_from_vmm(&mut self, path: &str) -> Result<()> {
-        match self.disk_owners.remove(path) {
-            Some(previous) => restore_disk_owner(path, &previous),
+        // Drop the record only once the restore succeeds, so cleanup retries.
+        match self.disk_owners.get(path).copied() {
+            Some(previous) => {
+                restore_disk_owner(path, &previous)?;
+                self.disk_owners.remove(path);
+                Ok(())
+            }
             None => Ok(()),
         }
     }
@@ -355,7 +364,7 @@ impl CloudHypervisorInner {
 
         let disk_config = self.make_disk_config(&config)?;
 
-        self.give_disk_to_vmm(&config.path_on_host)?;
+        self.give_disk_to_vmm(&config.path_on_host, config.is_readonly)?;
 
         let response = match cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await {
             Ok(response) => response,
@@ -566,7 +575,7 @@ impl CloudHypervisorInner {
 
                     info!(sl!(), "cold-plugging block device {:?}", &config);
 
-                    self.give_disk_to_vmm(&config.path_on_host)?;
+                    self.give_disk_to_vmm(&config.path_on_host, config.is_readonly)?;
                     boot_disks.push(self.make_disk_config(&config)?);
                 }
                 _ => continue,
@@ -704,5 +713,21 @@ mod tests {
         let net = NetConfig::try_from(cfg);
         assert!(net.is_ok());
         assert_eq!(net.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_return_disk_from_vmm_keeps_record_when_restore_fails() {
+        let mut clh = CloudHypervisorInner::new(None);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing").to_str().unwrap().to_string();
+        let previous = crate::ch::utils::DiskOwner {
+            uid: 0,
+            gid: 0,
+            mode: 0o660,
+        };
+        clh.disk_owners.insert(path.clone(), previous);
+
+        assert!(clh.return_disk_from_vmm(&path).is_err());
+        assert_eq!(clh.disk_owners.get(&path), Some(&previous));
     }
 }

@@ -76,8 +76,14 @@ pub fn give_disk_to_vmm_user(path: &str, uid: u32, gid: u32) -> Result<DiskOwner
     };
 
     chown(path, Some(uid), Some(gid)).with_context(|| format!("chown disk {path}"))?;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-        .with_context(|| format!("chmod disk {path}"))?;
+    if let Err(e) = fs::set_permissions(path, fs::Permissions::from_mode(0o600)) {
+        // No caller records a disk this returns an error for, so undo the
+        // chown here or the disk stays with the VMM user.
+        let rollback = restore_disk_owner(path, &previous);
+        return Err(
+            anyhow::Error::new(e).context(format!("chmod disk {path} (rollback: {rollback:?})"))
+        );
+    }
 
     Ok(previous)
 }
