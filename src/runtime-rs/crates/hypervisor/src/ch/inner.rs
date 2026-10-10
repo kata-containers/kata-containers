@@ -69,8 +69,11 @@ pub struct CloudHypervisorInner {
     // removing the device.
     pub(crate) device_ids: HashMap<String, String>,
 
-    // In rootless mode, the previous owner of each disk handed to the VMM
-    // user, keyed by host path, so it can be given back on removal or cleanup.
+    // The previous owner of each disk handed to the VMM user, keyed by host
+    // path, so it can be given back on removal or cleanup. Only
+    // give_disk_to_vmm() inserts, and only in rootless mode, so without
+    // rootless every give-back is a no-op. The give-backs are deliberately
+    // not gated on rootless: every recorded disk must be returned.
     pub(crate) disk_owners: HashMap<String, DiskOwner>,
 
     // List of Cloud Hypervisor features enabled at Cloud Hypervisor build-time.
