@@ -237,7 +237,7 @@ impl ContainerInner {
             return Ok(());
         }
 
-        self.check_state(vec![ProcessStatus::Running])
+        self.check_state(vec![ProcessStatus::Created, ProcessStatus::Running])
             .await
             .context("check state")?;
 
