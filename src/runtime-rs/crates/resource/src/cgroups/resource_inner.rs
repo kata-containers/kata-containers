@@ -62,12 +62,32 @@ fn read_procs(dir: &Path) -> Result<Vec<i32>> {
         .collect()
 }
 
+/// An empty cgroup.procs does not imply populated 0: exiting threads can still
+/// hold memory and keep the cgroup busy. Cgroup v1 has no cgroup.events.
+fn is_populated(dir: &Path) -> Result<bool> {
+    let events = match fs::read_to_string(dir.join("cgroup.events")) {
+        Ok(events) => events,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err).with_context(|| format!("read {}", dir.display())),
+    };
+    Ok(events
+        .lines()
+        .any(|line| line.split_whitespace().eq(["populated", "1"])))
+}
+
 async fn empty_cgroup(cgroup: &dyn Manager, deadline: tokio::time::Instant) -> Result<()> {
     let dir = procs_dir(cgroup).context("no cgroup.procs for the sandbox cgroup")?;
     loop {
         let procs = read_procs(&dir)?;
         if procs.is_empty() {
-            return Ok(());
+            if !is_populated(&dir)? {
+                return Ok(());
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(anyhow!("{} is still populated", dir.display()));
+            }
+            sleep(KILL_POLL_INTERVAL).await;
+            continue;
         }
         if procs.contains(&(process::id() as i32)) {
             return Err(anyhow!(
@@ -831,6 +851,72 @@ mod tests {
         result.unwrap();
         assert!(!status.success());
         assert!(read_procs(&dir).unwrap().is_empty());
+    }
+
+    const VMM_LIKE_ENV: &str = "KATA_CGROUP_TEST_VMM_LIKE";
+
+    fn run_vmm_like() -> ! {
+        use std::io::Write;
+        let mut memory = vec![0u8; 3 << 30];
+        for byte in memory.iter_mut().step_by(4096) {
+            *byte = 1;
+        }
+        for _ in 0..8 {
+            std::thread::spawn(|| std::thread::sleep(Duration::from_secs(600)));
+        }
+        println!("ready");
+        std::io::stdout().flush().unwrap();
+        std::thread::sleep(Duration::from_secs(600));
+        std::hint::black_box(&memory);
+        process::exit(0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs root, cgroup v2 and 3 GiB of free memory"]
+    async fn emptied_cgroup_of_a_vmm_like_process_can_be_removed() {
+        use std::io::BufRead;
+        if std::env::var_os(VMM_LIKE_ENV).is_some() {
+            run_vmm_like();
+        }
+        let test = "cgroups::resource_inner::tests::\
+                    emptied_cgroup_of_a_vmm_like_process_can_be_removed";
+        let mut busy = 0;
+        // Repeat to catch the short interval between procs becoming empty and populated 0.
+        for i in 0..5 {
+            let name = format!("kata-exit-test-{}-{i}", process::id());
+            let Some(relative) = sibling_cgroup(&name) else {
+                eprintln!("skipping: cannot create a cgroup v2 sibling");
+                return;
+            };
+            let dir = Path::new("/sys/fs/cgroup").join(&relative);
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", test, "--ignored", "--nocapture"])
+                .env(VMM_LIKE_ENV, "1")
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            let stdout = std::io::BufReader::new(child.stdout.take().unwrap());
+            assert!(stdout.lines().any(|line| line.unwrap() == "ready"));
+            fs::write(dir.join("cgroup.procs"), child.id().to_string()).unwrap();
+            let cgroup = FsManager::new(&relative).unwrap();
+
+            let result = empty_cgroup(
+                &cgroup,
+                tokio::time::Instant::now() + Duration::from_secs(5),
+            )
+            .await;
+            let removed = fs::remove_dir(&dir);
+            child.wait().unwrap();
+            if removed.is_err() {
+                busy += 1;
+                fs::remove_dir(&dir).unwrap();
+            }
+            result.unwrap();
+        }
+        assert_eq!(
+            busy, 0,
+            "cgroup busy after empty_cgroup() in {busy} of 5 runs"
+        );
     }
 
     #[tokio::test]
