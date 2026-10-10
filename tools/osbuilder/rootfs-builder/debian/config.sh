@@ -10,8 +10,7 @@ OS_VERSION=${OS_VERSION:-10.11}
 OS_NAME=${OS_NAME:-"stretch"}
 
 # shellcheck disable=SC2034
-PACKAGES="systemd coreutils init iptables chrony kmod"
-[[ "${GUEST_APPARMOR}" = yes ]] && PACKAGES+=" apparmor apparmor-utils"
+PACKAGES="systemd coreutils init iptables chrony kmod apparmor"
 
 # NOTE: Re-using ubuntu rootfs configuration, see 'ubuntu' folder for full content.
 # shellcheck disable=SC2154

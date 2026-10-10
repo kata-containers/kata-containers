@@ -11,10 +11,7 @@ set -o errtrace
 [[ -n "${DEBUG}" ]] && set -x
 
 script_name="${0##*/}"
-script_dir="${ROOTFS_BUILDER_SCRIPT_DIR:-}"
-if [[ -z "${script_dir}" ]]; then
-	script_dir="$(dirname "$(readlink -f "$0")")"
-fi
+script_dir="$(dirname "$(readlink -f "$0")")"
 AGENT_VERSION=${AGENT_VERSION:-}
 RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
@@ -30,8 +27,6 @@ LIBC=${LIBC:-musl}
 # However, it is not enforced by default: you need to enable that in the main configuration file.
 SECCOMP=${SECCOMP:-"yes"}
 SELINUX=${SELINUX:-"no"}
-GUEST_APPARMOR=${GUEST_APPARMOR:-"no"}
-GUEST_APPARMOR_PROFILE_TARBALL=${GUEST_APPARMOR_PROFILE_TARBALL:-""}
 AGENT_POLICY=${AGENT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
@@ -251,17 +246,6 @@ SELINUX             When set to "yes", build the rootfs with the required packag
                     Make sure the guest kernel is compiled with SELinux enabled.
                     Default value: "no"
 
-GUEST_APPARMOR      When set to "yes", install guest AppArmor userspace and
-                    optionally preload profiles from GUEST_APPARMOR_PROFILE_TARBALL.
-                    Supported for Ubuntu and Debian guest rootfses.
-                    Default value: "no"
-
-GUEST_APPARMOR_PROFILE_TARBALL
-                    Path to a .tar.zst archive whose contents are unpacked into
-                    /etc/apparmor.d in the guest rootfs. The archive must contain
-                    only relative paths and regular files or directories.
-                    Default value: <empty>
-
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
                     Default value: <not set>
@@ -423,8 +407,6 @@ check_env_variables()
 {
 	[[ "${AGENT_INIT}" == "yes" ]] || [[ "${AGENT_INIT}" == "no" ]] || die "AGENT_INIT(${AGENT_INIT}) is invalid (must be yes or no)"
 	[[ "${AGENT_POLICY}" == "yes" ]] || [[ "${AGENT_POLICY}" == "no" ]] || die "AGENT_POLICY(${AGENT_POLICY}) is invalid (must be yes or no)"
-	[[ "${GUEST_APPARMOR}" == "yes" ]] || [[ "${GUEST_APPARMOR}" == "no" ]] || die "GUEST_APPARMOR(${GUEST_APPARMOR}) is invalid (must be yes or no)"
-	[[ -z "${GUEST_APPARMOR_PROFILE_TARBALL}" ]] || [[ -f "${GUEST_APPARMOR_PROFILE_TARBALL}" ]] || die "GUEST_APPARMOR_PROFILE_TARBALL is not a file"
 
 	[[ -n "${KERNEL_MODULES_DIR}" ]] && [[ ! -d "${KERNEL_MODULES_DIR}" ]] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
@@ -640,11 +622,6 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname "${GUEST_HOOKS_TARBALL}"):$(dirname "${GUEST_HOOKS_TARBALL}")"
 		fi
 
-		if [[ -n "${GUEST_APPARMOR_PROFILE_TARBALL}" ]]; then
-			engine_run_args+=" --env GUEST_APPARMOR_PROFILE_TARBALL=${GUEST_APPARMOR_PROFILE_TARBALL}"
-			engine_run_args+=" -v $(dirname "${GUEST_APPARMOR_PROFILE_TARBALL}"):$(dirname "${GUEST_APPARMOR_PROFILE_TARBALL}"):ro"
-		fi
-
 		# Install yq to /usr/local/bin inside the container instead of relying on
 		# a host GOPATH bind-mount (ci/install_yq.sh).
 		engine_run_args+=" --env INSTALL_IN_GOPATH=false"
@@ -691,8 +668,6 @@ build_rootfs_distro()
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
-			--env GUEST_APPARMOR="${GUEST_APPARMOR}" \
-			--env GUEST_APPARMOR_PROFILE_TARBALL="${GUEST_APPARMOR_PROFILE_TARBALL}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
@@ -711,48 +686,44 @@ build_rootfs_distro()
 	fi
 }
 
-install_guest_apparmor_assets()
+# The distribution's apparmor.service loads every profile found in
+# /etc/apparmor.d during boot. If it runs, workload profiles would already be
+# in the kernel before the kata-agent is asked to apply one, and the agent
+# could not tell whether a profile is loaded from the intended source.
+#
+# The contract is that the official base image must not preload workload
+# profiles through the distribution service. That is weaker than permanently
+# disabling it, so this installs a preset rather than masking the unit: a
+# preset is how a distribution expresses "do not enable this by default",
+# and it leaves the service available for anyone who enables it explicitly.
+#
+# Being a no-op when the distribution ships no such unit keeps the non-systemd
+# and AGENT_INIT=yes builds working unchanged.
+disable_distro_apparmor_service()
 {
-	[[ "${GUEST_APPARMOR}" == "yes" ]] || return 0
+	local preset_dir="${ROOTFS_DIR}/usr/lib/systemd/system-preset"
+	local unit_name="apparmor.service"
 
-	local profile_dir="${ROOTFS_DIR}/etc/apparmor.d"
-	mkdir -p "${profile_dir}"
-	if [[ -n "${GUEST_APPARMOR_PROFILE_TARBALL}" ]]; then
-		info "Install guest AppArmor profiles"
-		local entry
-		while IFS= read -r entry; do
-			case "${entry}" in
-				/*|../*|*/../*|*/..|..)
-					die "guest AppArmor profile archive contains an unsafe path: ${entry}"
-					;;
-				""|./|*/)
-					;;
-		esac
-		done < <(tar --zstd --list --file "${GUEST_APPARMOR_PROFILE_TARBALL}")
-		tar --zstd --no-same-owner --no-same-permissions \
-			-xf "${GUEST_APPARMOR_PROFILE_TARBALL}" -C "${profile_dir}"
-		local invalid_entry
-		invalid_entry="$(find "${profile_dir}" -mindepth 1 ! \( -type f -o -type d \) -print -quit)"
-		[[ -z "${invalid_entry}" ]] || die "guest AppArmor profile is not a regular file: ${invalid_entry}"
-	fi
+	[[ -d "${ROOTFS_DIR}" ]] || return 0
 
-	# The guest agent also supports AGENT_INIT=yes and can load a requested
-	# profile on demand. With systemd, preload the same files during boot.
-	if [[ "${AGENT_INIT}" != "yes" ]]; then
-		local apparmor_unit=""
-		for candidate in \
-			"${ROOTFS_DIR}/lib/systemd/system/apparmor.service" \
-			"${ROOTFS_DIR}/usr/lib/systemd/system/apparmor.service"; do
-			if [[ -f "${candidate}" ]]; then
-				apparmor_unit="${candidate#"${ROOTFS_DIR}"}"
-				break
-			fi
-		done
-		[[ -n "${apparmor_unit}" ]] || die "GUEST_APPARMOR enabled but apparmor.service is missing"
-		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
-		ln -sf "${apparmor_unit}" \
-			"${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/apparmor.service"
-	fi
+	# Nothing to do when apparmor.service is not part of this rootfs.
+	[[ -f "${ROOTFS_DIR}/lib/systemd/system/${unit_name}" ]] || \
+		[[ -f "${ROOTFS_DIR}/usr/lib/systemd/system/${unit_name}" ]] || return 0
+
+	mkdir -p "${preset_dir}"
+	cat > "${preset_dir}/10-kata-apparmor.preset" <<-EOF
+		# Do not let the distribution enable apparmor.service: the base image
+		# must not preload workload profiles. Keep it available for explicit
+		# enablement.
+		disable ${unit_name}
+	EOF
+
+	# Drop any enablement the packaging already created, so the preset and the
+	# on-disk state agree.
+	local wants_dir
+	while IFS= read -r wants_dir; do
+		rm -f "${wants_dir}/${unit_name}"
+	done < <(find "${ROOTFS_DIR}" -type d -name '*.wants' -print 2>/dev/null)
 }
 
 # Used to create a minimal directory tree where the agent can be installed.
@@ -1102,7 +1073,7 @@ main()
 
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
-	install_guest_apparmor_assets
+	disable_distro_apparmor_service
 
 	if is_nvidia_variant; then
 		# The monolith and nvidia base continue to share stage-one.
@@ -1112,6 +1083,4 @@ main()
 	fi
 }
 
-if [[ "${ROOTFS_BUILDER_NO_MAIN:-no}" != "yes" ]]; then
-	main "$@"
-fi
+main "$@"

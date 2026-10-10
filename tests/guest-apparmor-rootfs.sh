@@ -3,7 +3,6 @@
 # Copyright (c) 2026 Kata Containers contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-#
 
 set -o errexit
 set -o nounset
@@ -14,62 +13,105 @@ rootfs_script="${repo_root}/tools/osbuilder/rootfs-builder/rootfs.sh"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
-# The Windows checkout may use CRLF for untouched upstream files. Keep this
-# test independent of checkout line endings by sourcing normalized copies.
-normalized_builder_dir="${tmp_dir}/rootfs-builder"
-normalized_scripts_dir="${tmp_dir}/scripts"
-mkdir -p "${normalized_builder_dir}" "${normalized_scripts_dir}"
-perl -pe 's/\r\n/\n/g; s/\r/\n/g' "${rootfs_script}" \
-	> "${normalized_builder_dir}/rootfs.sh"
-perl -pe 's/\r\n/\n/g; s/\r/\n/g' \
-	"${repo_root}/tools/osbuilder/scripts/lib.sh" \
-	> "${normalized_scripts_dir}/lib.sh"
-
+# Run one function from rootfs.sh against a prepared rootfs tree.
+#
+# The real script executes main() on load, so it cannot simply be sourced.
+# Extract only the function definition and drive it in a subshell instead of
+# adding an entry-point hook to the production script.
 run_rootfs_function() {
-	ROOTFS_BUILDER_NO_MAIN=yes \
-	ROOTFS_BUILDER_SCRIPT_DIR="${normalized_builder_dir}" \
-	ROOTFS_DIR="$1" \
-	GUEST_APPARMOR="$2" \
-	AGENT_INIT="$3" \
-	GUEST_APPARMOR_PROFILE_TARBALL="${4:-}" \
-	bash -c 'source "$1"; install_guest_apparmor_assets' _ \
-		"${normalized_builder_dir}/rootfs.sh"
+	local function_name="$1"
+	local target_dir="$2"
+
+	{
+		printf 'info() { printf "INFO: %%s\\n" "$*"; }\n'
+		awk "/^${function_name}\\(\\)/,/^}/" "${rootfs_script}"
+		printf '%s\n' "${function_name}"
+	} > "${tmp_dir}/driver.sh"
+
+	ROOTFS_DIR="${target_dir}" bash "${tmp_dir}/driver.sh"
 }
 
-plain_rootfs="${tmp_dir}/plain"
-run_rootfs_function "${plain_rootfs}" no yes
-[[ ! -e "${plain_rootfs}/etc/apparmor.d" ]]
+check_plain_rootfs_is_untouched() {
+	local rootfs="${tmp_dir}/plain"
+	mkdir -p "${rootfs}"
 
-agent_init_rootfs="${tmp_dir}/agent-init"
-run_rootfs_function "${agent_init_rootfs}" yes yes
-[[ -d "${agent_init_rootfs}/etc/apparmor.d" ]]
+	run_rootfs_function disable_distro_apparmor_service "${rootfs}"
 
-systemd_rootfs="${tmp_dir}/systemd"
-mkdir -p "${systemd_rootfs}/usr/lib/systemd/system"
-touch "${systemd_rootfs}/usr/lib/systemd/system/apparmor.service"
-run_rootfs_function "${systemd_rootfs}" yes no
-[[ -L "${systemd_rootfs}/etc/systemd/system/basic.target.wants/apparmor.service" ]]
-[[ "$(readlink "${systemd_rootfs}/etc/systemd/system/basic.target.wants/apparmor.service")" == "/usr/lib/systemd/system/apparmor.service" ]]
+	# No apparmor userspace in this rootfs, so nothing may be added.
+	[[ ! -e "${rootfs}/usr/lib/systemd/system-preset/10-kata-apparmor.preset" ]]
+	[[ ! -e "${rootfs}/etc/systemd/system/apparmor.service" ]]
+}
 
-if command -v zstd >/dev/null 2>&1; then
-	profile_source="${tmp_dir}/profiles"
-	mkdir -p "${profile_source}"
-	printf 'profile kata-default {\n}\n' > "${profile_source}/kata-default"
-	safe_archive="${tmp_dir}/profiles.tar.zst"
-	tar --zstd -cf "${safe_archive}" -C "${profile_source}" kata-default
-	archive_rootfs="${tmp_dir}/archive"
-	run_rootfs_function "${archive_rootfs}" yes yes "${safe_archive}"
-	[[ -f "${archive_rootfs}/etc/apparmor.d/kata-default" ]]
+check_service_is_disabled_not_masked() {
+	local rootfs="${tmp_dir}/systemd"
+	mkdir -p "${rootfs}/lib/systemd/system"
+	touch "${rootfs}/lib/systemd/system/apparmor.service"
 
-	unsafe_archive="${tmp_dir}/unsafe-profiles.tar.zst"
-	tar --zstd --transform='s#^kata-default$#../escape#' \
-		-cf "${unsafe_archive}" -C "${profile_source}" kata-default
-	if run_rootfs_function "${tmp_dir}/unsafe" yes yes "${unsafe_archive}"; then
-		echo "unsafe profile archive was accepted" >&2
-		exit 1
+	run_rootfs_function disable_distro_apparmor_service "${rootfs}"
+
+	local preset="${rootfs}/usr/lib/systemd/system-preset/10-kata-apparmor.preset"
+	[[ -f "${preset}" ]]
+	grep -q '^disable apparmor\.service$' "${preset}"
+
+	# A preset expresses "do not enable by default". Masking would be a
+	# stronger claim than the contract makes, so it must not happen.
+	[[ ! -e "${rootfs}/etc/systemd/system/apparmor.service" ]]
+}
+
+check_existing_enablement_is_removed() {
+	local rootfs="${tmp_dir}/enabled"
+	mkdir -p "${rootfs}/lib/systemd/system"
+	mkdir -p "${rootfs}/etc/systemd/system/multi-user.target.wants"
+	touch "${rootfs}/lib/systemd/system/apparmor.service"
+	ln -sf "/lib/systemd/system/apparmor.service" \
+		"${rootfs}/etc/systemd/system/multi-user.target.wants/apparmor.service"
+
+	run_rootfs_function disable_distro_apparmor_service "${rootfs}"
+
+	# The preset and the on-disk state have to agree.
+	[[ ! -e "${rootfs}/etc/systemd/system/multi-user.target.wants/apparmor.service" ]]
+	[[ -f "${rootfs}/usr/lib/systemd/system-preset/10-kata-apparmor.preset" ]]
+}
+
+check_usr_lib_location_is_recognised() {
+	local rootfs="${tmp_dir}/usr-lib"
+	mkdir -p "${rootfs}/usr/lib/systemd/system"
+	touch "${rootfs}/usr/lib/systemd/system/apparmor.service"
+
+	run_rootfs_function disable_distro_apparmor_service "${rootfs}"
+
+	[[ -f "${rootfs}/usr/lib/systemd/system-preset/10-kata-apparmor.preset" ]]
+}
+
+check_idempotent() {
+	local rootfs="${tmp_dir}/twice"
+	mkdir -p "${rootfs}/lib/systemd/system"
+	touch "${rootfs}/lib/systemd/system/apparmor.service"
+
+	run_rootfs_function disable_distro_apparmor_service "${rootfs}"
+	run_rootfs_function disable_distro_apparmor_service "${rootfs}"
+
+	local preset="${rootfs}/usr/lib/systemd/system-preset/10-kata-apparmor.preset"
+	[[ "$(grep -c '^disable apparmor\.service$' "${preset}")" -eq 1 ]]
+}
+
+check_no_apparmor_options_remain() {
+	# The opt-in build switches are gone; the parser is installed
+	# unconditionally instead. Guard against them creeping back.
+	local leftovers
+	leftovers="$(grep -nE 'GUEST_APPARMOR|ROOTFS_BUILDER_(SCRIPT_DIR|NO_MAIN)' "${rootfs_script}" || true)"
+	if [[ -n "${leftovers}" ]]; then
+		echo "unexpected guest AppArmor build options in rootfs.sh:" >&2
+		echo "${leftovers}" >&2
+		return 1
 	fi
-else
-	echo "Profile archive checks skipped: zstd is unavailable"
-fi
+}
+
+check_plain_rootfs_is_untouched
+check_service_is_disabled_not_masked
+check_existing_enablement_is_removed
+check_usr_lib_location_is_recognised
+check_idempotent
+check_no_apparmor_options_remain
 
 echo "Guest AppArmor rootfs checks passed"

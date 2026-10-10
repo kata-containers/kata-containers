@@ -12,7 +12,13 @@ OS_NAME=ubuntu
 OS_VERSION=${OS_VERSION:-""}
 [[ -z "${OS_VERSION}" ]] && echo "OS_VERSION is required, but was not set" && exit 1
 PACKAGES="chrony iptables dbus"
-[[ "${GUEST_APPARMOR}" = yes ]] && PACKAGES+=" apparmor apparmor-utils"
+# apparmor is installed unconditionally: it provides apparmor_parser, which the
+# kata-agent uses to load workload AppArmor profiles inside the guest. The
+# policy text itself is delivered separately, through a guest extension image,
+# so only the parser and its runtime dependencies belong here. apparmor-utils is
+# deliberately not installed: it is a command line tool the agent never calls,
+# and it pulls in a python3 dependency chain.
+PACKAGES+=" apparmor"
 # shellcheck disable=SC2154
 [[ "${AGENT_INIT}" = no ]] && PACKAGES+=" init"
 # cryptsetup-bin and e2fsprogs are installed unconditionally:
