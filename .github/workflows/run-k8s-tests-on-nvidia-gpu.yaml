@@ -1,7 +1,11 @@
-name: CI | Run NVIDIA GPU kubernetes tests on amd64
+name: CI | Run NVIDIA GPU kubernetes tests
 on:
   workflow_call:
     inputs:
+      arch:
+        required: false
+        type: string
+        default: amd64
       tarball-suffix:
         required: true
         type: string
@@ -33,23 +37,25 @@ on:
         required: true
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-nvidia-gpu
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-nvidia-gpu-${{ inputs.arch }}
   cancel-in-progress: true
 
 permissions: {}
 
 jobs:
-  run-nvidia-gpu-tests-on-amd64:
-    name: run-${{ matrix.environment.name }}-tests-on-amd64
+  run-nvidia-gpu-tests:
+    name: run-${{ matrix.environment.name }}-tests-on-${{ inputs.arch }}
     strategy:
       fail-fast: false
       matrix:
-        environment: [
-          { name: nvidia-gpu,                  vmm: qemu-nvidia-gpu,                runner: amd64-nvidia-a100,     coco: false, snapshotter: "" },
-          { name: nvidia-gpu-runtime-rs,       vmm: qemu-nvidia-gpu-runtime-rs,     runner: amd64-nvidia-a100,     coco: false, snapshotter: "erofs" },
-          { name: nvidia-gpu-snp,              vmm: qemu-nvidia-gpu-snp,            runner: amd64-nvidia-h100-snp, coco: true,  snapshotter: "nydus" },
-          { name: nvidia-gpu-snp-runtime-rs,   vmm: qemu-nvidia-gpu-snp-runtime-rs, runner: amd64-nvidia-h100-snp, coco: true,  snapshotter: "nydus" },
-        ]
+        environment: ${{ fromJSON(inputs.arch == 'arm64' && '[
+          {"name":"nvidia-gpu-runtime-rs", "vmm":"qemu-nvidia-gpu-runtime-rs", "runner":"arm64-nvidia-gpu", "coco":false, "snapshotter":"erofs", "skip-multi-gpu-tests":true}
+          ]' || '[
+          {"name":"nvidia-gpu", "vmm":"qemu-nvidia-gpu", "runner":"amd64-nvidia-a100", "coco":false, "snapshotter":""},
+          {"name":"nvidia-gpu-runtime-rs", "vmm":"qemu-nvidia-gpu-runtime-rs", "runner":"amd64-nvidia-a100", "coco":false, "snapshotter":"erofs"},
+          {"name":"nvidia-gpu-snp", "vmm":"qemu-nvidia-gpu-snp", "runner":"amd64-nvidia-h100-snp", "coco":true, "snapshotter":"nydus"},
+          {"name":"nvidia-gpu-snp-runtime-rs", "vmm":"qemu-nvidia-gpu-snp-runtime-rs", "runner":"amd64-nvidia-h100-snp", "coco":true, "snapshotter":"nydus"}
+          ]') }}
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -63,10 +69,12 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: kubeadm
       KBS: ${{ matrix.environment.coco && 'true' || 'false' }}
+      SKIP_MULTI_GPU_TESTS: ${{ matrix.environment.skip-multi-gpu-tests && 'true' || 'false' }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
       EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.snapshotter == 'erofs' && 'memory' || '' }}
       EROFS_DMVERITY: ${{ matrix.environment.snapshotter == 'erofs' && 'dmverity' || '' }}
       K8S_TEST_HOST_TYPE: baremetal
+      TARGET_ARCH: ${{ inputs.arch == 'arm64' && 'aarch64' || 'x86_64' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -83,7 +91,7 @@ jobs:
       - name: get-kata-tools-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: kata-tools-static-tarball-${{ inputs.arch }}${{ inputs.tarball-suffix }}
           path: kata-tools-artifacts
 
       - name: Install kata-tools
@@ -141,7 +149,7 @@ jobs:
       - name: Archive artifacts ${{ matrix.environment.vmm }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: k8s-tests-${{ matrix.environment.vmm }}-kubeadm-${{ inputs.tag }}
+          name: k8s-tests-${{ matrix.environment.vmm }}-${{ inputs.arch }}-kubeadm-${{ inputs.tag }}
           path: /tmp/artifacts
           retention-days: 1
 
@@ -155,3 +163,4 @@ jobs:
         timeout-minutes: 10
         run: |
           bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
