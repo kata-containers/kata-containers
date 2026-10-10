@@ -91,7 +91,7 @@ spec:
     resources:
       limits:
         nvidia.com/gpu: "1"
-        cpu: "16"
+        cpu: "8"
         memory: "8Gi"
     volumeMounts:
       - name: model
