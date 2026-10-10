@@ -502,3 +502,116 @@ impl ContainerManager for VirtContainerManager {
             && process.container_id.container_id == self.sid
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hypervisor::qemu::Qemu;
+    use kata_types::config::TomlConfig;
+    use persist::sandbox_persist::Persist;
+    use resource::{
+        cgroups::cgroup_persist::CgroupState, manager::ManagerArgs, resource_persist::ResourceState,
+    };
+
+    async fn manager() -> VirtContainerManager {
+        let agent = Arc::new(agent::kata::KataAgent::new(Default::default()));
+        let hypervisor = Arc::new(Qemu::new());
+        // Restore only opens managers for these nonexistent cgroups. It does
+        // not create cgroups or move the test process into one.
+        let resources = Arc::new(
+            ResourceManager::restore(
+                ManagerArgs {
+                    sid: "poststop-hook-test".into(),
+                    agent: agent.clone(),
+                    hypervisor: hypervisor.clone(),
+                    config: TomlConfig::default(),
+                },
+                ResourceState {
+                    cgroup_state: Some(CgroupState {
+                        path: Some("poststop-hook-test".into()),
+                        overhead_path: Some("poststop-hook-test-overhead".into()),
+                        sandbox_cgroup_only: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap(),
+        );
+        VirtContainerManager::new(
+            "sandbox",
+            0,
+            agent,
+            hypervisor,
+            resources,
+            Arc::new(CrioOomNotifier::default()),
+        )
+    }
+
+    #[tokio::test]
+    async fn delete_succeeds_after_a_failing_poststop_hook() {
+        let manager = manager().await;
+        manager.vmm_master_tid.set(42).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let failed_marker = dir.path().join("failed-hook");
+        let next_marker = dir.path().join("next-hook");
+        let hook = |marker: &std::path::Path, script: &str| {
+            oci::HookBuilder::default()
+                .path("/bin/sh")
+                .args(vec!["sh".into(), "-c".into(), script.into()])
+                .env(vec![format!("MARKER={}", marker.display())])
+                .build()
+                .unwrap()
+        };
+        let failing = hook(&failed_marker, "printf attempted > \"$MARKER\"; exit 1");
+        // Confirm this hook really fails; execute_hooks must tolerate that failure.
+        assert!(HookStates::new().execute_hook(&failing, None).is_err());
+        std::fs::remove_file(&failed_marker).unwrap();
+        let spec = oci::SpecBuilder::default()
+            .hooks(
+                oci::HooksBuilder::default()
+                    .poststop(vec![
+                        failing,
+                        hook(&next_marker, "printf continued > \"$MARKER\""),
+                    ])
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+        let container = Container::new(
+            42,
+            ContainerConfig {
+                container_id: "stopped".into(),
+                bundle: dir.path().display().to_string(),
+                rootfs_mounts: vec![],
+                terminal: false,
+                options: None,
+                stdin: None,
+                stdout: None,
+                stderr: None,
+            },
+            spec,
+            manager.agent.clone(),
+            manager.resource_manager.clone(),
+            None,
+        )
+        .await
+        .unwrap();
+        container.mark_stopped_for_test().await;
+        manager
+            .containers
+            .write()
+            .await
+            .insert("stopped".into(), container);
+
+        let state = manager
+            .delete_process(&ContainerProcess::new("stopped", "").unwrap())
+            .await
+            .unwrap();
+        assert_eq!(state.status, ProcessStatus::Stopped);
+        assert_eq!(std::fs::read_to_string(failed_marker).unwrap(), "attempted");
+        assert_eq!(std::fs::read_to_string(next_marker).unwrap(), "continued");
+        assert!(manager.containers.read().await.is_empty());
+    }
+}
