@@ -13,8 +13,8 @@ version = "0.2.3"
 [dependencies]
 kvm-bindings = { features = ["fam-wrappers"], workspace = true }
 kvm-ioctls = { workspace = true }
-libc = ">=0.2.39"
-memoffset = "0.6"
+libc = { workspace = true }
+memoffset = { workspace = true }
 thiserror = { workspace = true }
 vm-memory = { workspace = true }
 vmm-sys-util = { workspace = true }

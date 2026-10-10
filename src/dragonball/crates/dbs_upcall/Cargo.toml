@@ -11,9 +11,9 @@ repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/
 version = "0.3.0"
 
 [dependencies]
-log = "0.4.14"
+log = { workspace = true }
 thiserror = { workspace = true }
-timerfd = "1.2.0"
+timerfd = { workspace = true }
 
 dbs-utils = { workspace = true }
 dbs-virtio-devices = { features = ["virtio-vsock"], workspace = true }

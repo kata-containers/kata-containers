@@ -150,14 +150,17 @@ vsock-exporter = { path = "src/agent/vsock-exporter" }
 # Outside dependencies
 actix-rt = "2.7.0"
 anyhow = "1.0.103"
+arc-swap = "1.5.0"
 async-recursion = "0.3.2"
 async-trait = "0.1.48"
 awaitgroup = "0.7.0"
 base64 = "0.22"
 bilge = "0.5.0"
 byte-unit = "5.2.3"
+byteorder = "1.4.3"
 bytes = "1.0"
 capctl = "0.2.0"
+caps = "0.5.3"
 cfg-if = "1.0.0"
 cgroups = { features = ["oci"], package = "cgroups-rs", version = "0.5.1" }
 clap = { features = ["derive"], version = "4.5.40" }
@@ -165,9 +168,13 @@ const_format = "0.2.30"
 container-device-interface = "1.1.1"
 containerd-shim = { features = ["async"], version = "0.11.0" }
 containerd-shim-protos = { features = ["async"], version = "0.11.0" }
+crossbeam-channel = "0.5.6"
 derivative = "2.2.0"
+device_tree = "1.1.0"
 devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
+epoll = "=4.3.1"
 flate2 = "1.1.5"
+fuse-backend-rs = "0.14.0"
 futures = "0.3.30"
 go-flag = "0.1.0"
 gpt = "4.1.0"
@@ -181,10 +188,12 @@ hyper-util = { features = [
   "tokio",
 ], version = "0.1" }
 hyperlocal = "0.9.1"
+io-uring = "0.5.2"
 ipnetwork = "0.17.0"
 lazy_static = "1.4"
 libc = "0.2.94"
 log = "0.4.14"
+memoffset = "0.6"
 netlink-packet-core = "0.9.0"
 netlink-packet-route = "0.33.0"
 netlink-sys = { features = ["tokio_socket"], version = "0.9.0" }
@@ -205,6 +214,9 @@ nix = { features = [
   "term",
   "user",
 ], version = "0.31.3" }
+nydus-api = "0.4.1"
+nydus-rafs = "0.4.1"
+nydus-storage = "0.7.2"
 oci-spec = { features = ["runtime"], version = "0.10.0" }
 opentelemetry = { features = ["rt-tokio"], version = "0.17.0" }
 pathrs = "0.2.4"
@@ -213,16 +225,20 @@ prometheus = { features = ["process"], version = "0.14.0" }
 protobuf = "3.7.2"
 rand = "0.10.1"
 regex = "1.10.5"
+rlimit = "0.7.0"
 rstest = "0.26.1"
 rtnetlink = "0.23.0"
 scan_fmt = "0.2.6"
 scopeguard = "1.0.0"
 semver = "1.0"
+sendfd = "0.4.3"
 serde = { features = ["derive"], version = "1.0.145" }
+serde_derive = "1.0.131"
 serde_json = "1.0.91"
 serial_test = "0.10.0"
 sha2 = "0.11.0"
 slog = "2.5.2"
+slog-async = "2.7.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
@@ -233,6 +249,8 @@ tar = "0.4.46"
 tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "2.0.18"
+threadpool = "1"
+timerfd = "1.2.0"
 tokio = "1.46.1"
 tokio-util = "0.7.17"
 tokio-vsock = "0.3.4"
@@ -242,6 +260,7 @@ tracing-opentelemetry = "0.18.0"
 tracing-subscriber = "0.3.20"
 ttrpc = "0.9.0"
 url = "2.5.4"
+vhost-rs = { package = "vhost", version = "0.15.0" }
 which = "4.3.0"
 
 # Per-package release profile overrides for kata-deploy. The kata-deploy

@@ -17,7 +17,7 @@ anyhow = { workspace = true }
 backtrace = { default-features = false, features = [
   "libunwind",
   "std",
-], version = ">=0.3.76" }
+], version = "0.3.76" }
 containerd-shim-protos = { workspace = true }
 go-flag = { workspace = true }
 libc = { workspace = true }
