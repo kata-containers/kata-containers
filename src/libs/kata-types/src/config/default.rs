@@ -52,6 +52,7 @@ pub const DEFAULT_GUEST_HOOK_PATH: &str = "/opt/kata/hooks";
 pub const DEFAULT_GUEST_DNS_FILE: &str = "/etc/resolv.conf";
 
 pub const DEFAULT_GUEST_VCPUS: u32 = 1;
+pub const DEFAULT_SNP_CPU_MODEL: &str = "EPYC-Milan";
 
 // Default configuration for dragonball
 pub const DEFAULT_DRAGONBALL_GUEST_KERNEL_IMAGE: &str = "vmlinuz";

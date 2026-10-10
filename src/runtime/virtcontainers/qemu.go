@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -259,6 +260,75 @@ func (q *qemu) qemuPath() (string, error) {
 	}
 
 	return p, nil
+}
+
+// defaultSNPCPUModel is the fallback CPU model for SEV-SNP guests
+const defaultSNPCPUModel = "EPYC-Milan"
+
+// snpQueryTimeout bounds how long we wait for the QEMU binary to answer
+const snpQueryTimeout = 3 * time.Second
+
+// querySNPSupportedCPUModels asks the given QEMU binary which AMD EPYC CPU
+// models it supports, by parsing the output of `<qemuPath> -cpu help`.
+// Filtering out only EPYC* cpu models from the output.
+func querySNPSupportedCPUModels(qemuPath string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), snpQueryTimeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, qemuPath, "-cpu", "help").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var models []string
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) > 0 && strings.HasPrefix(fields[0], "EPYC") {
+			models = append(models, fields[0])
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return models, nil
+}
+
+// validateSNPCPUModel checks the configured SEV-SNP guest CPU model against
+// the list of CPU models the QEMU binary in use actually supports.
+//
+// "host" is always allowed, bypassing the check entirely. If QEMU cannot be
+// queried, the configured value is trusted as is. If the query succeeds
+// but the configured value isn't among the supported models, a warning
+// is logged and the default CPU model is used instead.
+func validateSNPCPUModel(cpuModel, qemuPath string) string {
+	cpuModel = strings.TrimSpace(cpuModel)
+	if cpuModel == "" {
+		return defaultSNPCPUModel
+	}
+
+	if cpuModel == "host" {
+		return cpuModel
+	}
+
+	logger := hvLogger.WithFields(logrus.Fields{
+		"subsystem": "qemu",
+		"cpu-model": cpuModel,
+	})
+
+	supportedModels, err := querySNPSupportedCPUModels(qemuPath)
+	if err != nil {
+		logger.WithError(err).Warn("unable to query QEMU for supported SEV-SNP CPU models, using the configured cpu_model")
+		return cpuModel
+	}
+
+	if slices.Contains(supportedModels, cpuModel) {
+		return cpuModel
+	}
+
+	logger.Warnf("cpu_model is not supported by QEMU, falling back to default cpu_model %q", defaultSNPCPUModel)
+	return defaultSNPCPUModel
 }
 
 // setup sets the Qemu structure up.
@@ -1238,7 +1308,15 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	qemuPath, err := q.qemuPath()
+	if err != nil {
+		return err
+	}
+
 	cpuModel := q.arch.cpuModel()
+	if q.arch.getProtection() == snpProtection {
+		cpuModel = validateSNPCPUModel(cpuModel, qemuPath)
+	}
 	cpuModel += "," + q.config.CPUFeatures
 
 	firmwarePath, err := q.config.FirmwareAssetPath()
@@ -1252,11 +1330,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	}
 
 	pflash, err := q.arch.getPFlash()
-	if err != nil {
-		return err
-	}
-
-	qemuPath, err := q.qemuPath()
 	if err != nil {
 		return err
 	}

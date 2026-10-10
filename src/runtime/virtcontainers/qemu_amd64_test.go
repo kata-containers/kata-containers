@@ -94,6 +94,19 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 	assert.Equal(expectedOut, model)
 }
 
+func TestQemuAmd64SNPCPUModelFromConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := qemuConfig(QemuQ35)
+	config.CPUModel = "EPYC-Milan"
+	arch, err := newQemuArch(config)
+	assert.NoError(err)
+
+	amd64, ok := arch.(*qemuAmd64)
+	assert.True(ok)
+	assert.Equal("EPYC-Milan", amd64.snpCPUModel)
+}
+
 func TestQemuAmd64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
 	amd64 := newTestQemu(assert, QemuQ35)
