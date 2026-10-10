@@ -85,7 +85,7 @@ assets:
     firecracker:
       description: "Firecracker micro-VMM"
       url: "https://github.com/firecracker-microvm/firecracker"
-      version: "v1.12.1"
+      version: "v1.17.0"
 
     qemu:
       description: "VMM that uses KVM"
