@@ -18,6 +18,27 @@ kernel = "@KERNELPATH_QEMU@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
+# Guest AppArmor policy extension image.
+#
+# AppArmor profiles for workloads ship in a separate extension image rather
+# than in the base image, so policy can be reviewed and versioned on its own
+# without rebuilding the guest image. The image is attached as a virtio-blk
+# device and mounted read-only at /run/kata-extensions/apparmor before the
+# agent starts. It carries policy text only; apparmor_parser comes from the
+# base image.
+#
+# Attaching it does not apply any policy by itself: a workload is only
+# constrained when it asks for a profile through its OCI apparmorProfile, and
+# a workload that asks for nothing is unaffected either way.
+#
+# Enable by uncommenting the block below and setting the path to the image
+# built as kata-containers-apparmor-extension.img, together with the verity
+# parameters generated for that build.
+#[[hypervisor.qemu.guest_extension_images]]
+#name = "apparmor"
+#path = "@IMAGEPATH@"
+#verity_params = "root_hash=...,salt=...,data_blocks=...,hash_block_size=...,data_block_size=..."
+
 # rootfs filesystem type:
 #   - ext4 (default)
 #   - xfs
