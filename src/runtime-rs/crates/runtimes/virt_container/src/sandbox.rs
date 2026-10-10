@@ -71,7 +71,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 ))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
-use kata_types::config::{hypervisor::Factory, TomlConfig};
+use kata_types::config::{hypervisor::Factory, PodResourceDeviceSource, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use kata_types::rootless::is_rootless;
 use oci_spec::runtime as oci;
@@ -673,12 +673,27 @@ impl VirtSandbox {
                 annotations.get("io.kubernetes.cri.sandbox-namespace")
             );
 
-            let cdi_devices = pod_resources_rs::pod_resources::get_pod_cdi_devices(
+            let sources: Vec<pod_resources_rs::DeviceSource> = config
+                .runtime
+                .pod_resource_device_sources()
+                .into_iter()
+                .map(|s| match s {
+                    PodResourceDeviceSource::DevicePlugin => {
+                        pod_resources_rs::DeviceSource::DevicePlugin
+                    }
+                    PodResourceDeviceSource::Dra => pod_resources_rs::DeviceSource::Dra,
+                })
+                .collect();
+
+            let selected = pod_resources_rs::pod_resources::get_pod_cdi_devices(
                 pod_resource_socket,
                 annotations,
+                &sources,
             )
             .await
             .context("failed to query Pod Resources CDI devices")?;
+
+            let cdi_devices = selected.flattened();
             info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
 
             let device_nodes = handle_cdi_devices(&cdi_devices).await?;
