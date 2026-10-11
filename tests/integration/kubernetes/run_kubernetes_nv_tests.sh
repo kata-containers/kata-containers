@@ -181,6 +181,24 @@ else
 	fi
 fi
 
+# BF3 shares its slow disk with etcd. Avoid the large vLLM image and its
+# snapshots, including when the caller selects test files explicitly.
+if [[ "${SKIP_VLLM_TESTS:-false}" == "true" ]]; then
+	filtered_nv_tests=()
+	for bats_file in "${K8S_TEST_NV[@]}"; do
+		if [[ "${bats_file//[[:space:]]/}" == "k8s-nvidia-vllm.bats" ]]; then
+			info "Skipping vLLM tests on this runner"
+		else
+			filtered_nv_tests+=("${bats_file}")
+		fi
+	done
+	K8S_TEST_NV=("${filtered_nv_tests[@]}")
+	if (( ${#K8S_TEST_NV[@]} == 0 )); then
+		info "No NVIDIA GPU tests remain after filtering"
+		exit 0
+	fi
+fi
+
 SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-runtime-rs" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu-runtime-rs}"
 # shellcheck disable=SC2076 # intentionally use literal string matching

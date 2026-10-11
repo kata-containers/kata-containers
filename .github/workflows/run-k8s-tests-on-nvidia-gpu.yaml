@@ -63,6 +63,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: kubeadm
       KBS: ${{ matrix.environment.coco && 'true' || 'false' }}
+      SKIP_VLLM_TESTS: ${{ matrix.environment.skip-vllm-tests && 'true' || 'false' }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
       EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.snapshotter == 'erofs' && 'memory' || '' }}
       EROFS_DMVERITY: ${{ matrix.environment.snapshotter == 'erofs' && 'dmverity' || '' }}
