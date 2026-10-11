@@ -106,6 +106,7 @@ test-utils.workspace = true
 [profile.release]
 lto = true
 
+# Update /src/agent/src/features.rs when adding a new feature
 [features]
 agent-policy = ["kata-agent-policy"]
 devicemapper = ["kata-types/devicemapper"]
