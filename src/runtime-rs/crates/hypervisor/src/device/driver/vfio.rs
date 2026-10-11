@@ -711,8 +711,19 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
     info!(sl!(), "{} is unbound from {}", bdf, host_driver);
 
     // echo bdf > /sys/bus/pci/drivers_probe
-    fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
-        .with_context(|| format!("Failed to echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"))?;
+    if let Err(err) = fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf) {
+        if let Err(restore_err) = bind_device_to_host(bdf, host_driver, _vendor_device_id) {
+            warn!(
+                sl!(),
+                "failed to restore {} to {} after vfio probe failure: {}",
+                bdf,
+                host_driver,
+                restore_err
+            );
+        }
+        return Err(err)
+            .with_context(|| format!("Failed to echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"));
+    }
 
     info!(sl!(), "echo {} > /sys/bus/pci/drivers_probe", bdf);
 
@@ -750,10 +761,12 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
     override_driver(bdf, host_driver).context("override driver")?;
 
-    // echo bdf > /sys/bus/pci/drivers/vfio-pci/unbind"
-    std::fs::write(VFIO_PCI_DRIVER_UNBIND, bdf)
-        .with_context(|| format!("echo {bdf}> {VFIO_PCI_DRIVER_UNBIND}"))?;
-    info!(sl!(), "echo {} > {}", bdf, VFIO_PCI_DRIVER_UNBIND);
+    if is_equal_driver(bdf, VFIO_PCI_DRIVER) {
+        // echo bdf > /sys/bus/pci/drivers/vfio-pci/unbind"
+        fs::write(VFIO_PCI_DRIVER_UNBIND, bdf)
+            .with_context(|| format!("echo {bdf} > {VFIO_PCI_DRIVER_UNBIND}"))?;
+        info!(sl!(), "echo {} > {}", bdf, VFIO_PCI_DRIVER_UNBIND);
+    }
 
     // echo bdf > /sys/bus/pci/drivers_probe
     std::fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
@@ -891,3 +904,4 @@ pub fn get_vfio_device(device: String) -> Result<String> {
 
     Ok(vfio_device)
 }
+
