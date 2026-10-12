@@ -146,6 +146,7 @@ static WHITELISTED_MSR_RANGES: &[MsrRange] = &[
     SINGLE_MSR!(MSR_KVM_ASYNC_PF_EN),
     SINGLE_MSR!(MSR_KVM_STEAL_TIME),
     SINGLE_MSR!(MSR_KVM_PV_EOI_EN),
+    SINGLE_MSR!(MSR_KVM_ASYNC_PF_INT),
     SINGLE_MSR!(MSR_EFER),
     SINGLE_MSR!(MSR_STAR),
     SINGLE_MSR!(MSR_LSTAR),
@@ -199,6 +200,7 @@ pub const MSR_KVM_SYSTEM_TIME_NEW: u32 = 0x4b56_4d01;
 pub const MSR_KVM_ASYNC_PF_EN: u32 = 0x4b56_4d02;
 pub const MSR_KVM_STEAL_TIME: u32 = 0x4b56_4d03;
 pub const MSR_KVM_PV_EOI_EN: u32 = 0x4b56_4d04;
+pub const MSR_KVM_ASYNC_PF_INT: u32 = 0x4b56_4d06;
 
 pub const MSR_EFER: u32 = 3221225600;
 pub const MSR_STAR: u32 = 3221225601;
@@ -758,6 +760,11 @@ mod tests {
                 assert_eq!(msr_should_serialize(msr), should);
             }
         }
+    }
+
+    #[test]
+    fn test_apf_interrupt_msr_should_serialize() {
+        assert!(msr_should_serialize(0x4b56_4d06));
     }
 
     #[test]
