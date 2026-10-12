@@ -126,7 +126,8 @@
 (allow kernel_t tmpfs_t (dir (mounton)))
 (allow kernel_t lib_t (dir (mounton)))
 (allow kernel_t ld_so_cache_t (file (mounton)))
-(allow kernel_t default_t (file (execute_no_trans)))
+; NVRC runs /sbin/ldconfig in place while bringing up the base image.
+(allow kernel_t ldconfig_exec_t (file (execute_no_trans)))
 (allow kernel_t self (process (setrlimit)))
 (allow kernel_t kata_agent_t (process (share)))
 (allow kernel_t kata_nvidia_t (process2 (nosuid_transition)))
@@ -195,7 +196,8 @@
 
 ; Baseline harvested from NVIDIA GPU CI. Keep kata_nvidia_t permissive until
 ; the remaining NVIDIA workloads have exercised this domain.
-(allow kata_nvidia_t default_t (file (open read map execute execute_no_trans)))
+; dcgm-exporter runs the labeled /sbin/ldconfig in its own domain.
+(allow kata_nvidia_t ldconfig_exec_t (file (getattr open read map execute execute_no_trans)))
 (allow kata_nvidia_t device_t (dir (write add_name create setattr)))
 (allow kata_nvidia_t device_t (chr_file (create getattr open read write ioctl map setattr)))
 (allow kata_nvidia_t device_t (sock_file (write)))
