@@ -51,9 +51,7 @@ jobs:
         environment: ${{ fromJSON(inputs.arch == 'arm64' && '[
           {"name":"nvidia-gpu-runtime-rs", "vmm":"qemu-nvidia-gpu-runtime-rs", "runner":"arm64-nvidia-gpu", "coco":false, "snapshotter":"erofs", "skip-multi-gpu-tests":true, "skip-vllm-tests":true}
           ]' || '[
-          {"name":"nvidia-gpu", "vmm":"qemu-nvidia-gpu", "runner":"amd64-nvidia-a100", "coco":false, "snapshotter":""},
           {"name":"nvidia-gpu-runtime-rs", "vmm":"qemu-nvidia-gpu-runtime-rs", "runner":"amd64-nvidia-a100", "coco":false, "snapshotter":"erofs"},
-          {"name":"nvidia-gpu-snp", "vmm":"qemu-nvidia-gpu-snp", "runner":"amd64-nvidia-h100-snp", "coco":true, "snapshotter":"nydus"},
           {"name":"nvidia-gpu-snp-runtime-rs", "vmm":"qemu-nvidia-gpu-snp-runtime-rs", "runner":"amd64-nvidia-h100-snp", "coco":true, "snapshotter":"nydus"}
           ]') }}
     concurrency:

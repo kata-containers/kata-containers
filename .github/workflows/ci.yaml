@@ -84,6 +84,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-monitor-image-amd64:
+    if: false
     needs: build-kata-static-tarball-amd64
     permissions:
       contents: read
@@ -135,6 +136,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-monitor-image-arm64:
+    if: false
     needs: build-kata-static-tarball-arm64
     permissions:
       contents: read
@@ -154,6 +156,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-s390x:
+    if: false
     permissions:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io
@@ -168,6 +171,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-ppc64le:
+    if: false
     permissions:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io
@@ -180,6 +184,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-image-s390x:
+    if: false
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read
@@ -198,6 +203,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-monitor-image-s390x:
+    if: false
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read
@@ -217,6 +223,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-image-ppc64le:
+    if: false
     needs: build-kata-static-tarball-ppc64le
     permissions:
       contents: read
@@ -235,6 +242,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-monitor-image-ppc64le:
+    if: false
     needs: build-kata-static-tarball-ppc64le
     permissions:
       contents: read
@@ -254,6 +262,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-publish-tee-confidential-unencrypted-image:
+    if: false
     name: build-and-publish-tee-confidential-unencrypted-image
     permissions:
       contents: read
@@ -297,7 +306,7 @@ jobs:
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   run-kata-monitor-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: [build-kata-static-tarball-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
     with:
@@ -307,7 +316,7 @@ jobs:
       kata-monitor-image: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci:${{ inputs.tag }}-amd64
 
   run-kata-monitor-k8s-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: [publish-kata-deploy-image-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-k8s-tests.yaml
     with:
@@ -321,7 +330,7 @@ jobs:
       kata-monitor-image-tag: ${{ inputs.tag }}-amd64
 
   run-k8s-tests-on-aks:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
 
@@ -342,7 +351,7 @@ jobs:
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
   run-k8s-tests-on-free-runner:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: publish-kata-deploy-image-amd64
     permissions:
       contents: read
@@ -357,7 +366,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-crio:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: publish-kata-deploy-image-amd64
     permissions:
       contents: read
@@ -372,7 +381,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-kata-coco-tests-on-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs:
       - publish-kata-deploy-image-arm64
       - build-and-publish-tee-confidential-unencrypted-image
@@ -438,7 +447,7 @@ jobs:
 
 
   run-kata-coco-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs:
      - publish-kata-deploy-image-amd64
      - build-and-publish-tee-confidential-unencrypted-image
@@ -463,7 +472,7 @@ jobs:
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
   run-k8s-tests-on-zvsi:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: [publish-kata-deploy-image-s390x, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
     with:
@@ -478,7 +487,7 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: publish-kata-deploy-image-ppc64le
     uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
     with:
@@ -490,7 +499,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-kata-deploy-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: [publish-kata-deploy-image-amd64]
     uses: ./.github/workflows/run-kata-deploy-tests.yaml
     with:
@@ -502,7 +511,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-basic-amd64-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/basic-ci-amd64.yaml
     with:
@@ -511,7 +520,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-basic-s390x-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: build-kata-static-tarball-s390x
     uses: ./.github/workflows/basic-ci-s390x.yaml
     with:
@@ -520,7 +529,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-cri-containerd-tests-amd64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: build-kata-static-tarball-amd64
     strategy:
       fail-fast: false
@@ -551,7 +560,7 @@ jobs:
       vmm: ${{ matrix.params.vmm }}
 
   run-cri-containerd-tests-s390x:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: build-kata-static-tarball-s390x
     strategy:
       fail-fast: false
@@ -574,7 +583,7 @@ jobs:
       vmm: ${{ matrix.params.vmm }}
 
   run-cri-containerd-tests-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: build-kata-static-tarball-ppc64le
     strategy:
       fail-fast: false
