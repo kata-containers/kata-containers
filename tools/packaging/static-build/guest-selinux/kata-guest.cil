@@ -98,6 +98,10 @@
 (filecon "/usr/sbin/mke2fs" any (system_u object_r fsadm_exec_t ((s0) (s0))))
 (filecon "/sbin/mkfs.ext4" any (system_u object_r fsadm_exec_t ((s0) (s0))))
 (filecon "/usr/sbin/mkfs.ext4" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+; CDH also runs /bin/dd while preparing that volume. Fedora labels
+; /usr/bin/dd; the NVIDIA image has it under /bin.
+(filecon "/bin/dd" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/usr/bin/dd" any (system_u object_r fsadm_exec_t ((s0) (s0))))
 
 ; Entering the domains. NVRC runs as kernel_t: it execs the agent and spawns the
 ; NVIDIA daemons and tools from the gpu extension. The agent launches the guest
@@ -256,6 +260,7 @@
 (allow kata_coco_t fs_t (filesystem (getattr mount)))
 (allow kata_coco_t proc_t (filesystem (mount)))
 (allow kata_coco_t fsadm_exec_t (file (getattr open read map execute execute_no_trans)))
+(allow kata_coco_t fsadm_exec_t (lnk_file (read)))
 (allow kata_coco_t http_port_t (tcp_socket (name_connect)))
 (allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))
 (allow kata_coco_t sysctl_vm_t (file (getattr open read)))
