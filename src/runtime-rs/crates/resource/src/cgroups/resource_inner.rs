@@ -5,7 +5,6 @@
 //
 
 use std::collections::{HashMap, HashSet};
-use std::error::Error as _;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -32,6 +31,8 @@ use crate::ResourceUpdateOp;
 pub type CgroupManager = Box<dyn Manager>;
 
 const KILL_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const DESTROY_RETRY_INTERVAL: Duration = Duration::from_millis(50);
+const DESTROY_RETRY_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn procs_dir(cgroup: &dyn Manager) -> Option<PathBuf> {
     // The unified hierarchy ignores the subsystem, while every v1 hierarchy
@@ -120,6 +121,33 @@ fn kill_procs(cgroup: &dyn Manager, dir: &Path) -> Result<()> {
     result
 }
 
+/// Retry destroy() briefly while `is_retryable` says the failure is
+/// transient (e.g. EBUSY, see `CgroupsResourceInner::is_busy_error`), instead
+/// of giving up on the first transient race over the cgroup directory.
+///
+/// The classifier is a parameter, rather than calling
+/// `CgroupsResourceInner::is_busy_error` directly, so the retry loop can be
+/// driven deterministically by a test double: `cgroups::manager::Error`'s
+/// EBUSY-carrying variant can only be constructed from inside the
+/// `cgroups-rs` crate, so tests supply their own predicate instead.
+async fn destroy_with_retry(
+    cgroup: &mut CgroupManager,
+    what: &str,
+    is_retryable: impl Fn(&cgroups::manager::Error) -> bool,
+) -> Result<()> {
+    let deadline = tokio::time::Instant::now() + DESTROY_RETRY_TIMEOUT;
+    loop {
+        match cgroup.destroy() {
+            Ok(()) => return Ok(()),
+            Err(err) if is_retryable(&err) && tokio::time::Instant::now() < deadline => {
+                warn!(sl!(), "destroy {what} busy, retrying: {err}");
+                sleep(DESTROY_RETRY_INTERVAL).await;
+            }
+            Err(err) => return Err(err).with_context(|| format!("destroy {what}")),
+        }
+    }
+}
+
 pub(crate) struct CgroupsResourceInner {
     /// Container resources, key is container id, and value is resources.
     resources: HashMap<String, LinuxResources>,
@@ -138,12 +166,22 @@ pub(crate) struct CgroupsResourceInner {
 }
 
 impl CgroupsResourceInner {
-    fn is_already_exists_error(err: &cgroups::manager::Error) -> bool {
+    /// Walk `err`'s source chain for an `io::Error` satisfying `matches`.
+    ///
+    /// Factored out of `is_busy_error`/`is_already_exists_error` so the
+    /// chain-walk itself can be unit tested directly: `cgroups::manager::Error`
+    /// values that actually carry an `io::Error` cause can only be built from
+    /// inside the `cgroups-rs` crate, so tests exercise this with a synthetic
+    /// error chain instead of going through `cgroups::manager::Error`.
+    fn io_error_in_chain_matches(
+        err: &(dyn std::error::Error + 'static),
+        matches: impl Fn(&std::io::Error) -> bool,
+    ) -> bool {
         let mut source = err.source();
 
         while let Some(inner_err) = source {
             if let Some(io_err) = inner_err.downcast_ref::<std::io::Error>() {
-                if io_err.kind() == std::io::ErrorKind::AlreadyExists {
+                if matches(io_err) {
                     return true;
                 }
             }
@@ -152,6 +190,20 @@ impl CgroupsResourceInner {
         }
 
         false
+    }
+
+    fn is_already_exists_error(err: &cgroups::manager::Error) -> bool {
+        Self::io_error_in_chain_matches(err, |io_err| {
+            io_err.kind() == std::io::ErrorKind::AlreadyExists
+        })
+    }
+
+    /// destroy() moves stragglers out of the cgroup and then rmdir(2)s it. A
+    /// process that briefly has the directory open right as the sandbox
+    /// exits (e.g. containerd inspecting it on the TaskExit path) can make
+    /// that rmdir fail with EBUSY even though the cgroup is otherwise empty.
+    fn is_busy_error(err: &cgroups::manager::Error) -> bool {
+        Self::io_error_in_chain_matches(err, |io_err| io_err.raw_os_error() == Some(libc::EBUSY))
     }
 
     fn add_proc_with_existing_retry(
@@ -555,10 +607,12 @@ impl CgroupsResourceInner {
     pub(crate) async fn delete(&mut self) -> Result<()> {
         let mut errors = Vec::new();
         if !self.sandbox_cgroup_deleted {
-            match self
-                .sandbox_cgroup
-                .destroy()
-                .context("destroy sandbox cgroup")
+            match destroy_with_retry(
+                &mut self.sandbox_cgroup,
+                "sandbox cgroup",
+                Self::is_busy_error,
+            )
+            .await
             {
                 Ok(()) => self.sandbox_cgroup_deleted = true,
                 Err(e) => errors.push(e),
@@ -567,7 +621,9 @@ impl CgroupsResourceInner {
 
         if !self.overhead_cgroup_deleted {
             if let Some(overhead_cgroup) = self.overhead_cgroup.as_mut() {
-                match overhead_cgroup.destroy().context("destroy overhead cgroup") {
+                match destroy_with_retry(overhead_cgroup, "overhead cgroup", Self::is_busy_error)
+                    .await
+                {
                     Ok(()) => self.overhead_cgroup_deleted = true,
                     Err(e) => errors.push(e),
                 }
@@ -850,5 +906,149 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("the runtime runs in it"));
+    }
+
+    /// A minimal error whose source chain carries a raw `io::Error`, standing
+    /// in for the real `cgroups::manager::Error::Cgroupfs(...)` chain that
+    /// `is_busy_error` walks in production (that variant's constructors are
+    /// `pub(crate)` in `cgroups-rs`, so it cannot be built here).
+    #[derive(Debug)]
+    struct WrappedIoError(std::io::Error);
+
+    impl std::fmt::Display for WrappedIoError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "wrapped: {}", self.0)
+        }
+    }
+
+    impl std::error::Error for WrappedIoError {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&self.0)
+        }
+    }
+
+    #[test]
+    fn test_io_error_in_chain_matches_finds_ebusy() {
+        let err = WrappedIoError(std::io::Error::from_raw_os_error(libc::EBUSY));
+        assert!(CgroupsResourceInner::io_error_in_chain_matches(&err, |e| {
+            e.raw_os_error() == Some(libc::EBUSY)
+        }));
+    }
+
+    #[test]
+    fn test_io_error_in_chain_matches_rejects_other_errno() {
+        let err = WrappedIoError(std::io::Error::from_raw_os_error(libc::EPERM));
+        assert!(!CgroupsResourceInner::io_error_in_chain_matches(
+            &err,
+            |e| e.raw_os_error() == Some(libc::EBUSY)
+        ));
+    }
+
+    #[test]
+    fn test_io_error_in_chain_matches_no_source_chain() {
+        // A bare cgroups::manager::Error variant has no io::Error in its
+        // source chain at all; is_busy_error must not treat that as busy.
+        assert!(!CgroupsResourceInner::is_busy_error(
+            &cgroups::manager::Error::InvalidArgument
+        ));
+    }
+
+    /// A `Manager` test double whose `destroy()` fails a fixed number of
+    /// times before succeeding, so `destroy_with_retry`'s retry loop can be
+    /// driven deterministically. `calls` is shared via `Arc` so the test can
+    /// observe the attempt count after `destroy_with_retry` returns, even
+    /// though it only ever sees the manager through `&mut CgroupManager`.
+    struct FlakyManager {
+        failures_left: u32,
+        calls: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    }
+
+    impl Manager for FlakyManager {
+        fn add_proc(&mut self, _tgid: CgroupPid) -> cgroups::manager::Result<()> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn add_thread(&mut self, _pid: CgroupPid) -> cgroups::manager::Result<()> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn pids(&self) -> cgroups::manager::Result<Vec<CgroupPid>> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn freeze(&self, _state: FreezerState) -> cgroups::manager::Result<()> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn destroy(&mut self) -> cgroups::manager::Result<()> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.failures_left > 0 {
+                self.failures_left -= 1;
+                Err(cgroups::manager::Error::InvalidLinuxResource)
+            } else {
+                Ok(())
+            }
+        }
+        fn set(&mut self, _resources: &LinuxResources) -> cgroups::manager::Result<()> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn cgroup_path(&self, _subsystem: Option<&str>) -> cgroups::manager::Result<String> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn enable_cpus_topdown(&self, _cpus: &str) -> cgroups::manager::Result<()> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn stats(&self) -> cgroups::CgroupStats {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn paths(&self) -> &HashMap<String, String> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn mounts(&self) -> &HashMap<String, String> {
+            unimplemented!("not exercised by destroy_with_retry")
+        }
+        fn systemd(&self) -> bool {
+            false
+        }
+        fn v2(&self) -> bool {
+            false
+        }
+    }
+
+    #[tokio::test]
+    async fn destroy_with_retry_retries_busy_errors_then_succeeds() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let mut manager: CgroupManager = Box::new(FlakyManager {
+            failures_left: 2,
+            calls: calls.clone(),
+        });
+
+        // `InvalidLinuxResource` stands in for a real EBUSY error (see
+        // `WrappedIoError` above for why); this test injects its own "is
+        // busy" predicate instead of `CgroupsResourceInner::is_busy_error`.
+        let result = destroy_with_retry(&mut manager, "test cgroup", |err| {
+            matches!(err, cgroups::manager::Error::InvalidLinuxResource)
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn destroy_with_retry_gives_up_immediately_on_non_retryable_error() {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let mut manager: CgroupManager = Box::new(FlakyManager {
+            failures_left: 1,
+            calls: calls.clone(),
+        });
+
+        // InvalidLinuxResource carries no io::Error source, so the real
+        // is_busy_error correctly refuses to retry it.
+        let result = destroy_with_retry(
+            &mut manager,
+            "test cgroup",
+            CgroupsResourceInner::is_busy_error,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 }
