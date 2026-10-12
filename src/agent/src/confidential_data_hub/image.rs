@@ -133,7 +133,11 @@ pub fn get_process(
         .any(|storage| storage.driver == KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL);
 
     if guest_pull && is_pod_sandbox {
-        return get_pause_image_process();
+        let mut process = get_pause_image_process()?;
+        // The pause image spec has no label. Keep the one the runtime set so
+        // the sandbox runs as container_t, same as the workload.
+        process.set_selinux_label(ocip.selinux_label().clone());
+        return Ok(process);
     }
 
     Ok(ocip.clone())
