@@ -373,6 +373,50 @@ function report_tests() {
 	report_bats_tests "${kubernetes_dir}"
 }
 
+# Guest AVC messages only reach the host journal through the VM console, which
+# the runtime logs when the hypervisor's enable_debug is set.  It logs each
+# console line quoted, hence the backslashes stripped below.
+function collect_guest_selinux_denials() {
+	local journal="$1"
+	local artifacts_dir="$2"
+	local denials="${artifacts_dir}/guest-selinux-denials.log"
+	local summary="${artifacts_dir}/guest-selinux-denials-summary.txt"
+
+	grep -F 'avc:' "${journal}" | grep -F 'denied' | sed 's/\\//g' > "${denials}" || true
+	if [[ ! -s "${denials}" ]]; then
+		rm -f "${denials}"
+		return
+	fi
+
+	awk '
+		function field(name) {
+			if (match($0, " " name "=[^ ]+"))
+				return substr($0, RSTART + length(name) + 2, RLENGTH - length(name) - 2)
+			return "-"
+		}
+		{
+			perms = $0
+			sub(/.*denied +\{ */, "", perms)
+			sub(/ *\}.*/, "", perms)
+			print field("scontext"), field("tcontext"), field("tclass"), "{ " perms " }", field("comm")
+		}' "${denials}" | sort | uniq -c | sort -rn > "${summary}"
+
+	local count
+	count=$(wc -l < "${denials}")
+	warn "${count} guest SELinux denials, see ${denials##*/} in the job artifacts"
+	echo "::warning::${count} guest SELinux denials ($(wc -l < "${summary}") unique)"
+	if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+		{
+			echo "### Guest SELinux denials (${KATA_HYPERVISOR:-})"
+			echo
+			echo '```'
+			echo "count scontext tcontext tclass perms comm"
+			cat "${summary}"
+			echo '```'
+		} >> "${GITHUB_STEP_SUMMARY}"
+	fi
+}
+
 function collect_artifacts() {
 	if [[ -z "${start_time:-}" ]]; then
 		warn "tests start time is not defined. Cannot gather journal information"
@@ -395,6 +439,8 @@ function collect_artifacts() {
 	# As we want to call journalctl with sudo, we're safe to ignore SC2024 here
 	# shellcheck disable=SC2024
 	sudo journalctl --since="${start_time}" > "${journalctl_log_path}"
+
+	collect_guest_selinux_denials "${journalctl_log_path}" "${artifacts_dir}"
 
 	local k3s_dir
 	k3s_dir='/var/lib/rancher/k3s/agent'
