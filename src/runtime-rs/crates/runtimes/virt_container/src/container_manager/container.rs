@@ -532,11 +532,13 @@ impl Container {
         let selinux_label = if get_disable_guest_selinux(&toml_config) {
             None
         } else {
-            guest_process_label(
-                oci_process.selinux_label().as_deref(),
-                &toml_config.runtime.guest_selinux_label,
+            Some(
+                guest_process_label(
+                    oci_process.selinux_label().as_deref(),
+                    &toml_config.runtime.guest_selinux_label,
+                )
+                .context("guest SELinux label")?,
             )
-            .context("guest SELinux label")?
         };
         oci_process.set_selinux_label(selinux_label);
 
@@ -858,7 +860,7 @@ fn amend_spec(
     } else if let Some(ref mut process) = spec.process_mut() {
         let label = guest_process_label(process.selinux_label().as_deref(), guest_selinux_label)
             .context("guest SELinux label")?;
-        process.set_selinux_label(label);
+        process.set_selinux_label(Some(label));
     }
 
     Ok(())
@@ -869,6 +871,9 @@ fn amend_spec(
 /// apply in the guest.
 const GUEST_CONTAINER_SELINUX_TYPE: &str = "container_t";
 const DEFAULT_SELINUX_LEVEL: &str = "s0";
+/// Hosts without SELinux pass no label; left unlabeled, the container would
+/// keep the agent's domain instead of being confined.
+const DEFAULT_GUEST_CONTAINER_LABEL: &str = "system_u:system_r:container_t:s0";
 
 /// Split `user:role:type[:level]`. The level itself may contain `:`
 /// (`s0:c1,c2`, `s0-s0:c0.c1023`).
@@ -896,16 +901,19 @@ fn join_selinux_label(user: &str, role: &str, typ: &str, level: Option<&str>) ->
 /// Label for a container process inside the guest, from the label the host
 /// passed (if any) and the configured `guest_selinux_label` (may be empty).
 /// The host's level wins so that per-pod MCS categories are preserved.
-fn guest_process_label(host_label: Option<&str>, guest_label: &str) -> Result<Option<String>> {
+fn guest_process_label(host_label: Option<&str>, guest_label: &str) -> Result<String> {
     let host = host_label
         .filter(|label| !label.is_empty())
         .map(split_selinux_label)
         .transpose()?;
 
     if guest_label.is_empty() {
-        return Ok(host.map(|(user, role, _, level)| {
-            join_selinux_label(user, role, GUEST_CONTAINER_SELINUX_TYPE, level)
-        }));
+        return Ok(host.map_or_else(
+            || DEFAULT_GUEST_CONTAINER_LABEL.to_owned(),
+            |(user, role, _, level)| {
+                join_selinux_label(user, role, GUEST_CONTAINER_SELINUX_TYPE, level)
+            },
+        ));
     }
 
     let (user, role, typ, guest_level) = split_selinux_label(guest_label)?;
@@ -913,7 +921,7 @@ fn guest_process_label(host_label: Option<&str>, guest_label: &str) -> Result<Op
         .and_then(|(_, _, _, level)| level)
         .or(guest_level)
         .unwrap_or(DEFAULT_SELINUX_LEVEL);
-    Ok(Some(join_selinux_label(user, role, typ, Some(level))))
+    Ok(join_selinux_label(user, role, typ, Some(level)))
 }
 
 fn get_disable_guest_selinux(toml_config: &TomlConfig) -> bool {
@@ -1066,41 +1074,37 @@ mod tests {
     fn test_guest_process_label() {
         let host = Some("system_u:system_r:container_kvm_t:s0:c1,c2");
 
-        assert_eq!(guest_process_label(None, "").unwrap(), None);
-        assert_eq!(guest_process_label(Some(""), "").unwrap(), None);
         assert_eq!(
-            guest_process_label(host, "").unwrap().as_deref(),
-            Some("system_u:system_r:container_t:s0:c1,c2")
+            guest_process_label(None, "").unwrap(),
+            DEFAULT_GUEST_CONTAINER_LABEL
         );
         assert_eq!(
-            guest_process_label(Some("system_u:system_r:container_kvm_t"), "")
-                .unwrap()
-                .as_deref(),
-            Some("system_u:system_r:container_t")
+            guest_process_label(Some(""), "").unwrap(),
+            DEFAULT_GUEST_CONTAINER_LABEL
         );
         assert_eq!(
-            guest_process_label(host, "system_u:system_r:spc_t")
-                .unwrap()
-                .as_deref(),
-            Some("system_u:system_r:spc_t:s0:c1,c2")
+            guest_process_label(host, "").unwrap(),
+            "system_u:system_r:container_t:s0:c1,c2"
         );
         assert_eq!(
-            guest_process_label(host, "system_u:system_r:spc_t:s0:c5,c6")
-                .unwrap()
-                .as_deref(),
-            Some("system_u:system_r:spc_t:s0:c1,c2")
+            guest_process_label(Some("system_u:system_r:container_kvm_t"), "").unwrap(),
+            "system_u:system_r:container_t"
         );
         assert_eq!(
-            guest_process_label(None, "system_u:system_r:container_t")
-                .unwrap()
-                .as_deref(),
-            Some("system_u:system_r:container_t:s0")
+            guest_process_label(host, "system_u:system_r:spc_t").unwrap(),
+            "system_u:system_r:spc_t:s0:c1,c2"
         );
         assert_eq!(
-            guest_process_label(None, "system_u:system_r:container_t:s0:c7,c8")
-                .unwrap()
-                .as_deref(),
-            Some("system_u:system_r:container_t:s0:c7,c8")
+            guest_process_label(host, "system_u:system_r:spc_t:s0:c5,c6").unwrap(),
+            "system_u:system_r:spc_t:s0:c1,c2"
+        );
+        assert_eq!(
+            guest_process_label(None, "system_u:system_r:container_t").unwrap(),
+            "system_u:system_r:container_t:s0"
+        );
+        assert_eq!(
+            guest_process_label(None, "system_u:system_r:container_t:s0:c7,c8").unwrap(),
+            "system_u:system_r:container_t:s0:c7,c8"
         );
         guest_process_label(Some("xxx"), "").unwrap_err();
         guest_process_label(None, "container_t").unwrap_err();

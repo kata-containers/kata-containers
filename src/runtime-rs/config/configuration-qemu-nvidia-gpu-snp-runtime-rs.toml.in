@@ -668,7 +668,8 @@ disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 # When the host passes a label, its level (MCS categories) is kept and only
 # user, role and type are taken from here; hosts without SELinux pass none, and
 # this label is then used as is (at s0 if it has no level).
-# When empty, the host label's type is replaced by container_t.
+# When empty, the host label's type is replaced by container_t, and
+# system_u:system_r:container_t:s0 is used without a host label.
 # Example: "system_u:system_r:container_t"
 guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
 

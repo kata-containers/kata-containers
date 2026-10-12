@@ -154,7 +154,8 @@ pub struct Runtime {
     /// role and type are replaced by this label's and its level (MCS categories)
     /// is kept. Without a host label this label is used as is, at `s0` if it
     /// carries no level. When empty, the host label's type is replaced by
-    /// `container_t`, since the host labels the VM rather than the workload.
+    /// `container_t`, since the host labels the VM rather than the workload,
+    /// and `system_u:system_r:container_t:s0` is used without a host label.
     #[serde(default)]
     pub guest_selinux_label: String,
 

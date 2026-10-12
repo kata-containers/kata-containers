@@ -86,7 +86,9 @@ verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=4096,has
    carry `enforcing=1`, as the guest kernel otherwise boots permissive;
    appending `enforcing=0` to them boots permissive for bring-up.
 2. The label given to container processes in the guest. When empty, the host
-   label's type is replaced with `container_t` and its MCS level is kept.
+   label's type is replaced with `container_t` and its MCS level is kept. Hosts
+   without SELinux pass no label, and `system_u:system_r:container_t:s0` is
+   used instead, so the workload never keeps the agent's domain.
 
 !!! note
     The extension is attached even when guest SELinux is disabled. With
