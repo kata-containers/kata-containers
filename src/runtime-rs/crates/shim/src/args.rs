@@ -62,7 +62,7 @@ impl Args {
                 .map_err(|_| Error::InvalidArgument)
                 .context("get address metadata")?;
             if !md.is_dir() {
-                return Err(Error::InvalidArgument).context("medata is dir");
+                return Err(Error::InvalidArgument).context("metadata is not a directory");
             }
             self.bundle = path
                 .to_str()
