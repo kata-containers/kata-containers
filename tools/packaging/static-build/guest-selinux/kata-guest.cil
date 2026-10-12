@@ -105,6 +105,8 @@
 (allow kernel_t kata_agent_t (process (transition siginh rlimitinh noatsecure)))
 (allow kernel_t kata_nvidia_t (process (transition siginh rlimitinh noatsecure)))
 (allow kata_agent_t kata_coco_t (process (transition siginh rlimitinh noatsecure)))
+; The coco extension is mounted nosuid, same as the gpu extension.
+(allow kata_agent_t kata_coco_t (process2 (nosuid_transition)))
 
 (allow kata_agent_t kata_agent_exec_t (file (entrypoint getattr open read map execute)))
 (allow kata_nvidia_t kata_gpu_extension_t (file (entrypoint getattr open read map execute)))
@@ -219,6 +221,26 @@
 (allow kata_nvidia_t tmpfs_t (file (create getattr open read write append map execute lock setattr rename)))
 (allow kata_nvidia_t tmpfs_t (sock_file (create getattr write)))
 (allow kata_nvidia_t unreserved_port_t (tcp_socket (name_bind)))
+
+; Confidential guests run attestation-agent and the confidential-data-hub as
+; kata_coco_t. They read an SNP report from configfs, talk to each other on
+; /run/confidential-containers, and open the passed-through GPU nodes.
+(allow kata_coco_t configfs_t (dir (getattr search write add_name remove_name create rmdir)))
+(allow kata_coco_t configfs_t (file (getattr open read create write)))
+(allow kata_coco_t container_runtime_tmpfs_t (dir (getattr search write add_name create)))
+(allow kata_coco_t container_runtime_tmpfs_t (file (getattr open read)))
+(allow kata_coco_t container_runtime_tmpfs_t (sock_file (create write)))
+(allow kata_coco_t device_t (dir (write add_name)))
+(allow kata_coco_t device_t (chr_file (getattr open read write ioctl create setattr)))
+(allow kata_coco_t root_t (chr_file (read write ioctl)))
+(allow kata_coco_t tmpfs_t (file (getattr open read map)))
+(allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))
+(allow kata_coco_t sysctl_vm_t (file (getattr open read)))
+(allow kata_coco_t self (capability (mknod)))
+(allow kata_coco_t self (capability2 (perfmon)))
+(allow kata_coco_t self (tcp_socket (listen accept)))
+(allow kata_coco_t self (unix_stream_socket (connectto)))
+(allow kata_coco_t unreserved_port_t (tcp_socket (name_bind)))
 
 ; Container rootfs content. Neither snapshotter delivers security.selinux
 ; xattrs:
