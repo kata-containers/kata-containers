@@ -35,9 +35,9 @@ etc/selinux/kata/build-info           policy format and package versions
 | `kata_coco_t` | the agent exec'ing anything from the coco extension | permissive |
 | `container_t` | the agent, from the OCI process label | enforced, as on an SELinux host |
 
-`kata_nvidia_t` and `kata_coco_t` are permissive until their rule set has been
+`kata_nvidia_t` and `kata_coco_t` are permissive while their rule sets are
 harvested from AVC denials on real workloads; switch them to enforcing by
-removing the `typepermissive` lines once it has.
+removing the `typepermissive` lines once that coverage is complete.
 
 ## Labels for content without xattrs
 

@@ -79,8 +79,8 @@
 (typeattributeset process_uncond_exempt (kata_agent_t))
 (typeattributeset storage_unconfined_type (kata_agent_t))
 
-; The guest components and the NVIDIA userspace have no harvested rule set yet,
-; so they log instead of being denied. container_t is enforced regardless.
+; The guest components and the NVIDIA userspace remain permissive while their
+; harvested rule sets are completed. container_t is enforced regardless.
 (typepermissive kata_coco_t)
 (typepermissive kata_nvidia_t)
 
@@ -108,8 +108,38 @@
 ; needs the type to be associable with its own superblock.
 (allow kata_extension_file_type self (filesystem (associate)))
 (allow kernel_t kata_extension_file_type (filesystem (mount unmount getattr relabelfrom relabelto)))
-; context= is checked as relabelfrom the superblock's initial SID, unlabeled.
+; context= is checked as relabelfrom the superblock's initial SID. EROFS has
+; used both unlabeled_t and fs_t here across the guest mount paths.
 (allow kernel_t unlabeled_t (filesystem (relabelfrom)))
+(allow kernel_t fs_t (filesystem (relabelfrom)))
+
+; NVRC loads and locks the policy, mounts extension content over the base
+; rootfs, disables module loading, and then starts the agent and NVIDIA stack.
+(allow kernel_t security_t (security (setbool)))
+(allow kernel_t proc_security_t (file (open write)))
+(allow kernel_t tmpfs_t (dir (mounton)))
+(allow kernel_t lib_t (dir (mounton)))
+(allow kernel_t ld_so_cache_t (file (mounton)))
+(allow kernel_t default_t (file (execute_no_trans)))
+(allow kernel_t self (process (setrlimit)))
+(allow kernel_t kata_agent_t (process (share)))
+(allow kernel_t kata_nvidia_t (process2 (nosuid_transition)))
+
+; NVRC invokes veritysetup before mounting each dm-verity extension. Fedora
+; transitions that helper into kernel_generic_helper_t.
+(allow kernel_generic_helper_t device_t (filesystem (getattr)))
+(allow kernel_generic_helper_t device_t (dir (write add_name)))
+(allow kernel_generic_helper_t device_t (blk_file (create getattr open read write ioctl setattr)))
+(allow kernel_generic_helper_t device_t (chr_file (getattr open read write ioctl)))
+(allow kernel_generic_helper_t proc_t (file (getattr open read)))
+(allow kernel_generic_helper_t root_t (chr_file (read write)))
+(allow kernel_generic_helper_t tmpfs_t (file (read write map execute)))
+(allow kernel_generic_helper_t kernel_t (system (ipc_info)))
+(allow kernel_generic_helper_t self (capability (chown mknod)))
+
+; modprobe reads modules directly from the GPU extension before NVRC locks
+; module loading.
+(allow kmod_t kata_gpu_extension_t (system (module_load)))
 
 ; Guest services read extension content (libraries, configs, the pause bundle,
 ; which the agent copies into the container's own rootfs).
@@ -125,6 +155,35 @@
 (allow container_domain kata_gpu_extension_t (dir (getattr search open read)))
 (allow container_domain kata_gpu_extension_t (file (getattr open read map execute execute_no_trans)))
 (allow container_domain kata_gpu_extension_t (lnk_file (getattr read)))
+
+; The agent creates passed-through GPU character devices on the container's
+; private /dev tmpfs. The mount label makes them container_runtime_tmpfs_t.
+(allow container_t container_runtime_tmpfs_t (chr_file (getattr open read write ioctl map)))
+
+; Baseline harvested from NVIDIA GPU CI. Keep kata_nvidia_t permissive until
+; the remaining NVIDIA workloads have exercised this domain.
+(allow kata_nvidia_t default_t (file (open read map execute execute_no_trans)))
+(allow kata_nvidia_t device_t (dir (write add_name create setattr)))
+(allow kata_nvidia_t device_t (chr_file (create getattr open read write ioctl map setattr)))
+(allow kata_nvidia_t device_t (sock_file (write)))
+(allow kata_nvidia_t kata_gpu_extension_t (dir (watch)))
+(allow kata_nvidia_t kernel_t (system (syslog_read)))
+(allow kata_nvidia_t kmod_exec_t (file (getattr open read map execute execute_no_trans)))
+(allow kata_nvidia_t modules_conf_t (dir (getattr search open read)))
+(allow kata_nvidia_t modules_conf_t (file (getattr open read)))
+(allow kata_nvidia_t modules_object_t (dir (search)))
+(allow kata_nvidia_t root_t (chr_file (read write)))
+(allow kata_nvidia_t self (capability (mknod)))
+(allow kata_nvidia_t self (capability2 (perfmon)))
+(allow kata_nvidia_t self (tcp_socket (listen accept)))
+(allow kata_nvidia_t self (unix_stream_socket (connectto)))
+(allow kata_nvidia_t sysctl_net_t (dir (search)))
+(allow kata_nvidia_t sysctl_net_t (file (open read)))
+(allow kata_nvidia_t sysctl_vm_t (file (getattr open read)))
+(allow kata_nvidia_t tmpfs_t (dir (create)))
+(allow kata_nvidia_t tmpfs_t (file (create getattr open read write append map execute lock setattr rename)))
+(allow kata_nvidia_t tmpfs_t (sock_file (create getattr write)))
+(allow kata_nvidia_t unreserved_port_t (tcp_socket (name_bind)))
 
 ; Container rootfs content. Neither snapshotter delivers security.selinux
 ; xattrs:
