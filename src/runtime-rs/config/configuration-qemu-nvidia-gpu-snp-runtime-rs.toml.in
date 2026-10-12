@@ -383,7 +383,7 @@ pflashes = []
 # to enable debug output where available.
 #
 # Default false
-enable_debug = false
+enable_debug = true
 
 # This option allows to add an extra HMP or QMP socket when `enable_debug = true`
 #
@@ -525,7 +525,7 @@ disable_selinux = @DEFDISABLESELINUX@
 # guest_extension_images below). kernel_params carries `enforcing=1`; append
 # `enforcing=0` to boot permissive while debugging.
 # (default: true)
-disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
+disable_guest_selinux = false
 
 
 [agent.@PROJECT_TYPE@]
