@@ -361,6 +361,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
 
+    log_child!(
+        cfd_log,
+        "DEBUG selinux: init domain={} exe={}",
+        selinux::current_context(),
+        selinux::self_exe()
+    );
+
     if std::env::var(PIDNS_ENABLED)?.eq(format!("{}", true).as_str()) {
         // get the pidns fd from parent, if parent had passed the pidns fd,
         // then get it and join in this pidns; otherwise, create a new pidns
@@ -400,6 +407,11 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
     log_child!(cfd_log, "child process start run");
+    log_child!(
+        cfd_log,
+        "DEBUG selinux: child domain={}",
+        selinux::current_context()
+    );
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
     let spec: oci::Spec = serde_json::from_str(spec_str)?;
@@ -708,7 +720,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             ));
         }
 
-        log_child!(cfd_log, "Set SELinux label to the container process");
+        log_child!(
+            cfd_log,
+            "DEBUG selinux: set exec label {:?} domain={}",
+            oci_process.selinux_label(),
+            selinux::current_context()
+        );
         let default_label = String::new();
         selinux::set_exec_label(
             oci_process
@@ -716,6 +733,17 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                 .as_ref()
                 .unwrap_or(&default_label),
         )?;
+        log_child!(
+            cfd_log,
+            "DEBUG selinux: exec attr after set={}",
+            selinux::exec_context()
+        );
+    } else {
+        log_child!(
+            cfd_log,
+            "DEBUG selinux: no process label, domain={}",
+            selinux::current_context()
+        );
     }
 
     // Log unknown seccomp system calls in advance before the log file descriptor closes.
@@ -788,6 +816,21 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if !exec_file.exists() {
         find_file(exec_file).ok_or_else(|| anyhow!("the file {} was not found", args[0]))?;
     }
+    let resolved = if exec_file.is_file() {
+        exec_file.to_path_buf()
+    } else {
+        find_file(exec_file).unwrap_or_else(|| exec_file.to_path_buf())
+    };
+    log_child!(
+        cfd_log,
+        "DEBUG selinux: before exec domain={} exec_attr={} cmd={} file={} file_context={} mount={}",
+        selinux::current_context(),
+        selinux::exec_context(),
+        args.first().map(String::as_str).unwrap_or(""),
+        resolved.display(),
+        selinux::file_context(&resolved),
+        selinux::mount_flags(&resolved)
+    );
 
     // notify parent that the child's ready to start
     write_sync(cwfd, SYNC_SUCCESS, "")?;
@@ -840,6 +883,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             seccomp::init_seccomp(scmp)?;
         }
     }
+
+    selinux::debug_kmsg(&format!(
+        "before do_exec domain={} exec_attr={} cmd={}",
+        selinux::current_context(),
+        selinux::exec_context(),
+        args.first().map(String::as_str).unwrap_or("")
+    ));
 
     do_exec(&args);
 }

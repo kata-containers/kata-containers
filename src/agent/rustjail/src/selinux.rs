@@ -50,6 +50,84 @@ pub fn add_mount_label(data: &mut String, label: &str) {
     }
 }
 
+fn read_proc_attr(name: &str) -> String {
+    let tid = gettid().to_string();
+    let paths = [
+        format!("/proc/thread-self/attr/{name}"),
+        format!("/proc/self/attr/selinux/{name}"),
+        format!("/proc/self/task/{tid}/attr/{name}"),
+        format!("/proc/self/attr/{name}"),
+    ];
+    for path in paths {
+        if let Ok(buf) = fs::read_to_string(&path) {
+            let context = buf.trim_end_matches(['\0', '\n']).to_string();
+            if !context.is_empty() {
+                return context;
+            }
+        }
+    }
+    "<unread>".to_string()
+}
+
+pub fn current_context() -> String {
+    read_proc_attr("current")
+}
+
+pub fn exec_context() -> String {
+    read_proc_attr("exec")
+}
+
+pub fn self_exe() -> String {
+    fs::read_link("/proc/self/exe")
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|err| format!("<error {err}>"))
+}
+
+pub fn file_context(path: &Path) -> String {
+    match xattr::get(path, "security.selinux") {
+        Ok(Some(bytes)) => String::from_utf8_lossy(&bytes)
+            .trim_end_matches(['\0', '\n'])
+            .to_string(),
+        Ok(None) => "<no xattr>".to_string(),
+        Err(err) => format!("<error {err}>"),
+    }
+}
+
+/// Mount point and flags for `path`, from this process's mount namespace.
+pub fn mount_flags(path: &Path) -> String {
+    let Ok(info) = fs::read_to_string("/proc/self/mountinfo") else {
+        return "<unread>".to_string();
+    };
+    let target = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let target = target.to_string_lossy();
+    let mut best = String::new();
+    let mut best_len = 0usize;
+    for line in info.lines() {
+        let mut fields = line.split_whitespace();
+        let Some(mount_point) = fields.nth(4) else {
+            continue;
+        };
+        let Some(options) = fields.next() else {
+            continue;
+        };
+        if target.starts_with(mount_point) && mount_point.len() >= best_len {
+            best_len = mount_point.len();
+            best = format!("{mount_point} {options}");
+        }
+    }
+    if best.is_empty() {
+        "<none>".to_string()
+    } else {
+        best
+    }
+}
+
+pub fn debug_kmsg(message: &str) {
+    if let Ok(mut file) = OpenOptions::new().write(true).open("/dev/kmsg") {
+        let _ = writeln!(file, "kata-agent: DEBUG selinux: {message}");
+    }
+}
+
 pub fn set_exec_label(label: &str) -> Result<()> {
     let mut attr_path = Path::new("/proc/thread-self/attr/exec").to_path_buf();
     if !attr_path.exists() {
