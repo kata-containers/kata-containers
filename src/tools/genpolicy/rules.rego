@@ -133,6 +133,18 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     print("CreateContainerRequest: true, ops =", ops)
 }
 
+# Guest SELinux runs the container as container_t. The runtime sends
+# system_u:system_r:container_t:s0 when the host has no label, and keeps
+# the host's user, role, and MCS level otherwise. An empty label means
+# guest SELinux is disabled. Any other type is rejected.
+allow_guest_selinux_label(label) if {
+    count(label) == 0
+}
+
+allow_guest_selinux_label(label) if {
+    regex.match("^[A-Za-z0-9_]+:[A-Za-z0-9_]+:container_t(:[A-Za-z0-9_,.-]+)*$", label)
+}
+
 allow_create_container_input if {
     print("allow_create_container_input: input =", input)
 
@@ -157,7 +169,7 @@ allow_create_container_input if {
     is_null(i_linux.Seccomp)
 
     i_process := i_oci.Process
-    count(i_process.SelinuxLabel) == 0
+    allow_guest_selinux_label(i_process.SelinuxLabel)
     count(i_process.User.Username) == 0
 
     print("allow_create_container_input: true")
@@ -1783,7 +1795,7 @@ allow_exec_process_input if {
     is_null(input.string_user)
 
     i_process := input.process
-    count(i_process.SelinuxLabel) == 0
+    allow_guest_selinux_label(i_process.SelinuxLabel)
     count(i_process.ApparmorProfile) == 0
 
     print("allow_exec_process_input: true")
