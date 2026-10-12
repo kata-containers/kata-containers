@@ -573,6 +573,8 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
                 0 => DEFAULT_DISK_QUEUE_SIZE,
                 sz => u16::try_from(sz)?,
             },
+            // CLH fallocates writable disks to their full logical size when sparse is false.
+            sparse: true,
             image_type: ImageType::Raw,
             ..Default::default()
         };
