@@ -164,21 +164,34 @@
 
 ; The agent creates passed-through GPU character devices on the container's
 ; private /dev tmpfs. The mount label makes them container_runtime_tmpfs_t.
-; vLLM also creates POSIX semaphores on the same tmpfs, under /dev/shm.
+; vLLM creates POSIX semaphores there, and nginx follows /dev/stderr and
+; listens on a unix socket on the same tmpfs.
 (allow container_t container_runtime_tmpfs_t (chr_file (getattr open read write ioctl map setattr)))
 (allow container_t container_runtime_tmpfs_t (dir (write add_name remove_name)))
 (allow container_t container_runtime_tmpfs_t (file (create write link unlink)))
+(allow container_t container_runtime_tmpfs_t (lnk_file (read)))
+(allow container_t container_runtime_tmpfs_t (sock_file (create setattr unlink write)))
 ; vLLM serves with io_uring, including a kernel polling thread.
 (allow container_t io_uring_t (anon_inode (create map read write)))
 (allow container_t self (io_uring (sqpoll)))
 
-; An emptyDir has no security.selinux xattrs, so its root is unlabeled_t.
-; Label what the container creates there as container content instead of
-; letting container_t read and write every unlabeled file in the guest.
+; A volume with no security.selinux xattrs has an unlabeled root. Label what
+; the container creates there as container content instead of letting
+; container_t read and write every unlabeled file in the guest.
 (typetransition container_t unlabeled_t dir container_file_t)
 (typetransition container_t unlabeled_t file container_file_t)
 (typetransition container_t unlabeled_t lnk_file container_file_t)
-(allow container_t unlabeled_t (dir (getattr search open read write add_name create)))
+(allow container_t unlabeled_t (dir (getattr search open read write add_name remove_name create rmdir)))
+
+; /proc/<pid> inodes take the task's domain, so a container pid has to be
+; allowed to live on procfs.
+(allow container_t proc_t (filesystem (associate)))
+
+; container_use_devices is off, and the policy lock means the guest cannot
+; turn it on. CPU tests open guest device nodes that stay device_t, such as
+; the tun device and /dev/kmsg, and read the guest kernel log.
+(allow container_t device_node (chr_file (getattr ioctl open read write)))
+(allow container_t kernel_t (system (syslog_read)))
 
 ; Baseline harvested from NVIDIA GPU CI. Keep kata_nvidia_t permissive until
 ; the remaining NVIDIA workloads have exercised this domain.
