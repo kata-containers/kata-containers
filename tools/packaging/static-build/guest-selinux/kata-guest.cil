@@ -92,6 +92,12 @@
 (filecon "/lib64/ld-[^/]*\.so(\.[^/]*)*" any (system_u object_r ld_so_t ((s0) (s0))))
 (filecon "/sbin/ldconfig" any (system_u object_r ldconfig_exec_t ((s0) (s0))))
 (filecon "/usr/sbin/ldconfig" any (system_u object_r ldconfig_exec_t ((s0) (s0))))
+; CDH formats the guest-pull volume with mke2fs. Fedora labels the
+; /usr/sbin paths; the NVIDIA image has them under /sbin.
+(filecon "/sbin/mke2fs" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/usr/sbin/mke2fs" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/sbin/mkfs.ext4" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/usr/sbin/mkfs.ext4" any (system_u object_r fsadm_exec_t ((s0) (s0))))
 
 ; Entering the domains. NVRC runs as kernel_t: it execs the agent and spawns the
 ; NVIDIA daemons and tools from the gpu extension. The agent launches the guest
@@ -110,7 +116,9 @@
 
 (allow kata_agent_t kata_agent_exec_t (file (entrypoint getattr open read map execute)))
 (allow kata_nvidia_t kata_gpu_extension_t (file (entrypoint getattr open read map execute)))
-(allow kata_coco_t kata_coco_extension_t (file (entrypoint getattr open read map execute)))
+; cryptsetup is on the extension and is executed in place, so it stays
+; kata_coco_t instead of transitioning.
+(allow kata_coco_t kata_coco_extension_t (file (entrypoint getattr open read map execute execute_no_trans)))
 
 ; NVRC mounts every extension but the selinux one with context=<type>, which
 ; needs the type to be associable with its own superblock.
@@ -228,23 +236,32 @@
 (allow kata_coco_t configfs_t (dir (getattr search write add_name remove_name create rmdir)))
 (allow kata_coco_t configfs_t (file (getattr open read create write)))
 (allow kata_coco_t container_runtime_tmpfs_t (dir (getattr search write add_name create)))
-(allow kata_coco_t container_runtime_tmpfs_t (file (getattr open read)))
-(allow kata_coco_t container_runtime_tmpfs_t (sock_file (create write)))
-(allow kata_coco_t device_t (dir (write add_name)))
+; LUKS headers live on the confidential-containers tmpfs.
+(allow kata_coco_t container_runtime_tmpfs_t (file (getattr open read create write lock)))
+(allow kata_coco_t container_runtime_tmpfs_t (sock_file (create getattr write)))
+(allow kata_coco_t device_t (dir (write add_name remove_name)))
+(allow kata_coco_t device_t (filesystem (getattr)))
 (allow kata_coco_t device_t (chr_file (getattr open read write ioctl create setattr)))
+(allow kata_coco_t device_t (blk_file (getattr open read write ioctl create setattr unlink)))
+(allow kata_coco_t fixed_disk_device_t (blk_file (getattr open read write ioctl)))
 (allow kata_coco_t root_t (chr_file (read write ioctl)))
 ; The attestation socket is created on /run, which is still tmpfs_t. CDH also
 ; connects to the KBS on 443 and on its node port, and mounts the guest-pull
 ; overlay.
 (allow kata_coco_t tmpfs_t (dir (create)))
-(allow kata_coco_t tmpfs_t (file (getattr open read map)))
+; mkfs.ext4 is UPX-packed and re-execs itself from a memfd on tmpfs.
+(allow kata_coco_t tmpfs_t (file (getattr open read map write execute execute_no_trans)))
 (allow kata_coco_t tmpfs_t (sock_file (create getattr write)))
 (allow kata_coco_t tmpfs_t (filesystem (getattr)))
-(allow kata_coco_t fs_t (filesystem (mount)))
+(allow kata_coco_t fs_t (filesystem (getattr mount)))
+(allow kata_coco_t proc_t (filesystem (mount)))
+(allow kata_coco_t fsadm_exec_t (file (getattr open read map execute execute_no_trans)))
 (allow kata_coco_t http_port_t (tcp_socket (name_connect)))
 (allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))
 (allow kata_coco_t sysctl_vm_t (file (getattr open read)))
-(allow kata_coco_t self (capability (mknod chown fowner fsetid dac_override dac_read_search)))
+(allow kata_coco_t self (capability (mknod chown fowner fsetid setfcap dac_override dac_read_search)))
+(allow kata_coco_t kernel_t (process (setsched)))
+(allow kata_coco_t kernel_t (system (ipc_info)))
 (allow kata_coco_t self (capability2 (perfmon)))
 (allow kata_coco_t self (tcp_socket (listen accept)))
 (allow kata_coco_t self (unix_stream_socket (connectto)))
@@ -264,7 +281,12 @@
 (typetransition kata_coco_t unlabeled_t dir container_file_t)
 (typetransition kata_coco_t unlabeled_t file container_file_t)
 (typetransition kata_coco_t unlabeled_t lnk_file container_file_t)
+; mkfs leaves the ext4 root unlabeled. Lookups of that directory are
+; search; creating "layers" needs write and add_name. Children still
+; take container_file_t from the transitions above.
+(allow kata_coco_t unlabeled_t (dir (search write add_name)))
 (allow kata_coco_t container_file_t (dir (getattr search open read write add_name remove_name create setattr rmdir reparent rename mounton)))
 (allow kata_coco_t container_file_t (file (getattr open read write append create setattr unlink rename link map execute execute_no_trans)))
-(allow kata_coco_t container_file_t (chr_file (unlink)))
+(allow kata_coco_t container_file_t (chr_file (create unlink)))
+(allow kata_coco_t container_file_t (sock_file (create getattr write)))
 (allow kata_coco_t container_file_t (lnk_file (getattr read create setattr unlink rename)))
