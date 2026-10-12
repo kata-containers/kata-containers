@@ -857,8 +857,15 @@ func TestCmdToKataProcess(t *testing.T) {
 		User:         "1000",
 		PrimaryGroup: "1000",
 	}
-	_, err := cmdToKataProcess(cmd)
+	process, err := cmdToKataProcess(cmd)
 	assert.Nil(err)
+	assert.False(process.NoNewPrivileges)
+
+	restricted := cmd
+	restricted.NoNewPrivileges = true
+	process, err = cmdToKataProcess(restricted)
+	assert.Nil(err)
+	assert.True(process.NoNewPrivileges)
 
 	cmd1 := cmd
 	cmd1.User = "foobar"
