@@ -374,9 +374,13 @@ disable_nesting_checks = true
 disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM_NV@
 
 # Enable cold-plugging of VFIO devices to a PCIe port type.
-# Accepted values: "no-port" (default, disabled), "root-port".
+# Accepted values: "no-port" (default, disabled), "root-port", "auto".
 # When set to "root-port", devices discovered via CDI / Pod Resources
-# are cold-plugged before VM boot.
+# are cold-plugged before VM boot onto root ports on pcie.0.
+# "auto" cold-plugs the same devices but probes the host first and gives
+# the guest a matching NUMA and PCIe topology: one pxb-pcie expander bus
+# (with arm-smmuv3 on aarch64) per IOMMU group, GPU initiator NUMA nodes,
+# and guest RAM bound per socket.  Requires shared_fs = "none".
 cold_plug_vfio = "root-port"
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
