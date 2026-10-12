@@ -2981,6 +2981,10 @@ pub struct QemuCmdLine<'a> {
     // devices, then -bios) so OVMF sees the full PCI topology at firmware init.
     bios: Option<Bios>,
 
+    // QEMU assigns addresses to PCI devices as it parses the command line.
+    // Reserve explicit root-port addresses before devices without addr= can
+    // claim them.
+    explicit_pcie_root_ports: Vec<PCIeRootPortDevice>,
     devices: Vec<Box<dyn ToQemuParams>>,
     ccw_subchannel: Option<CcwSubChannel>,
     block_fdsets: HashMap<String, Vec<i64>>,
@@ -3005,6 +3009,7 @@ impl<'a> QemuCmdLine<'a> {
             qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
             bios: None,
+            explicit_pcie_root_ports: Vec::new(),
             devices: Vec::new(),
             ccw_subchannel,
             block_fdsets: HashMap::new(),
@@ -3561,7 +3566,7 @@ impl<'a> QemuCmdLine<'a> {
             .with_slot(port_index)
             .with_multifunction(false)
             .with_addr("0");
-        self.devices.push(Box::new(root_port));
+        self.add_pcie_root_port(root_port);
     }
 
     /// Adds a single `-device vfio-pci` entry for a physical network VF that
@@ -3607,8 +3612,8 @@ impl<'a> QemuCmdLine<'a> {
             vfio_device = vfio_device.with_device_id(device_id);
         }
 
-        self.devices.reserve(2);
-        self.devices.push(Box::new(root_port));
+        self.devices.reserve(1);
+        self.add_pcie_root_port(root_port);
         self.devices.push(Box::new(vfio_device));
 
         Ok(())
@@ -3665,8 +3670,8 @@ impl<'a> QemuCmdLine<'a> {
             vfio_device = vfio_device.with_device_id(device_id);
         }
 
-        self.devices.reserve(2);
-        self.devices.push(Box::new(root_port));
+        self.devices.reserve(1);
+        self.add_pcie_root_port(root_port);
         self.devices.push(Box::new(vfio_device));
 
         Ok(())
@@ -3824,7 +3829,7 @@ impl<'a> QemuCmdLine<'a> {
                 .with_multifunction(multi_function)
                 .with_addr(addr);
 
-            self.devices.push(Box::new(root_port_dev));
+            self.add_pcie_root_port(root_port_dev);
         }
 
         Ok(())
@@ -3878,7 +3883,7 @@ impl<'a> QemuCmdLine<'a> {
                 .with_multifunction(false)
                 .with_addr("0");
 
-            self.devices.push(Box::new(pcie_root_port));
+            self.add_pcie_root_port(pcie_root_port);
 
             if let Some(switch) = &rp.connected_switch {
                 // Upstream Port
@@ -3904,6 +3909,14 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(seccomp_sandbox));
     }
 
+    fn add_pcie_root_port(&mut self, root_port: PCIeRootPortDevice) {
+        if root_port.multifunction || root_port.addr != "0" {
+            self.explicit_pcie_root_ports.push(root_port);
+        } else {
+            self.devices.push(Box::new(root_port));
+        }
+    }
+
     pub async fn build(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
 
@@ -3917,6 +3930,10 @@ impl<'a> QemuCmdLine<'a> {
         result.append(&mut self.cpu.qemu_params().await?);
         result.append(&mut self.memory.qemu_params().await?);
         result.append(&mut self.qmp_socket.qemu_params().await?);
+
+        for root_port in &self.explicit_pcie_root_ports {
+            result.append(&mut root_port.qemu_params().await?);
+        }
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
@@ -4141,6 +4158,48 @@ mod tests {
         assert!(vfio[1].split(',').any(|param| param.starts_with("fd=")));
         assert!(!vfio[1].split(',').any(|param| param.starts_with("host=")));
         assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_root_port_precedes_auto_addressed_block_devices() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-root-port-order", &config).unwrap();
+
+        for index in 0..4 {
+            cmdline.devices.push(Box::new(DeviceVirtioBlk::new(
+                &format!("disk{index}"),
+                VirtioBusType::Pci,
+                None,
+            )));
+        }
+
+        let vfio = VfioDeviceConfig::new("0000:21:00.0", 9, 10)
+            .with_vfio_bus("rp0")
+            .with_device_fds("/dev/null", "/dev/null", "vfio-test");
+        cmdline.add_pcie_vfio_device(vfio).unwrap();
+
+        let params = cmdline.build().await.unwrap();
+        let root_port_index = params
+            .windows(2)
+            .position(|args| {
+                args[0] == "-device"
+                    && args[1].starts_with("pcie-root-port,")
+                    && contains_param(&args[1..2], "addr=0x09")
+            })
+            .expect("missing VFIO root port");
+        let block_indices: Vec<usize> = params
+            .windows(2)
+            .enumerate()
+            .filter_map(|(index, args)| {
+                (args[0] == "-device" && args[1].starts_with("virtio-blk-pci,")).then_some(index)
+            })
+            .collect();
+
+        assert_eq!(block_indices.len(), 4);
+        assert!(block_indices.iter().all(|index| root_port_index < *index));
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 
