@@ -164,9 +164,38 @@ else
 		"k8s-nvidia-vllm.bats" \
 		"k8s-rootless-vmm.bats")
 
-	# Setting K8S_TEST_NV explicitly still runs the NIM tests by hand.
+	# NIM requests 16 CPUs per pod; the two-model path runs both together.
+	# Require headroom for cluster services regardless of runner architecture.
+	# An explicit K8S_TEST_NV still permits manually selecting NIM.
 	if is_nightly_run; then
-		K8S_TEST_NV+=("k8s-nvidia-nim.bats")
+		nim_cpus=32
+		if [[ "${SKIP_MULTI_GPU_TESTS:-false}" == "true" ]]; then
+			nim_cpus=16
+		fi
+		runner_cpus=$(nproc)
+		if (( runner_cpus > nim_cpus )); then
+			K8S_TEST_NV+=("k8s-nvidia-nim.bats")
+		else
+			info "Skipping nightly NIM tests: runner has ${runner_cpus} CPUs; need more than ${nim_cpus} to leave headroom for cluster services"
+		fi
+	fi
+fi
+
+# BF3 shares its slow disk with etcd. Avoid the large vLLM image and its
+# snapshots, including when the caller selects test files explicitly.
+if [[ "${SKIP_VLLM_TESTS:-false}" == "true" ]]; then
+	filtered_nv_tests=()
+	for bats_file in "${K8S_TEST_NV[@]}"; do
+		if [[ "${bats_file//[[:space:]]/}" == "k8s-nvidia-vllm.bats" ]]; then
+			info "Skipping vLLM tests on this runner"
+		else
+			filtered_nv_tests+=("${bats_file}")
+		fi
+	done
+	K8S_TEST_NV=("${filtered_nv_tests[@]}")
+	if (( ${#K8S_TEST_NV[@]} == 0 )); then
+		info "No NVIDIA GPU tests remain after filtering"
+		exit 0
 	fi
 fi
 

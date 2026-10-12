@@ -38,8 +38,8 @@ jobs:
       fail-fast: false
       matrix:
         environment: [
-          { name: nvidia-cpu, vmm: qemu-nvidia-cpu, runner: arm64-nvidia-gh200, snapshotter: "" },
-          { name: nvidia-cpu-runtime-rs, vmm: qemu-nvidia-cpu-runtime-rs, runner: arm64-nvidia-gh200, snapshotter: "erofs" },
+          { name: nvidia-cpu, vmm: qemu-nvidia-cpu, runner: arm64-nvidia-cpu, snapshotter: "" },
+          { name: nvidia-cpu-runtime-rs, vmm: qemu-nvidia-cpu-runtime-rs, runner: arm64-nvidia-cpu, snapshotter: "erofs" },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
