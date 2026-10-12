@@ -167,10 +167,10 @@
 
 ; The agent creates passed-through GPU character devices on the container's
 ; private /dev tmpfs. The mount label makes them container_runtime_tmpfs_t.
-; vLLM creates POSIX semaphores there, and nginx follows /dev/stderr and
-; listens on a unix socket on the same tmpfs.
-(allow container_t container_runtime_tmpfs_t (chr_file (getattr open read write ioctl map setattr)))
-(allow container_t container_runtime_tmpfs_t (dir (write add_name remove_name)))
+; vLLM creates POSIX semaphores there, nginx listens on a unix socket, and
+; nvidia-smi creates /dev/nvidia-caps.
+(allow container_t container_runtime_tmpfs_t (chr_file (create getattr open read write ioctl map setattr)))
+(allow container_t container_runtime_tmpfs_t (dir (create setattr write add_name remove_name)))
 (allow container_t container_runtime_tmpfs_t (file (create write link unlink)))
 (allow container_t container_runtime_tmpfs_t (lnk_file (read)))
 (allow container_t container_runtime_tmpfs_t (sock_file (create setattr unlink write)))
@@ -233,14 +233,22 @@
 (allow kata_coco_t device_t (dir (write add_name)))
 (allow kata_coco_t device_t (chr_file (getattr open read write ioctl create setattr)))
 (allow kata_coco_t root_t (chr_file (read write ioctl)))
+; The attestation socket is created on /run, which is still tmpfs_t. CDH also
+; connects to the KBS on 443 and on its node port, and mounts the guest-pull
+; overlay.
+(allow kata_coco_t tmpfs_t (dir (create)))
 (allow kata_coco_t tmpfs_t (file (getattr open read map)))
+(allow kata_coco_t tmpfs_t (sock_file (create getattr write)))
+(allow kata_coco_t tmpfs_t (filesystem (getattr)))
+(allow kata_coco_t fs_t (filesystem (mount)))
+(allow kata_coco_t http_port_t (tcp_socket (name_connect)))
 (allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))
 (allow kata_coco_t sysctl_vm_t (file (getattr open read)))
-(allow kata_coco_t self (capability (mknod)))
+(allow kata_coco_t self (capability (mknod chown fowner fsetid dac_override dac_read_search)))
 (allow kata_coco_t self (capability2 (perfmon)))
 (allow kata_coco_t self (tcp_socket (listen accept)))
 (allow kata_coco_t self (unix_stream_socket (connectto)))
-(allow kata_coco_t unreserved_port_t (tcp_socket (name_bind)))
+(allow kata_coco_t unreserved_port_t (tcp_socket (name_bind name_connect)))
 
 ; Container rootfs content. Neither snapshotter delivers security.selinux
 ; xattrs:
@@ -256,6 +264,7 @@
 (typetransition kata_coco_t unlabeled_t dir container_file_t)
 (typetransition kata_coco_t unlabeled_t file container_file_t)
 (typetransition kata_coco_t unlabeled_t lnk_file container_file_t)
-(allow kata_coco_t container_file_t (dir (getattr search open read write add_name remove_name create setattr rmdir reparent rename)))
-(allow kata_coco_t container_file_t (file (getattr open read write append create setattr unlink rename link map)))
+(allow kata_coco_t container_file_t (dir (getattr search open read write add_name remove_name create setattr rmdir reparent rename mounton)))
+(allow kata_coco_t container_file_t (file (getattr open read write append create setattr unlink rename link map execute execute_no_trans)))
+(allow kata_coco_t container_file_t (chr_file (unlink)))
 (allow kata_coco_t container_file_t (lnk_file (getattr read create setattr unlink rename)))
