@@ -50,10 +50,25 @@ impl MgmtServer {
     // TODO(when metrics is supported): register sandbox metrics
     // running management http server in an infinite loop, able to serve concurrent requests
     pub async fn run(self: Arc<Self>) {
-        let listener = listener_from_path(self.s_addr.clone()).await.unwrap();
+        let listener = match listener_from_path(self.s_addr.clone()).await {
+            Ok(l) => l,
+            Err(e) => {
+                error!(
+                    sl!(),
+                    "mgmt-svr: failed to bind socket {}: {:#}", self.s_addr, e
+                );
+                return;
+            }
+        };
         // start an infinite loop, which serves the incomming uds stream
         loop {
-            let (stream, _) = listener.accept().await.unwrap();
+            let (stream, _) = match listener.accept().await {
+                Ok(s) => s,
+                Err(e) => {
+                    error!(sl!(), "mgmt-svr: accept error: {:#}", e);
+                    return;
+                }
+            };
             let io = TokioIo::new(stream);
             let me = self.clone();
             // spawn a light weight thread to multiplex to the handler
