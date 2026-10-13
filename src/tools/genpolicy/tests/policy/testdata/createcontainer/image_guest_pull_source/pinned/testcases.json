@@ -9,7 +9,7 @@
             "io.katacontainers.pkg.oci.container_type": "pod_container",
             "io.kubernetes.cri.container-name": "dummy",
             "io.kubernetes.cri.container-type": "container",
-            "io.kubernetes.cri.image-name": "quay.io/prometheus/busybox@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d",
+            "io.kubernetes.cri.image-name": "registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
             "io.kubernetes.cri.sandbox-id": "5cd5b1a9a4ccc5c9fcf9fcc66fb72bf01e0920a1f34ef505f744119db6679c41",
             "io.kubernetes.cri.sandbox-name": "dummy",
             "io.kubernetes.cri.sandbox-namespace": "kata-containers-k8s-tests",
@@ -217,8 +217,7 @@
           "Process": {
             "ApparmorProfile": "cri-containerd.apparmor.d",
             "Args": [
-              "sleep",
-              "3600"
+              "/pause"
             ],
             "Capabilities": {
               "Ambient": [],
@@ -284,10 +283,10 @@
             "Terminal": false,
             "User": {
               "AdditionalGids": [
-                65534
+                0
               ],
-              "GID": 65534,
-              "UID": 65534,
+              "GID": 0,
+              "UID": 65535,
               "Username": ""
             }
           },
@@ -308,7 +307,7 @@
             "fstype": "overlay",
             "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
             "options": [],
-            "source": "quay.io/prometheus/busybox@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d"
+            "source": "registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
           }
         ]
       }
@@ -329,7 +328,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "mirror.example.test/prometheus/busybox:stable@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d"
+          "value": "mirror.example.test/pause:stable@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
         }
       ]
     },
@@ -341,7 +340,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "value": "registry.k8s.io/pause:3.6@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       ]
     },
@@ -353,7 +352,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d"
+          "value": "registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234d"
         }
       ]
     },
@@ -365,7 +364,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@sha256:g07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d"
+          "value": "registry.k8s.io/pause:3.6@sha256:gd380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
         }
       ]
     },
@@ -377,7 +376,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@sha256:F07FFF1D7544464A1041FC2B6BE79873A335A3AF8F0B747B82FA630287968D4D"
+          "value": "registry.k8s.io/pause:3.6@sha256:3D380CA8864549E74AF4B29C10F9CB0956236DFB01C40CA076FB6C37253234DB"
         }
       ]
     },
@@ -389,7 +388,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@md5:d41d8cd98f00b204e9800998ecf8427e"
+          "value": "registry.k8s.io/pause:3.6@md5:d41d8cd98f00b204e9800998ecf8427e"
         }
       ]
     },
@@ -401,7 +400,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox:latest"
+          "value": "registry.k8s.io/pause:3.6"
         }
       ]
     },
@@ -413,7 +412,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d"
+          "value": "@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
         }
       ]
     },
@@ -425,7 +424,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@invalid@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d"
+          "value": "registry.k8s.io/pause:3.6@invalid@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
         }
       ]
     },

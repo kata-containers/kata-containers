@@ -9,7 +9,7 @@
             "io.katacontainers.pkg.oci.container_type": "pod_container",
             "io.kubernetes.cri.container-name": "dummy",
             "io.kubernetes.cri.container-type": "container",
-            "io.kubernetes.cri.image-name": "quay.io/prometheus/busybox:latest",
+            "io.kubernetes.cri.image-name": "registry.k8s.io/pause:3.6",
             "io.kubernetes.cri.sandbox-id": "5cd5b1a9a4ccc5c9fcf9fcc66fb72bf01e0920a1f34ef505f744119db6679c41",
             "io.kubernetes.cri.sandbox-name": "dummy",
             "io.kubernetes.cri.sandbox-namespace": "kata-containers-k8s-tests",
@@ -217,8 +217,7 @@
           "Process": {
             "ApparmorProfile": "cri-containerd.apparmor.d",
             "Args": [
-              "sleep",
-              "3600"
+              "/pause"
             ],
             "Capabilities": {
               "Ambient": [],
@@ -284,10 +283,10 @@
             "Terminal": false,
             "User": {
               "AdditionalGids": [
-                65534
+                0
               ],
-              "GID": 65534,
-              "UID": 65534,
+              "GID": 0,
+              "UID": 65535,
               "Username": ""
             }
           },
@@ -308,7 +307,7 @@
             "fstype": "overlay",
             "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
             "options": [],
-            "source": "quay.io/prometheus/busybox:latest"
+            "source": "registry.k8s.io/pause:3.6"
           }
         ]
       }
@@ -542,10 +541,10 @@
             "Terminal": false,
             "User": {
               "AdditionalGids": [
-                65534
+                65535
               ],
-              "GID": 65534,
-              "UID": 65534,
+              "GID": 65535,
+              "UID": 65535,
               "Username": ""
             }
           },
@@ -586,7 +585,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "mirror.example.test/prometheus/busybox:latest"
+          "value": "mirror.example.test/pause:3.6"
         }
       ]
     },
@@ -598,7 +597,7 @@
         {
           "op": "replace",
           "path": "/storages/0/source",
-          "value": "quay.io/prometheus/busybox@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d"
+          "value": "registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
         }
       ]
     },

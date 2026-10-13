@@ -4,12 +4,9 @@ metadata:
   name: dummy
 spec:
   runtimeClassName: kata-cc-isolation
-  securityContext:
-    runAsUser: 65534
-    runAsGroup: 65534
   containers:
   - name: dummy
-    image: quay.io/prometheus/busybox@sha256:f07fff1d7544464a1041fc2b6be79873a335a3af8f0b747b82fa630287968d4d
-    command:
-    - sleep
-    - "3600"
+    image: registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db
+    securityContext:
+      runAsUser: 65535
+      runAsGroup: 0
