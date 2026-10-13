@@ -145,8 +145,9 @@
 ; ldconfig this way against the container's libraries.
 (typetransition kata_agent_t container_runtime_tmpfs_t process container_t)
 
-; domain_can_mmap_files is enabled in the base policy. Do not let the
-; formatter use an inherited descriptor to map a different block device.
+; domain_can_mmap_files is off and NVRC locks booleans, so map needs an explicit
+; allow. Keep the formatter from mapping any other block device even if the
+; boolean is turned on.
 (classpermission kata_mkfs_block_map)
 (classpermissionset kata_mkfs_block_map (blk_file (map)))
 (constrain kata_mkfs_block_map

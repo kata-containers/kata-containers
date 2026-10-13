@@ -58,6 +58,9 @@ sesearch "${policy}" -T -s kata_agent_t -t container_runtime_tmpfs_t -c process 
 seinfo "${policy}" --constrain | grep -q \
 	'constrain blk_file map.*kata_mkfs_t.*kata_scratch_device_t' \
 	|| { echo "formatter block-map constraint missing" >&2; exit 1; }
+# Every guest map must come from an explicit allow.
+seinfo "${policy}" -b domain_can_mmap_files -x | grep -q 'domain_can_mmap_files false' \
+	|| { echo "domain_can_mmap_files must default to false" >&2; exit 1; }
 # NVRC refuses to boot a policy it cannot lock.
 seinfo "${policy}" -b secure_mode_policyload | grep -q secure_mode_policyload \
 	|| { echo "secure_mode_policyload boolean missing from ${policy}" >&2; exit 1; }
