@@ -11,9 +11,9 @@ repository = "https://github.com/openanolis/dragonball-sandbox"
 version = "0.3.0"
 
 [dependencies]
-arc-swap = ">=0.4.8"
-lazy_static = "1"
-libc = "0.2.39"
+arc-swap = { workspace = true }
+lazy_static = { workspace = true }
+libc = { workspace = true }
 nix = { workspace = true }
 thiserror = { workspace = true }
 vm-memory = { features = ["backend-atomic", "backend-mmap"], workspace = true }
