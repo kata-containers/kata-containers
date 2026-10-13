@@ -117,8 +117,8 @@
 ; The CDI hook runs in place from the gpu extension, after a propagation remount.
 (allow kata_agent_t kata_gpu_extension_t (filesystem (remount)))
 (allow kata_agent_t kata_gpu_extension_t (file (execute execute_no_trans)))
-; Stop a container.
-(allow kata_agent_t container_t (process (sigkill)))
+; Stop a container: SIGTERM, then SIGKILL.
+(allow kata_agent_t container_t (process (signal sigkill)))
 ; Block emptyDir formats with mkfs.ext4. The agent pins its own exec label,
 ; so the process stays kata_agent_t. fsadm_t is unconfined and stays denied.
 (allow kata_agent_t fsadm_exec_t (file (execute execute_no_trans)))
