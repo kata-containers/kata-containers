@@ -3,5 +3,9 @@ CONFIG_DRM=y
 CONFIG_X86_PLATFORM_DEVICES=y
 CONFIG_DRM_XE=y
 
+# Xe drops GuC CT (G2H) messages when runtime PM is not built in:
+# pm_runtime_get_if_active() returns -EINVAL with CONFIG_PM=n.
+CONFIG_PM=y
+
 # Linux kernel version suffix
 CONFIG_LOCALVERSION="-intel-gpu"
