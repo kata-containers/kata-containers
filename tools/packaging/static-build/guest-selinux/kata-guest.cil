@@ -105,9 +105,10 @@
 (allow kata_agent_t root_t (chr_file (read write ioctl)))
 ; NVRC mounts a tmpfs over /etc/ld.so.cache, and the agent maps it.
 (allow kata_agent_t tmpfs_t (file (open map)))
-; /dev/shm, /dev/ptmx replaced by a symlink, and /dev/mapper/control.
+; /dev/shm, /dev/ptmx replaced by a symlink, /dev/mapper/control,
+; /dev/null, and bind-mounts of /dev/kmsg and /dev/net/tun into a container.
 (allow kata_agent_t device_t (dir (create)))
-(allow kata_agent_t device_t (chr_file (read open ioctl unlink)))
+(allow kata_agent_t device_t (chr_file (read write open ioctl unlink mounton)))
 (allow kata_agent_t device_t (lnk_file (create)))
 ; The channel to the host shim.
 (allow kata_agent_t self (vsock_socket (create bind listen accept)))
@@ -117,6 +118,11 @@
 ; The CDI hook runs in place from the gpu extension, after a propagation remount.
 (allow kata_agent_t kata_gpu_extension_t (filesystem (remount)))
 (allow kata_agent_t kata_gpu_extension_t (file (execute execute_no_trans)))
+; CPU tests run the devkit debug extension. It has the fallback extension
+; type. devkit-enter stays the agent and writes the devkit overlay
+; (resolv.conf, a kata-ctl copy). New files keep the parent directory's type.
+(allow kata_agent_t kata_extension_t (file (execute execute_no_trans write create unlink setattr)))
+(allow kata_agent_t kata_extension_t (dir (add_name remove_name create rename reparent)))
 ; Stop a container: SIGTERM, then SIGKILL.
 (allow kata_agent_t container_t (process (signal sigkill)))
 ; Block emptyDir formats with mkfs.ext4. The agent pins its own exec label,
