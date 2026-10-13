@@ -14,26 +14,31 @@
 ;   kata_agent_exec_t      /usr/bin/kata-agent in the base  -> kata_agent_t
 ;   kata_gpu_extension_t   gpu extension (context= mount)   -> kata_nvidia_t
 ;   kata_coco_extension_t  coco extension (context= mount)  -> kata_coco_t
+;   fsadm_exec_t           unpacked base-image mke2fs       -> kata_mkfs_t
 ;   kata_extension_t       any other extension              (no transition)
 ;
 ; Read README.md before changing this file.
 
 (type kata_agent_t)
 (type kata_coco_t)
+(type kata_mkfs_t)
 (type kata_nvidia_t)
 
 (type kata_agent_exec_t)
 (type kata_coco_extension_t)
 (type kata_gpu_extension_t)
 (type kata_extension_t)
+(type kata_scratch_device_t)
 
 (roletype system_r kata_agent_t)
 (roletype system_r kata_coco_t)
+(roletype system_r kata_mkfs_t)
 (roletype system_r kata_nvidia_t)
 (roletype object_r kata_agent_exec_t)
 (roletype object_r kata_coco_extension_t)
 (roletype object_r kata_gpu_extension_t)
 (roletype object_r kata_extension_t)
+(roletype object_r kata_scratch_device_t)
 
 (typeattribute kata_guest_domain)
 (typeattributeset kata_guest_domain (kata_agent_t kata_coco_t kata_nvidia_t))
@@ -43,6 +48,7 @@
     (kata_coco_extension_t kata_gpu_extension_t kata_extension_t))
 
 (typeattributeset domain (kata_guest_domain))
+(typeattributeset domain (kata_mkfs_t))
 (typeattributeset daemon (kata_guest_domain))
 (typeattributeset nsswitch_domain (kata_guest_domain))
 (typeattributeset syslog_client_type (kata_guest_domain))
@@ -50,6 +56,7 @@
 (typeattributeset can_receive_kernel_messages (kata_guest_domain))
 
 (typeattributeset file_type (kata_agent_exec_t kata_extension_file_type))
+(typeattributeset device_node (kata_scratch_device_t))
 (typeattributeset non_security_file_type (kata_agent_exec_t kata_extension_file_type))
 (typeattributeset non_auth_file_type (kata_agent_exec_t kata_extension_file_type))
 ; Only the agent binary is an exec_type: container-selinux lets every sandbox
@@ -98,6 +105,35 @@
     (or
         (not (eq t1 kata_agent_t))
         (eq t2 (kata_agent_t container_t kata_coco_t))))
+
+; A container binary must not run in a guest domain. The runtime attribute
+; grants the agent entrypoint, execute_no_trans, and map on container content,
+; and an explicit exec label skips the spc_t transition above. kata_coco_t
+; can also execute container_file_t in place. Those allows cannot be deleted.
+; Only a container domain may use container content as a program image, so
+; the exec that starts a workload still enters container_t, and the same
+; file cannot be the agent, the data hub, or the NVIDIA stack.
+; execute stays allowed: that is the permission the agent uses to start it.
+(typeattribute kata_container_content)
+(typeattributeset kata_container_content
+    (container_file_t container_ro_file_t container_var_lib_t
+     container_runtime_tmpfs_t svirt_home_t svirt_image_t svirt_tmp_t
+     svirt_tmpfs_t unlabeled_t))
+(classpermission kata_container_content_exec)
+(classpermissionset kata_container_content_exec (file (entrypoint execute_no_trans map)))
+(constrain kata_container_content_exec
+    (or
+        (not (eq t2 kata_container_content))
+        (eq t1 container_domain)))
+
+; domain_can_mmap_files is enabled in the base policy. Do not let the
+; formatter use an inherited descriptor to map a different block device.
+(classpermission kata_mkfs_block_map)
+(classpermissionset kata_mkfs_block_map (blk_file (map)))
+(constrain kata_mkfs_block_map
+    (or
+        (not (eq t1 kata_mkfs_t))
+        (eq t2 kata_scratch_device_t)))
 
 ; What the agent does once it is no longer an unconfined domain. Harvested
 ; from the first confined NVIDIA GPU run.
@@ -170,12 +206,20 @@
 (typetransition kernel_t kata_agent_exec_t process kata_agent_t)
 (typetransition kernel_t kata_gpu_extension_t process kata_nvidia_t)
 (typetransition kata_agent_t kata_coco_extension_t process kata_coco_t)
+; CDH invokes the immutable base-image formatter. Keep it out of the broad
+; confidential-components domain and give the short-lived child only the
+; block-device access needed to format the scratch volume.
+(typetransition kata_coco_t fsadm_exec_t process kata_mkfs_t)
+; cryptsetup creates the mapped node that mke2fs formats. Give that node a
+; dedicated type instead of granting the formatter every guest block device.
+(typetransition kata_coco_t device_t blk_file kata_scratch_device_t)
 
 (allow kernel_t kata_agent_exec_t (file (getattr open read map execute)))
 (allow kernel_t kata_gpu_extension_t (file (getattr open read map execute)))
 (allow kernel_t kata_agent_t (process (transition siginh rlimitinh noatsecure)))
 (allow kernel_t kata_nvidia_t (process (transition siginh rlimitinh noatsecure)))
 (allow kata_agent_t kata_coco_t (process (transition siginh rlimitinh noatsecure)))
+(allow kata_coco_t kata_mkfs_t (process (transition siginh rlimitinh noatsecure)))
 ; The coco extension is mounted nosuid, same as the gpu extension.
 (allow kata_agent_t kata_coco_t (process2 (nosuid_transition)))
 
@@ -184,6 +228,9 @@
 ; cryptsetup is on the extension and is executed in place, so it stays
 ; kata_coco_t instead of transitioning.
 (allow kata_coco_t kata_coco_extension_t (file (entrypoint getattr open read map execute execute_no_trans)))
+(allow kata_mkfs_t fsadm_exec_t (file (entrypoint getattr open read map execute)))
+(allow kata_mkfs_t fsadm_exec_t (lnk_file (getattr read)))
+(allow kata_mkfs_t kata_scratch_device_t (blk_file (getattr open read write ioctl)))
 
 ; NVRC mounts every extension but the selinux one with context=<type>, which
 ; needs the type to be associable with its own superblock.
@@ -226,7 +273,8 @@
 ; Guest services read extension content (libraries, configs, the pause bundle,
 ; which the agent copies into the container's own rootfs).
 (typeattribute kata_extension_reader)
-(typeattributeset kata_extension_reader (and (domain) (not (container_domain))))
+(typeattributeset kata_extension_reader
+    (and (domain) (not (container_domain kata_mkfs_t))))
 (allow kata_extension_reader kata_extension_file_type (dir (getattr search open read)))
 (allow kata_extension_reader kata_extension_file_type (file (getattr open read map)))
 (allow kata_extension_reader kata_extension_file_type (lnk_file (getattr read)))
@@ -308,19 +356,20 @@
 (allow kata_coco_t device_t (filesystem (getattr)))
 (allow kata_coco_t device_t (chr_file (getattr open read write ioctl create setattr)))
 (allow kata_coco_t device_t (blk_file (getattr open read write ioctl create setattr unlink)))
+(allow kata_coco_t kata_scratch_device_t (blk_file (getattr open read write ioctl create setattr unlink)))
 (allow kata_coco_t fixed_disk_device_t (blk_file (getattr open read write ioctl)))
 (allow kata_coco_t root_t (chr_file (read write ioctl)))
 ; The attestation socket is created on /run, which is still tmpfs_t. CDH also
 ; connects to the KBS on 443 and on its node port, and mounts the guest-pull
 ; overlay.
 (allow kata_coco_t tmpfs_t (dir (create)))
-; mkfs.ext4 is UPX-packed and re-execs itself from a memfd on tmpfs.
-(allow kata_coco_t tmpfs_t (file (getattr open read map write execute execute_no_trans)))
+; Runtime data on /run. mke2fs stays unpacked so this type is never executable.
+(allow kata_coco_t tmpfs_t (file (getattr open read write)))
 (allow kata_coco_t tmpfs_t (sock_file (create getattr write)))
 (allow kata_coco_t tmpfs_t (filesystem (getattr)))
 (allow kata_coco_t fs_t (filesystem (getattr mount)))
 (allow kata_coco_t proc_t (filesystem (mount)))
-(allow kata_coco_t fsadm_exec_t (file (getattr open read map execute execute_no_trans)))
+(allow kata_coco_t fsadm_exec_t (file (getattr open read map execute)))
 (allow kata_coco_t fsadm_exec_t (lnk_file (read)))
 (allow kata_coco_t http_port_t (tcp_socket (name_connect)))
 (allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))

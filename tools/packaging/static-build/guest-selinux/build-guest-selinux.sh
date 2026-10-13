@@ -35,12 +35,24 @@ policy="${store_dir}/policy/policy.${policy_version}"
 [[ -f "${policy}" ]] || { echo "expected ${policy} to be built" >&2; exit 1; }
 
 # Fail the build rather than ship a policy the guest cannot use.
-for t in kata_agent_t kata_coco_t kata_nvidia_t container_t container_file_t; do
+for t in \
+	kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t \
+	kata_scratch_device_t container_t container_file_t; do
 	seinfo "${policy}" -t "${t}" | grep -q "${t}" \
 		|| { echo "type ${t} missing from ${policy}" >&2; exit 1; }
 done
 sesearch "${policy}" -T -s kernel_t -t kata_agent_exec_t -c process | grep -q kata_agent_t \
 	|| { echo "kernel_t -> kata_agent_t transition missing" >&2; exit 1; }
+sesearch "${policy}" -T -s kata_coco_t -t fsadm_exec_t -c process | grep -q kata_mkfs_t \
+	|| { echo "kata_coco_t -> kata_mkfs_t transition missing" >&2; exit 1; }
+sesearch "${policy}" -T -s kata_coco_t -t device_t -c blk_file | grep -q kata_scratch_device_t \
+	|| { echo "scratch block-device transition missing" >&2; exit 1; }
+seinfo "${policy}" --constrain | grep -q \
+	'constrain file { entrypoint execute_no_trans map }.*kata_container_content' \
+	|| { echo "container-content execution constraint missing" >&2; exit 1; }
+seinfo "${policy}" --constrain | grep -q \
+	'constrain blk_file map.*kata_mkfs_t.*kata_scratch_device_t' \
+	|| { echo "formatter block-map constraint missing" >&2; exit 1; }
 # NVRC refuses to boot a policy it cannot lock.
 seinfo "${policy}" -b secure_mode_policyload | grep -q secure_mode_policyload \
 	|| { echo "secure_mode_policyload boolean missing from ${policy}" >&2; exit 1; }

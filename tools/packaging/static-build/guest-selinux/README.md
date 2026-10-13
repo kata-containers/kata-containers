@@ -30,9 +30,10 @@ etc/selinux/kata/build-info           policy format and package versions
 | Domain | Entered by | Confinement |
 | --- | --- | --- |
 | `kernel_t` | NVRC as PID 1 (the policy is loaded after it starts) | unconfined |
-| `kata_agent_t` | exec of `/usr/bin/kata-agent` (`kata_agent_exec_t`) | `container_runtime_domain`, the rules runc gets. Not `unconfined_domain()`. A constraint limits domain changes to `container_t` and `kata_coco_t` |
+| `kata_agent_t` | exec of `/usr/bin/kata-agent` (`kata_agent_exec_t`) | `container_runtime_domain`, the rules runc gets. Not `unconfined_domain()`. One constraint limits domain changes to `container_t` and `kata_coco_t`. Another allows only container domains to map container content or use it as a program image |
 | `kata_nvidia_t` | NVRC exec'ing anything from the gpu extension | permissive |
 | `kata_coco_t` | the agent exec'ing anything from the coco extension | permissive |
+| `kata_mkfs_t` | CDH exec'ing the unpacked base-image `mke2fs` | confined to `kata_scratch_device_t`; cannot read extensions or container content |
 | `container_t` | the agent, from the OCI process label | enforced, as on an SELinux host |
 
 `kata_nvidia_t` and `kata_coco_t` are permissive while their rule sets are

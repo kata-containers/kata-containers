@@ -103,6 +103,7 @@ verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=4096,has
 | `kata_agent_t` | kata-agent, from the base image | Yes |
 | `kata_nvidia_t` | Binaries run from the gpu extension | Permissive |
 | `kata_coco_t` | Binaries the agent runs from the coco extension (attestation-agent, CDH, image-rs) | Permissive |
+| `kata_mkfs_t` | The unpacked `mke2fs` used for encrypted scratch volumes | Yes |
 | `container_t` | Container processes | Yes |
 
 `kata_agent_t` is a member of `container_runtime_domain`. That attribute
@@ -118,6 +119,24 @@ unconfined, and an exec of `container_file_t` with no process label would
 enter `spc_t`. An allow that comes from the attribute cannot be deleted, so
 a constraint denies the domain change: `kata_agent_t` may enter only itself,
 `container_t`, or `kata_coco_t`.
+
+A container binary is a second path into a guest domain. The same runtime
+attribute lets the agent use container files as its own program, and
+`kata_coco_t` may execute `container_file_t` without leaving its domain. An
+explicit exec label also skips the `spc_t` transition. A second constraint
+allows `entrypoint`, `execute_no_trans`, and `map` on container content only
+for container domains. SELinux checks `map` for file mappings and also checks
+`execute` for an executable mapping. The agent retains `execute` so it can
+start a workload, but the transition happens before the new `container_t`
+process maps its image. The same file therefore cannot run in, or be mapped
+into, the agent, confidential-data-hub, or NVIDIA stack.
+
+CDH formats encrypted scratch volumes with the immutable base-image
+`mke2fs`. That binary is not compressed with UPX, so it never re-executes an
+unpacked copy from generic tmpfs. It transitions from `kata_coco_t` into the
+small `kata_mkfs_t` domain. The device-mapper block node CDH creates is
+`kata_scratch_device_t`; the formatter can open only that block-device type
+and cannot read extension content.
 
 `container_t` can read and execute the gpu extension, because CDI injects the
 driver libraries and binaries from it into GPU containers. It has no access to
@@ -261,7 +280,13 @@ compromised guest service, spreads inside the virtual machine:
   `lvm_t`, `install_t`). A constraint refuses every domain change except to
   the agent itself, `container_t`, or `kata_coco_t`.
 - **A missing process label.** An exec of container content with no label
-  would enter `spc_t`, which is unconfined. That exec now fails.
+  would enter `spc_t`, which is unconfined. That exec now fails. An explicit
+  label of a guest domain fails too: container content can be a program image
+  only for a container domain, and a guest domain cannot map it.
+- **A container payload disguised as a formatter.** `mke2fs` comes from the
+  integrity-protected base image, remains unpacked, and enters
+  `kata_mkfs_t`. The formatter can access the mapped scratch device but not a
+  container rootfs, another block-device type, or extension content.
 - **Turning SELinux off.** NVRC loads the policy and then locks policy loads,
   enforcement changes, and booleans. The agent cannot load a weaker policy or
   switch enforcement off.
@@ -275,8 +300,9 @@ compromised guest service, spreads inside the virtual machine:
   the guest kernel log would expose other workloads' messages and driver
   faults; that read is not part of the confined container domain.
 - **A guest-pulled image running as the confidential-data-hub.** Image files
-  are `container_file_t`, and the workload enters `container_t`, including
-  when the data hub unpacked them.
+  are `container_file_t`. The data hub may create and read them, and the
+  workload that runs them enters `container_t`. The same file cannot be
+  executed as `kata_coco_t`.
 
 ### What this leaves open
 
@@ -290,7 +316,8 @@ becoming the agent. It does not make the agent powerless.
 
 ## Limitations
 
-- `kata_nvidia_t` and `kata_coco_t` are permissive.
+- `kata_nvidia_t` and `kata_coco_t` are permissive. While they are, a
+  constraint denial inside those domains is recorded and still allowed.
 - Everything created under `/run/kata-containers` gets `container_file_t`, not
   only container root filesystems.
 - The agent is not given module-loading authority. NVRC also disables module

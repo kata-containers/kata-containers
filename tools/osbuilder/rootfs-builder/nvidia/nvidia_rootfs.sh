@@ -539,6 +539,13 @@ chisseled_init() {
 	echo 'options nvidia NVreg_DeviceFileMode=0660' > "${conf_file}"
 }
 
+should_upx_compress() {
+	case "${1}" in
+		./sbin/mke2fs|./usr/sbin/mke2fs) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
 compress_rootfs() {
 	echo "nvidia: compressing rootfs"
 	local upx
@@ -569,6 +576,14 @@ compress_rootfs() {
 		# Skip files with setuid/setgid bits (UPX refuses to pack them)
 		if [[ -u "${file}" ]] || [[ -g "${file}" ]]; then
 			echo "nvidia: skip compressing executable (special permissions): ${file} ($(file -b "${file}"))"
+			continue
+		fi
+		# mke2fs re-executes a UPX-unpacked copy from an anonymous tmpfs
+		# file. Keep the trusted binary unpacked so kata_coco_t never needs
+		# permission to execute arbitrary tmpfs_t content. mkfs.ext4 is a
+		# symlink to this inode and is not visited by find -type f.
+		if ! should_upx_compress "${file}"; then
+			echo "nvidia: skip compressing executable (SELinux trusted formatter): ${file}"
 			continue
 		fi
 		if ! file "${file}" | grep -q ELF; then
