@@ -57,27 +57,47 @@
 (typeattributeset exec_type (kata_agent_exec_t))
 (typeattributeset entry_type (kata_agent_exec_t kata_coco_extension_t kata_gpu_extension_t))
 
-; The agent is the guest's container runtime, so it mirrors container_runtime_t
-; minus everything that could undo the guest's own confinement: loading or
-; reloading policy, toggling enforcement or booleans, and loading kernel
-; modules (NVRC disables module loading before exec'ing the agent anyway).
+; runc's type is container_runtime_t. container-selinux puts the runtime
+; rules on container_runtime_domain, then calls unconfined_domain() on
+; container_runtime_t itself. The agent takes the rules. It is not an
+; unconfined domain, so it is not unconfined_domain_type,
+; files_unconfined_type, devices_unconfined_type, filesystem_unconfined_type,
+; kern_unconfined, corenet_unconfined_type, or selinux_unconfined_type
+; (policy load, setenforce, setbool, module load).
+;
+; container_runtime_domain_template() adds the process-identity and role
+; exemptions, raw fixed-disk access, and a read-only walk of proc. Those
+; are the template, not the unconfined set.
 (typeattributeset container_runtime_domain (kata_agent_t))
-(typeattributeset unconfined_domain_type (kata_agent_t))
-(typeattributeset can_change_object_identity (kata_agent_t))
 (typeattributeset can_change_process_identity (kata_agent_t))
 (typeattributeset can_change_process_role (kata_agent_t))
 (typeattributeset can_dump_kernel (kata_agent_t))
-(typeattributeset corenet_unconfined_type (kata_agent_t))
-(typeattributeset corenet_unlabeled_type (kata_agent_t))
-(typeattributeset devices_unconfined_type (kata_agent_t))
-(typeattributeset files_unconfined_type (kata_agent_t))
-(typeattributeset filesystem_unconfined_type (kata_agent_t))
 (typeattributeset fixed_disk_raw_read (kata_agent_t))
 (typeattributeset fixed_disk_raw_write (kata_agent_t))
-(typeattributeset kern_unconfined (kata_agent_t))
-(typeattributeset named_filetrans_domain (kata_agent_t))
-(typeattributeset process_uncond_exempt (kata_agent_t))
-(typeattributeset storage_unconfined_type (kata_agent_t))
+; kernel_read_all_proc() from that template. Read-only: kern_unconfined
+; would be write and execute on every proc type.
+(allow kata_agent_t proc_type (dir (getattr search open read lock ioctl)))
+(allow kata_agent_t proc_type (file (getattr open read ioctl lock)))
+(allow kata_agent_t proc_type (lnk_file (getattr read)))
+
+; container_runtime_domain still allows a transition to spc_t, kmod_t,
+; mount_t, fsadm_t, lvm_t, and install_t, and an exec of container_file_t
+; with no exec label type-transitions to spc_t. Those types are unconfined.
+; An allow inherited from the attribute cannot be removed. This constraint
+; denies the domain change anyway: the agent may enter only itself,
+; container_t, or kata_coco_t.
+(classpermission kata_agent_process_change)
+(classpermissionset kata_agent_process_change (process (transition dyntransition)))
+(classpermission kata_agent_process2_change)
+(classpermissionset kata_agent_process2_change (process2 (nnp_transition nosuid_transition)))
+(constrain kata_agent_process_change
+    (or
+        (not (eq t1 kata_agent_t))
+        (eq t2 (kata_agent_t container_t kata_coco_t))))
+(constrain kata_agent_process2_change
+    (or
+        (not (eq t1 kata_agent_t))
+        (eq t2 (kata_agent_t container_t kata_coco_t))))
 
 ; The guest components and the NVIDIA userspace remain permissive while their
 ; harvested rule sets are completed. container_t is enforced regardless.

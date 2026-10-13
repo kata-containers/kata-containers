@@ -105,10 +105,19 @@ verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=4096,has
 | `kata_coco_t` | Binaries the agent runs from the coco extension (attestation-agent, CDH, image-rs) | Permissive |
 | `container_t` | Container processes | Yes |
 
-`kata_agent_t` mirrors the host's `container_runtime_t`: it can set up
-namespaces, mounts and devices, and transition into `container_t`. Unlike
-`container_runtime_t`, it cannot load a policy, toggle enforcement, or change
-booleans.
+`kata_agent_t` is a member of `container_runtime_domain`. That attribute
+carries the rules container-selinux writes for runc: namespace and mount
+setup, and the transition into `container_t`. container-selinux then calls
+`unconfined_domain()` on `container_runtime_t` itself. The agent does not
+join that. It is not `unconfined_domain_type`, and it cannot load a policy,
+toggle enforcement, change booleans, or load kernel modules.
+
+Joining `container_runtime_domain` still allows a transition into `spc_t`,
+`kmod_t`, `mount_t`, `fsadm_t`, `lvm_t`, and `install_t`. Those types are
+unconfined, and an exec of `container_file_t` with no process label would
+enter `spc_t`. An allow that comes from the attribute cannot be deleted, so
+a constraint denies the domain change: `kata_agent_t` may enter only itself,
+`container_t`, or `kata_coco_t`.
 
 `container_t` can read and execute the gpu extension, because CDI injects the
 driver libraries and binaries from it into GPU containers. It has no access to
@@ -172,11 +181,118 @@ make -C tools/packaging/kata-deploy/local-build rootfs-image-selinux-extension-t
     `rootfs-image-nvidia` cache key includes the policy sources, so a policy
     change rebuilds both.
 
+## What this stops
+
+A Kata pod is one virtual machine. kata-agent is the program inside it that
+creates every container, mounts its files, hands it devices, and starts its
+processes. It runs as root. The containers in the pod, including sidecars,
+live beside it. Guest SELinux is the boundary that keeps a container which has
+escaped its namespaces from becoming that program, or any of the other
+privileged programs in the same machine.
+
+!!! warning
+    These bounds hold when the guest kernel is enforcing and `kata_nvidia_t`
+    and `kata_coco_t` are no longer permissive. A permissive boot only records
+    the denial.
+
+### An escaped container takes over kata-agent
+
+Without a guest policy the workload and the agent are both root in the same
+machine, so a container that has left its namespaces can attach to the agent
+and act as it. That owns the sandbox virtual machine. It does not, by itself,
+own the host.
+
+The blast radius is the whole pod:
+
+- **Every other container.** The escaped container can read a sidecar's files,
+  environment, and mounted credentials: a service-account token, an image-pull
+  secret, or a key that was mounted only into another container.
+- **Every volume mounted into the pod.** Secrets, config maps, empty
+  directories, and shared data directories are mounted by the agent. Whoever
+  controls the agent can read and change them, including volumes that were
+  never mounted into the malicious container.
+- **The pod's network.** The virtual machine's network is the pod's network.
+  The agent can open connections and listen wherever that pod was allowed to
+  reach, whether or not the original container was supposed to.
+- **Devices assigned to the pod.** The agent is what hands a GPU or a disk to
+  a container. Controlling the agent means opening those devices directly.
+- **Confidential data released into the virtual machine.** Attestation runs
+  before the key broker sends secrets in. Those secrets then live in the
+  guest, next to the confidential-data-hub. Taking over the agent means
+  reading decrypted images, volume keys, and anything else the broker released
+  because it trusted this guest.
+- **A stronger path at the guest kernel.** The agent is allowed to mount
+  filesystems and set up devices. That is a much stronger place from which to
+  attack the guest kernel than a normal container has.
+
+The host is the line this does not cross on its own. The host asks the agent,
+over the virtual-machine channel, to start and stop containers. Controlling
+the agent controls what runs in that virtual machine and what the host is told
+about it. Reaching the host still takes a bug in the hypervisor, the host
+kernel, or a host directory that was deliberately shared into the guest.
+
+With the policy, the escaped process stays `container_t`. It cannot take over
+the agent process, replace the agent binary, or read the agent's files. The
+other containers, the pod's devices, and the confidential material held beside
+the agent stay with the agent.
+
+### The rest of the guest
+
+The same separation bounds the other ways a compromised container, or a
+compromised guest service, spreads inside the virtual machine:
+
+- **Another container in the pod.** When the host supplies an MCS category,
+  one sandbox cannot read or modify another sandbox's files and processes
+  after leaving its namespaces.
+- **Confidential-computing material.** `container_t` cannot read the coco
+  extension, the attestation socket, LUKS headers, or the raw guest-pull
+  disk. A workload cannot collect the key broker's credentials or the
+  decrypted image just by being in the same virtual machine.
+- **The NVIDIA services.** A GPU container may run only the userspace CDI
+  bind-mounted into it. It does not become `kata_nvidia_t` and cannot open
+  the NVIDIA daemon's own sockets and state.
+- **A guest service taking over the rest of the guest.** The NVIDIA stack
+  runs as `kata_nvidia_t`, and attestation plus the confidential-data-hub run
+  as `kata_coco_t`. Neither is the agent, and neither is `kernel_t`. A bug in
+  one of them stays in that domain.
+- **The agent leaving its domain through a helper.** `container_runtime_domain`
+  would otherwise let the agent execute `mount`, `modprobe`, or a disk tool
+  and enter an unconfined domain (`spc_t`, `kmod_t`, `mount_t`, `fsadm_t`,
+  `lvm_t`, `install_t`). A constraint refuses every domain change except to
+  the agent itself, `container_t`, or `kata_coco_t`.
+- **A missing process label.** An exec of container content with no label
+  would enter `spc_t`, which is unconfined. That exec now fails.
+- **Turning SELinux off.** NVRC loads the policy and then locks policy loads,
+  enforcement changes, and booleans. The agent cannot load a weaker policy or
+  switch enforcement off.
+- **Loading a kernel module.** NVRC loads the GPU modules and then disables
+  further module loads. The agent is not given module-loading authority.
+- **A tampered extension.** The policy, GPU, and coco extensions are
+  dm-verity images. Modified content fails integrity check instead of being
+  executed.
+- **Arbitrary guest devices, and the kernel log.** Device access for
+  containers stays off, and the policy lock refuses to turn it on. Reading
+  the guest kernel log would expose other workloads' messages and driver
+  faults; that read is not part of the confined container domain.
+- **A guest-pulled image running as the confidential-data-hub.** Image files
+  are `container_file_t`, and the workload enters `container_t`, including
+  when the data hub unpacked them.
+
+### What this leaves open
+
+A bug in the guest kernel that runs the attacker's code is outside this
+policy. So is a bug in QEMU or the host kernel. So is anything the compromised
+domain is intentionally allowed to do, and any secret a service hands out
+through an API that was itself authorized. A compromise of `kata_agent_t` is
+still a compromise of the runtime: the agent has to be able to set up
+namespaces, mounts, and container processes. The policy keeps a container from
+becoming the agent. It does not make the agent powerless.
+
 ## Limitations
 
 - `kata_nvidia_t` and `kata_coco_t` are permissive.
 - Everything created under `/run/kata-containers` gets `container_file_t`, not
   only container root filesystems.
-- `kata_agent_t` can still load kernel modules. NVRC disables module loading
-  before it starts the agent, so this is not reachable at runtime.
+- The agent is not given module-loading authority. NVRC also disables module
+  loading before it starts the agent.
 - Only QEMU is wired up.
