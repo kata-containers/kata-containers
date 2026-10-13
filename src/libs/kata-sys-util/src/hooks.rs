@@ -11,7 +11,7 @@ use std::io::{self, Result};
 use std::time::Duration;
 
 use oci_spec::runtime as oci;
-use subprocess::{Exec, ExitStatus, Job, Redirection};
+use subprocess::{Exec, ExecExt, ExitStatus, Job, Redirection};
 
 use crate::sl;
 use crate::validate::valid_env;
@@ -283,6 +283,17 @@ impl<'a> HookExecutor<'a> {
             .detached()
             .stdout(Redirection::Pipe)
             .stderr(Redirection::Pipe);
+        // The agent's controlling terminal is the guest console. A hook, and
+        // anything it starts, must not inherit it.
+        // SAFETY: setsid is async-signal-safe and the closure does not allocate.
+        exec = unsafe {
+            exec.pre_exec(|| {
+                if libc::setsid() < 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            })
+        };
 
         if let Some(st) = state {
             let json = serde_json::to_string(st)?;
