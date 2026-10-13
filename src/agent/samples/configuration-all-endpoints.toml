@@ -1,5 +1,4 @@
 # This is an agent configuration file example.
-dev_mode = true
 server_addr = 'vsock://8:2048'
 
 [endpoints]
