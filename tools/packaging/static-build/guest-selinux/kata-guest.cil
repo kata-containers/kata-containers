@@ -125,6 +125,14 @@
 (allow kata_agent_t kata_extension_t (dir (add_name remove_name create rename reparent)))
 ; Stop a container: SIGTERM, then SIGKILL.
 (allow kata_agent_t container_t (process (signal sigkill)))
+; Start attestation-agent from the coco extension. The type transition into
+; kata_coco_t is already allowed, and the constraint keeps it there.
+(allow kata_agent_t kata_coco_extension_t (file (execute)))
+; The agent calls CDH and stats the attestation socket. /run is tmpfs_t
+; until something labels it container_runtime_tmpfs_t; both have shown up.
+(allow kata_agent_t tmpfs_t (sock_file (getattr write)))
+(allow kata_agent_t container_runtime_tmpfs_t (sock_file (getattr write)))
+(allow kata_agent_t kata_coco_t (unix_stream_socket (connectto)))
 ; Block emptyDir formats with mkfs.ext4. The agent pins its own exec label,
 ; so the process stays kata_agent_t. fsadm_t is unconfined and stays denied.
 (allow kata_agent_t fsadm_exec_t (file (execute execute_no_trans)))
