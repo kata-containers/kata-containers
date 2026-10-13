@@ -83,7 +83,6 @@ use crate::metrics::{get_metrics, is_collection_in_progress};
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
-use crate::passfd_io;
 use crate::pci;
 use crate::random;
 use crate::sandbox::{Sandbox, SandboxError};
@@ -92,6 +91,7 @@ use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 use crate::{confidential_data_hub, linux_abi::*};
+use crate::{passfd_io, skip_if_cdh_client_uninitialized};
 #[cfg(feature = "devicemapper")]
 use kata_types::dmverity::cleanup_dmverity_devices;
 
@@ -525,7 +525,7 @@ impl AgentService {
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
-        if confidential_data_hub::is_cdh_client_initialized() {
+        if confidential_data_hub::is_multi_cdh_clients_initialized() {
             unseal_envs(&mut process.Env).await;
         }
 
@@ -2668,6 +2668,8 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
 }
 
 async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
+    skip_if_cdh_client_uninitialized!(());
+
     let linux = oci
         .linux()
         .as_ref()
@@ -2699,9 +2701,7 @@ pub(crate) async fn cdh_secure_mount(
     mount_point: &str,
     mkfs_opts: &str,
 ) -> Result<()> {
-    if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
-    }
+    skip_if_cdh_client_uninitialized!(());
 
     let integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
 
@@ -2749,9 +2749,8 @@ async fn unseal_envs(envs: &mut [String]) {
 }
 
 async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
-    if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
-    }
+    skip_if_cdh_client_uninitialized!(());
+
     let process = oci
         .process_mut()
         .as_mut()
