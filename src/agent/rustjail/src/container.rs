@@ -48,7 +48,7 @@ use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
-use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid, User};
+use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 
@@ -82,6 +82,7 @@ const CWFD_FD: &str = "CWFD_FD";
 const CLOG_FD: &str = "CLOG_FD";
 const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
+const PASSWD_PATH: &str = "/etc/passwd";
 const PIDNS_FD: &str = "PIDNS_FD";
 const PIDNS_ENABLED: &str = "PIDNS_ENABLED";
 
@@ -800,10 +801,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if env::var_os(HOME_ENV_KEY).is_none() {
         // try to set "HOME" env by uid
-        if let Ok(Some(user)) = User::from_uid(Uid::from_raw(guser.uid())) {
-            if let Ok(user_home_dir) = user.dir.into_os_string().into_string() {
-                env::set_var(HOME_ENV_KEY, user_home_dir);
-            }
+        if let Some(user_home_dir) = passwd_home_dir(Path::new(PASSWD_PATH), guser.uid()) {
+            env::set_var(HOME_ENV_KEY, user_home_dir);
         }
         // set default home dir as "/" if "HOME" env is still empty
         if env::var_os(HOME_ENV_KEY).is_none() {
@@ -1459,6 +1458,19 @@ impl BaseContainer for LinuxContainer {
 
 use std::env;
 
+// Parsed directly: glibc NSS would load the container's libnss modules into
+// the agent before the exec into the container domain.
+fn passwd_home_dir(passwd: &Path, uid: u32) -> Option<String> {
+    let content = fs::read_to_string(passwd).ok()?;
+    content.lines().find_map(|line| {
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() < 7 || fields[2].parse::<u32>().ok()? != uid || fields[5].is_empty() {
+            return None;
+        }
+        Some(fields[5].to_string())
+    })
+}
+
 fn find_file<P>(exe_name: P) -> Option<PathBuf>
 where
     P: AsRef<Path>,
@@ -1908,6 +1920,28 @@ mod tests {
 
     fn sl() -> slog::Logger {
         slog_scope::logger()
+    }
+
+    #[test]
+    fn test_passwd_home_dir() {
+        let dir = tempdir().unwrap();
+        let passwd = dir.path().join("passwd");
+        fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/sh\n\
+             # comment\n\
+             short:x:5\n\
+             nohome:x:7:7:::/bin/sh\n\
+             app:x:1000:1000:App,,,:/home/app:/bin/bash\n",
+        )
+        .unwrap();
+
+        assert_eq!(passwd_home_dir(&passwd, 0).as_deref(), Some("/root"));
+        assert_eq!(passwd_home_dir(&passwd, 1000).as_deref(), Some("/home/app"));
+        assert_eq!(passwd_home_dir(&passwd, 5), None);
+        assert_eq!(passwd_home_dir(&passwd, 7), None);
+        assert_eq!(passwd_home_dir(&passwd, 42), None);
+        assert_eq!(passwd_home_dir(&dir.path().join("missing"), 0), None);
     }
 
     #[test]

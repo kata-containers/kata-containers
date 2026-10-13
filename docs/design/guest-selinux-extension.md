@@ -334,7 +334,9 @@ becoming the agent. It does not make the agent powerless.
   constraint denial inside those domains is recorded and still allowed.
 - The agent and confidential-data-hub can still map container content,
   executable mappings included, because overlayfs checks every mapping against
-  the mounter. Neither one maps container files itself; the policy cannot
+  the mounter. Neither one maps container files itself: the agent reads the
+  container's `/etc/passwd` directly, not through glibc NSS, so container
+  `libnss` modules never load into it. The policy cannot
   stop it if their code is compromised. Program images and in-place exec stay
   limited to container domains.
 - Everything created under `/run/kata-containers` gets `container_file_t`, not
