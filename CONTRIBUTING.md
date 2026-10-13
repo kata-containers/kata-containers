@@ -446,10 +446,10 @@ automatically blocked from merging.
 * We strongly encourage you to run the same CI tests on individual PRs, using [static checks](https://github.com/kata-containers/tests/blob/main/.ci/static-checks.sh)
 
 In repositories where a `Makefile` is present, you can execute
-static checks for testing and development. To do so, invoke the `make check` and `make test` rules, after developer mode is enabled.
+static checks for testing and development. To do so, invoke the
+`make check` and `make test` rules.
 
 ```sh
-$ export KATA_DEV_MODE=true
 $ make check
 $ make test
 ```
