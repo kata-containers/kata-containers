@@ -541,7 +541,11 @@ chisseled_init() {
 
 should_upx_compress() {
 	case "${1}" in
-		./sbin/mke2fs|./usr/sbin/mke2fs) return 1 ;;
+		# UPX re-executes from an anonymous tmpfs file. mke2fs stays
+		# unpacked so the confidential components never execute generic
+		# tmpfs. kata-agent stays unpacked so its startup memfd is not
+		# container content. mkfs.ext4 is a symlink to mke2fs.
+		./sbin/mke2fs|./usr/sbin/mke2fs|./usr/bin/kata-agent) return 1 ;;
 		*) return 0 ;;
 	esac
 }
@@ -578,12 +582,8 @@ compress_rootfs() {
 			echo "nvidia: skip compressing executable (special permissions): ${file} ($(file -b "${file}"))"
 			continue
 		fi
-		# mke2fs re-executes a UPX-unpacked copy from an anonymous tmpfs
-		# file. Keep the trusted binary unpacked so kata_coco_t never needs
-		# permission to execute arbitrary tmpfs_t content. mkfs.ext4 is a
-		# symlink to this inode and is not visited by find -type f.
 		if ! should_upx_compress "${file}"; then
-			echo "nvidia: skip compressing executable (SELinux trusted formatter): ${file}"
+			echo "nvidia: skip compressing executable (SELinux trusted binary): ${file}"
 			continue
 		fi
 		if ! file "${file}" | grep -q ELF; then

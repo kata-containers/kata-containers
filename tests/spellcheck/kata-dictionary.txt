@@ -89,6 +89,10 @@ devmapper
 hugepage
 MACVTAP
 memdisk
+memfd
+memfds
+mounter
+mounters
 pmem
 tmpfs
 Sharedfs

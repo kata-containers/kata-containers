@@ -120,11 +120,30 @@
      container_runtime_tmpfs_t svirt_home_t svirt_image_t svirt_tmp_t
      svirt_tmpfs_t unlabeled_t))
 (classpermission kata_container_content_exec)
-(classpermissionset kata_container_content_exec (file (entrypoint execute_no_trans map)))
+(classpermissionset kata_container_content_exec (file (entrypoint execute_no_trans)))
 (constrain kata_container_content_exec
     (or
         (not (eq t2 kata_container_content))
         (eq t1 container_domain)))
+
+; overlayfs checks the mounter's credentials against the backing file on
+; every mapping in the overlay. The agent mounts the erofs overlays and the
+; data hub mounts the guest-pull overlay, so both keep map. No other guest
+; domain may map container content.
+(typeattribute kata_overlay_mounter)
+(typeattributeset kata_overlay_mounter (kata_agent_t kata_coco_t))
+(classpermission kata_container_content_map)
+(classpermissionset kata_container_content_map (file (map)))
+(constrain kata_container_content_map
+    (or
+        (not (eq t2 kata_container_content))
+        (or (eq t1 container_domain) (eq t1 kata_overlay_mounter))))
+
+; The agent's tmpfs files, including memfds, are container_runtime_tmpfs_t,
+; which containers can also write. Anything the agent or its hooks execute
+; from that type enters container_t. The NVIDIA CDI hook runs its cloned
+; ldconfig this way against the container's libraries.
+(typetransition kata_agent_t container_runtime_tmpfs_t process container_t)
 
 ; domain_can_mmap_files is enabled in the base policy. Do not let the
 ; formatter use an inherited descriptor to map a different block device.

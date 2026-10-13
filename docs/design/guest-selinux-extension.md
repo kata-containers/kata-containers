@@ -124,12 +124,23 @@ A container binary is a second path into a guest domain. The same runtime
 attribute lets the agent use container files as its own program, and
 `kata_coco_t` may execute `container_file_t` without leaving its domain. An
 explicit exec label also skips the `spc_t` transition. A second constraint
-allows `entrypoint`, `execute_no_trans`, and `map` on container content only
-for container domains. SELinux checks `map` for file mappings and also checks
-`execute` for an executable mapping. The agent retains `execute` so it can
-start a workload, but the transition happens before the new `container_t`
-process maps its image. The same file therefore cannot run in, or be mapped
-into, the agent, confidential-data-hub, or NVIDIA stack.
+allows `entrypoint` and `execute_no_trans` on container content only for
+container domains. The agent retains `execute` so it can start a workload,
+but the exec must change into a container domain. The same file therefore
+cannot run as the agent, confidential-data-hub, or NVIDIA stack.
+
+A third constraint covers `map`. overlayfs checks every mapping of a file in
+the overlay a second time, against the backing file with the credentials of
+the process that mounted the overlay. The agent mounts the erofs snapshotter
+overlays and confidential-data-hub mounts the guest-pull overlay, so those two
+domains keep `map` on container content. No other guest domain, including the
+NVIDIA stack and the formatter, may map it.
+
+The agent's own tmpfs files and memfds are `container_runtime_tmpfs_t`, a type
+containers can also write. When the agent, or a hook it runs, executes a file
+of that type, the process enters `container_t`. The NVIDIA CDI
+`update-ldcache` hook executes a cloned `ldconfig` from a memfd. That
+`ldconfig` reads the container's libraries, and it does so as `container_t`.
 
 CDH formats encrypted scratch volumes with the immutable base-image
 `mke2fs`. That binary is not compressed with UPX, so it never re-executes an
@@ -282,7 +293,10 @@ compromised guest service, spreads inside the virtual machine:
 - **A missing process label.** An exec of container content with no label
   would enter `spc_t`, which is unconfined. That exec now fails. An explicit
   label of a guest domain fails too: container content can be a program image
-  only for a container domain, and a guest domain cannot map it.
+  only for a container domain. Only the two overlay mounters can map it.
+- **A container payload run by a hook.** A file the agent or an OCI hook
+  executes from its own tmpfs or memfds enters `container_t`, because the
+  container can write that type too.
 - **A container payload disguised as a formatter.** `mke2fs` comes from the
   integrity-protected base image, remains unpacked, and enters
   `kata_mkfs_t`. The formatter can access the mapped scratch device but not a
@@ -318,6 +332,11 @@ becoming the agent. It does not make the agent powerless.
 
 - `kata_nvidia_t` and `kata_coco_t` are permissive. While they are, a
   constraint denial inside those domains is recorded and still allowed.
+- The agent and confidential-data-hub can still map container content,
+  executable mappings included, because overlayfs checks every mapping against
+  the mounter. Neither one maps container files itself; the policy cannot
+  stop it if their code is compromised. Program images and in-place exec stay
+  limited to container domains.
 - Everything created under `/run/kata-containers` gets `container_file_t`, not
   only container root filesystems.
 - The agent is not given module-loading authority. NVRC also disables module

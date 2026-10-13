@@ -48,8 +48,13 @@ sesearch "${policy}" -T -s kata_coco_t -t fsadm_exec_t -c process | grep -q kata
 sesearch "${policy}" -T -s kata_coco_t -t device_t -c blk_file | grep -q kata_scratch_device_t \
 	|| { echo "scratch block-device transition missing" >&2; exit 1; }
 seinfo "${policy}" --constrain | grep -q \
-	'constrain file { entrypoint execute_no_trans map }.*kata_container_content' \
+	'constrain file { entrypoint execute_no_trans }.*kata_container_content' \
 	|| { echo "container-content execution constraint missing" >&2; exit 1; }
+seinfo "${policy}" --constrain | grep -q \
+	'constrain file map.*kata_container_content.*kata_overlay_mounter' \
+	|| { echo "container-content map constraint missing" >&2; exit 1; }
+sesearch "${policy}" -T -s kata_agent_t -t container_runtime_tmpfs_t -c process | grep -q container_t \
+	|| { echo "agent tmpfs exec -> container_t transition missing" >&2; exit 1; }
 seinfo "${policy}" --constrain | grep -q \
 	'constrain blk_file map.*kata_mkfs_t.*kata_scratch_device_t' \
 	|| { echo "formatter block-map constraint missing" >&2; exit 1; }
