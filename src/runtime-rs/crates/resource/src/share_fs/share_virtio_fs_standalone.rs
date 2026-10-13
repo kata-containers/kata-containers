@@ -21,7 +21,9 @@ use tokio::{
 };
 
 use agent::Storage;
-use hypervisor::{device::device_manager::DeviceManager, utils::chown_to_parent, Hypervisor};
+use hypervisor::{
+    device::device_manager::DeviceManager, selinux, utils::chown_to_parent, Hypervisor,
+};
 use kata_types::{config::hypervisor::SharedFsInfo, rootless::is_rootless};
 
 use super::{
@@ -108,7 +110,8 @@ impl ShareVirtioFsStandalone {
 
     async fn setup_virtiofsd(&self, h: &dyn Hypervisor) -> Result<()> {
         let sock_path = generate_sock_path(&h.get_jailer_root().await?);
-        let disable_guest_selinux = h.hypervisor_config().await.disable_guest_selinux;
+        let hypervisor_config = h.hypervisor_config().await;
+        let disable_guest_selinux = hypervisor_config.disable_guest_selinux;
 
         let socket_path = if is_rootless() {
             // In rootless mode, we use relative socket paths instead of absolute paths
@@ -128,6 +131,12 @@ impl ShareVirtioFsStandalone {
 
         let mut cmd = Command::new(&self.config.virtio_fs_daemon);
         let child_cmd = cmd.args(&args).stderr(Stdio::piped());
+
+        selinux::apply_exec_label(
+            child_cmd,
+            hypervisor_config.effective_selinux_label(),
+            "virtiofsd",
+        )?;
 
         if is_rootless() {
             // Change working directory to socket's parent directory
