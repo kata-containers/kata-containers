@@ -135,7 +135,10 @@
 (allow kata_agent_t kata_coco_t (unix_stream_socket (connectto)))
 ; Block emptyDir formats with mkfs.ext4. The agent pins its own exec label,
 ; so the process stays kata_agent_t. fsadm_t is unconfined and stays denied.
+; The disk it formats, /dev/sdc, is a fixed disk. Membership in
+; fixed_disk_raw_read does not grant this access.
 (allow kata_agent_t fsadm_exec_t (file (execute execute_no_trans)))
+(allow kata_agent_t fixed_disk_device_t (blk_file (read write open ioctl)))
 
 ; The guest components and the NVIDIA userspace remain permissive while their
 ; harvested rule sets are completed. container_t is enforced regardless.
