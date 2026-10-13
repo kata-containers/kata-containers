@@ -14,7 +14,7 @@
 ;   kata_agent_exec_t      /usr/bin/kata-agent in the base  -> kata_agent_t
 ;   kata_gpu_extension_t   gpu extension (context= mount)   -> kata_nvidia_t
 ;   kata_coco_extension_t  coco extension (context= mount)  -> kata_coco_t
-;   fsadm_exec_t           unpacked base-image mke2fs       -> kata_mkfs_t
+;   fsadm_exec_t           unpacked base-image dd, mke2fs   -> kata_mkfs_t
 ;   kata_extension_t       any other extension              (no transition)
 ;
 ; Read README.md before changing this file.
@@ -250,6 +250,14 @@
 (allow kata_mkfs_t fsadm_exec_t (file (entrypoint getattr open read map execute)))
 (allow kata_mkfs_t fsadm_exec_t (lnk_file (getattr read)))
 (allow kata_mkfs_t kata_scratch_device_t (blk_file (getattr open read write ioctl)))
+; CDH also zeroes the device with dd, which is fsadm_exec_t too. Both read
+; NVRC's tmpfs /etc/ld.so.cache, and dd reads /dev/zero, which is still the
+; unlabeled devtmpfs type. stdio is the console node on the rootfs, and CDH
+; collects the output through pipes.
+(allow kata_mkfs_t tmpfs_t (file (getattr open read map)))
+(allow kata_mkfs_t device_t (chr_file (getattr open read)))
+(allow kata_mkfs_t root_t (chr_file (read write)))
+(allow kata_mkfs_t kata_coco_t (fifo_file (getattr read write ioctl)))
 
 ; NVRC mounts every extension but the selinux one with context=<type>, which
 ; needs the type to be associable with its own superblock.
@@ -382,8 +390,10 @@
 ; connects to the KBS on 443 and on its node port, and mounts the guest-pull
 ; overlay.
 (allow kata_coco_t tmpfs_t (dir (create)))
-; Runtime data on /run. mke2fs stays unpacked so this type is never executable.
-(allow kata_coco_t tmpfs_t (file (getattr open read write)))
+; Runtime data on /run, and the loader maps NVRC's tmpfs /etc/ld.so.cache.
+; The CoCo binaries and their formatters stay unpacked, so this type is never
+; executable.
+(allow kata_coco_t tmpfs_t (file (getattr open read write map)))
 (allow kata_coco_t tmpfs_t (sock_file (create getattr write)))
 (allow kata_coco_t tmpfs_t (filesystem (getattr)))
 (allow kata_coco_t fs_t (filesystem (getattr mount)))

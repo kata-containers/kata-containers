@@ -541,11 +541,15 @@ chisseled_init() {
 
 should_upx_compress() {
 	case "${1}" in
-		# UPX re-executes from an anonymous tmpfs file. mke2fs stays
-		# unpacked so the confidential components never execute generic
-		# tmpfs. kata-agent stays unpacked so its startup memfd is not
-		# container content. mkfs.ext4 is a symlink to mke2fs.
-		./sbin/mke2fs|./usr/sbin/mke2fs|./usr/bin/kata-agent) return 1 ;;
+		# UPX re-executes from an anonymous tmpfs file. The confidential
+		# components and the formatters they run (mke2fs, dd) stay unpacked
+		# so none of them executes generic tmpfs. kata-agent stays unpacked
+		# so its startup memfd is not container content. mkfs.ext4 is a
+		# symlink to mke2fs.
+		./sbin/mke2fs|./usr/sbin/mke2fs|./bin/dd|./usr/bin/dd) return 1 ;;
+		./usr/bin/kata-agent) return 1 ;;
+		./usr/local/bin/attestation-agent|./usr/local/bin/api-server-rest) return 1 ;;
+		./usr/local/bin/confidential-data-hub) return 1 ;;
 		*) return 0 ;;
 	esac
 }

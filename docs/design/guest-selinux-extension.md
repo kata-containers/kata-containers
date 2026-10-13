@@ -103,7 +103,7 @@ verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=4096,has
 | `kata_agent_t` | kata-agent, from the base image | Yes |
 | `kata_nvidia_t` | Binaries run from the gpu extension | Permissive |
 | `kata_coco_t` | Binaries the agent runs from the coco extension (attestation-agent, CDH, image-rs) | Permissive |
-| `kata_mkfs_t` | The unpacked `mke2fs` used for encrypted scratch volumes | Yes |
+| `kata_mkfs_t` | The unpacked `dd` and `mke2fs` used for encrypted scratch volumes | Yes |
 | `container_t` | Container processes | Yes |
 
 `kata_agent_t` is a member of `container_runtime_domain`. That attribute
@@ -142,12 +142,15 @@ of that type, the process enters `container_t`. The NVIDIA CDI
 `update-ldcache` hook executes a cloned `ldconfig` from a memfd. That
 `ldconfig` reads the container's libraries, and it does so as `container_t`.
 
-CDH formats encrypted scratch volumes with the immutable base-image
-`mke2fs`. That binary is not compressed with UPX, so it never re-executes an
-unpacked copy from generic tmpfs. It transitions from `kata_coco_t` into the
-small `kata_mkfs_t` domain. The device-mapper block node CDH creates is
-`kata_scratch_device_t`; the formatter can open only that block-device type
-and cannot read extension content.
+CDH zeroes and formats encrypted scratch volumes with the immutable
+base-image `dd` and `mke2fs`. Neither binary is compressed with UPX, so
+neither re-executes an unpacked copy from generic tmpfs. The same holds for
+attestation-agent, api-server-rest, and CDH when the image carries them.
+Both formatters transition from `kata_coco_t` into the small `kata_mkfs_t`
+domain. The device-mapper block node CDH creates is `kata_scratch_device_t`;
+the formatter can open only that block-device type and cannot read extension
+content. It can read the guest's devtmpfs character devices, because
+`/dev/zero` keeps the unlabeled devtmpfs type.
 
 `container_t` can read and execute the gpu extension, because CDI injects the
 driver libraries and binaries from it into GPU containers. It has no access to
@@ -297,7 +300,7 @@ compromised guest service, spreads inside the virtual machine:
 - **A container payload run by a hook.** A file the agent or an OCI hook
   executes from its own tmpfs or memfds enters `container_t`, because the
   container can write that type too.
-- **A container payload disguised as a formatter.** `mke2fs` comes from the
+- **A container payload disguised as a formatter.** `dd` and `mke2fs` come from the
   integrity-protected base image, remains unpacked, and enters
   `kata_mkfs_t`. The formatter can access the mapped scratch device but not a
   container rootfs, another block-device type, or extension content.
