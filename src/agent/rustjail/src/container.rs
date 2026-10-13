@@ -399,7 +399,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             // parent return
             return Ok(());
         }
-        Ok(ForkResult::Child) => (),
+        Ok(ForkResult::Child) => {
+            // Create new session for init/exec process rather than inheriting parent's session
+            // This ensures the init/exec process owns independent session ID, which aligns with runc behavior.
+            // Do it before any hook runs, so hooks never inherit the agent's
+            // controlling terminal, the guest console.
+            unistd::setsid().context("create a new session")?;
+        }
         Err(e) => {
             return Err(anyhow!(format!(
                 "failed to fork temporary process: {:?}",
@@ -671,9 +677,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         unistd::chdir(oci_process.cwd().display().to_string().as_str())?;
     }
     verify_cwd()?;
-    // Create new session for init/exec process rather than inheriting parent's session
-    // This ensures the init/exec process owns independent session ID, which aligns with runc behavior.
-    unistd::setsid().context("create a new session")?;
 
     let guser = &oci_process.user();
 
