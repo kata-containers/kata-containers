@@ -99,6 +99,30 @@
         (not (eq t1 kata_agent_t))
         (eq t2 (kata_agent_t container_t kata_coco_t))))
 
+; What the agent does once it is no longer an unconfined domain. Harvested
+; from the first confined NVIDIA GPU run.
+; /dev/console is still a node on the rootfs.
+(allow kata_agent_t root_t (chr_file (read write ioctl)))
+; NVRC mounts a tmpfs over /etc/ld.so.cache, and the agent maps it.
+(allow kata_agent_t tmpfs_t (file (open map)))
+; /dev/shm, /dev/ptmx replaced by a symlink, and /dev/mapper/control.
+(allow kata_agent_t device_t (dir (create)))
+(allow kata_agent_t device_t (chr_file (read open ioctl unlink)))
+(allow kata_agent_t device_t (lnk_file (create)))
+; The channel to the host shim.
+(allow kata_agent_t self (vsock_socket (create bind listen accept)))
+; fs::write of /sys/class/scsi_host/hostN/scan opens that file with O_CREAT.
+(allow kata_agent_t sysfs_t (dir (add_name)))
+(allow kata_agent_t sysfs_t (file (create)))
+; The CDI hook runs in place from the gpu extension, after a propagation remount.
+(allow kata_agent_t kata_gpu_extension_t (filesystem (remount)))
+(allow kata_agent_t kata_gpu_extension_t (file (execute execute_no_trans)))
+; Stop a container.
+(allow kata_agent_t container_t (process (sigkill)))
+; Block emptyDir formats with mkfs.ext4. The agent pins its own exec label,
+; so the process stays kata_agent_t. fsadm_t is unconfined and stays denied.
+(allow kata_agent_t fsadm_exec_t (file (execute execute_no_trans)))
+
 ; The guest components and the NVIDIA userspace remain permissive while their
 ; harvested rule sets are completed. container_t is enforced regardless.
 (typepermissive kata_coco_t)

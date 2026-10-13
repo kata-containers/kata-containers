@@ -139,11 +139,25 @@ async fn ensure_ext4_filesystem(logger: &Logger, source: &str) -> Result<()> {
         // CDH's FsFormatter adds "-F" and its mapped device path separately in
         // confidential-data-hub/hub/src/storage/drivers/filesystem.rs; here the
         // agent invokes mkfs.ext4 directly, so add "-F" and source below.
-        tokio::process::Command::new(MKFS_EXT4)
-            .arg("-F")
+        let mut mkfs = tokio::process::Command::new(MKFS_EXT4);
+        mkfs.arg("-F")
             .args(BLOCK_EMPTYDIR_EXT4_MKFS_OPTS)
-            .arg(source)
-            .output()
+            .arg(source);
+        // /sbin/mke2fs is fsadm_exec_t. Pin the current label so mkfs stays
+        // in the agent's domain instead of unconfined fsadm_t. A guest
+        // without SELinux has nothing to write.
+        // SAFETY: runs in the forked child, before exec, and only writes
+        // the SELinux exec attribute.
+        unsafe {
+            mkfs.pre_exec(|| {
+                let current = rustjail::selinux::current_context();
+                if current.contains(':') {
+                    let _ = rustjail::selinux::set_exec_label(&current);
+                }
+                Ok(())
+            });
+        }
+        mkfs.output()
             .await
             .with_context(|| format!("run {MKFS_EXT4} for {source}"))?
     };
