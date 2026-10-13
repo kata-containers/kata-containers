@@ -179,6 +179,7 @@ impl InitialSizeManager {
         // reserves once. Transparent huge pages are ordinary memory and are
         // sized as usual.
         let hugetlb_backed = hv.memory_info.enable_hugepages
+            && hv.memory_info.enable_hugepages_pod_sizing
             && matches!(hv.memory_info.hugepage_type, HugePageType::Hugetlbfs);
 
         if self.resource.vcpu > 0.0 || self.resource.mem_mb > 0 {
@@ -567,8 +568,29 @@ mod tests {
     fn set_hugepages(config: &mut TomlConfig, hugepage_type: HugePageType) {
         config.hypervisor.entry("qemu".to_owned()).and_modify(|hv| {
             hv.memory_info.enable_hugepages = true;
+            hv.memory_info.enable_hugepages_pod_sizing = true;
             hv.memory_info.hugepage_type = hugepage_type;
         });
+    }
+
+    #[test]
+    fn test_setup_config_static_sizes_hugetlb_backed_memory_without_pod_sizing() {
+        let mut config = make_config(1.0, 0.5, 4, 256, 128, 4096, true);
+        set_hugepages(&mut config, HugePageType::Hugetlbfs);
+        config.hypervisor.entry("qemu".to_owned()).and_modify(|hv| {
+            hv.memory_info.enable_hugepages_pod_sizing = false;
+        });
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.memory_info.default_memory, 640);
     }
 
     #[test]

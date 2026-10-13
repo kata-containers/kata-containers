@@ -320,6 +320,13 @@ enable_mem_prealloc = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Size a guest backed by hugetlbfs from the pod's hugepages-<size> reservation
+# rather than from its memory limits, and bound each container inside the guest
+# by its own reservation. Give it a runtime class of its own, whose pod overhead
+# covers the host processes in memory.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable vhost-user storage device, default false
 # Enabling this will result in some Linux reserved block type
 # major range 240-254 being chosen to represent vhost-user devices.

@@ -805,6 +805,11 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
+	// HugePagesPodSizing sizes a huge page backed VM from the pod's huge page
+	// reservation and bounds its containers by their reservations. Off, the VM
+	// is default_memory plus the pod's memory limits.
+	HugePagesPodSizing bool
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 

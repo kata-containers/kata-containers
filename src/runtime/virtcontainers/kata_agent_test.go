@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"testing"
 
+	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 
@@ -1643,11 +1644,20 @@ func TestSandboxMemoryMaxBytes(t *testing.T) {
 	for _, tt := range []struct {
 		description string
 		hugePages   bool
+		notPodSized bool
 		static      bool
 		memMB       uint32
 		vCPUs       float32
 		expected    uint64
 	}{
+		{
+			description: "huge page backed without enable_hugepages_pod_sizing",
+			hugePages:   true,
+			notPodSized: true,
+			static:      true,
+			memMB:       32 * 1024,
+			vCPUs:       4,
+		},
 		{
 			// A 32 GiB guest on 4 vCPUs reports 32128 MiB and keeps 926 of
 			// them: 768 fixed, 62 for its size, 96 for its vCPUs.
@@ -1702,9 +1712,10 @@ func TestSandboxMemoryMaxBytes(t *testing.T) {
 		s := &Sandbox{config: &SandboxConfig{
 			StaticResourceMgmt: tt.static,
 			HypervisorConfig: HypervisorConfig{
-				HugePages:  tt.hugePages,
-				MemorySize: tt.memMB,
-				NumVCPUsF:  tt.vCPUs,
+				HugePages:          tt.hugePages,
+				HugePagesPodSizing: !tt.notPodSized,
+				MemorySize:         tt.memMB,
+				NumVCPUsF:          tt.vCPUs,
 			},
 		}}
 		assert.Equal(tt.expected, sandboxMemoryMaxBytes(s), tt.description)
@@ -1736,6 +1747,14 @@ func TestHoldableGuestMemoryReserve(t *testing.T) {
 		assert.Equal(int64(memTotalMB-reserveMB)<<20, holdable, tt.description)
 		assert.Less(holdable, int64(memTotalMB)<<20, tt.description)
 	}
+
+	// A guest huge page pool comes out of what the containers may use.
+	guest := guestCapacity{memoryMB: 16 * 1024, vCPUs: 4}
+	withPool := guest
+	withPool.pools = 4 << 30
+	assert.Equal(holdableGuestMemoryBytes(guest)-int64(4<<30), holdableGuestMemoryBytes(withPool))
+	withPool.pools = uint64(holdableGuestMemoryBytes(guest))
+	assert.Zero(holdableGuestMemoryBytes(withPool))
 
 	// The large guest keeps an eighth of what a thirty-second of the VM would
 	// have taken from it.
@@ -1881,6 +1900,31 @@ func TestOwnHugePages(t *testing.T) {
 	}
 }
 
+func TestContainerDisplayName(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal("app", containerDisplayName(&ContainerConfig{
+		ID:          "7de8d0f89ae5",
+		Annotations: map[string]string{ctrAnnotations.ContainerName: "app"},
+	}))
+	assert.Equal("7de8d0f89ae5", containerDisplayName(&ContainerConfig{ID: "7de8d0f89ae5"}))
+}
+
+// Once handleHugepages has rewritten the mount to its guest path, only the
+// flag recorded before tells that the container has a pool.
+func TestContainerHasGuestHugePagePool(t *testing.T) {
+	assert := assert.New(t)
+
+	rewritten := &specs.Spec{Mounts: []specs.Mount{{
+		Source:      filepath.Join(ephemeralPath(), "hp"),
+		Destination: "/hp",
+		Type:        "bind",
+	}}}
+
+	assert.False(containerHasGuestHugePagePool(&ContainerConfig{CustomSpec: rewritten}))
+	assert.True(containerHasGuestHugePagePool(&ContainerConfig{CustomSpec: rewritten, GuestHugePagePool: true}))
+	assert.False(containerHasGuestHugePagePool(&ContainerConfig{}))
+}
+
 func TestRefuseGuestHugePagePoolTooLarge(t *testing.T) {
 	const gib = uint64(1) << 30
 
@@ -1920,6 +1964,16 @@ func TestRefuseGuestHugePagePoolTooLarge(t *testing.T) {
 			refused: true,
 		},
 		{
+			// Each pool fits on its own, but both come out of the same guest.
+			description: "pools that fit one by one but not together are refused",
+			reservations: []podReservation{
+				{name: "dpdk-a", hugePages: 8 * gib, memory: int64(gib), pool: true},
+				{name: "dpdk-b", hugePages: 8 * gib, memory: int64(gib), pool: true},
+			},
+			guest:   guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			refused: true,
+		},
+		{
 			description: "a pool the kubelet copied from the pod is not the container's",
 			reservations: []podReservation{
 				{name: "app", hugePages: 16 * gib, memory: int64(gib), pool: true},
@@ -1938,7 +1992,7 @@ func TestRefuseGuestHugePagePoolTooLarge(t *testing.T) {
 		err := refuseGuestHugePagePoolTooLarge(tt.reservations, tt.copied, tt.guest)
 		if tt.refused {
 			assert.Error(err, tt.description)
-			assert.Contains(err.Error(), "huge page pool", tt.description)
+			assert.Contains(err.Error(), "huge page pools", tt.description)
 		} else {
 			assert.NoError(err, tt.description)
 		}

@@ -907,7 +907,9 @@ fn get_disable_guest_selinux(toml_config: &TomlConfig) -> bool {
 }
 
 // is_hugetlb_backed: the guest runs on the host's hugetlb pool, the memory a
-// pod reserves as hugepages-<size>. Transparent huge pages are ordinary memory.
+// pod reserves as hugepages-<size>, and enable_hugepages_pod_sizing asks for
+// its containers to be bounded by what they reserved. Transparent huge pages
+// are ordinary memory.
 fn is_hugetlb_backed(toml_config: &TomlConfig) -> bool {
     match toml_config
         .hypervisor
@@ -915,6 +917,7 @@ fn is_hugetlb_backed(toml_config: &TomlConfig) -> bool {
     {
         Some(hypervisor_config) => {
             hypervisor_config.memory_info.enable_hugepages
+                && hypervisor_config.memory_info.enable_hugepages_pod_sizing
                 && matches!(
                     hypervisor_config.memory_info.hugepage_type,
                     HugePageType::Hugetlbfs

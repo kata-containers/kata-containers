@@ -239,6 +239,13 @@ enable_mem_prealloc = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Size a guest backed by hugetlbfs from the pod's hugepages-<size> reservation
+# rather than from its memory limits, and bound each container inside the guest
+# by its own reservation. Give it a runtime class of its own, whose pod overhead
+# covers the host processes in memory.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable running clh VMM as a non-root user.
 # By default clh VMM run as root. When this is set to true, clh VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.

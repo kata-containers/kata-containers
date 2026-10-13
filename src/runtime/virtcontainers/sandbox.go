@@ -873,6 +873,12 @@ func hypervisorBacksGuestRAMWithHugePages(hypervisorType HypervisorType) bool {
 	}
 }
 
+// Whether the pod's huge page reservation sizes this huge page backed guest
+// and bounds its containers: enable_hugepages_pod_sizing.
+func hugePagePodSized(hc *HypervisorConfig) bool {
+	return hc.HugePages && hc.HugePagesPodSizing
+}
+
 // Floor for a VM sized from the pod's reservation. default_memory cannot serve:
 // the runtime cannot tell its own substituted default from a configured one.
 const minHugePageBackedVMMiB = 1024
@@ -881,7 +887,7 @@ const minHugePageBackedVMMiB = 1024
 // mapping its RAM comes from. The CRI does not carry it (k/enhancements#4113).
 func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) error {
 	hc := &sandboxConfig.HypervisorConfig
-	if !hc.HugePages || !sandboxConfig.StaticResourceMgmt {
+	if !hugePagePodSized(hc) || !sandboxConfig.StaticResourceMgmt {
 		return nil
 	}
 	if !hypervisorBacksGuestRAMWithHugePages(sandboxConfig.HypervisorType) {

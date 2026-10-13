@@ -992,8 +992,9 @@ pub struct MemoryInfo {
     /// - if no memory limits are provided: use `default_memory`
     /// - if memory limits are provided: use `overhead_memory + workload_memory`
     /// - if the guest RAM comes from the hugetlb pool (`enable_hugepages` with
-    ///   `hugepage_type = "hugetlbfs"`): use `default_memory` whatever the
-    ///   limits are; the pod reserves that memory as `hugepages-<size>`
+    ///   `hugepage_type = "hugetlbfs"`) and `enable_hugepages_pod_sizing` is
+    ///   set: use `default_memory` whatever the limits are; the pod reserves
+    ///   that memory as `hugepages-<size>`
     #[serde(default)]
     pub overhead_memory: u32,
 
@@ -1017,6 +1018,13 @@ pub struct MemoryInfo {
     /// Use huge pages for VM RAM.
     #[serde(default)]
     pub enable_hugepages: bool,
+
+    /// Size a guest backed by hugetlbfs from the pod's `hugepages-<size>`
+    /// reservation rather than from its memory limits, and bound each container
+    /// inside the guest by its own reservation. Off, the guest is sized and
+    /// bounded as any other.
+    #[serde(default)]
+    pub enable_hugepages_pod_sizing: bool,
 
     /// Huge page type:
     /// - `hugetlbfs`

@@ -34,9 +34,10 @@ func hugetlbSizingSandbox(hugePages, static, sandboxCgroupOnly bool) (*Sandbox, 
 		StaticResourceMgmt: static,
 		SandboxCgroupOnly:  sandboxCgroupOnly,
 		HypervisorConfig: HypervisorConfig{
-			HugePages:  hugePages,
-			MemorySize: testHugetlbDefaultMemMB,
-			SharedFS:   config.VirtioFS,
+			HugePages:          hugePages,
+			HugePagesPodSizing: true,
+			MemorySize:         testHugetlbDefaultMemMB,
+			SharedFS:           config.VirtioFS,
 		},
 		Containers: []ContainerConfig{{
 			ID: "pause",
@@ -113,6 +114,18 @@ func TestSizeHugepageBackedVMFromPodTakesTheReservation(t *testing.T) {
 	assert.Equal(uint32(64*1024), sbc.HypervisorConfig.MemorySize)
 	// The allowance is read from the pod's cgroup, not the sandbox's own.
 	assert.Equal(testHugetlbPodCgroup, *gotPath)
+}
+
+func TestSizeHugepageBackedVMFromPodNeedsTheOption(t *testing.T) {
+	assert := assert.New(t)
+	stubHugetlbHost(t, nil, 0, true, nil)
+
+	// Without enable_hugepages_pod_sizing the VM keeps default_memory, and a
+	// pod that reserved nothing is not refused.
+	s, sbc := hugetlbSizingSandbox(true, true, true)
+	sbc.HypervisorConfig.HugePagesPodSizing = false
+	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+	assert.Equal(uint32(testHugetlbDefaultMemMB), sbc.HypervisorConfig.MemorySize)
 }
 
 func TestSizeHugepageBackedVMFromPodRefusesAShortReservation(t *testing.T) {
