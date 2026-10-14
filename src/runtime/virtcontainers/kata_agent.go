@@ -565,9 +565,10 @@ func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
 			GID:            gid,
 			AdditionalGids: extraGids,
 		},
-		Args: cmd.Args,
-		Env:  cmdEnvsToStringSlice(cmd.Envs),
-		Cwd:  cmd.WorkDir,
+		Args:            cmd.Args,
+		Env:             cmdEnvsToStringSlice(cmd.Envs),
+		Cwd:             cmd.WorkDir,
+		NoNewPrivileges: cmd.NoNewPrivileges,
 	}
 
 	return process, nil
