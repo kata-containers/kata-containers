@@ -88,6 +88,71 @@ pub fn get_jailer_root(sid: &str) -> String {
     [&sandbox_path, JAILER_ROOT].join("/")
 }
 
+// `sun_path` is 108 bytes, including the terminating NUL.
+pub const MAX_UNIX_SOCKET_PATH_LEN: usize = 107;
+
+pub fn check_unix_socket_path_len(path: &Path) -> Result<()> {
+    let len = path.as_os_str().len();
+    if len > MAX_UNIX_SOCKET_PATH_LEN {
+        return Err(anyhow!(
+            "unix socket path {} is {} bytes, longer than the {} bytes limit",
+            path.display(),
+            len,
+            MAX_UNIX_SOCKET_PATH_LEN
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn get_rootless_symlink_sandbox_path(sid: &str) -> String {
+    prefix_with_rootless_dir(sid)
+}
+
+pub fn get_rootless_symlink_jailer_root(sid: &str) -> String {
+    let sandbox_path = get_rootless_symlink_sandbox_path(sid);
+
+    [&sandbox_path, JAILER_ROOT].join("/")
+}
+
+// Socket paths under the rootless sandbox dir can exceed `sun_path`, so VMMs
+// connect through a symlink in a shorter directory instead.
+pub fn link_rootless_vmm_socket(sid: &str, socket: &Path) -> Result<PathBuf> {
+    link_socket_into_dir(Path::new(&get_rootless_symlink_jailer_root(sid)), socket)
+}
+
+fn link_socket_into_dir(dir: &Path, socket: &Path) -> Result<PathBuf> {
+    let name = socket
+        .file_name()
+        .ok_or_else(|| anyhow!("socket path {} has no file name", socket.display()))?;
+    let link = dir.join(name);
+    check_unix_socket_path_len(&link)?;
+
+    create_dir_all_with_inherit_owner(dir, 0o750)
+        .with_context(|| format!("create socket symlink dir {}", dir.display()))?;
+
+    // A previous start attempt of the same sandbox may have left the link behind.
+    match std::fs::symlink_metadata(&link) {
+        Ok(md) if md.file_type().is_symlink() => std::fs::remove_file(&link)
+            .with_context(|| format!("remove stale socket symlink {}", link.display()))?,
+        Ok(_) => {
+            return Err(anyhow!(
+                "{} exists and is not a socket symlink",
+                link.display()
+            ))
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Err(err) => {
+            return Err(err).with_context(|| format!("stat socket symlink {}", link.display()))
+        }
+    }
+
+    std::os::unix::fs::symlink(socket, &link)
+        .with_context(|| format!("symlink socket {} to {}", socket.display(), link.display()))?;
+
+    Ok(link)
+}
+
 // Clear the O_CLOEXEC which is set by default by Rust standard library on
 // file descriptors that it opens.  This function is mostly meant to be
 // called on descriptors to be passed to a child (hypervisor) process as
@@ -504,9 +569,10 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
     Err(anyhow!("failed to remove VMM user"))
 }
 
-pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
+pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
     let path_result = remove_dir_all_if_exists(vm_path);
     if kata_types::rootless::is_rootless() {
+        let symlink_result = remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(sid));
         let user = &config
             .security_info
             .rootless_user
@@ -524,6 +590,7 @@ pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
                 );
             }
         }
+        symlink_result?;
     }
     path_result
 }
@@ -751,6 +818,52 @@ mod tests {
     use super::{
         authorize_rootless_resource_access, authorize_rootless_socket, select_rootless_access_group,
     };
+    use super::{check_unix_socket_path_len, link_socket_into_dir, MAX_UNIX_SOCKET_PATH_LEN};
+
+    #[test]
+    fn test_check_unix_socket_path_len() {
+        let path = |len: usize| PathBuf::from(format!("/{}", "a".repeat(len - 1)));
+
+        check_unix_socket_path_len(&path(MAX_UNIX_SOCKET_PATH_LEN)).unwrap();
+        let error = check_unix_socket_path_len(&path(MAX_UNIX_SOCKET_PATH_LEN + 1))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("108 bytes"), "{}", error);
+    }
+
+    #[test]
+    fn test_link_socket_into_dir() {
+        let tmp = TempDir::new().unwrap();
+        let socket = tmp.path().join("long").join("virtiofsd.sock");
+        fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        let _listener = UnixListener::bind(&socket).unwrap();
+        let dir = tmp.path().join("short").join("root");
+
+        let link = link_socket_into_dir(&dir, &socket).unwrap();
+        assert_eq!(link, dir.join("virtiofsd.sock"));
+        assert_eq!(fs::read_link(&link).unwrap(), socket);
+        std::os::unix::net::UnixStream::connect(&link).unwrap();
+
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/nonexistent", &link).unwrap();
+        let link = link_socket_into_dir(&dir, &socket).unwrap();
+        assert_eq!(fs::read_link(&link).unwrap(), socket);
+
+        fs::remove_file(&link).unwrap();
+        fs::write(&link, "").unwrap();
+        link_socket_into_dir(&dir, &socket).unwrap_err();
+        assert!(fs::symlink_metadata(&link).unwrap().is_file());
+    }
+
+    #[test]
+    fn test_link_socket_into_dir_rejects_long_link() {
+        let tmp = TempDir::new().unwrap();
+        let socket = tmp.path().join("virtiofsd.sock");
+        let dir = tmp.path().join("d".repeat(MAX_UNIX_SOCKET_PATH_LEN));
+
+        link_socket_into_dir(&dir, &socket).unwrap_err();
+        assert!(!dir.exists());
+    }
 
     fn rootless_user() -> RootlessUser {
         RootlessUser {
