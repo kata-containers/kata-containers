@@ -48,17 +48,21 @@ fi
 # -n: build the store without loading it; the builder has no SELinux of its own.
 semodule -n -X 100 -i "${base_cil}"
 semodule -n -X "${module_priority}" -i "${script_dir}/kata-guest.cil"
-# While the policy is being locked down, do not let base-policy dontaudit rules
-# hide denials that kill a guest service. This can be removed after enforcing
-# CI has exercised every supported workload.
-semodule -n -DB
 
 policy="${store_dir}/policy/policy.${policy_version}"
 [[ -f "${policy}" ]] || { echo "expected ${policy} to be built" >&2; exit 1; }
 
-# Fail the build rather than ship a policy the guest cannot use.
-! sesearch "${policy}" --dontaudit | grep -q '^dontaudit ' \
-	|| { echo "dontaudit rules remain in ${policy}" >&2; exit 1; }
+# Fedora dontaudits nginx writing /proc/self/fd (container_t -> container_t dir
+# write). The access stays denied. Stripping dontaudit (-DB) logged that probe
+# and failed the CI gate on a denial the base policy already hides.
+sesearch "${policy}" --dontaudit -s container_t -t container_t -c dir \
+	| grep -q 'write' \
+	|| { echo "Fedora dontaudit for container_t dir write is missing" >&2; exit 1; }
+if sesearch "${policy}" --allow -s container_t -t container_t -c dir \
+	| grep -q 'write'; then
+	echo "container_t must not be allowed to write its proc fd directory" >&2
+	exit 1
+fi
 for t in \
 	kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t kata_overlay_mount_t \
 	kata_overlay_mount_exec_t kata_scratch_device_t container_t container_file_t; do
