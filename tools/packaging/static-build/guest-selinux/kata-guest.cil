@@ -389,7 +389,7 @@
 (allow container_t container_runtime_tmpfs_t (dir (create setattr write add_name remove_name)))
 (allow container_t container_runtime_tmpfs_t (file (create write link unlink)))
 (allow container_t container_runtime_tmpfs_t (lnk_file (read)))
-(allow container_t container_runtime_tmpfs_t (sock_file (create setattr unlink write)))
+(allow container_t container_runtime_tmpfs_t (sock_file (create getattr open read setattr unlink write)))
 ; vLLM serves with io_uring, including a kernel polling thread. The guest
 ; kernel checks io_uring allowed at setup; only containers get it.
 (allow container_t io_uring_t (anon_inode (create map read write)))
@@ -412,6 +412,9 @@
 ; the tun device and /dev/kmsg, and read the guest kernel log.
 (allow container_t device_node (chr_file (getattr ioctl open read write)))
 (allow container_t kernel_t (system (syslog_read)))
+; The sysctl test writes /proc/sys/vm/max_map_count from the container. Every
+; vm sysctl shares this type, so the container can write the rest of them too.
+(allow container_t sysctl_vm_t (file (write)))
 
 ; Baseline harvested from NVIDIA GPU CI.
 ; dcgm-exporter runs the labeled /sbin/ldconfig in its own domain.
