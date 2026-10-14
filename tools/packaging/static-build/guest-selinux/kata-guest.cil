@@ -468,6 +468,9 @@
 (allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))
 (allow kata_coco_t sysctl_vm_t (file (getattr open read)))
 (allow kata_coco_t self (capability (mknod chown fowner fsetid setfcap dac_override dac_read_search)))
+; attestation-agent collects GPU evidence through NVML, which issues
+; privileged GPU ioctls and raises its worker threads' priority.
+(allow kata_coco_t self (capability (sys_admin sys_nice)))
 (allow kata_coco_t kernel_t (process (setsched)))
 (allow kata_coco_t kernel_t (system (ipc_info)))
 (allow kata_coco_t self (capability2 (perfmon)))
