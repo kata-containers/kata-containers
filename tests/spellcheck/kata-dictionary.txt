@@ -93,6 +93,10 @@ memfd
 memfds
 mounter
 mounters
+ptrace
+relabel
+superblock
+whiteouts
 pmem
 tmpfs
 Sharedfs

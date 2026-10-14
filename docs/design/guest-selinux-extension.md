@@ -104,6 +104,7 @@ verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=4096,has
 | `kata_nvidia_t` | Binaries run from the gpu extension | Yes |
 | `kata_coco_t` | Binaries the agent runs from the coco extension (attestation-agent, CDH, image-rs) | Yes |
 | `kata_mkfs_t` | The unpacked `dd` and `mke2fs` used for encrypted scratch volumes | Yes |
+| `kata_overlay_mount_t` | `kata-overlay-mount`, which the agent runs to mount each container overlay | Yes |
 | `container_t` | Container processes | Yes |
 
 `kata_agent_t` is a member of `container_runtime_domain`. That attribute
@@ -131,10 +132,21 @@ cannot run as the agent, confidential-data-hub, or NVIDIA stack.
 
 A third constraint covers `map`. overlayfs checks every mapping of a file in
 the overlay a second time, against the backing file with the credentials of
-the process that mounted the overlay. The agent mounts the erofs snapshotter
-overlays and confidential-data-hub mounts the guest-pull overlay, so those two
-domains keep `map` on container content. No other guest domain, including the
-NVIDIA stack and the formatter, may map it.
+the process that mounted the overlay. The mounter must therefore be able to
+map container content, or no container can map its own libraries. The agent
+does not mount container overlays itself. It runs `/usr/bin/kata-overlay-mount`
+from the base image, which enters `kata_overlay_mount_t`, mounts one overlay,
+and exits. The overlay holds that domain's credentials, so the agent never
+needs `map` on container content and the constraint denies it.
+
+`kata_overlay_mount_t` has the file access a container overlay needs for
+lookups, copy-up, and whiteouts, including `map` and `execute`. It has no
+`entrypoint` or `execute_no_trans` on container content, cannot transition to
+another domain, and can relabel a superblock only to a container content type.
+The agent cannot ptrace it. confidential-data-hub still mounts the guest-pull
+overlay itself, so `kata_coco_t` keeps `map` until it uses the helper too. No
+other guest domain, including the NVIDIA stack and the formatter, may map
+container content.
 
 The agent's own tmpfs files and memfds are `container_runtime_tmpfs_t`, a type
 containers can also write. When the agent, or a hook it runs, executes a file
@@ -302,11 +314,13 @@ compromised guest service, spreads inside the virtual machine:
   would otherwise let the agent execute `mount`, `modprobe`, or a disk tool
   and enter an unconfined domain (`spc_t`, `kmod_t`, `mount_t`, `fsadm_t`,
   `lvm_t`, `install_t`). A constraint refuses every domain change except to
-  the agent itself, `container_t`, or `kata_coco_t`.
+  the agent itself, `container_t`, `kata_coco_t`, or the overlay mount
+  helper.
 - **A missing process label.** An exec of container content with no label
   would enter `spc_t`, which is unconfined. That exec now fails. An explicit
   label of a guest domain fails too: container content can be a program image
-  only for a container domain. Only the two overlay mounters can map it.
+  only for a container domain. Only the overlay mount helper and the data hub
+  can map it; the agent cannot.
 - **A container payload run by a hook.** A file the agent or an OCI hook
   executes from its own tmpfs or memfds enters `container_t`, because the
   container can write that type too.
@@ -343,13 +357,16 @@ becoming the agent. It does not make the agent powerless.
 
 ## Limitations
 
-- The agent and confidential-data-hub can still map container content,
-  executable mappings included, because overlayfs checks every mapping against
-  the mounter. Neither one maps container files itself: the agent reads the
-  container's `/etc/passwd` directly, not through glibc NSS, so container
-  `libnss` modules never load into it. The policy cannot
-  stop it if their code is compromised. Program images and in-place exec stay
-  limited to container domains.
+- confidential-data-hub can still map container content, executable
+  mappings included, because it mounts the guest-pull overlay itself and
+  overlayfs checks every mapping against the mounter. CDH does not map
+  container files itself, but the policy cannot stop it if its code is
+  compromised. Moving that mount to `kata-overlay-mount` is a
+  guest-components change. Program images and in-place exec stay limited to
+  container domains.
+- Under guest SELinux the agent needs `/usr/bin/kata-overlay-mount` for every
+  container overlay. An image without it fails the mount instead of falling
+  back to mounting as the agent.
 - Everything created under `/run/kata-containers` gets `container_file_t`, not
   only container root filesystems.
 - The agent is not given module-loading authority. NVRC also disables module

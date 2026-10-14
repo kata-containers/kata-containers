@@ -65,6 +65,8 @@ ifneq ($(EXTRA_RUSTFEATURES),)
 endif
 
 TARGET_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
+OVERLAY_MOUNT_HELPER = kata-overlay-mount
+OVERLAY_MOUNT_HELPER_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(OVERLAY_MOUNT_HELPER)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR ?=
@@ -150,6 +152,7 @@ optimize: show-summary show-header
 ##TARGET install: install agent
 install: install-services
 	@install -D $(TARGET_PATH) $(DESTDIR)/$(BINDIR)/$(TARGET)
+	@install -D $(OVERLAY_MOUNT_HELPER_PATH) $(DESTDIR)/$(BINDIR)/$(OVERLAY_MOUNT_HELPER)
 
 ##TARGET clean: clean build
 clean:

@@ -412,6 +412,68 @@ pub(crate) fn common_storage_handler(logger: &Logger, storage: &Storage) -> Resu
     Ok(storage.mount_point.clone())
 }
 
+/// overlayfs checks every access to a layer, mmap included, with the
+/// credentials of the process that mounted it. Under guest SELinux the agent
+/// leaves the mount to this helper, which runs in its own domain, so the agent
+/// never holds credentials that can map container content.
+const OVERLAY_MOUNT_HELPER: &str = "/usr/bin/kata-overlay-mount";
+
+pub(crate) fn overlay_mount_uses_helper() -> bool {
+    rustjail::selinux::is_enabled().unwrap_or(false)
+}
+
+pub(crate) async fn mount_overlay(target: &Path, options: &[String]) -> Result<()> {
+    let output = {
+        // Keep the agent SIGCHLD handler from reaping this child before
+        // tokio::process observes it.
+        let _locker = rustjail::container::WAIT_PID_LOCKER.lock().await;
+        tokio::process::Command::new(OVERLAY_MOUNT_HELPER)
+            .arg(target)
+            .args(options)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .await
+            .with_context(|| format!("run {OVERLAY_MOUNT_HELPER} for {}", target.display()))?
+    };
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(anyhow!(
+        "{} failed for {}: status={}, stderr={}",
+        OVERLAY_MOUNT_HELPER,
+        target.display(),
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    ))
+}
+
+async fn overlay_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
+    let mount_path = Path::new(&storage.mount_point);
+    create_mount_destination(Path::new(&storage.source), mount_path, "", &storage.fstype)
+        .context("Could not create mountpoint")?;
+    info!(logger, "mounting overlay storage through helper";
+        "mount-destination" => mount_path.display(),
+        "mount-options" => storage.options.join(","),
+    );
+    mount_overlay(mount_path, &storage.options).await?;
+    set_ownership(logger, storage)?;
+    Ok(storage.mount_point.clone())
+}
+
+/// common_storage_handler, except that an overlay goes through the mount
+/// helper when guest SELinux is on.
+pub(crate) async fn overlay_aware_storage_handler(
+    logger: &Logger,
+    storage: &Storage,
+) -> Result<String> {
+    if storage.fstype == "overlay" && overlay_mount_uses_helper() {
+        return overlay_storage_handler(logger, storage).await;
+    }
+    common_storage_handler(logger, storage)
+}
+
 fn split_lowerdirs(lowerdirs: &str) -> Vec<String> {
     let mut dirs = vec![String::new()];
     let mut chars = lowerdirs.chars().peekable();

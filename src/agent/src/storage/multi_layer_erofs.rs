@@ -131,7 +131,7 @@ impl StorageHandler for MultiLayerErofsHandler {
             "mount-point" => &storage.mount_point,
         );
 
-        let path = crate::storage::common_storage_handler(ctx.logger, &storage)?;
+        let path = crate::storage::overlay_aware_storage_handler(ctx.logger, &storage).await?;
         crate::storage::new_device(path)
     }
 }
@@ -475,21 +475,24 @@ pub async fn handle_multi_layer_erofs_group(
     // The erofs layers carry no security.selinux xattrs, so without an
     // explicit context the whole rootfs would be unlabeled_t and unusable
     // from container_t.
-    if rustjail::selinux::is_enabled().unwrap_or(false) {
+    if crate::storage::overlay_mount_uses_helper() {
         options.push(overlay_context_option(mount_label));
+        crate::storage::mount_overlay(Path::new(&target_mount_point), &options)
+            .await
+            .context("failed to mount overlay")?;
+    } else {
+        let overlay_mount = kata_types::mount::Mount {
+            source: OVERLAY_TYPE.to_string(),
+            destination: PathBuf::from(&target_mount_point),
+            fs_type: OVERLAY_TYPE.to_string(),
+            options,
+            ..Default::default()
+        };
+
+        overlay_mount
+            .mount(Path::new(&target_mount_point))
+            .context("failed to mount overlay")?;
     }
-
-    let overlay_mount = kata_types::mount::Mount {
-        source: OVERLAY_TYPE.to_string(),
-        destination: PathBuf::from(&target_mount_point),
-        fs_type: OVERLAY_TYPE.to_string(),
-        options,
-        ..Default::default()
-    };
-
-    overlay_mount
-        .mount(Path::new(&target_mount_point))
-        .context("failed to mount overlay")?;
 
     info!(
         logger,

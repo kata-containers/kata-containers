@@ -9,7 +9,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
+use crate::storage::{new_device, overlay_aware_storage_handler, StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
 use kata_types::device::{DRIVER_OVERLAYFS_TYPE, DRIVER_VIRTIOFS_TYPE};
 use kata_types::mount::{StorageDevice, KATA_VOLUME_OVERLAYFS_CREATE_DIR};
@@ -86,7 +86,7 @@ impl StorageHandler for OverlayfsHandler {
                 ensure_directory_exists(Path::new(dir))?;
             }
         }
-        let path = common_storage_handler(ctx.logger, &storage)?;
+        let path = overlay_aware_storage_handler(ctx.logger, &storage).await?;
         new_device(path)
     }
 }
@@ -107,7 +107,7 @@ impl StorageHandler for VirtioFsHandler {
         storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
-        let path = common_storage_handler(ctx.logger, &storage)?;
+        let path = overlay_aware_storage_handler(ctx.logger, &storage).await?;
         new_device(path)
     }
 }

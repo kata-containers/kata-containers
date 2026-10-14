@@ -30,10 +30,11 @@ etc/selinux/kata/build-info           policy format and package versions
 | Domain | Entered by | Confinement |
 | --- | --- | --- |
 | `kernel_t` | NVRC as PID 1 (the policy is loaded after it starts) | unconfined |
-| `kata_agent_t` | exec of `/usr/bin/kata-agent` (`kata_agent_exec_t`) | `container_runtime_domain`, the rules runc gets. Not `unconfined_domain()`. One constraint limits domain changes to `container_t` and `kata_coco_t`. Another allows only container domains to use container content as a program image. Only container domains and the two overlay mounters, the agent and the data hub, may map it. Files the agent executes from its tmpfs or memfds enter `container_t` |
+| `kata_agent_t` | exec of `/usr/bin/kata-agent` (`kata_agent_exec_t`) | `container_runtime_domain`, the rules runc gets. Not `unconfined_domain()`. One constraint limits domain changes to `container_t`, `kata_coco_t`, and `kata_overlay_mount_t`. Another allows only container domains to use container content as a program image. Only container domains, the overlay mount helper, and the data hub may map it; the agent may not. Files the agent executes from its tmpfs or memfds enter `container_t` |
 | `kata_nvidia_t` | NVRC exec'ing anything from the gpu extension | enforced |
 | `kata_coco_t` | the agent exec'ing anything from the coco extension | enforced |
 | `kata_mkfs_t` | CDH exec'ing the unpacked base-image `dd` or `mke2fs` | confined to `kata_scratch_device_t`; cannot read extensions or container content |
+| `kata_overlay_mount_t` | the agent exec'ing `/usr/bin/kata-overlay-mount` (`kata_overlay_mount_exec_t`) | mounts one container overlay and exits. overlayfs keeps its credentials for layer access, so it may map container content but never run it as a program image |
 | `container_t` | the agent, from the OCI process label | enforced, as on an SELinux host |
 
 Every guest domain is enforced, and the build fails if one is marked
@@ -56,7 +57,7 @@ image, which `mkfs.erofs --file-contexts` labels at build time:
   domain run.
 - **erofs snapshotter** layers are mounted by the agent, which passes the
   container's `mountLabel` (or `container_file_t:s0`) as `context=` on the
-  container overlay.
+  container overlay. `kata-overlay-mount` mounts the overlay itself.
 - **nydus snapshotter** (guest pull) layers are unpacked by CDH under
   `/run/kata-containers/image`. Type transitions label that content
   `container_file_t` when it is created, on tmpfs (`tmpfs_t` parent) and on a

@@ -854,6 +854,9 @@ EOF
 	fi
 
 	${stripping_tool} "${ROOTFS_DIR}"/usr/bin/kata-agent
+	if [[ -f "${ROOTFS_DIR}"/usr/bin/kata-overlay-mount ]]; then
+		${stripping_tool} "${ROOTFS_DIR}"/usr/bin/kata-overlay-mount
+	fi
 
 	[[ -x "${AGENT_DEST}" ]] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"

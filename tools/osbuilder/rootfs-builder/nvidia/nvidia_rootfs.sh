@@ -522,6 +522,9 @@ chisseled_init() {
 	setup_nvrc_init_symlinks
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
+	# Under guest SELinux the agent mounts container overlays through this
+	# helper, so the overlay holds the helper's domain, not the agent's.
+	cp -a "${stage_one}"/usr/bin/kata-overlay-mount usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
 		cp -a "${stage_one}"/etc/kata-opa etc/.
 	fi
@@ -544,10 +547,10 @@ should_upx_compress() {
 		# UPX re-executes from an anonymous tmpfs file. The confidential
 		# components and the formatters they run (mke2fs, dd) stay unpacked
 		# so none of them executes generic tmpfs. kata-agent stays unpacked
-		# so its startup memfd is not container content. mkfs.ext4 is a
-		# symlink to mke2fs.
+		# so its startup memfd is not container content, and so does the
+		# overlay mount helper it runs. mkfs.ext4 is a symlink to mke2fs.
 		./sbin/mke2fs|./usr/sbin/mke2fs|./bin/dd|./usr/bin/dd) return 1 ;;
-		./usr/bin/kata-agent) return 1 ;;
+		./usr/bin/kata-agent|./usr/bin/kata-overlay-mount) return 1 ;;
 		./usr/local/bin/attestation-agent|./usr/local/bin/api-server-rest) return 1 ;;
 		./usr/local/bin/confidential-data-hub) return 1 ;;
 		*) return 0 ;;

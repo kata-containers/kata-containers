@@ -60,8 +60,8 @@ policy="${store_dir}/policy/policy.${policy_version}"
 ! sesearch "${policy}" --dontaudit | grep -q '^dontaudit ' \
 	|| { echo "dontaudit rules remain in ${policy}" >&2; exit 1; }
 for t in \
-	kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t \
-	kata_scratch_device_t container_t container_file_t; do
+	kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t kata_overlay_mount_t \
+	kata_overlay_mount_exec_t kata_scratch_device_t container_t container_file_t; do
 	seinfo "${policy}" -t "${t}" | grep -q "${t}" \
 		|| { echo "type ${t} missing from ${policy}" >&2; exit 1; }
 done
@@ -77,6 +77,15 @@ seinfo "${policy}" --constrain | grep -q \
 seinfo "${policy}" --constrain | grep -q \
 	'constrain file map.*kata_container_content.*kata_overlay_mounter' \
 	|| { echo "container-content map constraint missing" >&2; exit 1; }
+# The agent leaves overlay mounts to kata-overlay-mount and may not map
+# container content itself.
+mounters="$(seinfo "${policy}" -a kata_overlay_mounter -x)"
+grep -qw kata_overlay_mount_t <<< "${mounters}" \
+	|| { echo "kata_overlay_mount_t is not an overlay mounter" >&2; exit 1; }
+! grep -qw kata_agent_t <<< "${mounters}" \
+	|| { echo "kata_agent_t must not be an overlay mounter" >&2; exit 1; }
+sesearch "${policy}" -T -s kata_agent_t -t kata_overlay_mount_exec_t -c process | grep -q kata_overlay_mount_t \
+	|| { echo "agent -> kata_overlay_mount_t transition missing" >&2; exit 1; }
 sesearch "${policy}" -T -s kata_agent_t -t container_runtime_tmpfs_t -c process | grep -q container_t \
 	|| { echo "agent tmpfs exec -> container_t transition missing" >&2; exit 1; }
 seinfo "${policy}" --constrain | grep -q \
@@ -85,7 +94,7 @@ seinfo "${policy}" --constrain | grep -q \
 # Every domain the guest runs is enforced. The base policy keeps its own
 # permissive types, which nothing in the guest enters.
 permissive="$(seinfo "${policy}" --permissive)"
-for t in kernel_t kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t container_t; do
+for t in kernel_t kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t kata_overlay_mount_t container_t; do
 	! grep -qw "${t}" <<< "${permissive}" \
 		|| { echo "${t} is permissive in ${policy}" >&2; exit 1; }
 done

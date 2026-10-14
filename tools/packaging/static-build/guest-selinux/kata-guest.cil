@@ -15,6 +15,7 @@
 ;   kata_gpu_extension_t   gpu extension (context= mount)   -> kata_nvidia_t
 ;   kata_coco_extension_t  coco extension (context= mount)  -> kata_coco_t
 ;   fsadm_exec_t           unpacked base-image dd, mke2fs   -> kata_mkfs_t
+;   kata_overlay_mount_exec_t /usr/bin/kata-overlay-mount   -> kata_overlay_mount_t
 ;   kata_extension_t       any other extension              (no transition)
 ;
 ; Read README.md before changing this file.
@@ -23,8 +24,10 @@
 (type kata_coco_t)
 (type kata_mkfs_t)
 (type kata_nvidia_t)
+(type kata_overlay_mount_t)
 
 (type kata_agent_exec_t)
+(type kata_overlay_mount_exec_t)
 (type kata_coco_extension_t)
 (type kata_gpu_extension_t)
 (type kata_extension_t)
@@ -34,7 +37,9 @@
 (roletype system_r kata_coco_t)
 (roletype system_r kata_mkfs_t)
 (roletype system_r kata_nvidia_t)
+(roletype system_r kata_overlay_mount_t)
 (roletype object_r kata_agent_exec_t)
+(roletype object_r kata_overlay_mount_exec_t)
 (roletype object_r kata_coco_extension_t)
 (roletype object_r kata_gpu_extension_t)
 (roletype object_r kata_extension_t)
@@ -48,21 +53,25 @@
     (kata_coco_extension_t kata_gpu_extension_t kata_extension_t))
 
 (typeattributeset domain (kata_guest_domain))
-(typeattributeset domain (kata_mkfs_t))
+(typeattributeset domain (kata_mkfs_t kata_overlay_mount_t))
 (typeattributeset daemon (kata_guest_domain))
 (typeattributeset nsswitch_domain (kata_guest_domain))
 (typeattributeset syslog_client_type (kata_guest_domain))
 (typeattributeset kernel_system_state_reader (kata_guest_domain))
 (typeattributeset can_receive_kernel_messages (kata_guest_domain))
 
-(typeattributeset file_type (kata_agent_exec_t kata_extension_file_type))
+(typeattributeset file_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_extension_file_type))
 (typeattributeset device_node (kata_scratch_device_t))
-(typeattributeset non_security_file_type (kata_agent_exec_t kata_extension_file_type))
-(typeattributeset non_auth_file_type (kata_agent_exec_t kata_extension_file_type))
+(typeattributeset non_security_file_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_extension_file_type))
+(typeattributeset non_auth_file_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_extension_file_type))
 ; Only the agent binary is an exec_type: container-selinux lets every sandbox
 ; domain run any exec_type, which would expose the extensions to containers.
 (typeattributeset exec_type (kata_agent_exec_t))
-(typeattributeset entry_type (kata_agent_exec_t kata_coco_extension_t kata_gpu_extension_t))
+(typeattributeset entry_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_coco_extension_t kata_gpu_extension_t))
 
 ; runc's type is container_runtime_t. container-selinux puts the runtime
 ; rules on container_runtime_domain, then calls unconfined_domain() on
@@ -92,7 +101,7 @@
 ; with no exec label type-transitions to spc_t. Those types are unconfined.
 ; An allow inherited from the attribute cannot be removed. This constraint
 ; denies the domain change anyway: the agent may enter only itself,
-; container_t, or kata_coco_t.
+; container_t, kata_coco_t, or the overlay mount helper.
 (classpermission kata_agent_process_change)
 (classpermissionset kata_agent_process_change (process (transition dyntransition)))
 (classpermission kata_agent_process2_change)
@@ -100,11 +109,11 @@
 (constrain kata_agent_process_change
     (or
         (not (eq t1 kata_agent_t))
-        (eq t2 (kata_agent_t container_t kata_coco_t))))
+        (eq t2 (kata_agent_t container_t kata_coco_t kata_overlay_mount_t))))
 (constrain kata_agent_process2_change
     (or
         (not (eq t1 kata_agent_t))
-        (eq t2 (kata_agent_t container_t kata_coco_t))))
+        (eq t2 (kata_agent_t container_t kata_coco_t kata_overlay_mount_t))))
 
 ; A container binary must not run in a guest domain. The runtime attribute
 ; grants the agent entrypoint, execute_no_trans, and map on container content,
@@ -127,11 +136,12 @@
         (eq t1 container_domain)))
 
 ; overlayfs checks the mounter's credentials against the backing file on
-; every mapping in the overlay. The agent mounts the erofs overlays and the
-; data hub mounts the guest-pull overlay, so both keep map. No other guest
-; domain may map container content.
+; every mapping in the overlay. The agent leaves its overlay mounts to
+; kata-overlay-mount, so the agent itself cannot map container content.
+; The data hub still mounts the guest-pull overlay and keeps map until it
+; uses the helper too. No other guest domain may map container content.
 (typeattribute kata_overlay_mounter)
-(typeattributeset kata_overlay_mounter (kata_agent_t kata_coco_t))
+(typeattributeset kata_overlay_mounter (kata_overlay_mount_t kata_coco_t))
 (classpermission kata_container_content_map)
 (classpermissionset kata_container_content_map (file (map)))
 (constrain kata_container_content_map
@@ -263,6 +273,42 @@
 (allow kata_mkfs_t root_t (chr_file (read write)))
 (allow kata_mkfs_t kata_coco_t (fifo_file (getattr read write ioctl)))
 
+; The agent runs /usr/bin/kata-overlay-mount for every container overlay.
+; overlayfs keeps the helper's credentials and uses them for every access to
+; a layer: lookups, copy-up, whiteouts, xattrs, and the second mmap check.
+; So this domain gets the file access of a container overlay, but never
+; entrypoint or execute_no_trans, and the helper exits once it has mounted.
+; Its only other caller-controlled input is the context= label, and it can
+; relabel a superblock only to container content.
+(filecon "/usr/bin/kata-overlay-mount" file (system_u object_r kata_overlay_mount_exec_t ((s0) (s0))))
+(typetransition kata_agent_t kata_overlay_mount_exec_t process kata_overlay_mount_t)
+(allow kata_agent_t kata_overlay_mount_exec_t (file (getattr open read execute)))
+(allow kata_agent_t kata_overlay_mount_t (process (transition siginh rlimitinh noatsecure)))
+(allow kata_overlay_mount_t kata_overlay_mount_exec_t (file (entrypoint getattr open read map execute)))
+; stdin is /dev/null, still the devtmpfs type; stdout and stderr are pipes
+; back to the agent. The loader cache is NVRC's tmpfs.
+(allow kata_overlay_mount_t kata_agent_t (fd (use)))
+(allow kata_overlay_mount_t kata_agent_t (fifo_file (getattr read write ioctl)))
+(allow kata_overlay_mount_t kata_agent_t (process (sigchld)))
+(allow kata_overlay_mount_t device_t (chr_file (getattr read write)))
+(allow kata_overlay_mount_t tmpfs_t (file (getattr open read map)))
+(allow kata_overlay_mount_t self (capability (chown dac_override dac_read_search fowner fsetid mknod setfcap sys_admin)))
+(allow kata_overlay_mount_t file_type (dir (getattr search)))
+(allow kata_overlay_mount_t fs_t (filesystem (mount relabelfrom)))
+(allow kata_overlay_mount_t kata_container_content (filesystem (mount relabelto)))
+(allow kata_overlay_mount_t kata_container_content
+    (dir (getattr search open read ioctl lock write add_name remove_name create rmdir rename reparent setattr mounton)))
+(allow kata_overlay_mount_t kata_container_content
+    (file (getattr open read write append create unlink rename link setattr lock ioctl map execute execmod)))
+(allow kata_overlay_mount_t kata_container_content
+    (lnk_file (getattr read create unlink rename setattr)))
+(allow kata_overlay_mount_t kata_container_content
+    (chr_file (getattr open read write ioctl create unlink rename setattr)))
+(allow kata_overlay_mount_t kata_container_content
+    (fifo_file (getattr open read write create unlink rename setattr)))
+(allow kata_overlay_mount_t kata_container_content
+    (sock_file (getattr open read write create unlink rename setattr)))
+
 ; NVRC mounts every extension but the selinux one with context=<type>, which
 ; needs the type to be associable with its own superblock.
 (allow kata_extension_file_type self (filesystem (associate)))
@@ -310,7 +356,7 @@
 ; which the agent copies into the container's own rootfs).
 (typeattribute kata_extension_reader)
 (typeattributeset kata_extension_reader
-    (and (domain) (not (container_domain kata_mkfs_t))))
+    (and (domain) (not (container_domain kata_mkfs_t kata_overlay_mount_t))))
 (allow kata_extension_reader kata_extension_file_type (dir (getattr search open read)))
 (allow kata_extension_reader kata_extension_file_type (file (getattr open read map)))
 (allow kata_extension_reader kata_extension_file_type (lnk_file (getattr read)))
