@@ -287,18 +287,10 @@ pub struct VolumeManager {
     volume_states: Arc<RwLock<HashMap<String, VolumeState>>>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 struct VolumeState {
-    // Source path (on the host)
-    source_path: String,
-    // Guest path
-    guest_path: String,
-    // Reference count (how many containers are using it)
-    ref_count: usize,
-    // List of container IDs using this volume
-    containers: HashSet<String>,
-    // Monitor task handle (if any)
-    monitor_task: Option<Arc<JoinHandle<()>>>,
+    // Each container has its own guest copy, so its watcher must be released separately.
+    containers: HashMap<String, Vec<JoinHandle<()>>>,
 }
 
 #[allow(dead_code)]
@@ -316,62 +308,42 @@ impl VolumeManager {
         container_id: &str,
         mount_destination: &Path,
     ) -> Result<String> {
-        let mut states = self.volume_states.write().await;
-
-        if let Some(state) = states.get_mut(canonical_source) {
-            // Existing volume and update reference
-            state.ref_count += 1;
-            state.containers.insert(container_id.to_string());
-
-            info!(
-                sl!(),
-                "Existing volume: source={:?}, guest={:?}, ref_count={}",
-                canonical_source,
-                state.guest_path,
-                state.ref_count,
-            );
-        }
-
-        // Create a new volume state
         let guest_path = generate_copy_file_guest_path(container_id, mount_destination)
             .context("generate path failed")?;
 
-        let mut containers = HashSet::new();
-        containers.insert(container_id.to_string());
-
-        let state = VolumeState {
-            source_path: canonical_source.to_string(),
-            guest_path: guest_path.clone(),
-            ref_count: 1,
-            containers,
-            monitor_task: None,
-        };
-
-        states.insert(state.source_path.clone(), state.clone());
+        let mut states = self.volume_states.write().await;
+        let state = states.entry(canonical_source.to_string()).or_default();
+        state
+            .containers
+            .entry(container_id.to_string())
+            .or_default();
 
         info!(
             sl!(),
-            "Created new volume state: source={:?}, guest={:?}",
-            state.source_path,
-            state.guest_path,
+            "Volume source={:?}, guest={:?}, ref_count={}",
+            canonical_source,
+            guest_path,
+            state.containers.len(),
         );
 
-        // Return guest path
         Ok(guest_path)
     }
 
-    /// Register monitor task into the volume manager
     pub async fn register_monitor(
         &self,
         canonical_source: &str,
+        container_id: &str,
         monitor_task: Option<JoinHandle<()>>,
     ) -> Result<()> {
-        let mut states = self.volume_states.write().await;
-
-        if let Some(state) = states.get_mut(canonical_source) {
-            if let Some(handle) = monitor_task {
-                state.monitor_task = Some(Arc::new(handle));
-            }
+        if let Some(handle) = monitor_task {
+            let mut states = self.volume_states.write().await;
+            states
+                .entry(canonical_source.to_string())
+                .or_default()
+                .containers
+                .entry(container_id.to_string())
+                .or_default()
+                .push(handle);
         }
 
         Ok(())
@@ -385,28 +357,26 @@ impl VolumeManager {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| source_path.to_string());
 
-        if let Some(state) = states.get_mut(&canonical_source) {
-            state.containers.remove(container_id);
-            state.ref_count = state.ref_count.saturating_sub(1);
-
-            if state.ref_count == 0 {
-                // Abort the monitor task
-                if let Some(handle) = &state.monitor_task {
-                    handle.abort();
-                }
-
-                info!(
-                    sl!(),
-                    "Volume has no more references, source={:?}, guest={:?}",
-                    canonical_source,
-                    state.guest_path
-                );
-
-                return Ok(true); // Can be cleaned up
-            }
+        let Some(state) = states.get_mut(&canonical_source) else {
+            return Ok(false);
+        };
+        let Some(monitors) = state.containers.remove(container_id) else {
+            return Ok(false);
+        };
+        for monitor in monitors {
+            monitor.abort();
+        }
+        if !state.containers.is_empty() {
+            return Ok(false);
         }
 
-        Ok(false)
+        states.remove(&canonical_source);
+        info!(
+            sl!(),
+            "Volume has no more references, source={:?}", canonical_source
+        );
+
+        Ok(true) // Can be cleaned up
     }
 }
 
@@ -498,7 +468,7 @@ impl ShareFsVolume {
 
                     // Register monitor into Volume Manager
                     volume_manager
-                        .register_monitor(&src.to_string_lossy(), monitor_task)
+                        .register_monitor(&src.to_string_lossy(), cid, monitor_task)
                         .await?;
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
@@ -1004,6 +974,54 @@ mod test {
         assert!(is_system_mount(sys_sub_dir));
         assert!(is_system_mount(proc_sub_dir));
         assert!(!is_system_mount(not_sys_dir));
+    }
+
+    async fn add_container(
+        manager: &VolumeManager,
+        source: &str,
+        cid: &str,
+    ) -> tokio::sync::oneshot::Receiver<()> {
+        manager
+            .get_or_create_volume(source, cid, Path::new("/dst"))
+            .await
+            .unwrap();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let monitor = tokio::spawn(async move {
+            let _tx = tx;
+            std::future::pending::<()>().await
+        });
+        manager
+            .register_monitor(source, cid, Some(monitor))
+            .await
+            .unwrap();
+        rx
+    }
+
+    async fn is_aborted(monitor: &mut tokio::sync::oneshot::Receiver<()>) -> bool {
+        tokio::task::yield_now().await;
+        matches!(
+            monitor.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+        )
+    }
+
+    #[tokio::test]
+    async fn test_release_volume_per_container() {
+        let manager = VolumeManager::new();
+        let source = "/nonexistent/kata-volume-manager-test";
+        let mut a = add_container(&manager, source, "a").await;
+        let mut b = add_container(&manager, source, "b").await;
+
+        assert!(!manager.release_volume(source, "a").await.unwrap());
+        assert!(is_aborted(&mut a).await);
+        assert!(!is_aborted(&mut b).await);
+
+        assert!(!manager.release_volume(source, "a").await.unwrap());
+        assert!(!is_aborted(&mut b).await);
+
+        assert!(manager.release_volume(source, "b").await.unwrap());
+        assert!(is_aborted(&mut b).await);
+        assert!(!manager.release_volume(source, "b").await.unwrap());
     }
 
     #[test]
