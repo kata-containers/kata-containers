@@ -30,11 +30,17 @@ echo "policy-version = ${policy_version}" >> /etc/selinux/semanage.conf
 
 # -n: build the store without loading it; the builder has no SELinux of its own.
 semodule -n -X "${module_priority}" -i "${script_dir}/kata-guest.cil"
+# While the policy is being locked down, do not let base-policy dontaudit rules
+# hide denials that kill a guest service. This can be removed after enforcing
+# CI has exercised every supported workload.
+semodule -n -DB
 
 policy="${store_dir}/policy/policy.${policy_version}"
 [[ -f "${policy}" ]] || { echo "expected ${policy} to be built" >&2; exit 1; }
 
 # Fail the build rather than ship a policy the guest cannot use.
+! sesearch "${policy}" --dontaudit | grep -q '^dontaudit ' \
+	|| { echo "dontaudit rules remain in ${policy}" >&2; exit 1; }
 for t in \
 	kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t \
 	kata_scratch_device_t container_t container_file_t; do
