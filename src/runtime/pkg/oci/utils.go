@@ -1328,15 +1328,32 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		return vc.SandboxConfig{}, err
 	}
 
-	// If we are utilizing static resource management for the sandbox, ensure that the hypervisor is started
-	// with the base number of CPU/memory (which is equal to the default CPU/memory specified for the runtime
-	// configuration or annotations) as well as any specified workload resources.
+	// If we are utilizing static resource management for the sandbox, the VM is sized
+	// from the workload resources plus the configured overhead. The configured defaults
+	// are only a fallback, used when the workload states no CPU or memory limits at all.
 	if sandboxConfig.StaticResourceMgmt {
 		sandboxConfig.SandboxResources.BaseCPUs = sandboxConfig.HypervisorConfig.NumVCPUsF
 		sandboxConfig.SandboxResources.BaseMemMB = sandboxConfig.HypervisorConfig.MemorySize
 
-		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
-		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+		workloadCPUs := sandboxConfig.SandboxResources.WorkloadCPUs
+		workloadMemMB := sandboxConfig.SandboxResources.WorkloadMemMB
+
+		// A single limit in either dimension is enough to leave the defaults
+		// behind. The dimension without a limit then contributes nothing but
+		// its overhead, which is why a zero result has to be rejected below.
+		if workloadCPUs > 0 || workloadMemMB > 0 {
+			sandboxConfig.HypervisorConfig.NumVCPUsF = max(sandboxConfig.HypervisorConfig.OverheadVCPUsF+workloadCPUs, 1)
+			sandboxConfig.HypervisorConfig.MemorySize = sandboxConfig.HypervisorConfig.OverheadMemMB + workloadMemMB
+
+			// The remote hypervisor sizes its instance from the peer pod
+			// config rather than from this value, so it ships no
+			// default_memory and legitimately computes to 0 here.
+			if sandboxConfig.HypervisorConfig.MemorySize == 0 && sandboxConfig.HypervisorType != vc.RemoteHypervisor {
+				return vc.SandboxConfig{}, fmt.Errorf("computed sandbox memory is 0 MiB; set a memory limit or configure a non-zero overhead_memory")
+			}
+
+			sandboxConfig.HypervisorConfig.DefaultMaxMemorySize = max(sandboxConfig.HypervisorConfig.DefaultMaxMemorySize, uint64(sandboxConfig.HypervisorConfig.MemorySize))
+		}
 
 		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
@@ -1353,8 +1370,12 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		ociLog.WithFields(logrus.Fields{
 			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,
 			"default cpu":        sandboxConfig.SandboxResources.BaseCPUs,
+			"overhead cpu":       sandboxConfig.HypervisorConfig.OverheadVCPUsF,
 			"workload mem in MB": sandboxConfig.SandboxResources.WorkloadMemMB,
 			"default mem":        sandboxConfig.SandboxResources.BaseMemMB,
+			"overhead mem in MB": sandboxConfig.HypervisorConfig.OverheadMemMB,
+			"sandbox cpu":        sandboxConfig.HypervisorConfig.NumVCPUsF,
+			"sandbox mem in MB":  sandboxConfig.HypervisorConfig.MemorySize,
 		}).Debugf("static resources set")
 
 	}

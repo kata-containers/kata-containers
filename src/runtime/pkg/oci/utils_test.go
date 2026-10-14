@@ -1510,6 +1510,181 @@ func TestCalculateSandboxSizing(t *testing.T) {
 	}
 }
 
+// The expectations below mirror the runtime-rs cases in
+// src/runtime-rs/crates/resource/src/cpu_mem/initial_size.rs so both runtimes
+// size a sandbox identically for the same configuration and workload limits.
+func TestStaticResourceMgmtSizing(t *testing.T) {
+	assert := assert.New(t)
+
+	configPath, err := createConfig("config.json", minimalConfig)
+	assert.NoError(err)
+	defer os.Remove(configPath)
+
+	spec, err := compatoci.ParseConfigJSON(tempBundlePath)
+	assert.NoError(err)
+
+	savedFunc := config.GetHostPathFunc
+	config.GetHostPathFunc = func(devInfo config.DeviceInfo, vhostUserStoreEnabled bool,
+		vhostUserStorePath string) (string, error) {
+		return devInfo.ContainerPath, nil
+	}
+	defer func() {
+		config.GetHostPathFunc = savedFunc
+	}()
+
+	testCases := []struct {
+		name           string
+		hypervisorType vc.HypervisorType
+		static         bool
+		defaultVCPUs   float32
+		overheadVCPUs  float32
+		defaultMemMB   uint32
+		overheadMemMB  uint32
+		workloadCPUs   float32
+		workloadMemMB  uint32
+		expectedVCPUs  float32
+		expectedMemMB  uint32
+		expectedErrStr string
+	}{
+		{
+			name:          "both limits",
+			static:        true,
+			defaultVCPUs:  3,
+			overheadVCPUs: 0.75,
+			defaultMemMB:  1024,
+			overheadMemMB: 256,
+			workloadCPUs:  1.25,
+			workloadMemMB: 1024,
+			expectedVCPUs: 2,
+			expectedMemMB: 1280,
+		},
+		{
+			name:          "cpu only limit",
+			static:        true,
+			defaultVCPUs:  3,
+			overheadVCPUs: 0.5,
+			defaultMemMB:  1024,
+			overheadMemMB: 128,
+			workloadCPUs:  1.5,
+			expectedVCPUs: 2,
+			expectedMemMB: 128,
+		},
+		{
+			name:          "memory only limit",
+			static:        true,
+			defaultVCPUs:  3,
+			overheadVCPUs: 0.5,
+			defaultMemMB:  1024,
+			overheadMemMB: 128,
+			workloadMemMB: 512,
+			expectedVCPUs: 1,
+			expectedMemMB: 640,
+		},
+		{
+			name:          "both limits zero overhead",
+			static:        true,
+			defaultVCPUs:  3,
+			defaultMemMB:  1024,
+			workloadCPUs:  1.25,
+			workloadMemMB: 1024,
+			expectedVCPUs: 1.25,
+			expectedMemMB: 1024,
+		},
+		{
+			name:          "memory only limit zero overhead",
+			static:        true,
+			defaultVCPUs:  3,
+			defaultMemMB:  1024,
+			workloadMemMB: 512,
+			expectedVCPUs: 1,
+			expectedMemMB: 512,
+		},
+		{
+			// Without limits the configured defaults stand on their
+			// own. They are never added to the workload limits.
+			name:          "no limits falls back to defaults",
+			static:        true,
+			defaultVCPUs:  3,
+			overheadVCPUs: 0.75,
+			defaultMemMB:  1024,
+			overheadMemMB: 256,
+			expectedVCPUs: 3,
+			expectedMemMB: 1024,
+		},
+		{
+			name:          "dynamic sizing leaves defaults alone",
+			defaultVCPUs:  3,
+			overheadVCPUs: 0.75,
+			defaultMemMB:  1024,
+			overheadMemMB: 256,
+			workloadCPUs:  1.25,
+			workloadMemMB: 1024,
+			expectedVCPUs: 3,
+			expectedMemMB: 1024,
+		},
+		{
+			// A CPU-only limit with no memory overhead leaves nothing
+			// to boot the guest with, so this has to be rejected
+			// rather than silently sized to the configured default.
+			name:           "cpu only limit with no memory overhead",
+			static:         true,
+			defaultVCPUs:   3,
+			defaultMemMB:   1024,
+			workloadCPUs:   1.5,
+			expectedErrStr: "computed sandbox memory is 0 MiB",
+		},
+		{
+			// The remote hypervisor sizes its instance elsewhere, so a
+			// computed 0 is not an error for it.
+			name:           "remote hypervisor tolerates zero memory",
+			hypervisorType: vc.RemoteHypervisor,
+			static:         true,
+			workloadCPUs:   1.5,
+			expectedVCPUs:  1.5,
+			expectedMemMB:  0,
+		},
+	}
+
+	for _, tt := range testCases {
+		hypervisorType := tt.hypervisorType
+		if hypervisorType == "" {
+			hypervisorType = vc.QemuHypervisor
+		}
+
+		runtimeConfig := RuntimeConfig{
+			HypervisorType: hypervisorType,
+			HypervisorConfig: vc.HypervisorConfig{
+				NumVCPUsF:      tt.defaultVCPUs,
+				OverheadVCPUsF: tt.overheadVCPUs,
+				MemorySize:     tt.defaultMemMB,
+				OverheadMemMB:  tt.overheadMemMB,
+			},
+			StaticSandboxResourceMgmt: tt.static,
+			SandboxCPUs:               tt.workloadCPUs,
+			SandboxMemMB:              tt.workloadMemMB,
+		}
+
+		sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, false, true)
+
+		if tt.expectedErrStr != "" {
+			assert.Error(err, tt.name)
+			assert.Contains(err.Error(), tt.expectedErrStr, tt.name)
+			continue
+		}
+
+		assert.NoError(err, tt.name)
+		assert.Equal(tt.expectedVCPUs, sandboxConfig.HypervisorConfig.NumVCPUsF, tt.name)
+		assert.Equal(tt.expectedMemMB, sandboxConfig.HypervisorConfig.MemorySize, tt.name)
+
+		if !tt.static {
+			continue
+		}
+
+		assert.Equal(vc.RoundUpNumVCPUs(tt.expectedVCPUs), sandboxConfig.HypervisorConfig.DefaultMaxVCPUs, tt.name)
+		assert.GreaterOrEqual(sandboxConfig.HypervisorConfig.DefaultMaxMemorySize, uint64(tt.expectedMemMB), tt.name)
+	}
+}
+
 func TestNewMount(t *testing.T) {
 	assert := assert.New(t)
 

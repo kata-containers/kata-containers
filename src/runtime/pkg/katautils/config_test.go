@@ -1016,6 +1016,61 @@ func TestHypervisorDefaults(t *testing.T) {
 	assert.Equal(h.defaultMemSz(), uint32(1024), "default memory size is wrong")
 }
 
+func TestHypervisorOverheadDefaults(t *testing.T) {
+	assert := assert.New(t)
+
+	h := hypervisor{}
+
+	// Unlike the defaults, an unset overhead stays at zero rather than
+	// picking up a floor: the VM is then sized from the workload limits only.
+	assert.Equal(h.overheadVCPUs(), float32(0), "default vCPU overhead is wrong")
+	assert.Equal(h.overheadMemSz(), uint32(0), "default memory overhead is wrong")
+
+	h.OverheadVCPUs = 0.4
+	h.OverheadMemMB = 128
+	assert.Equal(h.overheadVCPUs(), float32(0.4), "custom vCPU overhead is wrong")
+	assert.Equal(h.overheadMemSz(), uint32(128), "custom memory overhead is wrong")
+
+	h.OverheadVCPUs = -1
+	assert.Equal(h.overheadVCPUs(), float32(0), "negative vCPU overhead is wrong")
+}
+
+func TestHypervisorOverheadFromConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir := t.TempDir()
+
+	hypervisorPath := filepath.Join(tmpdir, "hypervisor")
+	kernelPath := filepath.Join(tmpdir, "kernel")
+	imagePath := filepath.Join(tmpdir, "image")
+
+	for _, file := range []string{hypervisorPath, kernelPath, imagePath} {
+		err := os.WriteFile(file, []byte(""), os.FileMode(0640))
+		assert.NoError(err)
+	}
+
+	runtimeConfigFileData := fmt.Sprintf(`
+[hypervisor.qemu]
+path = "%s"
+kernel = "%s"
+image = "%s"
+default_vcpus = 2
+overhead_vcpus = 0.4
+default_memory = 1024
+overhead_memory = 128
+`, hypervisorPath, kernelPath, imagePath)
+
+	configPath := filepath.Join(tmpdir, "runtime.toml")
+	err := os.WriteFile(configPath, []byte(runtimeConfigFileData), os.FileMode(0640))
+	assert.NoError(err)
+
+	_, config, err := LoadConfiguration(configPath, true)
+	assert.NoError(err)
+
+	assert.Equal(float32(0.4), config.HypervisorConfig.OverheadVCPUsF, "vCPU overhead was not parsed")
+	assert.Equal(uint32(128), config.HypervisorConfig.OverheadMemMB, "memory overhead was not parsed")
+}
+
 func TestHypervisorDefaultsHypervisor(t *testing.T) {
 	assert := assert.New(t)
 
