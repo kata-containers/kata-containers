@@ -182,6 +182,9 @@
 (allow kata_agent_t kata_extension_t (dir (add_name remove_name create rename reparent)))
 ; Stop a container: SIGTERM, then SIGKILL.
 (allow kata_agent_t container_t (process (signal sigkill)))
+; Starting pause enters container_t. Inherit signal state, rlimits, and the
+; AT_SECURE flag; otherwise the workload starts in glibc secure mode.
+(allow kata_agent_t container_t (process (siginh rlimitinh noatsecure)))
 ; Start attestation-agent from the coco extension. The type transition into
 ; kata_coco_t is already allowed, and the constraint keeps it there.
 (allow kata_agent_t kata_coco_extension_t (file (execute)))
