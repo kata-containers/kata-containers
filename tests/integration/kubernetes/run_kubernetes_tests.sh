@@ -15,6 +15,8 @@ source "${kubernetes_dir}/../../common.bash"
 source "${kubernetes_dir}/tests_common.sh"
 # shellcheck source=/dev/null
 source "${kubernetes_dir}/k8s_bats_runner.sh"
+# shellcheck source=/dev/null
+source "${kubernetes_dir}/guest_selinux_triage.sh"
 
 cleanup() {
 	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
@@ -24,6 +26,7 @@ cleanup() {
 		# shellcheck disable=SC2086
 		kubectl delete pod -n kube-system ${pods_to_be_deleted} || true
 	fi
+	disable_triage_guest_permissive || true
 }
 
 trap cleanup EXIT
@@ -167,4 +170,5 @@ ensure_yq
 # Use common bats test runner with proper reporting, plain RuntimeClass by
 # default, and triage-only -debug re-runs for failed cases.
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
+setup_guest_selinux_triage
 run_kubernetes_bats_tests "${kubernetes_dir}" K8S_TEST_UNION

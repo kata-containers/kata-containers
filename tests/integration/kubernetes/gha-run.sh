@@ -451,6 +451,9 @@ function collect_artifacts() {
 	sudo journalctl --since="${start_time}" > "${journalctl_log_path}"
 
 	collect_guest_selinux_denials "${journalctl_log_path}" "${artifacts_dir}"
+	# Per failed test, from the enforcing run and its permissive triage re-run.
+	find "${kubernetes_dir}/reports" -name 'guest-selinux-denials-*.log' \
+		-exec cp {} "${artifacts_dir}/" \; 2>/dev/null || true
 
 	local k3s_dir
 	k3s_dir='/var/lib/rancher/k3s/agent'

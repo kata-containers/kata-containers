@@ -89,6 +89,16 @@ debug_runtime_class_available() {
 	kubectl get runtimeclass "${base}-debug" &>/dev/null
 }
 
+# Call an optional hook function named by an environment variable.
+# Hook failures never change a test verdict.
+run_k8s_bats_hook() {
+	local hook="$1"
+	shift
+	if [[ -n "${hook}" ]] && declare -F "${hook}" >/dev/null; then
+		"${hook}" "$@" || true
+	fi
+}
+
 # Run one bats file under KATA_TEST_RUNTIME_CLASS_MODE, writing TAP to out_file.
 # Returns the bats exit status.
 run_bats_file_with_mode() {
@@ -119,6 +129,7 @@ triage_failed_tests_with_debug() {
 	local safe_name
 	local triage_out
 	local filter
+	local since
 
 	mapfile -t failed < <(failed_bats_tests_from_tap "${tap_file}")
 	[[ ${#failed[@]} -eq 0 ]] && return 0
@@ -128,6 +139,8 @@ triage_failed_tests_with_debug() {
 		return 0
 	fi
 
+	run_k8s_bats_hook "${K8S_BATS_BEFORE_TRIAGE:-}"
+
 	for name in "${failed[@]}"; do
 		[[ -z "${name}" ]] && continue
 		info "RETRY (triage only) on kata-${KATA_HYPERVISOR}-debug: ${name}; verdict remains FAIL"
@@ -135,10 +148,15 @@ triage_failed_tests_with_debug() {
 		triage_out="${report_dir}/triage-debug-${test_entry}-${safe_name}.out"
 		filter="^$(escape_bats_filter_regex "${name}")$"
 
+		since="$(date '+%Y-%m-%d %H:%M:%S')"
 		# Ignore triage status: the plain (or hard-require) run is the verdict.
 		run_bats_file_with_mode "${test_entry}" "debug" "${triage_out}" \
 			-f "${filter}" || true
+		run_k8s_bats_hook "${K8S_BATS_AFTER_FAILURE:-}" \
+			"triage-${test_entry}-${safe_name}" "${since}" "${report_dir}"
 	done
+
+	run_k8s_bats_hook "${K8S_BATS_AFTER_TRIAGE:-}"
 
 	# Restore plain fixtures for subsequent files in the union.
 	apply_test_runtime_class_mode "plain"
@@ -153,6 +171,12 @@ triage_failed_tests_with_debug() {
 # Environment:
 #	BATS_TEST_FAIL_FAST - "yes" to stop after the first failed file
 #	K8S_TEST_DEBUG_RETRY - "true" (default) to re-run failed cases on -debug
+#	K8S_BATS_BEFORE_FILE - optional function run before each bats file
+#	K8S_BATS_AFTER_FAILURE - optional function run after each failed run and
+#		each triage re-run, given a label, the run's start time, and the
+#		report directory
+#	K8S_BATS_BEFORE_TRIAGE, K8S_BATS_AFTER_TRIAGE - optional functions run
+#		around the triage re-runs of a failed file
 run_kubernetes_bats_tests() {
 	local test_dir="$1"
 	local -n test_array=$2
@@ -189,6 +213,7 @@ run_kubernetes_bats_tests() {
 	local out_file
 	local verdict=0
 	local mode
+	local since
 
 	for test_entry in "${test_array[@]}"; do
 		test_entry=$(echo "${test_entry}" | tr -d '[:space:][:cntrl:]')
@@ -197,9 +222,7 @@ run_kubernetes_bats_tests() {
 		info "Executing ${test_entry}"
 		out_file="${report_dir}/${test_entry}.out"
 
-		if [[ -n "${K8S_BATS_BEFORE_FILE:-}" ]] && declare -F "${K8S_BATS_BEFORE_FILE}" >/dev/null; then
-			"${K8S_BATS_BEFORE_FILE}" || true
-		fi
+		run_k8s_bats_hook "${K8S_BATS_BEFORE_FILE:-}"
 
 		pushd "${test_dir}" > /dev/null || return 1
 
@@ -215,10 +238,13 @@ run_kubernetes_bats_tests() {
 		fi
 
 		verdict=0
+		since="$(date '+%Y-%m-%d %H:%M:%S')"
 		run_bats_file_with_mode "${test_entry}" "${mode}" "${out_file}" || verdict=$?
 
 		if [[ ${verdict} -ne 0 ]]; then
 			tests_fail+=("${test_entry}")
+			run_k8s_bats_hook "${K8S_BATS_AFTER_FAILURE:-}" \
+				"${mode}-${test_entry}" "${since}" "${report_dir}"
 			mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
 			local not_ok_file
 			not_ok_file="$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"

@@ -38,7 +38,11 @@ etc/selinux/kata/build-info           policy format and package versions
 
 Every guest domain is enforced, and the build fails if one is marked
 permissive. To harvest rules for a new workload, append `enforcing=0` to the
-guest `kernel_params` and collect the AVC denials.
+guest `kernel_params` and collect the AVC denials. CI does this for every
+failed test on the NVIDIA runtime-rs jobs: it saves the denials from the
+enforcing run, re-runs the failed cases on the debug RuntimeClass with
+`enforcing=0`, and saves those denials too, as
+`guest-selinux-denials-<run>.log` in the job artifacts.
 
 ## Labels for content without xattrs
 
