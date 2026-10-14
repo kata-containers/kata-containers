@@ -211,41 +211,39 @@ impl Process {
             };
 
             info!(logger, "begin passfd io wait process");
-            let resp = match agent.wait_process(req).await {
-                Ok(ret) => ret,
+            // An unknown exit must still trigger cleanup without reporting success.
+            let exit_code = match agent.wait_process(req).await {
+                Ok(ret) => {
+                    info!(
+                        logger,
+                        "end passfd io wait process exit code {}", ret.status
+                    );
+                    ret.status
+                }
                 Err(e) => {
                     error!(logger, "failed to passfd io wait process {:?}", e);
-                    return;
+                    UNKNOWN_EXIT_STATUS
                 }
             };
-
-            info!(
-                logger,
-                "end passfd io wait process exit code {}", resp.status
-            );
 
             let containers = containers.read().await;
             let container_id = &process.container_id.container_id;
-            let c = match containers.get(container_id) {
-                Some(c) => c,
-                None => {
+            if let Some(c) = containers.get(container_id) {
+                if let Err(err) = c.stop_process(&process).await {
                     error!(
                         logger,
-                        "Failed to stop process, since container {} not found", container_id
+                        "Failed to stop process, process = {:?}, err = {:?}", process, err
                     );
-                    return;
                 }
-            };
-
-            if let Err(err) = c.stop_process(&process).await {
+            } else {
                 error!(
                     logger,
-                    "Failed to stop process, process = {:?}, err = {:?}", process, err
+                    "Failed to stop process, since container {} not found", container_id
                 );
             }
 
             let mut exit_status = exit_status.write().await;
-            exit_status.update_exit_code(resp.status);
+            exit_status.update_exit_code(exit_code);
             drop(exit_status);
 
             let mut status = status.write().await;
@@ -502,5 +500,29 @@ mod tests {
         ));
         assert!(!is_binary_stdio("/run/containerd/io/stdout"));
         assert!(!is_binary_stdio("file:///run/container.log"));
+    }
+
+    #[tokio::test]
+    async fn test_passfd_io_wait_agent_error() {
+        use super::*;
+        use std::time::Duration;
+
+        let container_process = ContainerProcess::new("container", "").unwrap();
+        let mut process = Process::new(&container_process, 0, "", None, None, None, false);
+        let (watcher, exit_status) = process.fetch_exit_watcher().unwrap();
+        let agent: Arc<dyn Agent> = Arc::new(agent::kata::KataAgent::new(Default::default()));
+
+        process
+            .passfd_io_wait(Arc::new(RwLock::new(HashMap::new())), agent)
+            .await
+            .unwrap();
+        let mut watcher = watcher.unwrap();
+        tokio::time::timeout(Duration::from_secs(30), watcher.changed())
+            .await
+            .expect("the exit is reported")
+            .unwrap_err();
+
+        assert_eq!(exit_status.read().await.exit_code, UNKNOWN_EXIT_STATUS);
+        assert_eq!(process.get_status().await, ProcessStatus::Stopped);
     }
 }
