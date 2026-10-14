@@ -277,7 +277,8 @@
 (allow kernel_t kata_nvidia_t (process2 (nosuid_transition)))
 
 ; NVRC invokes veritysetup before mounting each dm-verity extension. Fedora
-; transitions that helper into kernel_generic_helper_t.
+; transitions that helper into kernel_generic_helper_t. Loading a dm-verity
+; table takes CAP_SYS_ADMIN; without it veritysetup exits and NVRC panics.
 (allow kernel_generic_helper_t device_t (filesystem (getattr)))
 (allow kernel_generic_helper_t device_t (dir (write add_name)))
 (allow kernel_generic_helper_t device_t (blk_file (create getattr open read write ioctl setattr)))
@@ -286,7 +287,7 @@
 (allow kernel_generic_helper_t root_t (chr_file (read write)))
 (allow kernel_generic_helper_t tmpfs_t (file (read write map execute)))
 (allow kernel_generic_helper_t kernel_t (system (ipc_info)))
-(allow kernel_generic_helper_t self (capability (chown mknod)))
+(allow kernel_generic_helper_t self (capability (chown mknod sys_admin)))
 
 ; modprobe reads modules directly from the GPU extension before NVRC locks
 ; module loading.
