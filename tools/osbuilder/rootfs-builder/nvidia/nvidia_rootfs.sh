@@ -551,6 +551,9 @@ should_upx_compress() {
 		# overlay mount helper it runs. mkfs.ext4 is a symlink to mke2fs.
 		./sbin/mke2fs|./usr/sbin/mke2fs|./bin/dd|./usr/bin/dd) return 1 ;;
 		./usr/bin/kata-agent|./usr/bin/kata-overlay-mount) return 1 ;;
+		# The agent runs this hook in place, so its UPX memfd would be
+		# container content mapped by kata_agent_t.
+		./bin/nvidia-cdi-hook) return 1 ;;
 		./usr/local/bin/attestation-agent|./usr/local/bin/api-server-rest) return 1 ;;
 		./usr/local/bin/confidential-data-hub) return 1 ;;
 		*) return 0 ;;
