@@ -217,9 +217,11 @@ not declare: `system { firmware_load kexec_image_load kexec_initramfs_load
 policy_load x509_certificate_load }` and `io_uring { allowed }`. Normally the
 kernel allows a permission the policy does not define. Here the build adds
 these permissions to the base module and compiles the policy to deny unknown
-permissions. The only one granted is `firmware_load`, to `kernel_t` for the
-gpu extension firmware. No guest domain can create an io_uring instance or
-load a kexec image.
+permissions. `firmware_load` is granted to `kernel_t` for the gpu extension
+firmware, and `io_uring allowed` is granted to `container_t` so a workload
+can create a ring. No guest service domain can create an io_uring instance,
+and none can load a kexec image, reload the policy, or load an x509
+certificate through these permissions.
 
 ## Build
 

@@ -390,9 +390,10 @@
 (allow container_t container_runtime_tmpfs_t (file (create write link unlink)))
 (allow container_t container_runtime_tmpfs_t (lnk_file (read)))
 (allow container_t container_runtime_tmpfs_t (sock_file (create setattr unlink write)))
-; vLLM serves with io_uring, including a kernel polling thread.
+; vLLM serves with io_uring, including a kernel polling thread. The guest
+; kernel checks io_uring allowed at setup; only containers get it.
 (allow container_t io_uring_t (anon_inode (create map read write)))
-(allow container_t self (io_uring (sqpoll)))
+(allow container_t self (io_uring (allowed sqpoll)))
 
 ; A volume with no security.selinux xattrs has an unlabeled root. Label what
 ; the container creates there as container content instead of letting
