@@ -101,8 +101,8 @@ verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=4096,has
 | --- | --- | --- |
 | `kernel_t` | NVRC, the syslog poller | Unconfined, as in the base policy |
 | `kata_agent_t` | kata-agent, from the base image | Yes |
-| `kata_nvidia_t` | Binaries run from the gpu extension | Permissive |
-| `kata_coco_t` | Binaries the agent runs from the coco extension (attestation-agent, CDH, image-rs) | Permissive |
+| `kata_nvidia_t` | Binaries run from the gpu extension | Yes |
+| `kata_coco_t` | Binaries the agent runs from the coco extension (attestation-agent, CDH, image-rs) | Yes |
 | `kata_mkfs_t` | The unpacked `dd` and `mke2fs` used for encrypted scratch volumes | Yes |
 | `container_t` | Container processes | Yes |
 
@@ -156,8 +156,10 @@ content. It can read the guest's devtmpfs character devices, because
 driver libraries and binaries from it into GPU containers. It has no access to
 the other extensions, the agent binary, or the rest of the guest.
 
-`kata_nvidia_t` and `kata_coco_t` start out permissive so that the policy can be
-tightened from real denials rather than guesses.
+Every guest domain is enforced. The rules for `kata_nvidia_t` and `kata_coco_t`
+were harvested from denials on real GPU, CPU, and SNP workloads while those
+domains were permissive. The policy build fails if any guest domain is marked
+permissive, and the NVIDIA CI jobs fail on any guest denial.
 
 ### Labeling
 
@@ -224,9 +226,8 @@ escaped its namespaces from becoming that program, or any of the other
 privileged programs in the same machine.
 
 !!! warning
-    These bounds hold when the guest kernel is enforcing and `kata_nvidia_t`
-    and `kata_coco_t` are no longer permissive. A permissive boot only records
-    the denial.
+    These bounds hold when the guest kernel is enforcing, which the NVIDIA
+    `kernel_params` select. A boot with `enforcing=0` only records the denial.
 
 ### An escaped container takes over kata-agent
 
@@ -333,8 +334,6 @@ becoming the agent. It does not make the agent powerless.
 
 ## Limitations
 
-- `kata_nvidia_t` and `kata_coco_t` are permissive. While they are, a
-  constraint denial inside those domains is recorded and still allowed.
 - The agent and confidential-data-hub can still map container content,
   executable mappings included, because overlayfs checks every mapping against
   the mounter. Neither one maps container files itself: the agent reads the

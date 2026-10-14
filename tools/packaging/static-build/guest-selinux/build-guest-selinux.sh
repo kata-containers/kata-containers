@@ -58,6 +58,13 @@ sesearch "${policy}" -T -s kata_agent_t -t container_runtime_tmpfs_t -c process 
 seinfo "${policy}" --constrain | grep -q \
 	'constrain blk_file map.*kata_mkfs_t.*kata_scratch_device_t' \
 	|| { echo "formatter block-map constraint missing" >&2; exit 1; }
+# Every domain the guest runs is enforced. The base policy keeps its own
+# permissive types, which nothing in the guest enters.
+permissive="$(seinfo "${policy}" --permissive)"
+for t in kernel_t kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t container_t; do
+	! grep -qw "${t}" <<< "${permissive}" \
+		|| { echo "${t} is permissive in ${policy}" >&2; exit 1; }
+done
 # Every guest map must come from an explicit allow.
 seinfo "${policy}" -b domain_can_mmap_files -x | grep -q 'domain_can_mmap_files false' \
 	|| { echo "domain_can_mmap_files must default to false" >&2; exit 1; }

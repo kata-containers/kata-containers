@@ -195,12 +195,6 @@
 ; fixed_disk_raw_read does not grant this access.
 (allow kata_agent_t fsadm_exec_t (file (execute execute_no_trans)))
 (allow kata_agent_t fixed_disk_device_t (blk_file (read write open ioctl)))
-
-; The guest components and the NVIDIA userspace remain permissive while their
-; harvested rule sets are completed. container_t is enforced regardless.
-(typepermissive kata_coco_t)
-(typepermissive kata_nvidia_t)
-
 ; Base rootfs label, applied by mkfs.erofs --file-contexts at image build.
 (filecon "/usr/bin/kata-agent" file (system_u object_r kata_agent_exec_t ((s0) (s0))))
 ; Fedora labels /lib/ld-*.so and /usr/bin/ldconfig. The NVIDIA image has the
@@ -345,8 +339,7 @@
 (allow container_t device_node (chr_file (getattr ioctl open read write)))
 (allow container_t kernel_t (system (syslog_read)))
 
-; Baseline harvested from NVIDIA GPU CI. Keep kata_nvidia_t permissive until
-; the remaining NVIDIA workloads have exercised this domain.
+; Baseline harvested from NVIDIA GPU CI.
 ; dcgm-exporter runs the labeled /sbin/ldconfig in its own domain.
 (allow kata_nvidia_t ldconfig_exec_t (file (getattr open read map execute execute_no_trans)))
 (allow kata_nvidia_t device_t (dir (write add_name create setattr)))

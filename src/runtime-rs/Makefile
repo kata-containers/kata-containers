@@ -526,7 +526,7 @@ endif
     IMAGEPATH_SELINUX_EXTENSION = $(PKGDATADIR)/$(IMAGENAME_SELINUX_EXTENSION)
     # enforcing=1 only matters with guest SELinux on (selinux=1): the guest kernel
     # otherwise boots permissive.
-    KERNELPARAMS_NV := cgroup_no_v1=all pci=realloc pci=nocrs pci=assign-busses enforcing=0 sysctl.kernel.printk_ratelimit=0 audit_backlog_limit=8192
+    KERNELPARAMS_NV := cgroup_no_v1=all pci=realloc pci=nocrs pci=assign-busses enforcing=1 sysctl.kernel.printk_ratelimit=0 audit_backlog_limit=8192
 
     KERNELPARAMS_CONFIDENTIAL_NV = $(KERNELPARAMS_NV)
     KERNELPARAMS_CONFIDENTIAL_NV += "nvrc.smi.srs=1"
