@@ -298,11 +298,17 @@
 (allow kata_overlay_mount_t kata_agent_t (fifo_file (getattr read write ioctl)))
 (allow kata_overlay_mount_t kata_agent_t (process (sigchld)))
 (allow kata_overlay_mount_t device_t (chr_file (getattr read write)))
+; /dev/console is still a node on the rootfs.
+(allow kata_overlay_mount_t root_t (chr_file (read write)))
 (allow kata_overlay_mount_t tmpfs_t (file (getattr open read map)))
+(allow kata_overlay_mount_t tmpfs_t (filesystem (getattr)))
 (allow kata_overlay_mount_t self (capability (chown dac_override dac_read_search fowner fsetid mknod setfcap sys_admin)))
 (allow kata_overlay_mount_t file_type (dir (getattr search)))
-(allow kata_overlay_mount_t fs_t (filesystem (mount relabelfrom)))
-(allow kata_overlay_mount_t kata_container_content (filesystem (mount relabelto)))
+; The new overlay starts as fs_t. context= moves it to a container type,
+; and a later mount can move it from one container type to another. Both
+; stay inside container content.
+(allow kata_overlay_mount_t fs_t (filesystem (getattr mount relabelfrom)))
+(allow kata_overlay_mount_t kata_container_content (filesystem (getattr mount relabelfrom relabelto)))
 (allow kata_overlay_mount_t kata_container_content
     (dir (getattr search open read ioctl lock write add_name remove_name create rmdir rename reparent setattr mounton)))
 (allow kata_overlay_mount_t kata_container_content
