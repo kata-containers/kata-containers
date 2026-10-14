@@ -25,10 +25,28 @@ readonly store_dir="/etc/selinux/${policy_type}"
 readonly out_dir="${DESTDIR:?}/etc/selinux/kata"
 readonly manifest_dir="${DESTDIR}/etc/kata-extensions"
 
-sed -i '/^policy-version[[:space:]]*=/d' /etc/selinux/semanage.conf
+sed -i '/^\(policy-version\|handle-unknown\)[[:space:]]*=/d' /etc/selinux/semanage.conf
 echo "policy-version = ${policy_version}" >> /etc/selinux/semanage.conf
+# A permission the policy does not define is denied, not silently allowed.
+echo "handle-unknown = deny" >> /etc/selinux/semanage.conf
+
+# The guest kernel checks permissions that Fedora's base module does not
+# declare yet. A module cannot extend a class, so add them to base. Only the
+# allows in kata-guest.cil grant any of them.
+readonly base_cil="/tmp/base.cil"
+bzcat "/var/lib/selinux/${policy_type}/active/modules/100/base/cil" > "${base_cil}"
+sed -i \
+	-e 's/^(class system (\(.*\) ))$/(class system (\1 firmware_load kexec_image_load kexec_initramfs_load policy_load x509_certificate_load ))/' \
+	-e 's/^(class io_uring (\(.*\) ))$/(class io_uring (\1 allowed ))/' \
+	"${base_cil}"
+if ! grep -q '^(class system (.* firmware_load ' "${base_cil}" \
+	|| ! grep -q '^(class io_uring (.* allowed ))$' "${base_cil}"; then
+	echo "could not extend the base system and io_uring classes" >&2
+	exit 1
+fi
 
 # -n: build the store without loading it; the builder has no SELinux of its own.
+semodule -n -X 100 -i "${base_cil}"
 semodule -n -X "${module_priority}" -i "${script_dir}/kata-guest.cil"
 # While the policy is being locked down, do not let base-policy dontaudit rules
 # hide denials that kill a guest service. This can be removed after enforcing
@@ -71,6 +89,14 @@ for t in kernel_t kata_agent_t kata_coco_t kata_mkfs_t kata_nvidia_t container_t
 	! grep -qw "${t}" <<< "${permissive}" \
 		|| { echo "${t} is permissive in ${policy}" >&2; exit 1; }
 done
+seinfo "${policy}" | grep -q 'Handle unknown classes:[[:space:]]*deny' \
+	|| { echo "${policy} must deny unknown permissions" >&2; exit 1; }
+for perm in firmware_load kexec_image_load kexec_initramfs_load policy_load x509_certificate_load; do
+	seinfo "${policy}" -c system -x | grep -qw "${perm}" \
+		|| { echo "system ${perm} missing from ${policy}" >&2; exit 1; }
+done
+seinfo "${policy}" -c io_uring -x | grep -qw allowed \
+	|| { echo "io_uring allowed missing from ${policy}" >&2; exit 1; }
 # Every guest map must come from an explicit allow.
 seinfo "${policy}" -b domain_can_mmap_files -x | grep -q 'domain_can_mmap_files false' \
 	|| { echo "domain_can_mmap_files must default to false" >&2; exit 1; }

@@ -195,6 +195,15 @@ downgrade the format the way libselinux does, so the build pins the policy
 version to what the guest kernel supports (35 for v6.18), through
 `GUEST_SELINUX_POLICY_VERSION`.
 
+The guest kernel checks some permissions that the Fedora base module does
+not declare: `system { firmware_load kexec_image_load kexec_initramfs_load
+policy_load x509_certificate_load }` and `io_uring { allowed }`. Normally the
+kernel allows a permission the policy does not define. Here the build adds
+these permissions to the base module and compiles the policy to deny unknown
+permissions. The only one granted is `firmware_load`, to `kernel_t` for the
+gpu extension firmware. No guest domain can create an io_uring instance or
+load a kexec image.
+
 ## Build
 
 The policy is built in a Fedora container

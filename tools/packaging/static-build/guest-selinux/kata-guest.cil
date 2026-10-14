@@ -298,6 +298,10 @@
 ; modprobe reads modules directly from the GPU extension before NVRC locks
 ; module loading.
 (allow kmod_t kata_gpu_extension_t (system (module_load)))
+; NVRC binds the extension firmware onto /lib/firmware/nvidia. The firmware
+; loader reads it with kernel credentials. Unknown permissions are denied, so
+; this is the only firmware the guest can load.
+(allow kernel_t kata_gpu_extension_t (system (firmware_load)))
 
 ; Guest services read extension content (libraries, configs, the pause bundle,
 ; which the agent copies into the container's own rootfs).
