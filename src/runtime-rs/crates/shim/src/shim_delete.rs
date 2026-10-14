@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 use containerd_shim_protos::api;
-use kata_sys_util::spec::{get_bundle_path, get_container_type, load_oci_spec};
+use kata_sys_util::spec::get_container_type;
 use kata_types::container::ContainerType;
 use nix::{sys::signal::kill, sys::signal::SIGKILL, unistd::Pid};
 use protobuf::Message;
@@ -32,6 +32,7 @@ impl ShimExecutor {
 
     async fn do_delete(&mut self) -> Result<()> {
         self.args.validate(true).context("validate")?;
+        self.enter_bundle_dir();
         let rsp = self.do_cleanup().await.context("shim do cleanup")?;
         // Drop ignores buffered flush errors, so flush explicitly while errors can be reported.
         let mut stdout = std::io::stdout().lock();
@@ -41,6 +42,22 @@ impl ShimExecutor {
             .flush()
             .context(Error::FileWrite("flush stdout".to_owned()))?;
         Ok(())
+    }
+
+    // Cleanup loads the OCI spec relative to the working directory, which may have been removed.
+    fn enter_bundle_dir(&self) {
+        let Err(err) = std::env::set_current_dir(&self.args.bundle) else {
+            return;
+        };
+        warn!(
+            sl!(),
+            "cannot enter bundle {:?}, cleaning up from the persisted sandbox state: {}",
+            self.args.bundle,
+            err
+        );
+        if let Err(err) = std::env::set_current_dir("/") {
+            warn!(sl!(), "failed to change directory to \"/\": {}", err);
+        }
     }
 
     async fn do_cleanup(&self) -> Result<api::DeleteResponse> {
@@ -71,18 +88,27 @@ impl ShimExecutor {
                 "failed to cleanup in service manager: {:?}. force shutdown shim process", e
             );
 
-            let bundle_path = get_bundle_path().context("get bundle path")?;
-            if let Ok(spec) = load_oci_spec() {
-                if let Ok(ContainerType::PodSandbox) = get_container_type(&spec) {
-                    // only force shutdown for sandbox container
-                    if let Ok(shim_pid) = self.read_pid_file(&bundle_path) {
-                        info!(sl!(), "force to shutdown shim process {}", shim_pid);
-                        let pid = Pid::from_raw(shim_pid as i32);
-                        if let Err(_e) = kill(pid, SIGKILL) {
-                            // ignore kill errors
+            let bundle_path = Path::new(&self.args.bundle);
+            match self.load_oci_spec(bundle_path) {
+                Ok(spec) => {
+                    if let Ok(ContainerType::PodSandbox) = get_container_type(&spec) {
+                        // only force shutdown for sandbox container
+                        if let Ok(shim_pid) = self.read_pid_file(bundle_path) {
+                            info!(sl!(), "force to shutdown shim process {}", shim_pid);
+                            let pid = Pid::from_raw(shim_pid as i32);
+                            if let Err(_e) = kill(pid, SIGKILL) {
+                                // ignore kill errors
+                            }
                         }
                     }
                 }
+                Err(err) => warn!(
+                    sl!(),
+                    "cannot identify the shim process of {} from bundle {:?}, it may be left running: {:#}",
+                    self.args.id,
+                    bundle_path,
+                    err
+                ),
             }
         }
 
