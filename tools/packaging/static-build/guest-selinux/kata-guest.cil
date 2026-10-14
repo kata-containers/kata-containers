@@ -362,6 +362,8 @@
 ; NVML, the persistence daemon, nvidia-ctk, and DCGM issue privileged GPU ioctls.
 (allow kata_nvidia_t self (capability (mknod sys_admin)))
 (allow kata_nvidia_t self (capability2 (perfmon)))
+; NVML's task runner sets its own scheduling policy.
+(allow kata_nvidia_t self (process (setsched)))
 (allow kata_nvidia_t self (tcp_socket (listen accept)))
 (allow kata_nvidia_t self (unix_stream_socket (connectto)))
 (allow kata_nvidia_t sysctl_net_t (dir (search)))
