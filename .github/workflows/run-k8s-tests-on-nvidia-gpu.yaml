@@ -153,6 +153,10 @@ jobs:
           path: /tmp/artifacts
           retention-days: 1
 
+      - name: Check guest SELinux denials ${{ matrix.environment.vmm }}
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh check-guest-selinux-denials
+
       - name: Delete kata-deploy
         if: always()
         timeout-minutes: 15

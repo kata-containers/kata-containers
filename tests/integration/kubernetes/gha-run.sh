@@ -417,6 +417,16 @@ function collect_guest_selinux_denials() {
 	fi
 }
 
+# collect-artifacts is allowed to fail, so the denial gate is a separate step.
+function check_guest_selinux_denials() {
+	local denials="/tmp/artifacts/guest-selinux-denials.log"
+	if [[ -s "${denials}" ]]; then
+		echo "::error::$(wc -l < "${denials}") guest SELinux denials, see guest-selinux-denials.log in the job artifacts"
+		return 1
+	fi
+	info "No guest SELinux denials"
+}
+
 function collect_artifacts() {
 	if [[ -z "${start_time:-}" ]]; then
 		warn "tests start time is not defined. Cannot gather journal information"
@@ -591,6 +601,7 @@ function main() {
 			;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
+		check-guest-selinux-denials) check_guest_selinux_denials ;;
 		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
 		cleanup-kubeadm) cleanup "kubeadm" ;;
