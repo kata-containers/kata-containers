@@ -353,7 +353,8 @@
 (allow kata_nvidia_t modules_conf_t (file (getattr open read)))
 (allow kata_nvidia_t modules_object_t (dir (search)))
 (allow kata_nvidia_t root_t (chr_file (read write)))
-(allow kata_nvidia_t self (capability (mknod)))
+; NVML, the persistence daemon, nvidia-ctk, and DCGM issue privileged GPU ioctls.
+(allow kata_nvidia_t self (capability (mknod sys_admin)))
 (allow kata_nvidia_t self (capability2 (perfmon)))
 (allow kata_nvidia_t self (tcp_socket (listen accept)))
 (allow kata_nvidia_t self (unix_stream_socket (connectto)))
