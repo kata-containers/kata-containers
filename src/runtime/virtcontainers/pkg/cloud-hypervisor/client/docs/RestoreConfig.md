@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **Prefault** | Pointer to **bool** |  | [optional] 
 **MemoryRestoreMode** | Pointer to [**MemoryRestoreMode**](MemoryRestoreMode.md) |  | [optional] [default to MEMORYRESTOREMODE_COPY]
 **Resume** | Pointer to **bool** |  | [optional] 
+**ZoneUpdates** | Pointer to [**[]VmMemoryZoneUpdateData**](VmMemoryZoneUpdateData.md) |  | [optional]
 
 ## Methods
 
@@ -122,6 +123,31 @@ SetResume sets Resume field to given value.
 `func (o *RestoreConfig) HasResume() bool`
 
 HasResume returns a boolean if a field has been set.
+
+### GetZoneUpdates
+
+`func (o *RestoreConfig) GetZoneUpdates() []VmMemoryZoneUpdateData`
+
+GetZoneUpdates returns the ZoneUpdates field if non-nil, zero value otherwise.
+
+### GetZoneUpdatesOk
+
+`func (o *RestoreConfig) GetZoneUpdatesOk() (*[]VmMemoryZoneUpdateData, bool)`
+
+GetZoneUpdatesOk returns a tuple with the ZoneUpdates field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetZoneUpdates
+
+`func (o *RestoreConfig) SetZoneUpdates(v []VmMemoryZoneUpdateData)`
+
+SetZoneUpdates sets ZoneUpdates field to given value.
+
+### HasZoneUpdates
+
+`func (o *RestoreConfig) HasZoneUpdates() bool`
+
+HasZoneUpdates returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

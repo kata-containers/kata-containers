@@ -19,7 +19,7 @@ type DiskConfig struct {
 	Path              *string              `json:"path,omitempty"`
 	Readonly          *bool                `json:"readonly,omitempty"`
 	Direct            *bool                `json:"direct,omitempty"`
-	Iommu             *bool                `json:"iommu,omitempty"`
+	Iommu             *IommuType           `json:"iommu,omitempty"`
 	NumQueues         *int32               `json:"num_queues,omitempty"`
 	QueueSize         *int32               `json:"queue_size,omitempty"`
 	VhostUser         *bool                `json:"vhost_user,omitempty"`
@@ -35,6 +35,7 @@ type DiskConfig struct {
 	Sparse            *bool                `json:"sparse,omitempty"`
 	ImageType         *ImageType           `json:"image_type,omitempty"`
 	LockGranularity   *LockGranularity     `json:"lock_granularity,omitempty"`
+	GuestBlockSize    *int32               `json:"guest_block_size,omitempty"`
 }
 
 // NewDiskConfig instantiates a new DiskConfig object
@@ -47,7 +48,7 @@ func NewDiskConfig() *DiskConfig {
 	this.Readonly = &readonly
 	var direct bool = false
 	this.Direct = &direct
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var numQueues int32 = 1
 	this.NumQueues = &numQueues
@@ -73,7 +74,7 @@ func NewDiskConfigWithDefaults() *DiskConfig {
 	this.Readonly = &readonly
 	var direct bool = false
 	this.Direct = &direct
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var numQueues int32 = 1
 	this.NumQueues = &numQueues
@@ -187,9 +188,9 @@ func (o *DiskConfig) SetDirect(v bool) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *DiskConfig) GetIommu() bool {
+func (o *DiskConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -197,7 +198,7 @@ func (o *DiskConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DiskConfig) GetIommuOk() (*bool, bool) {
+func (o *DiskConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -213,8 +214,8 @@ func (o *DiskConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *DiskConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *DiskConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 
@@ -698,6 +699,38 @@ func (o *DiskConfig) SetLockGranularity(v LockGranularity) {
 	o.LockGranularity = &v
 }
 
+// GetGuestBlockSize returns the GuestBlockSize field value if set, zero value otherwise.
+func (o *DiskConfig) GetGuestBlockSize() int32 {
+	if o == nil || o.GuestBlockSize == nil {
+		var ret int32
+		return ret
+	}
+	return *o.GuestBlockSize
+}
+
+// GetGuestBlockSizeOk returns a tuple with the GuestBlockSize field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetGuestBlockSizeOk() (*int32, bool) {
+	if o == nil || o.GuestBlockSize == nil {
+		return nil, false
+	}
+	return o.GuestBlockSize, true
+}
+
+// HasGuestBlockSize returns a boolean if a field has been set.
+func (o *DiskConfig) HasGuestBlockSize() bool {
+	if o != nil && o.GuestBlockSize != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetGuestBlockSize gets a reference to the given int32 and assigns it to the GuestBlockSize field.
+func (o *DiskConfig) SetGuestBlockSize(v int32) {
+	o.GuestBlockSize = &v
+}
+
 func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Path != nil {
@@ -756,6 +789,9 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.LockGranularity != nil {
 		toSerialize["lock_granularity"] = o.LockGranularity
+	}
+	if o.GuestBlockSize != nil {
+		toSerialize["guest_block_size"] = o.GuestBlockSize
 	}
 	return json.Marshal(toSerialize)
 }

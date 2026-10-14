@@ -20,10 +20,11 @@ type VmState string
 
 // List of VmState
 const (
-	VMSTATE_CREATED  VmState = "Created"
-	VMSTATE_RUNNING  VmState = "Running"
-	VMSTATE_SHUTDOWN VmState = "Shutdown"
-	VMSTATE_PAUSED   VmState = "Paused"
+	VMSTATE_CREATED     VmState = "Created"
+	VMSTATE_RUNNING     VmState = "Running"
+	VMSTATE_SHUTDOWN    VmState = "Shutdown"
+	VMSTATE_PAUSED      VmState = "Paused"
+	VMSTATE_BREAK_POINT VmState = "BreakPoint"
 )
 
 // All allowed values of VmState enum
@@ -32,6 +33,7 @@ var AllowedVmStateEnumValues = []VmState{
 	"Running",
 	"Shutdown",
 	"Paused",
+	"BreakPoint",
 }
 
 func (v *VmState) UnmarshalJSON(src []byte) error {

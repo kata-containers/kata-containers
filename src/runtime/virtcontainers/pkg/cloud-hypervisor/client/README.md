@@ -96,6 +96,8 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddUserDevicePut**](docs/DefaultApi.md#vmadduserdeviceput) | **Put** /vm.add-user-device | Add a new userspace device to the VM
 *DefaultApi* | [**VmAddVdpaPut**](docs/DefaultApi.md#vmaddvdpaput) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 *DefaultApi* | [**VmAddVsockPut**](docs/DefaultApi.md#vmaddvsockput) | **Put** /vm.add-vsock | Add a new vsock device to the VM
+*DefaultApi* | [**VmBalloonStatsGet**](docs/DefaultApi.md#vmballoonstatsget) | **Get** /vm.balloon-stats | Get cached statistics from the virtio-balloon device
+*DefaultApi* | [**VmCancelMigrationPut**](docs/DefaultApi.md#vmcancelmigrationput) | **Put** /vm.cancel-migration | Cancel an ongoing VM migration
 *DefaultApi* | [**VmCoredumpPut**](docs/DefaultApi.md#vmcoredumpput) | **Put** /vm.coredump | Takes a VM coredump.
 *DefaultApi* | [**VmCountersGet**](docs/DefaultApi.md#vmcountersget) | **Get** /vm.counters | Get counters from the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
@@ -114,6 +116,8 @@ Class | Method | HTTP request | Description
 ## Documentation For Models
 
  - [BalloonConfig](docs/BalloonConfig.md)
+ - [BalloonStats](docs/BalloonStats.md)
+ - [BalloonStatsResponse](docs/BalloonStatsResponse.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
  - [ConsoleMode](docs/ConsoleMode.md)
  - [CoreSchedulingMode](docs/CoreSchedulingMode.md)
@@ -128,6 +132,7 @@ Class | Method | HTTP request | Description
  - [FsConfig](docs/FsConfig.md)
  - [GenericVhostUserConfig](docs/GenericVhostUserConfig.md)
  - [ImageType](docs/ImageType.md)
+ - [IommuType](docs/IommuType.md)
  - [LandlockConfig](docs/LandlockConfig.md)
  - [LockGranularity](docs/LockGranularity.md)
  - [MemoryConfig](docs/MemoryConfig.md)
@@ -160,6 +165,7 @@ Class | Method | HTTP request | Description
  - [VmConfig](docs/VmConfig.md)
  - [VmCoredumpData](docs/VmCoredumpData.md)
  - [VmInfo](docs/VmInfo.md)
+ - [VmMemoryZoneUpdateData](docs/VmMemoryZoneUpdateData.md)
  - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)
  - [VmResizeDisk](docs/VmResizeDisk.md)

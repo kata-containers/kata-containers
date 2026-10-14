@@ -3,6 +3,8 @@
 ## Enum
 
 
+* `MEM_FDS` (value: `"MemFDs"`)
+
 * `PRECOPY` (value: `"Precopy"`)
 
 * `POSTCOPY` (value: `"Postcopy"`)

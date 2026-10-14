@@ -17,13 +17,13 @@ import (
 // DeviceConfig struct for DeviceConfig
 type DeviceConfig struct {
 	// Sysfs path of the VFIO device. Exactly one of `path` or an externally-opened cdev FD must be supplied; an FD is passed out of band via SCM_RIGHTS on the UNIX domain socket, never in this body.
-	Path               *string  `json:"path,omitempty"`
-	Iommu              *bool    `json:"iommu,omitempty"`
-	PciSegment         *int32   `json:"pci_segment,omitempty"`
-	PciDeviceId        *int32   `json:"pci_device_id,omitempty"`
-	Id                 *string  `json:"id,omitempty"`
-	XNvGpudirectClique *int32   `json:"x_nv_gpudirect_clique,omitempty"`
-	XExcludeMmapBars   *[]int64 `json:"x_exclude_mmap_bars,omitempty"`
+	Path               *string    `json:"path,omitempty"`
+	Iommu              *IommuType `json:"iommu,omitempty"`
+	PciSegment         *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId        *int32     `json:"pci_device_id,omitempty"`
+	Id                 *string    `json:"id,omitempty"`
+	XNvGpudirectClique *int32     `json:"x_nv_gpudirect_clique,omitempty"`
+	XExcludeMmapBars   *[]int64   `json:"x_exclude_mmap_bars,omitempty"`
 }
 
 // NewDeviceConfig instantiates a new DeviceConfig object
@@ -32,7 +32,7 @@ type DeviceConfig struct {
 // will change when the set of required properties is changed
 func NewDeviceConfig() *DeviceConfig {
 	this := DeviceConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -42,7 +42,7 @@ func NewDeviceConfig() *DeviceConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewDeviceConfigWithDefaults() *DeviceConfig {
 	this := DeviceConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -80,9 +80,9 @@ func (o *DeviceConfig) SetPath(v string) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *DeviceConfig) GetIommu() bool {
+func (o *DeviceConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -90,7 +90,7 @@ func (o *DeviceConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DeviceConfig) GetIommuOk() (*bool, bool) {
+func (o *DeviceConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -106,8 +106,8 @@ func (o *DeviceConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *DeviceConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *DeviceConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 

@@ -25,7 +25,7 @@ type VmConfig struct {
 	Rng              *RngConfig                `json:"rng,omitempty"`
 	Balloon          *BalloonConfig            `json:"balloon,omitempty"`
 	Fs               *[]FsConfig               `json:"fs,omitempty"`
-	GenericVhostUser *[]GenericVhostUserConfig `json:"generic-vhost-user,omitempty"`
+	GenericVhostUser *[]GenericVhostUserConfig `json:"generic_vhost_user,omitempty"`
 	Pmem             *[]PmemConfig             `json:"pmem,omitempty"`
 	Serial           *SerialConfig             `json:"serial,omitempty"`
 	Console          *ConsoleConfig            `json:"console,omitempty"`
@@ -35,7 +35,6 @@ type VmConfig struct {
 	Vdpa             *[]VdpaConfig             `json:"vdpa,omitempty"`
 	Vsock            *VsockConfig              `json:"vsock,omitempty"`
 	Numa             *[]NumaConfig             `json:"numa,omitempty"`
-	Iommu            *bool                     `json:"iommu,omitempty"`
 	Watchdog         *bool                     `json:"watchdog,omitempty"`
 	Rtc              *RtcConfig                `json:"rtc,omitempty"`
 	Pvpanic          *bool                     `json:"pvpanic,omitempty"`
@@ -53,8 +52,6 @@ type VmConfig struct {
 func NewVmConfig(payload PayloadConfig) *VmConfig {
 	this := VmConfig{}
 	this.Payload = payload
-	var iommu bool = false
-	this.Iommu = &iommu
 	var watchdog bool = false
 	this.Watchdog = &watchdog
 	var pvpanic bool = false
@@ -69,8 +66,6 @@ func NewVmConfig(payload PayloadConfig) *VmConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewVmConfigWithDefaults() *VmConfig {
 	this := VmConfig{}
-	var iommu bool = false
-	this.Iommu = &iommu
 	var watchdog bool = false
 	this.Watchdog = &watchdog
 	var pvpanic bool = false
@@ -680,38 +675,6 @@ func (o *VmConfig) SetNuma(v []NumaConfig) {
 	o.Numa = &v
 }
 
-// GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *VmConfig) GetIommu() bool {
-	if o == nil || o.Iommu == nil {
-		var ret bool
-		return ret
-	}
-	return *o.Iommu
-}
-
-// GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *VmConfig) GetIommuOk() (*bool, bool) {
-	if o == nil || o.Iommu == nil {
-		return nil, false
-	}
-	return o.Iommu, true
-}
-
-// HasIommu returns a boolean if a field has been set.
-func (o *VmConfig) HasIommu() bool {
-	if o != nil && o.Iommu != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *VmConfig) SetIommu(v bool) {
-	o.Iommu = &v
-}
-
 // GetWatchdog returns the Watchdog field value if set, zero value otherwise.
 func (o *VmConfig) GetWatchdog() bool {
 	if o == nil || o.Watchdog == nil {
@@ -998,7 +961,7 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 		toSerialize["fs"] = o.Fs
 	}
 	if o.GenericVhostUser != nil {
-		toSerialize["generic-vhost-user"] = o.GenericVhostUser
+		toSerialize["generic_vhost_user"] = o.GenericVhostUser
 	}
 	if o.Pmem != nil {
 		toSerialize["pmem"] = o.Pmem
@@ -1026,9 +989,6 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Numa != nil {
 		toSerialize["numa"] = o.Numa
-	}
-	if o.Iommu != nil {
-		toSerialize["iommu"] = o.Iommu
 	}
 	if o.Watchdog != nil {
 		toSerialize["watchdog"] = o.Watchdog

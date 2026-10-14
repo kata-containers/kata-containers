@@ -1891,6 +1891,14 @@ install_tools_helper() {
 	tool=${1}
 
 	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/tools/"${tool}")"
+	if [[ "${tool}" == "kata-ctl" ]]; then
+		# Factory commands embed runtime-rs, including its hypervisor API code.
+		# Rebuild when that code or its workspace dependencies change.
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/libs")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/Cargo.toml")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/Cargo.lock")"
+	fi
 	latest_builder_image="$(get_tools_image_name)"
 
 	install_cached_tarball_component \

@@ -16,12 +16,12 @@ import (
 
 // VdpaConfig struct for VdpaConfig
 type VdpaConfig struct {
-	Path        string  `json:"path"`
-	NumQueues   int32   `json:"num_queues"`
-	Iommu       *bool   `json:"iommu,omitempty"`
-	PciSegment  *int32  `json:"pci_segment,omitempty"`
-	PciDeviceId *int32  `json:"pci_device_id,omitempty"`
-	Id          *string `json:"id,omitempty"`
+	Path        string     `json:"path"`
+	NumQueues   int32      `json:"num_queues"`
+	Iommu       *IommuType `json:"iommu,omitempty"`
+	PciSegment  *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId *int32     `json:"pci_device_id,omitempty"`
+	Id          *string    `json:"id,omitempty"`
 }
 
 // NewVdpaConfig instantiates a new VdpaConfig object
@@ -32,7 +32,7 @@ func NewVdpaConfig(path string, numQueues int32) *VdpaConfig {
 	this := VdpaConfig{}
 	this.Path = path
 	this.NumQueues = numQueues
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -44,7 +44,7 @@ func NewVdpaConfigWithDefaults() *VdpaConfig {
 	this := VdpaConfig{}
 	var numQueues int32 = 1
 	this.NumQueues = numQueues
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -98,9 +98,9 @@ func (o *VdpaConfig) SetNumQueues(v int32) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *VdpaConfig) GetIommu() bool {
+func (o *VdpaConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -108,7 +108,7 @@ func (o *VdpaConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *VdpaConfig) GetIommuOk() (*bool, bool) {
+func (o *VdpaConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -124,8 +124,8 @@ func (o *VdpaConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *VdpaConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *VdpaConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 

@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **Id** | Pointer to **string** |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **PciDeviceId** | Pointer to **int32** |  | [optional] 
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**Iommu** | Pointer to [**IommuType**](IommuType.md) |  | [optional] [default to IOMMUTYPE_OFF]
 **Size** | **int64** |  | 
 **DeflateOnOom** | Pointer to **bool** | Deflate balloon when the guest is under memory pressure. | [optional] [default to false]
 **FreePageReporting** | Pointer to **bool** | Enable guest to report free pages. | [optional] [default to false]
@@ -108,20 +108,20 @@ HasPciDeviceId returns a boolean if a field has been set.
 
 ### GetIommu
 
-`func (o *BalloonConfig) GetIommu() bool`
+`func (o *BalloonConfig) GetIommu() IommuType`
 
 GetIommu returns the Iommu field if non-nil, zero value otherwise.
 
 ### GetIommuOk
 
-`func (o *BalloonConfig) GetIommuOk() (*bool, bool)`
+`func (o *BalloonConfig) GetIommuOk() (*IommuType, bool)`
 
 GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetIommu
 
-`func (o *BalloonConfig) SetIommu(v bool)`
+`func (o *BalloonConfig) SetIommu(v IommuType)`
 
 SetIommu sets Iommu field to given value.
 

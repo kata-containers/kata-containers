@@ -17,15 +17,19 @@ import (
 // SendMigrationData struct for SendMigrationData
 type SendMigrationData struct {
 	DestinationUrl string `json:"destination_url"`
-	Local          *bool  `json:"local,omitempty"`
+	// Deprecated: set memory_mode to \"MemFDs\" instead. If true, the request is treated as if memory_mode were \"MemFDs\".
+	// Deprecated
+	Local *bool `json:"local,omitempty"`
+	// Keep the source VM alive in a paused state after migration completes. This is only supported when memory_mode is \"MemFDs\" or the deprecated local property is true.
+	PreserveSource *bool `json:"preserve_source,omitempty"`
 	// The maximum downtime the migration aims for, in milliseconds. Defaults to 300ms.
 	DowntimeMs *int64 `json:"downtime_ms,omitempty"`
 	// The timeout for the migration (maximum total duration), in seconds. Defaults to 3600s (one hour).
 	TimeoutS        *int64           `json:"timeout_s,omitempty"`
 	TimeoutStrategy *TimeoutStrategy `json:"timeout_strategy,omitempty"`
-	// The number of parallel TCP connections to use for migration. Must be between 1 and 128. Multiple connections are not supported with local UNIX-socket migration.
+	// The number of parallel TCP connections to use for migration. Must be between 1 and 128. Multiple connections are not supported with UNIX domain socket migration.
 	Connections *int64 `json:"connections,omitempty"`
-	// Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client certificate (client-cert.pem), and TLS client key (client-key.pem). TLS is only supported with tcp:<host>:<port> destination URLs.
+	// Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client certificate (client-cert.pem), and TLS client key (client-key.pem). TLS is only supported with tcp:<host>:<port> destination URLs. Recommended for all TCP migrations. Omitting it is only intended for development and testing, as TCP migration is then unencrypted and unauthenticated.
 	TlsDir     *string        `json:"tls_dir,omitempty"`
 	MemoryMode *MigrationMode `json:"memory_mode,omitempty"`
 }
@@ -37,6 +41,10 @@ type SendMigrationData struct {
 func NewSendMigrationData(destinationUrl string) *SendMigrationData {
 	this := SendMigrationData{}
 	this.DestinationUrl = destinationUrl
+	var local bool = false
+	this.Local = &local
+	var preserveSource bool = false
+	this.PreserveSource = &preserveSource
 	var downtimeMs int64 = 300
 	this.DowntimeMs = &downtimeMs
 	var timeoutS int64 = 3600
@@ -55,6 +63,10 @@ func NewSendMigrationData(destinationUrl string) *SendMigrationData {
 // but it doesn't guarantee that properties required by API are set
 func NewSendMigrationDataWithDefaults() *SendMigrationData {
 	this := SendMigrationData{}
+	var local bool = false
+	this.Local = &local
+	var preserveSource bool = false
+	this.PreserveSource = &preserveSource
 	var downtimeMs int64 = 300
 	this.DowntimeMs = &downtimeMs
 	var timeoutS int64 = 3600
@@ -93,6 +105,7 @@ func (o *SendMigrationData) SetDestinationUrl(v string) {
 }
 
 // GetLocal returns the Local field value if set, zero value otherwise.
+// Deprecated
 func (o *SendMigrationData) GetLocal() bool {
 	if o == nil || o.Local == nil {
 		var ret bool
@@ -103,6 +116,7 @@ func (o *SendMigrationData) GetLocal() bool {
 
 // GetLocalOk returns a tuple with the Local field value if set, nil otherwise
 // and a boolean to check if the value has been set.
+// Deprecated
 func (o *SendMigrationData) GetLocalOk() (*bool, bool) {
 	if o == nil || o.Local == nil {
 		return nil, false
@@ -120,8 +134,41 @@ func (o *SendMigrationData) HasLocal() bool {
 }
 
 // SetLocal gets a reference to the given bool and assigns it to the Local field.
+// Deprecated
 func (o *SendMigrationData) SetLocal(v bool) {
 	o.Local = &v
+}
+
+// GetPreserveSource returns the PreserveSource field value if set, zero value otherwise.
+func (o *SendMigrationData) GetPreserveSource() bool {
+	if o == nil || o.PreserveSource == nil {
+		var ret bool
+		return ret
+	}
+	return *o.PreserveSource
+}
+
+// GetPreserveSourceOk returns a tuple with the PreserveSource field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetPreserveSourceOk() (*bool, bool) {
+	if o == nil || o.PreserveSource == nil {
+		return nil, false
+	}
+	return o.PreserveSource, true
+}
+
+// HasPreserveSource returns a boolean if a field has been set.
+func (o *SendMigrationData) HasPreserveSource() bool {
+	if o != nil && o.PreserveSource != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPreserveSource gets a reference to the given bool and assigns it to the PreserveSource field.
+func (o *SendMigrationData) SetPreserveSource(v bool) {
+	o.PreserveSource = &v
 }
 
 // GetDowntimeMs returns the DowntimeMs field value if set, zero value otherwise.
@@ -323,6 +370,9 @@ func (o SendMigrationData) MarshalJSON() ([]byte, error) {
 	}
 	if o.Local != nil {
 		toSerialize["local"] = o.Local
+	}
+	if o.PreserveSource != nil {
+		toSerialize["preserve_source"] = o.PreserveSource
 	}
 	if o.DowntimeMs != nil {
 		toSerialize["downtime_ms"] = o.DowntimeMs

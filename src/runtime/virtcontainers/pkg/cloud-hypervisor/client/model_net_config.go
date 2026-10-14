@@ -24,7 +24,7 @@ type NetConfig struct {
 	Mac               *string            `json:"mac,omitempty"`
 	HostMac           *string            `json:"host_mac,omitempty"`
 	Mtu               *int32             `json:"mtu,omitempty"`
-	Iommu             *bool              `json:"iommu,omitempty"`
+	Iommu             *IommuType         `json:"iommu,omitempty"`
 	NumQueues         *int32             `json:"num_queues,omitempty"`
 	QueueSize         *int32             `json:"queue_size,omitempty"`
 	VhostUser         *bool              `json:"vhost_user,omitempty"`
@@ -49,7 +49,7 @@ func NewNetConfig() *NetConfig {
 	this.Ip = &ip
 	var mask string = "255.255.255.0"
 	this.Mask = &mask
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var numQueues int32 = 2
 	this.NumQueues = &numQueues
@@ -59,11 +59,11 @@ func NewNetConfig() *NetConfig {
 	this.VhostUser = &vhostUser
 	var vhostMode string = "Client"
 	this.VhostMode = &vhostMode
-	var offloadTso bool = true
+	var offloadTso bool = false
 	this.OffloadTso = &offloadTso
-	var offloadUfo bool = true
+	var offloadUfo bool = false
 	this.OffloadUfo = &offloadUfo
-	var offloadCsum bool = true
+	var offloadCsum bool = false
 	this.OffloadCsum = &offloadCsum
 	return &this
 }
@@ -77,7 +77,7 @@ func NewNetConfigWithDefaults() *NetConfig {
 	this.Ip = &ip
 	var mask string = "255.255.255.0"
 	this.Mask = &mask
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var numQueues int32 = 2
 	this.NumQueues = &numQueues
@@ -87,11 +87,11 @@ func NewNetConfigWithDefaults() *NetConfig {
 	this.VhostUser = &vhostUser
 	var vhostMode string = "Client"
 	this.VhostMode = &vhostMode
-	var offloadTso bool = true
+	var offloadTso bool = false
 	this.OffloadTso = &offloadTso
-	var offloadUfo bool = true
+	var offloadUfo bool = false
 	this.OffloadUfo = &offloadUfo
-	var offloadCsum bool = true
+	var offloadCsum bool = false
 	this.OffloadCsum = &offloadCsum
 	return &this
 }
@@ -289,9 +289,9 @@ func (o *NetConfig) SetMtu(v int32) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *NetConfig) GetIommu() bool {
+func (o *NetConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -299,7 +299,7 @@ func (o *NetConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *NetConfig) GetIommuOk() (*bool, bool) {
+func (o *NetConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -315,8 +315,8 @@ func (o *NetConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *NetConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *NetConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 

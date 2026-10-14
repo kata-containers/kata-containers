@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **Path** | Pointer to **string** |  | [optional] 
 **Readonly** | Pointer to **bool** |  | [optional] [default to false]
 **Direct** | Pointer to **bool** |  | [optional] [default to false]
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**Iommu** | Pointer to [**IommuType**](IommuType.md) |  | [optional] [default to IOMMUTYPE_OFF]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 1]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 128]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
@@ -23,6 +23,7 @@ Name | Type | Description | Notes
 **Sparse** | Pointer to **bool** |  | [optional] [default to true]
 **ImageType** | Pointer to [**ImageType**](ImageType.md) |  | [optional] 
 **LockGranularity** | Pointer to [**LockGranularity**](LockGranularity.md) |  | [optional] [default to LOCKGRANULARITY_BYTE_RANGE]
+**GuestBlockSize** | Pointer to **int32** |  | [optional]
 
 ## Methods
 
@@ -120,20 +121,20 @@ HasDirect returns a boolean if a field has been set.
 
 ### GetIommu
 
-`func (o *DiskConfig) GetIommu() bool`
+`func (o *DiskConfig) GetIommu() IommuType`
 
 GetIommu returns the Iommu field if non-nil, zero value otherwise.
 
 ### GetIommuOk
 
-`func (o *DiskConfig) GetIommuOk() (*bool, bool)`
+`func (o *DiskConfig) GetIommuOk() (*IommuType, bool)`
 
 GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetIommu
 
-`func (o *DiskConfig) SetIommu(v bool)`
+`func (o *DiskConfig) SetIommu(v IommuType)`
 
 SetIommu sets Iommu field to given value.
 
@@ -517,6 +518,31 @@ SetLockGranularity sets LockGranularity field to given value.
 `func (o *DiskConfig) HasLockGranularity() bool`
 
 HasLockGranularity returns a boolean if a field has been set.
+
+### GetGuestBlockSize
+
+`func (o *DiskConfig) GetGuestBlockSize() int32`
+
+GetGuestBlockSize returns the GuestBlockSize field if non-nil, zero value otherwise.
+
+### GetGuestBlockSizeOk
+
+`func (o *DiskConfig) GetGuestBlockSizeOk() (*int32, bool)`
+
+GetGuestBlockSizeOk returns a tuple with the GuestBlockSize field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetGuestBlockSize
+
+`func (o *DiskConfig) SetGuestBlockSize(v int32)`
+
+SetGuestBlockSize sets GuestBlockSize field to given value.
+
+### HasGuestBlockSize
+
+`func (o *DiskConfig) HasGuestBlockSize() bool`
+
+HasGuestBlockSize returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

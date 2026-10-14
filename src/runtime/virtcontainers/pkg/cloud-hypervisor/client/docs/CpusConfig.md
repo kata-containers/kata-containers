@@ -9,7 +9,7 @@ Name | Type | Description | Notes
 **Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional] 
 **KvmHyperv** | Pointer to **bool** |  | [optional] [default to false]
 **MaxPhysBits** | Pointer to **int32** |  | [optional] 
-**Nested** | Pointer to **bool** |  | [optional] [default to true]
+**Nested** | Pointer to **bool** |  | [optional] [default to false]
 **Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional] 
 **Features** | Pointer to [**CpuFeatures**](CpuFeatures.md) |  | [optional] 
 **CoreScheduling** | Pointer to [**CoreSchedulingMode**](CoreSchedulingMode.md) |  | [optional] [default to CORESCHEDULINGMODE_VM]

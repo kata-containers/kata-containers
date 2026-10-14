@@ -38,13 +38,31 @@ impl CmdlineConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub enum IommuType {
+    #[default]
+    Off,
+    Virtio,
+    Smmuv3,
+}
+
+impl From<bool> for IommuType {
+    fn from(enabled: bool) -> Self {
+        if enabled {
+            Self::Virtio
+        } else {
+            Self::Off
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct ConsoleConfig {
     //#[serde(default = "default_consoleconfig_file")]
     pub file: Option<PathBuf>,
     pub mode: ConsoleOutputMode,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -103,7 +121,7 @@ pub struct CpuTopology {
 pub struct DeviceConfig {
     pub path: PathBuf,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
     #[serde(default)]
     pub id: Option<String>,
     #[serde(default)]
@@ -128,7 +146,7 @@ pub struct DiskConfig {
     #[serde(default)]
     pub direct: bool,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
     //#[serde(default = "default_diskconfig_num_queues")]
     pub num_queues: usize,
     //#[serde(default = "default_diskconfig_queue_size")]
@@ -163,7 +181,7 @@ impl Default for DiskConfig {
             path: None,
             readonly: false,
             direct: false,
-            iommu: false,
+            iommu: IommuType::Off,
             num_queues: 0,
             queue_size: 0,
             vhost_user: false,
@@ -282,7 +300,7 @@ pub struct NetConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mtu: Option<u16>,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
     //#[serde(default = "default_netconfig_num_queues")]
     #[serde(skip_serializing_if = "usize_is_zero")]
     pub num_queues: usize,
@@ -318,7 +336,7 @@ impl Default for NetConfig {
             mac: MacAddr::default(),
             host_mac: None,
             mtu: None,
-            iommu: false,
+            iommu: IommuType::Off,
             num_queues: 0,
             queue_size: 0,
             vhost_user: false,
@@ -389,7 +407,7 @@ pub struct PmemConfig {
     #[serde(default)]
     pub size: Option<u64>,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
     #[serde(default)]
     pub discard_writes: bool,
     #[serde(default)]
@@ -402,7 +420,7 @@ pub struct PmemConfig {
 pub struct RngConfig {
     pub src: PathBuf,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -430,7 +448,7 @@ pub struct VdpaConfig {
     //#[serde(default = "default_vdpaconfig_num_queues")]
     pub num_queues: usize,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
     #[serde(default)]
     pub id: Option<String>,
     #[serde(default)]
@@ -501,7 +519,7 @@ pub struct VsockConfig {
     pub cid: u32,
     pub socket: PathBuf,
     #[serde(default)]
-    pub iommu: bool,
+    pub iommu: IommuType,
     #[serde(default)]
     pub id: Option<String>,
     #[serde(default)]
@@ -573,6 +591,23 @@ pub enum State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_device_iommu_api_values() {
+        for (enabled, expected) in [(false, "Off"), (true, "Virtio")] {
+            let disk = DiskConfig {
+                iommu: enabled.into(),
+                ..Default::default()
+            };
+            let json = serde_json::to_value(&disk).unwrap();
+            assert_eq!(json["iommu"], expected);
+            assert_eq!(serde_json::from_value::<DiskConfig>(json).unwrap(), disk);
+        }
+        assert_eq!(
+            serde_json::from_str::<IommuType>("\"Smmuv3\"").unwrap(),
+            IommuType::Smmuv3
+        );
+    }
 
     #[test]
     fn test_vm_resize_serialization_preserves_256_vcpus() {

@@ -10,7 +10,7 @@ Name | Type | Description | Notes
 **Mac** | Pointer to **string** |  | [optional] 
 **HostMac** | Pointer to **string** |  | [optional] 
 **Mtu** | Pointer to **int32** |  | [optional] 
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**Iommu** | Pointer to [**IommuType**](IommuType.md) |  | [optional] [default to IOMMUTYPE_OFF]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 2]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 256]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
@@ -20,9 +20,9 @@ Name | Type | Description | Notes
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **PciDeviceId** | Pointer to **int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
-**OffloadTso** | Pointer to **bool** |  | [optional] [default to true]
-**OffloadUfo** | Pointer to **bool** |  | [optional] [default to true]
-**OffloadCsum** | Pointer to **bool** |  | [optional] [default to true]
+**OffloadTso** | Pointer to **bool** |  | [optional] [default to false]
+**OffloadUfo** | Pointer to **bool** |  | [optional] [default to false]
+**OffloadCsum** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods
 
@@ -195,20 +195,20 @@ HasMtu returns a boolean if a field has been set.
 
 ### GetIommu
 
-`func (o *NetConfig) GetIommu() bool`
+`func (o *NetConfig) GetIommu() IommuType`
 
 GetIommu returns the Iommu field if non-nil, zero value otherwise.
 
 ### GetIommuOk
 
-`func (o *NetConfig) GetIommuOk() (*bool, bool)`
+`func (o *NetConfig) GetIommuOk() (*IommuType, bool)`
 
 GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetIommu
 
-`func (o *NetConfig) SetIommu(v bool)`
+`func (o *NetConfig) SetIommu(v IommuType)`
 
 SetIommu sets Iommu field to given value.
 

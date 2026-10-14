@@ -3,6 +3,8 @@
 ## Enum
 
 
+* `FLAT_VMDK` (value: `"FlatVmdk"`)
+
 * `FIXED_VHD` (value: `"FixedVhd"`)
 
 * `QCOW2` (value: `"Qcow2"`)

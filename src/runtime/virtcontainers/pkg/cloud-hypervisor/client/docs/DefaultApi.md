@@ -22,6 +22,8 @@ Method | HTTP request | Description
 [**VmAddUserDevicePut**](DefaultApi.md#VmAddUserDevicePut) | **Put** /vm.add-user-device | Add a new userspace device to the VM
 [**VmAddVdpaPut**](DefaultApi.md#VmAddVdpaPut) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 [**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
+[**VmBalloonStatsGet**](DefaultApi.md#VmBalloonStatsGet) | **Get** /vm.balloon-stats | Get cached statistics from the virtio-balloon device
+[**VmCancelMigrationPut**](DefaultApi.md#VmCancelMigrationPut) | **Put** /vm.cancel-migration | Cancel an ongoing VM migration
 [**VmCoredumpPut**](DefaultApi.md#VmCoredumpPut) | **Put** /vm.coredump | Takes a VM coredump.
 [**VmCountersGet**](DefaultApi.md#VmCountersGet) | **Get** /vm.counters | Get counters from the VM
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
@@ -1126,6 +1128,124 @@ No authorization required
 
 - **Content-Type**: application/json
 - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmBalloonStatsGet
+
+> BalloonStatsResponse VmBalloonStatsGet(ctx).Execute()
+
+Get cached statistics from the virtio-balloon device
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmBalloonStatsGet(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmBalloonStatsGet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmBalloonStatsGet`: BalloonStatsResponse
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmBalloonStatsGet`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmBalloonStatsGetRequest struct via the builder pattern
+
+
+### Return type
+
+[**BalloonStatsResponse**](BalloonStatsResponse.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmCancelMigrationPut
+
+> VmCancelMigrationPut(ctx).Execute()
+
+Cancel an ongoing VM migration
+
+
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmCancelMigrationPut(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmCancelMigrationPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmCancelMigrationPutRequest struct via the builder pattern
+
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: Not defined
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
 [[Back to Model list]](../README.md#documentation-for-models)
