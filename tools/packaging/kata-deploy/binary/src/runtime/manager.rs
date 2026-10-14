@@ -487,7 +487,6 @@ pub async fn restart_and_wait_for_ready(
 mod tests {
     use super::*;
     use rstest::rstest;
-    use std::thread::sleep;
     use std::time::Duration;
     use tempfile::tempdir;
 
@@ -573,9 +572,19 @@ mod tests {
 
         // What a re-apply does: same bytes, later mtime. Reading that as a change
         // makes a job-mode retry restart the runtime it just decided not to.
-        sleep(Duration::from_millis(10));
-        fs::write(&drop_in, "kata").unwrap();
-        fs::write(&main_config, "imports = [\"kata-deploy.toml\"]").unwrap();
+        let later = before.written_at().unwrap() + Duration::from_secs(1);
+        for (file, contents) in [
+            (&drop_in, "kata"),
+            (&main_config, "imports = [\"kata-deploy.toml\"]"),
+        ] {
+            fs::write(file, contents).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(file)
+                .unwrap()
+                .set_modified(later)
+                .unwrap();
+        }
 
         let after = snapshot_files(&files).unwrap();
         assert!(
