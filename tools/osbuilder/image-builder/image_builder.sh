@@ -296,10 +296,15 @@ calculate_required_disk_size() {
 			continue
 		fi
 
-		if ! format_loop "${device}" "${block_size}" "${fs_type}" > /dev/null 2>&1 ; then
-			die "Could not format loop device: ${device}"
+		# A failed format or mount must not count. df of the unmounted
+		# directory reports the builder's own free space, which is always
+		# larger than the rootfs, so the first guess would be accepted and
+		# the real copy would run out of space.
+		if ! format_loop "${device}" "${block_size}" "${fs_type}" > /dev/null 2>&1 \
+			|| ! mount "${device}p1" "${mount_dir}"; then
+			losetup -d "${device}" || true
+			continue
 		fi
-		mount "${device}p1" "${mount_dir}"
 		avail="$(df -BM --output=avail "${mount_dir}" | tail -n1 | sed 's/[M ]//g')"
 		umount "${mount_dir}"
 		losetup -d "${device}"
@@ -376,10 +381,10 @@ format_loop() {
 
 	case "${fs_type}" in
 		"${ext4_format}")
-			mkfs.ext4 -q -F -b "${block_size}" "${device}p1"
+			mkfs.ext4 -q -F -b "${block_size}" "${device}p1" || return 1
 			info "Set filesystem reserved blocks percentage to ${reserved_blocks_percentage}%"
-			tune2fs -m "${reserved_blocks_percentage}" "${device}p1"
-      return 0
+			tune2fs -m "${reserved_blocks_percentage}" "${device}p1" || return 1
+			return 0
 			;;
 
 		"${xfs_format}")
