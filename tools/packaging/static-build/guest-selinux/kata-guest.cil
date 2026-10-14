@@ -166,8 +166,9 @@
 (allow kata_agent_t device_t (dir (create)))
 (allow kata_agent_t device_t (chr_file (read write open ioctl unlink mounton)))
 (allow kata_agent_t device_t (lnk_file (create)))
-; The channel to the host shim.
-(allow kata_agent_t self (vsock_socket (create bind listen accept)))
+; The channel to the host shim. The accepted socket is read and written by
+; the agent's worker thread; without that the ttrpc connection closes.
+(allow kata_agent_t self (vsock_socket (create bind listen accept read write)))
 ; fs::write of /sys/class/scsi_host/hostN/scan opens that file with O_CREAT.
 (allow kata_agent_t sysfs_t (dir (add_name)))
 (allow kata_agent_t sysfs_t (file (create)))
