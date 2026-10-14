@@ -86,6 +86,9 @@ grep -qw kata_overlay_mount_t <<< "${mounters}" \
 	|| { echo "kata_agent_t must not be an overlay mounter" >&2; exit 1; }
 sesearch "${policy}" -T -s kata_agent_t -t kata_overlay_mount_exec_t -c process | grep -q kata_overlay_mount_t \
 	|| { echo "agent -> kata_overlay_mount_t transition missing" >&2; exit 1; }
+seinfo "${policy}" --constrain | grep -q \
+	'constrain process { execheap execmem execstack } (not ( t1 == kata_agent_t ))' \
+	|| { echo "agent executable-memory constraint missing" >&2; exit 1; }
 sesearch "${policy}" -T -s kata_agent_t -t container_runtime_tmpfs_t -c process | grep -q container_t \
 	|| { echo "agent tmpfs exec -> container_t transition missing" >&2; exit 1; }
 seinfo "${policy}" --constrain | grep -q \

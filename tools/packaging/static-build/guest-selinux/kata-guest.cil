@@ -115,6 +115,13 @@
         (not (eq t1 kata_agent_t))
         (eq t2 (kata_agent_t container_t kata_coco_t kata_overlay_mount_t))))
 
+; The agent can read container files. With executable anonymous memory it
+; could copy one into its own mappings without ever mapping the file, so
+; the runtime attribute's execmem, execstack, and execheap are denied.
+(classpermission kata_agent_exec_memory)
+(classpermissionset kata_agent_exec_memory (process (execmem execstack execheap)))
+(constrain kata_agent_exec_memory (not (eq t1 kata_agent_t)))
+
 ; A container binary must not run in a guest domain. The runtime attribute
 ; grants the agent entrypoint, execute_no_trans, and map on container content,
 ; and an explicit exec label skips the spc_t transition above. kata_coco_t

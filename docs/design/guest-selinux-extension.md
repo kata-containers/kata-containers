@@ -148,6 +148,11 @@ overlay itself, so `kata_coco_t` keeps `map` until it uses the helper too. No
 other guest domain, including the NVIDIA stack and the formatter, may map
 container content.
 
+The agent can still read container files, for example the container's
+`/etc/passwd`. A fourth constraint denies it `execmem`, `execstack`, and
+`execheap`, which the runtime attribute would otherwise grant, so it cannot
+copy a container binary into executable anonymous memory either.
+
 The agent's own tmpfs files and memfds are `container_runtime_tmpfs_t`, a type
 containers can also write. When the agent, or a hook it runs, executes a file
 of that type, the process enters `container_t`. The NVIDIA CDI
