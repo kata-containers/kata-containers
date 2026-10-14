@@ -233,6 +233,11 @@
 (allow kernel_t kata_gpu_extension_t (file (getattr open read map execute)))
 (allow kernel_t kata_agent_t (process (transition siginh rlimitinh noatsecure)))
 (allow kernel_t kata_nvidia_t (process (transition siginh rlimitinh noatsecure)))
+; Fedora already transitions NVRC's modprobe and veritysetup. Inherit signal
+; state, rlimits, and the AT_SECURE flag on those execs. The agent stays
+; unable to enter kmod_t; that transition is still constrained.
+(allow kernel_t kmod_t (process (siginh rlimitinh noatsecure)))
+(allow kernel_t kernel_generic_helper_t (process (siginh rlimitinh noatsecure)))
 (allow kata_agent_t kata_coco_t (process (transition siginh rlimitinh noatsecure)))
 (allow kata_coco_t kata_mkfs_t (process (transition siginh rlimitinh noatsecure)))
 ; The coco extension is mounted nosuid, same as the gpu extension.
