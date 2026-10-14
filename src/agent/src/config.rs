@@ -16,7 +16,6 @@ use url::Url;
 use kata_types::config::default::DEFAULT_AGENT_VSOCK_PORT;
 
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
-const DEV_MODE_FLAG: &str = "agent.devmode";
 const TRACE_MODE_OPTION: &str = "agent.trace";
 const LOG_LEVEL_OPTION: &str = "agent.log";
 const SERVER_ADDR_OPTION: &str = "agent.server_addr";
@@ -127,7 +126,6 @@ pub enum GuestComponentsProcs {
 #[derive(Debug)]
 pub struct AgentConfig {
     pub debug_console: bool,
-    pub dev_mode: bool,
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
     pub cdh_api_timeout: time::Duration,
@@ -162,7 +160,6 @@ pub struct MemAgentConfig {
 #[derive(Debug, Deserialize)]
 pub struct AgentConfigBuilder {
     pub debug_console: Option<bool>,
-    pub dev_mode: Option<bool>,
     pub log_level: Option<String>,
     pub hotplug_timeout: Option<time::Duration>,
     pub cdh_api_timeout: Option<time::Duration>,
@@ -258,7 +255,6 @@ impl Default for AgentConfig {
     fn default() -> Self {
         AgentConfig {
             debug_console: false,
-            dev_mode: false,
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             cdh_api_timeout: DEFAULT_CDH_API_TIMEOUT,
@@ -296,7 +292,6 @@ impl FromStr for AgentConfig {
 
         // Overwrite default values with the configuration files ones.
         config_override!(agent_config_builder, agent_config, debug_console);
-        config_override!(agent_config_builder, agent_config, dev_mode);
         config_override!(
             agent_config_builder,
             agent_config,
@@ -436,7 +431,6 @@ impl AgentConfig {
 
             // parse cmdline flags
             parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, config.debug_console);
-            parse_cmdline_param!(param, DEV_MODE_FLAG, config.dev_mode);
 
             // Support "bare" tracing option for backwards compatibility with
             // Kata 1.x.
@@ -886,7 +880,6 @@ mod tests {
     fn test_new() {
         let config: AgentConfig = Default::default();
         assert!(!config.debug_console);
-        assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
     }
@@ -902,7 +895,6 @@ mod tests {
             contents: &'a str,
             env_vars: Vec<&'a str>,
             debug_console: bool,
-            dev_mode: bool,
             log_level: slog::Level,
             hotplug_timeout: time::Duration,
             container_pipe_size: i32,
@@ -926,7 +918,6 @@ mod tests {
                     contents: "",
                     env_vars: Vec::new(),
                     debug_console: false,
-                    dev_mode: false,
                     log_level: DEFAULT_LOG_LEVEL,
                     hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                     container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
@@ -948,13 +939,7 @@ mod tests {
 
         let tests = &[
             TestData {
-                contents: "agent.debug_consolex agent.devmode",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "agent.debug_console agent.devmodex",
-                debug_console: true,
+                contents: "agent.debug_consolex",
                 ..Default::default()
             },
             TestData {
@@ -993,10 +978,6 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "foo debug_console agent bar devmode",
-                ..Default::default()
-            },
-            TestData {
                 contents: "agent.debug_console",
                 debug_console: true,
                 ..Default::default()
@@ -1032,47 +1013,6 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "   agent.devmode ",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "agent.devmode foo",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: " agent.devmode foo",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "foo agent.devmode bar",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "foo agent.devmode",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "foo agent.devmode ",
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
-                contents: "agent.devmode agent.debug_console",
-                debug_console: true,
-                dev_mode: true,
-                ..Default::default()
-            },
-            TestData {
                 contents: "cgroup_no_v1=1",
                 cgroup_no_v1: "",
                 ..Default::default()
@@ -1089,44 +1029,38 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 systemd.unified_cgroup_hierarchy=a",
+                contents: "agent.debug_console agent.hotplug_timeout=100 systemd.unified_cgroup_hierarchy=a",
                 debug_console: true,
-                dev_mode: true,
                 hotplug_timeout: time::Duration::from_secs(100),
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0 systemd.unified_cgroup_hierarchy=11",
+                contents: "agent.debug_console agent.hotplug_timeout=0 systemd.unified_cgroup_hierarchy=11",
                 debug_console: true,
-                dev_mode: true,
                 unified_cgroup_hierarchy: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152 systemd.unified_cgroup_hierarchy=false",
+                contents: "agent.debug_console agent.container_pipe_size=2097152 systemd.unified_cgroup_hierarchy=false",
                 debug_console: true,
-                dev_mode: true,
                 container_pipe_size: 2097152,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=100 systemd.unified_cgroup_hierarchy=true",
+                contents: "agent.debug_console agent.container_pipe_size=100 systemd.unified_cgroup_hierarchy=true",
                 debug_console: true,
-                dev_mode: true,
                 container_pipe_size: 100,
                 unified_cgroup_hierarchy: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=0 systemd.unified_cgroup_hierarchy=0",
+                contents: "agent.debug_console agent.container_pipe_size=0 systemd.unified_cgroup_hierarchy=0",
                 debug_console: true,
-                dev_mode: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pip_siz=100 systemd.unified_cgroup_hierarchy=1",
+                contents: "agent.debug_console agent.container_pip_siz=100 systemd.unified_cgroup_hierarchy=1",
                 debug_console: true,
-                dev_mode: true,
                 unified_cgroup_hierarchy: true,
                 ..Default::default()
             },
@@ -1498,7 +1432,6 @@ mod tests {
                 AgentConfig::from_cmdline(filename, vec![]).expect("Failed to parse command line");
 
             assert_eq!(d.debug_console, config.debug_console, "{msg}");
-            assert_eq!(d.dev_mode, config.dev_mode, "{msg}");
             assert_eq!(d.cgroup_no_v1, config.cgroup_no_v1, "{msg}");
             assert_eq!(
                 d.unified_cgroup_hierarchy, config.unified_cgroup_hierarchy,
@@ -1539,13 +1472,11 @@ mod tests {
     #[serial]
     fn test_from_cmdline_with_args_overwrites() {
         let expected = AgentConfig {
-            dev_mode: true,
             server_addr: "unix:///tmp/overwrite.socket".to_string(),
             ..Default::default()
         };
 
-        let example_config_file_contents =
-            "dev_mode = true\nserver_addr = 'unix:///tmp/ignored.socket'";
+        let example_config_file_contents = "server_addr = 'unix:///tmp/ignored.socket'";
         let dir = tempdir().expect("failed to create tmpdir");
         let file_path = dir.path().join("config.toml");
         let filename = file_path.to_str().expect("failed to create filename");
@@ -1563,7 +1494,6 @@ mod tests {
         env::remove_var("KATA_AGENT_SERVER_ADDR");
 
         assert_eq!(expected.debug_console, config.debug_console);
-        assert_eq!(expected.dev_mode, config.dev_mode);
         assert_eq!(
             expected.unified_cgroup_hierarchy,
             config.unified_cgroup_hierarchy,
@@ -1771,7 +1701,6 @@ Caused by:
     fn test_config_builder_from_string() {
         let config = AgentConfig::from_str(
             r#"
-               dev_mode = true
                server_addr = 'vsock://8:2048'
                guest_components_procs = "api-server-rest"
                guest_components_rest_api = "all"
@@ -1781,7 +1710,6 @@ Caused by:
         .unwrap();
 
         // Verify that the override worked
-        assert!(config.dev_mode);
         assert_eq!(config.server_addr, "vsock://8:2048");
         assert_eq!(
             config.guest_components_procs,
