@@ -477,6 +477,8 @@
 ; attestation-agent collects GPU evidence through NVML, which issues
 ; privileged GPU ioctls and raises its worker threads' priority.
 (allow kata_coco_t self (capability (sys_admin sys_nice)))
+; cryptsetup sets its own scheduling while opening the scratch device.
+(allow kata_coco_t self (process (setsched)))
 (allow kata_coco_t kernel_t (process (setsched)))
 (allow kata_coco_t kernel_t (system (ipc_info)))
 (allow kata_coco_t self (capability2 (perfmon)))
