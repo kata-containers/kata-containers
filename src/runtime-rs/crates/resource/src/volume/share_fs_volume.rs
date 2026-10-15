@@ -57,7 +57,7 @@ const DIR_MODE_PERMS: u32 = SFlag::S_IFDIR.bits() | 0o750;
 // skip the volumes whose source had already set to guest share dir.
 pub(crate) struct ShareFsVolume {
     share_fs: Option<Arc<dyn ShareFs>>,
-    mounts: Vec<oci::Mount>,
+    mount: Option<oci::Mount>,
     storages: Vec<agent::Storage>,
 
     // Add volume manager reference
@@ -430,7 +430,7 @@ impl ShareFsVolume {
 
         let mut volume = Self {
             share_fs: share_fs.as_ref().map(Arc::clone),
-            mounts: vec![],
+            mount: None,
             storages: vec![],
             volume_manager: Some(volume_manager.clone()),
             source_path: Some(source_path.clone()),
@@ -449,7 +449,7 @@ impl ShareFsVolume {
                     Ok(src) => src,
                 };
 
-                // append oci::Mount structure to volume mounts
+                // set the oci::Mount structure of the volume
                 let mut oci_mount = oci::Mount::default();
                 oci_mount.set_destination(m.destination().clone());
                 oci_mount.set_typ(Some("bind".to_string()));
@@ -466,7 +466,7 @@ impl ShareFsVolume {
                         .context("copy file to guest")?;
 
                     oci_mount.set_source(Some(PathBuf::from(&guest_path)));
-                    volume.mounts.push(oci_mount);
+                    volume.mount = Some(oci_mount);
                 } else if src.is_dir() {
                     // We allow directory copying wildly
                     // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
@@ -484,7 +484,7 @@ impl ShareFsVolume {
                         .context("copy directory to guest")?;
 
                     oci_mount.set_source(Some(PathBuf::from(&guest_path)));
-                    volume.mounts.push(oci_mount);
+                    volume.mount = Some(oci_mount);
 
                     // Start monitoring (only for watchable volumes)
                     let mut monitor_task = None;
@@ -549,7 +549,7 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&guest_path)));
                     oci_mount.set_options(m.options().clone());
 
-                    volume.mounts.push(oci_mount);
+                    volume.mount = Some(oci_mount);
                 } else {
                     // Not mounted ever
                     let mount_result = share_fs_mount
@@ -581,7 +581,7 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&mount_result.guest_path)));
                     oci_mount.set_options(m.options().clone());
 
-                    volume.mounts.push(oci_mount);
+                    volume.mount = Some(oci_mount);
                 }
             }
         }
@@ -672,7 +672,7 @@ impl ShareFsVolume {
 #[async_trait]
 impl Volume for ShareFsVolume {
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
-        Ok(self.mounts.clone())
+        Ok(self.mount.iter().cloned().collect())
     }
 
     fn get_storage(&self) -> Result<Vec<agent::Storage>> {
@@ -706,63 +706,68 @@ impl Volume for ShareFsVolume {
 
         let mounted_info_set = share_fs.mounted_info_set();
         let mut mounted_info_set = mounted_info_set.lock().await;
-        for m in self.mounts.iter() {
-            let (host_source, mut mounted_info) = match mounted_info_set
-                .iter()
-                .find(|entry| {
-                    entry.1.guest_path.as_os_str().to_str().unwrap() == get_mount_path(m.source())
-                })
-                .map(|entry| (entry.0.to_owned(), entry.1.clone()))
-            {
-                Some(entry) => entry,
-                None => {
-                    warn!(
-                        sl!(),
-                        "The mounted info for guest path {} not found",
-                        &get_mount_path(m.source())
-                    );
-                    continue;
-                }
-            };
-
-            let old_readonly = mounted_info.readonly();
-            if get_mount_options(m.options()).contains(&"ro".to_owned()) {
-                mounted_info.ro_ref_count -= 1;
-            } else {
-                mounted_info.rw_ref_count -= 1;
+        let Some(m) = self.mount.as_ref() else {
+            return Ok(());
+        };
+        let (host_source, mut mounted_info) = match mounted_info_set
+            .iter()
+            .find(|entry| {
+                entry.1.guest_path.as_os_str().to_str().unwrap() == get_mount_path(m.source())
+            })
+            .map(|entry| (entry.0.to_owned(), entry.1.clone()))
+        {
+            Some(entry) => entry,
+            None => {
+                warn!(
+                    sl!(),
+                    "The mounted info for guest path {} not found",
+                    &get_mount_path(m.source())
+                );
+                return Ok(());
             }
+        };
 
-            debug!(
-                sl!(),
-                "Ref count for {} was updated to {} due to volume cleanup",
-                host_source,
-                mounted_info.ref_count()
-            );
-            let share_fs_mount = share_fs.get_share_fs_mount();
-            let file_name = mounted_info.file_name()?;
+        let old_readonly = mounted_info.readonly();
+        if get_mount_options(m.options()).contains(&"ro".to_owned()) {
+            mounted_info.ro_ref_count -= 1;
+        } else {
+            mounted_info.rw_ref_count -= 1;
+        }
 
-            if mounted_info.ref_count() > 0 {
-                // Downgrade to readonly if no container needs readwrite permission
-                if !old_readonly && mounted_info.readonly() {
-                    info!(sl!(), "Downgrade {} to readonly due to no container that needs readwrite permission", host_source);
-                    share_fs_mount
-                        .downgrade_to_ro(&file_name)
-                        .await
-                        .context("Downgrade volume")?;
-                }
-                mounted_info_set.insert(host_source.clone(), mounted_info);
-            } else {
+        debug!(
+            sl!(),
+            "Ref count for {} was updated to {} due to volume cleanup",
+            host_source,
+            mounted_info.ref_count()
+        );
+        let share_fs_mount = share_fs.get_share_fs_mount();
+        let file_name = mounted_info.file_name()?;
+
+        if mounted_info.ref_count() > 0 {
+            // Downgrade to readonly if no container needs readwrite permission
+            if !old_readonly && mounted_info.readonly() {
                 info!(
                     sl!(),
-                    "The path will be umounted due to no references, host_source = {}", host_source
+                    "Downgrade {} to readonly due to no container that needs readwrite permission",
+                    host_source
                 );
-                mounted_info_set.remove(&host_source);
-                // Umount the volume
                 share_fs_mount
-                    .umount_volume(&file_name)
+                    .downgrade_to_ro(&file_name)
                     .await
-                    .context("Umount volume")?
+                    .context("Downgrade volume")?;
             }
+            mounted_info_set.insert(host_source.clone(), mounted_info);
+        } else {
+            info!(
+                sl!(),
+                "The path will be umounted due to no references, host_source = {}", host_source
+            );
+            mounted_info_set.remove(&host_source);
+            // Umount the volume
+            share_fs_mount
+                .umount_volume(&file_name)
+                .await
+                .context("Umount volume")?
         }
 
         Ok(())
