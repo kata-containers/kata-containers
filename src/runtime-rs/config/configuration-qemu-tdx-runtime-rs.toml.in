@@ -628,6 +628,13 @@ disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 # qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
 enable_vcpus_pinning = @DEFENABLEVCPUSPINNING_QEMU@
 
+# Pin the QEMU hypervisor process (and all its vCPU/I/O threads) to a specific
+# set of host physical CPUs via sched_setaffinity(2), applied in the pre_exec hook before QEMU starts.
+# Format: Linux cpuset syntax — comma-separated CPUs and/or ranges,
+# e.g. "0,2,4-7,10".  Leave empty (default) to disable pinning.
+# NOTE: this option only affects the QEMU hypervisor
+# cpu_set = ""
+
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)
