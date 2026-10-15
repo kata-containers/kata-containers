@@ -321,6 +321,57 @@ EOF
     older than the agent never sets it. Either way the containers keep their
     own ceilings.
 
+!!! note "Huge pages inside the guest"
+
+    These rules apply when the runtime class sets `enable_hugepages_pod_sizing = true`.
+    `hugepages_used_by` in the same section says who uses a container's
+    `hugepages-<size>` of the VM's page size as huge pages:
+
+    | Value | `hugepages-<size>` | `memory` |
+    |---|---|---|
+    | `host` (default) | backs the VM, and is the container's guest memory ceiling | not used inside the guest |
+    | `guest` | stays huge pages inside the guest, as on runc | the container's guest memory ceiling |
+
+    The pod annotation `io.katacontainers.container.hugepages_used_by` overrides
+    it per container. In a `host` class, a container that needs huge pages
+    inside the guest is named as `guest`:
+
+    ```yaml
+    metadata:
+      annotations:
+        io.katacontainers.container.hugepages_used_by: "nvmf=guest"
+    spec:
+      runtimeClassName: kata-qemu-hugepage-sized
+      containers:
+      - name: trainer
+        resources:
+          limits:
+            memory: 256Mi
+            hugepages-1Gi: 64Gi
+      - name: nvmf
+        resources:
+          limits:
+            memory: 2Gi
+            hugepages-1Gi: 4Gi
+    ```
+
+    `trainer` is bounded at 64Gi and cannot take the guest's huge pages. `nvmf`
+    gets 4Gi of huge pages in the guest and is bounded at 2Gi. They exist
+    whether or not the container mounts a huge page backed `emptyDir`; mount one
+    only when the application wants a hugetlbfs path. The huge pages of a pod's
+    `guest` containers add up in the guest and are never shrunk while the pod
+    runs. A container that reserves none of its own, including one that only
+    carries the pod's value, is `host` even in a `guest` class.
+
+    Refused when the container is created:
+
+    - a huge page backed `emptyDir` on a `host` container;
+    - a container named `guest` that reserves none of the VM's page size of its own;
+    - huge pages of another page size than the VM's;
+    - a ceiling that does not fit what the guest holds after the `guest`
+      containers' huge pages, with the amount the pod is short;
+    - a change of the annotation while the pod runs.
+
 !!! warning "`hugepages-<size>` has to cover `default_memory`"
 
     A reservation below `default_memory` is refused before the VM starts. The

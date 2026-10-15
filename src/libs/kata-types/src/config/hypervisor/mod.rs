@@ -1019,10 +1019,9 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_hugepages: bool,
 
-    /// Size a guest backed by hugetlbfs from the pod's `hugepages-<size>`
-    /// reservation rather than from its memory limits, and bound each container
-    /// inside the guest by its own reservation. Off, the guest is sized and
-    /// bounded as any other.
+    /// Sizes a guest backed by hugetlbfs from the pod's `hugepages-<size>`
+    /// reservation in the Go runtime. runtime-rs refuses it until it follows
+    /// the same rules.
     #[serde(default)]
     pub enable_hugepages_pod_sizing: bool,
 
@@ -1224,6 +1223,14 @@ impl MemoryInfo {
         if self.memory_slots == 0 {
             return Err(std::io::Error::other(
                 "Configured memory slots for guest VM are zero",
+            ));
+        }
+        // runtime-rs does not size the guest from the pod or bound containers
+        // the way the Go runtime does, so the key is refused rather than given
+        // a different meaning here.
+        if self.enable_hugepages_pod_sizing {
+            return Err(std::io::Error::other(
+                "enable_hugepages_pod_sizing is not supported by runtime-rs yet: use the Go runtime for this runtime class",
             ));
         }
 
@@ -1994,6 +2001,20 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_memory_info_refuses_pod_sizing() {
+        let mut mem = MemoryInfo {
+            default_memory: 2048,
+            memory_slots: 10,
+            ..Default::default()
+        };
+        assert!(mem.validate().is_ok());
+
+        mem.enable_hugepages_pod_sizing = true;
+        let err = mem.validate().unwrap_err();
+        assert!(err.to_string().contains("not supported by runtime-rs"));
     }
 
     #[test]

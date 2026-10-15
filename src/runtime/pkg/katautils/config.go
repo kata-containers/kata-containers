@@ -153,6 +153,7 @@ type hypervisor struct {
 	ReclaimGuestFreedMemory        bool                      `toml:"reclaim_guest_freed_memory"`
 	HugePages                      bool                      `toml:"enable_hugepages"`
 	HugePagesPodSizing             bool                      `toml:"enable_hugepages_pod_sizing"`
+	HugePagesUsedBy                string                    `toml:"hugepages_used_by"`
 	VirtioMem                      bool                      `toml:"enable_virtio_mem"`
 	IOMMU                          bool                      `toml:"enable_iommu"`
 	IOMMUPlatform                  bool                      `toml:"enable_iommu_platform"`
@@ -1086,6 +1087,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ReclaimGuestFreedMemory:       h.ReclaimGuestFreedMemory,
 		HugePages:                     h.HugePages,
 		HugePagesPodSizing:            h.HugePagesPodSizing,
+		HugePagesUsedBy:               h.HugePagesUsedBy,
 		IOMMU:                         h.IOMMU,
 		IOMMUPlatform:                 h.getIOMMUPlatform(),
 		GuestNUMANodes:                h.defaultGuestNUMANodes(),
@@ -1276,6 +1278,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ReclaimGuestFreedMemory:        h.ReclaimGuestFreedMemory,
 		HugePages:                      h.HugePages,
 		HugePagesPodSizing:             h.HugePagesPodSizing,
+		HugePagesUsedBy:                h.HugePagesUsedBy,
 		Debug:                          h.Debug,
 		DisableNestingChecks:           h.DisableNestingChecks,
 		BlockDeviceDriver:              blockDriver,

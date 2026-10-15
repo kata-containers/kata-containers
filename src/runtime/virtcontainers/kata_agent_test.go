@@ -680,7 +680,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	}
 
 	k := kataAgent{}
-	k.constrainGRPCSpec(g, true, true, "", true, nil, false, guestCapacity{}, 0, false)
+	k.constrainGRPCSpec(g, true, true, "", true, nil, false, guestCapacity{}, 0, "", "")
 
 	// Check nil fields
 	assert.Nil(g.Hooks)
@@ -1491,6 +1491,7 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 		resources           *pb.LinuxResources
 		pageSize            string
 		guest               guestCapacity
+		refused             bool
 		expectedLimit       int64
 		expectedReservation int64
 		expectedSwap        int64
@@ -1519,15 +1520,24 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			expectedLimit: 256 * gib / 1024,
 		},
 		{
-			description: "an unset limit stays unlimited",
+			description: "a reservation bounds a container the pod gave no memory limit",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: 0, Swap: -1},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
 					{Pagesize: "1GB", Limit: hugePage},
 				},
 			},
-			expectedLimit: 0,
-			expectedSwap:  -1,
+			expectedLimit: int64(hugePage),
+			expectedSwap:  int64(hugePage),
+		},
+		{
+			description: "a reservation bounds a container with no memory resources at all",
+			resources: &pb.LinuxResources{
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: hugePage},
+				},
+			},
+			expectedLimit: int64(hugePage),
 		},
 		{
 			description: "a reservation larger than a limit can hold saturates",
@@ -1540,36 +1550,16 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			expectedLimit: math.MaxInt64,
 		},
 		{
-			// The whole reservation went to one container, so the ceiling is held to what
-			// the guest holds.
-			description: "a ceiling past the guest is held to what the guest holds",
+			description: "a ceiling past what the guest holds is refused, not held",
 			resources: &pb.LinuxResources{
-				Memory: &pb.LinuxMemory{
-					Limit:       2 * gib,
-					Reservation: 2 * gib,
-					Swap:        2 * gib,
-				},
+				Memory: &pb.LinuxMemory{Limit: 2 * gib},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
 					{Pagesize: "1GB", Limit: 16 * uint64(gib)},
 				},
 			},
-			pageSize:            "1GB",
-			guest:               guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
-			expectedLimit:       15105 * gib / 1024,
-			expectedReservation: 2 * gib,
-			expectedSwap:        15105 * gib / 1024,
-		},
-		{
-			description: "a small guest holds the ceiling to what it holds",
-			resources: &pb.LinuxResources{
-				Memory: &pb.LinuxMemory{Limit: 256 * gib / 1024},
-				HugepageLimits: []*pb.LinuxHugepageLimit{
-					{Pagesize: "2MB", Limit: 2 * uint64(gib)},
-				},
-			},
-			pageSize:      "2MB",
-			guest:         guestCapacity{memoryMB: 2 * 1024, vCPUs: 1},
-			expectedLimit: 1416 * gib / 1024,
+			pageSize: "1GB",
+			guest:    guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
+			refused:  true,
 		},
 		{
 			description: "a reservation a fixed size guest can hold is left alone",
@@ -1584,35 +1574,18 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 			expectedLimit: 4 * gib,
 		},
 		{
-			description: "swap is held with the limit, as the guest has none of its own",
+			description: "the pools come out of what the guest holds for a ceiling",
 			resources: &pb.LinuxResources{
-				Memory: &pb.LinuxMemory{
-					Limit: 2 * gib,
-					Swap:  4 * gib,
-				},
+				Memory: &pb.LinuxMemory{Limit: gib / 4},
 				HugepageLimits: []*pb.LinuxHugepageLimit{
-					{Pagesize: "1GB", Limit: hugePage},
+					{Pagesize: "1GB", Limit: 12 * uint64(gib)},
 				},
 			},
-			pageSize:      "1GB",
-			guest:         guestCapacity{memoryMB: 16 * 1024, vCPUs: 4},
-			expectedLimit: int64(hugePage),
-			expectedSwap:  int64(hugePage),
+			pageSize: "1GB",
+			guest:    guestCapacity{memoryMB: 16 * 1024, vCPUs: 4, pools: 4 << 30},
+			refused:  true,
 		},
 		{
-			description: "reservations of every size saturate together when the VM's size is unknown",
-			resources: &pb.LinuxResources{
-				Memory: &pb.LinuxMemory{Limit: 2 * gib},
-				HugepageLimits: []*pb.LinuxHugepageLimit{
-					{Pagesize: "1GB", Limit: math.MaxUint64},
-					{Pagesize: "2MB", Limit: 2 * uint64(gib)},
-				},
-			},
-			expectedLimit: math.MaxInt64,
-		},
-		{
-			// Only the VM's page size buys the guest RAM; a 2MB reservation is charged on
-			// the host and stays out of the ceiling.
 			description: "a reservation of another page size stays out of the ceiling",
 			resources: &pb.LinuxResources{
 				Memory: &pb.LinuxMemory{Limit: 2 * gib},
@@ -1629,9 +1602,19 @@ func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
 		assert := assert.New(t)
 
 		hugePages := hugePagesTotal(tt.resources.HugepageLimits, tt.pageSize)
-		translateHostMemoryLimitToGuest((&kataAgent{}).Logger(), tt.resources.Memory, hugePages, tt.guest)
+		err := translateHostMemoryLimitToGuest((&kataAgent{}).Logger(), tt.resources, hugePages, tt.guest, "app")
+		if tt.refused {
+			assert.Error(err, tt.description)
+			assert.Contains(err.Error(), "the pod needs", tt.description)
+			assert.Contains(err.Error(), "container app", tt.description)
+			continue
+		}
+		assert.NoError(err, tt.description)
 
 		memory := tt.resources.Memory
+		if hugePages == 0 && memory == nil {
+			continue
+		}
 		assert.Equal(tt.expectedLimit, memory.Limit, tt.description)
 		assert.Equal(tt.expectedReservation, memory.Reservation, tt.description)
 		assert.Equal(tt.expectedSwap, memory.Swap, tt.description)
@@ -1809,6 +1792,38 @@ func TestCopiedReservation(t *testing.T) {
 			expected: 40 * gib,
 		},
 		{
+			// The runtime class's overhead makes the VM larger than the pod's
+			// allowance, so the copy is not the VM's size.
+			description: "a copy is caught when the VM carries the class's overhead",
+			reservations: []podReservation{
+				{name: "main", hugePages: 10 * gib},
+				{name: "s1", hugePages: 16 * gib},
+				{name: "s2", hugePages: 16 * gib},
+				{name: "s3", hugePages: 16 * gib},
+			},
+			vmMemory: 18 * gib,
+			expected: 16 * gib,
+		},
+		{
+			description: "a copy beside a guest container is caught with the class's overhead",
+			reservations: []podReservation{
+				{name: "main", hugePages: 8 * gib},
+				{name: "pool", hugePages: 4 * gib, pool: true},
+				{name: "s2", hugePages: 16 * gib},
+			},
+			vmMemory: 18 * gib,
+			expected: 16 * gib,
+		},
+		{
+			description: "containers that stated their own and fit the VM with its overhead are none of them a copy",
+			reservations: []podReservation{
+				{name: "main", hugePages: 8 * gib},
+				{name: "s-hp", hugePages: 1 * gib},
+				{name: "s-nomem", hugePages: 2 * gib},
+			},
+			vmMemory: 13 * gib,
+		},
+		{
 			description: "a lone container is read as having stated its own",
 			reservations: []podReservation{
 				{name: "app", hugePages: 12 * gib},
@@ -1920,9 +1935,10 @@ func TestContainerHasGuestHugePagePool(t *testing.T) {
 		Type:        "bind",
 	}}}
 
-	assert.False(containerHasGuestHugePagePool(&ContainerConfig{CustomSpec: rewritten}))
-	assert.True(containerHasGuestHugePagePool(&ContainerConfig{CustomSpec: rewritten, GuestHugePagePool: true}))
-	assert.False(containerHasGuestHugePagePool(&ContainerConfig{}))
+	notPodSized := &Sandbox{config: &SandboxConfig{}}
+	assert.False(containerHasGuestHugePagePool(notPodSized, &ContainerConfig{CustomSpec: rewritten}, 0))
+	assert.True(containerHasGuestHugePagePool(notPodSized, &ContainerConfig{CustomSpec: rewritten, GuestHugePagePool: true}, 0))
+	assert.False(containerHasGuestHugePagePool(notPodSized, &ContainerConfig{}, 0))
 }
 
 func TestRefuseGuestHugePagePoolTooLarge(t *testing.T) {

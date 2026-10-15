@@ -184,6 +184,10 @@ type HypervisorConfig struct {
 	// reservation and bounds its containers by their reservations
 	HugePagesPodSizing bool
 
+	// HugePagesUsedBy is who uses a container's hugepages-<size> as huge pages
+	// by default in a guest sized from the pod
+	HugePagesUsedBy string
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 
