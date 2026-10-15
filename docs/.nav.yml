@@ -8,6 +8,7 @@ nav:
       - installation.md
     - Configuration:
         - Helm: helm-configuration.md
+        - Kata Deploy RuntimeClasses: kata-deploy-runtimeclasses.md
         - Runtime: runtime-configuration.md
         - Annotations: pod-annotations.md
   - Platform Support:

@@ -1893,6 +1893,7 @@ async fn install_stage_artifacts(
     }
 
     if runtime != "crio" {
+        artifacts::snapshotters::remove_unrequested_nydus_snapshotter(config).await?;
         if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
             for snapshotter in snapshotters {
                 artifacts::snapshotters::install_snapshotter(snapshotter, config, runtime).await?;
@@ -1964,6 +1965,7 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
     runtime::configure_cri_runtime(config, runtime).await?;
 
     if runtime != "crio" {
+        artifacts::snapshotters::unconfigure_unrequested_nydus_snapshotter(config, runtime).await?;
         if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
             for snapshotter in snapshotters {
                 artifacts::snapshotters::configure_snapshotter(snapshotter, runtime, config)
@@ -2300,6 +2302,7 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
                 info!("No experimental snapshotters to uninstall");
             }
         }
+        artifacts::snapshotters::remove_unrequested_nydus_snapshotter(config).await?;
     } else {
         info!("Skipping snapshotter uninstall on CRI-O (containerd-specific feature)");
     }
@@ -2343,6 +2346,7 @@ async fn cleanup_stage_revert_cri(
                 artifacts::snapshotters::uninstall_snapshotter(snapshotter, config).await?;
             }
         }
+        artifacts::snapshotters::remove_unrequested_nydus_snapshotter(config).await?;
     }
 
     if !cri_configuration_present(config, runtime).await {
