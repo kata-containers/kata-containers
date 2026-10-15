@@ -1114,6 +1114,20 @@ mod tests {
             .is_network_device_hotplug_supported());
     }
 
+    #[actix_rt::test]
+    async fn test_resize_vcpu_limits() {
+        for max_vcpus in [256, 512] {
+            let mut ch = CloudHypervisorInner::default();
+            ch.config.cpu_info.default_maxvcpus = max_vcpus;
+            for requested in [max_vcpus, max_vcpus + 1] {
+                assert_eq!(
+                    ch.resize_vcpu(max_vcpus, requested).await.unwrap(),
+                    (max_vcpus, max_vcpus)
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_handle_guest_protection() {
         for confidential_guest in [false, true] {

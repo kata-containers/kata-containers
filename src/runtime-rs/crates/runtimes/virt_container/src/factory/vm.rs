@@ -11,9 +11,10 @@ use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv}
 use hypervisor::device::driver::{VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_PCI};
 #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
-use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
+use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_NAME_CH, HYPERVISOR_QEMU};
 use kata_types::config::{
-    default, Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig,
+    default, hypervisor::CloudHypervisorConfig, Agent as AgentConfig,
+    Hypervisor as HypervisorConfig, TomlConfig,
 };
 use kata_types::machine_type::MACHINE_TYPE_S390X_TYPE;
 use resource::{cpu_mem::initial_size::InitialSizeManager, ResourceManager};
@@ -123,7 +124,10 @@ impl VmConfig {
         Ok(())
     }
 
-    pub fn validate_hypervisor_config(conf: &mut HypervisorConfig) -> Result<()> {
+    pub fn validate_hypervisor_config(
+        hypervisor_name: &str,
+        conf: &mut HypervisorConfig,
+    ) -> Result<()> {
         // remote hypervisor_socket
         if !conf.remote_info.hypervisor_socket.is_empty() {
             return Ok(());
@@ -162,10 +166,13 @@ impl VmConfig {
         }
 
         // default_maxvcpus
-        if conf.cpu_info.default_maxvcpus == 0
-            || conf.cpu_info.default_maxvcpus > default::MAX_QEMU_VCPUS
-        {
-            conf.cpu_info.default_maxvcpus = default::MAX_QEMU_VCPUS;
+        let max_vcpus = if hypervisor_name == HYPERVISOR_NAME_CH {
+            CloudHypervisorConfig::max_vcpus()
+        } else {
+            default::MAX_QEMU_VCPUS
+        };
+        if conf.cpu_info.default_maxvcpus == 0 || conf.cpu_info.default_maxvcpus > max_vcpus {
+            conf.cpu_info.default_maxvcpus = max_vcpus;
         }
 
         Ok(())
@@ -414,5 +421,33 @@ impl TemplateVm {
     /// Resume resumes a paused VM.
     pub async fn resume(&self) -> Result<()> {
         self.hypervisor.resume_vm().await.context("resume vm")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_cpu_limits() {
+        let ch_max_vcpus = CloudHypervisorConfig::max_vcpus();
+        for (hypervisor_name, requested, expected) in [
+            (HYPERVISOR_NAME_CH, 0, ch_max_vcpus),
+            (HYPERVISOR_NAME_CH, ch_max_vcpus - 1, ch_max_vcpus - 1),
+            (HYPERVISOR_NAME_CH, ch_max_vcpus + 1, ch_max_vcpus),
+            (HYPERVISOR_QEMU, 512, default::MAX_QEMU_VCPUS),
+        ] {
+            let mut config = HypervisorConfig::default();
+            config.boot_info.kernel = "vmlinuz".to_string();
+            config.boot_info.image = "kata.img".to_string();
+            config.cpu_info.default_maxvcpus = requested;
+
+            VmConfig::validate_hypervisor_config(hypervisor_name, &mut config).unwrap();
+
+            assert_eq!(
+                config.cpu_info.default_maxvcpus, expected,
+                "hypervisor={hypervisor_name}, requested={requested}"
+            );
+        }
     }
 }

@@ -75,6 +75,7 @@ func newClhConfig() (HypervisorConfig, error) {
 
 type clhClientMock struct {
 	vmInfo          chclient.VmInfo
+	resizeRequest   *chclient.VmResize
 	restoreRequest  *chclient.RestoreConfig
 	snapshotRequest *chclient.VmSnapshotConfig
 }
@@ -104,6 +105,7 @@ func (c *clhClientMock) BootVM(ctx context.Context) (*http.Response, error) {
 
 //nolint:golint
 func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
+	c.resizeRequest = &vmResize
 	return nil, nil
 }
 
@@ -691,6 +693,39 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 
 	err = clh.Cleanup(context.Background())
 	assert.NoError(err)
+}
+
+func TestCloudHypervisorResizeVCPUs(t *testing.T) {
+	tests := []struct {
+		name      string
+		maxVCPUs  int32
+		requested uint32
+		expected  uint32
+	}{
+		{"below 256", 512, 255, 255},
+		{"at 256", 512, 256, 256},
+		{"above 256", 512, 257, 257},
+		{"below 512", 512, 511, 511},
+		{"at 512", 512, 512, 512},
+		{"above 512", 512, 513, 512},
+		{"configured maximum", 256, 257, 256},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert := assert.New(t)
+			mockClient := &clhClientMock{}
+			mockClient.vmInfo.Config.Cpus = chclient.NewCpusConfig(2, tt.maxVCPUs)
+			clh := cloudHypervisor{APIClient: mockClient}
+
+			current, resized, err := clh.ResizeVCPUs(context.Background(), tt.requested)
+			assert.NoError(err)
+			assert.Equal(uint32(2), current)
+			assert.Equal(tt.expected, resized)
+			if assert.NotNil(mockClient.resizeRequest) {
+				assert.Equal(int32(tt.expected), mockClient.resizeRequest.GetDesiredVcpus())
+			}
+		})
+	}
 }
 
 func TestCloudHypervisorResizeMemory(t *testing.T) {
