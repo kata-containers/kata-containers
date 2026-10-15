@@ -44,7 +44,7 @@ pub enum PmemDeviceError {
 }
 
 /// Configuration for a virtio-pmem device.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct PmemDeviceConfigInfo {
     /// Unique device identifier.
     pub id: String,
@@ -83,6 +83,11 @@ pub struct PmemDeviceMgr {
 }
 
 impl PmemDeviceMgr {
+    /// Returns whether no virtio-pmem devices are configured.
+    pub fn is_empty(&self) -> bool {
+        self.info_list.is_empty()
+    }
+
     /// Adds a cold-plug virtio-pmem configuration.
     pub fn insert_or_update_device(
         &mut self,
@@ -132,13 +137,7 @@ impl PmemDeviceMgr {
             let device = Pmem::<GuestAddressSpaceImpl>::new(
                 info.config.id.clone(),
                 file,
-                info.config
-                    .file_range
-                    .as_ref()
-                    .map(|range| std::range::Range {
-                        start: range.start,
-                        end: range.end,
-                    }),
+                info.config.file_range.clone(),
                 info.config.read_only,
                 Box::new(handler),
                 epoll_mgr.clone(),

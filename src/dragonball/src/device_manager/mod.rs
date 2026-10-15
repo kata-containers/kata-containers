@@ -1780,6 +1780,8 @@ mod tests {
                 vsock_manager: VsockDeviceMgr::default(),
                 #[cfg(feature = "virtio-mem")]
                 mem_manager: MemDeviceMgr::default(),
+                #[cfg(feature = "virtio-pmem")]
+                pmem_manager: PmemDeviceMgr::default(),
                 #[cfg(feature = "virtio-balloon")]
                 balloon_manager: BalloonDeviceMgr::default(),
                 #[cfg(feature = "virtio-rng")]
