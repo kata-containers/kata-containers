@@ -79,6 +79,7 @@ else
 		"k8s-cron-job.bats" \
 		"k8s-custom-dns.bats" \
 		"k8s-devkit-debug-console.bats" \
+		"k8s-direct-volume.bats" \
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-erofs-dmverity.bats" \
