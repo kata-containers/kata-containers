@@ -1,11 +1,12 @@
 // Copyright 2026 Alibaba Cloud. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::any::Any;
 use std::fs::File;
 use std::marker::PhantomData;
+use std::ops::{Deref, Range};
 use std::os::fd::AsRawFd;
 use std::sync::Arc;
-use std::{any::Any, ops::Deref};
 
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
 use dbs_utils::epoll_manager::{
@@ -229,12 +230,13 @@ pub struct Pmem<AS: GuestAddressSpace> {
     pub(crate) device_info: VirtioDeviceInfo,
     pub(crate) file: Option<File>,
     /// Backing-file byte range; `len` is the padded guest-visible length.
-    pub(crate) file_range: Option<std::range::Range<u64>>,
+    pub(crate) file_range: Option<Range<u64>>,
     pub(crate) len: u64,
     pub(crate) read_only: bool,
     pub(crate) region: Option<Arc<GuestRegionMmap>>,
     pub(crate) mapping: Option<Arc<MmapRegion>>,
     pub(crate) handler: Box<dyn VirtioRegionHandler>,
+    pub(crate) region_registered: bool,
     pub(crate) kvm_slot: Option<(Arc<VmFd>, u32)>,
     pub(crate) subscriber_id: Option<SubscriberId>,
     pub(crate) phantom: PhantomData<AS>,
@@ -257,7 +259,7 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
     pub fn new(
         id: String,
         file: File,
-        file_range: Option<std::range::Range<u64>>,
+        file_range: Option<Range<u64>>,
         read_only: bool,
         handler: Box<dyn VirtioRegionHandler>,
         epoll_mgr: EpollManager,
@@ -275,10 +277,7 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
         let file_size = file.metadata()?.len();
         let file_range = match file_range {
             Some(range) => range,
-            None => std::range::Range {
-                start: 0,
-                end: file_size,
-            },
+            None => 0..file_size,
         };
         let file_page_size = Self::file_page_size(&file)?;
         // SAFETY: sysconf only queries the host page size.
@@ -330,6 +329,7 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
             region: None,
             mapping: None,
             handler,
+            region_registered: false,
             kvm_slot: None,
             subscriber_id: None,
             phantom: PhantomData,
@@ -338,7 +338,7 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
 
     fn map_file(
         file: &File,
-        range: &std::range::Range<u64>,
+        range: &Range<u64>,
         len: u64,
         read_only: bool,
     ) -> Result<(MmapRegion, MmapRegion, u32)> {
@@ -384,6 +384,39 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
         };
         Ok((mapping, mmap, if read_only { KVM_MEM_READONLY } else { 0 }))
     }
+
+    fn unregister_memory(&mut self) {
+        let mut leak_mapping = false;
+        if let Some((vm_fd, slot)) = self.kvm_slot.take() {
+            let region = kvm_userspace_memory_region {
+                slot,
+                memory_size: 0,
+                ..Default::default()
+            };
+            // SAFETY: A zero-sized region unregisters the slot.
+            if let Err(e) = unsafe { vm_fd.set_user_memory_region(region) } {
+                error!(target: "virtio-pmem", "{}: failed to unregister KVM slot: {}", self.id, e);
+                leak_mapping = true;
+            }
+        }
+        if self.region_registered {
+            if let Some(region) = self.region.as_ref() {
+                if let Err(e) = self.handler.remove_regions(std::slice::from_ref(region)) {
+                    error!(target: "virtio-pmem", "{}: failed to remove guest region: {}", self.id, e);
+                    leak_mapping = true;
+                } else {
+                    self.region_registered = false;
+                }
+            } else {
+                leak_mapping = true;
+            }
+        }
+        if leak_mapping {
+            if let Some(mapping) = self.mapping.take() {
+                std::mem::forget(mapping);
+            }
+        }
+    }
 }
 
 impl<AS, Q, R> VirtioDevice<AS, Q, R> for Pmem<AS>
@@ -422,14 +455,17 @@ where
     }
 
     fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
-        trace!(target: "virtio-pmem", "{}: VirtioDevice::write_config(0x{:x}, {:?})",
+        trace!(target: "virtio-pmem", "{}: ignore VirtioDevice::write_config(0x{:x}, {:?})",
                self.id, offset, data);
-        self.device_info.write_config(offset, data)
+        Ok(())
     }
 
     fn activate(&mut self, config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
         trace!(target: "virtio-pmem", "{}: VirtioDevice::activate()", self.id);
 
+        if self.subscriber_id.is_some() {
+            return Err(ActivateError::InternalError);
+        }
         self.device_info.check_queue_sizes(&config.queues)?;
 
         let region = self.region.clone().ok_or(ActivateError::InternalError)?;
@@ -447,6 +483,13 @@ where
         });
         self.subscriber_id = Some(self.device_info.register_event_handler(handler));
 
+        Ok(())
+    }
+
+    fn reset(&mut self) -> ActivateResult {
+        if let Some(id) = self.subscriber_id.take() {
+            self.device_info.remove_event_handler(id)?;
+        }
         Ok(())
     }
 
@@ -526,6 +569,7 @@ where
         self.kvm_slot = Some((vm_fd, slots[0]));
         self.region = Some(region);
         self.mapping = Some(Arc::new(mapping));
+        self.region_registered = true;
         self.device_info.config_space[..8].copy_from_slice(&guest_addr.to_le_bytes());
 
         Ok(None)
@@ -547,20 +591,6 @@ impl<AS: GuestAddressSpace> Drop for Pmem<AS> {
                 error!(target: "virtio-pmem", "{}: failed to remove event handler: {}", self.id, e);
             }
         }
-        if let Some((vm_fd, slot)) = self.kvm_slot.take() {
-            let region = kvm_userspace_memory_region {
-                slot,
-                memory_size: 0,
-                ..Default::default()
-            };
-            // SAFETY: A zero-sized region unregisters the slot before its mapping is dropped.
-            if let Err(e) = unsafe { vm_fd.set_user_memory_region(region) } {
-                error!(target: "virtio-pmem", "{}: failed to unregister KVM slot: {}", self.id, e);
-                // KVM may still reference the mapping if slot removal failed.
-                if let Some(mapping) = self.mapping.take() {
-                    std::mem::forget(mapping);
-                }
-            }
-        }
+        self.unregister_memory();
     }
 }
