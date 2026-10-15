@@ -594,3 +594,252 @@ impl<AS: GuestAddressSpace> Drop for Pmem<AS> {
         self.unregister_memory();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::CString;
+    use std::os::fd::FromRawFd;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use dbs_device::resources::Resource;
+    use dbs_interrupt::NoopNotifier;
+    use kvm_ioctls::Kvm;
+    use test_utils::skip_if_kvm_unaccessable;
+    use vm_memory::GuestMemoryMmap;
+    use vmm_sys_util::eventfd::EventFd;
+    use vmm_sys_util::tempfile::TempFile;
+
+    use super::*;
+    use crate::device::VirtioQueueConfig;
+    use crate::tests::{create_address_space, VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+
+    struct TestRegionHandler {
+        reject: Arc<AtomicBool>,
+        removed: Arc<AtomicBool>,
+    }
+
+    impl VirtioRegionHandler for TestRegionHandler {
+        fn insert_regions(&mut self, _regions: Vec<Arc<GuestRegionMmap>>) -> Result<()> {
+            if self.reject.load(Ordering::SeqCst) {
+                Err(Error::InsertMmap)
+            } else {
+                Ok(())
+            }
+        }
+
+        fn remove_regions(&mut self, _regions: &[Arc<GuestRegionMmap>]) -> Result<()> {
+            self.removed.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    fn backing_file(size: u64) -> File {
+        let file = TempFile::new().unwrap().into_file();
+        file.set_len(size).unwrap();
+        file
+    }
+
+    fn test_handler(
+        reject: Arc<AtomicBool>,
+        removed: Arc<AtomicBool>,
+    ) -> Box<dyn VirtioRegionHandler> {
+        Box::new(TestRegionHandler { reject, removed })
+    }
+
+    fn resources(len: u64) -> DeviceResources {
+        let mut resources = DeviceResources::new();
+        resources.append(Resource::MmioAddressRange {
+            base: 0x1_0000_0000,
+            size: len,
+        });
+        resources.append(Resource::KvmMemSlot(0));
+        resources
+    }
+
+    fn device_config(vm_fd: Arc<VmFd>) -> VirtioDeviceConfig<Arc<GuestMemoryMmap>> {
+        let memory = Arc::new(GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap());
+        VirtioDeviceConfig::new(
+            memory,
+            create_address_space(),
+            vm_fd,
+            DeviceResources::new(),
+            vec![VirtioQueueConfig::create(QUEUE_SIZE, 0).unwrap()],
+            None,
+            Arc::new(NoopNotifier::new()),
+        )
+    }
+
+    fn queue_handler() -> PmemEpollHandler<Arc<GuestMemoryMmap>> {
+        let vm_fd = Arc::new(Kvm::new().unwrap().create_vm().unwrap());
+        let config = device_config(vm_fd);
+        let region = Arc::new(
+            GuestRegionMmap::new(MmapRegion::new(0x1000).unwrap(), GuestAddress(0x8000)).unwrap(),
+        );
+        PmemEpollHandler {
+            id: "pmem-test".into(),
+            config,
+            region,
+            _mapping: Arc::new(MmapRegion::new(0x1000).unwrap()),
+            size: 0x1000,
+        }
+    }
+
+    #[test]
+    fn test_file_range_and_read_only_config() {
+        let reject = Arc::new(AtomicBool::new(false));
+        let removed = Arc::new(AtomicBool::new(false));
+        let mut dev = Pmem::<Arc<GuestMemoryMmap>>::new(
+            "pmem0".into(),
+            backing_file(PMEM_ALIGN + 1),
+            None,
+            true,
+            test_handler(reject, removed),
+            EpollManager::default(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(dev.len, PMEM_ALIGN * 2);
+        let config = dev.device_info.config_space.clone();
+        VirtioDevice::<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>::write_config(
+            &mut dev,
+            0,
+            &[0xff; 16],
+        )
+        .unwrap();
+        assert_eq!(dev.device_info.config_space, config);
+
+        let range = 0..1;
+        let (_owner, mapping, flags) = Pmem::<Arc<GuestMemoryMmap>>::map_file(
+            dev.file.as_ref().unwrap(),
+            &range,
+            PMEM_ALIGN,
+            false,
+        )
+        .unwrap();
+        assert_eq!(mapping.size(), PMEM_ALIGN as usize);
+        assert_eq!(flags, 0);
+        // SAFETY: The padded byte is inside the anonymous tail of the live reservation.
+        unsafe {
+            mapping.as_ptr().add(0x1000).write_volatile(0xa5);
+            assert_eq!(mapping.as_ptr().add(0x1000).read_volatile(), 0xa5);
+        }
+        let (_read_only_owner, _, flags) = Pmem::<Arc<GuestMemoryMmap>>::map_file(
+            dev.file.as_ref().unwrap(),
+            &range,
+            PMEM_ALIGN,
+            true,
+        )
+        .unwrap();
+        assert_eq!(flags, KVM_MEM_READONLY);
+
+        let invalid_range = 1..2;
+        assert!(Pmem::<Arc<GuestMemoryMmap>>::new(
+            "invalid".into(),
+            backing_file(PMEM_ALIGN),
+            Some(invalid_range),
+            false,
+            test_handler(
+                Arc::new(AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
+            ),
+            EpollManager::default(),
+            false,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_flush_and_malformed_queue() {
+        skip_if_kvm_unaccessable!();
+        for (request_len, used_len) in [(4, 4), (8, 0)] {
+            let mut handler = queue_handler();
+            let memory = handler.config.vm_as.clone();
+            let vq = VirtQueue::new(GuestAddress(0), &memory, 16);
+            vq.avail.ring(0).store(0);
+            vq.avail.idx().store(1);
+            vq.dtable(0).set(0x1000, request_len, VIRTQ_DESC_F_NEXT, 1);
+            vq.dtable(1).set(0x2000, 4, VIRTQ_DESC_F_WRITE, 0);
+            memory
+                .write_obj(VIRTIO_PMEM_REQ_TYPE_FLUSH, GuestAddress(0x1000))
+                .unwrap();
+            handler.config.queues = vec![VirtioQueueConfig::new(
+                vq.create_queue(),
+                Arc::new(EventFd::new(0).unwrap()),
+                Arc::new(NoopNotifier::new()),
+                0,
+            )];
+            assert!(handler.process_queue(0));
+            assert_eq!(vq.used.ring(0).load().len, used_len);
+        }
+    }
+
+    #[test]
+    fn test_resource_rollback_and_reset() {
+        skip_if_kvm_unaccessable!();
+        let epoll = EpollManager::default();
+        let reject = Arc::new(AtomicBool::new(true));
+        let removed = Arc::new(AtomicBool::new(false));
+        let mut dev = Pmem::<Arc<GuestMemoryMmap>>::new(
+            "pmem0".into(),
+            backing_file(PMEM_ALIGN),
+            None,
+            false,
+            test_handler(reject.clone(), removed.clone()),
+            epoll,
+            false,
+        )
+        .unwrap();
+        let kvm = Kvm::new().unwrap();
+        let vm_fd = Arc::new(kvm.create_vm().unwrap());
+        let len = dev.len;
+        assert!(
+            VirtioDevice::<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>::set_resource(
+                &mut dev,
+                vm_fd.clone(),
+                resources(len),
+            )
+            .is_err()
+        );
+        reject.store(false, Ordering::SeqCst);
+        VirtioDevice::<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>::set_resource(
+            &mut dev,
+            vm_fd.clone(),
+            resources(len),
+        )
+        .unwrap();
+        VirtioDevice::<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>::activate(
+            &mut dev,
+            device_config(vm_fd.clone()),
+        )
+        .unwrap();
+        VirtioDevice::<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>::reset(&mut dev).unwrap();
+        VirtioDevice::<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>::activate(
+            &mut dev,
+            device_config(vm_fd),
+        )
+        .unwrap();
+        drop(dev);
+        assert!(removed.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_hugetlbfs_page_size() {
+        let name = CString::new("pmem-test").unwrap();
+        // SAFETY: memfd_create receives a valid name.
+        let fd = unsafe {
+            libc::memfd_create(
+                name.as_ptr(),
+                libc::MFD_CLOEXEC | libc::MFD_HUGETLB | libc::MFD_HUGE_2MB,
+            )
+        };
+        if fd < 0 {
+            return;
+        }
+        // SAFETY: fd is uniquely owned after successful memfd_create.
+        let file = unsafe { File::from_raw_fd(fd) };
+        assert_eq!(
+            Pmem::<Arc<GuestMemoryMmap>>::file_page_size(&file).unwrap(),
+            PMEM_ALIGN
+        );
+    }
+}
