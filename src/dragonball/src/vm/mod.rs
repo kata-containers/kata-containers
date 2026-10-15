@@ -1184,6 +1184,13 @@ impl Vm {
         use crate::snapshot::{DeviceManagerState, MicrovmState, SnapshotError};
         use dbs_snapshot::Persist;
 
+        #[cfg(feature = "virtio-pmem")]
+        if !self.device_manager.pmem_manager.is_empty() {
+            return Err(SnapshotError::InvalidState(
+                "virtio-pmem devices do not support snapshots".into(),
+            ));
+        }
+
         let vcpu_states = self.vcpu_manager()?.save_state(msr_list)?;
 
         // VM-scoped KVM state, captured while the vCPUs are paused.
