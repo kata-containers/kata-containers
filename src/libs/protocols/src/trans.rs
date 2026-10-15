@@ -751,7 +751,7 @@ impl From<grpc::LinuxResources> for oci::LinuxResources {
         if resources.has_CPU() {
             oci_resources.set_cpu(Some(resources.CPU().clone().into()));
         }
-        if !resources.has_Pids() {
+        if resources.has_Pids() {
             oci_resources.set_pids(Some(resources.Pids().clone().into()));
         }
         if resources.has_BlockIO() {
@@ -1249,6 +1249,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::cap_vec2hashset;
+    use super::grpc;
     use super::oci;
 
     fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> Vec<T> {
@@ -1283,6 +1284,23 @@ mod tests {
         let to: TestB = TestB::from(from.clone());
 
         assert_eq!(from.from, to.to);
+    }
+
+    #[test]
+    fn test_linux_resources_round_trip_keeps_pids() {
+        let pids = oci::LinuxPidsBuilder::default().limit(8).build().unwrap();
+        let resources = oci::LinuxResourcesBuilder::default()
+            .pids(pids)
+            .build()
+            .unwrap();
+
+        let grpc_resources: grpc::LinuxResources = resources.into();
+        assert!(grpc_resources.has_Pids());
+        let back: oci::LinuxResources = grpc_resources.into();
+        assert_eq!(back.pids().as_ref().unwrap().limit(), 8);
+
+        let without: oci::LinuxResources = grpc::LinuxResources::default().into();
+        assert!(without.pids().is_none());
     }
 
     #[test]
