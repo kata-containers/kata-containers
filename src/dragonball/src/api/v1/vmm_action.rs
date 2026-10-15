@@ -2134,6 +2134,35 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "virtio-pmem")]
+    #[test]
+    fn test_vmm_action_insert_pmem_device() {
+        skip_if_kvm_unaccessable!();
+
+        let tests = &mut [
+            TestData::new(
+                VmmAction::InsertPmemDevice(PmemDeviceConfigInfo::default()),
+                InstanceState::Running,
+                &|result| {
+                    assert!(matches!(
+                        result,
+                        Err(VmmActionError::Pmem(
+                            PmemDeviceError::UpdateNotAllowedPostBoot
+                        ))
+                    ));
+                },
+            ),
+            TestData::new(
+                VmmAction::InsertPmemDevice(PmemDeviceConfigInfo::default()),
+                InstanceState::Uninitialized,
+                &|result| assert!(result.is_ok()),
+            ),
+        ];
+        for test in tests.iter_mut() {
+            test.check_request();
+        }
+    }
+
     #[cfg(feature = "virtio-rng")]
     #[test]
     fn test_vmm_action_insert_rng_device() {
