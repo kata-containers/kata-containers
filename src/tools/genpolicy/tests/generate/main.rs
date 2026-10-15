@@ -357,6 +357,76 @@ spec:
 }
 
 #[test]
+fn guest_pull_container_group_override() -> Result<(), Box<dyn std::error::Error>> {
+    for (name, container_context, pod_groups, expected_groups) in [
+        (
+            "user_and_group",
+            "runAsUser: 65534\n        runAsGroup: 65534",
+            "",
+            vec![65534],
+        ),
+        // This image makes root a member of GID 10 in /etc/group.
+        (
+            "group_only",
+            "runAsGroup: 65534",
+            "    supplementalGroups: [10]\n",
+            vec![10, 65534],
+        ),
+        (
+            "explicit_pod_groups",
+            "runAsUser: 65534\n        runAsGroup: 65534",
+            "    fsGroup: 2000\n    supplementalGroups: [0, 3000]\n",
+            vec![0, 2000, 3000, 65534],
+        ),
+    ] {
+        let workdir = prepare_workdir(&format!("guest_pull_container_group_override_{name}"), &[]);
+        let pod_yaml_path = workdir.join("pod.yaml");
+        fs::write(
+            &pod_yaml_path,
+            format!(
+                r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: container-group-override
+spec:
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+{pod_groups}  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command: ["/bin/sh", "-c", "echo hello"]
+      securityContext:
+        {container_context}
+"#
+            ),
+        )?;
+
+        let output = genpolicy_succeeds(|cmd| {
+            cmd.arg("--yaml-file").arg(&pod_yaml_path).arg("--raw-out");
+        })?;
+        let stdout = String::from_utf8(output.stdout)?;
+        let (_, data) = stdout.rsplit_once("policy_data := ").expect("policy data");
+        let data: serde_json::Value = serde_json::from_str(data)?;
+        let containers = data["containers"].as_array().expect("containers");
+        let workload = containers
+            .iter()
+            .find(|c| {
+                c["OCI"]["Process"]["Args"] == serde_json::json!(["/bin/sh", "-c", "echo hello"])
+            })
+            .expect("workload container");
+        assert_eq!(workload["OCI"]["Process"]["User"]["GID"], 65534, "{name}");
+        assert_eq!(
+            workload["OCI"]["Process"]["User"]["AdditionalGids"],
+            serde_json::json!(expected_groups),
+            "{name}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn output_behavior() -> Result<(), Box<dyn std::error::Error>> {
     struct TestCase {
         name: &'static str,
