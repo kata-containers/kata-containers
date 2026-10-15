@@ -345,15 +345,21 @@ impl Request {
         disk: &mut Box<dyn Ufile>,
         data_descs: &[IoDataDesc],
     ) -> result::Result<(), ExecuteError> {
+        let mut top = self
+            .sector
+            .checked_mul(SECTOR_SIZE)
+            .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
         for d in data_descs {
-            let mut top = (d.data_len as u64 + SECTOR_SIZE - 1) & !(SECTOR_SIZE - 1u64);
-
             top = top
-                .checked_add(self.sector << SECTOR_SHIFT)
+                .checked_add(d.data_len as u64)
                 .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
-            if top > disk.get_capacity() {
-                return Err(ExecuteError::BadRequest(Error::InvalidOffset));
-            }
+        }
+        // Align the whole transfer, since individual descriptors may split a sector.
+        let top = top
+            .checked_next_multiple_of(SECTOR_SIZE)
+            .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
+        if top > disk.get_capacity() {
+            return Err(ExecuteError::BadRequest(Error::InvalidOffset));
         }
 
         Ok(())

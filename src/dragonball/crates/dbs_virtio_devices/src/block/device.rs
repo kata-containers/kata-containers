@@ -1081,6 +1081,138 @@ mod tests {
     }
 
     #[test]
+    fn test_block_request_capacity_whole_transfer() {
+        for (capacity, sector, lengths, valid) in [
+            (512, 0, vec![512, 512], false),
+            (1024, 1, vec![512, 512], false),
+            (1024, 0, vec![512, 512], true),
+            (1024, 1, vec![256, 256], true),
+            (1024, 1, vec![256, 257], false),
+            (512, 0, vec![512], true),
+            (512, 1, vec![512], false),
+            (512, 1, vec![0], true),
+        ] {
+            let mut file = DummyFile::new();
+            file.capacity = capacity;
+            let mut disk: Box<dyn Ufile> = Box::new(file);
+            let req = Request {
+                request_type: RequestType::In,
+                sector,
+                status_addr: GuestAddress(0),
+                request_index: 0,
+            };
+            let data_descs: Vec<_> = lengths
+                .iter()
+                .map(|&data_len| IoDataDesc {
+                    data_addr: 0,
+                    data_len,
+                })
+                .collect();
+            assert_eq!(
+                req.check_capacity(&mut disk, &data_descs).is_ok(),
+                valid,
+                "capacity={capacity}, sector={sector}, lengths={lengths:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_block_request_capacity_overflow() {
+        for (sector, length) in [
+            (1 << 55, 512),
+            (u64::MAX / SECTOR_SIZE, 512),
+            (u64::MAX / SECTOR_SIZE, 1),
+        ] {
+            let mut file = DummyFile::new();
+            file.capacity = u64::MAX;
+            let mut disk: Box<dyn Ufile> = Box::new(file);
+            let req = Request {
+                request_type: RequestType::In,
+                sector,
+                status_addr: GuestAddress(0),
+                request_index: 0,
+            };
+            let data_descs = [IoDataDesc {
+                data_addr: 0,
+                data_len: length,
+            }];
+            assert!(matches!(
+                req.check_capacity(&mut disk, &data_descs),
+                Err(ExecuteError::BadRequest(VirtioError::InvalidOffset))
+            ));
+        }
+    }
+
+    #[test]
+    fn test_block_request_execute_rejects_invalid_transfer() {
+        let mem = GuestMemoryMmap::<()>::from_ranges(&[(GuestAddress(0), 4096)]).unwrap();
+        for request_type in [RequestType::In, RequestType::Out] {
+            for (sector, lengths) in [(0, vec![512, 512]), (1 << 55, vec![512])] {
+                let mut file = DummyFile::new();
+                file.capacity = 512;
+                let mut disk: Box<dyn Ufile> = Box::new(file);
+                let req = Request {
+                    request_type,
+                    sector,
+                    status_addr: GuestAddress(0),
+                    request_index: 0,
+                };
+                let data_descs: Vec<_> = lengths
+                    .into_iter()
+                    .map(|data_len| IoDataDesc {
+                        data_addr: 512,
+                        data_len,
+                    })
+                    .collect();
+                assert!(matches!(
+                    req.execute(&mut disk, &mem, &data_descs, &[]),
+                    Err(ExecuteError::BadRequest(VirtioError::InvalidOffset))
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn test_block_aio_queue_rejects_invalid_transfer() {
+        for request_type in [VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT] {
+            for sector in [0u64, 1 << 55] {
+                let mut file = DummyFile::new();
+                file.capacity = 512;
+                let mut handler = get_block_epoll_handler_with_file(file);
+                let mem = &handler.vm_as.clone();
+                let vq = VirtQueue::new(GuestAddress(0), mem, 16);
+                vq.avail.ring(0).store(0);
+                vq.avail.idx().store(1);
+                let write_flag = if request_type == VIRTIO_BLK_T_IN {
+                    VIRTQ_DESC_F_WRITE
+                } else {
+                    0
+                };
+                vq.dtable(0).set(0x1000, 16, VIRTQ_DESC_F_NEXT, 1);
+                vq.dtable(1)
+                    .set(0x2000, 512, VIRTQ_DESC_F_NEXT | write_flag, 2);
+                vq.dtable(2)
+                    .set(0x2200, 512, VIRTQ_DESC_F_NEXT | write_flag, 3);
+                vq.dtable(3).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 0);
+                mem.write_obj(request_type, GuestAddress(0x1000)).unwrap();
+                mem.write_obj(sector, GuestAddress(0x1008)).unwrap();
+                mem.write_obj(0xffu8, GuestAddress(0x3000)).unwrap();
+                handler.queue = VirtioQueueConfig::new(
+                    vq.create_queue(),
+                    Arc::new(EventFd::new(0).unwrap()),
+                    Arc::new(NoopNotifier::new()),
+                    0,
+                );
+                assert!(handler.process_queue());
+                assert_eq!(
+                    mem.read_obj::<u8>(GuestAddress(0x3000)).unwrap(),
+                    VIRTIO_BLK_S_IOERR as u8
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_block_virtio_device_normal() {
         let device_id = "dummy_device_id";
         let epoll_mgr = EpollManager::default();
