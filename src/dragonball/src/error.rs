@@ -222,6 +222,10 @@ pub enum StartMicroVmError {
     /// Virtio-rng errors.
     #[error("virtio-rng errors: {0}")]
     RngDeviceError(#[source] device_manager::rng_dev_mgr::RngDeviceError),
+    /// Virtio-pmem errors.
+    #[cfg(feature = "virtio-pmem")]
+    #[error("virtio-pmem errors: {0}")]
+    PmemDeviceError(#[source] device_manager::pmem_dev_mgr::PmemDeviceError),
     #[cfg(feature = "host-device")]
     /// Failed to create VFIO device
     #[error("cannot create VFIO device {0:?}")]
