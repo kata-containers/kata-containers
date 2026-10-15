@@ -993,9 +993,16 @@ pub mod tests {
     pub struct DummyVirtioRegionHandler {}
 
     impl VirtioRegionHandler for DummyVirtioRegionHandler {
-        fn insert_region(
+        fn insert_regions(
             &mut self,
-            _region: Arc<GuestRegionMmap>,
+            _regions: Vec<Arc<GuestRegionMmap>>,
+        ) -> std::result::Result<(), VirtioError> {
+            Ok(())
+        }
+
+        fn remove_regions(
+            &mut self,
+            _regions: &[Arc<GuestRegionMmap>],
         ) -> std::result::Result<(), VirtioError> {
             Ok(())
         }
