@@ -26,11 +26,12 @@ use crate::{
     VirtioDeviceConfig, VirtioDeviceInfo, VirtioRegionHandler, VirtioSharedMemoryList, TYPE_PMEM,
 };
 
-const VIRTIO_PMEM_REQ_TYPE_FLUSH: u32 = 0;
 const QUEUE_SIZE: u16 = 256;
 const NUM_QUEUES: usize = 1;
 const QUEUE_SIZES: &[u16] = &[QUEUE_SIZE];
-/// Guest-visible granularity for the pmem region.
+const VIRTIO_PMEM_REQ_TYPE_FLUSH: u32 = 0;
+/// Guest-visible granularity: a pmem region must start at a 2MiB boundary and
+/// span a 2MiB multiple, so misaligned sizes are padded up.
 const PMEM_ALIGN: u64 = 2 * 1024 * 1024;
 
 pub(crate) struct PmemEpollHandler<
@@ -41,11 +42,14 @@ pub(crate) struct PmemEpollHandler<
     id: String,
     config: VirtioDeviceConfig<AS, Q, R>,
     region: Arc<GuestRegionMmap>,
+    // The aligned region is a non-owning view into this mapping.
     _mapping: Arc<MmapRegion>,
+    /// Length of the file-backed part of the mapping, i.e. the msync length.
     size: u64,
 }
 
 impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpollHandler<AS, Q, R> {
+    /// Flush the backing file: one synchronous msync over the mapped range.
     fn do_flush(region: &GuestRegionMmap, size: u64, id: &str) -> i32 {
         // SAFETY: The caller keeps the file-backed mapping alive for `size` bytes.
         let ret = unsafe {
@@ -71,6 +75,8 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
     fn process_queue(&mut self, queue_index: usize) -> bool {
         let guard = self.config.lock_guest_memory();
         let mem = guard.deref().memory();
+        // Hoisted out of the closures below: edition 2018 closures capture the
+        // whole `self`, which conflicts with the mutable queue borrow.
         let region = Arc::clone(&self.region);
         let size = self.size;
         let id = self.id.as_str();
@@ -78,6 +84,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
         let queue = &mut self.config.queues[queue_index];
         let mut queue_guard = queue.queue_mut().lock();
         let queue_size = queue_guard.size();
+
         let mut used_desc_heads = Vec::with_capacity(queue_size as usize);
 
         let mut iter = match queue_guard.iter(mem) {
@@ -88,11 +95,16 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
             }
         };
 
+        // A single msync covers all flush requests in one queue notification.
         let mut flush_result: Option<i32> = None;
+        // A malformed queue can fail on every chain in a row, so only report
+        // the first failure for each queue notification to keep a hostile
+        // guest from flooding the host log.
         let mut first_error: Option<String> = None;
 
         for mut desc_chain in &mut iter {
             let head_index = desc_chain.head_index();
+
             if head_index >= queue_size {
                 first_error.get_or_insert_with(|| {
                     format!(
@@ -103,11 +115,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
             }
 
             let mut len = 0;
+
             if let (Some(req), Some(resp)) = (desc_chain.next(), desc_chain.next()) {
                 let malformed = req.is_write_only()
                     || req.len() != 4
                     || !resp.is_write_only()
                     || resp.len() != 4;
+
                 let req_type = if malformed {
                     None
                 } else {
@@ -118,8 +132,11 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
 
                 match req_type {
                     Some(VIRTIO_PMEM_REQ_TYPE_FLUSH) => {
+                        // A single msync per queue notification covers every
+                        // request in the batch.
                         let status =
                             flush_result.get_or_insert_with(|| Self::do_flush(&region, size, id));
+
                         match mem.write_obj(status.to_le_bytes(), resp.addr()) {
                             Ok(_) => len = 4,
                             Err(e) => {
@@ -139,9 +156,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
             } else {
                 first_error.get_or_insert_with(|| "descriptor chain too short".into());
             }
+
             used_desc_heads.push((head_index, len));
         }
 
+        // The queue state lock is held for the whole batch: the locked view
+        // (`Queue`) offers an unlocked `add_used`, so the used-ring updates
+        // stay inside the same critical section without re-locking.
         if let Some(e) = first_error {
             error!(
                 target: "virtio-pmem",
@@ -152,6 +173,9 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
 
         let mut nr_used = 0;
         for &(desc_index, len) in &used_desc_heads {
+            // Do not use `VirtioQueueConfig::add_used()` here: it panics on
+            // failure, which would take down the event thread shared by every
+            // virtio device of the VM.
             match queue_guard.add_used(mem, desc_index, len) {
                 Ok(()) => nr_used += 1,
                 Err(e) => error!(
@@ -163,6 +187,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> PmemEpoll
                 ),
             }
         }
+
         nr_used > 0
     }
 }
@@ -188,6 +213,7 @@ where
             error!(target: "virtio-pmem", "{}: invalid queue index {}", self.id, idx);
             return;
         }
+
         if let Err(e) = self.config.queues[idx].consume_event() {
             error!(target: "virtio-pmem", "{}: failed to get queue event: {:?}", self.id, e);
         } else if self.process_queue(idx) {
@@ -226,6 +252,8 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
     }
 
     /// Create a new virtio-pmem device backed by `file`.
+    ///
+    /// If `file_range` is None, the entire backing file is used.
     pub fn new(
         id: String,
         file: File,
@@ -272,6 +300,11 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
         if f_access_platform {
             avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
         }
+
+        // Config space: { le64 start; le64 size; }. Back-filled by set_resource().
+        // `size` is relaxed: the guest-visible length is padded up to PMEM_ALIGN,
+        // matching the firecracker device; the tail past `size` maps anonymous
+        // pages that are not synchronized with the backing file.
         let len = size
             .checked_next_multiple_of(PMEM_ALIGN.max(file_page_size))
             .ok_or(Error::InvalidInput)?;
@@ -350,5 +383,184 @@ impl<AS: GuestAddressSpace> Pmem<AS> {
             MmapRegion::build_raw(ptr, len as usize, prot, flags).map_err(Error::NewMmapRegion)?
         };
         Ok((mapping, mmap, if read_only { KVM_MEM_READONLY } else { 0 }))
+    }
+}
+
+impl<AS, Q, R> VirtioDevice<AS, Q, R> for Pmem<AS>
+where
+    AS: DbsGuestAddressSpace,
+    Q: QueueT + Send + 'static,
+    R: GuestMemoryRegion + Sync + Send + 'static,
+{
+    fn device_type(&self) -> u32 {
+        TYPE_PMEM
+    }
+
+    fn queue_max_sizes(&self) -> &[u16] {
+        QUEUE_SIZES
+    }
+
+    fn get_avail_features(&self, page: u32) -> u32 {
+        self.device_info.get_avail_features(page)
+    }
+
+    fn set_acked_features(&mut self, page: u32, value: u32) {
+        trace!(
+            target: "virtio-pmem",
+            "{}: VirtioDevice::set_acked_features({}, 0x{:x})",
+            self.id,
+            page,
+            value
+        );
+        self.device_info.set_acked_features(page, value)
+    }
+
+    fn read_config(&mut self, offset: u64, data: &mut [u8]) -> ConfigResult {
+        trace!(target: "virtio-pmem", "{}: VirtioDevice::read_config(0x{:x}, {:?})",
+               self.id, offset, data);
+        self.device_info.read_config(offset, data)
+    }
+
+    fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
+        trace!(target: "virtio-pmem", "{}: VirtioDevice::write_config(0x{:x}, {:?})",
+               self.id, offset, data);
+        self.device_info.write_config(offset, data)
+    }
+
+    fn activate(&mut self, config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
+        trace!(target: "virtio-pmem", "{}: VirtioDevice::activate()", self.id);
+
+        self.device_info.check_queue_sizes(&config.queues)?;
+
+        let region = self.region.clone().ok_or(ActivateError::InternalError)?;
+        let mapping = self.mapping.clone().ok_or(ActivateError::InternalError)?;
+        let file_range = self
+            .file_range
+            .as_ref()
+            .ok_or(ActivateError::InternalError)?;
+        let handler = Box::new(PmemEpollHandler {
+            id: self.id.clone(),
+            config,
+            region,
+            _mapping: mapping,
+            size: file_range.end - file_range.start,
+        });
+        self.subscriber_id = Some(self.device_info.register_event_handler(handler));
+
+        Ok(())
+    }
+
+    fn get_resource_requirements(
+        &self,
+        requests: &mut Vec<ResourceConstraint>,
+        use_generic_irq: bool,
+    ) {
+        requests.push(ResourceConstraint::LegacyIrq { irq: None });
+        if use_generic_irq {
+            requests.push(ResourceConstraint::GenericIrq {
+                size: (self.device_info.queue_sizes.len() + 1) as u32,
+            });
+        }
+
+        // Keep device memory above 4GiB, outside normal guest RAM and legacy MMIO.
+        requests.push(ResourceConstraint::MmioAddress {
+            range: Some((0x1_0000_0000, u64::MAX)),
+            align: PMEM_ALIGN,
+            size: self.len,
+        });
+        requests.push(ResourceConstraint::KvmMemSlot {
+            slot: None,
+            size: 1,
+        });
+    }
+
+    fn set_resource(
+        &mut self,
+        vm_fd: Arc<VmFd>,
+        resource: DeviceResources,
+    ) -> Result<Option<VirtioSharedMemoryList<R>>> {
+        let ranges = resource.get_mmio_address_ranges();
+        let slots = resource.get_kvm_mem_slots();
+        if ranges.len() != 1 || slots.len() != 1 || self.kvm_slot.is_some() {
+            return Err(Error::InvalidResource);
+        }
+        let (guest_addr, len) = ranges[0];
+        if guest_addr % PMEM_ALIGN != 0 || len != self.len || guest_addr.checked_add(len).is_none()
+        {
+            return Err(Error::InvalidResource);
+        }
+
+        let file = self.file.as_ref().ok_or(Error::InternalError)?;
+        let range = self.file_range.as_ref().ok_or(Error::InternalError)?;
+        let (mapping, mmap, flags) = Self::map_file(file, range, len, self.read_only)?;
+
+        let region = Arc::new(
+            GuestRegionMmap::new(mmap, GuestAddress(guest_addr)).ok_or(Error::InsertMmap)?,
+        );
+
+        let kvm_region = kvm_userspace_memory_region {
+            slot: slots[0],
+            flags,
+            guest_phys_addr: guest_addr,
+            memory_size: len,
+            userspace_addr: region.as_ptr() as u64,
+        };
+
+        // SAFETY: The allocated slot uses our live mapping, retained until slot removal.
+        unsafe { vm_fd.set_user_memory_region(kvm_region) }.map_err(Error::SetUserMemoryRegion)?;
+
+        if let Err(e) = self.handler.insert_regions(vec![region.clone()]) {
+            let unregister = kvm_userspace_memory_region {
+                slot: slots[0],
+                memory_size: 0,
+                ..Default::default()
+            };
+            // SAFETY: Undo the slot before releasing its mapping.
+            if let Err(unregister_error) = unsafe { vm_fd.set_user_memory_region(unregister) } {
+                error!(target: "virtio-pmem", "{}: failed to roll back KVM slot: {}", self.id, unregister_error);
+                std::mem::forget(mapping);
+            }
+            return Err(e);
+        }
+
+        self.kvm_slot = Some((vm_fd, slots[0]));
+        self.region = Some(region);
+        self.mapping = Some(Arc::new(mapping));
+        self.device_info.config_space[..8].copy_from_slice(&guest_addr.to_le_bytes());
+
+        Ok(None)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl<AS: GuestAddressSpace> Drop for Pmem<AS> {
+    fn drop(&mut self) {
+        if let Some(id) = self.subscriber_id.take() {
+            if let Err(e) = self.device_info.remove_event_handler(id) {
+                error!(target: "virtio-pmem", "{}: failed to remove event handler: {}", self.id, e);
+            }
+        }
+        if let Some((vm_fd, slot)) = self.kvm_slot.take() {
+            let region = kvm_userspace_memory_region {
+                slot,
+                memory_size: 0,
+                ..Default::default()
+            };
+            // SAFETY: A zero-sized region unregisters the slot before its mapping is dropped.
+            if let Err(e) = unsafe { vm_fd.set_user_memory_region(region) } {
+                error!(target: "virtio-pmem", "{}: failed to unregister KVM slot: {}", self.id, e);
+                // KVM may still reference the mapping if slot removal failed.
+                if let Some(mapping) = self.mapping.take() {
+                    std::mem::forget(mapping);
+                }
+            }
+        }
     }
 }
