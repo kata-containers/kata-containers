@@ -15,11 +15,12 @@ import (
 	"fmt"
 )
 
-// ImageType the model 'ImageType'
+// ImageType Unknown is only valid for vhost-user disks.
 type ImageType string
 
 // List of ImageType
 const (
+	IMAGETYPE_FLAT_VMDK ImageType = "FlatVmdk"
 	IMAGETYPE_FIXED_VHD ImageType = "FixedVhd"
 	IMAGETYPE_QCOW2     ImageType = "Qcow2"
 	IMAGETYPE_RAW       ImageType = "Raw"
@@ -29,6 +30,7 @@ const (
 
 // All allowed values of ImageType enum
 var AllowedImageTypeEnumValues = []ImageType{
+	"FlatVmdk",
 	"FixedVhd",
 	"Qcow2",
 	"Raw",

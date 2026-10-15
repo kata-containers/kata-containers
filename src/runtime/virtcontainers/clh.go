@@ -662,7 +662,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// set random device generator to hypervisor
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
-	clh.vmconfig.Rng.SetIommu(clh.config.IOMMU)
+	clh.vmconfig.Rng.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	// set the initial root/boot disk of hypervisor
 	assetPath, assetType, err := clh.config.ImageOrInitrdAssetPath()
@@ -712,7 +712,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 		clh.vmconfig.Console = chclient.NewConsoleConfig(chclient.CONSOLEMODE_OFF)
 	}
-	clh.vmconfig.Console.SetIommu(clh.config.IOMMU)
+	clh.vmconfig.Console.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
@@ -1101,7 +1101,7 @@ func (clh *cloudHypervisor) addInitdataDisk(initdataImage string) {
 	if clh.config.BlockDeviceCacheSet {
 		disk.Direct = &clh.config.BlockDeviceCacheDirect
 	}
-	disk.SetIommu(clh.config.IOMMU)
+	disk.SetIommu(clhIommuType(clh.config.IOMMU))
 	disk.SetImageType(chclient.IMAGETYPE_RAW)
 
 	if rl := clh.getDiskRateLimiterConfig(); rl != nil {
@@ -1151,7 +1151,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	queueSize := int32(1024)
 	clhDisk.NumQueues = &queues
 	clhDisk.QueueSize = &queueSize
-	clhDisk.SetIommu(clh.config.IOMMU)
+	clhDisk.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
 	if diskRateLimiterConfig != nil {
@@ -1194,7 +1194,7 @@ func (clh *cloudHypervisor) coldPlugVFIODevice(device *config.VFIODev) error {
 
 	clhDevice := *chclient.NewDeviceConfig()
 	clhDevice.SetPath(device.SysfsDev)
-	clhDevice.SetIommu(clh.config.IOMMU)
+	clhDevice.SetIommu(clhIommuType(clh.config.IOMMU))
 	clhDevice.SetId(device.ID)
 
 	if clh.vmconfig.Devices != nil {
@@ -1217,7 +1217,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	// Create the clh device config via the constructor to ensure default values are properly assigned
 	clhDevice := *chclient.NewDeviceConfig()
 	clhDevice.SetPath(device.SysfsDev)
-	clhDevice.SetIommu(clh.config.IOMMU)
+	clhDevice.SetIommu(clhIommuType(clh.config.IOMMU))
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
@@ -2086,7 +2086,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	}).Info("Adding HybridVSock")
 
 	clh.vmconfig.Vsock = chclient.NewVsockConfig(cid, path)
-	clh.vmconfig.Vsock.SetIommu(clh.config.IOMMU)
+	clh.vmconfig.Vsock.SetIommu(clhIommuType(clh.config.IOMMU))
 }
 
 func (clh *cloudHypervisor) getRateLimiterConfig(bwSize, bwOneTimeBurst, opsSize, opsOneTimeBurst int64) *chclient.RateLimiterConfig {
@@ -2156,7 +2156,7 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	if netRateLimiterConfig != nil {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
-	net.SetIommu(clh.config.IOMMU)
+	net.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	if clh.netDevices != nil {
 		*clh.netDevices = append(*clh.netDevices, *net)
@@ -2325,4 +2325,12 @@ func pathExists(path string) bool {
 
 func (clh *cloudHypervisor) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
 	return nil
+}
+
+// clhIommuType maps Kata's IOMMU setting to the CLH device API.
+func clhIommuType(enabled bool) chclient.IommuType {
+	if enabled {
+		return chclient.IOMMUTYPE_VIRTIO
+	}
+	return chclient.IOMMUTYPE_OFF
 }

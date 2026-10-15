@@ -23,7 +23,6 @@ Name | Type | Description | Notes
 **Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
 **Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
 **Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **Watchdog** | Pointer to **bool** |  | [optional] [default to false]
 **Rtc** | Pointer to [**RtcConfig**](RtcConfig.md) |  | [optional] 
 **Pvpanic** | Pointer to **bool** |  | [optional] [default to false]
@@ -521,31 +520,6 @@ SetNuma sets Numa field to given value.
 `func (o *VmConfig) HasNuma() bool`
 
 HasNuma returns a boolean if a field has been set.
-
-### GetIommu
-
-`func (o *VmConfig) GetIommu() bool`
-
-GetIommu returns the Iommu field if non-nil, zero value otherwise.
-
-### GetIommuOk
-
-`func (o *VmConfig) GetIommuOk() (*bool, bool)`
-
-GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetIommu
-
-`func (o *VmConfig) SetIommu(v bool)`
-
-SetIommu sets Iommu field to given value.
-
-### HasIommu
-
-`func (o *VmConfig) HasIommu() bool`
-
-HasIommu returns a boolean if a field has been set.
 
 ### GetWatchdog
 

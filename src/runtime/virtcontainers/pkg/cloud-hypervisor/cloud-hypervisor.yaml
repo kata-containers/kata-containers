@@ -29,6 +29,8 @@ paths:
       responses:
         204:
           description: The VMM successfully shutdown.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.info:
     get:
@@ -40,6 +42,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VmInfo"
+        404:
+          description: The VM information is not available because the VM is not created.
 
   /vm.counters:
     get:
@@ -51,6 +55,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VmCounters"
+        409:
+          description: The operation conflicts with the current state of the VM.
+
+  /vm.balloon-stats:
+    get:
+      summary: Get cached statistics from the virtio-balloon device
+      responses:
+        200:
+          description: Most recently reported virtio-balloon statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalloonStatsResponse"
+        409:
+          description: The operation conflicts with the current state of the VM.
+        500:
+          description: The statistics could not be retrieved, e.g. the statistics feature was not negotiated with the guest driver.
 
   /vm.create:
     put:
@@ -66,6 +87,8 @@ paths:
       responses:
         204:
           description: The VM instance was successfully created.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.delete:
     put:
@@ -74,6 +97,8 @@ paths:
       responses:
         204:
           description: The VM instance was successfully deleted.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.boot:
     put:
@@ -84,6 +109,8 @@ paths:
           description: The VM instance successfully booted.
         404:
           description: The VM instance could not boot because it is not created yet
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.pause:
     put:
@@ -96,6 +123,8 @@ paths:
           description: The VM instance could not pause because it is not created yet
         405:
           description: The VM instance could not pause because it is not booted.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.resume:
     put:
@@ -108,6 +137,8 @@ paths:
           description: The VM instance could not resume because it is not booted yet
         405:
           description: The VM instance could not resume because it is not paused.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.shutdown:
     put:
@@ -120,6 +151,8 @@ paths:
           description: The VM instance could not shut down because is not created.
         405:
           description: The VM instance could not shut down because it is not started.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.reboot:
     put:
@@ -132,6 +165,8 @@ paths:
           description: The VM instance could not reboot because it is not created.
         405:
           description: The VM instance could not reboot because it is not booted.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.power-button:
     put:
@@ -144,6 +179,8 @@ paths:
           description: The button could not be triggered because it is not created yet
         405:
           description: The button could not be triggered because it is not booted.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.resize:
     put:
@@ -160,6 +197,8 @@ paths:
           description: The VM instance was successfully resized.
         404:
           description: The VM instance could not be resized because it is not created.
+        409:
+          description: The operation conflicts with the current state of the VM.
         429:
           description: The VM instance could not be resized because a cpu removal is still pending.
 
@@ -176,6 +215,10 @@ paths:
       responses:
         204:
           description: The disk was successfully resized.
+        404:
+          description: The disk could not be resized because the VM is not created, or no disk with the given identifier exists.
+        409:
+          description: The operation conflicts with the current state of the VM.
         500:
           description: The disk could not be resized.
 
@@ -192,6 +235,10 @@ paths:
       responses:
         204:
           description: The memory zone was successfully resized.
+        404:
+          description: The memory zone could not be resized because the VM is not created.
+        409:
+          description: The operation conflicts with the current state of the VM.
         500:
           description: The memory zone could not be resized.
 
@@ -214,8 +261,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new device was successfully (cold) added to the VM instance.
+        400:
+          description: The new device could not be added because the configuration is not valid.
         404:
           description: The new device could not be added to the VM instance.
+        409:
+          description: The new device could not be added because a device with the same identifier or path already exists, or because the operation conflicts with the current state of the VM.
 
   /vm.remove-device:
     put:
@@ -231,7 +282,9 @@ paths:
         204:
           description: The device was successfully removed from the VM instance.
         404:
-          description: The device could not be removed from the VM instance.
+          description: The device could not be removed because the VM is not created, or no device with the given identifier exists.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.add-disk:
     put:
@@ -252,6 +305,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new disk was successfully (cold) added to the VM instance.
+        400:
+          description: The new disk could not be added because the configuration is not valid.
+        404:
+          description: The new disk could not be added because the VM is not created.
+        409:
+          description: The new disk could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new disk could not be added to the VM instance.
 
@@ -274,6 +333,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new device was successfully (cold) added to the VM instance.
+        400:
+          description: The new device could not be added because the configuration is not valid.
+        404:
+          description: The new device could not be added because the VM is not created.
+        409:
+          description: The new device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -296,6 +361,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new device was successfully (cold) added to the VM instance.
+        400:
+          description: The new device could not be added because the configuration is not valid.
+        404:
+          description: The new device could not be added because the VM is not created.
+        409:
+          description: The new device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -318,6 +389,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new device was successfully (cold) added to the VM instance.
+        400:
+          description: The new device could not be added because the configuration is not valid.
+        404:
+          description: The new device could not be added because the VM is not created.
+        409:
+          description: The new device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -340,6 +417,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new device was successfully (cold) added to the VM instance.
+        400:
+          description: The new device could not be added because the configuration is not valid.
+        404:
+          description: The new device could not be added because the VM is not created.
+        409:
+          description: The new device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -362,6 +445,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new device was successfully (cold) added to the VM instance.
+        400:
+          description: The new device could not be added because the configuration is not valid.
+        404:
+          description: The new device could not be added because the VM is not created.
+        409:
+          description: The new device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new device could not be added to the VM instance.
 
@@ -384,6 +473,12 @@ paths:
                 $ref: "#/components/schemas/PciDeviceInfo"
         204:
           description: The new vDPA device was successfully (cold) added to the VM instance.
+        400:
+          description: The new vDPA device could not be added because the configuration is not valid.
+        404:
+          description: The new vDPA device could not be added because the VM is not created.
+        409:
+          description: The new vDPA device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         500:
           description: The new vDPA device could not be added to the VM instance.
 
@@ -405,6 +500,10 @@ paths:
           description: The new device was successfully added to the VM instance.
         "204":
           description: The new device was successfully (cold) added to the VM instance.
+        "400":
+          description: The new device could not be added because the configuration is not valid.
+        "409":
+          description: The new device could not be added because a device with the same identifier already exists, or because the operation conflicts with the current state of the VM.
         "404":
           description: The new device could not be added to the VM instance.
       summary: Add a new userspace device to the VM
@@ -426,6 +525,8 @@ paths:
           description: The VM instance could not be snapshotted because it is not created.
         405:
           description: The VM instance could not be snapshotted because it is not booted.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.coredump:
     put:
@@ -444,6 +545,8 @@ paths:
           description: The VM instance could not be coredumped because it is not created.
         405:
           description: The VM instance could not be coredumped because it is not booted.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.nmi:
     put:
@@ -451,6 +554,8 @@ paths:
       responses:
         204:
           description: The NMI successfully injected.
+        409:
+          description: The operation conflicts with the current state of the VM.
 
   /vm.restore:
     put:
@@ -465,8 +570,12 @@ paths:
       responses:
         204:
           description: The VM instance was successfully restored.
+        400:
+          description: The VM could not be restored because the restore configuration is not valid.
         404:
           description: The VM instance could not be restored because it is already created.
+        409:
+          description: The VM could not be restored because a device with the same identifier or path already exists, or because the operation conflicts with the current state of the VM.
 
   /vm.receive-migration:
     put:
@@ -481,6 +590,8 @@ paths:
       responses:
         204:
           description: The VM migration was successfully received.
+        409:
+          description: The operation conflicts with the current state of the VMM.
         500:
           description: The VM migration could not be received.
 
@@ -497,8 +608,25 @@ paths:
       responses:
         204:
           description: The VM migration was successfully sent.
+        409:
+          description: The operation conflicts with the current state of the VMM.
         500:
           description: The VM migration could not be sent.
+
+  /vm.cancel-migration:
+    put:
+      summary: Cancel an ongoing VM migration
+      description: >
+        Requests the cancellation of an ongoing migration on a best effort
+        basis. A successful response only indicates that the request was
+        accepted, not that the migration was actually cancelled: The migration
+        may have progressed too far to be stopped. The actual outcome must be
+        observed externally via the event monitor.
+      responses:
+        204:
+          description: The cancellation request was successfully submitted.
+        500:
+          description: The cancellation request could not be submitted because there is no ongoing migration.
 
 components:
   schemas:
@@ -522,7 +650,7 @@ components:
 
     VmState:
       type: string
-      enum: [Created, Running, Shutdown, Paused]
+      enum: [Created, Running, Shutdown, Paused, BreakPoint]
 
     VmInfo:
       required:
@@ -568,6 +696,92 @@ components:
         additionalProperties:
           type: integer
           format: int64
+
+    BalloonStatsResponse:
+      required:
+        - balloon_actual
+        - last_update
+        - stats
+      type: object
+      properties:
+        balloon_actual:
+          type: integer
+          format: int64
+          description: Current balloon size in bytes
+        last_update:
+          type: integer
+          format: int64
+          description: Host UNIX timestamp in milliseconds when statistics were last updated, or zero before the first sample
+        stats:
+          $ref: "#/components/schemas/BalloonStats"
+
+    BalloonStats:
+      type: object
+      properties:
+        swap_in:
+          type: integer
+          format: int64
+          description: Memory swapped into the guest in bytes
+        swap_out:
+          type: integer
+          format: int64
+          description: Memory swapped out by the guest in bytes
+        major_faults:
+          type: integer
+          format: int64
+          description: Number of major page faults
+        minor_faults:
+          type: integer
+          format: int64
+          description: Number of minor page faults
+        free_memory:
+          type: integer
+          format: int64
+          description: Unused guest memory in bytes
+        total_memory:
+          type: integer
+          format: int64
+          description: Total guest memory in bytes
+        available_memory:
+          type: integer
+          format: int64
+          description: Guest memory available without swapping in bytes
+        disk_caches:
+          type: integer
+          format: int64
+          description: Reclaimable guest disk caches in bytes
+        hugetlb_allocations:
+          type: integer
+          format: int64
+          description: Number of successful hugetlb allocations
+        hugetlb_failures:
+          type: integer
+          format: int64
+          description: Number of failed hugetlb allocations
+        oom_kills:
+          type: integer
+          format: int64
+          description: Number of guest OOM kills reported by Linux
+        alloc_stalls:
+          type: integer
+          format: int64
+          description: Number of guest memory allocation stalls reported by Linux
+        async_scans:
+          type: integer
+          format: int64
+          description: Memory scanned asynchronously by Linux in bytes
+        direct_scans:
+          type: integer
+          format: int64
+          description: Memory scanned directly by Linux in bytes
+        async_reclaims:
+          type: integer
+          format: int64
+          description: Memory reclaimed asynchronously by Linux in bytes
+        direct_reclaims:
+          type: integer
+          format: int64
+          description: Memory reclaimed directly by Linux in bytes
 
     PciDeviceInfo:
       required:
@@ -629,7 +843,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FsConfig"
-        generic-vhost-user:
+        generic_vhost_user:
           type: array
           items:
             $ref: "#/components/schemas/GenericVhostUserConfig"
@@ -661,9 +875,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NumaConfig"
-        iommu:
-          type: boolean
-          default: false
         watchdog:
           type: boolean
           default: false
@@ -746,7 +957,7 @@ components:
           type: integer
         nested:
           type: boolean
-          default: true
+          default: false
         affinity:
           type: array
           items:
@@ -771,6 +982,12 @@ components:
         mmio64_aperture_weight:
           type: integer
           format: int32
+
+    IommuType:
+      description: Virtual IOMMU the device is attached to.
+      type: string
+      enum: ["Off", "Virtio", "Smmuv3"]
+      default: "Off"
 
     PlatformConfig:
       type: object
@@ -977,7 +1194,8 @@ components:
 
     ImageType:
       type: string
-      enum: ["FixedVhd", "Qcow2", "Raw", "Vhdx", "Unknown"]
+      description: Unknown is only valid for vhost-user disks.
+      enum: ["FlatVmdk", "FixedVhd", "Qcow2", "Raw", "Vhdx", "Unknown"]
 
     LockGranularity:
       type: string
@@ -996,8 +1214,7 @@ components:
           type: boolean
           default: false
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         num_queues:
           type: integer
           default: 1
@@ -1037,6 +1254,8 @@ components:
           $ref: "#/components/schemas/ImageType"
         lock_granularity:
           $ref: "#/components/schemas/LockGranularity"
+        guest_block_size:
+          type: integer
 
     NetConfig:
       type: object
@@ -1058,8 +1277,7 @@ components:
         mtu:
           type: integer
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         num_queues:
           type: integer
           default: 2
@@ -1086,13 +1304,13 @@ components:
           $ref: "#/components/schemas/RateLimiterConfig"
         offload_tso:
           type: boolean
-          default: true
+          default: false
         offload_ufo:
           type: boolean
-          default: true
+          default: false
         offload_csum:
           type: boolean
-          default: true
+          default: false
 
     RngConfig:
       required:
@@ -1108,8 +1326,7 @@ components:
           type: integer
           format: uint8
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         src:
           type: string
 
@@ -1125,8 +1342,7 @@ components:
           type: integer
           format: uint8
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
 
     BalloonConfig:
       required:
@@ -1142,8 +1358,7 @@ components:
           type: integer
           format: uint8
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         size:
           type: integer
           format: int64
@@ -1203,6 +1418,8 @@ components:
         pci_device_id:
           type: integer
           format: uint8
+        id:
+          type: string
         device_type:
           type: integer
           format: uint32
@@ -1218,8 +1435,7 @@ components:
           type: integer
           format: int64
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         discard_writes:
           type: boolean
           default: false
@@ -1248,8 +1464,7 @@ components:
         mode:
           $ref: "#/components/schemas/ConsoleMode"
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         id:
           type: string
         pci_segment:
@@ -1294,8 +1509,7 @@ components:
             out of band via SCM_RIGHTS on the UNIX domain socket, never
             in this body.
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         pci_segment:
           type: integer
           format: int16
@@ -1349,8 +1563,7 @@ components:
           type: integer
           default: 1
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         pci_segment:
           type: integer
           format: int16
@@ -1375,8 +1588,7 @@ components:
           type: string
           description: Path to UNIX domain socket, used to proxy vsock connections.
         iommu:
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/IommuType"
         pci_segment:
           type: integer
           format: int16
@@ -1484,7 +1696,7 @@ components:
 
     MemoryRestoreMode:
       type: string
-      enum: [Copy, OnDemand]
+      enum: [Copy, OnDemand, CopyOnWrite]
       default: Copy
 
     RestoreConfig:
@@ -1500,6 +1712,10 @@ components:
           $ref: "#/components/schemas/MemoryRestoreMode"
         resume:
           type: boolean
+        zone_updates:
+          type: array
+          items:
+            $ref: "#/components/schemas/VmMemoryZoneUpdateData"
 
     ReceiveMigrationData:
       required:
@@ -1514,17 +1730,40 @@ components:
             Directory containing the TLS server certificate (server-cert.pem), the TLS
             server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem).
             TLS is only supported with tcp:<host>:<port> receiver URLs.
-        memory_mode:
-          $ref: "#/components/schemas/MigrationMode"
+            Recommended for all TCP migrations. Omitting it is only intended for
+            development and testing, as TCP migration is then unencrypted and
+            unauthenticated.
+        zone_updates:
+          type: array
+          items:
+            $ref: "#/components/schemas/VmMemoryZoneUpdateData"
+        background_fetch_pages:
+          type: boolean
+          default: true
+          description: Enable the background thread for faulting all remaining pages.
 
     MigrationMode:
       type: string
-      enum: ["Precopy", "Postcopy"]
+      enum: ["MemFDs", "Precopy", "Postcopy"]
       default: "Precopy"
       description: >
-        Memory transfer mode. Precopy transfers all guest memory before the
-        destination resumes. Postcopy resumes the destination first and faults
-        guest pages in on demand.
+        Memory transfer mode. MemFDs passes the guest memory backing file
+        descriptors to the destination over a UNIX socket. MemFDs requires every
+        guest memory region to use shared memory or hugepage backing. Precopy
+        transfers all guest memory before the destination resumes. Postcopy
+        resumes the destination first and faults guest pages in on demand.
+
+    VmMemoryZoneUpdateData:
+      type: object
+      required: [id, host_numa_node]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        host_numa_node:
+          type: integer
+          format: uint32
+          minimum: 0
 
     TimeoutStrategy:
       type: string
@@ -1544,6 +1783,18 @@ components:
           type: string
         local:
           type: boolean
+          default: false
+          deprecated: true
+          description: >
+            Deprecated: set memory_mode to "MemFDs" instead. If true, the
+            request is treated as if memory_mode were "MemFDs".
+        preserve_source:
+          type: boolean
+          default: false
+          description: >
+            Keep the source VM alive in a paused state after migration
+            completes. This is only supported when memory_mode is "MemFDs" or
+            the deprecated local property is true.
         downtime_ms:
           type: integer
           format: int64
@@ -1571,13 +1822,16 @@ components:
           description: >
             The number of parallel TCP connections to use for migration.
             Must be between 1 and 128. Multiple connections are not supported
-            with local UNIX-socket migration.
+            with UNIX domain socket migration.
         tls_dir:
           type: string
           description: >
             Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client
             certificate (client-cert.pem), and TLS client key (client-key.pem).
             TLS is only supported with tcp:<host>:<port> destination URLs.
+            Recommended for all TCP migrations. Omitting it is only intended for
+            development and testing, as TCP migration is then unencrypted and
+            unauthenticated.
         memory_mode:
           $ref: "#/components/schemas/MigrationMode"
 

@@ -16,11 +16,11 @@ import (
 
 // BalloonConfig struct for BalloonConfig
 type BalloonConfig struct {
-	Id          *string `json:"id,omitempty"`
-	PciSegment  *int32  `json:"pci_segment,omitempty"`
-	PciDeviceId *int32  `json:"pci_device_id,omitempty"`
-	Iommu       *bool   `json:"iommu,omitempty"`
-	Size        int64   `json:"size"`
+	Id          *string    `json:"id,omitempty"`
+	PciSegment  *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId *int32     `json:"pci_device_id,omitempty"`
+	Iommu       *IommuType `json:"iommu,omitempty"`
+	Size        int64      `json:"size"`
 	// Deflate balloon when the guest is under memory pressure.
 	DeflateOnOom *bool `json:"deflate_on_oom,omitempty"`
 	// Enable guest to report free pages.
@@ -33,7 +33,7 @@ type BalloonConfig struct {
 // will change when the set of required properties is changed
 func NewBalloonConfig(size int64) *BalloonConfig {
 	this := BalloonConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	this.Size = size
 	var deflateOnOom bool = false
@@ -48,7 +48,7 @@ func NewBalloonConfig(size int64) *BalloonConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewBalloonConfigWithDefaults() *BalloonConfig {
 	this := BalloonConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var deflateOnOom bool = false
 	this.DeflateOnOom = &deflateOnOom
@@ -154,9 +154,9 @@ func (o *BalloonConfig) SetPciDeviceId(v int32) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *BalloonConfig) GetIommu() bool {
+func (o *BalloonConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -164,7 +164,7 @@ func (o *BalloonConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *BalloonConfig) GetIommuOk() (*bool, bool) {
+func (o *BalloonConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -180,8 +180,8 @@ func (o *BalloonConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *BalloonConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *BalloonConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 

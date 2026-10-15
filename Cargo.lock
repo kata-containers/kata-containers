@@ -168,7 +168,7 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 [[package]]
 name = "api_client"
 version = "0.1.0"
-source = "git+https://github.com/cloud-hypervisor/cloud-hypervisor?tag=v53.0#9ed824d6d08df3e96f7d5f50795d9449ac99f431"
+source = "git+https://github.com/cloud-hypervisor/cloud-hypervisor?tag=v54.0#038ce5a72d761380a02f714a4eb4ca63e0ea073d"
 dependencies = [
  "thiserror 2.0.18",
  "vmm-sys-util",

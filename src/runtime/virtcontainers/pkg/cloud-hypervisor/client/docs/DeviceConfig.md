@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Path** | Pointer to **string** | Sysfs path of the VFIO device. Exactly one of &#x60;path&#x60; or an externally-opened cdev FD must be supplied; an FD is passed out of band via SCM_RIGHTS on the UNIX domain socket, never in this body.  | [optional] 
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**Iommu** | Pointer to [**IommuType**](IommuType.md) |  | [optional] [default to IOMMUTYPE_OFF]
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **PciDeviceId** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
@@ -58,20 +58,20 @@ HasPath returns a boolean if a field has been set.
 
 ### GetIommu
 
-`func (o *DeviceConfig) GetIommu() bool`
+`func (o *DeviceConfig) GetIommu() IommuType`
 
 GetIommu returns the Iommu field if non-nil, zero value otherwise.
 
 ### GetIommuOk
 
-`func (o *DeviceConfig) GetIommuOk() (*bool, bool)`
+`func (o *DeviceConfig) GetIommuOk() (*IommuType, bool)`
 
 GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetIommu
 
-`func (o *DeviceConfig) SetIommu(v bool)`
+`func (o *DeviceConfig) SetIommu(v IommuType)`
 
 SetIommu sets Iommu field to given value.
 

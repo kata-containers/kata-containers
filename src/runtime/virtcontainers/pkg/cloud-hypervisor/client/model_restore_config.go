@@ -16,10 +16,11 @@ import (
 
 // RestoreConfig struct for RestoreConfig
 type RestoreConfig struct {
-	SourceUrl         string             `json:"source_url"`
-	Prefault          *bool              `json:"prefault,omitempty"`
-	MemoryRestoreMode *MemoryRestoreMode `json:"memory_restore_mode,omitempty"`
-	Resume            *bool              `json:"resume,omitempty"`
+	SourceUrl         string                    `json:"source_url"`
+	Prefault          *bool                     `json:"prefault,omitempty"`
+	MemoryRestoreMode *MemoryRestoreMode        `json:"memory_restore_mode,omitempty"`
+	Resume            *bool                     `json:"resume,omitempty"`
+	ZoneUpdates       *[]VmMemoryZoneUpdateData `json:"zone_updates,omitempty"`
 }
 
 // NewRestoreConfig instantiates a new RestoreConfig object
@@ -164,6 +165,38 @@ func (o *RestoreConfig) SetResume(v bool) {
 	o.Resume = &v
 }
 
+// GetZoneUpdates returns the ZoneUpdates field value if set, zero value otherwise.
+func (o *RestoreConfig) GetZoneUpdates() []VmMemoryZoneUpdateData {
+	if o == nil || o.ZoneUpdates == nil {
+		var ret []VmMemoryZoneUpdateData
+		return ret
+	}
+	return *o.ZoneUpdates
+}
+
+// GetZoneUpdatesOk returns a tuple with the ZoneUpdates field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RestoreConfig) GetZoneUpdatesOk() (*[]VmMemoryZoneUpdateData, bool) {
+	if o == nil || o.ZoneUpdates == nil {
+		return nil, false
+	}
+	return o.ZoneUpdates, true
+}
+
+// HasZoneUpdates returns a boolean if a field has been set.
+func (o *RestoreConfig) HasZoneUpdates() bool {
+	if o != nil && o.ZoneUpdates != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetZoneUpdates gets a reference to the given []VmMemoryZoneUpdateData and assigns it to the ZoneUpdates field.
+func (o *RestoreConfig) SetZoneUpdates(v []VmMemoryZoneUpdateData) {
+	o.ZoneUpdates = &v
+}
+
 func (o RestoreConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -177,6 +210,9 @@ func (o RestoreConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Resume != nil {
 		toSerialize["resume"] = o.Resume
+	}
+	if o.ZoneUpdates != nil {
+		toSerialize["zone_updates"] = o.ZoneUpdates
 	}
 	return json.Marshal(toSerialize)
 }

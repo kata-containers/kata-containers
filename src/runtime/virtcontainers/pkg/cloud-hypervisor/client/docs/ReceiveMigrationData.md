@@ -5,8 +5,9 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **ReceiverUrl** | **string** |  | 
-**TlsDir** | Pointer to **string** | Directory containing the TLS server certificate (server-cert.pem), the TLS server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem). TLS is only supported with tcp:&lt;host&gt;:&lt;port&gt; receiver URLs.  | [optional] 
-**MemoryMode** | Pointer to [**MigrationMode**](MigrationMode.md) |  | [optional] [default to MIGRATIONMODE_PRECOPY]
+**TlsDir** | Pointer to **string** | Directory containing the TLS server certificate (server-cert.pem), the TLS server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem). TLS is only supported with tcp:&lt;host&gt;:&lt;port&gt; receiver URLs. Recommended for all TCP migrations. Omitting it is only intended for development and testing, as TCP migration is then unencrypted and unauthenticated.  | [optional]
+**ZoneUpdates** | Pointer to [**[]VmMemoryZoneUpdateData**](VmMemoryZoneUpdateData.md) |  | [optional]
+**BackgroundFetchPages** | Pointer to **bool** | Enable the background thread for faulting all remaining pages. | [optional] [default to true]
 
 ## Methods
 
@@ -72,30 +73,55 @@ SetTlsDir sets TlsDir field to given value.
 
 HasTlsDir returns a boolean if a field has been set.
 
-### GetMemoryMode
+### GetZoneUpdates
 
-`func (o *ReceiveMigrationData) GetMemoryMode() MigrationMode`
+`func (o *ReceiveMigrationData) GetZoneUpdates() []VmMemoryZoneUpdateData`
 
-GetMemoryMode returns the MemoryMode field if non-nil, zero value otherwise.
+GetZoneUpdates returns the ZoneUpdates field if non-nil, zero value otherwise.
 
-### GetMemoryModeOk
+### GetZoneUpdatesOk
 
-`func (o *ReceiveMigrationData) GetMemoryModeOk() (*MigrationMode, bool)`
+`func (o *ReceiveMigrationData) GetZoneUpdatesOk() (*[]VmMemoryZoneUpdateData, bool)`
 
-GetMemoryModeOk returns a tuple with the MemoryMode field if it's non-nil, zero value otherwise
+GetZoneUpdatesOk returns a tuple with the ZoneUpdates field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetMemoryMode
+### SetZoneUpdates
 
-`func (o *ReceiveMigrationData) SetMemoryMode(v MigrationMode)`
+`func (o *ReceiveMigrationData) SetZoneUpdates(v []VmMemoryZoneUpdateData)`
 
-SetMemoryMode sets MemoryMode field to given value.
+SetZoneUpdates sets ZoneUpdates field to given value.
 
-### HasMemoryMode
+### HasZoneUpdates
 
-`func (o *ReceiveMigrationData) HasMemoryMode() bool`
+`func (o *ReceiveMigrationData) HasZoneUpdates() bool`
 
-HasMemoryMode returns a boolean if a field has been set.
+HasZoneUpdates returns a boolean if a field has been set.
+
+### GetBackgroundFetchPages
+
+`func (o *ReceiveMigrationData) GetBackgroundFetchPages() bool`
+
+GetBackgroundFetchPages returns the BackgroundFetchPages field if non-nil, zero value otherwise.
+
+### GetBackgroundFetchPagesOk
+
+`func (o *ReceiveMigrationData) GetBackgroundFetchPagesOk() (*bool, bool)`
+
+GetBackgroundFetchPagesOk returns a tuple with the BackgroundFetchPages field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetBackgroundFetchPages
+
+`func (o *ReceiveMigrationData) SetBackgroundFetchPages(v bool)`
+
+SetBackgroundFetchPages sets BackgroundFetchPages field to given value.
+
+### HasBackgroundFetchPages
+
+`func (o *ReceiveMigrationData) HasBackgroundFetchPages() bool`
+
+HasBackgroundFetchPages returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

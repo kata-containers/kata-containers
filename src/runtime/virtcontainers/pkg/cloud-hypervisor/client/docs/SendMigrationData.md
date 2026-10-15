@@ -5,12 +5,13 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **DestinationUrl** | **string** |  | 
-**Local** | Pointer to **bool** |  | [optional] 
+**Local** | Pointer to **bool** | Deprecated: set memory_mode to \&quot;MemFDs\&quot; instead. If true, the request is treated as if memory_mode were \&quot;MemFDs\&quot;.  | [optional] [default to false]
+**PreserveSource** | Pointer to **bool** | Keep the source VM alive in a paused state after migration completes. This is only supported when memory_mode is \&quot;MemFDs\&quot; or the deprecated local property is true.  | [optional] [default to false]
 **DowntimeMs** | Pointer to **int64** | The maximum downtime the migration aims for, in milliseconds. Defaults to 300ms.  | [optional] [default to 300]
 **TimeoutS** | Pointer to **int64** | The timeout for the migration (maximum total duration), in seconds. Defaults to 3600s (one hour).  | [optional] [default to 3600]
 **TimeoutStrategy** | Pointer to [**TimeoutStrategy**](TimeoutStrategy.md) |  | [optional] [default to TIMEOUTSTRATEGY_CANCEL]
-**Connections** | Pointer to **int64** | The number of parallel TCP connections to use for migration. Must be between 1 and 128. Multiple connections are not supported with local UNIX-socket migration.  | [optional] [default to 1]
-**TlsDir** | Pointer to **string** | Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client certificate (client-cert.pem), and TLS client key (client-key.pem). TLS is only supported with tcp:&lt;host&gt;:&lt;port&gt; destination URLs.  | [optional] 
+**Connections** | Pointer to **int64** | The number of parallel TCP connections to use for migration. Must be between 1 and 128. Multiple connections are not supported with UNIX domain socket migration.  | [optional] [default to 1]
+**TlsDir** | Pointer to **string** | Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client certificate (client-cert.pem), and TLS client key (client-key.pem). TLS is only supported with tcp:&lt;host&gt;:&lt;port&gt; destination URLs. Recommended for all TCP migrations. Omitting it is only intended for development and testing, as TCP migration is then unencrypted and unauthenticated.  | [optional]
 **MemoryMode** | Pointer to [**MigrationMode**](MigrationMode.md) |  | [optional] [default to MIGRATIONMODE_PRECOPY]
 
 ## Methods
@@ -76,6 +77,31 @@ SetLocal sets Local field to given value.
 `func (o *SendMigrationData) HasLocal() bool`
 
 HasLocal returns a boolean if a field has been set.
+
+### GetPreserveSource
+
+`func (o *SendMigrationData) GetPreserveSource() bool`
+
+GetPreserveSource returns the PreserveSource field if non-nil, zero value otherwise.
+
+### GetPreserveSourceOk
+
+`func (o *SendMigrationData) GetPreserveSourceOk() (*bool, bool)`
+
+GetPreserveSourceOk returns a tuple with the PreserveSource field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPreserveSource
+
+`func (o *SendMigrationData) SetPreserveSource(v bool)`
+
+SetPreserveSource sets PreserveSource field to given value.
+
+### HasPreserveSource
+
+`func (o *SendMigrationData) HasPreserveSource() bool`
+
+HasPreserveSource returns a boolean if a field has been set.
 
 ### GetDowntimeMs
 

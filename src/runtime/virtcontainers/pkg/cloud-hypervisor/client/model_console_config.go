@@ -19,7 +19,7 @@ type ConsoleConfig struct {
 	File        *string     `json:"file,omitempty"`
 	Socket      *string     `json:"socket,omitempty"`
 	Mode        ConsoleMode `json:"mode"`
-	Iommu       *bool       `json:"iommu,omitempty"`
+	Iommu       *IommuType  `json:"iommu,omitempty"`
 	Id          *string     `json:"id,omitempty"`
 	PciSegment  *int32      `json:"pci_segment,omitempty"`
 	PciDeviceId *int32      `json:"pci_device_id,omitempty"`
@@ -32,7 +32,7 @@ type ConsoleConfig struct {
 func NewConsoleConfig(mode ConsoleMode) *ConsoleConfig {
 	this := ConsoleConfig{}
 	this.Mode = mode
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -42,7 +42,7 @@ func NewConsoleConfig(mode ConsoleMode) *ConsoleConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewConsoleConfigWithDefaults() *ConsoleConfig {
 	this := ConsoleConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -136,9 +136,9 @@ func (o *ConsoleConfig) SetMode(v ConsoleMode) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *ConsoleConfig) GetIommu() bool {
+func (o *ConsoleConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -146,7 +146,7 @@ func (o *ConsoleConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ConsoleConfig) GetIommuOk() (*bool, bool) {
+func (o *ConsoleConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -162,8 +162,8 @@ func (o *ConsoleConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *ConsoleConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *ConsoleConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 

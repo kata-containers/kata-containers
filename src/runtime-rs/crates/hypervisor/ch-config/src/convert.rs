@@ -6,7 +6,7 @@ use crate::NamedHypervisorConfig;
 use crate::ProtectionDevConfig;
 use crate::VmConfig;
 use crate::{
-    ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DiskConfig,
+    ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DiskConfig, ImageType,
     MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig, VsockConfig,
 };
 use anyhow::Result;
@@ -425,6 +425,7 @@ impl TryFrom<BootInfo> for DiskConfig {
         let disk = DiskConfig {
             path: Some(path),
             readonly: true,
+            image_type: ImageType::Raw,
             num_queues: DEFAULT_DISK_QUEUES,
             queue_size: DEFAULT_DISK_QUEUE_SIZE,
 
@@ -482,7 +483,7 @@ fn get_serial_cfg(debug: bool) -> ConsoleConfig {
     ConsoleConfig {
         file: None,
         mode,
-        iommu: false,
+        iommu: false.into(),
     }
 }
 
@@ -490,7 +491,7 @@ fn get_console_cfg() -> ConsoleConfig {
     ConsoleConfig {
         file: None,
         mode: ConsoleOutputMode::Off,
-        iommu: false,
+        iommu: false.into(),
     }
 }
 
@@ -596,6 +597,7 @@ mod tests {
         let disk_config = DiskConfig {
             path: Some(PathBuf::from(path)),
             readonly: true,
+            image_type: ImageType::Raw,
             num_queues: DEFAULT_DISK_QUEUES,
             queue_size: DEFAULT_DISK_QUEUE_SIZE,
 
@@ -672,7 +674,7 @@ mod tests {
                 result: ConsoleConfig {
                     file: None,
                     mode: ConsoleOutputMode::Off,
-                    iommu: false,
+                    iommu: false.into(),
                 },
             },
             TestData {
@@ -680,7 +682,7 @@ mod tests {
                 result: ConsoleConfig {
                     file: None,
                     mode: ConsoleOutputMode::Tty,
-                    iommu: false,
+                    iommu: false.into(),
                 },
             },
         ];
@@ -709,7 +711,7 @@ mod tests {
             ConsoleConfig {
                 file: None,
                 mode: ConsoleOutputMode::Off,
-                iommu: false,
+                iommu: false.into(),
             }
         );
     }
@@ -1660,6 +1662,14 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = VmConfig::try_from(d.cfg.clone());
+
+            if !d.cfg.cfg.boot_info.image.is_empty() {
+                if let Ok(config) = &result {
+                    // CLH v54.0 rejects boot disks without an explicit format.
+                    let json = serde_json::to_value(config).unwrap();
+                    assert_eq!(json["disks"][0]["image_type"], "Raw", "{}", msg);
+                }
+            }
 
             let msg = format!("{}: actual result: {:?}", msg, result);
 

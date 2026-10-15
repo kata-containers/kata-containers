@@ -20,14 +20,16 @@ type MemoryRestoreMode string
 
 // List of MemoryRestoreMode
 const (
-	MEMORYRESTOREMODE_COPY      MemoryRestoreMode = "Copy"
-	MEMORYRESTOREMODE_ON_DEMAND MemoryRestoreMode = "OnDemand"
+	MEMORYRESTOREMODE_COPY          MemoryRestoreMode = "Copy"
+	MEMORYRESTOREMODE_ON_DEMAND     MemoryRestoreMode = "OnDemand"
+	MEMORYRESTOREMODE_COPY_ON_WRITE MemoryRestoreMode = "CopyOnWrite"
 )
 
 // All allowed values of MemoryRestoreMode enum
 var AllowedMemoryRestoreModeEnumValues = []MemoryRestoreMode{
 	"Copy",
 	"OnDemand",
+	"CopyOnWrite",
 }
 
 func (v *MemoryRestoreMode) UnmarshalJSON(src []byte) error {

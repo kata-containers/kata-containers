@@ -6,9 +6,7 @@ use crate::{
     DeviceConfig, DiskConfig, FsConfig, NetConfig, VmConfig, VmInfo, VmResize, VsockConfig,
 };
 use anyhow::{anyhow, Context, Result};
-use api_client::{
-    simple_api_full_command_and_response, simple_api_full_command_with_fds_and_response,
-};
+use api_client::simple_api_full_command_with_fds_and_response;
 
 use serde::{Deserialize, Serialize};
 use std::os::{fd::RawFd, unix::net::UnixStream};
@@ -44,17 +42,13 @@ async fn api_command(
         .context("clone api socket")?;
 
     let result = task::spawn_blocking(move || -> Result<Option<String>> {
-        let response = if let Some(fds) = fds {
-            simple_api_full_command_with_fds_and_response(
-                &mut socket,
-                method,
-                endpoint,
-                body.as_deref(),
-                &fds,
-            )
-        } else {
-            simple_api_full_command_and_response(&mut socket, method, endpoint, body.as_deref())
-        }
+        let response = simple_api_full_command_with_fds_and_response(
+            &mut socket,
+            method,
+            endpoint,
+            body.as_deref(),
+            fds.as_deref().unwrap_or_default(),
+        )
         .map_err(|e| anyhow!(e))?;
         Ok(response)
     })

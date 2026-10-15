@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **QueueSizes** | **[]int32** |  | 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **PciDeviceId** | Pointer to **int32** |  | [optional] 
+**Id** | Pointer to **string** |  | [optional]
 **DeviceType** | **int32** |  | 
 
 ## Methods
@@ -118,6 +119,31 @@ SetPciDeviceId sets PciDeviceId field to given value.
 `func (o *GenericVhostUserConfig) HasPciDeviceId() bool`
 
 HasPciDeviceId returns a boolean if a field has been set.
+
+### GetId
+
+`func (o *GenericVhostUserConfig) GetId() string`
+
+GetId returns the Id field if non-nil, zero value otherwise.
+
+### GetIdOk
+
+`func (o *GenericVhostUserConfig) GetIdOk() (*string, bool)`
+
+GetIdOk returns a tuple with the Id field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetId
+
+`func (o *GenericVhostUserConfig) SetId(v string)`
+
+SetId sets Id field to given value.
+
+### HasId
+
+`func (o *GenericVhostUserConfig) HasId() bool`
+
+HasId returns a boolean if a field has been set.
 
 ### GetDeviceType
 

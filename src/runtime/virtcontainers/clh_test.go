@@ -146,6 +146,11 @@ func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
 	return nil, nil
 }
 
+func TestClhIommuType(t *testing.T) {
+	assert.Equal(t, chclient.IOMMUTYPE_OFF, clhIommuType(false))
+	assert.Equal(t, chclient.IOMMUTYPE_VIRTIO, clhIommuType(true))
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}

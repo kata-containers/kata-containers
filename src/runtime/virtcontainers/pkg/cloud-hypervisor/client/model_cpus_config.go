@@ -37,7 +37,7 @@ func NewCpusConfig(bootVcpus int32, maxVcpus int32) *CpusConfig {
 	this.MaxVcpus = maxVcpus
 	var kvmHyperv bool = false
 	this.KvmHyperv = &kvmHyperv
-	var nested bool = true
+	var nested bool = false
 	this.Nested = &nested
 	var coreScheduling CoreSchedulingMode = CORESCHEDULINGMODE_VM
 	this.CoreScheduling = &coreScheduling
@@ -51,7 +51,7 @@ func NewCpusConfigWithDefaults() *CpusConfig {
 	this := CpusConfig{}
 	var kvmHyperv bool = false
 	this.KvmHyperv = &kvmHyperv
-	var nested bool = true
+	var nested bool = false
 	this.Nested = &nested
 	var coreScheduling CoreSchedulingMode = CORESCHEDULINGMODE_VM
 	this.CoreScheduling = &coreScheduling

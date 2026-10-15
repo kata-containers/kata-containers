@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Cid** | **int64** | Guest Vsock CID | 
 **Socket** | **string** | Path to UNIX domain socket, used to proxy vsock connections. | 
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**Iommu** | Pointer to [**IommuType**](IommuType.md) |  | [optional] [default to IOMMUTYPE_OFF]
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **PciDeviceId** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
@@ -72,20 +72,20 @@ SetSocket sets Socket field to given value.
 
 ### GetIommu
 
-`func (o *VsockConfig) GetIommu() bool`
+`func (o *VsockConfig) GetIommu() IommuType`
 
 GetIommu returns the Iommu field if non-nil, zero value otherwise.
 
 ### GetIommuOk
 
-`func (o *VsockConfig) GetIommuOk() (*bool, bool)`
+`func (o *VsockConfig) GetIommuOk() (*IommuType, bool)`
 
 GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetIommu
 
-`func (o *VsockConfig) SetIommu(v bool)`
+`func (o *VsockConfig) SetIommu(v IommuType)`
 
 SetIommu sets Iommu field to given value.
 

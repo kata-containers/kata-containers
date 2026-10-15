@@ -7,6 +7,8 @@ api_default.go
 client.go
 configuration.go
 docs/BalloonConfig.md
+docs/BalloonStats.md
+docs/BalloonStatsResponse.md
 docs/ConsoleConfig.md
 docs/ConsoleMode.md
 docs/CoreSchedulingMode.md
@@ -22,6 +24,7 @@ docs/DiskConfig.md
 docs/FsConfig.md
 docs/GenericVhostUserConfig.md
 docs/ImageType.md
+docs/IommuType.md
 docs/LandlockConfig.md
 docs/LockGranularity.md
 docs/MemoryConfig.md
@@ -54,6 +57,7 @@ docs/VmAddUserDevice.md
 docs/VmConfig.md
 docs/VmCoredumpData.md
 docs/VmInfo.md
+docs/VmMemoryZoneUpdateData.md
 docs/VmRemoveDevice.md
 docs/VmResize.md
 docs/VmResizeDisk.md
@@ -66,6 +70,8 @@ git_push.sh
 go.mod
 go.sum
 model_balloon_config.go
+model_balloon_stats.go
+model_balloon_stats_response.go
 model_console_config.go
 model_console_mode.go
 model_core_scheduling_mode.go
@@ -80,6 +86,7 @@ model_disk_config.go
 model_fs_config.go
 model_generic_vhost_user_config.go
 model_image_type.go
+model_iommu_type.go
 model_landlock_config.go
 model_lock_granularity.go
 model_memory_config.go
@@ -112,6 +119,7 @@ model_vm_add_user_device.go
 model_vm_config.go
 model_vm_coredump_data.go
 model_vm_info.go
+model_vm_memory_zone_update_data.go
 model_vm_remove_device.go
 model_vm_resize.go
 model_vm_resize_disk.go

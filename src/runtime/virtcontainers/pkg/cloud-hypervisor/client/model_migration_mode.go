@@ -15,17 +15,19 @@ import (
 	"fmt"
 )
 
-// MigrationMode Memory transfer mode. Precopy transfers all guest memory before the destination resumes. Postcopy resumes the destination first and faults guest pages in on demand.
+// MigrationMode Memory transfer mode. MemFDs passes the guest memory backing file descriptors to the destination over a UNIX socket. MemFDs requires every guest memory region to use shared memory or hugepage backing. Precopy transfers all guest memory before the destination resumes. Postcopy resumes the destination first and faults guest pages in on demand.
 type MigrationMode string
 
 // List of MigrationMode
 const (
+	MIGRATIONMODE_MEM_FDS  MigrationMode = "MemFDs"
 	MIGRATIONMODE_PRECOPY  MigrationMode = "Precopy"
 	MIGRATIONMODE_POSTCOPY MigrationMode = "Postcopy"
 )
 
 // All allowed values of MigrationMode enum
 var AllowedMigrationModeEnumValues = []MigrationMode{
+	"MemFDs",
 	"Precopy",
 	"Postcopy",
 }
