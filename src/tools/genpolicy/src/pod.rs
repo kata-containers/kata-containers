@@ -1195,12 +1195,6 @@ impl Container {
                     "get_process_fields: set GID = {new_gid}, User = {:?}",
                     process.User
                 );
-
-                process.User.AdditionalGids.insert(new_gid);
-                debug!(
-                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
-                    process.User
-                );
             }
 
             if let Some(gid) = context.runAsGroup {
@@ -1208,10 +1202,15 @@ impl Container {
 
                 let new_gid = gid.try_into().unwrap();
                 process.User.GID = new_gid;
+            }
 
-                process.User.AdditionalGids.insert(new_gid);
+            if context.runAsUser.is_some() || context.runAsGroup.is_some() {
+                // WithAdditionalGIDs uses the final identity, so groups from
+                // the image or pod user must not survive a container override.
+                process.User.AdditionalGids.clear();
+                process.User.AdditionalGids.insert(process.User.GID);
                 debug!(
-                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
+                    "get_process_fields: reset AdditionalGids to the final primary GID, User = {:?}",
                     process.User
                 );
             }
@@ -1328,6 +1327,46 @@ fn sum_limits_by_keys(limits: &BTreeMap<String, String>, keys: &[String]) -> Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn container_identity_override_replaces_inherited_groups() {
+        for (context, expected_uid, expected_gid, expected_groups) in [
+            (
+                "runAsUser: 65534\nrunAsGroup: 2000",
+                65534,
+                2000,
+                vec![123, 2000],
+            ),
+            ("runAsUser: 65534", 65534, 1000, vec![123, 1000]),
+            ("runAsGroup: 2000", 0, 2000, vec![2000]),
+            ("runAsUser: 9999\nrunAsGroup: 2000", 9999, 2000, vec![2000]),
+        ] {
+            let mut container = Container {
+                securityContext: Some(serde_yaml::from_str(context).unwrap()),
+                ..Default::default()
+            };
+            container.registry.passwd =
+                "root:x:0:0::/:/bin/sh\nnobody:x:65534:1000::/:/bin/sh\n".into();
+            container.registry.group = "shared:x:123:nobody\n".into();
+            let mut process = policy::KataProcess::default();
+            process.User.AdditionalGids.insert(0);
+
+            container.get_process_fields(&mut process);
+
+            assert_eq!(process.User.UID, expected_uid, "{context}");
+            assert_eq!(process.User.GID, expected_gid, "{context}");
+            assert_eq!(
+                process
+                    .User
+                    .AdditionalGids
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                expected_groups,
+                "{context}"
+            );
+        }
+    }
 
     fn make_limits(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
         entries
