@@ -234,7 +234,7 @@ impl ResourceManagerInner {
                         "the network is set up through create_network and attach_network"
                     ));
                 }
-                ResourceConfig::VmRootfs(r) => {
+                ResourceConfig::VmRootfs(r) | ResourceConfig::PmemVolume(r) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
                         .await
                         .context("do handle device failed.")?;
