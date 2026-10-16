@@ -32,6 +32,14 @@ impl fmt::Display for MacAddr {
     }
 }
 
+impl std::str::FromStr for MacAddr {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        parse_mac_address_str(s).map(MacAddr::new)
+    }
+}
+
 // Requried to remove the `bytes` member from the serialized JSON!
 impl Serialize for MacAddr {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -109,6 +117,13 @@ impl Visitor<'_> for MacAddrVisitor {
 #[cfg(test)]
 mod tests {
     use super::*; // Import parent module items, including MAC_ADDR_LEN and parse_mac_address_str
+
+    #[test]
+    fn test_mac_addr_from_str() {
+        let mac: MacAddr = "02:68:73:00:00:02".parse().unwrap();
+        assert_eq!(mac.bytes, [0x02, 0x68, 0x73, 0x00, 0x00, 0x02]);
+        assert!("02:68:73".parse::<MacAddr>().is_err());
+    }
 
     #[test]
     fn test_parse_mac_address_str_valid() {
