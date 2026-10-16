@@ -4,7 +4,7 @@
 //SPDX-License-Identifier: Apache-2.0
 
 use crate::firecracker::{sl, FcInner};
-use crate::{selinux, VcpuThreadIds, VmmState, HYPERVISOR_FIRECRACKER};
+use crate::{VcpuThreadIds, VmmState, HYPERVISOR_FIRECRACKER};
 use anyhow::{anyhow, Context, Result};
 use kata_types::capabilities::Capabilities;
 use kata_types::config::KATA_PATH;
@@ -61,12 +61,7 @@ impl FcInner {
 
         self.netns = _netns.clone();
 
-        if !self.hypervisor_config().disable_selinux {
-            if let Some(label) = selinux_label.as_ref() {
-                self.config.security_info.selinux_label = Some(label.to_string());
-                selinux::set_exec_label(label).context("failed to set SELinux process label")?;
-            }
-        }
+        self.config.set_selinux_label(selinux_label);
 
         self.prepare_vmm(self.netns.clone()).await?;
         self.state = VmmState::VmmServerReady;
