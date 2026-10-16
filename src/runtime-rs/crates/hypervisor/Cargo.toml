@@ -42,6 +42,7 @@ tracing = { workspace = true }
 ttrpc = { features = ["async"], workspace = true }
 virtio-bindings = { workspace = true }
 vmm-sys-util = "0.15.0"
+xattr = "1.6.1"
 # Local dependencies
 ch-config = { optional = true, workspace = true }
 kata-sys-util = { workspace = true }
