@@ -40,6 +40,11 @@ type PhysicalEndpoint struct {
 	VendorDeviceID     string
 	PCIPath            vcTypes.PciPath
 	CCWDevice          *vcTypes.CcwDevice
+
+	// Optional replacements for the PCI bind helpers. Nil in production;
+	// tests set them to avoid writing sysfs.
+	bindToVFIO func(*PhysicalEndpoint) (string, error)
+	bindToHost func(*PhysicalEndpoint) error
 }
 
 // Properties returns the properties of the physical interface.
@@ -94,7 +99,7 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
-func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error {
+func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) (err error) {
 	span, ctx := physicalTrace(ctx, "Attach", endpoint)
 	defer span.End()
 
@@ -113,12 +118,12 @@ func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error 
 	// MAC reconciliation, see rpc.rs::update_interface) still keeps L2/L3
 	// working.
 	if endpoint.HardAddr != "" && endpoint.BDF != "" {
-		if err := setVfAdminMAC(endpoint.BDF, endpoint.HardAddr); err != nil {
+		if macErr := setVfAdminMAC(endpoint.BDF, endpoint.HardAddr); macErr != nil {
 			networkLogger().WithFields(logrus.Fields{
 				"bdf":    endpoint.BDF,
 				"netdev": endpoint.IfaceName,
 				"hwAddr": endpoint.HardAddr,
-			}).WithError(err).Warn("setVfAdminMAC: skipped, falling back to in-guest MAC reconciliation")
+			}).WithError(macErr).Warn("setVfAdminMAC: skipped, falling back to in-guest MAC reconciliation")
 		}
 	}
 
@@ -128,6 +133,23 @@ func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error 
 	if err != nil {
 		return err
 	}
+
+	// bindNICToVFIO has already taken the VF off the host netdev driver.
+	// If anything below fails the endpoint is never recorded, so the
+	// sandbox-level removeNetwork rollback will not see it. Detach is
+	// safe here: for a physical endpoint it only rebinds PCI using BDF
+	// and the host driver saved in createPhysicalEndpoint.
+	defer func() {
+		if err != nil {
+			if derr := endpoint.Detach(ctx, false, ""); derr != nil {
+				networkLogger().WithFields(logrus.Fields{
+					"bdf":    endpoint.BDF,
+					"driver": endpoint.Driver,
+					"netdev": endpoint.IfaceName,
+				}).WithError(derr).Error("failed to Detach physical endpoint after Attach failure")
+			}
+		}
+	}()
 
 	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
 	if err != nil {
@@ -163,7 +185,7 @@ func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool,
 }
 
 // HotAttach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
+func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) (err error) {
 	span, ctx := physicalTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
@@ -173,6 +195,21 @@ func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) err
 	if err != nil {
 		return err
 	}
+
+	// Same as Attach: reuse Detach (PCI rebind) rather than HotDetach.
+	// HotDetach also removes the device from the sandbox device manager,
+	// which is not valid if AddDevice never succeeded.
+	defer func() {
+		if err != nil {
+			if derr := endpoint.Detach(ctx, false, ""); derr != nil {
+				networkLogger().WithFields(logrus.Fields{
+					"bdf":    endpoint.BDF,
+					"driver": endpoint.Driver,
+					"netdev": endpoint.IfaceName,
+				}).WithError(derr).Error("failed to Detach physical endpoint after HotAttach failure")
+			}
+		}
+	}()
 
 	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
 	if err != nil {
@@ -310,10 +347,16 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 }
 
 func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
+	if endpoint.bindToVFIO != nil {
+		return endpoint.bindToVFIO(endpoint)
+	}
 	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver)
 }
 
 func bindNICToHost(endpoint *PhysicalEndpoint) error {
+	if endpoint.bindToHost != nil {
+		return endpoint.bindToHost(endpoint)
+	}
 	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver)
 }
 
