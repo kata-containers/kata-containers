@@ -614,7 +614,7 @@ endif
 
 ifneq (,$(FCCMD))
     KNOWN_HYPERVISORS += $(HYPERVISOR_FC)
-    CONFIG_FILE_FC = configuration-rs-fc.toml
+    CONFIG_FILE_FC = configuration-fc-runtime-rs.toml
     CONFIG_FC = config/$(CONFIG_FILE_FC)
     CONFIG_FC_IN = $(CONFIG_FC).in
     CONFIG_PATH_FC = $(abspath $(CONFDIR)/$(CONFIG_FILE_FC))
@@ -633,6 +633,8 @@ ifneq (,$(FCCMD))
     DEFSANDBOXCGROUPONLY_FC := true
     RUNTIMENAME := virt_container
     DEFSTATICRESOURCEMGMT_FC := true
+    # No shared filesystem: emptyDir volumes reach the guest as block devices.
+    DEFEMPTYDIRMODE_FC := block-plain
 endif
 
 ifneq (,$(REMOTE))
@@ -832,6 +834,7 @@ USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFEMPTYDIRMODE
 USER_VARS += DEFEMPTYDIRMODE_COCO
 USER_VARS += DEFEMPTYDIRMODE_NV
+USER_VARS += DEFEMPTYDIRMODE_FC
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFDISABLEGUESTSELINUX

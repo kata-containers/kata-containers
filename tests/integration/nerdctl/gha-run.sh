@@ -87,6 +87,9 @@ function run() {
 	# uses it when told to, per command.
 	local -a snapshotter=()
 	kata_hypervisor_runs_without_shared_fs && snapshotter=(--snapshotter erofs)
+	# The Firecracker runtime-rs class takes its rootfs from the devmapper
+	# thin-pool set up by configure_devmapper_for_containerd.
+	[[ "${KATA_HYPERVISOR}" == "fc-runtime-rs" ]] && snapshotter=(--snapshotter devmapper)
 
 	info "Running nerdctl smoke test tests using RunC"
 
@@ -137,11 +140,32 @@ function run() {
 	sudo nerdctl network rm "${macvlan_net_name}" "${ipvlan_net_name}"
 }
 
+function install_kata_for_nerdctl() {
+	install_kata
+
+	# Firecracker (fc-runtime-rs) uses block devices and requires the devmapper
+	# snapshotter; other hypervisors work fine with the default overlayfs.
+	# Must run AFTER install_kata since install_kata may overwrite the
+	# containerd config via overwrite_containerd_config.
+	if [[ "${KATA_HYPERVISOR:-}" == "fc-runtime-rs" ]]; then
+		configure_devmapper_for_containerd
+
+		# Pre-pull alpine into the content store (no --snapshotter).
+		# nerdctl v2.3.1 calls SnapshotterCapabilities for OCI image indexes
+		# during pull, and devmapper returns nil/empty capabilities, causing
+		# "no unpack platforms defined". Pre-pulling without a snapshotter
+		# populates the content store; when nerdctl run then finds the image
+		# already present, it calls image.Unpack(devmapper) via the container-
+		# creation path which bypasses the SnapshotterCapabilities check.
+		sudo ctr -n default images pull docker.io/library/alpine:latest
+	fi
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
-		install-kata) install_kata ;;
+		install-kata) install_kata_for_nerdctl ;;
 		run) run ;;
 		collect-artifacts) collect_artifacts ;;
 		*) >&2 die "Invalid argument" ;;

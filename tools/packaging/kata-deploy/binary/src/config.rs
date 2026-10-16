@@ -1282,7 +1282,7 @@ fn synthesize_variant_runtimes(
 /// Returns only shims that are supported for that architecture
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
+        "x86_64" => "clh clh-runtime-rs dragonball fc fc-runtime-rs qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
         "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu-runtime-rs",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu qemu-runtime-rs",

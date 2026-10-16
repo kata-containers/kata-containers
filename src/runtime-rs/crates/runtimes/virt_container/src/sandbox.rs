@@ -1454,6 +1454,14 @@ impl Sandbox for VirtSandbox {
             }
         }
 
+        // Give the hypervisor a chance to finalize boot now that OCI hooks and
+        // the post-hooks network rescan have completed.  For hypervisors that
+        // require all devices (including network) to be registered before the
+        // guest boots (e.g. Firecracker), start_vm defers the actual boot
+        // command to this call.  For hypervisors that boot the guest in
+        // start_vm (QEMU, dragonball, cloud-hypervisor), this is a no-op.
+        self.hypervisor.boot_vm().await.context("boot vm")?;
+
         if defer_network {
             self.setup_deferred_network_after_start(sandbox_config)
                 .await?;
