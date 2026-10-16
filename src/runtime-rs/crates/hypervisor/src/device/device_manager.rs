@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use kata_sys_util::rand::RandomBytes;
 use kata_types::config::hypervisor::{
     BlockDeviceInfo, SharedFsInfo, TopologyConfigInfo, VIRTIO_SCSI,
@@ -311,6 +311,19 @@ impl DeviceManager {
             DeviceConfig::BlockCfgModern(config) => {
                 if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
                 {
+                    if config.driver_option == VIRTIO_PMEM {
+                        let DeviceType::BlockModern(device) =
+                            self.get_device_info(&device_matched_id).await?
+                        else {
+                            bail!("PMEM backing path is already attached as another device type");
+                        };
+                        let device = device.lock().await;
+                        if device.config.driver_option != KATA_NVDIMM_DEV_TYPE
+                            || device.config.is_readonly != config.is_readonly
+                        {
+                            bail!("PMEM backing file is already attached with a different configuration");
+                        }
+                    }
                     return Ok(device_matched_id);
                 }
 

@@ -70,7 +70,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
-use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
+use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI, VIRTIO_PMEM};
 use kata_types::config::{hypervisor::Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use kata_types::rootless::is_rootless;
@@ -527,6 +527,23 @@ impl VirtSandbox {
         {
             let vm_rootfs = ResourceConfig::VmRootfs(block_config);
             resource_configs.push(vm_rootfs);
+        }
+
+        let config = self.resource_manager.config().await;
+        let blockdev_info = self.hypervisor.hypervisor_config().await.blockdev_info;
+        if config.runtime.hypervisor_name == "dragonball"
+            && blockdev_info.block_device_driver == VIRTIO_PMEM
+            && !sandbox_config.state.bundle.is_empty()
+        {
+            let spec_path =
+                Path::new(&sandbox_config.state.bundle).join(spec::OCI_SPEC_CONFIG_FILE_NAME);
+            let spec = oci::Spec::load(spec_path).context("load PMEM volume spec")?;
+            let configs = resource::volume::direct_volumes::rawblock_volume::pmem_volume_configs(
+                spec.mounts().as_deref().unwrap_or_default(),
+                &blockdev_info,
+            )?;
+            // A sandbox reference keeps cold-plugged devices alive after container cleanup.
+            resource_configs.extend(configs.into_iter().map(ResourceConfig::PmemVolume));
         }
 
         // prepare extra extension image device configs (e.g. CoCo extension)
