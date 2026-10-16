@@ -498,3 +498,7 @@ func (c *LinuxCgroup) ID() string {
 func (c *LinuxCgroup) Parent() string {
 	return filepath.Dir(c.path)
 }
+
+func (c *LinuxCgroup) String() string {
+	return fmt.Sprint(c.Type(), ": ", c.ID())
+}
