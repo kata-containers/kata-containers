@@ -503,24 +503,17 @@ impl CloudHypervisorInner {
             None
         };
 
+        selinux::apply_exec_label(
+            &mut cmd,
+            self.config.effective_selinux_label(),
+            "Cloud Hypervisor",
+        )?;
+
         unsafe {
-            let selinux_label = self.config.security_info.selinux_label.clone();
             let _pre = cmd.pre_exec(move || {
                 if let Some(netns_path) = &netns {
                     let netns_fd = std::fs::File::open(netns_path);
                     let _ = setns(&netns_fd?, CloneFlags::CLONE_NEWNET).context("set netns failed");
-                }
-                if let Some(label) = selinux_label.as_ref() {
-                    if let Err(e) = selinux::set_exec_label(label) {
-                        error!(sl!(), "Failed to set SELinux label in child process: {}", e);
-                        // Don't return error here to avoid breaking the process startup
-                        // Log the error and continue
-                    } else {
-                        info!(
-                            sl!(),
-                            "Successfully set SELinux label in child process: {}", &label
-                        );
-                    }
                 }
                 if let Some(user) = &user {
                     set_process_credentials(user)
@@ -655,12 +648,7 @@ impl CloudHypervisorInner {
 
         self.netns = netns;
 
-        if !self.hypervisor_config().disable_selinux {
-            if let Some(label) = selinux_label.as_ref() {
-                self.config.security_info.selinux_label = Some(label.to_string());
-                selinux::set_exec_label(label).context("failed to set SELinux process label")?;
-            }
-        }
+        self.config.set_selinux_label(selinux_label);
 
         Ok(())
     }

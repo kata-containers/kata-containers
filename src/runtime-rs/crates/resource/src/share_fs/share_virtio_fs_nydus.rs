@@ -56,6 +56,7 @@ impl ShareVirtioFsNydus {
 
     async fn setup_nydusd(&self, h: &dyn Hypervisor) -> Result<()> {
         let jailer_root = h.get_jailer_root().await?;
+        let hypervisor_config = h.hypervisor_config().await;
         let sock_path = Path::new(&jailer_root).join("virtiofsd.sock");
         let api_sock_path = Path::new(&jailer_root).join(NYDUSD_API_SOCK);
 
@@ -76,7 +77,10 @@ impl ShareVirtioFsNydus {
             return Err(anyhow!("nydusd already initialized"));
         }
         let nydusd = nydusd_guard.insert(Arc::new(Nydusd::new(nydusd_config)));
-        let pid = nydusd.start().await.context("failed to start nydusd")?;
+        let pid = nydusd
+            .start(hypervisor_config.effective_selinux_label())
+            .await
+            .context("failed to start nydusd")?;
 
         info!(sl!(), "nydusd started with pid {}", pid);
 

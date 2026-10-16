@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use hypervisor::selinux;
 use kata_types::rootless::is_rootless;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -148,7 +149,7 @@ impl Nydusd {
         Ok(args)
     }
 
-    pub async fn start(&self) -> Result<u32> {
+    pub async fn start(&self, selinux_label: Option<&str>) -> Result<u32> {
         // Before starting nydusd, we need to clean up any stale socket files
         // that might exist from a previous run.
         cleanup_socket(&self.config.sock_path).await?;
@@ -165,6 +166,8 @@ impl Nydusd {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+
+        selinux::apply_exec_label(&mut cmd, selinux_label, "nydusd")?;
 
         if is_rootless() {
             // `build_args()` uses relative socket file names in rootless mode; run
@@ -412,6 +415,26 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn invalid_selinux_label_prevents_nydusd_launch() {
+        let dir = tempdir().unwrap();
+        let nydusd = Nydusd::new(NydusdConfig::new(
+            PathBuf::from("/bin/true"),
+            dir.path().join("nydusd.sock"),
+            dir.path().join("nydusd-api.sock"),
+            dir.path().to_path_buf(),
+            false,
+            vec![],
+        ));
+
+        let err = nydusd.start(Some("invalid\0label")).await.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("configure nydusd SELinux process label"));
+        assert!(nydusd.get_pid().await.is_none());
+        assert!(nydusd.inner.read().await.child.is_none());
+    }
 
     #[test]
     fn test_nydusd_config_validate_checks_all_paths() {
