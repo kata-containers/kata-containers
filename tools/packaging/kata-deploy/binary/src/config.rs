@@ -669,25 +669,6 @@ impl Config {
             _ => {}
         }
 
-        // Validate NVRC_ENABLE_DCGM
-        // Format: "shim1;shim2", naming the shims whose guests run DCGM.
-        //
-        // Only the NVIDIA GPU images carry DCGM and an NVRC to start it, so
-        // nvrc.dcgm=on anywhere else is a setting that would silently do
-        // nothing. Membership in shims_for_arch is deliberately not required:
-        // the chart builds this list from every enabled shim, and the same
-        // value reaches nodes of every architecture, so a GPU shim missing here
-        // means "not on this node" rather than a mistake.
-        for shim in &self.nvrc_enable_dcgm {
-            if !shim.contains("nvidia-gpu") {
-                return Err(anyhow::anyhow!(
-                    "NVRC_ENABLE_DCGM references '{}', which is not an NVIDIA GPU shim. \
-                     DCGM only runs in the NVIDIA GPU guest images.",
-                    shim
-                ));
-            }
-        }
-
         // Validate SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH
         // Format: "shim1:snapshotter1,shim2:snapshotter2"
         match self.snapshotter_handler_mapping_for_arch.as_ref() {
@@ -782,6 +763,23 @@ impl Config {
             }
         }
 
+        Ok(())
+    }
+
+    /// Installation-only: a rejected DCGM setting must not prevent cleanup.
+    pub fn validate_nvrc_enable_dcgm(&self) -> Result<()> {
+        // Only the NVIDIA GPU images carry DCGM and an NVRC to start it.
+        // Do not require membership in shims_for_arch: the chart lists every
+        // enabled shim, including ones for other architectures.
+        for shim in &self.nvrc_enable_dcgm {
+            if !shim.contains("nvidia-gpu") {
+                return Err(anyhow::anyhow!(
+                    "NVRC_ENABLE_DCGM references '{}', which is not an NVIDIA GPU shim. \
+                     DCGM only runs in the NVIDIA GPU guest images.",
+                    shim
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -1891,8 +1889,24 @@ mod tests {
             config.nvrc_enable_dcgm,
             vec!["qemu-nvidia-gpu", "qemu-nvidia-gpu-snp-runtime-rs"]
         );
+        config.validate_nvrc_enable_dcgm().unwrap();
 
         cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_load_config_for_cleanup_with_invalid_dcgm() {
+        setup_minimal_env();
+        std::env::set_var("NVRC_ENABLE_DCGM", "qemu-nvidia-cpu-runtime-rs");
+
+        let result = Config::from_env();
+        cleanup_env_vars();
+
+        assert_eq!(
+            result.unwrap().nvrc_enable_dcgm,
+            vec!["qemu-nvidia-cpu-runtime-rs"]
+        );
     }
 
     #[serial]
@@ -1902,7 +1916,7 @@ mod tests {
         set_arch_var("SHIMS", "qemu qemu-nvidia-gpu");
         std::env::set_var("NVRC_ENABLE_DCGM", "qemu");
 
-        let result = Config::from_env();
+        let result = Config::from_env().unwrap().validate_nvrc_enable_dcgm();
         assert!(result.is_err());
         assert!(result
             .unwrap_err()

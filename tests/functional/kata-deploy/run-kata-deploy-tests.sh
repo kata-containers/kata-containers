@@ -40,6 +40,7 @@ else
 		"kata-deploy-reporting.bats" \
 		"kata-deploy-multi-install.bats" \
 		"kata-deploy-user-drop-in.bats" \
+		"kata-deploy-invalid-dcgm.bats" \
 		"kata-deploy-reconcile.bats" \
 		"kata-deploy-node-binaries.bats" \
 		"kata-deploy-installation-prefix.bats" \
