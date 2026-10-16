@@ -62,6 +62,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0 # This is needed in order to keep the commit ids history
           persist-credentials: false
 
@@ -111,6 +112,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
           persist-credentials: false
 
@@ -165,6 +167,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0 # This is needed in order to keep the commit ids history
           persist-credentials: false
 
@@ -253,6 +256,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0 # This is needed in order to keep the commit ids history
           persist-credentials: false
 
@@ -310,6 +314,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
