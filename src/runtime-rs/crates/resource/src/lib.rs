@@ -30,6 +30,8 @@ pub use manager::ResourceManager;
 pub mod cdi_devices;
 pub mod coco_data;
 pub mod cpu_mem;
+#[cfg(test)]
+mod test_utils;
 
 use kata_types::config::hypervisor::SharedFsInfo;
 
