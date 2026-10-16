@@ -77,7 +77,13 @@ fn write_toml_with_header(file_path: &Path, header: &str, doc: &DocumentMut) -> 
     };
     let body = doc.to_string();
     let body_trimmed = body.trim_start_matches('\n');
-    std::fs::write(file_path, format!("{}{}", normalized_header, body_trimmed))
+    let content = format!("{}{}", normalized_header, body_trimmed);
+    // CRI convergence uses the mtime to detect configuration not yet loaded by
+    // the daemon. An identical reapply must not make that configuration newer.
+    if std::fs::read(file_path).is_ok_and(|current| current == content.as_bytes()) {
+        return Ok(());
+    }
+    std::fs::write(file_path, content)
         .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
     Ok(())
 }
@@ -583,6 +589,28 @@ mod tests {
             input
         );
         assert_eq!(toml, expected_toml, "toml mismatch for input: {:?}", input);
+    }
+
+    #[rstest]
+    #[case("")]
+    #[case("{{ template \"base\" . }}\n")]
+    fn identical_toml_update_preserves_mtime(#[case] header: &str) {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), format!("{header}version = 3\n")).unwrap();
+        set_toml_value(file.path(), ".version", "3").unwrap();
+        let before = std::fs::read(file.path()).unwrap();
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        file.as_file().set_modified(old).unwrap();
+
+        for _ in 0..3 {
+            set_toml_value(file.path(), ".version", "3").unwrap();
+            assert_eq!(std::fs::read(file.path()).unwrap(), before);
+            assert_eq!(file.as_file().metadata().unwrap().modified().unwrap(), old);
+        }
+
+        set_toml_value(file.path(), ".version", "4").unwrap();
+        assert_eq!(get_toml_value(file.path(), ".version").unwrap(), "4");
+        assert!(file.as_file().metadata().unwrap().modified().unwrap() > old);
     }
 
     // --- TOML operations on files with K3s/RKE2 base template header ---
