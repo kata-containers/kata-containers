@@ -22,6 +22,7 @@ pub use utils::{
     do_get_guest_path, do_get_guest_share_path, do_get_host_path, get_host_rw_shared_path,
 };
 mod virtio_fs_share_mount;
+pub(crate) use virtio_fs_share_mount::cleanup_host_share_path;
 pub use virtio_fs_share_mount::ephemeral_path;
 use virtio_fs_share_mount::VirtiofsShareMount;
 pub mod sandbox_bind_mounts;

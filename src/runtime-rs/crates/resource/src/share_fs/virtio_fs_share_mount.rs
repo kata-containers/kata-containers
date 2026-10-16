@@ -202,42 +202,49 @@ impl ShareFsMount for VirtiofsShareMount {
     }
 
     async fn cleanup(&self, sid: &str) -> Result<()> {
-        // Cleanup can run multiple times when a previous attempt fails. Return errors
-        // so the resource manager keeps this stage pending for a later retry.
-        // Unmount ro path
-        let host_ro_dest = get_host_ro_shared_path(sid);
-        umount_all(host_ro_dest.clone(), true).context("failed to umount ro path")?;
-
-        // Recursive removal through a surviving bind mount would delete host data.
-        let host_path = get_host_shared_path(sid);
-        let mount_points =
-            get_mount_points_under(&host_path).context("failed to list shared path mounts")?;
-        if !mount_points.is_empty() {
-            warn!(
-                sl!(),
-                "unmounting leftover shared path mounts: {mount_points:?}"
-            );
-        }
-        for mount_point in &mount_points {
-            umount_all(mount_point, true)
-                .with_context(|| format!("failed to umount {}", mount_point.display()))?;
-        }
-        let mount_points =
-            get_mount_points_under(&host_path).context("failed to list shared path mounts")?;
-        if !mount_points.is_empty() {
-            return Err(anyhow!(
-                "shared path {} still has mounts: {mount_points:?}",
-                host_path.display()
-            ));
-        }
-
-        remove_dir_all_if_exists(host_ro_dest).context("failed to remove ro path")?;
-        let host_rw_dest = get_host_rw_shared_path(sid);
-        remove_dir_all_if_exists(host_rw_dest).context("failed to remove rw path")?;
-        // remove the host share directory
-        remove_dir_all_if_exists(host_path).context("failed to remove host shared path")?;
-        Ok(())
+        cleanup_host_share_path(sid)
     }
+}
+
+/// Unmount and remove a sandbox's host share directory. It needs only the sandbox
+/// ID, so it also serves a sandbox restored by the shim's `delete`, which has no
+/// share fs instance.
+pub(crate) fn cleanup_host_share_path(sid: &str) -> Result<()> {
+    // Cleanup can run multiple times when a previous attempt fails. Return errors
+    // so the resource manager keeps this stage pending for a later retry.
+    // Unmount ro path
+    let host_ro_dest = get_host_ro_shared_path(sid);
+    umount_all(host_ro_dest.clone(), true).context("failed to umount ro path")?;
+
+    // Recursive removal through a surviving bind mount would delete host data.
+    let host_path = get_host_shared_path(sid);
+    let mount_points =
+        get_mount_points_under(&host_path).context("failed to list shared path mounts")?;
+    if !mount_points.is_empty() {
+        warn!(
+            sl!(),
+            "unmounting leftover shared path mounts: {mount_points:?}"
+        );
+    }
+    for mount_point in &mount_points {
+        umount_all(mount_point, true)
+            .with_context(|| format!("failed to umount {}", mount_point.display()))?;
+    }
+    let mount_points =
+        get_mount_points_under(&host_path).context("failed to list shared path mounts")?;
+    if !mount_points.is_empty() {
+        return Err(anyhow!(
+            "shared path {} still has mounts: {mount_points:?}",
+            host_path.display()
+        ));
+    }
+
+    remove_dir_all_if_exists(host_ro_dest).context("failed to remove ro path")?;
+    let host_rw_dest = get_host_rw_shared_path(sid);
+    remove_dir_all_if_exists(host_rw_dest).context("failed to remove rw path")?;
+    // remove the host share directory
+    remove_dir_all_if_exists(host_path).context("failed to remove host shared path")?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -247,6 +254,36 @@ mod tests {
     #[test]
     fn test_ephemeral_path() {
         assert_eq!(ephemeral_path(), DEFAULT_EPHEMERAL_PATH);
+    }
+
+    // A sandbox restored by `delete` may never have had a host share directory.
+    #[test]
+    fn test_cleanup_host_share_path_without_directory() {
+        // Use an absolute ID to isolate paths without changing the global rootless flag.
+        let temp = tempfile::tempdir().unwrap();
+        let sandbox = temp.path().join("sandbox");
+        let sid = sandbox.to_str().unwrap();
+
+        cleanup_host_share_path(sid).unwrap();
+        assert!(!get_host_shared_path(sid).exists());
+    }
+
+    // What a dead or ended shim leaves: the empty tree, nothing mounted (#5975).
+    #[test]
+    fn test_cleanup_host_share_path_removes_left_tree() {
+        // umount2(2) on a path that is not a mount point needs privilege to return EINVAL.
+        test_utils::skip_if_not_root!();
+
+        let temp = tempfile::tempdir().unwrap();
+        let sandbox = temp.path().join("sandbox");
+        let sid = sandbox.to_str().unwrap();
+        fs::create_dir_all(get_host_rw_shared_path(sid).join(PASSTHROUGH_FS_DIR)).unwrap();
+        fs::create_dir_all(get_host_ro_shared_path(sid)).unwrap();
+
+        cleanup_host_share_path(sid).unwrap();
+        assert!(!get_host_shared_path(sid).exists());
+        // Cleanup is retried by the resource manager, so a second run must succeed.
+        cleanup_host_share_path(sid).unwrap();
     }
 
     // Isolate mounts so a failed assertion cannot affect other tests or the host.

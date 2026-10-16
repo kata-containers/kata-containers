@@ -1055,7 +1055,16 @@ impl ResourceManagerInner {
                     Err(e) => errors.push(e),
                 }
             } else {
-                steps.share_fs_mount = true;
+                // A sandbox restored by the shim's `delete` has no share fs
+                // instance, but its host share directory is still there when the
+                // original shim died or was ended before its own cleanup. Nothing
+                // else removes it. Without a directory this does nothing.
+                match share_fs::cleanup_host_share_path(&self.sid)
+                    .context("cleanup host share path of a restored sandbox")
+                {
+                    Ok(()) => steps.share_fs_mount = true,
+                    Err(e) => errors.push(e),
+                }
             }
         }
 
