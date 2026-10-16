@@ -88,7 +88,7 @@ jobs:
         if: ${{ matrix.vmm == 'qemu-tdx-runtime-rs' && inputs.pr-number != 'nightly' }}
         run: echo "SKIP_JOB=true" >> "${GITHUB_ENV}"
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ env.SKIP_JOB != 'true' }}
         with:
           ref: ${{ inputs.commit-hash }}
@@ -197,7 +197,7 @@ jobs:
       CONTAINER_ENGINE_VERSION: "latest"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.commit-hash }}
           allow-unsafe-pr-checkout: true
@@ -326,7 +326,7 @@ jobs:
       AUTO_GENERATE_POLICY: "no"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.commit-hash }}
           allow-unsafe-pr-checkout: true
