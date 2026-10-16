@@ -23,7 +23,8 @@ use dragonball::{
     },
     device_manager::{
         balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
-        rng_dev_mgr::RngDeviceConfigInfo, vfio_dev_mgr::HostDeviceConfig,
+        pmem_dev_mgr::PmemDeviceConfigInfo, rng_dev_mgr::RngDeviceConfigInfo,
+        vfio_dev_mgr::HostDeviceConfig,
     },
     vm::VmConfigInfo,
     Vmm,
@@ -359,6 +360,12 @@ impl VmmInstance {
     pub fn insert_rng_device(&self, cfg: RngDeviceConfigInfo) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::InsertRngDevice(cfg.clone())))
             .with_context(|| format!("Failed to insert rng device: {cfg:?}"))?;
+        Ok(())
+    }
+
+    pub fn insert_pmem_device(&self, cfg: PmemDeviceConfigInfo) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::InsertPmemDevice(cfg)))
+            .context("Failed to insert pmem device")?;
         Ok(())
     }
 
