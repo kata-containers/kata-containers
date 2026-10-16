@@ -13,6 +13,9 @@ pub mod muxer_impl;
 pub mod muxer_killq;
 pub mod muxer_rxq;
 
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
+
 use super::backend::{VsockBackend, VsockBackendType};
 use super::{VsockChannel, VsockEpollListener};
 pub use muxer_impl::VsockMuxer;
@@ -82,5 +85,9 @@ pub enum Error {
 /// `vsock::muxer::muxer::VsockMuxer`, which translates guest-side vsock
 /// connections to host-side connections with different backends.
 pub trait VsockGenericMuxer: VsockChannel + VsockEpollListener + Send {
+    fn local_port_watermark(&self) -> u32;
+    fn restore_local_port_watermark(&mut self, watermark: u32);
+    fn set_local_port_watermark_observer(&mut self, observer: Arc<AtomicU32>);
+
     fn add_backend(&mut self, backend: Box<dyn VsockBackend>, is_peer_backend: bool) -> Result<()>;
 }

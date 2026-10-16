@@ -8,13 +8,16 @@
 // found in the THIRD-PARTY file.
 use std::any::Any;
 use std::marker::PhantomData;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use dbs_device::resources::ResourceConstraint;
 use dbs_utils::epoll_manager::{EpollManager, SubscriberId};
 use log::debug;
+use log::info;
 use log::trace;
 use log::warn;
+use serde::{Deserialize, Serialize};
 use virtio_queue::QueueT;
 use vm_memory::GuestAddressSpace;
 use vm_memory::GuestMemoryRegion;
@@ -31,6 +34,20 @@ const VSOCK_DRIVER_NAME: &str = "virtio-vsock";
 const VSOCK_CONFIG_SPACE_SIZE: usize = 8;
 const VSOCK_AVAIL_FEATURES: u64 =
     (1u64 << uapi::VIRTIO_F_VERSION_1) | (1u64 << uapi::VIRTIO_F_IN_ORDER);
+
+/// Persisted vsock device state.
+///
+/// Keep the original VirtioDeviceInfoState fields flattened so snapshots
+/// created before allocator-watermark support remain readable.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VsockState {
+    #[serde(flatten)]
+    pub device_info: crate::persist::VirtioDeviceInfoState,
+    /// Last host-side port allocated before the snapshot. Live connections are
+    /// deliberately not restored; only allocator progress crosses restore.
+    #[serde(default)]
+    pub local_port_last: Option<u32>,
+}
 
 /// This is the `VirtioDevice` implementation for our vsock device. It handles
 /// the virtio-level device logic: feature negociation, device configuration,
@@ -54,6 +71,7 @@ pub struct Vsock<AS: GuestAddressSpace, M: VsockGenericMuxer = VsockMuxer> {
     device_info: VirtioDeviceInfo,
     subscriber_id: Option<SubscriberId>,
     muxer: Option<M>,
+    local_port_watermark: Arc<AtomicU32>,
     phantom: PhantomData<AS>,
 }
 
@@ -77,7 +95,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
         cid: u64,
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
-        muxer: M,
+        mut muxer: M,
         f_access_platform: bool,
     ) -> Result<Self> {
         let mut config_space = Vec::with_capacity(VSOCK_CONFIG_SPACE_SIZE);
@@ -91,6 +109,9 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
             avail_features |= 1u64 << uapi::VIRTIO_F_ACCESS_PLATFORM;
         }
 
+        let local_port_watermark = Arc::new(AtomicU32::new(muxer.local_port_watermark()));
+        muxer.set_local_port_watermark_observer(local_port_watermark.clone());
+
         Ok(Vsock {
             cid,
             queue_sizes: queue_sizes.clone(),
@@ -103,6 +124,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
             ),
             subscriber_id: None,
             muxer: Some(muxer),
+            local_port_watermark,
             phantom: PhantomData,
         })
     }
@@ -127,7 +149,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
 impl<'a, AS: GuestAddressSpace, M: VsockGenericMuxer> crate::persist::VirtioDevicePersist<'a>
     for Vsock<AS, M>
 {
-    type State = crate::persist::VirtioDeviceInfoState;
+    type State = VsockState;
     type SaveArgs = ();
     type RestoreArgs = ();
     type Error = crate::Error;
@@ -137,7 +159,10 @@ impl<'a, AS: GuestAddressSpace, M: VsockGenericMuxer> crate::persist::VirtioDevi
     /// Live vsock connection state is not captured: a snapshot must be taken
     /// at a clean quiesce point with no active connections.
     fn save_state(&mut self, _args: ()) -> crate::Result<Self::State> {
-        Ok(self.device_info.save_state())
+        Ok(VsockState {
+            device_info: self.device_info.save_state(),
+            local_port_last: Some(self.local_port_watermark.load(Ordering::Acquire)),
+        })
     }
 
     /// Restore the guest-negotiated state of this device.
@@ -145,7 +170,16 @@ impl<'a, AS: GuestAddressSpace, M: VsockGenericMuxer> crate::persist::VirtioDevi
     /// The device must have been re-created with the same configuration and
     /// must not have been activated yet.
     fn restore_state(&mut self, state: &Self::State, _args: ()) -> crate::Result<()> {
-        self.device_info.restore_state(state)
+        self.device_info.restore_state(&state.device_info)?;
+        if let Some(watermark) = state.local_port_last {
+            self.local_port_watermark
+                .store(watermark, Ordering::Release);
+            if let Some(muxer) = self.muxer.as_mut() {
+                muxer.restore_local_port_watermark(watermark);
+            }
+            info!("vsock-restore event=local-port-watermark-restored value={watermark}");
+        }
+        Ok(())
     }
 }
 
