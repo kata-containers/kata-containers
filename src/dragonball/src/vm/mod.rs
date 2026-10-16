@@ -927,6 +927,7 @@ impl Vm {
         seccomp_filters: HashMap<String, BpfProgram>,
         state_path: &std::path::Path,
         mem_path: &std::path::Path,
+        reset_vsock_pending: bool,
     ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: received restore-from-snapshot command");
 
@@ -974,15 +975,17 @@ impl Vm {
                 .unwrap_or_default(),
         )
         .map_err(StartMicroVmError::Vcpu)?;
-        // Recreate host-side devices and fresh vCPU objects without requiring
-        // a boot source. The snapshot supplies guest memory, the finalized
-        // kernel command line and all vCPU state before execution resumes.
+
+        // Recreate host-side devices and fresh vCPU objects without loading a
+        // kernel or constructing throwaway cold-boot register state. Guest
+        // memory and every vCPU register are replaced by the snapshot below.
         self.init_microvm_from_snapshot(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
+
         #[cfg(feature = "dbs-upcall")]
         self.init_upcall()?;
 
         info!(self.logger, "VM: restoring snapshot state");
-        self.restore_microvm(state_path, mem_path)
+        self.restore_microvm(state_path, mem_path, reset_vsock_pending)
             .map_err(|e| StartMicroVmError::RestoreMicroVm(e.to_string()))?;
 
         info!(self.logger, "VM: register events");
@@ -1131,6 +1134,7 @@ impl Vm {
         &mut self,
         state_path: &std::path::Path,
         mem_path: &std::path::Path,
+        reset_vsock_transport: bool,
     ) -> std::result::Result<(), crate::snapshot::SnapshotError> {
         use crate::snapshot::SnapshotError;
 
@@ -1146,7 +1150,12 @@ impl Vm {
             state => return Err(SnapshotError::InvalidState(format!("{state:?}"))),
         };
 
-        let save_result = self.save_microvm_paused(state_path, mem_path, msr_list.as_slice());
+        let save_result = self.save_microvm_paused(
+            state_path,
+            mem_path,
+            msr_list.as_slice(),
+            reset_vsock_transport,
+        );
         let resume_result = if resume_after_save {
             self.resume_all_vcpus_with_downtime()
         } else {
@@ -1186,6 +1195,7 @@ impl Vm {
         state_path: &std::path::Path,
         mem_path: &std::path::Path,
         msr_list: &[u32],
+        #[allow(unused_variables)] reset_vsock_transport: bool,
     ) -> std::result::Result<(), crate::snapshot::SnapshotError> {
         use crate::snapshot::{DeviceManagerState, MicrovmState, SnapshotError};
         use dbs_snapshot::Persist;
@@ -1247,7 +1257,11 @@ impl Vm {
         }
         #[cfg(feature = "virtio-vsock")]
         {
-            device_states.vsock = Some(self.device_manager.vsock_manager.save_state(false)?);
+            device_states.vsock = Some(
+                self.device_manager
+                    .vsock_manager
+                    .save_state(reset_vsock_transport)?,
+            );
         }
         #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
         {
@@ -1291,6 +1305,7 @@ impl Vm {
         &mut self,
         state_path: &std::path::Path,
         mem_path: &std::path::Path,
+        #[allow(unused_variables)] reset_vsock_pending: bool,
     ) -> std::result::Result<(), crate::snapshot::SnapshotError> {
         use crate::snapshot::MicrovmState;
         use dbs_snapshot::Persist;
@@ -1326,6 +1341,10 @@ impl Vm {
                 .restore_state(memory_state, &mut mem_file)?;
         }
 
+        // Restore vCPU/LAPIC state before device activation can replay an
+        // interrupt from a snapshotted virtio queue.
+        dbs_snapshot::Persist::restore_state(&mut *self.vcpu_manager()?, &state.vcpu_states, ())?;
+
         #[cfg(feature = "virtio-blk")]
         if let Some(block_state) = &state.device_states.block {
             self.device_manager
@@ -1342,7 +1361,7 @@ impl Vm {
         if let Some(vsock_state) = &state.device_states.vsock {
             self.device_manager
                 .vsock_manager
-                .restore_state(vsock_state, false)?;
+                .restore_state(vsock_state, reset_vsock_pending)?;
         }
         #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
         if let Some(fs_state) = &state.device_states.fs {
@@ -1354,8 +1373,6 @@ impl Vm {
         }
         // TODO: balloon, virtio-mem, vhost-net and vhost-user-net are not yet
         // snapshotted; kata-dragonball does not instantiate them.
-
-        dbs_snapshot::Persist::restore_state(&mut *self.vcpu_manager()?, &state.vcpu_states, ())?;
 
         // TODO(security): the guest's RNG/entropy state lives in the restored
         // memory, so every VM restored from the same template starts with
@@ -1548,7 +1565,7 @@ pub mod tests {
         }
         source.set_instance_state(InstanceState::Paused);
         source
-            .save_microvm(state_file.as_path(), memory_file.as_path())
+            .save_microvm(state_file.as_path(), memory_file.as_path(), false)
             .unwrap();
 
         let snapshot = MicrovmState::load_from_file(state_file.as_path()).unwrap();
@@ -1590,7 +1607,7 @@ pub mod tests {
             .init_microvm_from_snapshot(inspect_epoll, inspected_vm_as, TimestampUs::default())
             .unwrap();
         inspected
-            .restore_microvm(state_file.as_path(), memory_file.as_path())
+            .restore_microvm(state_file.as_path(), memory_file.as_path(), false)
             .unwrap();
         assert_eq!(
             inspected
@@ -1628,6 +1645,7 @@ pub mod tests {
                 Default::default(),
                 state_file.as_path(),
                 memory_file.as_path(),
+                false,
             )
             .unwrap();
 
