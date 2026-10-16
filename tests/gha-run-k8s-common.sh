@@ -251,14 +251,19 @@ function create_cluster() {
 }
 
 function install_bats() {
+	local bats_version
+	if command -v bats &>/dev/null && bats_version=$(bats --version); then
+		echo "${bats_version}"
+		if version_greater_than_equal "${bats_version#Bats }" "1.10.0"; then
+			return
+		fi
+	fi
+
 	source /etc/os-release
 	case "${ID}" in
 		ubuntu)
-			# Only jammy and older need bats fetched from somewhere else:
-			# their own universe carries one too old for these suites,
-			# while noble onwards already ships a new enough bats. Pulling
-			# noble's repo into a later release would be reaching backwards.
-			if dpkg --compare-versions "${VERSION_ID:-}" lt 24.04; then
+			# Only use the noble repository on Ubuntu 24.04.
+			if [[ "${VERSION_ID:-}" == "24.04" ]]; then
 				# Installing bats from the noble repo.
 				sudo apt install -y software-properties-common
 				sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
