@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::validate;
@@ -36,7 +36,7 @@ impl Args {
     /// Check the shim argument object is vaild or not.
     ///
     /// The id, namespace, address and publish_binary are mandatory for START, RUN and DELETE.
-    /// And bundle is mandatory for DELETE.
+    /// And bundle is mandatory for DELETE, though it may already have been removed.
     pub fn validate(&mut self, should_check_bundle: bool) -> Result<()> {
         if self.id.is_empty() || self.namespace.is_empty() || self.publish_binary.is_empty() {
             return Err(anyhow!(Error::ArgumentIsEmpty(format!(
@@ -54,9 +54,16 @@ impl Args {
                 return Err(anyhow!(Error::ArgumentIsEmpty("bundle".to_string())));
             }
 
-            let path = PathBuf::from(self.bundle.clone())
-                .canonicalize()
-                .map_err(|_| Error::InvalidArgument)?;
+            let path = match PathBuf::from(self.bundle.clone()).canonicalize() {
+                Ok(path) => path,
+                Err(err)
+                    if err.kind() == std::io::ErrorKind::NotFound
+                        && Path::new(&self.bundle).is_absolute() =>
+                {
+                    return Ok(());
+                }
+                Err(_) => return Err(Error::InvalidArgument.into()),
+            };
             let md = path
                 .metadata()
                 .map_err(|_| Error::InvalidArgument)
@@ -278,5 +285,30 @@ mod tests {
                 assert!(result.is_ok(), "{}", msg);
             }
         }
+    }
+
+    #[test]
+    fn test_args_missing_bundle() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut arg = Args {
+            id: "default_id".to_string(),
+            namespace: "default_namespace".to_string(),
+            publish_binary: "containerd".to_string(),
+            ..Default::default()
+        };
+
+        let missing = dir.path().join("removed-bundle");
+        arg.bundle = missing.to_str().unwrap().to_string();
+        arg.validate(true).unwrap();
+        assert_eq!(arg.bundle, missing.to_str().unwrap());
+
+        arg.bundle = "removed-bundle".to_string();
+        let err = arg.validate(true).unwrap_err();
+        assert_eq!(err.to_string(), Error::InvalidArgument.to_string());
+
+        let file = dir.path().join("file");
+        std::fs::write(&file, "").unwrap();
+        arg.bundle = file.to_str().unwrap().to_string();
+        arg.validate(true).unwrap_err();
     }
 }

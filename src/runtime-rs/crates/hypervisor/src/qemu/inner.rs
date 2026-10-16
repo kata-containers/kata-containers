@@ -16,8 +16,9 @@ use crate::{
 };
 
 use crate::utils::{
-    bytes_to_megs, create_dir_all_with_inherit_owner, enter_netns, get_jailer_root, megs_to_bytes,
-    set_process_credentials, uses_native_ccw_bus, vm_cleanup,
+    bytes_to_megs, check_unix_socket_path_len, create_dir_all_with_inherit_owner, enter_netns,
+    get_jailer_root, link_rootless_vmm_socket, megs_to_bytes, set_process_credentials,
+    uses_native_ccw_bus, vm_cleanup,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -37,7 +38,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fs;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -153,8 +154,14 @@ impl QemuInner {
             match device {
                 DeviceType::ShareFs(share_fs_dev) => {
                     if share_fs_dev.config.fs_type == "virtio-fs" {
+                        let mut sock_path = PathBuf::from(&share_fs_dev.config.sock_path);
+                        if is_rootless() {
+                            sock_path = link_rootless_vmm_socket(&self.id, &sock_path)
+                                .context("link rootless virtiofsd socket")?;
+                        }
+                        check_unix_socket_path_len(&sock_path)?;
                         cmdline.add_virtiofs_share(
-                            &share_fs_dev.config.sock_path,
+                            &sock_path.to_string_lossy(),
                             &share_fs_dev.config.mount_tag,
                             share_fs_dev.config.queue_size,
                         );
@@ -806,7 +813,7 @@ impl QemuInner {
             self.id.as_str(),
         ]
         .join("/");
-        vm_cleanup(&self.config, vm_path.as_str())
+        vm_cleanup(&self.config, &self.id, vm_path.as_str())
     }
 
     pub(crate) async fn resize_vcpu(

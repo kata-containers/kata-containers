@@ -5,11 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
-use crate::ch::utils::get_rootless_symlink_sandbox_jailer_root;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
-use crate::utils::create_dir_all_with_inherit_owner;
 use crate::utils::open_named_tuntap;
+use crate::utils::{check_unix_socket_path_len, link_rootless_vmm_socket};
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
@@ -40,7 +39,6 @@ use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::os::fd::AsRawFd;
 use std::os::fd::IntoRawFd;
-use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -388,49 +386,12 @@ impl CloudHypervisorInner {
                 DeviceType::ShareFs(dev) => {
                     let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
-                    let fs_cfg = if is_rootless() {
-                        // TODO: Replace this symlink workaround if a better approach for rootless socket paths appears.
-                        // In rootless mode the virtiofsd.sock lives under the rootless directory,
-                        // and its full path can exceed the 108-byte Unix domain socket limit.
-                        // To ensure the cloud-hypervisor VMM can connect to virtiofsd, create a
-                        // short symlink inside the rootless directory and point the VMM at it.
-                        let mut fs_cfg = FsConfig::try_from(settings)?;
-                        let rootless_symlink_sanbox_jailer_root =
-                            get_rootless_symlink_sandbox_jailer_root(self.id.as_str());
-
-                        create_dir_all_with_inherit_owner(
-                            rootless_symlink_sanbox_jailer_root.as_str(),
-                            0x750,
-                        )
-                        .map_err(|e| {
-                            anyhow!(
-                                "failed to create rootless sharefs symlink jailer root dir: {}",
-                                e
-                            )
-                        })?;
-                        let virtiofsd_name = fs_cfg.socket.file_name().ok_or_else(|| {
-                            anyhow!(
-                                "failed to get virtiofsd socket file name from path: {:?}",
-                                fs_cfg.socket
-                            )
-                        })?;
-                        let virtiofsd_symlink_path =
-                            PathBuf::from(rootless_symlink_sanbox_jailer_root.as_str())
-                                .join(virtiofsd_name);
-
-                        symlink(&fs_cfg.socket, &virtiofsd_symlink_path).map_err(|e| {
-                            anyhow!(
-                                "failed to create symlink for rootless sharefs socket: {}",
-                                e
-                            )
-                        })?;
-
-                        fs_cfg.socket = virtiofsd_symlink_path;
-
-                        fs_cfg
-                    } else {
-                        FsConfig::try_from(settings)?
-                    };
+                    let mut fs_cfg = FsConfig::try_from(settings)?;
+                    if is_rootless() {
+                        fs_cfg.socket = link_rootless_vmm_socket(&self.id, &fs_cfg.socket)
+                            .context("link rootless virtiofsd socket")?;
+                    }
+                    check_unix_socket_path_len(&fs_cfg.socket)?;
 
                     shared_fs_devices.push(fs_cfg);
                 }
