@@ -22,11 +22,11 @@ use crate::{
         MemHotplugByProbeRequest, MemoryData, MemoryStats, MetricsResponse, NetworkStats,
         OnlineCPUMemRequest, PidsStats, ReadStreamRequest, ReadStreamResponse,
         RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
-        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SharedMount,
-        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
-        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-        VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-        WriteStreamRequest,
+        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SetSandboxHostsRequest,
+        SharedMount, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
+        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
+        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+        WaitProcessRequest, WriteStreamRequest,
     },
     GetDiagnosticDataRequest, GetDiagnosticDataResponse, GetGuestDetailsRequest, OomEventResponse,
     SetPolicyRequest, WaitProcessResponse, WriteStreamResponse,
@@ -731,6 +731,15 @@ impl From<SetGuestDateTimeRequest> for agent::SetGuestDateTimeRequest {
         Self {
             Sec: from.sec,
             Usec: from.usec,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<SetSandboxHostsRequest> for agent::SetSandboxHostsRequest {
+    fn from(from: SetSandboxHostsRequest) -> Self {
+        Self {
+            hosts: from.hosts,
             ..Default::default()
         }
     }

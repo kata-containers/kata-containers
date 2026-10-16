@@ -12,6 +12,7 @@ use json_patch::{patch, Patch};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -39,6 +40,32 @@ pub struct Volumes {
     pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
     pub image_volume: ImageVolume,
+    #[serde(default)]
+    pub erofs: Option<ErofsVolume>,
+}
+
+/// How runtime-rs presents mounts when its erofs_volumes experimental feature
+/// is on, loaded from genpolicy-settings.json and used only when
+/// kata_config.erofs_volumes is set.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ErofsVolume {
+    /// Prefix of the guest directory an image is mounted on, which the runtime
+    /// completes with the destination's file name.
+    pub mount_point: String,
+    /// Anchored regexes, in order, for the options of every image storage.
+    pub options: Vec<String>,
+    /// Appended to options for Kubernetes content volumes.
+    pub content_options: Vec<String>,
+    /// Appended last, to describe the dm-verity hash tree.
+    pub verity_options: Vec<String>,
+    /// Settings mounts that are content volumes even though the pod YAML
+    /// does not list them, such as the service account token.
+    pub content_mounts: Vec<String>,
+    /// Destinations the agent serves from one sandbox-scoped guest file.
+    pub sandbox_files: BTreeMap<String, String>,
+    /// Kubelet's host path for the termination log, which the agent replaces
+    /// with a file of its own and so is never read from the guest.
+    pub termination_log_source: String,
 }
 
 /// EmptyDir volume settings loaded from genpolicy-settings.json.
@@ -83,6 +110,8 @@ pub struct ImageVolume {
 pub struct KataConfig {
     pub oci_version: String,
     pub enable_configmap_secret_storages: bool,
+    #[serde(default)]
+    pub erofs_volumes: bool,
 }
 
 /// Drop-ins in genpolicy-settings.d/ must be RFC 6902 JSON Patch documents (JSON array of
@@ -154,6 +183,10 @@ impl Settings {
     }
 
     fn validate_settings(settings: &Self) {
+        if settings.kata_config.erofs_volumes && settings.volumes.erofs.is_none() {
+            panic!("<kata_config.erofs_volumes> requires <volumes.erofs> settings.");
+        }
+
         if let Some(commands) = &settings.request_defaults.ExecProcessRequest.commands {
             if !commands.is_empty() {
                 panic!("The settings field <request_defaults.ExecProcessRequest.commands> has been deprecated. \

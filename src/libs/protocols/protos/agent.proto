@@ -66,6 +66,7 @@ service AgentService {
 
 	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
 	rpc CreateSandbox(CreateSandboxRequest) returns (google.protobuf.Empty);
+	rpc SetSandboxHosts(SetSandboxHostsRequest) returns (google.protobuf.Empty);
 	rpc DestroySandbox(DestroySandboxRequest) returns (google.protobuf.Empty);
 	rpc OnlineCPUMem(OnlineCPUMemRequest) returns (google.protobuf.Empty);
 	rpc ReseedRandomDev(ReseedRandomDevRequest) returns (google.protobuf.Empty);
@@ -324,6 +325,17 @@ message CreateSandboxRequest {
 	string guest_hook_path = 6;
 	// This field is the list of kernel modules to be loaded in the guest kernel.
 	repeated KernelModule kernel_modules = 7;
+}
+
+message SetSandboxHostsRequest {
+	// The lines of the pod's hosts file, in order.
+	//
+	// The agent writes them to a sandbox-scoped file that every container in
+	// the pod shares, which is how the host presents it too. This needs an
+	// RPC of its own because, unlike hostname and dns, it cannot ride
+	// CreateSandboxRequest: the host only names the file in the container
+	// spec, by which point the sandbox already exists.
+	repeated string hosts = 1;
 }
 
 message DestroySandboxRequest {

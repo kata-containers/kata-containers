@@ -355,7 +355,8 @@ fn get_config_map_mount_and_storage(
     let settings_config_map = &settings_volumes.configMap;
     debug!("Settings configMap: {:?}", settings_config_map);
 
-    if settings.kata_config.enable_configmap_secret_storages {
+    if settings.kata_config.enable_configmap_secret_storages && !settings.kata_config.erofs_volumes
+    {
         let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let mount_path_str = OsString::from(mount_path).into_string().unwrap();
 
@@ -493,6 +494,104 @@ fn get_downward_api_mount(yaml_mount: &pod::VolumeMount, p_mounts: &mut Vec<poli
             source,
             options,
         });
+    }
+}
+
+/// runtime-rs with erofs_volumes on sends nothing over copy_file: read-only
+/// volumes arrive as EROFS images on block devices, and the sandbox-scoped
+/// files and the termination log come from files the agent wrote itself.
+pub fn use_erofs_volumes(
+    settings: &settings::Settings,
+    p_mounts: &mut [policy::KataMount],
+    storages: &mut Vec<agent::Storage>,
+    yaml_container: &pod::Container,
+    yaml_volumes: &Option<Vec<volume::Volume>>,
+) {
+    let erofs = settings
+        .volumes
+        .erofs
+        .as_ref()
+        .expect("erofs_volumes requires volumes.erofs settings");
+
+    let termination_log = yaml_container
+        .terminationMessagePath
+        .as_deref()
+        .unwrap_or("/dev/termination-log");
+
+    let mut content_mounts = erofs.content_mounts.clone();
+    if let (Some(volumes), Some(mounts)) = (yaml_volumes, &yaml_container.volumeMounts) {
+        for mount in mounts {
+            if volumes
+                .iter()
+                .any(|v| v.name == mount.name && is_content_volume(v))
+            {
+                content_mounts.push(mount.mountPath.clone());
+            }
+        }
+    }
+
+    for mount in p_mounts.iter_mut() {
+        if let Some(source) = erofs.sandbox_files.get(&mount.destination) {
+            mount.source.clone_from(source);
+        } else if mount.destination == termination_log {
+            mount.source.clone_from(&erofs.termination_log_source);
+        } else if mount.type_ == "bind"
+            && mount.source.starts_with("$(sfprefix)")
+            && mount.options.iter().any(|o| o == "ro")
+        {
+            let content = content_mounts.contains(&mount.destination);
+            storages.push(to_erofs_mount(erofs, mount, content));
+        }
+    }
+}
+
+fn is_content_volume(volume: &volume::Volume) -> bool {
+    volume.configMap.is_some()
+        || volume.secret.is_some()
+        || volume.projected.is_some()
+        || volume.downwardAPI.is_some()
+}
+
+fn to_erofs_mount(
+    erofs: &settings::ErofsVolume,
+    mount: &mut policy::KataMount,
+    content: bool,
+) -> agent::Storage {
+    let name = Path::new(&mount.destination)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let name = regex::escape(name);
+
+    let mut options = erofs.options.clone();
+    if content {
+        options.extend(erofs.content_options.iter().cloned());
+    }
+
+    // The image root is always a directory, so a file volume is found one
+    // level inside the mount point.
+    mount.source = format!("{}{name}(/{name})?$", erofs.mount_point);
+    mount.options.extend(options.iter().cloned());
+
+    let mut storage_options: Vec<String> = options
+        .iter()
+        .map(|o| format!("^{}$", regex::escape(o)))
+        .collect();
+    storage_options.extend(erofs.verity_options.iter().cloned());
+
+    // Left empty, the driver and source are the runtime's to pick: whether the
+    // image is on virtio-blk or virtio-scsi, and at which address.
+    agent::Storage {
+        driver: String::new(),
+        driver_options: Vec::new(),
+        source: String::new(),
+        fstype: "erofs".to_string(),
+        options: storage_options,
+        mount_point: format!("{}{name}$", erofs.mount_point),
+        fs_group: protobuf::MessageField::none(),
+        shared: false,
+        special_fields: ::protobuf::SpecialFields::new(),
     }
 }
 
