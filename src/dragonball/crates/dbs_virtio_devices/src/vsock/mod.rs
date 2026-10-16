@@ -32,6 +32,8 @@ mod defs {
     pub const EVQ_EVENT: u32 = 2;
     /// Backend event: the backend needs a kick.
     pub const BACKEND_EVENT: u32 = 3;
+    /// Epoll-worker dispatch barrier for restored vsock readiness.
+    pub const HANDLER_READY_EVENT: u32 = 4;
 
     /// Number of virtio queues.
     pub const NUM_QUEUES: usize = 3;
@@ -105,6 +107,9 @@ pub enum VsockError {
     /// vsock backend error
     #[error("Vsock backend error: {0}")]
     Backend(#[source] std::io::Error),
+    /// Failed to create the restored-handler readiness barrier.
+    #[error("Vsock handler readiness event error: {0}")]
+    HandlerReadyEvent(#[source] std::io::Error),
     /// The vsock data/buffer virtio descriptor is expected, but missing.
     #[error("The vsock data/buffer virtio descriptor is expected, but missing")]
     BufDescMissing,
@@ -185,6 +190,7 @@ pub trait VsockChannel {
 mod tests {
     use std::ops::Deref;
     use std::os::unix::io::{AsRawFd, RawFd};
+    use std::sync::atomic::AtomicU32;
     use std::sync::Arc;
 
     use dbs_device::resources::DeviceResources;
@@ -303,16 +309,6 @@ mod tests {
     }
 
     impl VsockGenericMuxer for TestMuxer {
-        fn local_port_watermark(&self) -> u32 {
-            0
-        }
-        fn restore_local_port_watermark(&mut self, _watermark: u32) {}
-        fn set_local_port_watermark_observer(
-            &mut self,
-            _observer: std::sync::Arc<std::sync::atomic::AtomicU32>,
-        ) {
-        }
-
         fn add_backend(
             &mut self,
             _backend: Box<dyn VsockBackend>,
@@ -320,6 +316,14 @@ mod tests {
         ) -> MuxerResult<()> {
             Ok(())
         }
+
+        fn local_port_watermark(&self) -> u32 {
+            0
+        }
+
+        fn restore_local_port_watermark(&mut self, _watermark: u32) {}
+
+        fn set_local_port_watermark_observer(&mut self, _observer: Arc<AtomicU32>) {}
     }
 
     pub struct TestContext {

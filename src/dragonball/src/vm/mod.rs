@@ -1241,7 +1241,7 @@ impl Vm {
         }
         #[cfg(feature = "virtio-vsock")]
         {
-            device_states.vsock = Some(self.device_manager.vsock_manager.save_state(())?);
+            device_states.vsock = Some(self.device_manager.vsock_manager.save_state(false)?);
         }
         #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
         {
@@ -1336,7 +1336,7 @@ impl Vm {
         if let Some(vsock_state) = &state.device_states.vsock {
             self.device_manager
                 .vsock_manager
-                .restore_state(vsock_state, ())?;
+                .restore_state(vsock_state, false)?;
         }
         #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
         if let Some(fs_state) = &state.device_states.fs {
