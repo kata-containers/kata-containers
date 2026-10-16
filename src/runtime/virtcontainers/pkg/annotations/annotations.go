@@ -351,6 +351,12 @@ const (
 const (
 	kataAnnotContainerResourcePrefix = kataAnnotContainerPrefix + "resource."
 
+	// ContainerHugePagesUsedBy is a pod annotation, "name=guest,name=host", that
+	// picks per container who uses its hugepages-<size> of the VM's page size
+	// as huge pages in a guest sized from the pod. Containers it does not name
+	// take the runtime class's hugepages_used_by.
+	ContainerHugePagesUsedBy = kataAnnotContainerPrefix + "hugepages_used_by"
+
 	// ContainerResourcesSwappiness is a container annotation to specify the Resources.Memory.Swappiness
 	ContainerResourcesSwappiness = kataAnnotContainerResourcePrefix + "swappiness"
 

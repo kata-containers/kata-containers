@@ -65,7 +65,7 @@ func TestHandleHugepages(t *testing.T) {
 		mounts = append(mounts, mount)
 	}
 
-	hugepages, err := k.handleHugepages(mounts, hugepageLimits)
+	hugepages, err := k.handleHugepages(mounts, hugepageLimits, nil)
 
 	assert.NoError(err, "Unable to handle hugepages %v", hugepageLimits)
 	assert.NotNil(hugepages)

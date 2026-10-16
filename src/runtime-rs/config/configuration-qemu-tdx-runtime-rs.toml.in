@@ -317,6 +317,12 @@ reclaim_guest_freed_memory = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Sizing a huge page backed guest from the pod's hugepages-<size> reservation
+# is not supported by runtime-rs yet; setting this to true is refused at
+# startup. Use the Go runtime for such a runtime class.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable vhost-user storage device, default false
 # Enabling this will result in some Linux reserved block type
 # major range 240-254 being chosen to represent vhost-user devices.

@@ -805,6 +805,17 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
+	// HugePagesPodSizing sizes a huge page backed VM from the pod's huge page
+	// reservation and bounds its containers by their reservations. Off, the VM
+	// is default_memory plus the pod's memory limits.
+	HugePagesPodSizing bool
+
+	// HugePagesUsedBy is who uses a container's hugepages-<size> of the VM's
+	// page size as huge pages when HugePagesPodSizing is set: "host" (default)
+	// or "guest". The pod annotation io.katacontainers.container.hugepages_used_by
+	// overrides it per container.
+	HugePagesUsedBy string
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 

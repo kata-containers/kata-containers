@@ -239,6 +239,12 @@ enable_mem_prealloc = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Sizing a huge page backed guest from the pod's hugepages-<size> reservation
+# is not supported by runtime-rs yet; setting this to true is refused at
+# startup. Use the Go runtime for such a runtime class.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable running clh VMM as a non-root user.
 # By default clh VMM run as root. When this is set to true, clh VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.

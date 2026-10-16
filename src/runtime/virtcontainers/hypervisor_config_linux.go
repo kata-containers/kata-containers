@@ -36,6 +36,10 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		return err
 	}
 
+	if !validHugePagesUsedBy(conf.HugePagesUsedBy) {
+		return fmt.Errorf("hugepages_used_by %q is not %s or %s", conf.HugePagesUsedBy, HugePagesUsedByHost, HugePagesUsedByGuest)
+	}
+
 	if conf.NumVCPUsF == 0 {
 		conf.NumVCPUsF = defaultVCPUs
 	}

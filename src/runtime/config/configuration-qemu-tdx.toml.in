@@ -309,6 +309,27 @@ reclaim_guest_freed_memory = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Size a huge page backed VM from the pod's hugepages-<size> reservation
+# rather than from default_memory plus the pod's memory limits, and bound each
+# container inside the guest by its own reservation, unless hugepages_used_by
+# keeps the container's huge pages for the guest. Needs enable_hugepages,
+# static_sandbox_resource_mgmt and sandbox_cgroup_only. Give it a runtime class
+# of its own, whose pod overhead covers the host processes in memory.
+# Default false
+enable_hugepages_pod_sizing = false
+
+# Who uses a container's hugepages-<size> of the VM's page size as huge pages
+# when enable_hugepages_pod_sizing is set. "host": they back the VM, and the
+# container gets them as its guest memory ceiling, with its memory limit unused
+# in the guest. "guest": they stay huge pages inside the guest, as on runc, and
+# the container's memory limit is its guest memory ceiling. The pod annotation
+# io.katacontainers.container.hugepages_used_by, "name=guest,name=host", picks
+# per container. A container that reserves none of its own is host. A huge page
+# backed emptyDir is only a path to the guest's huge pages and is refused on a
+# host container.
+# Default "host"
+hugepages_used_by = "host"
+
 # Enable vhost-user storage device, default false
 # Enabling this will result in some Linux reserved block type
 # major range 240-254 being chosen to represent vhost-user devices.

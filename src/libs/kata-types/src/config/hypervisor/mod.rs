@@ -991,6 +991,10 @@ pub struct MemoryInfo {
     /// This value is used by runtime-rs static sandbox sizing as:
     /// - if no memory limits are provided: use `default_memory`
     /// - if memory limits are provided: use `overhead_memory + workload_memory`
+    /// - if the guest RAM comes from the hugetlb pool (`enable_hugepages` with
+    ///   `hugepage_type = "hugetlbfs"`) and `enable_hugepages_pod_sizing` is
+    ///   set: use `default_memory` whatever the limits are; the pod reserves
+    ///   that memory as `hugepages-<size>`
     #[serde(default)]
     pub overhead_memory: u32,
 
@@ -1014,6 +1018,12 @@ pub struct MemoryInfo {
     /// Use huge pages for VM RAM.
     #[serde(default)]
     pub enable_hugepages: bool,
+
+    /// Sizes a guest backed by hugetlbfs from the pod's `hugepages-<size>`
+    /// reservation in the Go runtime. runtime-rs refuses it until it follows
+    /// the same rules.
+    #[serde(default)]
+    pub enable_hugepages_pod_sizing: bool,
 
     /// Huge page type:
     /// - `hugetlbfs`
@@ -1213,6 +1223,14 @@ impl MemoryInfo {
         if self.memory_slots == 0 {
             return Err(std::io::Error::other(
                 "Configured memory slots for guest VM are zero",
+            ));
+        }
+        // runtime-rs does not size the guest from the pod or bound containers
+        // the way the Go runtime does, so the key is refused rather than given
+        // a different meaning here.
+        if self.enable_hugepages_pod_sizing {
+            return Err(std::io::Error::other(
+                "enable_hugepages_pod_sizing is not supported by runtime-rs yet: use the Go runtime for this runtime class",
             ));
         }
 
@@ -1983,6 +2001,20 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_memory_info_refuses_pod_sizing() {
+        let mut mem = MemoryInfo {
+            default_memory: 2048,
+            memory_slots: 10,
+            ..Default::default()
+        };
+        assert!(mem.validate().is_ok());
+
+        mem.enable_hugepages_pod_sizing = true;
+        let err = mem.validate().unwrap_err();
+        assert!(err.to_string().contains("not supported by runtime-rs"));
     }
 
     #[test]
