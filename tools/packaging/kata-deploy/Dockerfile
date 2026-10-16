@@ -17,6 +17,7 @@ RUN apk add --no-cache zstd
 
 COPY ${KATA_ARTIFACTS_DIR}/kata-static-*.tar.zst ${DESTINATION}/tarballs/
 COPY ${KATA_ARTIFACTS_DIR}/kata-deploy-static-*.tar.zst ${DESTINATION}/tarballs/
+COPY ${KATA_ARTIFACTS_DIR}/VERSION ${DESTINATION}/
 COPY tools/packaging/kata-deploy/shim-components.json ${DESTINATION}/
 COPY versions.yaml ${DESTINATION}/
 
