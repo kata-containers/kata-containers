@@ -47,6 +47,7 @@ pub use crate::device_manager::net_dev_mgr::{
 };
 #[cfg(feature = "virtio-rng")]
 pub use crate::device_manager::rng_dev_mgr::{RngDeviceConfigInfo, RngDeviceError};
+
 #[cfg(feature = "host-device")]
 use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError};
 #[cfg(feature = "virtio-vsock")]
@@ -182,6 +183,10 @@ pub enum VmmAction {
 
     /// Launch the microVM. This action can only be called before the microVM has booted.
     StartMicroVm,
+
+    /// Launch the microVM used to create a reusable template. The template
+    /// must not capture an established host upcall connection.
+    StartMicroVmForTemplate,
 
     /// Shutdown the vmicroVM. This action can only be called after the microVM has booted.
     /// When vmm is used as the crate by the other process, which is need to
@@ -386,7 +391,8 @@ impl VmmService {
             VmmAction::ConfigureBootSource(boot_source_body) => {
                 self.configure_boot_source(vmm, boot_source_body)
             }
-            VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr),
+            VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr, true),
+            VmmAction::StartMicroVmForTemplate => self.start_microvm(vmm, event_mgr, false),
             VmmAction::ShutdownMicroVm => self.shutdown_microvm(vmm),
             VmmAction::PauseMicroVm => self.pause_microvm(vmm),
             VmmAction::ResumeMicroVm => self.resume_microvm(vmm),
@@ -533,7 +539,12 @@ impl VmmService {
     }
 
     #[instrument(skip(self, event_mgr))]
-    fn start_microvm(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> VmmRequestResult {
+    fn start_microvm(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        initialize_upcall: bool,
+    ) -> VmmRequestResult {
         use self::StartMicroVmError::MicroVMAlreadyRunning;
         use self::VmmActionError::StartMicroVm;
 
@@ -543,7 +554,7 @@ impl VmmService {
             return Err(StartMicroVm(MicroVMAlreadyRunning));
         }
 
-        vm.start_microvm(event_mgr, seccomp_filters)
+        vm.start_microvm(event_mgr, seccomp_filters, initialize_upcall)
             .map(|_| VmmData::Empty)
             .map_err(StartMicroVm)
     }
