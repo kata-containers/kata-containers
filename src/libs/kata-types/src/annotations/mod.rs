@@ -177,6 +177,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FIRMWARE_HASH: &str =
 /// A sandbox annotation to specify cpu specific features.
 pub const KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES: &str =
     "io.katacontainers.config.hypervisor.cpu_features";
+/// A sandbox annotation to specify SEV-SNP guest CPU model.
+pub const KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL: &str =
+    "io.katacontainers.config.hypervisor.cpu_model";
 /// A sandbox annotation for passing the default vCPUs assigned for a VM by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_vcpus";
@@ -678,6 +681,9 @@ impl Annotation {
                     // Hypervisor CPU related annotations
                     KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES => {
                         hv.cpu_info.cpu_features = value.to_string();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL => {
+                        hv.cpu_info.cpu_model = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS => match self.get_value::<f32>(key) {
                         Ok(num_cpus) => {

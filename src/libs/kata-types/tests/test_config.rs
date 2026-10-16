@@ -10,7 +10,8 @@ mod tests {
         KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE,
         KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE,
         KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
-        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
+        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
         KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS,
@@ -574,5 +575,28 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
         assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_cpu_model_annotation() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL.to_string(),
+            "EPYC-Genoa".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        if let Some(hv) = config.hypervisor.get("qemu") {
+            assert_eq!(hv.cpu_info.cpu_model, "EPYC-Genoa");
+        }
     }
 }

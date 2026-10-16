@@ -125,6 +125,10 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
 
+# CPU model
+# the SEV-SNP guest CPU model to pass to QEMU
+cpu_model = "EPYC-Milan"
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores

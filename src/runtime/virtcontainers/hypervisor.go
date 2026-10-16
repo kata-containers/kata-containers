@@ -520,6 +520,9 @@ type HypervisorConfig struct {
 	// CPUFeatures are cpu specific features
 	CPUFeatures string
 
+	// CPUModel is the CPU model to pass to the SEV-SNP guest CPU
+	CPUModel string
+
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 

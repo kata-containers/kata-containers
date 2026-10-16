@@ -739,6 +739,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.MachineType] = "q35"
 	ocispec.Annotations[vcAnnotations.MachineAccelerators] = "nofw"
 	ocispec.Annotations[vcAnnotations.CPUFeatures] = "pmu=off"
+	ocispec.Annotations[vcAnnotations.CPUModel] = "EPYC-Milan"
 	ocispec.Annotations[vcAnnotations.DisableVhostNet] = "true"
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
@@ -782,6 +783,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.HypervisorMachineType, "q35")
 	assert.Equal(sbConfig.HypervisorConfig.MachineAccelerators, "nofw")
 	assert.Equal(sbConfig.HypervisorConfig.CPUFeatures, "pmu=off")
+	assert.Equal(sbConfig.HypervisorConfig.CPUModel, "EPYC-Milan")
 	assert.Equal(sbConfig.HypervisorConfig.DisableVhostNet, true)
 	assert.Equal(sbConfig.HypervisorConfig.GuestHookPath, "/usr/bin/")
 	assert.Equal(sbConfig.HypervisorConfig.DisableImageNvdimm, true)

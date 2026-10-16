@@ -94,6 +94,9 @@ const (
 	// CPUFeatures is a sandbox annotation to specify cpu specific features.
 	CPUFeatures = kataAnnotHypervisorPrefix + "cpu_features"
 
+	// CPUModel is a sandbox annotation to specify the SEV-SNP guest CPU model.
+	CPUModel = kataAnnotHypervisorPrefix + "cpu_model"
+
 	// DisableVhostNet is a sandbox annotation to specify if vhost-net is not available on the host.
 	DisableVhostNet = kataAnnotHypervisorPrefix + "disable_vhost_net"
 

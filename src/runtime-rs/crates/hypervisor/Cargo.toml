@@ -37,7 +37,7 @@ serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 thiserror = { workspace = true }
-tokio = { features = ["fs", "io-util", "process", "sync"], workspace = true }
+tokio = { features = ["fs", "io-util", "process", "sync", "time"], workspace = true }
 tracing = { workspace = true }
 ttrpc = { features = ["async"], workspace = true }
 virtio-bindings = { workspace = true }
