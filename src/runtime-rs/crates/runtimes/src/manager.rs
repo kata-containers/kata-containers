@@ -467,6 +467,7 @@ impl RuntimeHandlerManager {
             dns,
             hostname: spec.hostname().clone().unwrap_or_default(),
             network_env,
+            cgroup_parent: None,
             annotations: spec.annotations().clone().unwrap_or_default(),
             hooks: spec.hooks().clone(),
             state: state.clone(),
