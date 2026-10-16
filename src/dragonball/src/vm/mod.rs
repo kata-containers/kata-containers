@@ -823,7 +823,11 @@ impl Vm {
         &mut self,
         event_mgr: &mut EventManager,
         seccomp_filters: HashMap<String, BpfProgram>,
+        initialize_upcall: bool,
     ) -> std::result::Result<(), StartMicroVmError> {
+        #[cfg(not(feature = "dbs-upcall"))]
+        let _ = initialize_upcall;
+
         info!(self.logger, "VM: received instance start command");
 
         if let Some(process_seccomp_filter) = seccomp_filters.get(ALL_THREADS) {
@@ -884,7 +888,9 @@ impl Vm {
         self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
         self.init_configure_system(&vm_as)?;
         #[cfg(feature = "dbs-upcall")]
-        self.init_upcall()?;
+        if initialize_upcall {
+            self.init_upcall()?;
+        }
 
         info!(self.logger, "VM: register events");
         self.register_events(event_mgr)?;

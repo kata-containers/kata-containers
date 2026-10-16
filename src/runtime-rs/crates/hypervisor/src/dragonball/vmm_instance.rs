@@ -184,6 +184,12 @@ impl VmmInstance {
         Ok(())
     }
 
+    pub fn instance_start_for_template(&self) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::StartMicroVmForTemplate))
+            .context("Failed to start template MicroVm")?;
+        Ok(())
+    }
+
     /// Start the microVM by restoring it from a snapshot (VM template)
     /// instead of cold booting.
     #[cfg(target_arch = "x86_64")]
