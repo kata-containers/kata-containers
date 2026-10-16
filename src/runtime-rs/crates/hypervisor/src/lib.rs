@@ -91,6 +91,8 @@ const SHMEM: &str = "shmem";
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 const HUGE_SHMEM: &str = "hugeshmem";
+#[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
+const ANON: &str = "anon";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";
