@@ -790,9 +790,15 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 		}
 	}
 
+	expectedSharedFS := config.NoSharedFS
+
 	config, err := newFirecrackerHypervisorConfig(hypervisor)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if config.SharedFS != expectedSharedFS {
+		t.Errorf("Expected shared fs %v, got %v", expectedSharedFS, config.SharedFS)
 	}
 
 	if config.HypervisorPath != hypervisor.Path {

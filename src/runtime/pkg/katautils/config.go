@@ -906,6 +906,9 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableAnnotations:     h.EnableAnnotations,
 		DisableSeLinux:        h.DisableSeLinux,
 		DisableGuestSeLinux:   true, // Guest SELinux is not supported in Firecracker
+		// Firecracker has no shared fs; files are copied into the guest
+		// and must be kept in sync by the file event watcher.
+		SharedFS: config.NoSharedFS,
 	}, nil
 }
 
