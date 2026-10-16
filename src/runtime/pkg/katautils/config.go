@@ -15,6 +15,7 @@ import (
 	"reflect"
 	goruntime "runtime"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -32,6 +33,8 @@ import (
 
 const (
 	defaultHypervisor = vc.QemuHypervisor
+
+	maxGuestTimeSyncInterval = uint64((1<<63 - 1) / int64(time.Second))
 )
 
 // The TOML configuration file contains a number of sections (or
@@ -207,6 +210,7 @@ type runtime struct {
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 	EmptyDirMode              string   `toml:"emptydir_mode"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
+	GuestTimeSyncInterval     uint64   `toml:"guest_time_sync_interval"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
 	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
@@ -1555,6 +1559,11 @@ func updateRuntimeConfigRuntime(configPath string, tomlConf tomlConfig, config *
 		return fmt.Errorf("%v: %v", configPath, err)
 	}
 	config.EmptyDirMode = emptyDirMode
+	if tomlConf.Runtime.GuestTimeSyncInterval > maxGuestTimeSyncInterval {
+		return fmt.Errorf("%v: guest_time_sync_interval %d exceeds maximum %d seconds",
+			configPath, tomlConf.Runtime.GuestTimeSyncInterval, maxGuestTimeSyncInterval)
+	}
+	config.GuestTimeSyncInterval = tomlConf.Runtime.GuestTimeSyncInterval
 
 	return nil
 }

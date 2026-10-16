@@ -23,6 +23,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -229,6 +230,244 @@ func TestConsoleWatcherStopCancelsConnect(t *testing.T) {
 	start := time.Now()
 	watcher.stop()
 	assert.Less(t, time.Since(start), time.Second)
+}
+
+type guestTimeSyncTestAgent struct {
+	*mockAgent
+	calls       chan time.Time
+	failures    int
+	block       bool
+	callMutex   sync.Mutex
+	callStart   chan struct{}
+	callCancel  chan struct{}
+	allowReturn chan struct{}
+	agentStop   chan bool
+}
+
+func (a *guestTimeSyncTestAgent) setGuestDateTime(ctx context.Context, now time.Time) error {
+	a.calls <- now
+
+	a.callMutex.Lock()
+	if a.failures > 0 {
+		a.failures--
+		a.callMutex.Unlock()
+		return fmt.Errorf("guest time sync failed")
+	}
+	a.callMutex.Unlock()
+
+	if a.block {
+		close(a.callStart)
+		<-ctx.Done()
+		close(a.callCancel)
+		if a.allowReturn != nil {
+			<-a.allowReturn
+		}
+		return ctx.Err()
+	}
+
+	return nil
+}
+
+func (a *guestTimeSyncTestAgent) stopSandbox(context.Context, *Sandbox) error {
+	if a.agentStop != nil {
+		canceled := false
+		select {
+		case <-a.callCancel:
+			canceled = true
+		default:
+		}
+		a.agentStop <- canceled
+	}
+	return nil
+}
+
+func TestGuestTimeSyncRetriesAndStops(t *testing.T) {
+	testAgent := &guestTimeSyncTestAgent{
+		mockAgent: &mockAgent{},
+		calls:     make(chan time.Time, 10),
+		failures:  1,
+	}
+	sandbox := &Sandbox{
+		id:    testSandboxID,
+		agent: testAgent,
+	}
+
+	generation := sandbox.beginGuestTimeSyncStart()
+	sandbox.startGuestTimeSync(generation, 10*time.Millisecond)
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-testAgent.calls:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for guest time synchronization")
+		}
+	}
+
+	sandbox.stopGuestTimeSync()
+
+	for len(testAgent.calls) > 0 {
+		<-testAgent.calls
+	}
+	select {
+	case <-testAgent.calls:
+		t.Fatal("guest time synchronization continued after stop")
+	case <-time.After(30 * time.Millisecond):
+	}
+}
+
+func TestFailedVMStartCleanupStopsGuestTimeSync(t *testing.T) {
+	testAgent := &guestTimeSyncTestAgent{
+		mockAgent:  &mockAgent{},
+		calls:      make(chan time.Time, 1),
+		block:      true,
+		callStart:  make(chan struct{}),
+		callCancel: make(chan struct{}),
+		agentStop:  make(chan bool, 1),
+	}
+	sandbox := &Sandbox{
+		id:    testSandboxID,
+		agent: testAgent,
+	}
+
+	generation := sandbox.beginGuestTimeSyncStart()
+	sandbox.startGuestTimeSync(generation, 10*time.Millisecond)
+
+	select {
+	case <-testAgent.callStart:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for guest time synchronization")
+	}
+
+	sandbox.cleanupFailedVMStart(context.Background())
+
+	select {
+	case <-testAgent.callCancel:
+	case <-time.After(time.Second):
+		t.Fatal("in-flight guest time synchronization was not canceled")
+	}
+
+	select {
+	case canceled := <-testAgent.agentStop:
+		assert.True(t, canceled, "agent stopped before guest time synchronization exited")
+	case <-time.After(time.Second):
+		t.Fatal("agent was not stopped during failed VM start cleanup")
+	}
+}
+
+func TestGuestTimeSyncStopPreventsLateStartAndAllowsRestart(t *testing.T) {
+	testAgent := &guestTimeSyncTestAgent{
+		mockAgent: &mockAgent{},
+		calls:     make(chan time.Time, 1),
+	}
+	sandbox := &Sandbox{
+		id:    testSandboxID,
+		agent: testAgent,
+		state: types.SandboxState{State: types.StateReady},
+	}
+
+	staleGeneration := sandbox.beginGuestTimeSyncStart()
+	sandbox.stopGuestTimeSync()
+	sandbox.startGuestTimeSync(staleGeneration, 10*time.Millisecond)
+	assert.Nil(t, sandbox.guestTimeSyncCancel)
+
+	restartGeneration := sandbox.beginGuestTimeSyncStart()
+	sandbox.startGuestTimeSync(restartGeneration, 10*time.Millisecond)
+	assert.NotNil(t, sandbox.guestTimeSyncCancel)
+	firstDone := sandbox.guestTimeSyncDone
+
+	sandbox.startGuestTimeSync(restartGeneration, 10*time.Millisecond)
+	assert.Equal(t, firstDone, sandbox.guestTimeSyncDone)
+
+	sandbox.stopGuestTimeSync()
+}
+
+func TestGuestTimeSyncStopWaitsOutsideLifecycleLock(t *testing.T) {
+	testAgent := &guestTimeSyncTestAgent{
+		mockAgent:   &mockAgent{},
+		calls:       make(chan time.Time, 1),
+		block:       true,
+		callStart:   make(chan struct{}),
+		callCancel:  make(chan struct{}),
+		allowReturn: make(chan struct{}),
+	}
+	sandbox := &Sandbox{
+		id:    testSandboxID,
+		agent: testAgent,
+	}
+
+	generation := sandbox.beginGuestTimeSyncStart()
+	sandbox.startGuestTimeSync(generation, 10*time.Millisecond)
+
+	select {
+	case <-testAgent.callStart:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for guest time synchronization")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		sandbox.stopGuestTimeSync()
+		close(stopped)
+	}()
+
+	select {
+	case <-testAgent.callCancel:
+	case <-time.After(time.Second):
+		t.Fatal("guest time synchronization was not canceled")
+	}
+
+	restarted := make(chan uint64, 1)
+	go func() {
+		restarted <- sandbox.beginGuestTimeSyncStart()
+	}()
+
+	var restartGeneration uint64
+	select {
+	case restartGeneration = <-restarted:
+	case <-time.After(time.Second):
+		t.Fatal("guest time synchronization lifecycle lock was held while waiting")
+	}
+
+	close(testAgent.allowReturn)
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("guest time synchronization did not stop")
+	}
+
+	sandbox.startGuestTimeSync(restartGeneration, time.Second)
+	assert.NotNil(t, sandbox.guestTimeSyncCancel)
+	sandbox.stopGuestTimeSync()
+}
+
+func TestGuestTimeSyncIntervalPersistence(t *testing.T) {
+	const interval = uint64(37)
+
+	network, err := NewNetwork()
+	assert.NoError(t, err)
+
+	sandbox := &Sandbox{
+		id:         "guest-time-sync-persistence",
+		agent:      &mockAgent{},
+		config:     &SandboxConfig{GuestTimeSyncInterval: interval},
+		containers: map[string]*Container{},
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
+		hypervisor: &mockHypervisor{},
+		network:    network,
+		state:      types.SandboxState{BlockIndexMap: make(map[int]struct{})},
+	}
+	sandbox.store, err = persist.GetDriver()
+	assert.NoError(t, err)
+	if sandbox.store == nil {
+		t.Fatal("failed to get persist driver")
+	}
+	defer sandbox.store.Destroy(sandbox.id)
+
+	assert.NoError(t, sandbox.Save())
+
+	restoredConfig, err := loadSandboxConfig(sandbox.id)
+	assert.NoError(t, err)
+	assert.Equal(t, interval, restoredConfig.GuestTimeSyncInterval)
 }
 
 func TestCalculateSandboxCPUs(t *testing.T) {

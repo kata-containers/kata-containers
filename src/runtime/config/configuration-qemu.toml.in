@@ -587,6 +587,10 @@ cdh_api_timeout = 50
 # system log
 # (default: disabled)
 enable_debug = false
+
+# Periodically synchronize the guest clock with the host, in seconds.
+# Omitted or 0 disables synchronization.
+guest_time_sync_interval = 0
 #
 # Internetworking model
 # Determines how the VM should be connected to the

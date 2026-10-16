@@ -173,6 +173,10 @@ type RuntimeConfig struct {
 	// needed for the workload ( Mostly used for pulling images in the guest )
 	CreateContainerTimeout uint64
 
+	// GuestTimeSyncInterval is the interval in seconds between guest clock
+	// synchronizations. A zero value disables periodic synchronization.
+	GuestTimeSyncInterval uint64
+
 	// Base directory of directly attachable network config
 	DanConfig string
 
@@ -1318,6 +1322,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		Experimental: runtime.Experimental,
 
 		CreateContainerTimeout: runtime.CreateContainerTimeout,
+
+		GuestTimeSyncInterval: runtime.GuestTimeSyncInterval,
 
 		ForceGuestPull: runtime.ForceGuestPull,
 

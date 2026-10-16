@@ -310,6 +310,60 @@ func TestConfigLoadConfiguration(t *testing.T) {
 	testLoadConfiguration(t, tmpdir, nil)
 }
 
+func TestConfigGuestTimeSyncInterval(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		expected    uint64
+		expectError bool
+	}{
+		{
+			name:     "omitted",
+			expected: 0,
+		},
+		{
+			name:     "zero",
+			value:    "guest_time_sync_interval = 0\n",
+			expected: 0,
+		},
+		{
+			name:     "positive",
+			value:    "guest_time_sync_interval = 30\n",
+			expected: 30,
+		},
+		{
+			name:     "maximum",
+			value:    fmt.Sprintf("guest_time_sync_interval = %d\n", maxGuestTimeSyncInterval),
+			expected: maxGuestTimeSyncInterval,
+		},
+		{
+			name:        "above maximum",
+			value:       fmt.Sprintf("guest_time_sync_interval = %d\n", maxGuestTimeSyncInterval+1),
+			expectError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "configuration.toml")
+			err := createConfig(configPath, "[runtime]\n"+test.value)
+			assert.NoError(t, err)
+
+			tomlConf, _, err := decodeConfig(configPath)
+			assert.NoError(t, err)
+
+			config := oci.RuntimeConfig{}
+			err = updateRuntimeConfigRuntime(configPath, tomlConf, &config)
+			if test.expectError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, config.GuestTimeSyncInterval)
+		})
+	}
+}
+
 func TestConfigLoadConfigurationFailBrokenSymLink(t *testing.T) {
 	tmpdir := t.TempDir()
 

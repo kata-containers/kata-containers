@@ -195,6 +195,10 @@ type SandboxConfig struct {
 	// needed for the workload(s)
 	CreateContainerTimeout uint64
 
+	// GuestTimeSyncInterval is the interval in seconds between guest clock
+	// synchronizations. A zero value disables periodic synchronization.
+	GuestTimeSyncInterval uint64
+
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
 
@@ -265,6 +269,13 @@ type Sandbox struct {
 	seccompSupported  bool
 	disableVMShutdown bool
 	isVCPUsPinningOn  bool
+
+	guestTimeSyncMutex      sync.Mutex
+	guestTimeSyncGeneration uint64
+	guestTimeSyncEnabled    bool
+	guestTimeSyncCancel     context.CancelFunc
+	guestTimeSyncDone       chan struct{}
+	guestTimeSyncStopping   chan struct{}
 }
 
 // ID returns the sandbox identifier string.
@@ -426,6 +437,7 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 // Release closes the agent connection.
 func (s *Sandbox) Release(ctx context.Context) error {
 	s.Logger().Info("release sandbox")
+	s.stopGuestTimeSync()
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
@@ -1092,6 +1104,8 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		return fmt.Errorf("Sandbox not ready, paused or stopped, impossible to delete")
 	}
 
+	s.stopGuestTimeSync()
+
 	for _, c := range s.containers {
 		if err := c.delete(ctx); err != nil {
 			s.Logger().WithError(err).WithField("container`", c.id).Debug("failed to delete container")
@@ -1659,6 +1673,8 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
+	guestTimeSyncGeneration := s.beginGuestTimeSyncStart()
+
 	s.Logger().Info("Starting VM")
 
 	if s.config.HypervisorConfig.Debug {
@@ -1757,22 +1773,30 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 	}
 
 	s.Logger().Info("Agent started in the sandbox")
+	s.startGuestTimeSync(guestTimeSyncGeneration, time.Duration(s.config.GuestTimeSyncInterval)*time.Second)
 
 	defer func() {
 		if err != nil {
-			if e := s.agent.stopSandbox(ctx, s); e != nil {
-				s.Logger().WithError(e).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
-			}
+			s.cleanupFailedVMStart(ctx)
 		}
 	}()
 
 	return nil
 }
 
+func (s *Sandbox) cleanupFailedVMStart(ctx context.Context) {
+	s.stopGuestTimeSync()
+	if err := s.agent.stopSandbox(ctx, s); err != nil {
+		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
+	}
+}
+
 // stopVM: stop the sandbox's VM
 func (s *Sandbox) stopVM(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
+
+	s.stopGuestTimeSync()
 
 	s.Logger().Info("Stopping sandbox in the VM")
 	if err := s.agent.stopSandbox(ctx, s); err != nil {
@@ -1782,6 +1806,105 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 	s.Logger().Info("Stopping VM")
 
 	return s.hypervisor.StopVM(ctx, s.disableVMShutdown)
+}
+
+func (s *Sandbox) beginGuestTimeSyncStart() uint64 {
+	s.guestTimeSyncMutex.Lock()
+	defer s.guestTimeSyncMutex.Unlock()
+
+	// Each lifecycle start gets a generation. Teardown advances it again,
+	// invalidating an installation that arrives after the agent was stopped.
+	s.guestTimeSyncGeneration++
+	s.guestTimeSyncEnabled = true
+	return s.guestTimeSyncGeneration
+}
+
+func (s *Sandbox) startGuestTimeSync(generation uint64, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+
+	for {
+		s.guestTimeSyncMutex.Lock()
+		if !s.guestTimeSyncEnabled || generation != s.guestTimeSyncGeneration || s.guestTimeSyncCancel != nil {
+			s.guestTimeSyncMutex.Unlock()
+			return
+		}
+		if s.guestTimeSyncStopping != nil {
+			stopping := s.guestTimeSyncStopping
+			select {
+			case <-stopping:
+				s.guestTimeSyncStopping = nil
+				s.guestTimeSyncMutex.Unlock()
+				continue
+			default:
+			}
+			s.guestTimeSyncMutex.Unlock()
+			<-stopping
+			continue
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		s.guestTimeSyncCancel = cancel
+		s.guestTimeSyncDone = done
+		s.guestTimeSyncMutex.Unlock()
+
+		go func() {
+			defer close(done)
+
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					now := time.Now()
+					if err := s.agent.setGuestDateTime(ctx, now); err != nil && ctx.Err() == nil {
+						s.Logger().WithError(err).Warn("failed to synchronize guest time")
+					}
+					if ctx.Err() != nil {
+						return
+					}
+				}
+			}
+		}()
+		return
+	}
+}
+
+func (s *Sandbox) stopGuestTimeSync() {
+	s.guestTimeSyncMutex.Lock()
+	s.guestTimeSyncEnabled = false
+	s.guestTimeSyncGeneration++
+
+	// Detach the task while locked, then wait without blocking a later
+	// lifecycle start from explicitly re-enabling synchronization.
+	cancel := s.guestTimeSyncCancel
+	done := s.guestTimeSyncDone
+	if done != nil {
+		s.guestTimeSyncCancel = nil
+		s.guestTimeSyncDone = nil
+		s.guestTimeSyncStopping = done
+	} else {
+		done = s.guestTimeSyncStopping
+	}
+	s.guestTimeSyncMutex.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
+
+		s.guestTimeSyncMutex.Lock()
+		if s.guestTimeSyncStopping == done {
+			s.guestTimeSyncStopping = nil
+		}
+		s.guestTimeSyncMutex.Unlock()
+	}
 }
 
 func (s *Sandbox) addContainer(c *Container) error {
@@ -2173,6 +2296,8 @@ func (s *Sandbox) Start(ctx context.Context) error {
 		return err
 	}
 
+	guestTimeSyncGeneration := s.beginGuestTimeSyncStart()
+
 	prevState := s.state.State
 
 	if err := s.setSandboxState(types.StateRunning); err != nil {
@@ -2194,6 +2319,8 @@ func (s *Sandbox) Start(ctx context.Context) error {
 	if err := s.storeSandbox(ctx); err != nil {
 		return err
 	}
+
+	s.startGuestTimeSync(guestTimeSyncGeneration, time.Duration(s.config.GuestTimeSyncInterval)*time.Second)
 
 	s.Logger().Info("Sandbox is started")
 

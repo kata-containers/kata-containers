@@ -300,4 +300,7 @@ type SandboxConfig struct {
 
 	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
 	EnableVCPUsPinning bool
+
+	// GuestTimeSyncInterval is the interval in seconds between guest clock synchronizations.
+	GuestTimeSyncInterval uint64
 }
