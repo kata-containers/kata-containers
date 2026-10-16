@@ -13,7 +13,7 @@ use dbs_virtio_devices::mmio::DRAGONBALL_FEATURE_INTR_USED;
 use dbs_virtio_devices::vsock::backend::{
     VsockInnerBackend, VsockInnerConnector, VsockTcpBackend, VsockUnixStreamBackend,
 };
-use dbs_virtio_devices::vsock::Vsock;
+use dbs_virtio_devices::vsock::{Vsock, VsockState};
 use dbs_virtio_devices::Error as VirtioError;
 use serde_derive::{Deserialize, Serialize};
 
@@ -378,7 +378,7 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
 
 /// Snapshot state of one vsock device (config + guest-negotiated device state
 /// + transport state); see [`persist::VirtioDevState`].
-pub type VsockDevState = persist::VirtioDevState<VsockDeviceConfigInfo>;
+pub type VsockDevState = persist::VirtioDevState<VsockDeviceConfigInfo, VsockState>;
 
 /// Snapshot state of the vsock device manager.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

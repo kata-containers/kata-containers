@@ -17,7 +17,7 @@ use std::os::unix::io::AsRawFd;
 use vm_memory::{GuestAddress, GuestMemoryError};
 
 pub use self::defs::{NUM_QUEUES, QUEUE_SIZES};
-pub use self::device::Vsock;
+pub use self::device::{Vsock, VsockState};
 use self::muxer::Error as MuxerError;
 pub use self::muxer::VsockMuxer;
 use self::packet::VsockPacket;
@@ -303,6 +303,16 @@ mod tests {
     }
 
     impl VsockGenericMuxer for TestMuxer {
+        fn local_port_watermark(&self) -> u32 {
+            0
+        }
+        fn restore_local_port_watermark(&mut self, _watermark: u32) {}
+        fn set_local_port_watermark_observer(
+            &mut self,
+            _observer: std::sync::Arc<std::sync::atomic::AtomicU32>,
+        ) {
+        }
+
         fn add_backend(
             &mut self,
             _backend: Box<dyn VsockBackend>,

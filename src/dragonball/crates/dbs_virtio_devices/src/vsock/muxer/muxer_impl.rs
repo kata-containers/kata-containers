@@ -37,9 +37,12 @@
 ///       `HashMap` object, mapping `RawFd`s to `EpollListener`s.
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::hash::{BuildHasher, Hasher};
 use std::io::Read;
 use std::os::fd::FromRawFd;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 use log::{debug, error, info, trace, warn};
 
@@ -122,6 +125,8 @@ pub struct VsockMuxer {
     local_port_set: HashSet<u32>,
     /// The last used host-side port.
     local_port_last: u32,
+    /// Shared snapshot observer for allocator progress after device activation.
+    local_port_watermark_observer: Option<Arc<AtomicU32>>,
     /// backend implementations supported in muxer.
     backend_map: HashMap<VsockBackendType, Box<dyn VsockBackend>>,
     /// the backend which can accept peer-initiated connection.
@@ -392,11 +397,33 @@ impl VsockGenericMuxer for VsockMuxer {
         }
         Ok(())
     }
+
+    fn local_port_watermark(&self) -> u32 {
+        self.local_port_last
+    }
+
+    fn restore_local_port_watermark(&mut self, watermark: u32) {
+        self.local_port_last = watermark;
+        if let Some(observer) = &self.local_port_watermark_observer {
+            observer.store(watermark, Ordering::Release);
+        }
+    }
+
+    fn set_local_port_watermark_observer(&mut self, observer: Arc<AtomicU32>) {
+        observer.store(self.local_port_last, Ordering::Release);
+        self.local_port_watermark_observer = Some(observer);
+    }
 }
 
 impl VsockMuxer {
     /// Muxer constructor.
     pub fn new(cid: u64) -> Result<Self> {
+        // Avoid reusing a host-initiated port tuple that may still be present
+        // in a restored guest's network state.
+        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+        hasher.write_u64(cid);
+        let local_port_last = (hasher.finish() as u32) & !(1 << 31) | (1 << 30);
+
         Ok(Self {
             cid,
             epoll_fd: epoll::create(false).map_err(Error::EpollFdCreate)?,
@@ -404,7 +431,8 @@ impl VsockMuxer {
             conn_map: HashMap::with_capacity(defs::MAX_CONNECTIONS),
             listener_map: HashMap::with_capacity(defs::MAX_CONNECTIONS + 1),
             killq: MuxerKillQ::default(),
-            local_port_last: (1u32 << 30) - 1,
+            local_port_last,
+            local_port_watermark_observer: None,
             local_port_set: HashSet::with_capacity(defs::MAX_CONNECTIONS),
             backend_map: HashMap::new(),
             peer_backend: None,
@@ -775,7 +803,11 @@ impl VsockMuxer {
                 break;
             }
         }
-        self.local_port_last
+        let local_port = self.local_port_last;
+        if let Some(observer) = &self.local_port_watermark_observer {
+            observer.store(local_port, Ordering::Release);
+        }
+        local_port
     }
 
     /// Mark a previously used host-side port as free.
@@ -1639,5 +1671,21 @@ mod tests {
         fs::remove_file(Path::new(&host_sock_path_1)).unwrap_or_default();
         fs::remove_file(Path::new(&host_sock_path_2)).unwrap_or_default();
         fs::remove_file(Path::new(&host_sock_path_3)).unwrap_or_default();
+    }
+
+    #[test]
+    fn test_local_port_watermark_restore_and_observe() {
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+        let observer = Arc::new(AtomicU32::new(0));
+        muxer.set_local_port_watermark_observer(observer.clone());
+
+        let restored = (1 << 30) + 41;
+        muxer.restore_local_port_watermark(restored);
+        assert_eq!(muxer.local_port_watermark(), restored);
+        assert_eq!(observer.load(Ordering::Acquire), restored);
+
+        let allocated = muxer.allocate_local_port();
+        assert_eq!(allocated, restored + 1);
+        assert_eq!(observer.load(Ordering::Acquire), allocated);
     }
 }
