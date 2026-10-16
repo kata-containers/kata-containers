@@ -227,8 +227,15 @@ impl CgroupsResourceInner {
     /// - `Ok((CgroupManager, Option<CgroupManager>))`: A tuple containing
     ///   the sandbox cgroup manager and an optional overhead cgroup
     ///   manager.
+    ///
+    /// `restoring` is true when the units already exist (`restore`). systemd
+    /// accepts `TimeoutStopUSec` only when a transient unit is created, and
+    /// refuses it on an existing scope with `PropertyReadOnly`, so the timeout
+    /// is set on creation only. The restored scope keeps the one it was
+    /// created with.
     fn new_cgroup_managers(
         config: &CgroupConfig,
+        restoring: bool,
     ) -> Result<(CgroupManager, Option<CgroupManager>)> {
         let use_systemd = is_systemd_cgroup(&config.path);
         let sandbox_cgroup = if use_systemd {
@@ -236,7 +243,9 @@ impl CgroupsResourceInner {
             // Set SIGTERM timeout to 5mins, so that the runtime has up to
             // 5mins to do graceful shutdown. Exceeding this timeout, the
             // systemd will forcibly kill the runtime by sending SIGKILL.
-            manager.set_term_timeout(300).context("set term timeout")?;
+            if !restoring {
+                manager.set_term_timeout(300).context("set term timeout")?;
+            }
             Box::new(manager) as Box<dyn Manager>
         } else {
             let manager = FsManager::new(&config.path).context("new fs manager")?;
@@ -248,9 +257,11 @@ impl CgroupsResourceInner {
         } else if use_systemd {
             let mut manager = SystemdManager::new(&config.overhead_path)
                 .context("new systemd manager for overhead")?;
-            manager
-                .set_term_timeout(300)
-                .context("set term timeout for overhead")?;
+            if !restoring {
+                manager
+                    .set_term_timeout(300)
+                    .context("set term timeout for overhead")?;
+            }
             Some(Box::new(manager) as Box<dyn Manager>)
         } else {
             let manager =
@@ -264,7 +275,7 @@ impl CgroupsResourceInner {
     /// Create a new `CgroupsResourceInner` instance.
     pub(crate) fn new(config: &CgroupConfig) -> Result<Self> {
         let (mut sandbox_cgroup, mut overhead_cgroup) =
-            Self::new_cgroup_managers(config).context("create new cgroups")?;
+            Self::new_cgroup_managers(config, false).context("create new cgroups")?;
 
         // The runtime is prioritized to be added to the overhead cgroup.
         let pid = CgroupPid::from(process::id() as u64);
@@ -299,7 +310,7 @@ impl CgroupsResourceInner {
 
     pub(crate) fn restore(config: &CgroupConfig) -> Result<Self> {
         let (sandbox_cgroup, overhead_cgroup) =
-            Self::new_cgroup_managers(config).context("restore cgroups")?;
+            Self::new_cgroup_managers(config, true).context("restore cgroups")?;
 
         Ok(Self {
             resources: HashMap::new(),
