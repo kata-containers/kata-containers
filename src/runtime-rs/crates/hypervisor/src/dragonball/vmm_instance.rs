@@ -184,6 +184,12 @@ impl VmmInstance {
         Ok(())
     }
 
+    pub fn instance_start_for_template(&self) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::StartMicroVmForTemplate))
+            .context("Failed to start template MicroVm")?;
+        Ok(())
+    }
+
     /// Start the microVM by restoring it from a snapshot (VM template)
     /// instead of cold booting.
     #[cfg(target_arch = "x86_64")]
@@ -191,6 +197,7 @@ impl VmmInstance {
         self.handle_request(Request::Sync(VmmAction::StartMicroVmFromSnapshot {
             state_path,
             mem_path,
+            reset_vsock_pending: false,
         }))
         .context("Failed to start MicroVm from snapshot")?;
         Ok(())
@@ -382,6 +389,7 @@ impl VmmInstance {
         self.handle_request(Request::Sync(VmmAction::SaveMicrovm {
             state_path,
             mem_path,
+            reset_vsock_transport: false,
         }))
         .context("Failed to save microvm")?;
         Ok(())

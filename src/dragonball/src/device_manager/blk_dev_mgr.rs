@@ -518,7 +518,37 @@ impl BlockDeviceMgr {
         &mut self,
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), BlockDeviceError> {
+        self.attach_devices_matching(ctx, |_| true)
+    }
+
+    /// Attach devices that exist at boot while preserving configured order.
+    pub fn attach_boot_devices(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        self.attach_devices_matching(ctx, |config| config.is_read_only || config.is_root_device)
+    }
+
+    /// Attach Kata workload devices after the VM's boot-time devices.
+    pub fn attach_workload_devices(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        self.attach_devices_matching(ctx, |config| !config.is_read_only && !config.is_root_device)
+    }
+
+    fn attach_devices_matching<F>(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+        matches: F,
+    ) -> std::result::Result<(), BlockDeviceError>
+    where
+        F: Fn(&BlockDeviceConfigInfo) -> bool,
+    {
         for info in self.info_list.iter_mut() {
+            if !matches(&info.config) {
+                continue;
+            }
             match info.config.device_type {
                 BlockDeviceType::RawBlock => {
                     info!(
@@ -1049,29 +1079,38 @@ impl<'a> dbs_snapshot::Persist<'a> for BlockDeviceMgr {
         state: &Self::State,
         _args: (),
     ) -> std::result::Result<(), Self::Error> {
-        for (pos, dev_state) in state.devices.iter().enumerate() {
-            // Drive ids may be generated per-run (e.g. the VM rootfs drive
-            // id), so an id miss is expected across template create/restore
-            // boundaries. Fall back to positional matching, but only when the
-            // device sets align *and* the backing path at that position
-            // confirms it is the same device -- otherwise saved queue state
-            // could be applied to the wrong block device. A path mismatch is
-            // refused rather than guessed.
+        let mut restored = vec![false; self.info_list.len()];
+        for dev_state in state.devices.iter() {
+            // Drive ids and managed task-rootfs paths change across sandbox
+            // restore. Match immutable read-only devices by path, and match
+            // writable managed rootfs devices in their stable inventory order.
             let index = match self.get_index_of_drive_id(&dev_state.config.drive_id) {
-                Some(index) => index,
-                None if self.info_list.len() == state.devices.len()
-                    && self.info_list[pos].config.path_on_host == dev_state.config.path_on_host =>
-                {
+                Some(index) if !restored[index] => index,
+                _ if self.info_list.len() == state.devices.len() => {
+                    let index = self
+                        .info_list
+                        .iter()
+                        .enumerate()
+                        .find(|(index, info)| {
+                            !restored[*index]
+                                && info.config.device_type == dev_state.config.device_type
+                                && info.config.is_read_only == dev_state.config.is_read_only
+                                && info.config.is_root_device == dev_state.config.is_root_device
+                                && (!dev_state.config.is_read_only
+                                    || info.config.path_on_host == dev_state.config.path_on_host)
+                        })
+                        .map(|(index, _)| index)
+                        .ok_or_else(|| InvalidDeviceId(dev_state.config.drive_id.clone()))?;
                     log::warn!(
-                        "block device id '{}' not found, matched by position {} (backing path {:?})",
+                        "block device id '{}' not found, matched restored device at position {}",
                         dev_state.config.drive_id,
-                        pos,
-                        dev_state.config.path_on_host,
+                        index,
                     );
-                    pos
+                    index
                 }
-                None => return Err(InvalidDeviceId(dev_state.config.drive_id.clone())),
+                _ => return Err(InvalidDeviceId(dev_state.config.drive_id.clone())),
             };
+            restored[index] = true;
             // The saved type must match the device that was re-created from
             // config, or the saved state belongs to a different device.
             if self.info_list[index].config.device_type != dev_state.config.device_type {

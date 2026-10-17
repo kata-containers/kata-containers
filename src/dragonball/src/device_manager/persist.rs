@@ -69,17 +69,19 @@ where
         .as_any()
         .downcast_ref::<DbsMmioV2Device>()
         .ok_or(VirtioError::InvalidInput)?;
+    let device_state = {
+        let mut guard = mmio_dev.state();
+        let inner = guard
+            .get_inner_device_mut()
+            .as_any_mut()
+            .downcast_mut::<D>()
+            .ok_or(VirtioError::InvalidInput)?;
+        inner.save_state(args)?
+    };
+    // A device may update its queues while preparing the snapshot (vsock
+    // publishes TRANSPORT_RESET). Capture transport state afterwards.
     let transport = mmio_dev.save_state();
-    let mut guard = mmio_dev.state();
-    let inner = guard
-        .get_inner_device_mut()
-        .as_any_mut()
-        .downcast_mut::<D>()
-        .ok_or(VirtioError::InvalidInput)?;
-    Ok((
-        inner.save_state(args)?,
-        VirtioTransportState::Mmio(transport),
-    ))
+    Ok((device_state, VirtioTransportState::Mmio(transport)))
 }
 
 /// Restore the device and transport state of a freshly re-created virtio

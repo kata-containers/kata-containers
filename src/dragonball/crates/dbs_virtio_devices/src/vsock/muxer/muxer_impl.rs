@@ -37,9 +37,12 @@
 ///       `HashMap` object, mapping `RawFd`s to `EpollListener`s.
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::Read;
+use std::hash::{BuildHasher, Hasher};
+use std::io::{Read, Write};
 use std::os::fd::FromRawFd;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 use log::{debug, error, info, trace, warn};
 
@@ -74,6 +77,7 @@ pub enum MuxerRx {
 enum ReadPortResult {
     PassFd,
     Connect(u32),
+    QueryGuestRst(ConnMapKey),
 }
 
 /// An epoll listener, registered under the muxer's nested epoll FD.
@@ -122,6 +126,11 @@ pub struct VsockMuxer {
     local_port_set: HashSet<u32>,
     /// The last used host-side port.
     local_port_last: u32,
+    /// Shared snapshot observer for allocator progress after device activation.
+    local_port_watermark_observer: Option<Arc<AtomicU32>>,
+    /// Exact tuples for which the guest has emitted a reset. Querying consumes
+    /// the acknowledgement, so stale entries cannot satisfy a later barrier.
+    guest_rst_acks: HashSet<ConnMapKey>,
     /// backend implementations supported in muxer.
     backend_map: HashMap<VsockBackendType, Box<dyn VsockBackend>>,
     /// the backend which can accept peer-initiated connection.
@@ -265,6 +274,10 @@ impl VsockChannel for VsockMuxer {
             return Ok(());
         }
 
+        if pkt.op() == uapi::VSOCK_OP_RST {
+            self.record_guest_rst_ack(conn_key);
+        }
+
         if !self.conn_map.contains_key(&conn_key) {
             // This packet can't be routed to any active connection (based on
             // its src and dst ports). The only orphan / unroutable packets we
@@ -392,11 +405,33 @@ impl VsockGenericMuxer for VsockMuxer {
         }
         Ok(())
     }
+
+    fn local_port_watermark(&self) -> u32 {
+        self.local_port_last
+    }
+
+    fn restore_local_port_watermark(&mut self, watermark: u32) {
+        self.local_port_last = watermark;
+        if let Some(observer) = &self.local_port_watermark_observer {
+            observer.store(watermark, Ordering::Release);
+        }
+    }
+
+    fn set_local_port_watermark_observer(&mut self, observer: Arc<AtomicU32>) {
+        observer.store(self.local_port_last, Ordering::Release);
+        self.local_port_watermark_observer = Some(observer);
+    }
 }
 
 impl VsockMuxer {
     /// Muxer constructor.
     pub fn new(cid: u64) -> Result<Self> {
+        // Avoid reusing a host-initiated port tuple that may still be present
+        // in a restored guest's network state.
+        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+        hasher.write_u64(cid);
+        let local_port_last = (hasher.finish() as u32) & !(1 << 31) | (1 << 30);
+
         Ok(Self {
             cid,
             epoll_fd: epoll::create(false).map_err(Error::EpollFdCreate)?,
@@ -404,8 +439,10 @@ impl VsockMuxer {
             conn_map: HashMap::with_capacity(defs::MAX_CONNECTIONS),
             listener_map: HashMap::with_capacity(defs::MAX_CONNECTIONS + 1),
             killq: MuxerKillQ::default(),
-            local_port_last: (1u32 << 30) - 1,
+            local_port_last,
+            local_port_watermark_observer: None,
             local_port_set: HashSet::with_capacity(defs::MAX_CONNECTIONS),
+            guest_rst_acks: HashSet::with_capacity(defs::MAX_CONNECTIONS),
             backend_map: HashMap::new(),
             peer_backend: None,
         })
@@ -503,11 +540,18 @@ impl VsockMuxer {
                                         false,
                                     ),
                                 )
+                                .map(|_| ())
                             }
                             ReadPortResult::PassFd => self.add_listener(
                                 stream.as_raw_fd(),
                                 EpollListener::PassFdStream(stream),
                             ),
+                            ReadPortResult::QueryGuestRst(key) => {
+                                self.respond_to_guest_rst_query(key, |response| {
+                                    stream.write_all(response)
+                                })?;
+                                Ok(())
+                            }
                         })
                         .unwrap_or_else(|err| {
                             info!("vsock: error adding local-init connection: {err:?}");
@@ -590,42 +634,41 @@ impl VsockMuxer {
             blen += 1;
         }
 
-        let mut word_iter = std::str::from_utf8(&buf)
+        let mut word_iter = std::str::from_utf8(&buf[..blen])
             .map_err(|_| Error::InvalidPortRequest)?
             .split_whitespace();
 
-        word_iter
+        let command = word_iter
             .next()
-            .ok_or(Error::InvalidPortRequest)
-            .and_then(|word| {
-                let key = word.to_lowercase();
-                if key == "connect" {
-                    Ok(true)
-                } else if key == "passfd" {
-                    Ok(false)
-                } else {
-                    Err(Error::InvalidPortRequest)
-                }
-            })
-            .and_then(|connect| {
-                if connect {
-                    word_iter.next().ok_or(Error::InvalidPortRequest).map(Some)
-                } else {
-                    Ok(None)
-                }
-            })
-            .and_then(|word| {
-                word.map_or_else(
-                    || Ok(ReadPortResult::PassFd),
-                    |word| {
-                        word.parse::<u32>()
-                            .map_or(Err(Error::InvalidPortRequest), |word| {
-                                Ok(ReadPortResult::Connect(word))
-                            })
-                    },
-                )
-            })
-            .map_err(|_| Error::InvalidPortRequest)
+            .ok_or(Error::InvalidPortRequest)?
+            .to_ascii_lowercase();
+        let result = match command.as_str() {
+            "connect" => ReadPortResult::Connect(
+                word_iter
+                    .next()
+                    .ok_or(Error::InvalidPortRequest)?
+                    .parse::<u32>()
+                    .map_err(|_| Error::InvalidPortRequest)?,
+            ),
+            "passfd" => ReadPortResult::PassFd,
+            "query-rst" => ReadPortResult::QueryGuestRst(ConnMapKey {
+                local_port: word_iter
+                    .next()
+                    .ok_or(Error::InvalidPortRequest)?
+                    .parse::<u32>()
+                    .map_err(|_| Error::InvalidPortRequest)?,
+                peer_port: word_iter
+                    .next()
+                    .ok_or(Error::InvalidPortRequest)?
+                    .parse::<u32>()
+                    .map_err(|_| Error::InvalidPortRequest)?,
+            }),
+            _ => return Err(Error::InvalidPortRequest),
+        };
+        if word_iter.next().is_some() {
+            return Err(Error::InvalidPortRequest);
+        }
+        Ok(result)
     }
 
     fn passfd_read_port_and_fd(stream: &mut Box<dyn VsockStream>) -> Result<(RawFd, u32, bool)> {
@@ -775,7 +818,43 @@ impl VsockMuxer {
                 break;
             }
         }
-        self.local_port_last
+        let local_port = self.local_port_last;
+        if let Some(observer) = &self.local_port_watermark_observer {
+            observer.store(local_port, Ordering::Release);
+        }
+        self.guest_rst_acks
+            .retain(|key| key.local_port != local_port);
+        local_port
+    }
+
+    fn record_guest_rst_ack(&mut self, key: ConnMapKey) {
+        if self.guest_rst_acks.contains(&key) {
+            return;
+        }
+        if self.guest_rst_acks.len() >= defs::MAX_CONNECTIONS {
+            if let Some(old) = self.guest_rst_acks.iter().next().copied() {
+                self.guest_rst_acks.remove(&old);
+            }
+        }
+        self.guest_rst_acks.insert(key);
+    }
+
+    #[cfg(test)]
+    fn consume_guest_rst_ack(&mut self, key: ConnMapKey) -> bool {
+        self.guest_rst_acks.remove(&key)
+    }
+
+    fn respond_to_guest_rst_query<F>(&mut self, key: ConnMapKey, mut write: F) -> Result<()>
+    where
+        F: FnMut(&[u8]) -> std::io::Result<()>,
+    {
+        let acknowledged = self.guest_rst_acks.contains(&key);
+        let response: &[u8] = if acknowledged { b"OK\n" } else { b"BUSY\n" };
+        write(response).map_err(Error::BackendWrite)?;
+        if acknowledged {
+            self.guest_rst_acks.remove(&key);
+        }
+        Ok(())
     }
 
     /// Mark a previously used host-side port as free.
@@ -853,7 +932,7 @@ impl VsockMuxer {
             if prev_state == ConnState::LocalInit && conn.state() == ConnState::Established {
                 let msg = format!("OK {}\n", key.local_port);
                 match conn.send_bytes_raw(msg.as_bytes()) {
-                    Ok(written) if written == msg.len() => (),
+                    Ok(written) if written == msg.len() => {}
                     Ok(_) => {
                         // If we can't write a dozen bytes to a pristine
                         // connection something must be really wrong. Killing
@@ -1158,6 +1237,24 @@ mod tests {
             assert_eq!(&buf[..len], format!("OK {local_port}\n").as_bytes());
 
             (stream, local_port)
+        }
+
+        fn query_guest_rst(&mut self, local_port: u32, peer_port: u32) -> String {
+            let conn_count = self.muxer.conn_map.len();
+            let port_count = self.muxer.local_port_set.len();
+            let rx_pending = self.muxer.has_pending_rx();
+            let mut stream = UnixStream::connect(self.host_sock_path.clone()).unwrap();
+            stream
+                .write_all(format!("query-rst {local_port} {peer_port}\n").as_bytes())
+                .unwrap();
+            self.notify_muxer();
+            self.notify_muxer();
+            let mut response = String::new();
+            stream.read_to_string(&mut response).unwrap();
+            assert_eq!(self.muxer.conn_map.len(), conn_count);
+            assert_eq!(self.muxer.local_port_set.len(), port_count);
+            assert_eq!(self.muxer.has_pending_rx(), rx_pending);
+            response
         }
     }
 
@@ -1639,5 +1736,132 @@ mod tests {
         fs::remove_file(Path::new(&host_sock_path_1)).unwrap_or_default();
         fs::remove_file(Path::new(&host_sock_path_2)).unwrap_or_default();
         fs::remove_file(Path::new(&host_sock_path_3)).unwrap_or_default();
+    }
+
+    #[test]
+    fn test_query_guest_rst_requires_and_consumes_exact_guest_ack() {
+        let mut ctx = MuxerTestContext::new("/tmp/query_guest_rst_exact");
+        let key = ConnMapKey {
+            local_port: 1234,
+            peer_port: 1024,
+        };
+
+        assert_eq!(ctx.query_guest_rst(key.local_port, key.peer_port), "BUSY\n");
+        ctx.muxer.record_guest_rst_ack(key);
+        assert_eq!(ctx.query_guest_rst(key.local_port, 1025), "BUSY\n");
+        assert_eq!(ctx.query_guest_rst(key.local_port, key.peer_port), "OK\n");
+        assert_eq!(ctx.query_guest_rst(key.local_port, key.peer_port), "BUSY\n");
+    }
+
+    #[test]
+    fn test_query_guest_rst_write_failure_retains_ack() {
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+        let key = ConnMapKey {
+            local_port: 1234,
+            peer_port: 1024,
+        };
+        muxer.record_guest_rst_ack(key);
+
+        let result = muxer.respond_to_guest_rst_query(key, |_| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "test write failure",
+            ))
+        });
+        assert!(result.is_err());
+        assert!(muxer.guest_rst_acks.contains(&key));
+
+        let mut response = Vec::new();
+        muxer
+            .respond_to_guest_rst_query(key, |bytes| {
+                response.extend_from_slice(bytes);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(response, b"OK\n");
+        assert!(!muxer.guest_rst_acks.contains(&key));
+    }
+
+    #[test]
+    fn test_host_remove_without_guest_rst_is_not_acknowledged() {
+        let mut ctx = MuxerTestContext::new("/tmp/query_guest_rst_host_remove");
+        let peer_port = 1024;
+        let (_stream, local_port) = ctx.local_connect(peer_port);
+        ctx.muxer.remove_connection(ConnMapKey {
+            local_port,
+            peer_port,
+        });
+
+        assert_eq!(ctx.query_guest_rst(local_port, peer_port), "BUSY\n");
+    }
+
+    #[test]
+    fn test_guest_rst_ack_is_bounded_and_duplicate_safe() {
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+        for local_port in 0..defs::MAX_CONNECTIONS as u32 {
+            muxer.record_guest_rst_ack(ConnMapKey {
+                local_port,
+                peer_port: 1024,
+            });
+        }
+        let retained = ConnMapKey {
+            local_port: 0,
+            peer_port: 1024,
+        };
+        muxer.record_guest_rst_ack(retained);
+        assert_eq!(muxer.guest_rst_acks.len(), defs::MAX_CONNECTIONS);
+        assert!(muxer.guest_rst_acks.contains(&retained));
+
+        let newest = ConnMapKey {
+            local_port: defs::MAX_CONNECTIONS as u32 + 1,
+            peer_port: 1024,
+        };
+        muxer.record_guest_rst_ack(newest);
+        assert_eq!(muxer.guest_rst_acks.len(), defs::MAX_CONNECTIONS);
+        assert!(muxer.consume_guest_rst_ack(newest));
+    }
+
+    #[test]
+    fn test_local_port_allocation_clears_stale_guest_rst_ack() {
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+        let local_port = (1 << 30) + 17;
+        muxer.local_port_last = local_port - 1;
+        let stale = ConnMapKey {
+            local_port,
+            peer_port: 1024,
+        };
+        muxer.record_guest_rst_ack(stale);
+
+        assert_eq!(muxer.allocate_local_port(), local_port);
+        assert!(!muxer.consume_guest_rst_ack(stale));
+    }
+
+    #[test]
+    fn test_guest_rst_packet_records_ack_before_connection_lookup() {
+        let mut ctx = MuxerTestContext::new("/tmp/query_guest_rst_packet");
+        let key = ConnMapKey {
+            local_port: 4321,
+            peer_port: 1024,
+        };
+        ctx.init_pkt(key.local_port, key.peer_port, uapi::VSOCK_OP_RST);
+        ctx.send();
+
+        assert!(ctx.muxer.consume_guest_rst_ack(key));
+    }
+
+    #[test]
+    fn test_local_port_watermark_restore_and_observe() {
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+        let observer = Arc::new(AtomicU32::new(0));
+        muxer.set_local_port_watermark_observer(observer.clone());
+
+        let restored = (1 << 30) + 41;
+        muxer.restore_local_port_watermark(restored);
+        assert_eq!(muxer.local_port_watermark(), restored);
+        assert_eq!(observer.load(Ordering::Acquire), restored);
+
+        let allocated = muxer.allocate_local_port();
+        assert_eq!(allocated, restored + 1);
+        assert_eq!(observer.load(Ordering::Acquire), allocated);
     }
 }

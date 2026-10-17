@@ -8,13 +8,16 @@
 // found in the THIRD-PARTY file.
 
 use std::ops::Deref;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use dbs_utils::epoll_manager::{EventOps, EventSet, Events, MutEventSubscriber};
-use log::{error, trace, warn};
+use log::{error, info, trace, warn};
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{GuestMemoryRegion, GuestRegionMmap};
 
 use super::defs;
+use super::device::SnapshotControl;
 use super::muxer::{VsockGenericMuxer, VsockMuxer};
 use super::packet::VsockPacket;
 use crate::device::VirtioDeviceConfig;
@@ -22,7 +25,7 @@ use crate::{DbsGuestAddressSpace, Result as VirtioResult};
 
 const QUEUE_RX: usize = 0;
 const QUEUE_TX: usize = 1;
-const QUEUE_CFG: usize = 2;
+pub(super) const QUEUE_CFG: usize = 2;
 
 // TODO: Detect / handle queue deadlock:
 // 1. If `self.backend.send_pkt()` errors out, TX queue processing will halt.
@@ -63,6 +66,7 @@ pub struct VsockEpollHandler<
     id: String,
     pub(crate) muxer: M,
     _cid: u64,
+    snapshot_control: Arc<SnapshotControl>,
 }
 
 impl<AS, Q, R, M> VsockEpollHandler<AS, Q, R, M>
@@ -72,12 +76,19 @@ where
     R: GuestMemoryRegion,
     M: VsockGenericMuxer,
 {
-    pub fn new(config: VirtioDeviceConfig<AS, Q, R>, id: String, cid: u64, muxer: M) -> Self {
+    pub(super) fn new(
+        config: VirtioDeviceConfig<AS, Q, R>,
+        id: String,
+        cid: u64,
+        muxer: M,
+        snapshot_control: Arc<SnapshotControl>,
+    ) -> Self {
         VsockEpollHandler {
             config,
             id,
             _cid: cid,
             muxer,
+            snapshot_control,
         }
     }
 
@@ -95,6 +106,13 @@ where
     /// with any data that we have pending.
     fn process_rx(&mut self, mem: &AS::M) {
         trace!("{}: epoll_handler::process_rx()", self.id);
+        if self
+            .snapshot_control
+            .pending_event_ack
+            .load(Ordering::Acquire)
+        {
+            return;
+        }
         let mut raise_irq = false;
         {
             let rxvq = &mut self.config.queues[QUEUE_RX].queue_mut().lock();
@@ -212,10 +230,30 @@ where
         }
     }
 
-    fn handle_evq_event(&mut self, _mem: &AS::M) {
+    fn handle_evq_event(&mut self, mem: &AS::M) {
         trace!("{}: handle event queue event", self.id);
         if let Err(e) = self.config.queues[QUEUE_CFG].consume_event() {
             error!("{}: failed to consume config queue event, {:?}", self.id, e);
+            return;
+        }
+
+        let reset_pending = self
+            .snapshot_control
+            .pending_event_ack
+            .load(Ordering::Acquire);
+        let reset_acked = if reset_pending {
+            match self.snapshot_control.poll_reset_ack() {
+                Ok(acked) => acked,
+                Err(e) => {
+                    error!("{}: failed to poll transport reset ACK: {}", self.id, e);
+                    false
+                }
+            }
+        } else {
+            false
+        };
+        if (reset_acked || !reset_pending) && self.muxer.has_pending_rx() {
+            self.process_rx(mem);
         }
     }
 
@@ -253,12 +291,20 @@ where
             defs::TXQ_EVENT => self.handle_txq_event(mem),
             defs::EVQ_EVENT => self.handle_evq_event(mem),
             defs::BACKEND_EVENT => self.notify_backend_event(&events, mem),
+            defs::HANDLER_READY_EVENT => {
+                let ready = self.snapshot_control.handler_ready_event.read().is_ok();
+                self.snapshot_control.complete_handler_registration(ready);
+                if ready && self.muxer.has_pending_rx() {
+                    self.process_rx(mem);
+                }
+            }
             _ => error!("{}: unknown epoll event slot {}", self.id, events.data()),
         }
     }
 
     fn init(&mut self, ops: &mut EventOps) {
         trace!("{}: VsockEpollHandler::init()", self.id);
+        let mut registration_ready = true;
 
         let events = Events::with_data(
             self.config.queues[QUEUE_RX].eventfd.as_ref(),
@@ -266,6 +312,7 @@ where
             EventSet::IN,
         );
         if let Err(e) = ops.add(events) {
+            registration_ready = false;
             error!(
                 "{}: failed to register epoll event for RX queue, {:?}.",
                 self.id, e
@@ -278,6 +325,7 @@ where
             EventSet::IN,
         );
         if let Err(e) = ops.add(events) {
+            registration_ready = false;
             error!(
                 "{}: failed to register epoll event for TX queue, {:?}.",
                 self.id, e
@@ -290,6 +338,7 @@ where
             EventSet::IN,
         );
         if let Err(e) = ops.add(events) {
+            registration_ready = false;
             error!(
                 "{}: failed to register epoll event for config queue, {:?}.",
                 self.id, e
@@ -300,24 +349,136 @@ where
         let be_evset = EventSet::from_bits(self.muxer.get_polled_evset().bits()).unwrap();
         let events = Events::with_data_raw(be_fd, defs::BACKEND_EVENT, be_evset);
         if let Err(e) = ops.add(events) {
+            registration_ready = false;
             error!(
                 "{}: failed to register epoll event for backend fd: {:?}, {:?}.",
                 self.id, be_fd, e
             );
+        }
+
+        if !registration_ready {
+            self.snapshot_control.complete_handler_registration(false);
+            return;
+        }
+
+        let events = Events::with_data(
+            self.snapshot_control.handler_ready_event.as_ref(),
+            defs::HANDLER_READY_EVENT,
+            EventSet::IN,
+        );
+        if let Err(e) = ops.add(events) {
+            error!(
+                "{}: failed to register vsock readiness barrier: {:?}",
+                self.id, e
+            );
+            self.snapshot_control.complete_handler_registration(false);
+            return;
+        }
+        if let Err(e) = self.snapshot_control.handler_ready_event.write(1) {
+            error!(
+                "{}: failed to signal vsock readiness barrier: {:?}",
+                self.id, e
+            );
+            self.snapshot_control.complete_handler_registration(false);
+            return;
+        }
+
+        if self
+            .snapshot_control
+            .pending_event_ack
+            .load(Ordering::Acquire)
+        {
+            if let Err(e) = self.signal_used_queue(QUEUE_CFG) {
+                error!(
+                    "{}: failed to replay transport reset interrupt: {:?}",
+                    self.id, e
+                );
+            } else {
+                info!("vsock-reset event=snapshot_irq_replayed");
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::any::Any;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::Arc;
+
+    use dbs_interrupt::InterruptNotifier;
     use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::{Bytes, GuestAddress, GuestMemoryMmap};
     use vmm_sys_util::epoll::EventSet;
+    use vmm_sys_util::eventfd::EventFd;
 
     use super::super::packet::VSOCK_PKT_HDR_SIZE;
     use super::super::tests::TestContext;
-    use super::super::VsockError;
+    use super::super::{VsockChannel, VsockError};
     use super::*;
+    use crate::tests::VIRTQ_DESC_F_WRITE;
+
+    #[derive(Clone)]
+    struct CountingNotifier(Arc<AtomicUsize>);
+
+    impl InterruptNotifier for CountingNotifier {
+        fn notify(&self) -> std::io::Result<()> {
+            self.0.fetch_add(1, Ordering::AcqRel);
+            Ok(())
+        }
+
+        fn notifier(&self) -> Option<&EventFd> {
+            None
+        }
+
+        fn clone_boxed(&self) -> Box<dyn InterruptNotifier> {
+            Box::new(self.clone())
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    #[test]
+    fn test_restore_reset_irq_replayed_once_without_consuming_queue() {
+        skip_if_kvm_unaccessable!();
+
+        for (pending, expected_notifications) in [(true, 1), (false, 0)] {
+            let test_ctx = TestContext::new();
+            let mut ctx = test_ctx.create_event_handler_context();
+            let notifications = Arc::new(AtomicUsize::new(0));
+            let eventq = ctx.queues.remove(QUEUE_CFG);
+            ctx.queues.insert(
+                QUEUE_CFG,
+                crate::VirtioQueueConfig::new(
+                    eventq.queue,
+                    eventq.eventfd,
+                    Arc::new(CountingNotifier(notifications.clone())),
+                    QUEUE_CFG as u16,
+                ),
+            );
+            let used_before = ctx._guest_evvq.used.idx().load();
+            ctx.arti_activate(&test_ctx.mem);
+            let handler = ctx.epoll_handler.take().unwrap();
+            handler
+                .snapshot_control
+                .pending_event_ack
+                .store(pending, Ordering::Release);
+            let control = handler.snapshot_control.clone();
+
+            let manager = dbs_utils::epoll_manager::EpollManager::default();
+            let id = manager.add_subscriber(Box::new(handler));
+
+            assert_eq!(
+                notifications.load(Ordering::Acquire),
+                expected_notifications
+            );
+            assert_eq!(ctx._guest_evvq.used.idx().load(), used_before);
+            assert_eq!(control.pending_event_ack.load(Ordering::Acquire), pending);
+            manager.clone().remove_subscriber(id).unwrap();
+        }
+    }
 
     #[test]
     fn test_irq() {
@@ -327,6 +488,56 @@ mod tests {
         ctx.arti_activate(&test_ctx.mem);
 
         assert!(ctx.signal_used_queue(0).is_ok());
+    }
+
+    #[test]
+    fn test_transport_reset_ack_requires_replenished_descriptor() {
+        skip_if_kvm_unaccessable!();
+        const EVENT_ADDR: u64 = 0x0060_0000;
+
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        ctx._guest_evvq
+            .dtable(0)
+            .set(EVENT_ADDR, 4, VIRTQ_DESC_F_WRITE, 0);
+        ctx._guest_evvq
+            .dtable(1)
+            .set(EVENT_ADDR + 4, 4, VIRTQ_DESC_F_WRITE, 0);
+        ctx._guest_evvq
+            .dtable(2)
+            .set(EVENT_ADDR + 8, 4, VIRTQ_DESC_F_WRITE, 0);
+        ctx._guest_evvq.avail.ring(0).store(0);
+        ctx._guest_evvq.avail.ring(1).store(1);
+        ctx._guest_evvq.avail.idx().store(2);
+        ctx.arti_activate(&test_ctx.mem);
+
+        let handler = ctx.epoll_handler.as_mut().unwrap();
+        handler.snapshot_control.arm_reset();
+        assert!(handler.snapshot_control.request_reset().unwrap());
+        handler.muxer.set_pending_rx(true);
+        let rx_ok_before = handler.muxer.rx_ok_cnt;
+
+        assert!(!handler.snapshot_control.poll_reset_ack().unwrap());
+
+        handler.config.queues[QUEUE_CFG].generate_event().unwrap();
+        handler.handle_evq_event(&test_ctx.mem);
+        assert!(handler
+            .snapshot_control
+            .pending_event_ack
+            .load(Ordering::Acquire));
+        assert!(handler.muxer.has_pending_rx());
+
+        // Replenishing with a different valid descriptor is sufficient. ACK
+        // tracks guest producer progress, not descriptor identity.
+        ctx._guest_evvq.avail.ring(2).store(2);
+        ctx._guest_evvq.avail.idx().store(3);
+        handler.config.queues[QUEUE_CFG].generate_event().unwrap();
+        handler.handle_evq_event(&test_ctx.mem);
+        assert!(!handler
+            .snapshot_control
+            .pending_event_ack
+            .load(Ordering::Acquire));
+        assert!(handler.muxer.rx_ok_cnt > rx_ok_before);
     }
 
     #[test]
