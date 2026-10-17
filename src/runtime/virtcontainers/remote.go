@@ -209,10 +209,27 @@ func (rh *remoteHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 }
 
 func (rh *remoteHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	// Peer-pod VMs are remote (e.g. EC2 instances) and don't support
+	// in-flight hardware hotplug. Block devices that backed CSI volumes
+	// are attached to the VM out-of-band by the cloud provider's CSI
+	// driver running inside the guest. Treat HotplugAddDevice as a
+	// no-op for block devices so the rest of kata's storage-volume
+	// handling can proceed; the actual device discovery happens in the
+	// guest via the csi-podvm sidecars.
+	if devType == BlockDev {
+		hvLogger.Infof("HotplugAddDevice: bypassed for block device (peer-pod): devInfo=%#v", devInfo)
+		return nil, nil
+	}
 	return nil, notImplemented("HotplugAddDevice")
 }
 
 func (rh *remoteHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
+	// Mirror HotplugAddDevice: nothing was hotplugged for block devices,
+	// so detach is also a no-op.
+	if devType == BlockDev {
+		hvLogger.Infof("HotplugRemoveDevice: bypassed for block device (peer-pod)")
+		return nil, nil
+	}
 	return nil, notImplemented("HotplugRemoveDevice")
 }
 
