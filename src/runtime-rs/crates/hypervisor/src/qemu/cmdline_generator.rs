@@ -11,7 +11,6 @@ use crate::utils::{
     SocketAddress,
 };
 
-use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 use std::borrow::Cow;
 
@@ -1174,7 +1173,7 @@ impl ToQemuParams for VmdkFormatNode {
 fn block_backend_node(
     device_id: &str,
     path: &str,
-    source: &BlockSourceFormat,
+    vmdk: Option<&crate::VmdkConfig>,
     is_direct: bool,
     is_readonly: bool,
     discard_unmap: bool,
@@ -1183,7 +1182,7 @@ fn block_backend_node(
     backend.set_read_only(is_readonly);
     backend.set_discard_unmap(discard_unmap);
 
-    if matches!(source, BlockSourceFormat::Vmdk(_)) {
+    if vmdk.is_some() {
         Box::new(VmdkFormatNode::new(device_id, backend))
     } else {
         Box::new(backend)
@@ -3012,9 +3011,28 @@ impl<'a> QemuCmdLine<'a> {
             requires_memlock: false,
         };
 
-        // add_virtiofs_share() installs the file-backed memory backend when
-        // filesystem sharing is enabled.
-        if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+        // A VM template must back its guest memory with the template memory
+        // file instead of anonymous RAM.  The file is pre-created by the
+        // template factory and, when the VM is booted to become a template,
+        // shared with the host so that the guest's memory contents land in
+        // it.  This lets migration (which sets x-ignore-shared) skip the
+        // memory and only save/restore the device state, exactly like the Go
+        // runtime's setupTemplate().
+        if config.vm_template.boot_to_be_template || config.vm_template.boot_from_template {
+            if config.vm_template.memory_path.is_empty() {
+                return Err(anyhow!("vm template memory path is not configured"));
+            }
+
+            qemu_cmd_line.add_file_memory_backend(
+                "entire-guest-memory",
+                &config.vm_template.memory_path,
+                config.vm_template.boot_to_be_template,
+                false,
+                config.memory_info.enable_mem_prealloc,
+            );
+        } else if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+            // add_virtiofs_share() installs the file-backed memory backend
+            // when filesystem sharing is enabled.
             qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
         }
 
@@ -3331,7 +3349,7 @@ impl<'a> QemuCmdLine<'a> {
         &mut self,
         device_id: &str,
         path: &str,
-        source: &BlockSourceFormat,
+        vmdk: Option<&crate::VmdkConfig>,
         is_direct: bool,
         is_readonly: bool,
         is_scsi: bool,
@@ -3342,7 +3360,7 @@ impl<'a> QemuCmdLine<'a> {
             return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
         }
         let mut fdset_ids = Vec::new();
-        let path = prepare_block_source(path, source, is_readonly, is_direct, |file, label| {
+        let path = prepare_block_source(path, vmdk, is_readonly, is_direct, |file, label| {
             let (path, fdset_id) =
                 self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
             fdset_ids.push(fdset_id);
@@ -3354,7 +3372,7 @@ impl<'a> QemuCmdLine<'a> {
         let backend = block_backend_node(
             device_id,
             &path,
-            source,
+            vmdk,
             is_direct,
             is_readonly,
             discard_unmap,
@@ -4018,7 +4036,6 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_types::vmdk::VmdkConfig;
     use rstest::rstest;
     use serial_test::serial;
     use tempfile::tempdir;
@@ -4225,7 +4242,7 @@ mod tests {
         let result = cmdline.add_block_device(
             "rootfs",
             image.to_str().unwrap(),
-            &BlockSourceFormat::Raw,
+            None,
             false,
             true,
             false,
@@ -4257,15 +4274,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_cold_plug_vmdk_uses_format_node() {
-        let vmdk = VmdkConfig::default();
-        let format_node = block_backend_node(
-            "rootfs",
-            "/dev/fdset/2",
-            &BlockSourceFormat::Vmdk(vmdk),
-            false,
-            true,
-            false,
-        );
+        let vmdk = crate::VmdkConfig::default();
+        let format_node =
+            block_backend_node("rootfs", "/dev/fdset/2", Some(&vmdk), false, true, false);
 
         let format_params = format_node.qemu_params().await.unwrap();
         assert_eq!(format_params[0], "-blockdev");
@@ -4310,7 +4321,7 @@ mod tests {
             .add_block_device(
                 "blk0",
                 image.to_str().unwrap(),
-                &BlockSourceFormat::Raw,
+                None,
                 true,
                 is_readonly,
                 false,
