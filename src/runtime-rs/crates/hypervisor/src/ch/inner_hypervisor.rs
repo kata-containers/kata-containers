@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
+use crate::ch::landlock;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
@@ -482,6 +483,10 @@ impl CloudHypervisorInner {
             cmd.args(["--seccomp", "false"]);
         }
 
+        // With enable_landlock, vm.create confines the VMM thread and every
+        // thread it starts later. The threads already running stay unconfined
+        // until Cloud Hypervisor accepts --landlock without --kernel.
+
         let netns = self.netns.clone();
         if let Some(netns_ref) = &self.netns {
             info!(sl!(), "set netns for vmm : {:?}", netns_ref);
@@ -670,6 +675,10 @@ impl CloudHypervisorInner {
         create_dir_all_with_inherit_owner(&self.run_dir, 0o750)
             .with_context(|| anyhow!("failed to create sandbox directory {}", self.run_dir))?;
 
+        if self.config.security_info.enable_landlock {
+            landlock::create_stage_dirs(&self.run_dir)?;
+        }
+
         if !self.jailer_root.is_empty() {
             create_dir_all_with_inherit_owner(self.jailer_root.as_str(), 0o750)
                 .map_err(|e| anyhow!("Failed to create dir {} err : {:?}", self.jailer_root, e))?;
@@ -683,6 +692,14 @@ impl CloudHypervisorInner {
         self.start_hypervisor(self.timeout_secs).await?;
 
         self.state = VmmState::VmmServerReady;
+
+        // A template's saved config carries the Landlock rules of the sandbox
+        // that made it, which name another sandbox's staging directories.
+        if self.config.security_info.enable_landlock && self.config.vm_template.boot_from_template {
+            return Err(anyhow!(
+                "enable_landlock cannot be combined with boot_from_template"
+            ));
+        }
 
         if self.config.vm_template.boot_from_template && self.should_restore_from_template() {
             self.prepare_restore_files()?;
@@ -784,6 +801,13 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "CloudHypervisor::cleanup()");
+        let unstaged = landlock::unstage_all(self.vm_path.as_str());
+        if !unstaged.is_empty() {
+            return Err(anyhow!(
+                "staged disks still mounted, so the sandbox directory is kept: {}",
+                unstaged.join(", ")
+            ));
+        }
         vm_cleanup(&self.config, &self.id, self.vm_path.as_str())
     }
 

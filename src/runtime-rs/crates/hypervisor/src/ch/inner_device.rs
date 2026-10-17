@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
+use crate::ch::landlock;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::utils::open_named_tuntap;
@@ -92,6 +93,16 @@ impl CloudHypervisorInner {
     }
 
     async fn handle_add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+        // A confined VMM's rules are fixed at vm.create and name no VFIO group
+        // or virtio-fs socket, so a hot-plug of either cannot open its files.
+        if self.config.security_info.enable_landlock
+            && matches!(device, DeviceType::ShareFs(_) | DeviceType::Vfio(_))
+        {
+            return Err(anyhow!(
+                "cannot hot-plug {:?} into a VMM confined with enable_landlock",
+                device
+            ));
+        }
         match device {
             DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs).await,
             DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(hvsock).await,
@@ -125,7 +136,11 @@ impl CloudHypervisorInner {
             DeviceType::Vfio(vfiodev) => self.inner_remove_device(vfiodev.device_id.as_str()).await,
             DeviceType::BlockModern(blockdev) => {
                 let device_id = blockdev.lock().await.device_id.clone();
-                self.inner_remove_device(device_id.as_str()).await
+                self.inner_remove_device(device_id.as_str()).await?;
+                if self.config.security_info.enable_landlock {
+                    landlock::unstage_device(&self.vm_path, &device_id)?;
+                }
+                Ok(())
             }
             _ => Ok(()),
         }
@@ -300,6 +315,27 @@ impl CloudHypervisorInner {
         Ok(disk_config)
     }
 
+    /// Under Landlock, point `disk_config` at a staged copy of the disk below
+    /// a directory the VMM's rules cover.
+    fn stage_disk_for_vmm(
+        &self,
+        device_id: &str,
+        config: &BlockConfigModern,
+        disk_config: &mut DiskConfig,
+    ) -> Result<()> {
+        if !self.config.security_info.enable_landlock {
+            return Ok(());
+        }
+        let staged = landlock::stage_disk(
+            &self.vm_path,
+            device_id,
+            &config.path_on_host,
+            config.is_readonly,
+        )?;
+        disk_config.path = Some(staged);
+        Ok(())
+    }
+
     fn is_vm_boot_file(&self, path: &str) -> bool {
         let boot_info = &self.config.boot_info;
 
@@ -317,9 +353,23 @@ impl CloudHypervisorInner {
             (dev.device_id.clone(), dev.config.clone())
         };
 
-        let disk_config = self.make_disk_config(&config)?;
+        let mut disk_config = self.make_disk_config(&config)?;
 
-        let response = cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await?;
+        let added = match self.stage_disk_for_vmm(&device_id, &config, &mut disk_config) {
+            Ok(()) => cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await,
+            Err(e) => Err(e),
+        };
+        let response = match added {
+            Ok(response) => response,
+            Err(e) => {
+                if self.config.security_info.enable_landlock {
+                    if let Err(unstage_err) = landlock::unstage_device(&self.vm_path, &device_id) {
+                        error!(sl!(), "failed to unstage disk: {:?}", unstage_err);
+                    }
+                }
+                return Err(e);
+            }
+        };
 
         if let Some(detail) = response {
             debug!(sl!(), "blockdev add response: {:?}", detail);
@@ -459,7 +509,10 @@ impl CloudHypervisorInner {
                     }
                 }
                 DeviceType::BlockModern(block_device) => {
-                    let config = block_device.lock().await.config.clone();
+                    let (device_id, config) = {
+                        let dev = block_device.lock().await;
+                        (dev.device_id.clone(), dev.config.clone())
+                    };
 
                     if self.is_vm_boot_file(&config.path_on_host) {
                         // Already handled through the VmConfig payload/disks.
@@ -468,7 +521,9 @@ impl CloudHypervisorInner {
 
                     info!(sl!(), "cold-plugging block device {:?}", &config);
 
-                    boot_disks.push(self.make_disk_config(&config)?);
+                    let mut disk_config = self.make_disk_config(&config)?;
+                    self.stage_disk_for_vmm(&device_id, &config, &mut disk_config)?;
+                    boot_disks.push(disk_config);
                 }
                 _ => continue,
             }
