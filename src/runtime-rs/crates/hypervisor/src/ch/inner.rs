@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use ch_config::ch_api::ApiSocket;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
+use kata_types::config::hypervisor::{HYPERVISOR_NAME_CH, MAX_NETWORK_QUEUES};
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use tokio::sync::watch::{channel, Receiver, Sender};
@@ -120,6 +120,12 @@ impl CloudHypervisorInner {
     pub fn hypervisor_config(&self) -> HypervisorConfig {
         self.config.clone()
     }
+
+    pub(crate) fn network_queue_limit(&self) -> usize {
+        // CLH revalidates existing NICs on every device hotplug. Use boot vCPUs,
+        // since CPUs added later can be removed while the NIC remains attached.
+        (self.config.cpu_info.default_vcpus.ceil() as usize).clamp(1, MAX_NETWORK_QUEUES as usize)
+    }
 }
 
 impl Default for CloudHypervisorInner {
@@ -194,12 +200,15 @@ mod tests {
         clh.netns = Some(String::from("/var/run/netns/testnet"));
         clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
         clh.run_dir = String::from("/var/run/kata-containers/") + &clh.id;
+        clh.config.cpu_info.default_vcpus = 2.0;
+        clh.config.network_info.network_queues = 8;
 
         let state = clh.save().await.unwrap();
         assert_eq!(state.id, clh.id);
         assert_eq!(state.netns, clh.netns);
         assert_eq!(state.vm_path, clh.vm_path);
         assert_eq!(state.run_dir, clh.run_dir);
+        assert_eq!(state.config.network_info.network_queues, 8);
         assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
 
@@ -210,5 +219,7 @@ mod tests {
         assert_eq!(clh.netns, state.netns);
         assert_eq!(clh.vm_path, state.vm_path);
         assert_eq!(clh.run_dir, state.run_dir);
+        assert_eq!(clh.hypervisor_config().network_info.network_queues, 8);
+        assert_eq!(clh.network_queue_limit(), 2);
     }
 }
