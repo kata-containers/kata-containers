@@ -71,6 +71,10 @@ pub enum Error {
     #[error("error reading from backend: {0}")]
     BackendRead(#[source] std::io::Error),
 
+    /// Error writing a control response to a backend stream.
+    #[error("error writing to backend: {0}")]
+    BackendWrite(#[source] std::io::Error),
+
     /// Muxer connection limit reached.
     #[error("muxer reaches connection limit")]
     TooManyConnections,
