@@ -10,13 +10,16 @@ use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
 use crate::VhostUserConfig;
-use crate::{device::pci_path::PciPath, KATA_BLK_DEV_TYPE};
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
     ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, DEFAULT_HOTPLUG_TIMEOUT,
     JAILER_ROOT,
 };
-use anyhow::{anyhow, Context, Result};
+use crate::{
+    device::{driver::virtio_blk_modern::BlockSourceFormat, pci_path::PciPath},
+    KATA_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
+};
+use anyhow::{anyhow, bail, Context, Result};
 use dbs_utils::net::MacAddr;
 use dragonball::api::v1::VhostUserConfig as DragonballVhostUserConfig;
 use dragonball::api::v1::{
@@ -26,6 +29,7 @@ use dragonball::api::v1::{
 use dragonball::config_manager::{RateLimiterConfigInfo, TokenBucketConfigInfo};
 use dragonball::device_manager::{
     blk_dev_mgr::BlockDeviceType,
+    pmem_dev_mgr::PmemDeviceConfigInfo,
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
 };
 use kata_types::config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME;
@@ -76,6 +80,31 @@ impl DragonballInner {
                 ) = {
                     let dev = block_device.lock().await;
                     let cfg = &dev.config;
+                    if cfg.driver_option == KATA_NVDIMM_DEV_TYPE {
+                        if self.state == VmmState::VmRunning {
+                            bail!("virtio-pmem does not support hotplug");
+                        }
+                        if self.config.vm_template.boot_from_template {
+                            bail!("virtio-pmem does not support VM templates");
+                        }
+                        if !matches!(cfg.source, BlockSourceFormat::Raw) {
+                            bail!("virtio-pmem requires a raw backing file");
+                        }
+                        let path = self
+                            .get_resource(&cfg.path_on_host, &dev.device_id)
+                            .context("get pmem resource")?;
+                        self.cached_block_devices.insert(dev.device_id.clone());
+                        self.vmm_instance
+                            .insert_pmem_device(PmemDeviceConfigInfo {
+                                id: dev.device_id.clone(),
+                                path,
+                                read_only: cfg.is_readonly,
+                                ..Default::default()
+                            })
+                            .context("add pmem device")?;
+                        drop(dev);
+                        return Ok(DeviceType::BlockModern(block_device));
+                    }
                     (
                         dev.device_id.clone(),
                         cfg.path_on_host.clone(),
@@ -182,7 +211,12 @@ impl DragonballInner {
                 Ok(())
             }
             DeviceType::BlockModern(block_device) => {
-                let device_id = block_device.lock().await.device_id.clone();
+                let dev = block_device.lock().await;
+                if dev.config.driver_option == KATA_NVDIMM_DEV_TYPE {
+                    bail!("virtio-pmem does not support unplug");
+                }
+                let device_id = dev.device_id.clone();
+                drop(dev);
                 self.remove_block_drive(&device_id)
                     .context("remove block modern drive")
             }

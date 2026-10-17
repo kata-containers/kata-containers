@@ -75,6 +75,21 @@ impl AddressSpaceBase {
         Ok(())
     }
 
+    /// Remove an exact address space region.
+    pub fn remove_region(
+        &mut self,
+        base: GuestAddress,
+        size: u64,
+    ) -> Result<(), AddressSpaceError> {
+        let index = self
+            .regions
+            .iter()
+            .position(|region| region.start_addr() == base && region.len() == size)
+            .ok_or(AddressSpaceError::InvalidAddressRange(base.0, size))?;
+        self.regions.remove(index);
+        Ok(())
+    }
+
     /// Enumerate all regions in the address space.
     ///
     /// # Arguments
@@ -194,12 +209,34 @@ impl AddressSpace {
         &mut self,
         region: Arc<AddressSpaceRegion>,
     ) -> Result<(), AddressSpaceError> {
-        let curr = self.state.load().regions.clone();
-        let layout = self.state.load().layout.clone();
-        let mut base = AddressSpaceBase::from_regions(curr, layout);
-        base.insert_region(region)?;
-        let _old = self.state.swap(Arc::new(base));
+        self.insert_regions(vec![region])
+    }
 
+    /// Insert all regions without publishing a partial update on failure.
+    pub fn insert_regions(
+        &mut self,
+        regions: Vec<Arc<AddressSpaceRegion>>,
+    ) -> Result<(), AddressSpaceError> {
+        let curr = self.state.load_full();
+        let mut base = AddressSpaceBase::from_regions(curr.regions.clone(), curr.layout.clone());
+        for region in regions {
+            base.insert_region(region)?;
+        }
+        let _old = self.state.swap(Arc::new(base));
+        Ok(())
+    }
+
+    /// Remove all exact regions without publishing a partial update on failure.
+    pub fn remove_regions(
+        &mut self,
+        regions: &[(GuestAddress, u64)],
+    ) -> Result<(), AddressSpaceError> {
+        let curr = self.state.load_full();
+        let mut base = AddressSpaceBase::from_regions(curr.regions.clone(), curr.layout.clone());
+        for &(address, size) in regions {
+            base.remove_region(address, size)?;
+        }
+        let _old = self.state.swap(Arc::new(base));
         Ok(())
     }
 
@@ -639,6 +676,41 @@ mod tests {
             ),
             format!("InvalidAddressRange({:?}, {:?})", 0x400, 0x200)
         );
+    }
+
+    #[test]
+    fn test_address_space_remove_regions_is_atomic() {
+        let region = Arc::new(AddressSpaceRegion::new(
+            AddressSpaceRegionType::DefaultMemory,
+            GuestAddress(0x100),
+            0x200,
+        ));
+        let layout = AddressSpaceLayout::new(0x2000, 0x100, 0x1800);
+        let mut address_space = AddressSpace::from_regions(vec![region], layout);
+
+        assert!(address_space
+            .remove_regions(&[(GuestAddress(0x100), 0x200), (GuestAddress(0x900), 0x100)])
+            .is_err());
+        let mut count = 0;
+        address_space
+            .walk_regions(|_| {
+                count += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(count, 1);
+
+        address_space
+            .remove_regions(&[(GuestAddress(0x100), 0x200)])
+            .unwrap();
+        count = 0;
+        address_space
+            .walk_regions(|_| {
+                count += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]

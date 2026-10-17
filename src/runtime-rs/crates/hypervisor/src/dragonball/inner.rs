@@ -205,10 +205,9 @@ impl DragonballInner {
 
         if self.config.boot_info.initrd.is_empty() {
             // When booting from the image, add rootfs and verity parameters here.
-            let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
             let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
                 &self.config.boot_info.kernel_verity_params,
-                &rootfs_driver,
+                &self.config.boot_info.vm_rootfs_driver,
                 &self.config.boot_info.rootfs_type,
                 true,
             )?;
@@ -672,9 +671,13 @@ mod tests {
         for initrd in ["/initrd.img", ""] {
             inner.config.boot_info.initrd = initrd.into();
             inner.config.boot_info.rootfs_type = "erofs".into();
+            inner.config.boot_info.vm_rootfs_driver = crate::VM_ROOTFS_DRIVER_PMEM.into();
             inner.config.blockdev_info.block_device_driver = crate::VM_ROOTFS_DRIVER_BLK.into();
             let params = inner.get_kernel_params().unwrap();
             let tokens: Vec<&str> = params.split_whitespace().collect();
+            if initrd.is_empty() {
+                assert!(tokens.contains(&"root=/dev/pmem0p1"));
+            }
             assert!(tokens.contains(
                 &"kata.extension.coco.verity_params=root_hash=abc,salt=def,data_blocks=1234"
             ));

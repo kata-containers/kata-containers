@@ -200,7 +200,7 @@ impl ResourceManagerInner {
                         .await
                         .context("failed to handle network")?;
                 }
-                ResourceConfig::VmRootfs(r) => {
+                ResourceConfig::VmRootfs(r) | ResourceConfig::PmemVolume(r) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
                         .await
                         .context("do handle device failed.")?;
