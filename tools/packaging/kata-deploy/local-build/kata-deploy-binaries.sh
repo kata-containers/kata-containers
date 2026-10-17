@@ -81,6 +81,7 @@ readonly MEASURED_ROOTFS_VARIANTS=(
 	base
 	confidential
 	coco-extension
+	apparmor-extension
 	devkit-extension
 	nvidia-gpu
 	nvidia-gpu-confidential
@@ -154,7 +155,9 @@ options:
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
+	rootfs-image-apparmor-extension
 	rootfs-image-coco-extension
+	rootfs-image-devkit-extension
 	rootfs-image-mariner
 	rootfs-initrd
 	rootfs-initrd-confidential
@@ -618,22 +621,6 @@ get_latest_nvidia_driver_version() {
 	get_from_kata_deps ".externals.nvidia.driver.version"
 }
 
-get_nvidia_driver_cache_key() {
-	local version url
-	version=$(get_latest_nvidia_driver_version)
-	url=$(get_from_kata_deps ".externals.nvidia.driver.url")
-	# A tarball url replaces the GitHub tag as the driver source, so it
-	# must key the caches - otherwise a github-source artefact is served
-	# for a build requesting a different source drop. Cache keys only:
-	# the raw version above names the driver packages to install, and a
-	# suffixed version names packages that do not exist. The suffix test
-	# ignores a query string; the hash keys the complete url.
-	if [[ "${url%%\?*}" =~ \.tar\.(gz|xz)$ ]]; then
-		version+="-$(echo "${url}" | sha256sum | cut -c1-8)"
-	fi
-	echo "${version}"
-}
-
 get_latest_nvidia_ctk_version() {
 	get_from_kata_deps ".externals.nvidia.ctk.version"
 }
@@ -663,21 +650,11 @@ get_latest_nvidia_repo_version() {
 	local arch
 	arch="$(uname -m)"
 
-	local repos
-	repos="$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")"
-	repos+=" $(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")"
-	repos+=" $(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")"
-	repos+=" $(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")"
-
-	# Joins the hash only when set, so the default (unset) key is
-	# identical to before the driver repo existed. Url and pkg stay
-	# separate fields - joined, different splits could collide.
-	local driver_repo_url driver_repo_pkg
-	driver_repo_url="$(get_from_kata_deps ".externals.nvidia.driver.repo.${arch}.url")"
-	driver_repo_pkg="$(get_from_kata_deps ".externals.nvidia.driver.repo.${arch}.pkg")"
-	[[ -n "${driver_repo_url}${driver_repo_pkg}" ]] && repos+=" ${driver_repo_url} ${driver_repo_pkg}"
-
-	echo "${repos}" | sha256sum | cut -c1-9
+	echo "$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")" \
+		"$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")" \
+		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")" \
+		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")" \
+		| sha256sum | cut -c1-9
 }
 
 #Install guest image
@@ -706,7 +683,7 @@ install_image() {
 		latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${image_type}"
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_nvidia_driver_cache_key)"
+		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_upx_version)"
@@ -732,7 +709,7 @@ install_image() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-			latest_artefact+="-$(get_nvidia_driver_cache_key)"
+			latest_artefact+="-$(get_latest_nvidia_driver_version)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -753,7 +730,7 @@ install_image() {
 		# Monolith: Kata NVIDIA modules + pinned driver/CTK userspace + NVRC init.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_nvidia_driver_cache_key)"
+		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1038,6 +1015,146 @@ install_image_devkit_extension() {
 	fi
 }
 
+# Install the guest AppArmor policy extension image (erofs+verity).
+#
+# This extension carries policy text only: profiles and any includes they need.
+# It deliberately ships no apparmor_parser and no shared libraries, because the
+# parser belongs to the base image. The kata-agent mounts this read-only before
+# it runs and loads a requested profile out of it with the base image's parser.
+#
+# There is no distro bootstrap here: the tree is assembled directly from the
+# reviewed policy in tools/packaging/apparmor-extension/policy and handed to
+# image_builder.sh, which is why this does not go through rootfs.sh at all.
+install_image_apparmor_extension() {
+	local component="rootfs-image-apparmor-extension"
+	local policy_dir="${repo_root_dir}/tools/packaging/apparmor-extension/policy"
+
+	[[ -d "${policy_dir}" ]] || die "AppArmor policy directory not found: ${policy_dir}"
+	[[ -n "$(ls -A "${policy_dir}/profiles" 2>/dev/null)" ]] || \
+		die "no AppArmor profiles found in ${policy_dir}/profiles"
+
+	# A wrong profile name would otherwise only surface as a failure inside a
+	# guest, so validate at build time with a real parser.
+	validate_apparmor_profiles "${policy_dir}/profiles"
+
+	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
+	local install_dir="${destdir}/${prefix}/share/kata-containers/"
+	local extension_img="${install_dir}/kata-containers-apparmor-extension.img"
+
+	mkdir -p "${install_dir}"
+
+	local extension_rootfs
+	extension_rootfs="$(mktemp -d "${repo_root_dir}/.apparmor-extension-rootfs.XXXX")"
+
+	cp -a "${policy_dir}/." "${extension_rootfs}/"
+	mkdir -p "${extension_rootfs}/metadata"
+	{
+		echo "name=apparmor"
+		echo "kata_version=$(get_kata_version)"
+		echo "policy_commit=$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
+			-- tools/packaging/apparmor-extension 2>/dev/null || echo unknown)"
+		echo "profiles=$(find "${extension_rootfs}/profiles" -mindepth 1 -type f -printf '%f\n' \
+			| sort | tr '\n' ' ')"
+	} > "${extension_rootfs}/metadata/manifest"
+
+	export USE_DOCKER="1"
+	export BUILD_VARIANT="apparmor-extension"
+	export FS_TYPE="erofs"
+	# s390x does not use a measured rootfs, so no dm-verity hash is produced.
+	if [[ "${ARCH}" == "s390x" ]]; then
+		export MEASURED_ROOTFS="no"
+	else
+		export MEASURED_ROOTFS="yes"
+	fi
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+
+	local rc=0
+	"${image_builder}" -o "${extension_img}" "${extension_rootfs}" || rc=$?
+
+	if command -v sudo >/dev/null 2>&1; then
+		sudo rm -rf --one-file-system "${extension_rootfs:?}"
+	else
+		rm -rf --one-file-system "${extension_rootfs:?}"
+	fi
+
+	[[ "${rc}" -eq 0 ]] || die "building the AppArmor extension image failed"
+	[[ -f "${extension_img}" ]] || die "image_builder.sh did not produce ${extension_img}"
+
+	if [[ -e "${install_dir}/root_hash_apparmor-extension.txt" ]]; then
+		info "Root hash file: ${install_dir}/root_hash_apparmor-extension.txt"
+	fi
+}
+
+# Parse every AppArmor profile in a directory with a real parser, and require
+# each file to declare exactly one profile whose name matches the file name.
+#
+# The kata-agent resolves a requested profile by file name and then verifies
+# from the kernel that a profile with that name is loaded, so a mismatch between
+# the two would turn into a confusing runtime failure inside a guest. Checking
+# here keeps the extension's file names and profile names in step.
+#
+# A host parser is used when available. Otherwise the agent builder image is
+# used, since it is a full distribution image carrying the apparmor package, so
+# this works on CI runners that have no apparmor installed either way.
+validate_apparmor_profiles() {
+	local profiles_dir="$1"
+
+	[[ -d "${profiles_dir}" ]] || die "AppArmor profiles directory not found: ${profiles_dir}"
+
+	local engine="" image_name=""
+	if command -v apparmor_parser >/dev/null 2>&1; then
+		info "Validating AppArmor profiles with the host apparmor_parser"
+	elif command -v docker >/dev/null 2>&1 && image_name="$(get_agent_image_name)" && \
+		[[ -n "${image_name}" ]]; then
+		engine="docker"
+		info "Validating AppArmor profiles with apparmor_parser from ${image_name}"
+	else
+		die "no apparmor_parser on the host and no usable builder image to validate profiles with"
+	fi
+
+	local rc=0
+	local profile_file expected_name declared count
+	for profile_file in "${profiles_dir}"/*; do
+		[[ -f "${profile_file}" ]] || continue
+		expected_name="$(basename "${profile_file}")"
+
+		if [[ -n "${engine}" ]]; then
+			declared="$("${engine}" run --rm \
+				-v "${profiles_dir}:/profiles:ro" \
+				--entrypoint /bin/sh "${image_name}" -c \
+				"apparmor_parser -Q -N \"/profiles/${expected_name}\"" 2>&1)" || {
+				echo "ERROR: AppArmor profile ${expected_name} failed to parse:" >&2
+				echo "${declared}" >&2
+				rc=1
+				continue
+			}
+		else
+			declared="$(apparmor_parser -Q -N "${profile_file}" 2>&1)" || {
+				echo "ERROR: AppArmor profile ${expected_name} failed to parse:" >&2
+				echo "${declared}" >&2
+				rc=1
+				continue
+			}
+		fi
+
+		count="$(printf '%s\n' "${declared}" | grep -c . || true)"
+		if [[ "${count}" -ne 1 ]]; then
+			echo "ERROR: AppArmor profile ${expected_name} declares ${count} profiles; expected exactly 1" >&2
+			rc=1
+			continue
+		fi
+		if [[ "${declared}" != "${expected_name}" ]]; then
+			echo "ERROR: AppArmor profile file ${expected_name} declares itself as '${declared}'" >&2
+			echo "       the agent resolves profiles by file name, so the two must match" >&2
+			rc=1
+			continue
+		fi
+		info "Validated AppArmor profile ${declared}"
+	done
+
+	[[ "${rc}" -eq 0 ]] || die "AppArmor profile validation failed"
+}
 #Install cbl-mariner guest image
 install_image_mariner() {
 	export IMAGE_SIZE_ALIGNMENT_MB=2
@@ -1083,7 +1200,7 @@ install_initrd() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-			latest_artefact+="-$(get_nvidia_driver_cache_key)"
+			latest_artefact+="-$(get_latest_nvidia_driver_version)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1101,7 +1218,7 @@ install_initrd() {
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_nvidia_driver_cache_key)"
+		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1274,15 +1391,6 @@ install_cached_kernel_tarball_component() {
 
 	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
 	latest_builder_image="$(get_kernel_image_name)"
-
-	# The nvidia kernel tarball ships the out-of-tree driver modules, so
-	# the driver (version and source) must key its cache too - otherwise a
-	# driver bump serves modules built from the previous driver.
-	case ${kernel_name} in
-		kernel-nvidia-gpu*)
-			latest_artefact+="-$(get_nvidia_driver_cache_key)"
-			;;
-	esac
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
@@ -1536,9 +1644,7 @@ install_clh_helper() {
 # Install static cloud-hypervisor asset
 install_clh() {
 	if [[ "${ARCH}" == "x86_64" ]]; then
-		# Cloud Hypervisor deliberately rejects the TDX feature as broken.
-		# Select the supported KVM backend explicitly and retain MSHV support.
-		features="kvm,mshv"
+		features="mshv,tdx"
 	else
 		features=""
 	fi
@@ -2095,6 +2201,8 @@ handle_build() {
 	rootfs-image-confidential) install_image_confidential ;;
 
 	rootfs-image-coco-extension) install_image_coco_extension ;;
+
+	rootfs-image-apparmor-extension) install_image_apparmor_extension ;;
 
 	rootfs-image-devkit-extension) install_image_devkit_extension ;;
 
