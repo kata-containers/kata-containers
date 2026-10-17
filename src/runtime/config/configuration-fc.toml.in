@@ -368,6 +368,20 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 #
 emptydir_mode = "@DEFEMPTYDIRMODE@"
 
+# If enabled, a block-plain emptyDir is mounted in the guest with the ext4
+# `noinit_itable` option after `discard`, so the guest kernel does not zero
+# every inode table of the sparse, host-sized image in the background after
+# the first mount. That zeroing allocates host blocks that kubelet charges to
+# the pod (about 641 MB per empty volume on a 790 GB host filesystem); with
+# the option, an empty volume costs about 13 MB. Inode table blocks are then
+# written only as inodes in them are allocated. It has no effect with other
+# `emptydir_mode` values.
+#
+# When the agent policy is in use, `emptyDir_plain.options` in
+# genpolicy-settings.json must then be set to ["discard", "noinit_itable"],
+# otherwise block-plain emptyDir mounts are denied. See docs/Limitations.md.
+#emptydir_noinit_itable = true
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.

@@ -188,6 +188,11 @@ type SandboxConfig struct {
 	// Valid values are "shared-fs" (default), "block-encrypted", or "block-plain".
 	EmptyDirMode string
 
+	// EmptyDirNoInitItable mounts block-plain emptyDir filesystems with the
+	// ext4 noinit_itable option so the guest does not zero every inode table
+	// in the background after the first mount. Ignored for other modes.
+	EmptyDirNoInitItable bool
+
 	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
 	EnableVCPUsPinning bool
 
