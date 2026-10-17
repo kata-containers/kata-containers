@@ -989,9 +989,23 @@ impl ResourceManagerInner {
         // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
         if !steps.network {
             if let Some(network) = &self.network {
-                match network
-                    .remove(self.hypervisor.as_ref())
+                // remove() holds a per-thread NetnsGuard across awaits, run it on
+                // a dedicated thread so the netns never leaks onto Tokio workers.
+                let network = network.clone();
+                let hypervisor = self.hypervisor.clone();
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                thread::spawn(move || {
+                    let remove = || -> Result<()> {
+                        let rt = runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()?;
+                        rt.block_on(network.remove(hypervisor.as_ref()))
+                    };
+                    let _ = tx.send(remove());
+                });
+                match rx
                     .await
+                    .unwrap_or_else(|e| Err(e.into()))
                     .context("remove network")
                 {
                     Ok(()) => steps.network = true,
