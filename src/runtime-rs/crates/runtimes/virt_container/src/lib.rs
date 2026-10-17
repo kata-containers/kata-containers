@@ -201,7 +201,7 @@ impl RuntimeHandler for VirtContainer {
 
 async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>)> {
     let (mut toml_config, _) =
-        TomlConfig::load_from_default().context("failed to load toml config")?;
+        TomlConfig::load_from_file("").context("failed to load toml config")?;
     let hypervisor_name = toml_config.runtime.hypervisor_name.clone();
     if let Some(h) = toml_config.hypervisor.get_mut(&hypervisor_name) {
         h.vm_template.boot_to_be_template = false;
