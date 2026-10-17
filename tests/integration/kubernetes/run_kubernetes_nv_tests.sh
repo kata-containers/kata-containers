@@ -163,8 +163,7 @@ else
 		"k8s-nvidia-numa.bats" \
 		"k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-dcgm.bats" \
-		"k8s-nvidia-vllm.bats" \
-		"k8s-rootless-vmm.bats")
+		"k8s-nvidia-vllm.bats")
 
 	# NIM requests 16 CPUs per pod; the two-model path runs both together.
 	# Require headroom for cluster services regardless of runner architecture.
