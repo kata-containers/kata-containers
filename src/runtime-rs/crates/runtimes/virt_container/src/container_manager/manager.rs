@@ -173,6 +173,14 @@ impl ContainerManager for VirtContainerManager {
                 let mut c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+                // Returning an error here blocks containerd from processing the exit
+                // and reaching sandbox teardown, so report the cleanup failure and continue.
+                if let Err(e) = c.finish_cleanup().await {
+                    error!(
+                        sl!(),
+                        "failed to finish cleanup of container {}: {:?}", container_id, e
+                    );
+                }
 
                 // A task that never started has no exit-driven cleanup to release its mounts.
                 let status = c.state_process(process).await.context("state process")?;
