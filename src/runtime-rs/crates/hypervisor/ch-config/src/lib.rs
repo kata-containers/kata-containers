@@ -512,6 +512,25 @@ pub struct VmConfig {
     pub watchdog: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform: Option<PlatformConfig>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub landlock_enable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub landlock_rules: Option<Vec<LandlockConfig>>,
+}
+
+/// The directory under the sandbox path that holds a Landlock-confined VMM's
+/// read-only or read-write disks. Cloud Hypervisor fixes its Landlock rules at
+/// vm.create, so a disk added later must sit below a directory they name.
+pub fn landlock_stage_dir(sandbox_path: &str, readonly: bool) -> PathBuf {
+    let dir = if readonly { "disks-ro" } else { "disks-rw" };
+    [sandbox_path, dir].iter().collect()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub struct LandlockConfig {
+    pub path: PathBuf,
+    /// "r" or "rw".
+    pub access: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]

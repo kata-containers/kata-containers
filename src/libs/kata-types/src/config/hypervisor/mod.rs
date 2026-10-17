@@ -1315,6 +1315,17 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub disable_seccomp: bool,
 
+    /// Enables Landlock for the VMM (Cloud Hypervisor only).
+    ///
+    /// From vm.create on, the VMM thread and the threads it starts can open
+    /// only the files the VMM needs: the guest kernel and image, its own
+    /// sockets, and the disks this VM is given. Every disk but the boot image
+    /// is staged under the sandbox directory, so a disk added after boot is
+    /// covered too. VFIO and virtio-fs hot-plug and booting from a VM
+    /// template are refused.
+    #[serde(default)]
+    pub enable_landlock: bool,
+
     /// Enables confidential guest support.
     ///
     /// Toggling this setting may activate different hardware features, ranging from
