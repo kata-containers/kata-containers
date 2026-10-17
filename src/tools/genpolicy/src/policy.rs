@@ -1082,6 +1082,16 @@ impl AgentPolicy {
             );
         }
 
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Container-level settings from user's YAML.
+        yaml_container.get_process_fields(&mut process);
+        debug!(
+            "get_container_process: after yaml_container.get_process_fields: User = {:?}",
+            process.User
+        );
+
+        // Explicit pod groups supplement the final container identity and must
+        // survive any runAsUser/runAsGroup override at the container level.
         apply_pod_groups_to_process(
             &mut process,
             resource.get_pod_security_context(),
@@ -1090,14 +1100,6 @@ impl AgentPolicy {
         );
         debug!(
             "get_container_process: after apply_pod_fs_group_and_supplemental_groups: User = {:?}",
-            process.User
-        );
-
-        ///////////////////////////////////////////////////////////////////////////////////////
-        // Container-level settings from user's YAML.
-        yaml_container.get_process_fields(&mut process);
-        debug!(
-            "get_container_process: after yaml_container.get_process_fields: User = {:?}",
             process.User
         );
 
