@@ -10,7 +10,8 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-containerd-shim-protos = { features = ["sandbox"], workspace = true }
+containerd-shim-protos = { features = ["sandbox"], workspace = true}
+cgroups = { workspace = true }
 nix = { workspace = true }
 oci-spec = { workspace = true }
 protobuf = { workspace = true }
@@ -25,3 +26,7 @@ kata-types = { workspace = true }
 protocols = { workspace = true }
 resource = { workspace = true }
 runtime-spec = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
