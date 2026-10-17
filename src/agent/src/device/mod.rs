@@ -896,12 +896,31 @@ fn get_next_bus_from_bridge(devpath: &PathBuf) -> Result<String> {
     })
 }
 
+// Returns the "dddd:bb" bus of a host bridge sysfs dir such as
+// "/sys/devices/pci0000:80", or the default root bus "0000:00".
+fn root_bus_from_sysfs(root_bus_sysfs: &str) -> String {
+    std::path::Path::new(root_bus_sysfs)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_prefix("pci"))
+        .filter(|bus| {
+            bus.len() == 7
+                && bus.as_bytes()[4] == b':'
+                && bus
+                    .chars()
+                    .enumerate()
+                    .all(|(i, c)| i == 4 || c.is_ascii_hexdigit())
+        })
+        .map(str::to_string)
+        .unwrap_or_else(|| "0000:00".to_string())
+}
+
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
 #[instrument]
 pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
-    let mut bus = "0000:00".to_string();
+    let mut bus = root_bus_from_sysfs(root_bus_sysfs);
     let mut relpath = String::new();
 
     if pcipath.is_empty() {
@@ -1991,6 +2010,20 @@ mod tests {
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path234);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
+    }
+
+    #[test]
+    fn test_pcipath_to_sysfs_non_zero_root_bus() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let rootbuspath = testdir.path().join("pci0000:80");
+        let rootbuspath = rootbuspath.to_str().unwrap();
+
+        let path = pci::Path::from_str("00/00").unwrap();
+        let bridgepath = format!("{}/0000:80:00.0", rootbuspath);
+        fs::create_dir_all(format!("{}/pci_bus/0000:81", bridgepath)).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path);
+        assert_eq!(relpath.unwrap(), "/0000:80:00.0/0000:81:00.0");
     }
 
     #[test]
