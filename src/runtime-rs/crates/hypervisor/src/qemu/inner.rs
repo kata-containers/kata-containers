@@ -56,6 +56,18 @@ use tokio::{
 
 const VSOCK_SCHEME: &str = "vsock";
 const MEMLOCK_HEADROOM_DIVISOR: u64 = 10;
+/// Maximum time to wait for a QEMU migration (VM template save or restore) to
+/// complete.
+///
+/// The Go runtime uses 5 seconds on x86_64/ppc64le/s390x and 10 seconds on
+/// arm64/riscv64 (`qmpMigrationWaitTimeout`).  Use the larger value here:
+/// migrating the device state of a template can take longer than a few
+/// hundred milliseconds on slow or heavily loaded hosts, and a premature
+/// timeout aborts template creation.
+const QMP_MIGRATION_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Interval between `query-migrate` polls while waiting for a migration.
+const QMP_MIGRATION_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 fn open_qemu_pidfd(pid: u32) -> Result<Arc<OwnedFd>> {
     let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -617,13 +629,16 @@ impl QemuInner {
             Err(e) => return Err(e),
         }
 
-        // Overall timeout for migration.
-        // Regarding why the timeout is set to 280ms and whether it should be adjusted, we need more empirical data.
-        // For now, we will keep using the previous configuration.
-        let timeout = Duration::from_millis(280);
+        // Overall timeout for migration.  Saving a VM template migrates the
+        // device state only (guest memory lives in the template memory file
+        // and is skipped via x-ignore-shared), but this still involves QEMU
+        // writing the state out through an exec migration stream, which can
+        // take a while on a loaded host.  Use the same upper bound as the Go
+        // runtime instead of the previous 280ms.
+        let timeout = QMP_MIGRATION_WAIT_TIMEOUT;
 
         // Polling interval: start small, then back off to reduce load.
-        let poll_interval = Duration::from_millis(20);
+        let poll_interval = QMP_MIGRATION_POLL_INTERVAL;
 
         // Deadline with a timeout.
         let deadline = Instant::now()
