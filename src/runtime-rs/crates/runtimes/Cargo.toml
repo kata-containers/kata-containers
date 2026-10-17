@@ -7,6 +7,8 @@ version = "0.1.0"
 
 [dev-dependencies]
 async-trait = { workspace = true }
+protobuf = { workspace = true }
+protocols = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
 
@@ -50,8 +52,6 @@ kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }
 persist = { workspace = true }
-protobuf = { workspace = true }
-protocols = { workspace = true }
 resource = { workspace = true }
 runtime-spec = { workspace = true }
 shim-interface = { workspace = true }
