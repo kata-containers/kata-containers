@@ -676,6 +676,15 @@ impl CloudHypervisorInner {
             .with_context(|| anyhow!("failed to create sandbox directory {}", self.run_dir))?;
 
         if self.config.security_info.enable_landlock {
+            // Checked before the VMM starts: a template's saved config carries
+            // the Landlock rules of the sandbox that made it, and a confined
+            // VMM cannot write a snapshot to the template directory.
+            let template = &self.config.vm_template;
+            if template.boot_from_template || template.boot_to_be_template {
+                return Err(anyhow!(
+                    "enable_landlock cannot be combined with a VM template"
+                ));
+            }
             landlock::create_stage_dirs(&self.run_dir)?;
         }
 
@@ -692,14 +701,6 @@ impl CloudHypervisorInner {
         self.start_hypervisor(self.timeout_secs).await?;
 
         self.state = VmmState::VmmServerReady;
-
-        // A template's saved config carries the Landlock rules of the sandbox
-        // that made it, which name another sandbox's staging directories.
-        if self.config.security_info.enable_landlock && self.config.vm_template.boot_from_template {
-            return Err(anyhow!(
-                "enable_landlock cannot be combined with boot_from_template"
-            ));
-        }
 
         if self.config.vm_template.boot_from_template && self.should_restore_from_template() {
             self.prepare_restore_files()?;

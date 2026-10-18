@@ -11,12 +11,14 @@
 
 use std::fs;
 use std::io;
+use std::os::unix::fs::{chown, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use ch_config::landlock_stage_dir;
 use kata_sys_util::mount;
 use nix::mount::{umount2, MntFlags, MsFlags};
+use nix::unistd::{Gid, Uid};
 
 use crate::utils::create_dir_all_with_inherit_owner;
 
@@ -39,14 +41,28 @@ pub(crate) fn staged_disk_path(
     Ok(landlock_stage_dir(sandbox_path, readonly).join(device_id))
 }
 
-/// Create both staging directories. They must exist before the first disk is
-/// staged and when vm.create runs: Cloud Hypervisor drops a rule whose path is
-/// missing, without an error.
+/// Search permission only: the VMM can reach a staged disk but cannot list or
+/// change the directory.
+const STAGE_DIR_MODE: u32 = 0o711;
+
+/// Create both staging directories, owned by the shim and not writable by the
+/// VMM. They must exist before the first disk is staged and when vm.create
+/// runs: Cloud Hypervisor drops a rule whose path is missing, without an error.
+/// The VMM owns nothing in them, so it cannot plant a symlink that the bind
+/// mount in `stage_disk` would follow.
 pub(crate) fn create_stage_dirs(sandbox_path: &str) -> Result<()> {
     for readonly in [true, false] {
         let dir = landlock_stage_dir(sandbox_path, readonly);
-        create_dir_all_with_inherit_owner(&dir, 0o750)
+        create_dir_all_with_inherit_owner(&dir, STAGE_DIR_MODE)
             .with_context(|| format!("failed to create disk staging directory {:?}", dir))?;
+        chown(
+            &dir,
+            Some(Uid::current().as_raw()),
+            Some(Gid::current().as_raw()),
+        )
+        .with_context(|| format!("failed to take ownership of {:?}", dir))?;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(STAGE_DIR_MODE))
+            .with_context(|| format!("failed to set the mode of {:?}", dir))?;
     }
     Ok(())
 }
@@ -119,6 +135,21 @@ pub(crate) fn unstage_all(sandbox_path: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_create_stage_dirs_leaves_the_directories_closed_to_other_users() {
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let sandbox = dir.path().to_str().unwrap();
+        create_stage_dirs(sandbox).unwrap();
+        for readonly in [true, false] {
+            let meta = fs::metadata(landlock_stage_dir(sandbox, readonly)).unwrap();
+            assert_eq!(meta.mode() & 0o7777, STAGE_DIR_MODE);
+            assert_eq!(meta.uid(), Uid::current().as_raw());
+            assert_eq!(meta.gid(), Gid::current().as_raw());
+        }
+    }
 
     #[test]
     fn test_staged_disk_path_picks_the_directory_by_access() {
