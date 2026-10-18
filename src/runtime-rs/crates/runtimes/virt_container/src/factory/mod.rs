@@ -55,7 +55,21 @@ impl FactoryConfig {
 
 /// Load and validate factory configuration
 fn load_and_validate_factory_config() -> Result<(TomlConfig, FactoryConfig)> {
-    let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
+    // `TomlConfig::load_from_file()` adjusts the configuration through the
+    // plugin of the configured hypervisor.  The shim registers those plugins
+    // in `RuntimeHandler::init()`, but `kata-ctl` drives the factory directly,
+    // so make sure they are registered here as well.
+    crate::register_hypervisor_plugins();
+
+    // Use `load_from_file("")` rather than `load_from_default()`: the latter
+    // returns the raw configuration without `TomlConfig::adjust_config()`.
+    // Host dependent defaults such as `default_maxvcpus` would then differ
+    // from the configuration used by the shim when it restores a VM from
+    // this template.  QEMU derives the size of some migration sections
+    // (e.g. the ICH9 CPU hotplug state) from `max_cpus`, which is not part
+    // of the migration stream, so a mismatch makes the restore fail with
+    // "Missing section footer".
+    let (toml_config, _) = TomlConfig::load_from_file("").context("load toml config")?;
 
     let factory_config = FactoryConfig::new(&toml_config);
 

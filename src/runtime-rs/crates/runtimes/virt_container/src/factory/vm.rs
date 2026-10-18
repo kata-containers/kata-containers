@@ -162,11 +162,14 @@ impl VmConfig {
         }
 
         // default_maxvcpus
-        if conf.cpu_info.default_maxvcpus == 0
-            || conf.cpu_info.default_maxvcpus > default::MAX_QEMU_VCPUS
-        {
-            conf.cpu_info.default_maxvcpus = default::MAX_QEMU_VCPUS;
-        }
+        // Apply the same host CPU based adjustment as
+        // `TomlConfig::adjust_config()` instead of falling back to a fixed
+        // maximum.  The CPU topology must match the one used when the
+        // template was created: QEMU's VM state size for CPU hotplug depends
+        // on `max_cpus`, but the count itself is not encoded in the migration
+        // stream, so a mismatch corrupts the stream and makes template
+        // restore fail with "Missing section footer".
+        conf.cpu_info.adjust_config()?;
 
         Ok(())
     }

@@ -56,6 +56,10 @@ use tokio::{
 
 const VSOCK_SCHEME: &str = "vsock";
 const MEMLOCK_HEADROOM_DIVISOR: u64 = 10;
+/// Max wait time for QEMU migration (VM template save/restore).
+/// Go runtime uses 5s for x86_64/ppc64le/s390x and 10s for arm64/riscv64.
+/// Use 10s: template device state migration may exceed hundreds of ms on slow/loaded hosts; early timeout fails template creation.
+const QMP_MIGRATION_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn open_qemu_pidfd(pid: u32) -> Result<Arc<OwnedFd>> {
     let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -620,7 +624,8 @@ impl QemuInner {
         // Overall timeout for migration.
         // Regarding why the timeout is set to 280ms and whether it should be adjusted, we need more empirical data.
         // For now, we will keep using the previous configuration.
-        let timeout = Duration::from_millis(280);
+        //It may take longer on a loaded host.
+        let timeout = QMP_MIGRATION_WAIT_TIMEOUT;
 
         // Polling interval: start small, then back off to reduce load.
         let poll_interval = Duration::from_millis(20);
