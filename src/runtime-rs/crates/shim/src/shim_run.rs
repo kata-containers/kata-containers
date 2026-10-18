@@ -14,7 +14,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use kata_sys_util::spec::get_bundle_path;
 use nix::fcntl::{fcntl, FcntlArg, FdFlag};
 
 use crate::{
@@ -27,10 +26,8 @@ impl ShimExecutor {
     pub async fn run(&mut self) -> Result<()> {
         crate::panic_hook::set_panic_hook();
         let sid = self.args.id.clone();
-        let bundle_path = get_bundle_path().context("get bundle")?;
-        let path = bundle_path.join("log");
-        let _logger_guard =
-            logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug).context("set logger");
+
+        let _logger_guard = logger::set_logger(&sid, self.args.debug).context("set logger")?;
         // Regist shim logger for later use.
         logging::register_subsystem_logger("runtimes", "shim");
 

@@ -16,7 +16,7 @@ use crate::{logger, shim::ShimExecutor, Error};
 
 impl ShimExecutor {
     pub async fn delete(&mut self) -> Result<()> {
-        let _logger_guard = match logger::set_logger("", &self.args.id, self.args.debug) {
+        let _logger_guard = match logger::set_logger(&self.args.id, self.args.debug) {
             Ok(guard) => Some(guard),
             Err(err) => {
                 eprintln!("failed to set the delete logger, errors go to stderr only: {err:#}");
