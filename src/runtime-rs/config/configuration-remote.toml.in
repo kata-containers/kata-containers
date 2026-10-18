@@ -175,6 +175,12 @@ reconnect_timeout_ms = 30000
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
 [runtime]
+# Shim logging destination: "journald" (default) or "file".
+log_destination = "journald"
+# Host directory for shim logs when log_destination is "file".
+# (default: /var/log/kata-containers)
+log_dir = "/var/log/kata-containers"
+
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)

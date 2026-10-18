@@ -581,6 +581,12 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT_COCO@
 cdh_api_timeout_ms = 50000
 
 [runtime]
+# Shim logging destination: "journald" (default) or "file".
+log_destination = "journald"
+# Host directory for shim logs when log_destination is "file".
+# (default: /var/log/kata-containers)
+log_dir = "/var/log/kata-containers"
+
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)
