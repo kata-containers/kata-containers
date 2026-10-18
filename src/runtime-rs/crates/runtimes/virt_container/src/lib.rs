@@ -78,9 +78,16 @@ unsafe impl Sync for VirtContainer {}
 #[derive(Debug)]
 pub struct VirtContainer {}
 
-#[async_trait]
-impl RuntimeHandler for VirtContainer {
-    fn init() -> Result<()> {
+/// Register the configuration plugins of all hypervisors supported by this
+/// build.
+///
+/// Loading a configuration with `TomlConfig::load_from_file()` runs the
+/// plugin of the configured hypervisor to adjust and validate it.  The shim
+/// registers the plugins through [`RuntimeHandler::init()`], but callers such
+/// as `kata-ctl factory` load the configuration without initializing a
+/// runtime handler, so they have to register the plugins themselves.  The
+/// registration is idempotent.
+pub fn register_hypervisor_plugins() {
         // Before start logging with virt-container, regist it
         logging::register_subsystem_logger("runtimes", "virt-container");
 
@@ -123,6 +130,15 @@ impl RuntimeHandler for VirtContainer {
             let openvmm_config = Arc::new(OpenVmmConfig::new());
             register_hypervisor_plugin(HYPERVISOR_NAME_OPENVMM, openvmm_config);
         }
+    }
+
+    #[async_trait]
+    impl RuntimeHandler for VirtContainer {
+    fn init() -> Result<()> {
+        // Before start logging with virt-container, regist it
+        logging::register_subsystem_logger("runtimes", "virt-container");
+
+        register_hypervisor_plugins();
 
         Ok(())
     }
