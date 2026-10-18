@@ -3012,9 +3012,28 @@ impl<'a> QemuCmdLine<'a> {
             requires_memlock: false,
         };
 
-        // add_virtiofs_share() installs the file-backed memory backend when
-        // filesystem sharing is enabled.
-        if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+        // A VM template must back its guest memory with the template memory
+        // file instead of anonymous RAM.  The file is pre-created by the
+        // template factory and, when the VM is booted to become a template,
+        // shared with the host so that the guest's memory contents land in
+        // it.  This lets migration (which sets x-ignore-shared) skip the
+        // memory and only save/restore the device state, exactly like the Go
+        // runtime's setupTemplate().
+        if config.vm_template.boot_to_be_template || config.vm_template.boot_from_template {
+            if config.vm_template.memory_path.is_empty() {
+                return Err(anyhow!("vm template memory path is not configured"));
+            }
+
+            qemu_cmd_line.add_file_memory_backend(
+                "entire-guest-memory",
+                &config.vm_template.memory_path,
+                config.vm_template.boot_to_be_template,
+                false,
+                config.memory_info.enable_mem_prealloc,
+            );
+        } else if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+            // add_virtiofs_share() installs the file-backed memory backend
+            // when filesystem sharing is enabled.
             qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
         }
 
