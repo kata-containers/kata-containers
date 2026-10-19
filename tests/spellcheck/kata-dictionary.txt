@@ -9,6 +9,7 @@ katacontainers
 libcontainer
 osbuilder
 rootfs
+rootfses
 shimv2
 SPDK
 upcall
