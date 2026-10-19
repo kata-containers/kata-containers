@@ -48,7 +48,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor_persist::HypervisorState;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
-use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, RootlessUser};
+use kata_types::config::hypervisor::{
+    Hypervisor as HypervisorConfig, RootlessUser, MAX_NETWORK_QUEUES,
+};
 
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 
@@ -159,6 +161,11 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn get_agent_socket(&self) -> Result<String>;
     async fn disconnect(&self);
     async fn hypervisor_config(&self) -> HypervisorConfig;
+    /// Queue-pair limit applied before endpoint creation.
+    /// Backends may override this with a stricter limit.
+    async fn network_queue_limit(&self) -> usize {
+        MAX_NETWORK_QUEUES as usize
+    }
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds>;
     async fn get_pids(&self) -> Result<Vec<u32>>;
     async fn get_vmm_master_tid(&self) -> Result<u32>;
