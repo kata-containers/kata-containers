@@ -638,6 +638,11 @@ pub struct CpuInfo {
     #[serde(default)]
     pub cpu_features: String,
 
+    /// CPU model to pass to QEMU's `-cpu` option.
+    /// If unspecified, QEMU uses `host`.
+    #[serde(default)]
+    pub cpu_model: String,
+
     /// Default number of vCPUs per SB/VM:
     /// - Unspecified or `0`: Set to `@DEFVCPUS@`
     /// - `< 0`: Set to the actual number of physical cores
@@ -2077,6 +2082,7 @@ mod tests {
                 desc: "all with default values",
                 input: &mut CpuInfo {
                     cpu_features: "".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus: 0.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 0,
@@ -2084,6 +2090,7 @@ mod tests {
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
@@ -2094,6 +2101,7 @@ mod tests {
                 desc: "all with big values",
                 input: &mut CpuInfo {
                     cpu_features: "a,b,c".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus: 9999999.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 9999999,
@@ -2101,6 +2109,7 @@ mod tests {
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus: node_cpus,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
@@ -2111,6 +2120,7 @@ mod tests {
                 desc: "default_vcpus lager than default_maxvcpus",
                 input: &mut CpuInfo {
                     cpu_features: "a, b ,c".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus: -1.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
@@ -2118,6 +2128,7 @@ mod tests {
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus: 1.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
@@ -2128,6 +2139,7 @@ mod tests {
                 desc: "overhead_vcpus explicitly set keeps value",
                 input: &mut CpuInfo {
                     cpu_features: "x, y".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus: 0.0,
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
@@ -2135,6 +2147,7 @@ mod tests {
                 },
                 output: CpuInfo {
                     cpu_features: "x,y".to_string(),
+                    cpu_model: "".to_string(),
                     default_vcpus,
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
@@ -2167,7 +2180,36 @@ mod tests {
                 "test[{}] overhead_vcpus",
                 tc.desc
             );
+            assert_eq!(
+                tc.input.cpu_model, tc.output.cpu_model,
+                "test[{}] cpu_model",
+                tc.desc
+            );
         }
+    }
+
+    #[test]
+    fn test_cpu_info_adjust_config_keeps_explicit_cpu_model() {
+        let mut cpu_info = CpuInfo {
+            cpu_model: "EPYC-Genoa".to_string(),
+            ..Default::default()
+        };
+
+        cpu_info.adjust_config().unwrap();
+
+        assert_eq!(cpu_info.cpu_model, "EPYC-Genoa");
+    }
+
+    #[test]
+    fn test_cpu_info_adjust_config_keeps_empty_cpu_model() {
+        let mut cpu_info = CpuInfo {
+            cpu_model: "".to_string(),
+            ..Default::default()
+        };
+
+        cpu_info.adjust_config().unwrap();
+
+        assert!(cpu_info.cpu_model.is_empty());
     }
 
     #[test]
