@@ -169,7 +169,11 @@ impl QemuInner {
                     if cmdline.has_memory_hotplug_region() {
                         platform.add_hotplug_placeholder_node();
                     }
-                    cmdline.apply_platform(&platform.machine_options(), platform.topology_args()?);
+                    cmdline.apply_platform(
+                        &platform.machine_options(),
+                        platform.topology_args()?,
+                        platform.iommufd_id(),
+                    );
                     info!(
                         sl!(),
                         "cold_plug_vfio=auto: Platform owns the topology for {:?}", assigned
