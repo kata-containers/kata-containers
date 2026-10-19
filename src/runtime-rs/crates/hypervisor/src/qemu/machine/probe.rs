@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryFrom;
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 
@@ -18,6 +19,10 @@ pub(crate) struct HostTopology {
     /// Allocated after all GPU pxb complexes in bus_nr ordering.
     pub nic_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
+    /// 64-bit MMIO of each GPU (its prefetchable BARs) in bytes, keyed by
+    /// BDF, from `/sys/bus/pci/devices/<BDF>/resource`.  Sizes the virt
+    /// machine's `highmem-mmio-size`; empty when the topology is hand-built.
+    pub gpu_mmio_bytes: BTreeMap<String, u64>,
     /// `-numa dist` entries emitted after all NUMA nodes.  Each tuple is (src, dst, val).
     pub numa_distances: Vec<(u32, u32, u32)>,
     /// Minimum number of `pcie-root-port` slots to pre-provision on the Q35 default
@@ -46,10 +51,15 @@ pub(crate) struct GpuSmmuGroup {
     pub socket: u32,
 }
 
+/// One EGM region, `/dev/egmN`, as `nvgrace-egm` exposes it under
+/// `/sys/class/egm/egmN`.  One region per socket.
 pub(crate) struct EgmSocketInfo {
     pub path: String,
     pub socket: u32,
     pub total_size: u64,
+    /// GPUs of the region; vEGM is only supported when all of them are
+    /// passed through (the compute-tray boundary).
+    pub gpu_devices: Vec<String>,
 }
 
 /// CoCo hardware protection capability detected by the host probe.
@@ -95,6 +105,78 @@ impl ProtectionDevice {
     }
 }
 
+/// Equal share of `total` for the `i`-th of `n` consumers, rounded down to a
+/// whole MiB except for the last one, which takes the remainder so the shares
+/// add up to `total` exactly (QEMU requires memdev sizes to sum to `-m`).
+pub(crate) fn equal_share(total: u64, n: usize, i: usize) -> u64 {
+    const MIB: u64 = 1 << 20;
+    if n == 0 {
+        return total;
+    }
+    let share = total / n as u64 / MIB * MIB;
+    if i + 1 == n {
+        total - share * (n as u64 - 1)
+    } else {
+        share
+    }
+}
+
+impl HostTopology {
+    /// Replace the host CPU indices the prober recorded with guest vCPU ranges:
+    /// `max_vcpus` guest CPUs laid out contiguously over the sockets in socket
+    /// order, earlier sockets taking the remainder.  `-numa node,cpus=` names
+    /// guest CPUs, and every possible vCPU (up to maxcpus) needs a node so that
+    /// hot-plugged CPUs have somewhere to land.
+    pub(crate) fn map_guest_vcpus(&mut self, max_vcpus: u32) {
+        let n = self.sockets.len() as u32;
+        if n == 0 {
+            return;
+        }
+        let (base, rem) = (max_vcpus / n, max_vcpus % n);
+        let mut start = 0u32;
+        for (i, socket) in self.sockets.iter_mut().enumerate() {
+            let count = base + u32::from((i as u32) < rem);
+            socket.cpu_range = start..start + count;
+            start += count;
+        }
+    }
+
+    /// Give every socket without an explicit `mem_size` an equal share of the
+    /// guest RAM that the explicitly sized sockets leave over.
+    pub(crate) fn fill_guest_memory(&mut self, total_bytes: u64) {
+        let claimed: u64 = self.sockets.iter().filter_map(|s| s.mem_size).sum();
+        let open: Vec<usize> = self
+            .sockets
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.mem_size.is_none())
+            .map(|(i, _)| i)
+            .collect();
+        let remaining = total_bytes.saturating_sub(claimed);
+        for (k, idx) in open.iter().enumerate() {
+            self.sockets[*idx].mem_size = Some(equal_share(remaining, open.len(), k));
+        }
+    }
+
+    /// Keep only the passthrough devices named in `keep` (BDFs, compared
+    /// case-insensitively) and drop groups that end up empty.  The prober sees
+    /// every NVIDIA device on the host; a sandbox only gets the ones its pod
+    /// was allocated.
+    pub(crate) fn retain_devices(&mut self, keep: &[String]) {
+        let keep: Vec<String> = keep.iter().map(|b| b.to_ascii_lowercase()).collect();
+        for groups in [&mut self.gpu_smmu_groups, &mut self.nic_smmu_groups] {
+            for group in groups.iter_mut() {
+                group
+                    .pci_bus_addrs
+                    .retain(|addr| keep.contains(&addr.to_ascii_lowercase()));
+            }
+            groups.retain(|group| !group.pci_bus_addrs.is_empty());
+        }
+        self.gpu_mmio_bytes
+            .retain(|bdf, _| keep.contains(&bdf.to_ascii_lowercase()));
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Host topology prober
 // ──────────────────────────────────────────────────────────────────────────────
@@ -126,6 +208,14 @@ fn read_sysfs_i32(path: &Path) -> Result<i32> {
         .with_context(|| format!("parsing i32 from {}", path.display()))
 }
 
+/// Reads a hex integer that may not fit in 32 bits, such as an EGM size.
+fn read_sysfs_hex_u64(path: &Path) -> Result<u64> {
+    let raw =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let trimmed = raw.trim().trim_start_matches("0x");
+    u64::from_str_radix(trimmed, 16).with_context(|| format!("parsing hex from {}", path.display()))
+}
+
 /// Resolves the IOMMU-group number for a PCI device.
 ///
 /// `/sys/bus/pci/devices/<BDF>/iommu_group` is a symlink that ends in
@@ -140,6 +230,17 @@ fn iommu_group_of(dev_path: &Path) -> Option<u32> {
         .and_then(|n| n.parse::<u32>().ok())
 }
 
+/// Name of the physical IOMMU a PCI device sits behind, from the
+/// `/sys/bus/pci/devices/<BDF>/iommu` symlink (e.g. `smmu3.0x0000000005000000`
+/// on Grace, `dmar0` on Intel).  `None` when the kernel exposes no such link.
+fn iommu_unit_of(dev_path: &Path) -> Option<String> {
+    let target = std::fs::read_link(dev_path.join("iommu")).ok()?;
+    target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_owned)
+}
+
 /// Derives the canonical BDF string (`DDDD:BB:SS.F`) from a sysfs device path.
 fn bdf_of(dev_path: &Path) -> Option<String> {
     dev_path
@@ -148,23 +249,28 @@ fn bdf_of(dev_path: &Path) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Maps a NUMA node index to a socket/package index.
-///
-/// On single-socket Grace systems all NUMA nodes belong to socket 0.
-/// On dual-socket or multi-chip systems the mapping is stored in
-/// `/sys/devices/system/node/nodeN/cpumap` but deriving the socket from
-/// `/sys/bus/pci/devices/<BDF>/numa_node` is enough for our purposes:
-/// we assign each *unique* NUMA node a sequential socket ID.
-fn numa_node_to_socket(node: i32, socket_map: &mut HashMap<i32, u32>) -> u32 {
-    let next_id = socket_map.len() as u32;
-    *socket_map.entry(node).or_insert(next_id)
+/// Resolve PCI affinity using the CPU's node links, not its package ID.
+/// Package IDs are opaque (and large on Grace), not host NUMA node numbers.
+fn numa_node_to_socket(node: i32, sockets: &[SocketInfo]) -> Result<u32> {
+    if let Some(socket) = sockets.iter().find(|s| s.host_node == Some(node as u32)) {
+        return Ok(socket.id);
+    }
+    if sockets.len() == 1 && sockets[0].host_node.is_none() {
+        return Ok(sockets[0].id);
+    }
+    anyhow::bail!("PCI NUMA node {node} has no matching CPU NUMA node")
 }
 
 /// Probe the current host and return the NVIDIA device topology.
 ///
 /// Reads `/sys/bus/pci/devices/` to discover all NVIDIA GPUs and NICs,
-/// groups them by IOMMU group (one group = one SMMU on aarch64 Grace),
-/// and builds a `HostTopology` suitable for `Platform::apply_host_defaults`.
+/// groups them by the physical SMMU each device sits behind (the `iommu`
+/// symlink; the IOMMU group is the fallback when the kernel exposes no such
+/// link), and builds a `HostTopology` suitable for
+/// `Platform::apply_host_defaults`.  Devices behind one host SMMU must share
+/// one `arm-smmuv3` in the guest, and an IOMMU group is an isolation boundary
+/// rather than a translation unit: two GPUs can sit in separate groups behind
+/// the same SMMU.
 ///
 /// Returns `Ok(topo)` with empty `gpu_smmu_groups` if no NVIDIA devices are
 /// found (e.g., on a plain x86 CI runner).
@@ -173,6 +279,7 @@ pub(crate) fn probe_host_topology() -> Result<HostTopology> {
         Path::new("/sys/bus/pci/devices"),
         Path::new("/sys/devices/system/cpu"),
         Path::new("/dev"),
+        Path::new("/sys/class/egm"),
     )
 }
 
@@ -181,10 +288,14 @@ pub(crate) fn probe_host_topology_at(
     pci_root: &Path,
     cpu_root: &Path,
     dev_root: &Path,
+    egm_class_root: &Path,
 ) -> Result<HostTopology> {
     // ── 1. Walk /sys/bus/pci/devices and collect NVIDIA devices ─────────────
-    let mut gpu_groups: HashMap<u32, Vec<(String, i32)>> = HashMap::new(); // group_id → [(BDF, numa_node)]
-    let mut nic_groups: HashMap<u32, Vec<(String, i32)>> = HashMap::new();
+    // complex key → [(BDF, numa_node)]; the key is the physical SMMU when the
+    // kernel exposes it, otherwise the IOMMU group
+    let mut gpu_groups: HashMap<String, Vec<(String, i32)>> = HashMap::new();
+    let mut nic_groups: HashMap<String, Vec<(String, i32)>> = HashMap::new();
+    let mut gpu_mmio_bytes: BTreeMap<String, u64> = BTreeMap::new();
 
     let dir =
         std::fs::read_dir(pci_root).with_context(|| format!("opening {}", pci_root.display()))?;
@@ -225,17 +336,22 @@ pub(crate) fn probe_host_topology_at(
                 continue;
             }
         };
+        let complex_key = iommu_unit_of(&dev_path).unwrap_or_else(|| format!("group{iommu_group}"));
 
         match class16 {
             CLASS_3D_CONTROLLER | CLASS_VGA_CONTROLLER => {
+                let mmio = pci_mmio64_bytes(&dev_path);
+                if mmio > 0 {
+                    gpu_mmio_bytes.insert(bdf.clone(), mmio);
+                }
                 gpu_groups
-                    .entry(iommu_group)
+                    .entry(complex_key)
                     .or_default()
                     .push((bdf, numa_node));
             }
             CLASS_NETWORK_CONTROLLER | CLASS_INFINIBAND_CONTROLLER => {
                 nic_groups
-                    .entry(iommu_group)
+                    .entry(complex_key)
                     .or_default()
                     .push((bdf, numa_node));
             }
@@ -244,66 +360,86 @@ pub(crate) fn probe_host_topology_at(
     }
 
     // ── 2. Convert raw groups → GpuSmmuGroup, sorted for deterministic output ──
-    let mut socket_map: HashMap<i32, u32> = HashMap::new();
+    let sockets = build_socket_info(cpu_root);
 
-    let mut gpu_smmu_groups: Vec<(u32 /* group_id */, GpuSmmuGroup)> = gpu_groups
+    let mut gpu_smmu_groups: Vec<(String /* complex key */, GpuSmmuGroup)> = gpu_groups
         .into_iter()
         .map(|(group_id, mut devs)| {
             devs.sort_by(|a, b| a.0.cmp(&b.0)); // sort BDFs
-            let socket = numa_node_to_socket(devs[0].1, &mut socket_map);
-            (
+            let socket = numa_node_to_socket(devs[0].1, &sockets)?;
+            Ok((
                 group_id,
                 GpuSmmuGroup {
                     pci_bus_addrs: devs.into_iter().map(|(bdf, _)| bdf).collect(),
                     socket,
                 },
-            )
+            ))
         })
-        .collect();
-    gpu_smmu_groups.sort_by_key(|(gid, _)| *gid);
+        .collect::<Result<_>>()?;
+    // Order complexes by their first BDF, not by IOMMU group id: BDFs are
+    // stable across boots, group ids follow enumeration order.
+    gpu_smmu_groups.sort_by(|a, b| a.1.pci_bus_addrs[0].cmp(&b.1.pci_bus_addrs[0]));
 
-    let mut nic_smmu_groups: Vec<(u32, GpuSmmuGroup)> = nic_groups
+    let mut nic_smmu_groups: Vec<(String, GpuSmmuGroup)> = nic_groups
         .into_iter()
         .map(|(group_id, mut devs)| {
             devs.sort_by(|a, b| a.0.cmp(&b.0));
-            let socket = numa_node_to_socket(devs[0].1, &mut socket_map);
-            (
+            let socket = numa_node_to_socket(devs[0].1, &sockets)?;
+            Ok((
                 group_id,
                 GpuSmmuGroup {
                     pci_bus_addrs: devs.into_iter().map(|(bdf, _)| bdf).collect(),
                     socket,
                 },
-            )
+            ))
         })
-        .collect();
-    nic_smmu_groups.sort_by_key(|(gid, _)| *gid);
+        .collect::<Result<_>>()?;
+    nic_smmu_groups.sort_by(|a, b| a.1.pci_bus_addrs[0].cmp(&b.1.pci_bus_addrs[0]));
 
-    // ── 3. Build SocketInfo list ─────────────────────────────────────────────
-    // Derive CPU ranges from /sys/devices/system/cpu/cpuN/topology/physical_package_id
-    // Fall back to a single socket covering all online CPUs when unavailable.
-    let sockets = build_socket_info(cpu_root, &socket_map);
-
-    // ── 4. EGM detection: /dev/egmN devices ─────────────────────────────────
-    let egm_sockets = probe_egm_devices(dev_root);
+    // ── 3. EGM detection: /dev/egmN devices ─────────────────────────────────
+    let egm_sockets = probe_egm_devices(egm_class_root, dev_root, pci_root, &sockets);
 
     Ok(HostTopology {
         sockets,
         gpu_smmu_groups: gpu_smmu_groups.into_iter().map(|(_, g)| g).collect(),
         nic_smmu_groups: nic_smmu_groups.into_iter().map(|(_, g)| g).collect(),
         egm_sockets,
+        gpu_mmio_bytes,
         numa_distances: vec![],
         pcie_root_port: 0,
         protection: None,
     })
 }
 
+/// Bytes of 64-bit memory BARs of a PCI device, from its sysfs `resource`
+/// file: one `start end flags` line per resource, the first six being the
+/// BARs.  Returns 0 when the file is missing.
+fn pci_mmio64_bytes(dev_path: &Path) -> u64 {
+    const IORESOURCE_MEM: u64 = 0x0000_0200;
+    const IORESOURCE_MEM_64: u64 = 0x0010_0000;
+    let Ok(raw) = std::fs::read_to_string(dev_path.join("resource")) else {
+        return 0;
+    };
+    raw.lines()
+        .take(6)
+        .filter_map(|line| {
+            let mut fields = line
+                .split_whitespace()
+                .map(|f| u64::from_str_radix(f.trim_start_matches("0x"), 16).ok());
+            let (start, end, flags) = (fields.next()??, fields.next()??, fields.next()??);
+            let is_mem64 = flags & IORESOURCE_MEM != 0 && flags & IORESOURCE_MEM_64 != 0;
+            (is_mem64 && end >= start).then(|| end - start + 1)
+        })
+        .sum()
+}
+
 /// Reads `/sys/devices/system/cpu/` to build SocketInfo per physical package.
 ///
-/// Each unique `physical_package_id` becomes a socket.  If the topology files
-/// are unavailable we fall back to a single socket with an empty CPU range.
-fn build_socket_info(cpu_root: &Path, socket_map: &HashMap<i32, u32>) -> Vec<SocketInfo> {
-    // package_id → sorted list of CPU indices
-    let mut packages: HashMap<u32, Vec<u32>> = HashMap::new();
+/// Keep host NUMA affinity from cpuN/nodeN separately from the decimal package
+/// ID. A package spanning multiple host nodes gets one memory domain per node.
+/// Sorted keys make guest socket IDs independent of sysfs/HashMap iteration.
+fn build_socket_info(cpu_root: &Path) -> Vec<SocketInfo> {
+    let mut packages: BTreeMap<(u32, Option<u32>), Vec<u32>> = BTreeMap::new();
 
     if let Ok(dir) = std::fs::read_dir(cpu_root) {
         for entry in dir.flatten() {
@@ -318,10 +454,24 @@ fn build_socket_info(cpu_root: &Path, socket_map: &HashMap<i32, u32>) -> Vec<Soc
                 Err(_) => continue,
             };
             let pkg_path = entry.path().join("topology/physical_package_id");
-            let pkg_id: u32 = read_sysfs_hex(&pkg_path)
-                .or_else(|_| read_sysfs_i32(&pkg_path).map(|v| v as u32))
+            let pkg_id = read_sysfs_i32(&pkg_path)
+                .ok()
+                .and_then(|id| u32::try_from(id).ok())
                 .unwrap_or_default();
-            packages.entry(pkg_id).or_default().push(cpu_idx);
+            let host_node = std::fs::read_dir(entry.path()).ok().and_then(|entries| {
+                entries.flatten().find_map(|entry| {
+                    entry
+                        .file_name()
+                        .to_str()?
+                        .strip_prefix("node")?
+                        .parse::<u32>()
+                        .ok()
+                })
+            });
+            packages
+                .entry((pkg_id, host_node))
+                .or_default()
+                .push(cpu_idx);
         }
     }
 
@@ -336,39 +486,40 @@ fn build_socket_info(cpu_root: &Path, socket_map: &HashMap<i32, u32>) -> Vec<Soc
         }];
     }
 
-    let mut infos: Vec<SocketInfo> = packages
+    packages
         .into_iter()
-        .map(|(pkg_id, mut cpus)| {
+        .enumerate()
+        .map(|(id, ((_, host_node), mut cpus))| {
             cpus.sort_unstable();
             let first = *cpus.first().unwrap();
             let last = *cpus.last().unwrap();
-            // Find the NUMA node for this package using the inverse socket_map
-            let host_node = socket_map
-                .iter()
-                .find(|(_, &sid)| sid == pkg_id)
-                .map(|(&node, _)| node as u32);
             SocketInfo {
-                id: pkg_id,
+                id: id as u32,
                 cpu_range: first..(last + 1),
                 host_node,
                 mem_path: None,
                 mem_size: None,
             }
         })
-        .collect();
-    infos.sort_by_key(|s| s.id);
-    infos
+        .collect()
 }
 
-/// Discovers EGM backing devices under `/dev/egmN`.
+/// Discovers the EGM regions the `nvgrace-egm` module exposes.
 ///
-/// EGM size is read from `/sys/class/misc/egmN/size` (bytes).
-/// The NUMA node of the underlying PCIe device maps to a socket via
-/// `/sys/class/misc/egmN/device/numa_node`.
-fn probe_egm_devices(dev_root: &Path) -> Vec<EgmSocketInfo> {
+/// One region per socket, `/dev/egmN`, described under `/sys/class/egm/egmN`
+/// by `egm_size` (hex, bytes) and `gpu_devices` (the BDFs of the GPUs of that
+/// socket).  The socket is the one of the region's first GPU, resolved the
+/// same way as for the passthrough groups.  Regions without a size or without
+/// GPUs are skipped.
+fn probe_egm_devices(
+    class_root: &Path,
+    dev_root: &Path,
+    pci_root: &Path,
+    sockets: &[SocketInfo],
+) -> Vec<EgmSocketInfo> {
     let mut result = Vec::new();
 
-    let dir = match std::fs::read_dir(dev_root) {
+    let dir = match std::fs::read_dir(class_root) {
         Ok(d) => d,
         Err(_) => return result,
     };
@@ -379,29 +530,34 @@ fn probe_egm_devices(dev_root: &Path) -> Vec<EgmSocketInfo> {
         if !name_str.starts_with("egm") || !name_str[3..].chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
-        let egm_idx: u32 = match name_str[3..].parse() {
-            Ok(n) => n,
-            Err(_) => continue,
+
+        let Ok(total_size) = read_sysfs_hex_u64(&entry.path().join("egm_size")) else {
+            continue;
+        };
+        let gpu_devices: Vec<String> = std::fs::read_to_string(entry.path().join("gpu_devices"))
+            .map(|s| {
+                s.split(|c: char| c.is_whitespace() || c == ',')
+                    .filter(|b| !b.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let Some(first_gpu) = gpu_devices.first() else {
+            continue;
+        };
+        let numa_node = read_sysfs_i32(&pci_root.join(first_gpu).join("numa_node")).unwrap_or(0);
+        let Ok(socket) = numa_node_to_socket(numa_node.max(0), sockets) else {
+            continue;
         };
 
-        let path = dev_root.join(name_str.as_ref());
-        // Size from /sys/class/misc/egmN/size
-        let sys_misc = PathBuf::from(format!("/sys/class/misc/egm{egm_idx}"));
-        let size_bytes: u64 = read_sysfs_hex(&sys_misc.join("size"))
-            .map(|v| v as u64)
-            .unwrap_or(0);
-
-        // NUMA node from /sys/class/misc/egmN/device/numa_node
-        let numa_node = read_sysfs_i32(&sys_misc.join("device/numa_node")).unwrap_or(0);
-        let socket = if numa_node < 0 { 0 } else { numa_node as u32 };
-
         result.push(EgmSocketInfo {
-            path: path.to_string_lossy().into_owned(),
+            path: dev_root.join(&*name_str).to_string_lossy().into_owned(),
             socket,
-            total_size: size_bytes,
+            total_size,
+            gpu_devices,
         });
     }
 
-    result.sort_by_key(|e| e.socket);
+    result.sort_by(|a, b| a.socket.cmp(&b.socket).then_with(|| a.path.cmp(&b.path)));
     result
 }

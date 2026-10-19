@@ -312,6 +312,11 @@ impl Memory {
         self
     }
 
+    fn clear_memory_backend(&mut self) -> &mut Self {
+        self.memory_backend = None;
+        self
+    }
+
     #[allow(dead_code)]
     fn set_maxmem_size(&mut self, max_size: u64) -> &mut Self {
         self.max_size = max_size;
@@ -519,6 +524,18 @@ impl CcwSubChannel {
     }
 }
 
+/// Arguments rendered elsewhere (the machine-centric `Platform`), emitted
+/// verbatim at their position in the device list.
+#[derive(Debug)]
+struct RawArgs(Vec<String>);
+
+#[async_trait]
+impl ToQemuParams for RawArgs {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(self.0.clone())
+    }
+}
+
 #[derive(Debug)]
 struct Machine {
     r#type: String,
@@ -588,6 +605,26 @@ impl Machine {
 
     fn set_confidential_guest_support(&mut self, scheme: &str) -> &mut Self {
         self.confidential_guest_support = scheme.to_owned();
+        self
+    }
+
+    /// Merge `key=value` options into the machine line.  A key already present
+    /// (from `machine_accelerators`) is replaced, so a Platform's
+    /// `gic-version=3` wins over the profile's `gic-version=host`.
+    fn merge_options(&mut self, extra: &[String]) -> &mut Self {
+        let key_of = |opt: &str| opt.split('=').next().unwrap_or(opt).to_owned();
+        let mut options: Vec<String> = self
+            .options
+            .split(',')
+            .filter(|o| !o.is_empty())
+            .map(String::from)
+            .collect();
+        for opt in extra {
+            let key = key_of(opt);
+            options.retain(|existing| key_of(existing) != key);
+            options.push(opt.clone());
+        }
+        self.options = options.join(",");
         self
     }
 }
@@ -2986,6 +3023,11 @@ pub struct QemuCmdLine<'a> {
     block_fdsets: HashMap<String, Vec<i64>>,
     next_fdset_id: i64,
     requires_memlock: bool,
+    /// ID of the iommufd object a machine-centric `Platform` emitted.  VFIO
+    /// devices the Platform does not model join it instead of creating their
+    /// own: the kernel binds every device of an IOMMU group to one iommufd
+    /// context, and QEMU rejects a duplicate object id.
+    platform_iommufd: Option<String>,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -3010,6 +3052,7 @@ impl<'a> QemuCmdLine<'a> {
             block_fdsets: HashMap::new(),
             next_fdset_id: 1,
             requires_memlock: false,
+            platform_iommufd: None,
         };
 
         // add_virtiofs_share() installs the file-backed memory backend when
@@ -3630,16 +3673,24 @@ impl<'a> QemuCmdLine<'a> {
             }
         };
 
-        let iommufd_name = format!("iommufd{}", config.bus);
         let fd_config = config.fd_config.as_ref();
-        if let Some(fd_config) = fd_config {
-            self.devices.push(Box::new(ObjectIommufd::with_fd(
-                &iommufd_name,
-                &fd_config.iommufd_dev,
-            )?));
-        } else {
-            self.add_iommufd(&iommufd_name)?;
-        }
+        let iommufd_name = match &self.platform_iommufd {
+            // The Platform already emitted the VM's shared iommufd object;
+            // join it rather than open a second iommufd context.
+            Some(id) => id.clone(),
+            None => {
+                let name = format!("iommufd{}", config.bus);
+                if let Some(fd_config) = fd_config {
+                    self.devices.push(Box::new(ObjectIommufd::with_fd(
+                        &name,
+                        &fd_config.iommufd_dev,
+                    )?));
+                } else {
+                    self.add_iommufd(&name)?;
+                }
+                name
+            }
+        };
 
         let root_port_id = config.bus.clone();
         let root_port = PCIeRootPortDevice::new(&root_port_id, DEFAULT_PCIE_ROOT_BUS)
@@ -3904,6 +3955,27 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(seccomp_sandbox));
     }
 
+    /// Hand the machine options and the memory/NUMA/PCIe/VFIO topology to a
+    /// machine-centric `Platform` (Phase 7).  The legacy singletons keep
+    /// `-name`, kernel, `-smp`, `-cpu`, `-m` and every device the Platform does
+    /// not model.  The machine-wide memory backend installed by `new()` is
+    /// dropped: the Platform binds guest RAM per NUMA node through `memdev=`,
+    /// and QEMU rejects `-machine memory-backend=` next to `-numa memdev=`.
+    /// `iommufd_id` names the shared iommufd object in `topology_args`, if
+    /// any; VFIO devices added later reference it.
+    pub fn apply_platform(
+        &mut self,
+        machine_options: &[String],
+        topology_args: Vec<String>,
+        iommufd_id: Option<&str>,
+    ) {
+        self.machine.merge_options(machine_options);
+        self.machine.memory_backend = None;
+        self.memory.clear_memory_backend();
+        self.platform_iommufd = iommufd_id.map(str::to_owned);
+        self.devices.push(Box::new(RawArgs(topology_args)));
+    }
+
     pub async fn build(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
 
@@ -4141,6 +4213,39 @@ mod tests {
         assert!(vfio[1].split(',').any(|param| param.starts_with("fd=")));
         assert!(!vfio[1].split(',').any(|param| param.starts_with("host=")));
         assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_joins_platform_iommufd() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-platform-iommufd", &config).unwrap();
+        cmdline.apply_platform(
+            &[],
+            vec!["-object".to_owned(), "iommufd,id=iommufd0".to_owned()],
+            Some("iommufd0"),
+        );
+        let vfio = VfioDeviceConfig::new("0000:21:00.0", 9, 10).with_vfio_bus("rp0");
+        cmdline.add_pcie_vfio_device(vfio).unwrap();
+        let params = cmdline.build().await.unwrap();
+
+        // Only the Platform's object; the legacy device joins it.
+        let iommufds: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| {
+                (args[0] == "-object" && args[1].starts_with("iommufd,"))
+                    .then_some(args[1].as_str())
+            })
+            .collect();
+        assert_eq!(iommufds, vec!["iommufd,id=iommufd0"]);
+
+        let vfio = params
+            .windows(2)
+            .find(|args| args[0] == "-device" && args[1].starts_with("vfio-pci,"))
+            .expect("missing VFIO device");
+        assert!(contains_param(&vfio[1..2], "iommufd=iommufd0"));
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 

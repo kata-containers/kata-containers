@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use super::platform::{
-    BaseMachine, CpuConfig, CpuModel, IommufdBackend, Machine, MemoryBackend, NumaNode, Objects,
-    Platform, SHARED_IOMMUFD_ID,
+    highmem_mmio_size_for, BaseMachine, CpuConfig, CpuModel, IommufdBackend, Machine,
+    MemoryBackend, NumaNode, Objects, Platform, SHARED_IOMMUFD_ID,
 };
 use super::probe::{
     probe_host_topology_at, EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice,
@@ -72,6 +73,7 @@ fn grace_1_single_gpu() {
             numa_distances: vec![],
             pcie_root_port: 0,
             protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
         },
         "grace_1_single_gpu.args",
     );
@@ -98,6 +100,7 @@ fn grace_2_four_gpus_1_per_smmu() {
             numa_distances: vec![],
             pcie_root_port: 0,
             protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
         },
         "grace_2_four_gpus_1_per_smmu.args",
     );
@@ -122,6 +125,7 @@ fn grace_3_four_gpus_2_per_smmu() {
             numa_distances: vec![],
             pcie_root_port: 0,
             protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
         },
         "grace_3_four_gpus_2_per_smmu.args",
     );
@@ -146,6 +150,7 @@ fn grace_4_gpu_and_nic() {
             numa_distances: vec![],
             pcie_root_port: 0,
             protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
         },
         "grace_4_gpu_and_nic.args",
     );
@@ -166,6 +171,7 @@ fn grace_5_vcmdq() {
         numa_distances: vec![],
         pcie_root_port: 0,
         protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
     };
     let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
     platform.apply_host_defaults(&topo);
@@ -235,26 +241,31 @@ fn grace_6_vegm_1_per_socket() {
                     path: "/dev/egm4".into(),
                     socket: 0,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm5".into(),
                     socket: 1,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm6".into(),
                     socket: 2,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm7".into(),
                     socket: 3,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
             ],
             numa_distances: vec![],
             pcie_root_port: 0,
             protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
         },
         "grace_6_vegm_1_per_socket.args",
     );
@@ -298,16 +309,19 @@ fn grace_7_vegm_2_per_socket() {
                     path: "/dev/egm4".into(),
                     socket: 0,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm5".into(),
                     socket: 1,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
             ],
             numa_distances: vec![],
             pcie_root_port: 0,
             protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
         },
         "grace_7_vegm_2_per_socket.args",
     );
@@ -332,6 +346,7 @@ fn gb300_nvl_2gpu() {
         numa_distances: vec![],
         pcie_root_port: 0,
         protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
     };
     let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
     // B200 BARs require 8T highmem window; override the default 4T.
@@ -342,6 +357,193 @@ fn gb300_nvl_2gpu() {
     let got = platform.to_qemu_args().expect("to_qemu_args");
     let want = load_fixture("gb300_nvl_2gpu.args");
     assert_eq!(want, got);
+}
+
+// ---- GB200 tray: 4 GPUs, 1 GPU per SMMU, 2 per socket, no EGM (34 NUMA nodes) ----
+//
+// Probed on a GB200 node (2026-09-15): two Grace sockets, Blackwell GPUs
+// 0008:01:00.0 and 0009:01:00.0 on host node 0, 0018:01:00.0 and 0019:01:00.0
+// on host node 1, each alone in its IOMMU group.  Guest layout: 8 vCPUs split
+// 4/4, 16G split 8G/8G bound to the matching host node.
+
+#[test]
+fn gb200_4gpu_2socket() {
+    let socket = |id: u32, cpus: std::ops::Range<u32>| SocketInfo {
+        id,
+        cpu_range: cpus,
+        host_node: Some(id),
+        mem_path: None,
+        mem_size: Some(8 << 30),
+    };
+    let group = |bdf: &str, socket: u32| GpuSmmuGroup {
+        pci_bus_addrs: vec![bdf.to_owned()],
+        socket,
+    };
+    check(
+        HostTopology {
+            sockets: vec![socket(0, 0..4), socket(1, 4..8)],
+            gpu_smmu_groups: vec![
+                group("0008:01:00.0", 0),
+                group("0009:01:00.0", 0),
+                group("0018:01:00.0", 1),
+                group("0019:01:00.0", 1),
+            ],
+            nic_smmu_groups: vec![],
+            egm_sockets: vec![],
+            numa_distances: vec![],
+            pcie_root_port: 0,
+            protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
+        },
+        "gb200_4gpu_2socket.args",
+    );
+}
+
+/// Read the real host through the same entry point as auto cold plug, without
+/// opening device FDs or launching QEMU. Output is the Platform argument fragment,
+/// not the legacy kernel/CPU/console/device arguments of a complete sandbox.
+#[test]
+#[ignore = "requires explicit host BDFs; diagnostic only"]
+fn dump_host_topology_args() {
+    let assigned: Vec<String> = std::env::var("KATA_DRY_RUN_BDFS")
+        .expect("set KATA_DRY_RUN_BDFS to comma-separated PCI BDFs")
+        .split(',')
+        .map(str::trim)
+        .filter(|bdf| !bdf.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+    assert!(!assigned.is_empty(), "provide at least one PCI BDF");
+    let read_u32 = |name: &str, default: u32| {
+        std::env::var(name)
+            .map(|value| value.parse::<u32>().expect("expected an unsigned integer"))
+            .unwrap_or(default)
+    };
+    let vcpus = read_u32("KATA_DRY_RUN_VCPUS", 8);
+    let memory_mib = read_u32("KATA_DRY_RUN_MEMORY_MIB", 16384);
+    let hotplug = read_u32("KATA_DRY_RUN_HOTPLUG", 0);
+    assert!(vcpus > 0 && memory_mib > 0 && hotplug <= 1);
+    let mut config = kata_types::config::Hypervisor::default();
+    config.machine_info.machine_type = "virt".to_owned();
+    config.cpu_info.default_vcpus = vcpus as f32;
+    config.cpu_info.default_maxvcpus = vcpus;
+    config.memory_info.default_memory = memory_mib;
+    config.shared_fs.shared_fs = Some("none".to_owned());
+    config.device_info.cold_plug_vfio = "auto".to_owned();
+
+    let mut platform = Platform::for_assigned_devices(&config, &assigned)
+        .expect("probe and build host topology")
+        .expect("none of the requested devices is modelled by the host probe");
+    let paths = platform.guest_pci_paths();
+    for bdf in &assigned {
+        assert!(
+            paths.contains_key(bdf),
+            "requested device {} was not modelled",
+            bdf
+        );
+    }
+    if hotplug == 1 {
+        platform.add_hotplug_placeholder_node();
+    }
+    println!("# Platform fragment: virt, {vcpus} vCPUs, {memory_mib} MiB, shared_fs=none");
+    println!("# Guest sizing is supplied here, not loaded from the installed Kata config.");
+    println!("# EGM is ignored by auto mode; no devices are opened and QEMU is not started.");
+    for bdf in &assigned {
+        println!("# {bdf} -> {}", paths[bdf]);
+    }
+    for arg in platform.to_qemu_args().expect("emit Platform arguments") {
+        println!("{arg}");
+    }
+}
+
+// The prober records host CPU indices and host memory; the guest layout is
+// derived from them before apply_host_defaults.
+
+#[test]
+fn guest_layout_from_probe() {
+    let host_socket = |id: u32, cpus: std::ops::Range<u32>| SocketInfo {
+        id,
+        cpu_range: cpus,
+        host_node: Some(id),
+        mem_path: None,
+        mem_size: None,
+    };
+    let mut topo = HostTopology {
+        sockets: vec![
+            host_socket(0, 0..72),
+            host_socket(1, 72..144),
+            host_socket(2, 144..216),
+        ],
+        gpu_smmu_groups: vec![],
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
+    };
+
+    topo.map_guest_vcpus(8);
+    let ranges: Vec<_> = topo.sockets.iter().map(|s| s.cpu_range.clone()).collect();
+    assert_eq!(ranges, vec![0..3, 3..6, 6..8]);
+
+    let total = 16u64 << 30;
+    topo.fill_guest_memory(total);
+    let sizes: Vec<u64> = topo.sockets.iter().map(|s| s.mem_size.unwrap()).collect();
+    // Whole-MiB shares for all but the last socket, which takes the remainder.
+    let share = (total / 3 / (1 << 20)) << 20;
+    assert_eq!(sizes, vec![share, share, total - 2 * share]);
+    assert_eq!(sizes.iter().sum::<u64>(), total);
+}
+
+// A sandbox only gets the devices its pod was allocated; the probe sees all.
+
+#[test]
+fn retain_devices_keeps_only_assigned() {
+    let mut topo = HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:01:00.0", "0009:01:00.0"], &["0018:01:00.0"]], 0),
+        nic_smmu_groups: smmu_groups(&[&["0002:00:01.0"]], 0),
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
+    };
+    topo.retain_devices(&["0009:01:00.0".to_owned(), "0002:00:01.0".to_uppercase()]);
+    assert_eq!(topo.gpu_smmu_groups.len(), 1, "emptied GPU group dropped");
+    assert_eq!(topo.gpu_smmu_groups[0].pci_bus_addrs, vec!["0009:01:00.0"]);
+    assert_eq!(
+        topo.nic_smmu_groups.len(),
+        1,
+        "NIC kept, matched case-insensitively"
+    );
+    assert_eq!(topo.sockets.len(), 1, "sockets untouched");
+}
+
+// Guest PCI paths: pxb bus_nr, root port slot in emission order, device at
+// function 0.  These are what the runtime writes back for the agent.
+
+#[test]
+fn guest_pci_paths_follow_bus_nr_and_port_order() {
+    let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
+    platform.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0", "0009:06:00.0"], &["0010:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
+    });
+    let paths = platform.guest_pci_paths();
+    assert_eq!(paths["0008:06:00.0"], "20/00/00");
+    assert_eq!(
+        paths["0009:06:00.0"], "20/01/00",
+        "second port on the same pxb"
+    );
+    assert_eq!(paths["0010:06:00.0"], "40/00/00", "second pxb complex");
+    assert_eq!(paths.len(), 3);
 }
 
 // ---- Q35 CoCo (SEV-SNP) + single GPU — AMD EPYC host, H100 80GB ----
@@ -945,6 +1147,7 @@ fn q35_vanilla_kata_x86() {
         numa_distances: vec![(0, 1, 20), (1, 0, 20)],
         pcie_root_port: 8,
         protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
     };
 
     let mut platform = Platform::from_config_defaults("q35", 0).expect("from_config_defaults");
@@ -954,11 +1157,151 @@ fn q35_vanilla_kata_x86() {
     assert_eq!(want, got);
 }
 
+// ---- Grace I/O Virtualization Guide: devices behind one host SMMU share a
+// complex even when they sit in different IOMMU groups ----
+
+#[test]
+fn probe_groups_by_physical_smmu() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let pci = tmp.path().join("pci_devices");
+    let cpu = tmp.path().join("cpu");
+    let dev = tmp.path().join("dev");
+    fs::create_dir_all(&pci).unwrap();
+    fs::create_dir_all(&cpu).unwrap();
+    fs::create_dir_all(&dev).unwrap();
+    let iommu_groups = tmp.path().join("iommu_groups");
+    let iommus = tmp.path().join("iommu");
+
+    let make_gpu = |bdf: &str, iommu_group: u32, smmu: &str| {
+        let d = pci.join(bdf);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("vendor"), "0x10de\n").unwrap();
+        fs::write(d.join("class"), "0x030200\n").unwrap();
+        fs::write(d.join("numa_node"), "0\n").unwrap();
+        let gdir = iommu_groups.join(iommu_group.to_string());
+        fs::create_dir_all(&gdir).unwrap();
+        symlink(&gdir, d.join("iommu_group")).unwrap();
+        let sdir = iommus.join(smmu);
+        fs::create_dir_all(&sdir).unwrap();
+        symlink(&sdir, d.join("iommu")).unwrap();
+    };
+
+    // Two GPUs in distinct IOMMU groups behind the same SMMU, a third behind another.
+    make_gpu("0008:06:00.0", 50, "smmu3.0x0000000005000000");
+    make_gpu("0009:06:00.0", 48, "smmu3.0x0000000005000000");
+    make_gpu("0018:06:00.0", 88, "smmu3.0x0000100005000000");
+
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).expect("probe");
+    assert_eq!(
+        topo.gpu_smmu_groups.len(),
+        2,
+        "one complex per physical SMMU"
+    );
+    assert_eq!(
+        topo.gpu_smmu_groups[0].pci_bus_addrs,
+        vec!["0008:06:00.0", "0009:06:00.0"]
+    );
+    assert_eq!(topo.gpu_smmu_groups[1].pci_bus_addrs, vec!["0018:06:00.0"]);
+}
+
+// ---- Memory hot-plug: QEMU parks the hot-plug region on the last NUMA node,
+// which must not be a GPU initiator node ----
+
+#[test]
+fn hotplug_placeholder_is_last_numa_node() {
+    let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
+    platform.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
+    });
+    let before = platform.to_qemu_args().expect("args");
+    platform.add_hotplug_placeholder_node();
+    let after = platform.to_qemu_args().expect("args");
+
+    assert_eq!(after.len(), before.len() + 2, "exactly one more -numa pair");
+    let last_numa = after.iter().rposition(|a| a == "-numa").expect("numa");
+    // 1 CpuMem node + 8 initiator nodes (1..=8), then the placeholder.
+    assert_eq!(after[last_numa + 1], "node,nodeid=9");
+    let last_initiator = after.iter().position(|a| a == "node,nodeid=8").unwrap();
+    assert!(
+        last_initiator < last_numa,
+        "placeholder follows the initiator nodes"
+    );
+}
+
+// Real Grace package IDs are not sequential NUMA node IDs.
+
+#[test]
+fn probe_gb200_package_ids_preserve_numa_binding() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let pci = tmp.path().join("pci");
+    let cpu = tmp.path().join("cpu");
+    let dev = tmp.path().join("dev");
+    fs::create_dir_all(&dev).unwrap();
+    for (node, cpu_id, package, bdf) in [
+        (0, 0, 268435456u32, "0008:01:00.0"),
+        (1, 72, 285212672u32, "0018:01:00.0"),
+    ] {
+        let cpu_path = cpu.join(format!("cpu{cpu_id}"));
+        fs::create_dir_all(cpu_path.join("topology")).unwrap();
+        fs::write(
+            cpu_path.join("topology/physical_package_id"),
+            package.to_string(),
+        )
+        .unwrap();
+        let node_path = tmp.path().join(format!("node{node}"));
+        fs::create_dir_all(&node_path).unwrap();
+        symlink(&node_path, cpu_path.join(format!("node{node}"))).unwrap();
+        let d = pci.join(bdf);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("vendor"), "0x10de").unwrap();
+        fs::write(d.join("class"), "0x030200").unwrap();
+        fs::write(d.join("numa_node"), node.to_string()).unwrap();
+        symlink(tmp.path().join(format!("{node}")), d.join("iommu_group")).unwrap();
+    }
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).unwrap();
+    assert_eq!(topo.sockets.len(), 2);
+    assert_eq!(topo.sockets[0].host_node, Some(0));
+    assert_eq!(topo.sockets[1].host_node, Some(1));
+    assert_eq!(topo.gpu_smmu_groups[0].socket, topo.sockets[0].id);
+    assert_eq!(topo.gpu_smmu_groups[1].socket, topo.sockets[1].id);
+
+    let mut config = kata_types::config::Hypervisor::default();
+    config.machine_info.machine_type = "virt".to_owned();
+    config.memory_info.default_memory = 16384;
+    config.cpu_info.default_vcpus = 8.0;
+    config.cpu_info.default_maxvcpus = 8;
+    let platform = Platform::from_config_and_topology(&config, topo).unwrap();
+    let args = platform.to_qemu_args().unwrap();
+    for (idx, bus_nr) in [(0, 32), (1, 64)] {
+        assert!(args.contains(&format!(
+            "memory-backend-ram,id=m{idx},size=8G,host-nodes={idx},policy=bind"
+        )));
+        assert!(args.contains(&format!(
+            "pxb-pcie,id=pcie.{},bus=pcie.0,bus_nr={bus_nr},numa_node={idx}",
+            idx + 1
+        )));
+    }
+}
+
 // ---- Phase 6: PlatformProbe unit test ----
 //
 // Builds a minimal synthetic sysfs tree to exercise probe_host_topology_at().
 // Verifies that GPU and NIC devices are classified correctly and grouped by
-// IOMMU group into GpuSmmuGroup entries.
+// IOMMU group (the fallback when sysfs exposes no `iommu` link) into
+// GpuSmmuGroup entries.
 
 #[test]
 fn probe_synthetic_sysfs() {
@@ -992,6 +1335,19 @@ fn probe_synthetic_sysfs() {
 
     // GPU 0 in group 10, NUMA 0
     make_dev("0008:06:00.0", "0x10de", "0x030200", 0, 10);
+    // Its BARs as sysfs lists them (GB200: 64M, 256G and 32M, all 64-bit
+    // prefetchable), followed by a ROM line that must not count.
+    fs::write(
+        pci.join("0008:06:00.0/resource"),
+        "0x000063c000000000 0x000063c003ffffff 0x000000000014220c\n\
+         0x0000000000000000 0x0000000000000000 0x0000000000000000\n\
+         0x0000634000000000 0x0000637fffffffff 0x000000000014220c\n\
+         0x0000000000000000 0x0000000000000000 0x0000000000000000\n\
+         0x000063c004000000 0x000063c005ffffff 0x000000000014220c\n\
+         0x0000000000000000 0x0000000000000000 0x0000000000000000\n\
+         0x000063c006000000 0x000063c006ffffff 0x000000000014220c\n",
+    )
+    .unwrap();
     // GPU 1 in the same group 10, NUMA 0 (2-per-SMMU config)
     make_dev("0009:06:00.0", "0x10de", "0x030200", 0, 10);
     // NIC in its own group 20, NUMA 0
@@ -999,7 +1355,15 @@ fn probe_synthetic_sysfs() {
     // Non-NVIDIA device — should be ignored
     make_dev("0000:00:01.0", "0x8086", "0x060400", 0, 99);
 
-    let topo = probe_host_topology_at(&pci, &cpu, &dev).expect("probe");
+    // EGM region of socket 0, exposed the way nvgrace-egm does under
+    // /sys/class/egm: egm_size in hex and the BDFs of its GPUs.
+    let egm = tmp.path().join("egm");
+    fs::create_dir_all(egm.join("egm4")).unwrap();
+    fs::write(egm.join("egm4/egm_size"), "0xde4000000\n").unwrap();
+    fs::write(egm.join("egm4/gpu_devices"), "0008:06:00.0 0009:06:00.0\n").unwrap();
+    fs::write(dev.join("egm4"), "").unwrap();
+
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &egm).expect("probe");
 
     assert_eq!(topo.gpu_smmu_groups.len(), 1, "one GPU SMMU group");
     let gpu_group = &topo.gpu_smmu_groups[0];
@@ -1011,6 +1375,67 @@ fn probe_synthetic_sysfs() {
     let nic_group = &topo.nic_smmu_groups[0];
     assert_eq!(nic_group.pci_bus_addrs.len(), 1);
     assert_eq!(nic_group.pci_bus_addrs[0], "0008:00:00.0");
+
+    assert_eq!(topo.egm_sockets.len(), 1, "one EGM region");
+    let egm4 = &topo.egm_sockets[0];
+    assert_eq!(egm4.path, dev.join("egm4").to_string_lossy());
+    assert_eq!(egm4.socket, topo.gpu_smmu_groups[0].socket);
+    assert_eq!(egm4.total_size, 0xde4000000);
+    assert_eq!(egm4.gpu_devices, vec!["0008:06:00.0", "0009:06:00.0"]);
+
+    assert_eq!(
+        topo.gpu_mmio_bytes.get("0008:06:00.0").copied(),
+        Some((64 << 20) + (256 << 30) + (32 << 20)),
+        "64-bit BARs of GPU 0"
+    );
+    assert!(
+        !topo.gpu_mmio_bytes.contains_key("0009:06:00.0"),
+        "no resource file, no entry"
+    );
+}
+
+// ---- highmem-mmio-size from the probed BARs ----
+//
+// The Grace I/O Virtualization Guide: 4T suffices for GH200 and GB200 trays
+// with four GPUs, a GB300 tray with four GPUs needs 8T.
+
+#[test]
+fn highmem_mmio_window_follows_the_guide() {
+    let gb200_gpu: u64 = (64 << 20) + (256 << 30) + (32 << 20);
+    let gb300_gpu: u64 = (64 << 20) + (512 << 30) + (32 << 20);
+    assert_eq!(highmem_mmio_size_for(4 * gb200_gpu, 4), 4 << 40);
+    assert_eq!(
+        highmem_mmio_size_for(gb200_gpu, 1),
+        4 << 40,
+        "never below 4T"
+    );
+    assert_eq!(highmem_mmio_size_for(4 * gb300_gpu, 4), 8 << 40);
+    assert_eq!(highmem_mmio_size_for(0, 0), 4 << 40, "no BAR data");
+}
+
+#[test]
+fn probed_bars_size_the_virt_mmio_window() {
+    let mut topo = HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
+    };
+    // A 4T BAR: 2 x (4T + 2G) rounds up to 16T.
+    topo.gpu_mmio_bytes
+        .insert("0008:06:00.0".to_owned(), 4 << 40);
+    let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
+    platform.apply_host_defaults(&topo);
+    let args = platform.to_qemu_args().expect("args");
+    assert!(
+        args.iter().any(|a| a.contains("highmem-mmio-size=16T")),
+        "{:?}",
+        args
+    );
 }
 
 // ---- Phase 6: switch-port topology emission test ----
@@ -1028,6 +1453,7 @@ fn grace_switch_port_emission() {
         numa_distances: vec![],
         pcie_root_port: 0,
         protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
     };
 
     // Build a Platform with the normal GPU root-port, then manually replace the
