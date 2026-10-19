@@ -472,7 +472,9 @@ fn validate_includes(root: &Path, path: &Path, content: &[u8]) -> Result<()> {
     // that could consult the distribution policy outside this extension.
     let text =
         std::str::from_utf8(content).context("AppArmor extension must contain policy text only")?;
-    let inline = regex::Regex::new(r#"(^|[\s{}])(include|abi)([\s<\"]|$)"#)?;
+    // A comma terminates a rule without requiring whitespace before the next
+    // token. In particular `r,include "/outside"` is accepted by the parser.
+    let inline = regex::Regex::new(r#"(^|[\s{},])(include|abi)([\s<\"]|$)"#)?;
     for line in text.lines() {
         let trimmed = line.trim_start();
         // Only contiguous #include is a parser directive; '# include' is a
@@ -837,6 +839,37 @@ mod tests {
         fs::write(root.join("profiles/test"), "profile test {}\n").unwrap();
         std::os::unix::fs::symlink("/etc/passwd", root.join("abstractions/link")).unwrap();
         assert!(policy_tree_digest(root).is_err());
+    }
+
+    #[test]
+    fn comma_adjacent_directives_cannot_escape_the_policy_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("test");
+        fs::create_dir(tmp.path().join("abstractions")).unwrap();
+        fs::write(tmp.path().join("abstractions/common"), "/tmp r,\n").unwrap();
+        for text in [
+            "profile test { /tmp r,include \"/dev/null\"\n}\n",
+            "profile test { /tmp r,include</dev/null>\n}\n",
+            "profile test { /tmp r,include if exists </outside>\n}\n",
+            "profile test { /tmp r,abi</dev/null>,\n}\n",
+            "profile test { /tmp r,#include </outside>\n}\n",
+            // Even safe relative inline includes are outside the deliberately
+            // restricted grammar: directives must occupy their own line.
+            "profile test { /tmp r,include <abstractions/common>\n}\n",
+            "profile test { /tmp r,\\\ninclude \"/outside\"\n}\n",
+        ] {
+            assert!(
+                validate_includes(tmp.path(), &path, text.as_bytes()).is_err(),
+                "unsupported inline directive accepted: {}",
+                text
+            );
+        }
+        validate_includes(
+            tmp.path(),
+            &path,
+            b"include <abstractions/common>\nprofile test {}\n",
+        )
+        .unwrap();
     }
 
     #[test]

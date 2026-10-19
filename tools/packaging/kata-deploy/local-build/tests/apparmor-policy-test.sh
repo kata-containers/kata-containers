@@ -61,7 +61,12 @@ docker() {
 	printf '\n' >> "${trace}"
 	if [[ "$1" == build ]]; then
 		[[ "$2" == --build-arg && "$3" == RUST_TOOLCHAIN=unit-test-rust &&
-			"$4" == -t && "$5" == unit-test-builder && "$6" == "${static_build_dir}/agent" ]] || return 95
+			"$4" == -t && "$5" == unit-test-builder && "$6" != "${static_build_dir}/agent" ]] || return 95
+		# Validate real COPY inputs, not only the mocked Docker arguments.
+		cmp "${static_build_dir}/agent/Dockerfile" "$6/Dockerfile" || return 95
+		cmp "${repo_root_dir}/ci/install_libseccomp.sh" "$6/install_libseccomp.sh" || return 95
+		[[ -x "$6/install_libseccomp.sh" ]] || return 95
+		printf '%s\n' "$6" > "${policy_root%/policy}/builder-context"
 		[[ "${mock_build_failure}" != yes ]] || return 96
 		[[ "${mock_builder_broken}" == yes ]] || : > "${builder_ready}"
 		return 0
@@ -106,6 +111,15 @@ check() {
 	(set -e; fixture; "$@") > "${test_tmp}/stdout" 2> "${test_tmp}/stderr"
 	result=$?
 	set -e
+	if [[ -s "${test_tmp}/case-${case_number}/builder-context" ]]; then
+		local context
+		IFS= read -r context < "${test_tmp}/case-${case_number}/builder-context"
+		if [[ -e "${context}" ]]; then
+			printf 'not ok %s - parser build context leaked: %s\n' "${case_number}" "${context}"
+			failed=$((failed + 1))
+			return
+		fi
+	fi
 	if [[ "${expected}" == pass && "${result}" -eq 0 ]] ||
 		{ [[ "${expected}" != pass && "${result}" -ne 0 ]] &&
 			grep -Fq "${expected}" "${test_tmp}/stderr"; }; then
@@ -238,6 +252,14 @@ check 'if exists permits variable whitespace' pass include_line $'#include\tif \
 check 'rule comments and ordinary comments do not become directives' pass ordinary_comments
 check 'inline include directives are rejected' 'unsafe AppArmor include' \
 	include_line 'profile unit-test { include <abstractions/common>'
+check 'comma-adjacent includes cannot bypass closure checks' 'unsafe AppArmor include' \
+	include_line 'profile unit-test { /tmp r,include "/dev/null"'
+check 'comma-adjacent angle includes cannot bypass closure checks' 'unsafe AppArmor include' \
+	include_line 'profile unit-test { /tmp r,include</dev/null>'
+check 'comma-adjacent ABI directives cannot bypass closure checks' 'unsafe AppArmor include' \
+	include_line 'profile unit-test { /tmp r,abi</dev/null>,'
+check 'continued rule lines cannot hide directives' 'unsafe AppArmor include' \
+	include_line $'profile unit-test { /tmp r,\\\ninclude "/dev/null"'
 check 'inline #include directives are rejected' 'unsafe AppArmor include' \
 	include_line 'profile unit-test { #include </etc/passwd>'
 check 'inline ABI directives are rejected' 'unsafe AppArmor include' \

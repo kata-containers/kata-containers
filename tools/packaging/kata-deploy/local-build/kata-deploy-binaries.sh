@@ -1172,10 +1172,10 @@ validate_apparmor_policy_tree() (
 			}
 			if (line !~ /^(include|abi)([[:space:]<"]|$)/) {
 				line = rule_code(line)
-				if (line ~ /(^|[[:space:]{}])(include|abi)([[:space:]<"]|$)/) invalid()
+				if (line ~ /(^|[[:space:]{},])(include|abi)([[:space:]<"]|$)/ || line ~ /\\$/) invalid()
 				next
 			}
-			is_abi = (line ~ /^abi[[:space:]]/)
+			is_abi = (line ~ /^abi([[:space:]<"]|$)/)
 			sub(/^(include|abi)[[:space:]]*/, "", line)
 			optional = (!is_abi && line ~ /^if[[:space:]]+exists[[:space:]]*/)
 			if (optional) sub(/^if[[:space:]]+exists[[:space:]]*/, "", line)
@@ -1189,7 +1189,10 @@ validate_apparmor_policy_tree() (
 			path = substr(line, 2, end - 2)
 			tail = substr(line, end + 1)
 			sub(/^[[:space:]]*/, "", tail)
-			if (is_abi) sub(/^,[[:space:]]*/, "", tail)
+			if (is_abi) {
+				if (tail !~ /^,/) { invalid(); next }
+				sub(/^,[[:space:]]*/, "", tail)
+			}
 			if ((tail != "" && tail !~ /^#/) || path == "" || path ~ /[@$*?[:cntrl:]]/ ||
 				index(path, "[") || index(path, "]") || index(path, "\\") ||
 				path ~ /^\// || path ~ /(^|\/)\.\.?($|\/)/) {
@@ -1206,6 +1209,20 @@ validate_apparmor_policy_tree() (
 		[[ "${optional}" == 1 || -e "${policy_dir}/${include_path}" ]] || \
 			die "AppArmor include/ABI is not shipped in the policy root: ${include_path}"
 	done <<< "${includes}"
+)
+
+# A cold parser-builder must have the same complete COPY inputs as the normal
+# agent build, without depending on an earlier agent-tarball make invocation.
+# Stage an isolated context so existing generated/user files are never replaced.
+build_apparmor_parser_image() (
+	local engine="$1" image_name="$2" context
+	context="$(mktemp -d "${TMPDIR:-/tmp}/kata-apparmor-parser-build.XXXXXX")" || return
+	trap 'rm -rf -- "${context:?}"' EXIT
+	install -m 644 "${static_build_dir}/agent/Dockerfile" "${context}/Dockerfile" || return
+	install -m 755 "${repo_root_dir}/ci/install_libseccomp.sh" "${context}/install_libseccomp.sh" || return
+	"${engine}" build \
+		--build-arg "RUST_TOOLCHAIN=$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
+		-t "${image_name}" "${context}"
 )
 
 # Parse every AppArmor profile in a policy root with a real parser, and require
@@ -1253,9 +1270,7 @@ validate_apparmor_profiles() (
 		[[ -n "${image_name}" ]] || die "No agent builder image configured for AppArmor validation"
 		if ! "${engine}" run --rm --entrypoint /bin/sh "${image_name}" \
 			-c 'command -v apparmor_parser >/dev/null'; then
-			"${engine}" build \
-				--build-arg "RUST_TOOLCHAIN=$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
-				-t "${image_name}" "${static_build_dir}/agent" || die "Failed to build AppArmor parser image"
+			build_apparmor_parser_image "${engine}" "${image_name}" || die "Failed to build AppArmor parser image"
 		fi
 		"${engine}" run --rm --entrypoint /bin/sh "${image_name}" \
 			-c 'command -v apparmor_parser >/dev/null' || die "Agent builder has no apparmor_parser: ${image_name}"

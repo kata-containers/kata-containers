@@ -122,6 +122,7 @@ kata-static-ovmf.tar.zst
 kata-static-qemu-snp-experimental.tar.zst
 kata-static-qemu-tdx-experimental.tar.zst
 kata-static-qemu.tar.zst
+kata-static-rootfs-image-apparmor-extension.tar.zst
 kata-static-rootfs-image-confidential.tar.zst
 kata-static-rootfs-image-mariner.tar.zst
 kata-static-rootfs-image-nvidia-gpu-confidential.tar.zst
@@ -144,6 +145,7 @@ kata-static-kernel.tar.zst
 kata-static-nydus.tar.zst
 kata-static-ovmf.tar.zst
 kata-static-qemu.tar.zst
+kata-static-rootfs-image-apparmor-extension.tar.zst
 kata-static-rootfs-image-confidential.tar.zst
 kata-static-rootfs-image-nvidia-gpu.tar.zst
 kata-static-rootfs-image-nvidia.tar.zst

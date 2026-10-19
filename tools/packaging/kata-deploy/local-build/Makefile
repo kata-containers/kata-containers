@@ -346,6 +346,11 @@ rootfs-image-confidential-tarball: $(DEPS)
 rootfs-image-coco-extension-tarball:
 	${MAKE} $@-build
 
+# Policy-only image: no agent tarball or shared Agent builder inputs are needed.
+DEPS :=
+rootfs-image-apparmor-extension-tarball: $(DEPS)
+	${MAKE} $@-build
+
 # Self-contained debug rootfs (no kata-agent, kernel or driver tree), so it has
 # no build-time dependency on any other target.
 DEPS :=
