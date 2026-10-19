@@ -235,21 +235,25 @@ fn grace_6_vegm_1_per_socket() {
                     path: "/dev/egm4".into(),
                     socket: 0,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm5".into(),
                     socket: 1,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm6".into(),
                     socket: 2,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm7".into(),
                     socket: 3,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
             ],
             numa_distances: vec![],
@@ -298,11 +302,13 @@ fn grace_7_vegm_2_per_socket() {
                     path: "/dev/egm4".into(),
                     socket: 0,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
                 EgmSocketInfo {
                     path: "/dev/egm5".into(),
                     socket: 1,
                     total_size: 56896 << 20,
+                    gpu_devices: vec![],
                 },
             ],
             numa_distances: vec![],
@@ -1174,7 +1180,7 @@ fn probe_groups_by_physical_smmu() {
     make_gpu("0009:06:00.0", 48, "smmu3.0x0000000005000000");
     make_gpu("0018:06:00.0", 88, "smmu3.0x0000100005000000");
 
-    let topo = probe_host_topology_at(&pci, &cpu, &dev).expect("probe");
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).expect("probe");
     assert_eq!(
         topo.gpu_smmu_groups.len(),
         2,
@@ -1250,7 +1256,7 @@ fn probe_gb200_package_ids_preserve_numa_binding() {
         fs::write(d.join("numa_node"), node.to_string()).unwrap();
         symlink(tmp.path().join(format!("{node}")), d.join("iommu_group")).unwrap();
     }
-    let topo = probe_host_topology_at(&pci, &cpu, &dev).unwrap();
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).unwrap();
     assert_eq!(topo.sockets.len(), 2);
     assert_eq!(topo.sockets[0].host_node, Some(0));
     assert_eq!(topo.sockets[1].host_node, Some(1));
@@ -1321,7 +1327,15 @@ fn probe_synthetic_sysfs() {
     // Non-NVIDIA device — should be ignored
     make_dev("0000:00:01.0", "0x8086", "0x060400", 0, 99);
 
-    let topo = probe_host_topology_at(&pci, &cpu, &dev).expect("probe");
+    // EGM region of socket 0, exposed the way nvgrace-egm does under
+    // /sys/class/egm: egm_size in hex and the BDFs of its GPUs.
+    let egm = tmp.path().join("egm");
+    fs::create_dir_all(egm.join("egm4")).unwrap();
+    fs::write(egm.join("egm4/egm_size"), "0xde4000000\n").unwrap();
+    fs::write(egm.join("egm4/gpu_devices"), "0008:06:00.0 0009:06:00.0\n").unwrap();
+    fs::write(dev.join("egm4"), "").unwrap();
+
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &egm).expect("probe");
 
     assert_eq!(topo.gpu_smmu_groups.len(), 1, "one GPU SMMU group");
     let gpu_group = &topo.gpu_smmu_groups[0];
@@ -1333,6 +1347,13 @@ fn probe_synthetic_sysfs() {
     let nic_group = &topo.nic_smmu_groups[0];
     assert_eq!(nic_group.pci_bus_addrs.len(), 1);
     assert_eq!(nic_group.pci_bus_addrs[0], "0008:00:00.0");
+
+    assert_eq!(topo.egm_sockets.len(), 1, "one EGM region");
+    let egm4 = &topo.egm_sockets[0];
+    assert_eq!(egm4.path, dev.join("egm4").to_string_lossy());
+    assert_eq!(egm4.socket, topo.gpu_smmu_groups[0].socket);
+    assert_eq!(egm4.total_size, 0xde4000000);
+    assert_eq!(egm4.gpu_devices, vec!["0008:06:00.0", "0009:06:00.0"]);
 }
 
 // ---- Phase 6: switch-port topology emission test ----

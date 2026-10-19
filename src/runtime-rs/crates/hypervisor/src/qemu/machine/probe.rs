@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 
@@ -47,10 +47,15 @@ pub(crate) struct GpuSmmuGroup {
     pub socket: u32,
 }
 
+/// One EGM region, `/dev/egmN`, as `nvgrace-egm` exposes it under
+/// `/sys/class/egm/egmN`.  One region per socket.
 pub(crate) struct EgmSocketInfo {
     pub path: String,
     pub socket: u32,
     pub total_size: u64,
+    /// GPUs of the region; vEGM is only supported when all of them are
+    /// passed through (the compute-tray boundary).
+    pub gpu_devices: Vec<String>,
 }
 
 /// CoCo hardware protection capability detected by the host probe.
@@ -197,6 +202,14 @@ fn read_sysfs_i32(path: &Path) -> Result<i32> {
         .with_context(|| format!("parsing i32 from {}", path.display()))
 }
 
+/// Reads a hex integer that may not fit in 32 bits, such as an EGM size.
+fn read_sysfs_hex_u64(path: &Path) -> Result<u64> {
+    let raw =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let trimmed = raw.trim().trim_start_matches("0x");
+    u64::from_str_radix(trimmed, 16).with_context(|| format!("parsing hex from {}", path.display()))
+}
+
 /// Resolves the IOMMU-group number for a PCI device.
 ///
 /// `/sys/bus/pci/devices/<BDF>/iommu_group` is a symlink that ends in
@@ -260,6 +273,7 @@ pub(crate) fn probe_host_topology() -> Result<HostTopology> {
         Path::new("/sys/bus/pci/devices"),
         Path::new("/sys/devices/system/cpu"),
         Path::new("/dev"),
+        Path::new("/sys/class/egm"),
     )
 }
 
@@ -268,6 +282,7 @@ pub(crate) fn probe_host_topology_at(
     pci_root: &Path,
     cpu_root: &Path,
     dev_root: &Path,
+    egm_class_root: &Path,
 ) -> Result<HostTopology> {
     // ── 1. Walk /sys/bus/pci/devices and collect NVIDIA devices ─────────────
     // complex key → [(BDF, numa_node)]; the key is the physical SMMU when the
@@ -371,7 +386,7 @@ pub(crate) fn probe_host_topology_at(
     nic_smmu_groups.sort_by(|a, b| a.1.pci_bus_addrs[0].cmp(&b.1.pci_bus_addrs[0]));
 
     // ── 3. EGM detection: /dev/egmN devices ─────────────────────────────────
-    let egm_sockets = probe_egm_devices(dev_root);
+    let egm_sockets = probe_egm_devices(egm_class_root, dev_root, pci_root, &sockets);
 
     Ok(HostTopology {
         sockets,
@@ -455,15 +470,22 @@ fn build_socket_info(cpu_root: &Path) -> Vec<SocketInfo> {
         .collect()
 }
 
-/// Discovers EGM backing devices under `/dev/egmN`.
+/// Discovers the EGM regions the `nvgrace-egm` module exposes.
 ///
-/// EGM size is read from `/sys/class/misc/egmN/size` (bytes).
-/// The NUMA node of the underlying PCIe device maps to a socket via
-/// `/sys/class/misc/egmN/device/numa_node`.
-fn probe_egm_devices(dev_root: &Path) -> Vec<EgmSocketInfo> {
+/// One region per socket, `/dev/egmN`, described under `/sys/class/egm/egmN`
+/// by `egm_size` (hex, bytes) and `gpu_devices` (the BDFs of the GPUs of that
+/// socket).  The socket is the one of the region's first GPU, resolved the
+/// same way as for the passthrough groups.  Regions without a size or without
+/// GPUs are skipped.
+fn probe_egm_devices(
+    class_root: &Path,
+    dev_root: &Path,
+    pci_root: &Path,
+    sockets: &[SocketInfo],
+) -> Vec<EgmSocketInfo> {
     let mut result = Vec::new();
 
-    let dir = match std::fs::read_dir(dev_root) {
+    let dir = match std::fs::read_dir(class_root) {
         Ok(d) => d,
         Err(_) => return result,
     };
@@ -474,29 +496,34 @@ fn probe_egm_devices(dev_root: &Path) -> Vec<EgmSocketInfo> {
         if !name_str.starts_with("egm") || !name_str[3..].chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
-        let egm_idx: u32 = match name_str[3..].parse() {
-            Ok(n) => n,
-            Err(_) => continue,
+
+        let Ok(total_size) = read_sysfs_hex_u64(&entry.path().join("egm_size")) else {
+            continue;
+        };
+        let gpu_devices: Vec<String> = std::fs::read_to_string(entry.path().join("gpu_devices"))
+            .map(|s| {
+                s.split(|c: char| c.is_whitespace() || c == ',')
+                    .filter(|b| !b.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let Some(first_gpu) = gpu_devices.first() else {
+            continue;
+        };
+        let numa_node = read_sysfs_i32(&pci_root.join(first_gpu).join("numa_node")).unwrap_or(0);
+        let Ok(socket) = numa_node_to_socket(numa_node.max(0), sockets) else {
+            continue;
         };
 
-        let path = dev_root.join(name_str.as_ref());
-        // Size from /sys/class/misc/egmN/size
-        let sys_misc = PathBuf::from(format!("/sys/class/misc/egm{egm_idx}"));
-        let size_bytes: u64 = read_sysfs_hex(&sys_misc.join("size"))
-            .map(|v| v as u64)
-            .unwrap_or(0);
-
-        // NUMA node from /sys/class/misc/egmN/device/numa_node
-        let numa_node = read_sysfs_i32(&sys_misc.join("device/numa_node")).unwrap_or(0);
-        let socket = if numa_node < 0 { 0 } else { numa_node as u32 };
-
         result.push(EgmSocketInfo {
-            path: path.to_string_lossy().into_owned(),
+            path: dev_root.join(&*name_str).to_string_lossy().into_owned(),
             socket,
-            total_size: size_bytes,
+            total_size,
+            gpu_devices,
         });
     }
 
-    result.sort_by_key(|e| e.socket);
+    result.sort_by(|a, b| a.socket.cmp(&b.socket).then_with(|| a.path.cmp(&b.path)));
     result
 }
