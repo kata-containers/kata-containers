@@ -287,6 +287,11 @@ impl Platform {
         Ok(args)
     }
 
+    /// ID of the shared iommufd object, once a passthrough device is placed.
+    pub fn iommufd_id(&self) -> Option<&str> {
+        self.objects.iommufd.as_ref().map(|ifd| ifd.id.as_str())
+    }
+
     pub fn guest_pci_paths(&self) -> HashMap<String, String> {
         let mut paths = HashMap::new();
         for root in &self.pci.roots {

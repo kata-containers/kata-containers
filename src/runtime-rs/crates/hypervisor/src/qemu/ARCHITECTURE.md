@@ -966,6 +966,11 @@ result to `QemuCmdLine::apply_platform`:
 - Platform-placed devices are skipped by the legacy VFIO cold-plug loop and
   get their `guest_pci_path` from `Platform::guest_pci_paths`
   (`<bus_nr>/<port>/00`); `PciPath` learned the root-complex form for that.
+- VFIO devices the prober does not model (NVSwitches, non-NVIDIA devices)
+  still go through the legacy cold-plug loop but join the Platform's
+  `iommufd0` instead of creating their own object: a second iommufd context
+  cannot bind a device of a group the first one owns, and QEMU rejects a
+  duplicate object id (see "One iommufd per VM").
 
 Legacy keeps `-name`, kernel, `-smp`, `-cpu`, `-m` (with hot-plug slots and
 maxmem), QMP, consoles, virtio devices, hot-plug root ports on `pcie.0` and any
@@ -1298,6 +1303,13 @@ the tray passed through).  Neither the `-m` hand-over nor the tray check exists
 yet, so `Platform::for_assigned_devices` ignores probed EGM devices with a
 warning and backs the guest with RAM.  The emitters and fixtures grace_6 and
 grace_7 already produce the vEGM layout; Phase 8 wires the runtime side.
+
+### Rootless QEMU with `cold_plug_vfio = "auto"`
+
+The Platform emits `iommufd0` without a passed `fd=`; devices the prober does
+not model join that object, so under rootless QEMU (#13548) QEMU would have to
+open `/dev/iommu` itself and cannot.  Hand the iommufd descriptor to the
+Platform's object before enabling both together.
 
 ### At most seven `pxb-pcie` complexes
 
