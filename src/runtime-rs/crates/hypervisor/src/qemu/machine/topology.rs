@@ -39,10 +39,6 @@ pub(crate) struct VfioDevice {
     pub host: String,
     pub rombar: Option<bool>,
     pub kind: VfioDeviceKind,
-    /// When set, an `-object iommufd,id=<iommufd_id>` is emitted immediately before
-    /// this device and referenced in the device string.  Used for CoCo x86 passthrough;
-    /// Grace uses a single shared `iommufd0` in `Objects::iommufd` instead.
-    pub iommufd_id: Option<String>,
     /// `x-pci-vendor-id` override required for CoCo measured-boot attestation (#12329).
     pub pci_vendor_id: Option<u16>,
     /// `x-pci-device-id` override required for CoCo measured-boot attestation (#12329).

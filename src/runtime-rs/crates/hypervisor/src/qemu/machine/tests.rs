@@ -5,7 +5,8 @@
 use std::path::Path;
 
 use super::platform::{
-    BaseMachine, CpuConfig, CpuModel, Machine, MemoryBackend, NumaNode, Objects, Platform,
+    BaseMachine, CpuConfig, CpuModel, IommufdBackend, Machine, MemoryBackend, NumaNode, Objects,
+    Platform, SHARED_IOMMUFD_ID,
 };
 use super::probe::{
     EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice, SocketInfo, TdxQuoteSocket,
@@ -314,13 +315,13 @@ fn grace_7_vegm_2_per_socket() {
 //
 // Production capture: AMD EPYC host, 2026-07-13.  17 vCPUs, 57344M, single
 // NUMA node pinned to host-node 1 via memory-backend-ram (not file-backed).
-// sev-snp-guest object emitted before -machine.  iommufd is per-device.
+// sev-snp-guest object emitted before -machine.  One shared iommufd0.
 // vfio-pci (not nohotplug); x-pci-vendor-id/device-id for CoCo attestation.
 //
 // Platform is built directly (not via apply_host_defaults) because the
-// per-device iommufd UUIDs are assigned by the runtime at VM launch time
-// and cannot be derived from HostTopology alone.  apply_host_defaults for
-// CoCo topology will be wired end-to-end in Phase 4.
+// vfio device ids are assigned by the runtime at VM launch time and cannot
+// be derived from HostTopology alone.  apply_host_defaults for CoCo
+// topology will be wired end-to-end in Phase 4.
 
 #[test]
 fn q35_coco_snp_single_gpu() {
@@ -357,7 +358,6 @@ fn q35_coco_snp_single_gpu() {
                         host: "0000:e1:00.0".to_owned(),
                         rombar: None,
                         kind: VfioDeviceKind::GpuPci,
-                        iommufd_id: Some("iommufdvfio-ab57592a4d2482201".to_owned()),
                         pci_vendor_id: Some(0x10de),
                         pci_device_id: Some(0x2321),
                     }),
@@ -366,7 +366,9 @@ fn q35_coco_snp_single_gpu() {
             pcie_root_port: vec![],
         },
         objects: Objects {
-            iommufd: None,
+            iommufd: Some(IommufdBackend {
+                id: SHARED_IOMMUFD_ID.to_owned(),
+            }),
             memory_backends: vec![MemoryBackend::Ram {
                 id: "numa-mem0".to_owned(),
                 size: 57344 << 20,
@@ -405,7 +407,7 @@ fn q35_coco_snp_single_gpu() {
 // memory, NUMA distance 21) but without CoCo:
 //   - No protection object; -machine q35,accel=kvm (no kernel_irqchip)
 //   - memory-backend-file via /dev/shm (not memory-backend-ram)
-//   - Per-device iommufd retained (modern VFIO interface, CoCo-independent)
+//   - One shared iommufd0 (modern VFIO interface, CoCo-independent)
 //   - x-pci-vendor-id/device-id retained (kata applies them for any GPU passthrough)
 //   - NUMA node 1 is memory-only; the single vCPU lives on node 0
 
@@ -420,7 +422,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
         slot: u8,
         host: &str,
         vfio_id: &str,
-        iommufd_id: &str,
         kind: VfioDeviceKind,
         device_id: u16,
     ) -> PciRootPort {
@@ -435,7 +436,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                 host: host.to_owned(),
                 rombar: None,
                 kind,
-                iommufd_id: Some(iommufd_id.to_owned()),
                 pci_vendor_id: Some(0x10de),
                 pci_device_id: Some(device_id),
             }),
@@ -472,7 +472,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             0,
                             "0000:1b:00.0",
                             "vfio-5c7a307d86e7ae830",
-                            "iommufdvfio-5c7a307d86e7ae830",
                             GpuPci,
                             0x2330,
                         ),
@@ -482,7 +481,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             1,
                             "0000:43:00.0",
                             "vfio-98077fd3aa014b541",
-                            "iommufdvfio-98077fd3aa014b541",
                             GpuPci,
                             0x2330,
                         ),
@@ -492,7 +490,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             2,
                             "0000:52:00.0",
                             "vfio-35b65d16a30068022",
-                            "iommufdvfio-35b65d16a30068022",
                             GpuPci,
                             0x2330,
                         ),
@@ -502,7 +499,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             3,
                             "0000:61:00.0",
                             "vfio-331446c1d73050393",
-                            "iommufdvfio-331446c1d73050393",
                             GpuPci,
                             0x2330,
                         ),
@@ -512,7 +508,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             4,
                             "0000:07:00.0",
                             "vfio-b91919c2fa001cd18",
-                            "iommufdvfio-b91919c2fa001cd18",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -522,7 +517,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             5,
                             "0000:08:00.0",
                             "vfio-fab9e6a06185873e9",
-                            "iommufdvfio-fab9e6a06185873e9",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -532,7 +526,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             6,
                             "0000:09:00.0",
                             "vfio-3a77ef115d3f0ab610",
-                            "iommufdvfio-3a77ef115d3f0ab610",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -542,7 +535,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             7,
                             "0000:0a:00.0",
                             "vfio-2e0a336d490089a111",
-                            "iommufdvfio-2e0a336d490089a111",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -560,7 +552,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             0,
                             "0000:9d:00.0",
                             "vfio-7f57f8dea75cdeca4",
-                            "iommufdvfio-7f57f8dea75cdeca4",
                             GpuPci,
                             0x2330,
                         ),
@@ -570,7 +561,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             1,
                             "0000:c3:00.0",
                             "vfio-4461976d3de811155",
-                            "iommufdvfio-4461976d3de811155",
                             GpuPci,
                             0x2330,
                         ),
@@ -580,7 +570,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             2,
                             "0000:d1:00.0",
                             "vfio-dc1944aed29728336",
-                            "iommufdvfio-dc1944aed29728336",
                             GpuPci,
                             0x2330,
                         ),
@@ -590,7 +579,6 @@ fn q35_vanilla_8gpu_4nvswitch() {
                             3,
                             "0000:df:00.0",
                             "vfio-5c974cdc2dcfe4cb7",
-                            "iommufdvfio-5c974cdc2dcfe4cb7",
                             GpuPci,
                             0x2330,
                         ),
@@ -600,7 +588,9 @@ fn q35_vanilla_8gpu_4nvswitch() {
             pcie_root_port: vec![],
         },
         objects: Objects {
-            iommufd: None,
+            iommufd: Some(IommufdBackend {
+                id: SHARED_IOMMUFD_ID.to_owned(),
+            }),
             memory_backends: vec![
                 MemoryBackend::File {
                     id: "numa-mem0".to_owned(),
@@ -657,8 +647,8 @@ fn q35_vanilla_8gpu_4nvswitch() {
 // TDX object emitted as JSON (not key=value); includes vsock quote-generation-socket.
 // NVSwitches use root-port + vfio-pci topology — NOT x3130 switch-port hierarchy.
 //
-// Platform is built directly (not via apply_host_defaults) because per-device
-// iommufd UUIDs are assigned by the runtime at VM launch time and because
+// Platform is built directly (not via apply_host_defaults) because the vfio
+// device ids are assigned by the runtime at VM launch time and because
 // NvSwitch vs GPU classification is not yet in HostTopology (Phase 4).
 
 #[test]
@@ -672,7 +662,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
         slot: u8,
         host: &str,
         vfio_id: &str,
-        iommufd_id: &str,
         kind: VfioDeviceKind,
         device_id: u16,
     ) -> PciRootPort {
@@ -687,7 +676,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                 host: host.to_owned(),
                 rombar: None,
                 kind,
-                iommufd_id: Some(iommufd_id.to_owned()),
                 pci_vendor_id: Some(0x10de),
                 pci_device_id: Some(device_id),
             }),
@@ -724,7 +712,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             0,
                             "0000:1b:00.0",
                             "vfio-4a182f997e753b150",
-                            "iommufdvfio-4a182f997e753b150",
                             GpuPci,
                             0x2330,
                         ),
@@ -734,7 +721,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             1,
                             "0000:43:00.0",
                             "vfio-03bafd69f614ffb21",
-                            "iommufdvfio-03bafd69f614ffb21",
                             GpuPci,
                             0x2330,
                         ),
@@ -744,7 +730,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             2,
                             "0000:52:00.0",
                             "vfio-947368d0843e55b42",
-                            "iommufdvfio-947368d0843e55b42",
                             GpuPci,
                             0x2330,
                         ),
@@ -754,7 +739,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             3,
                             "0000:61:00.0",
                             "vfio-41adfe2466817df03",
-                            "iommufdvfio-41adfe2466817df03",
                             GpuPci,
                             0x2330,
                         ),
@@ -764,7 +748,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             4,
                             "0000:07:00.0",
                             "vfio-7eff1447579be32f8",
-                            "iommufdvfio-7eff1447579be32f8",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -774,7 +757,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             5,
                             "0000:08:00.0",
                             "vfio-bfaa424dfcf1b24d9",
-                            "iommufdvfio-bfaa424dfcf1b24d9",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -784,7 +766,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             6,
                             "0000:09:00.0",
                             "vfio-585d94b2d0bd3b6b10",
-                            "iommufdvfio-585d94b2d0bd3b6b10",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -794,7 +775,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             7,
                             "0000:0a:00.0",
                             "vfio-44e4edb8e24e522911",
-                            "iommufdvfio-44e4edb8e24e522911",
                             NvSwitch,
                             0x22a3,
                         ),
@@ -812,7 +792,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             0,
                             "0000:9d:00.0",
                             "vfio-fd42e60b81a629b24",
-                            "iommufdvfio-fd42e60b81a629b24",
                             GpuPci,
                             0x2330,
                         ),
@@ -822,7 +801,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             1,
                             "0000:c3:00.0",
                             "vfio-c3b4a6ef942a66a45",
-                            "iommufdvfio-c3b4a6ef942a66a45",
                             GpuPci,
                             0x2330,
                         ),
@@ -832,7 +810,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             2,
                             "0000:d1:00.0",
                             "vfio-4ababdb3c8421bf06",
-                            "iommufdvfio-4ababdb3c8421bf06",
                             GpuPci,
                             0x2330,
                         ),
@@ -842,7 +819,6 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                             3,
                             "0000:df:00.0",
                             "vfio-2e0f5a646c1bbd557",
-                            "iommufdvfio-2e0f5a646c1bbd557",
                             GpuPci,
                             0x2330,
                         ),
@@ -852,7 +828,9 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
             pcie_root_port: vec![],
         },
         objects: Objects {
-            iommufd: None,
+            iommufd: Some(IommufdBackend {
+                id: SHARED_IOMMUFD_ID.to_owned(),
+            }),
             memory_backends: vec![
                 MemoryBackend::Ram {
                     id: "numa-mem0".to_owned(),
