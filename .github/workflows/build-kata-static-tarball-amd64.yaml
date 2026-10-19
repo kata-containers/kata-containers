@@ -215,6 +215,7 @@ jobs:
         asset:
           - rootfs-image
           - rootfs-image-confidential
+          - rootfs-image-apparmor-extension
           - rootfs-image-coco-extension
           - rootfs-image-devkit-extension
           - rootfs-image-mariner
