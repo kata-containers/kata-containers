@@ -25,6 +25,7 @@ extern crate scan_fmt;
 extern crate path_absolutize;
 extern crate regex;
 
+pub mod apparmor;
 pub mod capabilities;
 pub mod cgroups;
 pub mod cgroups_rs;

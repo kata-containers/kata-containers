@@ -1169,6 +1169,13 @@ func toGuestExtensionImages(imgs []guestExtensionImage) ([]vc.GuestExtensionImag
 		if !isValidExtensionName(img.Name) {
 			return nil, fmt.Errorf("guest_extension_images '%s' has an invalid name: only ASCII alphanumerics, '-' and '_' are allowed (the name is used in the virtio-blk serial and in the kata.extension.<name>.verity_params kernel parameter)", img.Name)
 		}
+		// AppArmor is opt-in, but an explicit request must never silently omit
+		// its policy image. Preserve the path semantics of other extensions.
+		if img.Name == "apparmor" {
+			if err := validateAppArmorExtensionPath(img.Path); err != nil {
+				return nil, fmt.Errorf("guest_extension_images '%s' has invalid path %q: %w", img.Name, img.Path, err)
+			}
+		}
 		if strings.TrimSpace(img.VerityParams) != "" {
 			if _, err := vc.ParseKernelVerityParams(img.VerityParams); err != nil {
 				return nil, fmt.Errorf("guest_extension_images '%s' has invalid verity_params: %w", img.Name, err)
@@ -1181,6 +1188,24 @@ func toGuestExtensionImages(imgs []guestExtensionImage) ([]vc.GuestExtensionImag
 		}
 	}
 	return result, nil
+}
+
+func validateAppArmorExtensionPath(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("AppArmor extension requires a non-empty image path")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("AppArmor extension image must be a regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {

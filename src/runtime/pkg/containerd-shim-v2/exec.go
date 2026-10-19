@@ -116,6 +116,7 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *a
 		Interactive:         terminal,
 		Detach:              !terminal,
 		NoNewPrivileges:     spec.NoNewPrivileges,
+		ApparmorProfile:     spec.ApparmorProfile,
 	}
 
 	exec := &exec{
