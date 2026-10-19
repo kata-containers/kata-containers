@@ -63,6 +63,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.blk_logical_sector_size` | uint32 | logical sector size in bytes reported by block devices to the guest (0 = hypervisor default, must be a power of 2 between 512 and 65536) |
 | `io.katacontainers.config.hypervisor.blk_physical_sector_size` | uint32 | physical sector size in bytes reported by block devices to the guest (0 = hypervisor default, must be a power of 2 between 512 and 65536) |
 | `io.katacontainers.config.hypervisor.cpu_features` | `string` | Comma-separated list of CPU features to pass to the CPU (QEMU) |
+| `io.katacontainers.config.hypervisor.cpu_model` | `string` | CPU model passed to QEMU's `-cpu` option, for all architectures and protection types (runtime-rs QEMU only, default is `host`). See [Guest CPU model](#guest-cpu-model) |
 | `io.katacontainers.config.hypervisor.default_max_vcpus` | uint32| the maximum number of vCPUs allocated for the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.default_memory` | uint32| the memory assigned for a VM by the hypervisor in `MiB` |
 | `io.katacontainers.config.hypervisor.default_vcpus` | float32| the default vCPUs assigned for a VM by the hypervisor |
@@ -115,6 +116,12 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.default_gpu_model` | string | the GPU model required for the VM. Only used by remote hypervisor to help with instance selection |
 | `io.katacontainers.config.hypervisor.block_device_num_queues` | `usize` | The number of queues to use for block devices (runtime-rs only) |
 | `io.katacontainers.config.hypervisor.block_device_queue_size` | uint32 | The size of the of the queue to use for block devices (runtime-rs only) |
+
+#### Guest CPU model
+
+By default the guest CPU is `-cpu host`. Set `cpu_model` in the `[hypervisor.qemu]` section of the runtime-rs configuration, or with the `io.katacontainers.config.hypervisor.cpu_model` annotation, to use a named model instead. For example, `cpu_model = "EPYC-Milan-v2"` gives the guests of a mixed-generation fleet the same CPU model, regardless of the host they are scheduled on. The model is not validated: QEMU fails at launch if the host cannot provide it. Only the runtime-rs QEMU hypervisor uses the setting, the Go runtime and the other hypervisors ignore it.
+
+The `cpu_model` annotation is not in the default `enable_annotations` list and has to be allowed explicitly. For SEV-SNP the CPU model is part of the launch measurement, see [Guest CPU model and the launch measurement](how-to-run-kata-containers-with-SNP-VMs.md#guest-cpu-model-and-the-launch-measurement).
 
 ### Container Options
 
