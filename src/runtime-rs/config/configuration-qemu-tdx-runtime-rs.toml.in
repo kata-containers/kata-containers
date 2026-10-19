@@ -103,6 +103,11 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
 
+# CPU model
+# Guest CPU model, QEMU -cpu. Empty means host. A named model, for example
+# "EPYC-Milan-v2", gives every guest the same CPU on every host generation.
+cpu_model = ""
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
