@@ -6,8 +6,8 @@
 
 use std::{
     ffi::OsStr,
-    fs::{DirBuilder, OpenOptions},
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
+    fs::DirBuilder,
+    os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
 };
 
@@ -29,9 +29,20 @@ fn shim_log_path_at(log_dir: &Path, sid: &str) -> Result<PathBuf> {
     Ok(log_dir.join(format!("{sid}.log")))
 }
 
-fn open_log_file_at(log_dir: &Path, sid: &str) -> Result<std::fs::File> {
+fn create_log_rotator_at(
+    log_dir: &Path,
+    sid: &str,
+    rotation_size: u64,
+    rotation_count: u32,
+) -> Result<logging::FileRotator> {
     if !log_dir.is_absolute() {
         bail!("shim log directory must be an absolute path");
+    }
+    if rotation_size == 0 {
+        bail!("shim log rotation size must be greater than zero");
+    }
+    if rotation_count == 0 {
+        bail!("shim log rotation count must be greater than zero");
     }
 
     DirBuilder::new()
@@ -41,12 +52,17 @@ fn open_log_file_at(log_dir: &Path, sid: &str) -> Result<std::fs::File> {
         .with_context(|| format!("create shim log directory {}", log_dir.display()))?;
 
     let log_path = shim_log_path_at(log_dir, sid)?;
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .mode(0o640)
-        .open(&log_path)
-        .with_context(|| format!("open shim log file {}", log_path.display()))
+    let mut rotator = logging::FileRotator::new(&log_path)
+        .with_context(|| format!("configure shim log file {}", log_path.display()))?;
+    rotator
+        .truncate_mode(false)
+        .rotate_threshold(rotation_size)
+        .rotate_count(rotation_count as usize)
+        .file_mode(0o640)
+        .open()
+        .with_context(|| format!("open shim log file {}", log_path.display()))?;
+
+    Ok(rotator)
 }
 
 pub(crate) fn set_logger(sid: &str, is_debug: bool) -> Result<slog_async::AsyncGuard> {
@@ -64,8 +80,13 @@ pub(crate) fn set_logger(sid: &str, is_debug: bool) -> Result<slog_async::AsyncG
     let destination = match config.runtime.log_destination {
         RuntimeLogDestination::Journald => logging::LogDestination::Journal,
         RuntimeLogDestination::File => {
-            let file = open_log_file_at(Path::new(&config.runtime.log_dir), sid)?;
-            logging::LogDestination::File(Box::new(file))
+            let rotator = create_log_rotator_at(
+                Path::new(&config.runtime.log_dir),
+                sid,
+                config.runtime.log_rotation_size,
+                config.runtime.log_rotation_count,
+            )?;
+            logging::LogDestination::RotatingFile(Box::new(rotator))
         }
     };
 
@@ -106,23 +127,36 @@ mod tests {
         for sid in ["", ".", "..", "../escape", "dir/name"] {
             assert!(shim_log_path_at(dir, sid).is_err(), "accepted {:?}", sid);
         }
-        assert!(open_log_file_at(Path::new("relative"), "sandbox-id").is_err());
+        assert!(create_log_rotator_at(Path::new("relative"), "sandbox-id", 1, 1).is_err());
     }
 
     #[test]
-    fn file_destination_creates_and_appends_log() {
+    fn file_destination_creates_and_rotates_log() {
         let temp_dir = tempfile::tempdir().unwrap();
         {
-            let mut file = open_log_file_at(temp_dir.path(), "sandbox-id").unwrap();
+            let mut file = create_log_rotator_at(temp_dir.path(), "sandbox-id", 6, 1).unwrap();
             writeln!(file, "first").unwrap();
+            file.flush().unwrap();
         }
         {
-            let mut file = open_log_file_at(temp_dir.path(), "sandbox-id").unwrap();
+            let mut file = create_log_rotator_at(temp_dir.path(), "sandbox-id", 6, 1).unwrap();
             writeln!(file, "second").unwrap();
+            file.flush().unwrap();
         }
         assert_eq!(
             std::fs::read_to_string(temp_dir.path().join("sandbox-id.log")).unwrap(),
-            "first\nsecond\n"
+            ""
         );
+        assert_eq!(
+            std::fs::read_to_string(temp_dir.path().join("sandbox-id.log.1")).unwrap(),
+            "second\n"
+        );
+    }
+
+    #[test]
+    fn file_destination_rejects_invalid_rotation_settings() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        assert!(create_log_rotator_at(temp_dir.path(), "sandbox-id", 0, 1).is_err());
+        assert!(create_log_rotator_at(temp_dir.path(), "sandbox-id", 1, 0).is_err());
     }
 }
