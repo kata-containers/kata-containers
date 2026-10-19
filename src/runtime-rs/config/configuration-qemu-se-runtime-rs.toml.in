@@ -561,6 +561,12 @@ log_destination = "journald"
 # Host directory for shim logs when log_destination is "file".
 # (default: /var/log/kata-containers)
 log_dir = "/var/log/kata-containers"
+# Maximum size of the active shim log file before rotation, in bytes.
+# (default: 10485760)
+log_rotation_size = 10485760
+# Number of rotated shim log files to retain.
+# (default: 3)
+log_rotation_count = 3
 
 # If enabled, the runtime will log additional debug messages to the
 # system log
