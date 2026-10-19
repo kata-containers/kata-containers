@@ -116,8 +116,12 @@ pub(crate) const SNP_CRYPTO_FEATURES: &[&str] = &[
 ];
 
 pub(crate) struct Objects {
-    /// Shared iommufd object used by all Grace GPU devices.
-    /// For CoCo x86, per-device iommufd is stored on `VfioDevice::iommufd_id` instead.
+    /// The one `-object iommufd` of the VM, referenced by every VFIO device on
+    /// virt and Q35 alike (`SHARED_IOMMUFD_ID`).  The kernel binds all devices
+    /// of an IOMMU group to one iommufd context and fails a second context with
+    /// EPERM (`iommu_device_claim_dma_owner`), and QEMU shares one IOAS between
+    /// devices on the same object, so guest RAM is pinned once instead of once
+    /// per device.  Set whenever a passthrough device is placed.
     pub iommufd: Option<IommufdBackend>,
     pub memory_backends: Vec<MemoryBackend>,
     pub numa_nodes: Vec<NumaNode>,
@@ -192,6 +196,9 @@ pub(crate) struct ObjectRngRandom {
 }
 
 const PRIMARY_RAM_ID: &str = "m0";
+
+/// ID of the single iommufd object shared by every VFIO device of the VM.
+pub(crate) const SHARED_IOMMUFD_ID: &str = "iommufd0";
 
 impl Platform {
     pub fn from_config(config: &HypervisorConfig) -> Result<Self> {
@@ -346,6 +353,10 @@ impl Platform {
             return;
         }
 
+        self.objects.iommufd = Some(IommufdBackend {
+            id: SHARED_IOMMUFD_ID.to_owned(),
+        });
+
         let mut gpu_idx = 0usize;
 
         for (group_idx, group) in topo.gpu_smmu_groups.iter().enumerate() {
@@ -372,7 +383,6 @@ impl Platform {
                         host: pci_addr.clone(),
                         rombar: None,
                         kind: VfioDeviceKind::GpuPci,
-                        iommufd_id: None,
                         pci_vendor_id: None,
                         pci_device_id: None,
                     }),
@@ -400,7 +410,7 @@ impl Platform {
         }
 
         self.objects.iommufd = Some(IommufdBackend {
-            id: "iommufd0".to_owned(),
+            id: SHARED_IOMMUFD_ID.to_owned(),
         });
 
         let has_egm = !topo.egm_sockets.is_empty();
@@ -498,7 +508,6 @@ impl Platform {
                         host: pci_addr.clone(),
                         rombar: Some(false),
                         kind: VfioDeviceKind::Gpu,
-                        iommufd_id: None,
                         pci_vendor_id: None,
                         pci_device_id: None,
                     }),
@@ -586,8 +595,9 @@ impl Platform {
     ///   2. -machine q35,...
     ///   3. memory backends + NUMA nodes, interleaved per socket
     ///   4. -numa dist entries
-    ///   5. pxb-pcie GPU roots (pxb + root ports + per-device iommufd + vfio)
-    ///   6. cold-plug root ports on pcie.0
+    ///   5. the shared iommufd object, once, when any VFIO device is placed
+    ///   6. pxb-pcie GPU roots (pxb + root ports + vfio)
+    ///   7. cold-plug root ports on pcie.0
     fn numa_has_memdev(&self) -> bool {
         self.objects.numa_nodes.iter().any(|n| n.memdev.is_some())
     }
@@ -620,6 +630,11 @@ impl Platform {
             args.push(format!("dist,src={src},dst={dst},val={val}"));
         }
 
+        if let Some(ifd) = &self.objects.iommufd {
+            args.push("-object".to_owned());
+            args.push(format!("iommufd,id={}", ifd.id));
+        }
+
         let default_bus = self.pci.default_bus.as_deref().unwrap_or("pcie.0");
         for root in &self.pci.roots {
             args.push("-device".to_owned());
@@ -630,12 +645,8 @@ impl Platform {
                 args.push(emit_root_port(port, &root.id));
 
                 if let Some(vfio) = &port.device {
-                    if let Some(ref ifd_id) = vfio.iommufd_id {
-                        args.push("-object".to_owned());
-                        args.push(format!("iommufd,id={ifd_id}"));
-                    }
                     args.push("-device".to_owned());
-                    args.push(emit_vfio_q35(vfio, &port.id));
+                    args.push(emit_vfio_q35(vfio, &port.id, self.objects.iommufd.as_ref()));
                 }
             }
         }
@@ -938,7 +949,7 @@ fn emit_root_port(port: &PciRootPort, bus: &str) -> String {
 }
 
 /// Q35 vfio emission: host → id → [x-pci-vendor-id] → [x-pci-device-id] → bus → [iommufd]
-fn emit_vfio_q35(vfio: &VfioDevice, port_id: &str) -> String {
+fn emit_vfio_q35(vfio: &VfioDevice, port_id: &str, iommufd: Option<&IommufdBackend>) -> String {
     let device = match vfio.kind {
         VfioDeviceKind::Gpu => "vfio-pci-nohotplug",
         VfioDeviceKind::GpuPci | VfioDeviceKind::NvSwitch | VfioDeviceKind::Nic => "vfio-pci",
@@ -951,8 +962,8 @@ fn emit_vfio_q35(vfio: &VfioDevice, port_id: &str) -> String {
         s.push_str(&format!(",x-pci-device-id={did:#06x}"));
     }
     s.push_str(&format!(",bus={port_id}"));
-    if let Some(ref ifd_id) = vfio.iommufd_id {
-        s.push_str(&format!(",iommufd={ifd_id}"));
+    if let Some(ifd) = iommufd {
+        s.push_str(&format!(",iommufd={}", ifd.id));
     }
     s
 }

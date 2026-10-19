@@ -246,8 +246,6 @@ pub struct VfioDevice {
     pub host: String,
     pub rombar: Option<bool>,        // Grace: Some(false); Q35 CoCo: None
     pub kind: VfioDeviceKind,
-    /// Per-device iommufd (CoCo x86); Grace uses shared iommufd0 in Objects.
-    pub iommufd_id: Option<String>,
     pub pci_vendor_id: Option<u16>,  // CoCo attestation override
     pub pci_device_id: Option<u16>,
 }
@@ -287,7 +285,7 @@ the `2-GPUs-per-SMMU` topology.
 
 ```rust
 pub struct Objects {
-    /// Shared iommufd (Grace); CoCo x86 uses per-device iommufd on VfioDevice.
+    /// The VM's single iommufd object; every VFIO device references it.
     pub iommufd: Option<IommufdBackend>,
     pub memory_backends: Vec<MemoryBackend>,
     pub numa_nodes: Vec<NumaNode>,
@@ -328,6 +326,17 @@ pub enum AcpiPciNodeLink {
     EgmMemory { id: String, pci_dev: String, node: u32 },
 }
 ```
+
+**One iommufd per VM.** `Objects::iommufd` is the only `-object iommufd` the
+Platform emits, on virt and Q35 alike, and every VFIO device references it.
+The kernel lets one iommufd context own an IOMMU group; a second context that
+binds a device of the same group gets EPERM from `iommu_device_claim_dma_owner`,
+which is what happens to NVSwitches behind a switch port without ACS when each
+device brings its own object (#14088).  QEMU also shares one `IOAS` between the
+devices on one object, so guest RAM is pinned and charged against
+`RLIMIT_MEMLOCK` once rather than once per device.  The Grace I/O
+Virtualization Guide's command lines use a single `iommufd0` for the same
+reason.
 
 **EGM is per socket, not per GPU:** one `MemoryBackend::File` with `/dev/egmN`
 per CPU socket.  Two GPUs on the same socket share the full EGM backing; each
@@ -498,8 +507,9 @@ follow the machine line, interleaved with their NUMA node:
 2. `-machine q35,...`
 3. Per socket: `-object memory-backend-{ram,file}` then `-numa node,memdev=,cpus=`
 4. `-numa dist` entries
-5. `PciTopology::roots` — `pxb-pcie`, root ports, per-device `iommufd`, `vfio-pci`
-6. `PciTopology::pcie_root_port` — pre-provisioned empty ports on `pcie.0`
+5. `-object iommufd,id=iommufd0`, once
+6. `PciTopology::roots` — `pxb-pcie`, root ports, `vfio-pci`
+7. `PciTopology::pcie_root_port` — pre-provisioned empty ports on `pcie.0`
 
 ### VFIO Device Assignment Model
 
@@ -788,8 +798,8 @@ each supported machine type and that `HostTopology` round-trips through
   `SocketInfo::{host_node, mem_path, mem_size}`.
 - `ProtectionDevice` enum: `SevSnp` / `Tdx`; drives `kernel_irqchip=split` and
   `confidential_guest_support` on Q35.
-- `VfioDevice` extended: `rombar: Option`, `iommufd_id` (per-device CoCo),
-  `pci_vendor_id/device_id` (CoCo attestation).
+- `VfioDevice` extended: `rombar: Option`, `pci_vendor_id/device_id` (CoCo
+  attestation).  Q35 references the one shared `iommufd0` like Grace.
 - `VfioDeviceKind::GpuPci` added (`vfio-pci` for Q35; existing `Gpu` keeps
   `vfio-pci-nohotplug` for Grace).
 - `PciRootPort` extended: `slot`, `multifunction`, `io_reserve` — all `Option`
@@ -940,8 +950,8 @@ Key observations from the SEV-SNP + GPU invocation:
   CoCo uses RAM backend (not file-backed `/dev/shm`) — single NUMA node
 - GPU passthrough via `pxb-pcie + pcie-root-port + vfio-pci` (same shape as Grace
   but `vfio-pci` NOT `vfio-pci-nohotplug`, no `arm-smmuv3` — x86 uses global IOMMU)
-- `iommufd` is **per-device** (`id=iommufdvfio-<uuid>`), NOT the shared `iommufd0`
-  used on Grace; one `iommufd` object per GPU
+- the capture carried one `iommufd` object per device (`id=iommufdvfio-<uuid>`);
+  the fixture uses the shared `iommufd0` instead (see "One iommufd per VM")
 - `x-pci-vendor-id=0x10de,x-pci-device-id=0x2321` overrides required so the guest
   sees the correct device IDs for measured boot / attestation
 - `pxb-pcie bus_nr=32` (0x20 spacing, shared with Grace)
@@ -953,7 +963,6 @@ Platform fields added in Phase 3:
 - `Q35::kernel_irqchip: Option<String>` (`"split"` for CoCo, absent for vanilla)
 - `Q35::confidential_guest_support: Option<String>` referencing the protection object id
 - `MemoryBackend::Ram { host_nodes, policy }` for NUMA-pinned RAM backend
-- `VfioDevice::iommufd_id: Option<String>` — per-device `iommufd` for CoCo x86
 - `VfioDevice::pci_vendor_id / pci_device_id` for CoCo attestation overrides
 
 **TDX production data captured** (Intel TDX host, 2026-07-15).
@@ -1011,7 +1020,7 @@ distance 21) but without CoCo.  Key differences from the TDX capture:
   `confidential-guest-support`.
 - Memory backend is `memory-backend-file` via `/dev/shm` (same pattern as
   `q35_vanilla_kata_x86`), not `memory-backend-ram` as in the CoCo captures.
-- Per-device `iommufd` is still present: the modern VFIO `iommufd` interface is used
+- The shared `iommufd0` is present: the modern VFIO `iommufd` interface is used
   for GPU passthrough regardless of CoCo mode.
 - `x-pci-vendor-id`/`x-pci-device-id` overrides are still present: the kata
   runtime applies them for any GPU passthrough, not only for CoCo attestation.
