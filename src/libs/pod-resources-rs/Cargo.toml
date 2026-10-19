@@ -20,3 +20,6 @@ slog = { workspace = true }
 slog-scope = { workspace = true }
 tonic = "0.14"
 tonic-prost = "0.14"
+
+[dev-dependencies]
+tempfile = { workspace = true }
