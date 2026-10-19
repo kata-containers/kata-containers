@@ -83,7 +83,29 @@ pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::Asyn
 
 pub enum LogDestination {
     File(Box<dyn Write + Send + Sync>),
+    RotatingFile(Box<dyn Write + Send + Sync>),
     Journal,
+}
+
+// Only rotating file output uses this fallback; other destinations are unchanged.
+struct JournalFallback<D>(D);
+
+impl<D: Drain<Ok = (), Err = io::Error>> Drain for JournalFallback<D> {
+    type Ok = ();
+    type Err = slog::Never;
+
+    fn log(&self, record: &Record, values: &OwnedKVList) -> Result<(), slog::Never> {
+        if let Err(err) = self.0.log(record, values) {
+            let _ = writeln!(
+                io::stderr().lock(),
+                "file logging failed, using journald: {err}"
+            );
+            return slog_journald::JournaldDrain
+                .ignore_res()
+                .log(record, values);
+        }
+        Ok(())
+    }
 }
 
 // Creates a logger which prints output as JSON
@@ -123,6 +145,16 @@ pub fn create_logger_with_destination(
                 .fuse();
 
             Box::new(json_drain)
+        }
+        LogDestination::RotatingFile(writer) => {
+            // Check rotation after each complete JSON record. This does not
+            // request fsync-like durability.
+            let json_drain = slog_json::Json::new(writer)
+                .add_default_keys()
+                .set_flush(true)
+                .build();
+
+            Box::new(JournalFallback(json_drain))
         }
         LogDestination::Journal => {
             // `destination` is `Journal`.
@@ -389,7 +421,57 @@ mod tests {
     use serde_json::{json, Value};
     use slog::{crit, debug, error, info, warn, Logger};
     use std::io::prelude::*;
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
+
+    #[test]
+    fn rotating_file_write_error_with_unwritable_stderr_is_nonfatal() {
+        const CHILD: &str = "KATA_TEST_ROTATING_FILE_STDERR_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            struct FailedWriter(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+            impl Write for FailedWriter {
+                fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                    self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Err(io::Error::other("injected write failure"))
+                }
+                fn flush(&mut self) -> io::Result<()> {
+                    Ok(())
+                }
+            }
+            let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let (logger, guard) = create_logger_with_destination(
+                "name",
+                "source",
+                slog::Level::Info,
+                LogDestination::RotatingFile(Box::new(FailedWriter(calls.clone()))),
+            );
+            info!(logger, "write must fail without panicking");
+            info!(logger, "logger must remain usable");
+            drop(guard);
+            drop(logger);
+            assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 2);
+            return;
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::rotating_file_write_error_with_unwritable_stderr_is_nonfatal",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .stderr(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open("/dev/full")
+                    .unwrap(),
+            )
+            .status()
+            .unwrap();
+        assert!(
+            status.success(),
+            "write error stopped the logger: {}",
+            status
+        );
+    }
 
     #[test]
     fn test_get_log_levels() {
@@ -607,6 +689,26 @@ mod tests {
             .get(record_key)
             .expect("failed to find record key field");
         assert_eq!(field_record_value, record_value);
+    }
+
+    #[test]
+    fn test_rotating_file_destination_flushes_each_record() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("runtime.log");
+        let mut writer = FileRotator::new(&path).unwrap();
+        writer.rotate_threshold(1).rotate_count(1).open().unwrap();
+
+        let (logger, guard) = create_logger_with_destination(
+            "name",
+            "source",
+            slog::Level::Info,
+            LogDestination::RotatingFile(Box::new(writer)),
+        );
+        info!(logger, "record");
+        drop(guard);
+        drop(logger);
+
+        assert!(path.with_extension("log.1").is_file());
     }
 
     #[test]
