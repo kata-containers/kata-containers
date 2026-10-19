@@ -334,6 +334,10 @@ type Cmd struct {
 	Interactive     bool
 	Detach          bool
 	NoNewPrivileges bool
+
+	// ApparmorProfile preserves the OCI exec request for validation against
+	// the container's security binding by the guest agent. Empty means inherit.
+	ApparmorProfile string `json:",omitempty"`
 }
 
 // Resources describes VM resources configuration.
