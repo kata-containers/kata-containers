@@ -1,0 +1,73 @@
+# Copyright (c) 2026 Kata Containers contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Test profile for the guest AppArmor integration tests.
+#
+# This is not a default policy. Nothing applies it unless a workload asks for
+# the profile named kata-apparmor-test through its OCI apparmorProfile value.
+#
+# It exists to prove the mechanism end to end inside a guest: that the agent
+# can find a profile in the extension image, load it with the base image's
+# parser, verify it, and have the kernel enforce it. It does that by denying
+# writes to one well known path while otherwise staying permissive, so it can
+# never be mistaken for a hardening profile.
+#
+# A production default profile would have to start from a real guest file tree
+# and a real workload's access needs, and be reviewed as such.
+#
+# Deliberately self-contained: no #include. The distribution's abstractions and
+# tunables are a deep tree of policy text that carries distribution-specific
+# assumptions, and pulling it in would make this profile's meaning depend on
+# whichever base image release it happened to load against. Keeping the test
+# profile closed means the test exercises the agent and the parser without also
+# depending on distribution policy. Profiles that do want includes must ship
+# the whole included tree inside this extension, under the same root.
+
+profile kata-apparmor-test flags=(attach_disconnected) {
+	# Program startup and shared libraries.
+	/bin/** mr,
+	/usr/bin/** mr,
+	/usr/sbin/** mr,
+	/sbin/** mr,
+	/usr/lib/** mr,
+	/lib/** mr,
+	/lib64/** mr,
+	/usr/lib64/** mr,
+
+	# Keep this profile across exec, including BusyBox applet symlinks and
+	# usrmerge's /bin -> /usr/bin. Only the test's concrete executables get x.
+	/{,usr/}bin/{busybox,sh,ash,dash,bash,cat,grep,sleep} ix,
+
+	# Permit shell child notifications and normal Agent-driven stop/cleanup.
+	# The Agent runs unconfined; do not allow arbitrary signal peers.
+	signal (send, receive) peer=kata-apparmor-test,
+	signal (receive) peer=unconfined,
+
+	# Dynamic loader configuration and the files it reads.
+	/etc/ld.so.cache r,
+	/etc/ld.so.conf r,
+	/etc/ld.so.conf.d/** r,
+
+	# Basic devices the workload needs.
+	/dev/null rw,
+	/dev/zero r,
+	/dev/urandom r,
+	/dev/random r,
+	/dev/tty rw,
+
+	# Working directory the tests write their evidence into.
+	/tmp/ rw,
+	/tmp/** rw,
+
+	# The one protected path. The tests assert that a write here is refused
+	# and that the profile is still in enforce mode afterwards.
+	deny /tmp/kata-apparmor-deny w,
+	deny /tmp/kata-apparmor-deny k,
+
+	# Observing the profile state is how the tests check enforcement.
+	/proc/self/attr/current r,
+	/proc/self/attr/exec rw,
+	/proc/** r,
+	/sys/kernel/security/apparmor/profiles r,
+}

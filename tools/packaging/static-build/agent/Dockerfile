@@ -25,6 +25,7 @@ RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX /opt
 
 RUN apt-get update && \
 	apt-get --no-install-recommends -y install \
+		apparmor \
 		ca-certificates \
 		clang \
 		curl \
