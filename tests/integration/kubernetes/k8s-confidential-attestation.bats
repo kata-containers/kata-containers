@@ -180,6 +180,7 @@ setup() {
 	initrd_path=$(echo "$qemu_cmd" | grep -oP -- '-initrd \K[^ ]+' || true)
 	firmware_path=$(echo "$qemu_cmd" | grep -oP -- '-bios \K[^ ]+')
 	vcpu_count=$(echo "$qemu_cmd" | grep -oP -- '-smp \K\d+')
+	vcpu_type=$(echo "$qemu_cmd" | grep -oP -- '-cpu \K[^ ,]+')
 	append=$(echo "$qemu_cmd" | grep -oP -- '-append \K.*?(?= -(smp|bios) )')
 	# Remove escape backslashes for quotes from output for dm-mod.create parameters
 	append="${append//\\\"/\"}"
@@ -187,7 +188,7 @@ setup() {
 	measure_args=(
 		--mode=snp
 		--vcpus="${vcpu_count}"
-		--vcpu-type=EPYC-v4
+		--vcpu-type="${vcpu_type}"
 		--output-format=hex
 		--ovmf="${firmware_path}"
 		--kernel="${kernel_path}"

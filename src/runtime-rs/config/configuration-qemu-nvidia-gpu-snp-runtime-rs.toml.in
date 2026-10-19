@@ -132,6 +132,11 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM_NV@"
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
 
+# CPU model
+# Guest CPU model, QEMU -cpu. Part of the SNP launch measurement:
+# sev-snp-measure --vcpu-type must match. Milan is the oldest SNP generation.
+cpu_model = "EPYC-Milan-v2"
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
