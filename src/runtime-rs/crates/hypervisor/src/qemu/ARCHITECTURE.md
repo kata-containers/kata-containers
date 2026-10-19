@@ -1303,6 +1303,9 @@ the tray passed through).  Neither the `-m` hand-over nor the tray check exists
 yet, so `Platform::for_assigned_devices` ignores probed EGM devices with a
 warning and backs the guest with RAM.  The emitters and fixtures grace_6 and
 grace_7 already produce the vEGM layout; Phase 8 wires the runtime side.
+The prober reads the regions the way `nvgrace-egm` exposes them,
+`/sys/class/egm/egmN/{egm_size,gpu_devices}`, and keeps the GPUs of each
+region in `EgmSocketInfo::gpu_devices` for the tray check.
 
 ### Rootless QEMU with `cold_plug_vfio = "auto"`
 
