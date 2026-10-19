@@ -30,6 +30,12 @@ pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
 /// Default logger path for runtime shim log files.
 pub const DEFAULT_RUNTIME_LOG_DIR: &str = "/var/log/kata-containers";
 
+/// Default maximum size of an active shim log file before rotation.
+pub const DEFAULT_RUNTIME_LOG_ROTATION_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Default number of rotated shim log files to retain.
+pub const DEFAULT_RUNTIME_LOG_ROTATION_COUNT: u32 = 3;
+
 /// Destination for runtime shim logs.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -76,9 +82,18 @@ pub struct Runtime {
     pub log_destination: RuntimeLogDestination,
 
     /// Host directory for shim logs when `log_destination` is `file`.
-    /// Administrators manage total directory usage and historical log cleanup.
+    /// Rotation is per sandbox. Administrators manage total directory usage
+    /// and historical log cleanup.
     #[serde(default = "default_runtime_log_dir")]
     pub log_dir: String,
+
+    /// Maximum size of the active shim log file before rotation.
+    #[serde(default = "default_runtime_log_rotation_size")]
+    pub log_rotation_size: u64,
+
+    /// Number of rotated shim log files to retain, excluding the active file.
+    #[serde(default = "default_runtime_log_rotation_count")]
+    pub log_rotation_count: u32,
 
     /// Enabled experimental feature list, format: ["a", "b"].
     ///
@@ -408,6 +423,14 @@ fn default_runtime_log_dir() -> String {
     String::from(DEFAULT_RUNTIME_LOG_DIR)
 }
 
+fn default_runtime_log_rotation_size() -> u64 {
+    DEFAULT_RUNTIME_LOG_ROTATION_SIZE
+}
+
+fn default_runtime_log_rotation_count() -> u32 {
+    DEFAULT_RUNTIME_LOG_ROTATION_COUNT
+}
+
 #[cfg(not(feature = "enable-vendor"))]
 mod vendor {
     use super::*;
@@ -592,6 +615,11 @@ jaeger_password = "pw"
         let default = toml::from_str::<Runtime>("").unwrap();
         assert_eq!(default.log_destination, RuntimeLogDestination::Journald);
         assert_eq!(default.log_dir, DEFAULT_RUNTIME_LOG_DIR);
+        assert_eq!(default.log_rotation_size, DEFAULT_RUNTIME_LOG_ROTATION_SIZE);
+        assert_eq!(
+            default.log_rotation_count,
+            DEFAULT_RUNTIME_LOG_ROTATION_COUNT
+        );
         assert_eq!(
             toml::from_str::<Runtime>("log_destination = \"file\"")
                 .unwrap()
@@ -604,6 +632,10 @@ jaeger_password = "pw"
                 .log_dir,
             "/tmp/kata-logs"
         );
+        let config =
+            toml::from_str::<Runtime>("log_rotation_size = 4096\nlog_rotation_count = 2").unwrap();
+        assert_eq!(config.log_rotation_size, 4096);
+        assert_eq!(config.log_rotation_count, 2);
         assert!(toml::from_str::<Runtime>("log_destination = \"invalid\"").is_err());
     }
 }
