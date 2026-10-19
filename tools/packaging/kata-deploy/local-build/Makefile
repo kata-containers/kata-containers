@@ -33,6 +33,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-apparmor-extension-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-image-devkit-extension-tarball \
 	rootfs-image-mariner-tarball \
@@ -74,6 +75,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-apparmor-extension-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-image-devkit-extension-tarball \
 	rootfs-image-nvidia-gpu-tarball \

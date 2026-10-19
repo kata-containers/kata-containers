@@ -88,12 +88,16 @@ RUST_EXTRA_OPTS="$(read_verity_param "base" "KERNELVERITYPARAMS")"
 RUST_EXTRA_OPTS+="$(read_verity_param "coco-extension" "COCOVERITYPARAMS")"
 RUST_EXTRA_OPTS+="$(read_verity_param "nvidia" "KERNELVERITYPARAMS_NV")"
 RUST_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-extension" "NVIDIAGPUEXTENSIONVERITYPARAMS")"
+# The AppArmor policy extension is available to both runtimes, so its hash is
+# emitted for runtime-rs and for the Go runtime below.
+RUST_EXTRA_OPTS+="$(read_verity_param "apparmor-extension" "APPARMOREXTENSIONVERITYPARAMS")"
 
 # runtime (Go): monolithic confidential image -> confidential hash, plus the
 # monolithic nvidia-gpu / nvidia-gpu-confidential hashes for the NVIDIA configs.
 GO_EXTRA_OPTS="$(read_verity_param "confidential" "KERNELVERITYPARAMS")"
 GO_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu" "KERNELVERITYPARAMS_NV")"
 GO_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-confidential" "KERNELVERITYPARAMS_CONFIDENTIAL_NV")"
+GO_EXTRA_OPTS+="$(read_verity_param "apparmor-extension" "APPARMOREXTENSIONVERITYPARAMS")"
 # qemu-nvidia-cpu (Go) boots the driver-agnostic nvidia base image verity-backed;
 # it needs the "nvidia" base hash in its own var since KERNELVERITYPARAMS_NV
 # above is the monolithic nvidia-gpu hash.

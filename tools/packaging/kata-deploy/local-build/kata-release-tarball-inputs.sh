@@ -42,6 +42,7 @@ kata-static-qemu-no-shared-fs.tar.zst
 kata-static-qemu-snp-experimental.tar.zst
 kata-static-qemu-tdx-experimental.tar.zst
 kata-static-qemu.tar.zst
+kata-static-rootfs-image-apparmor-extension.tar.zst
 kata-static-rootfs-image-coco-extension.tar.zst
 kata-static-rootfs-image-devkit-extension.tar.zst
 kata-static-rootfs-image-mariner.tar.zst
@@ -66,6 +67,7 @@ kata-static-openvmm.tar.zst
 kata-static-ovmf.tar.zst
 kata-static-qemu-no-shared-fs.tar.zst
 kata-static-qemu.tar.zst
+kata-static-rootfs-image-apparmor-extension.tar.zst
 kata-static-rootfs-image-coco-extension.tar.zst
 kata-static-rootfs-image-devkit-extension.tar.zst
 kata-static-rootfs-image-nvidia-gpu-extension.tar.zst
