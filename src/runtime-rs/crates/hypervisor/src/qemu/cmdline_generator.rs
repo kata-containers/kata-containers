@@ -404,16 +404,16 @@ struct Cpu {
 
 impl Cpu {
     fn new(config: &HypervisorConfig) -> Cpu {
+        // '-cpu host' is used unless a CPU model is configured
+        let r#type = if config.cpu_info.cpu_model.is_empty() {
+            "host".to_owned()
+        } else {
+            config.cpu_info.cpu_model.clone()
+        };
         Cpu {
-            // '-cpu host' has always to be used when using KVM
-            r#type: "host".to_owned(),
+            r#type,
             cpu_features: config.cpu_info.cpu_features.clone(),
         }
-    }
-
-    fn set_type(&mut self, cpu_type: &str) -> &mut Self {
-        self.r#type = cpu_type.to_owned();
-        self
     }
 }
 
@@ -3528,8 +3528,6 @@ impl<'a> QemuCmdLine<'a> {
             .set_kernel_irqchip("split")
             .set_confidential_guest_support("snp")
             .set_nvdimm(false);
-
-        self.cpu.set_type("EPYC-v4");
     }
 
     pub fn add_tdx_protection_device(
@@ -4625,6 +4623,32 @@ mod tests {
             .collect();
 
         assert_eq!(values, expected_values);
+    }
+
+    #[rstest]
+    #[case::default_is_host("", false, "host")]
+    #[case::from_config_without_protection("EPYC-Genoa", false, "EPYC-Genoa")]
+    #[case::sev_snp_from_config("EPYC-Milan", true, "EPYC-Milan")]
+    #[actix_rt::test]
+    #[serial]
+    async fn test_cpu_model(
+        #[case] cpu_model: &str,
+        #[case] sev_snp: bool,
+        #[case] expected_model: &str,
+    ) {
+        let mut config = test_qemu_config(Some("none"), false);
+        config.cpu_info.cpu_model = cpu_model.to_owned();
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("cpu-model", &config).unwrap();
+        if sev_snp {
+            cmdline.add_sev_snp_protection_device(1, 1, "/usr/share/ovmf/OVMF.fd", &None);
+        }
+        let params = cmdline.build().await.unwrap();
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+
+        assert!(params
+            .windows(2)
+            .any(|args| args[0] == "-cpu" && args[1].split(',').next() == Some(expected_model)));
     }
 
     #[actix_rt::test]
