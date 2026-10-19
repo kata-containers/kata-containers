@@ -277,11 +277,11 @@ pub struct SmmuV3Config {
 
 **`SMMU` grouping rule:** GPUs that share a physical `SMMU` on the host **must** be
 placed on the same `PciRootComplex` in the guest (they share the same
-`arm-smmuv3` device).  The prober keys complexes on the physical SMMU behind
+`arm-smmuv3` device).  The prober keys complexes on the physical `SMMU` behind
 each device (`/sys/bus/pci/devices/<BDF>/iommu`, e.g. `smmu3.0x0000000005000000`)
 and falls back to the IOMMU group only when the kernel exposes no such link: an
 IOMMU group is an isolation boundary, not a translation unit, and two GPUs can
-sit in separate groups behind one SMMU.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
+sit in separate groups behind one `SMMU`.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
 the `2-GPUs-per-SMMU` topology.
 
 #### `Objects` — shared QEMU `-object` backends
@@ -932,7 +932,7 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
 - `probe_host_topology()` in `probe.rs`: walks `/sys/bus/pci/devices/` to
   discover NVIDIA GPUs (class 0x0302/0x0300) and NICs (0x0200/0x0207), groups
   them by IOMMU group ID (one group = one `SMMU` on Grace; Phase 7 keys on the
-  physical SMMU instead), reads NUMA node affinity, and detects EGM devices
+  physical `SMMU` instead), reads NUMA node affinity, and detects EGM devices
   under `/dev/egmN`.
 - `probe_host_topology_at(pci, cpu, dev)`: test-injectable variant used by the
   `probe_synthetic_sysfs` unit test.
@@ -964,7 +964,7 @@ result to `QemuCmdLine::apply_platform`:
   `memory-backend=` reference are dropped; guest RAM comes from the Platform's
   per-socket backends bound through `-numa node,memdev=`;
 - `Platform::topology_args` (everything but the `-machine` pair: iommufd,
-  backends, NUMA nodes, pxb/smmuv3/root ports/vfio, initiator links) is
+  backends, NUMA nodes, `pxb`/`smmuv3`/root ports/`vfio`, initiator links) is
   appended to the device list verbatim;
 - Platform-placed devices are skipped by the legacy VFIO cold-plug loop and
   get their `guest_pci_path` from `Platform::guest_pci_paths`
@@ -976,7 +976,7 @@ result to `QemuCmdLine::apply_platform`:
   duplicate object id (see "One iommufd per VM").
 
 Legacy keeps `-name`, kernel, `-smp`, `-cpu`, `-m` (with hot-plug slots and
-maxmem), QMP, consoles, virtio devices, hot-plug root ports on `pcie.0` and any
+`maxmem`), QMP, consoles, virtio devices, hot-plug root ports on `pcie.0` and any
 VFIO device the prober does not model.  Without `"auto"` nothing changes: the
 Platform is still only probed and logged.  `"auto"` with no modelled device
 falls back to the legacy topology; `"auto"` with `shared_fs = "virtio-fs"` is
@@ -992,7 +992,7 @@ Groundwork that preparing the first real launch on a GB200 node forced:
 - the probe's host CPU ranges and memory become a guest layout
   (`map_guest_vcpus`, `fill_guest_memory`, per-socket RAM bound to host nodes);
 - host NUMA binding comes from `cpuN/nodeN` links, independently of the
-  decimal `physical_package_id` (Grace reports large, nonsequential IDs);
+  decimal `physical_package_id` (Grace reports large, non-sequential IDs);
 - `HostTopology::retain_devices` scopes the Platform to the sandbox's devices;
 - the virt `highmem-mmio-size` follows the probed GPU BARs instead of a
   fixed 4T, so a GB300 tray gets the 8T the guide asks for;
