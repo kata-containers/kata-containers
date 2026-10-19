@@ -781,7 +781,7 @@ assemble_nvidia_gpu_extension() {
 			"${extension}/usr/share/nvidia/nvswitch/fabricmanager.cfg"
 	fi
 
-	# Materialize the SONAME symlinks (e.g. libcuda.so.1 -> libcuda.so.595.58.03)
+	# Materialize the SONAME symlinks (e.g. libcuda.so.1 -> libcuda.so.615.78.08)
 	# inside the lib dir. The extension ships only the versioned files, so without
 	# this `nvidia-ctk cdi generate` has no symlink to replicate into the
 	# container (it reproduces existing links, it does not synthesize SONAMEs) and
