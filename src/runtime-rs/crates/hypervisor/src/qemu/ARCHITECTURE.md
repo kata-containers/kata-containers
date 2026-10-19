@@ -645,6 +645,9 @@ All Grace configurations share these constants:
 - `-object iommufd,id=iommufd0` — modern IOMMU fd interface; legacy VFIO groups
   not supported on Grace
 - `arm-smmuv3` fixed parameters: `accel=on,ats=on,ril=off,pasid=on,oas=48`
+- `highmem-mmio-size`: 4T for GH200/GB200 trays, 8T for GB300; sized from the
+  probed GPU BARs by `highmem_mmio_size_for` (twice the BARs plus a 2G MIG
+  reserve per GPU, rounded up to a power of two, 4T floor)
 - Host kernel driver: `nvgrace-gpu-vfio-pci` (replaces standard `vfio-pci`)
 - EGM kernel module: `nvgrace-egm` (creates `/dev/egm*` character devices)
 
@@ -991,6 +994,8 @@ Groundwork that preparing the first real launch on a GB200 node forced:
 - host NUMA binding comes from `cpuN/nodeN` links, independently of the
   decimal `physical_package_id` (Grace reports large, nonsequential IDs);
 - `HostTopology::retain_devices` scopes the Platform to the sandbox's devices;
+- the virt `highmem-mmio-size` follows the probed GPU BARs instead of a
+  fixed 4T, so a GB300 tray gets the 8T the guide asks for;
 - fixture `gb200_4gpu_2socket.args` (Config 8); 18 golden and unit tests pass.
 
 **Still open (Phase 8):**

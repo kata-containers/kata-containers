@@ -579,6 +579,23 @@ impl Platform {
             .sum();
         let n_cpu_nodes = topo.sockets.len() as u32;
 
+        // Size the 64-bit MMIO window from the probed BARs; a hand-built
+        // topology without BAR sizes keeps the configured default.
+        let probed_bars: Vec<u64> = topo
+            .gpu_smmu_groups
+            .iter()
+            .flat_map(|g| &g.pci_bus_addrs)
+            .filter_map(|bdf| topo.gpu_mmio_bytes.get(bdf).copied())
+            .collect();
+        if !probed_bars.is_empty() {
+            if let Machine::Virt(v) = &mut self.machine {
+                v.highmem_mmio_size = Some(highmem_mmio_size_for(
+                    probed_bars.iter().sum(),
+                    total_gpus as u64,
+                ));
+            }
+        }
+
         for (socket_idx, socket) in topo.sockets.iter().enumerate() {
             let memdev = if has_egm {
                 topo.egm_sockets
@@ -1249,6 +1266,24 @@ fn emit_vfio_grace(vfio: &VfioDevice, port_id: &str, iommufd: Option<&IommufdBac
         s.push_str(&format!(",iommufd={}", ifd.id));
     }
     s
+}
+
+/// Smallest `highmem-mmio-size` for Grace GPU passthrough: the Grace I/O
+/// Virtualization Guide's value for GH200 and GB200 trays with four GPUs.
+const GRACE_HIGHMEM_MMIO_MIN: u64 = 4 << 40;
+
+/// MMIO `nvgrace-gpu-vfio-pci` reserves per GPU on top of its BARs (MIG).
+const GPU_MIG_RESERVE: u64 = 2 << 30;
+
+/// `highmem-mmio-size` for `gpus` GPUs whose 64-bit BARs total `bar_bytes`:
+/// twice the BARs plus the per-GPU reserve, rounded up to the power of two
+/// QEMU requires, never below the 4T floor.  Reproduces the guide: four GB200
+/// GPUs (256G BAR1 each) stay at 4T, four GB300 GPUs (512G) need 8T.
+pub(crate) fn highmem_mmio_size_for(bar_bytes: u64, gpus: u64) -> u64 {
+    let need = bar_bytes
+        .saturating_add(gpus.saturating_mul(GPU_MIG_RESERVE))
+        .saturating_mul(2);
+    need.next_power_of_two().max(GRACE_HIGHMEM_MMIO_MIN)
 }
 
 /// Guest bus number of the `complex_idx`-th `pxb-pcie` (0-based), 0x20 apart.

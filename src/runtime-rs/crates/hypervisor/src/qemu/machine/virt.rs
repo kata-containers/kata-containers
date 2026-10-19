@@ -10,6 +10,7 @@ pub(crate) struct Virt {
     pub ras: bool,
     /// Highmem MMIO window size in bytes; must be a power of 2.
     /// Required for Grace GPU passthrough: 4T for GH200/GB200 with <=4
-    /// GPUs, 8T for GB300 NVL72 with 4 GPUs.
+    /// GPUs, 8T for GB300 NVL72 with 4 GPUs.  `apply_virt_defaults` sizes it
+    /// from the probed GPU BARs (`highmem_mmio_size_for`); 4T is the default.
     pub highmem_mmio_size: Option<u64>,
 }
