@@ -19,6 +19,10 @@ pub(crate) struct HostTopology {
     /// Allocated after all GPU pxb complexes in bus_nr ordering.
     pub nic_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
+    /// 64-bit MMIO of each GPU (its prefetchable BARs) in bytes, keyed by
+    /// BDF, from `/sys/bus/pci/devices/<BDF>/resource`.  Sizes the virt
+    /// machine's `highmem-mmio-size`; empty when the topology is hand-built.
+    pub gpu_mmio_bytes: BTreeMap<String, u64>,
     /// `-numa dist` entries emitted after all NUMA nodes.  Each tuple is (src, dst, val).
     pub numa_distances: Vec<(u32, u32, u32)>,
     /// Minimum number of `pcie-root-port` slots to pre-provision on the Q35 default
@@ -168,6 +172,8 @@ impl HostTopology {
             }
             groups.retain(|group| !group.pci_bus_addrs.is_empty());
         }
+        self.gpu_mmio_bytes
+            .retain(|bdf, _| keep.contains(&bdf.to_ascii_lowercase()));
     }
 }
 
@@ -289,6 +295,7 @@ pub(crate) fn probe_host_topology_at(
     // kernel exposes it, otherwise the IOMMU group
     let mut gpu_groups: HashMap<String, Vec<(String, i32)>> = HashMap::new();
     let mut nic_groups: HashMap<String, Vec<(String, i32)>> = HashMap::new();
+    let mut gpu_mmio_bytes: BTreeMap<String, u64> = BTreeMap::new();
 
     let dir =
         std::fs::read_dir(pci_root).with_context(|| format!("opening {}", pci_root.display()))?;
@@ -333,6 +340,10 @@ pub(crate) fn probe_host_topology_at(
 
         match class16 {
             CLASS_3D_CONTROLLER | CLASS_VGA_CONTROLLER => {
+                let mmio = pci_mmio64_bytes(&dev_path);
+                if mmio > 0 {
+                    gpu_mmio_bytes.insert(bdf.clone(), mmio);
+                }
                 gpu_groups
                     .entry(complex_key)
                     .or_default()
@@ -393,10 +404,33 @@ pub(crate) fn probe_host_topology_at(
         gpu_smmu_groups: gpu_smmu_groups.into_iter().map(|(_, g)| g).collect(),
         nic_smmu_groups: nic_smmu_groups.into_iter().map(|(_, g)| g).collect(),
         egm_sockets,
+        gpu_mmio_bytes,
         numa_distances: vec![],
         pcie_root_port: 0,
         protection: None,
     })
+}
+
+/// Bytes of 64-bit memory BARs of a PCI device, from its sysfs `resource`
+/// file: one `start end flags` line per resource, the first six being the
+/// BARs.  Returns 0 when the file is missing.
+fn pci_mmio64_bytes(dev_path: &Path) -> u64 {
+    const IORESOURCE_MEM: u64 = 0x0000_0200;
+    const IORESOURCE_MEM_64: u64 = 0x0010_0000;
+    let Ok(raw) = std::fs::read_to_string(dev_path.join("resource")) else {
+        return 0;
+    };
+    raw.lines()
+        .take(6)
+        .filter_map(|line| {
+            let mut fields = line
+                .split_whitespace()
+                .map(|f| u64::from_str_radix(f.trim_start_matches("0x"), 16).ok());
+            let (start, end, flags) = (fields.next()??, fields.next()??, fields.next()??);
+            let is_mem64 = flags & IORESOURCE_MEM != 0 && flags & IORESOURCE_MEM_64 != 0;
+            (is_mem64 && end >= start).then(|| end - start + 1)
+        })
+        .sum()
 }
 
 /// Reads `/sys/devices/system/cpu/` to build SocketInfo per physical package.
