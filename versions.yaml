@@ -232,7 +232,7 @@ externals:
     desc: "NVIDIA compute stack"
     driver:
       desc: "NVIDIA kernel driver"
-      version: "595.58.03"
+      version: "615.71.09"
       # yamllint disable-line rule:line-length
       url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
       # Optional dedicated driver userspace repository - drivers released
