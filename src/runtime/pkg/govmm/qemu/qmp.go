@@ -1217,7 +1217,9 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 // devID is the id of the device to add. Must be valid QMP identifier.
 // bdf is the PCI bus-device-function of the pci device.
 // bus is optional. When hot plugging a PCIe device, the bus can be the ID of the pcie-root-port.
-// iommufdID is the ID of the iommufd object to be created for this device. If empty, no iommufd object will be created.
+// iommufdID is the ID of the iommufd object used by this device. The object is
+// created if it does not exist yet, so all devices can share one object. If
+// empty, the device does not use iommufd.
 func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string, iommufdID string) error {
 	var driver string
 	var transport VirtioTransport
@@ -1238,17 +1240,37 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 		args["bus"] = bus
 	}
 	if iommufdID != "" {
-		iommufdIDFull := "iommufd" + iommufdID
-		objectAddArgs := map[string]interface{}{
-			"qom-type": "iommufd",
-			"id":       iommufdIDFull,
-		}
-		if err := q.executeCommand(ctx, "object-add", objectAddArgs, nil); err != nil {
+		// Devices of one IOMMU group must bind to the same iommufd
+		// context, so reuse the object if it already exists.
+		if err := q.ensureIommufdObject(ctx, iommufdID); err != nil {
 			return err
 		}
-		args["iommufd"] = iommufdIDFull
+		args["iommufd"] = iommufdID
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ensureIommufdObject creates the iommufd object id unless it already exists.
+// Another caller can create the object between the lookup and object-add, so
+// a failed object-add is only an error if the object is still missing.
+func (q *QMP) ensureIommufdObject(ctx context.Context, id string) error {
+	path := "/objects/" + id
+	if _, err := q.ExecQomGet(ctx, path, "type"); err == nil {
+		return nil
+	}
+
+	objectAddArgs := map[string]interface{}{
+		"qom-type": "iommufd",
+		"id":       id,
+	}
+	err := q.executeCommand(ctx, "object-add", objectAddArgs, nil)
+	if err == nil {
+		return nil
+	}
+	if _, qomErr := q.ExecQomGet(ctx, path, "type"); qomErr == nil {
+		return nil
+	}
+	return err
 }
 
 // ExecutePCIVFIODeviceAdd adds a VFIO device to a QEMU instance using the device_add command.
