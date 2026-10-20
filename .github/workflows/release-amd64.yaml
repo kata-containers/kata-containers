@@ -69,6 +69,7 @@ jobs:
         id: build-and-push-kata-deploy-ci-amd64
         env:
           TARGET_ARCH: ${{ inputs.target-arch }}
+          RELEASE: "yes"
         run: |
           # We need to do such trick here as the format of the $GITHUB_REF
           # is "refs/tags/<tag>"
