@@ -1,0 +1,31 @@
+name: Lima lab controller checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/testing/lima/**
+      - .github/workflows/lima-lab-checks.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/testing/lima
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Shell checks
+        run: |
+          bash -n scripts/guest.sh
+          bash -n scripts/guest-ci.sh
+          shellcheck scripts/guest.sh scripts/guest-ci.sh
