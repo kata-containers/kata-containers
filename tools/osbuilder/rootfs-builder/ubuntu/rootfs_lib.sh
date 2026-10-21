@@ -31,6 +31,11 @@ build_rootfs() {
 	ln -s /run "${rootfs_dir}/var/run"
 	cp --remove-destination /etc/resolv.conf "${rootfs_dir}/etc"
 
+	# Ensure that the rootfs is not affected by https://emudhra.we-have-a-problem.com/.
+	badCACerts=$(openssl crl2pkcs7 -nocrl -certfile /etc/ssl/certs/ca-certificates.crt |
+		openssl pkcs7 -print_certs -noout |
+		grep -E 'CN=(AAA Certificate Services|emSign ECC Root CA - G3)' || true)
+	[[ -z "${badCACerts}" ]] || die "refusing to build rootfs with insecure CA certificates:\n${badCACerts}"
 	local dir="${rootfs_dir}/etc/ssl/certs"
 	mkdir -p "${dir}"
 	cp --remove-destination /etc/ssl/certs/ca-certificates.crt "${dir}"
