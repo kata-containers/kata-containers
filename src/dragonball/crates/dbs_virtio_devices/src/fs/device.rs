@@ -75,6 +75,9 @@ const OSS_CONFLICTS_DIR: &str = ".conflicts";
 const OSS_WRITE_THROUGH_INTERVAL_SECS: u64 = 1;
 const OSS_ASYNC_FLUSH_INTERVAL_SECS: u64 = 30;
 const OSS_DEFAULT_UPLOAD_CHUNK_SIZE: usize = 8 * 1024 * 1024;
+const OSS_RETRY_MAX_ATTEMPTS: usize = 4;
+const OSS_RETRY_BASE_BACKOFF_MS: u64 = 100;
+const OSS_RETRY_MAX_BACKOFF_MS: u64 = 1_600;
 
 #[derive(Debug, Clone, Deserialize)]
 struct OssFsConfig {
@@ -1065,6 +1068,61 @@ fn resolve_oss_upload_chunk_size(chunk_size: Option<usize>) -> FsResult<usize> {
     Ok(chunk_size)
 }
 
+fn oss_retry_backoff_delay(attempt: usize) -> Duration {
+    let shift = attempt.saturating_sub(1).min(20) as u32;
+    let factor = 1u64.checked_shl(shift).unwrap_or(u64::MAX);
+    let backoff_ms = OSS_RETRY_BASE_BACKOFF_MS
+        .saturating_mul(factor)
+        .min(OSS_RETRY_MAX_BACKOFF_MS);
+    Duration::from_millis(backoff_ms)
+}
+
+fn is_retryable_oss_error(e: &opendal::Error) -> bool {
+    if e.is_temporary() {
+        return true;
+    }
+
+    matches!(
+        e.kind(),
+        OpenDalErrorKind::RateLimited | OpenDalErrorKind::Unexpected
+    )
+}
+
+fn run_oss_with_retry<T, F>(
+    mountpoint: &str,
+    op_name: &str,
+    object_path: &str,
+    mut op: F,
+) -> std::result::Result<T, opendal::Error>
+where
+    F: FnMut() -> std::result::Result<T, opendal::Error>,
+{
+    let mut attempt = 1usize;
+    loop {
+        match op() {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                if attempt < OSS_RETRY_MAX_ATTEMPTS && is_retryable_oss_error(&e) {
+                    let backoff = oss_retry_backoff_delay(attempt);
+                    warn!(
+                        "{VIRTIO_FS_NAME}: retrying oss {op_name} for {object_path} at {mountpoint}, attempt {}/{} after {:?}, error kind {:?}: {}",
+                        attempt + 1,
+                        OSS_RETRY_MAX_ATTEMPTS,
+                        backoff,
+                        e.kind(),
+                        e
+                    );
+                    std::thread::sleep(backoff);
+                    attempt += 1;
+                    continue;
+                }
+
+                return Err(e);
+            }
+        }
+    }
+}
+
 fn build_oss_operator(cfg: &OssFsConfig) -> FsResult<OpenDalOperator> {
     let mut builder = OssService::default()
         .bucket(&cfg.bucket)
@@ -1399,9 +1457,12 @@ fn collect_local_cache_files(
 fn query_remote_object_state(
     op: &OpenDalOperator,
     runtime: &tokio::runtime::Runtime,
+    mountpoint: &str,
     object_path: &str,
 ) -> FsResult<RemoteObjectState> {
-    match runtime.block_on(op.stat(object_path)) {
+    match run_oss_with_retry(mountpoint, "stat", object_path, || {
+        runtime.block_on(op.stat(object_path))
+    }) {
         Ok(meta) => Ok(RemoteObjectState::Existing {
             etag: meta.etag().map(ToString::to_string),
             content_length: meta.content_length(),
@@ -1490,9 +1551,10 @@ fn download_remote_object_to_local(
     local_path: &Path,
     remote_state: &RemoteObjectState,
 ) -> FsResult<OssCacheEntry> {
-    let data = runtime
-        .block_on(op.read(object_path))
-        .map_err(|e| FsError::BackendFs(format!("failed to read remote object {object_path}: {e}")))?;
+    let data = run_oss_with_retry(&sync_ctx.mountpoint, "read", object_path, || {
+        runtime.block_on(op.read(object_path))
+    })
+    .map_err(|e| FsError::BackendFs(format!("failed to read remote object {object_path}: {e}")))?;
     if let Some(parent) = local_path.parent() {
         fs::create_dir_all(parent).map_err(FsError::IOError)?;
     }
@@ -1537,116 +1599,214 @@ fn classify_conditional_oss_error(e: &opendal::Error) -> Option<OssConditionalOp
 fn upload_local_file_chunked(
     op: &OpenDalOperator,
     runtime: &tokio::runtime::Runtime,
+    mountpoint: &str,
     object_path: &str,
     local_path: &Path,
     chunk_size: usize,
 ) -> FsResult<()> {
-    let mut file = File::open(local_path).map_err(FsError::IOError)?;
-    let write_opts = WriteOptions {
-        chunk: Some(chunk_size),
-        ..Default::default()
-    };
-    let mut writer = runtime
-        .block_on(op.writer_options(object_path, write_opts))
-        .map_err(|e| FsError::BackendFs(format!("failed to open oss writer for {object_path}: {e}")))?;
-    let mut buf = vec![0u8; chunk_size];
+    let mut attempt = 1usize;
     loop {
-        let bytes_read = file.read(&mut buf).map_err(FsError::IOError)?;
-        if bytes_read == 0 {
-            break;
+        let mut file = File::open(local_path).map_err(FsError::IOError)?;
+        let write_opts = WriteOptions {
+            chunk: Some(chunk_size),
+            ..Default::default()
+        };
+        let mut writer = match runtime.block_on(op.writer_options(object_path, write_opts)) {
+            Ok(writer) => writer,
+            Err(e) => {
+                if attempt < OSS_RETRY_MAX_ATTEMPTS && is_retryable_oss_error(&e) {
+                    let backoff = oss_retry_backoff_delay(attempt);
+                    warn!(
+                        "{VIRTIO_FS_NAME}: retrying oss write open for {object_path} at {mountpoint}, attempt {}/{} after {:?}: {}",
+                        attempt + 1,
+                        OSS_RETRY_MAX_ATTEMPTS,
+                        backoff,
+                        e
+                    );
+                    std::thread::sleep(backoff);
+                    attempt += 1;
+                    continue;
+                }
+                return Err(FsError::BackendFs(format!(
+                    "failed to open oss writer for {object_path}: {e}"
+                )));
+            }
+        };
+
+        let mut transient_err: Option<opendal::Error> = None;
+        let mut buf = vec![0u8; chunk_size];
+        loop {
+            let bytes_read = file.read(&mut buf).map_err(FsError::IOError)?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            if let Err(e) = runtime.block_on(writer.write(buf[..bytes_read].to_vec())) {
+                transient_err = Some(e);
+                break;
+            }
         }
 
-        runtime
-            .block_on(writer.write(buf[..bytes_read].to_vec()))
-            .map_err(|e| FsError::BackendFs(format!("failed to write chunk for {object_path}: {e}")))?;
+        if transient_err.is_none() {
+            if let Err(e) = runtime.block_on(writer.close()) {
+                transient_err = Some(e);
+            }
+        }
+
+        if let Some(e) = transient_err {
+            if attempt < OSS_RETRY_MAX_ATTEMPTS && is_retryable_oss_error(&e) {
+                let backoff = oss_retry_backoff_delay(attempt);
+                warn!(
+                    "{VIRTIO_FS_NAME}: retrying oss upload for {object_path} at {mountpoint}, attempt {}/{} after {:?}: {}",
+                    attempt + 1,
+                    OSS_RETRY_MAX_ATTEMPTS,
+                    backoff,
+                    e
+                );
+                std::thread::sleep(backoff);
+                attempt += 1;
+                continue;
+            }
+            return Err(FsError::BackendFs(format!(
+                "failed to upload {object_path} to oss: {e}"
+            )));
+        }
+
+        return Ok(());
     }
-    runtime
-        .block_on(writer.close())
-        .map_err(|e| FsError::BackendFs(format!("failed to close writer for {object_path}: {e}")))?;
-    Ok(())
 }
 
 fn upload_local_file_chunked_with_cas(
     op: &OpenDalOperator,
     runtime: &tokio::runtime::Runtime,
+    mountpoint: &str,
     object_path: &str,
     local_path: &Path,
     chunk_size: usize,
     expected_etag: Option<&str>,
     if_not_exists: bool,
 ) -> FsResult<OssConditionalOpOutcome> {
-    let mut write_opts = WriteOptions {
-        chunk: Some(chunk_size),
-        ..Default::default()
-    };
-    if let Some(etag) = expected_etag {
-        write_opts.if_match = Some(etag.to_string());
-    }
-    if if_not_exists {
-        write_opts.if_not_exists = true;
-    }
-
-    let mut file = File::open(local_path).map_err(FsError::IOError)?;
-    let mut writer = match runtime.block_on(op.writer_options(object_path, write_opts)) {
-        Ok(writer) => writer,
-        Err(e) => {
-            if let Some(outcome) = classify_conditional_oss_error(&e) {
-                return Ok(outcome);
-            }
-            return Err(FsError::BackendFs(format!(
-                "failed to open conditional oss writer for {object_path}: {e}"
-            )));
-        }
-    };
-
-    let mut buf = vec![0u8; chunk_size];
+    let mut attempt = 1usize;
     loop {
-        let bytes_read = file.read(&mut buf).map_err(FsError::IOError)?;
-        if bytes_read == 0 {
-            break;
+        let mut write_opts = WriteOptions {
+            chunk: Some(chunk_size),
+            ..Default::default()
+        };
+        if let Some(etag) = expected_etag {
+            write_opts.if_match = Some(etag.to_string());
         }
-        if let Err(e) = runtime.block_on(writer.write(buf[..bytes_read].to_vec())) {
+        if if_not_exists {
+            write_opts.if_not_exists = true;
+        }
+
+        let mut file = File::open(local_path).map_err(FsError::IOError)?;
+        let mut writer = match runtime.block_on(op.writer_options(object_path, write_opts)) {
+            Ok(writer) => writer,
+            Err(e) => {
+                if let Some(outcome) = classify_conditional_oss_error(&e) {
+                    return Ok(outcome);
+                }
+                if attempt < OSS_RETRY_MAX_ATTEMPTS && is_retryable_oss_error(&e) {
+                    let backoff = oss_retry_backoff_delay(attempt);
+                    warn!(
+                        "{VIRTIO_FS_NAME}: retrying conditional oss write open for {object_path} at {mountpoint}, attempt {}/{} after {:?}: {}",
+                        attempt + 1,
+                        OSS_RETRY_MAX_ATTEMPTS,
+                        backoff,
+                        e
+                    );
+                    std::thread::sleep(backoff);
+                    attempt += 1;
+                    continue;
+                }
+                return Err(FsError::BackendFs(format!(
+                    "failed to open conditional oss writer for {object_path}: {e}"
+                )));
+            }
+        };
+
+        let mut op_err: Option<opendal::Error> = None;
+        let mut buf = vec![0u8; chunk_size];
+        loop {
+            let bytes_read = file.read(&mut buf).map_err(FsError::IOError)?;
+            if bytes_read == 0 {
+                break;
+            }
+            if let Err(e) = runtime.block_on(writer.write(buf[..bytes_read].to_vec())) {
+                op_err = Some(e);
+                break;
+            }
+        }
+
+        if op_err.is_none() {
+            if let Err(e) = runtime.block_on(writer.close()) {
+                op_err = Some(e);
+            }
+        }
+
+        if let Some(e) = op_err {
             if let Some(outcome) = classify_conditional_oss_error(&e) {
                 return Ok(outcome);
             }
+            if attempt < OSS_RETRY_MAX_ATTEMPTS && is_retryable_oss_error(&e) {
+                let backoff = oss_retry_backoff_delay(attempt);
+                warn!(
+                    "{VIRTIO_FS_NAME}: retrying conditional oss upload for {object_path} at {mountpoint}, attempt {}/{} after {:?}: {}",
+                    attempt + 1,
+                    OSS_RETRY_MAX_ATTEMPTS,
+                    backoff,
+                    e
+                );
+                std::thread::sleep(backoff);
+                attempt += 1;
+                continue;
+            }
             return Err(FsError::BackendFs(format!(
-                "failed to write conditional chunk for {object_path}: {e}"
+                "failed to upload conditional object {object_path}: {e}"
             )));
         }
-    }
 
-    if let Err(e) = runtime.block_on(writer.close()) {
-        if let Some(outcome) = classify_conditional_oss_error(&e) {
-            return Ok(outcome);
-        }
-        return Err(FsError::BackendFs(format!(
-            "failed to close conditional writer for {object_path}: {e}"
-        )));
+        return Ok(OssConditionalOpOutcome::Applied);
     }
-
-    Ok(OssConditionalOpOutcome::Applied)
 }
 
 fn delete_remote_object_with_cas(
     op: &OpenDalOperator,
     runtime: &tokio::runtime::Runtime,
+    mountpoint: &str,
     object_path: &str,
     expected_etag: &str,
 ) -> FsResult<OssConditionalOpOutcome> {
-    let delete_opts = DeleteOptions {
-        if_match: Some(expected_etag.to_string()),
-        ..Default::default()
-    };
+    let mut attempt = 1usize;
+    loop {
+        let delete_opts = DeleteOptions {
+            if_match: Some(expected_etag.to_string()),
+            ..Default::default()
+        };
 
-    match runtime.block_on(op.delete_options(object_path, delete_opts)) {
-        Ok(_) => Ok(OssConditionalOpOutcome::Applied),
-        Err(e) => {
-            if let Some(outcome) = classify_conditional_oss_error(&e) {
-                return Ok(outcome);
+        match runtime.block_on(op.delete_options(object_path, delete_opts)) {
+            Ok(_) => return Ok(OssConditionalOpOutcome::Applied),
+            Err(e) => {
+                if let Some(outcome) = classify_conditional_oss_error(&e) {
+                    return Ok(outcome);
+                }
+                if attempt < OSS_RETRY_MAX_ATTEMPTS && is_retryable_oss_error(&e) {
+                    let backoff = oss_retry_backoff_delay(attempt);
+                    warn!(
+                        "{VIRTIO_FS_NAME}: retrying conditional delete for {object_path} at {mountpoint}, attempt {}/{} after {:?}: {}",
+                        attempt + 1,
+                        OSS_RETRY_MAX_ATTEMPTS,
+                        backoff,
+                        e
+                    );
+                    std::thread::sleep(backoff);
+                    attempt += 1;
+                    continue;
+                }
+                return Err(FsError::BackendFs(format!(
+                    "failed to conditionally delete remote object {object_path}: {e}"
+                )));
             }
-            Err(FsError::BackendFs(format!(
-                "failed to conditionally delete remote object {object_path}: {e}"
-            )))
         }
     }
 }
@@ -1663,17 +1823,16 @@ fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadS
     } else {
         sync_ctx.prefix.as_str()
     };
-    let entries = runtime
-        .block_on(op.list_options(
+    let entries = run_oss_with_retry(&sync_ctx.mountpoint, "list", list_path, || {
+        runtime.block_on(op.list_options(
             list_path,
             ListOptions {
                 recursive: true,
                 ..Default::default()
             },
         ))
-        .map_err(|e| {
-            FsError::BackendFs(format!("failed to list oss objects at {list_path}: {e}"))
-        })?;
+    })
+    .map_err(|e| FsError::BackendFs(format!("failed to list oss objects at {list_path}: {e}")))?;
 
     let index_path = sync_ctx.cache_root.join(OSS_CACHE_INDEX_FILE);
     let old_index = load_oss_cache_index(&index_path);
@@ -1689,9 +1848,10 @@ fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadS
         let object_path = entry.path().to_string();
         let relative_path = oss_object_relative_path(&object_path, &sync_ctx.prefix)?;
         let local_path = sync_ctx.cache_data_dir.join(&relative_path);
-        let metadata = runtime.block_on(op.stat(&object_path)).map_err(|e| {
-            FsError::BackendFs(format!("failed to stat oss object {object_path}: {e}"))
-        })?;
+        let metadata = run_oss_with_retry(&sync_ctx.mountpoint, "stat", &object_path, || {
+            runtime.block_on(op.stat(&object_path))
+        })
+        .map_err(|e| FsError::BackendFs(format!("failed to stat oss object {object_path}: {e}")))?;
         let content_length = metadata.content_length();
         let etag = metadata.etag().map(ToString::to_string);
         let old_entry = old_index.entries.get(&object_path);
@@ -1704,9 +1864,10 @@ fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadS
         if can_reuse {
             stats.reused += 1;
         } else {
-            let data = runtime.block_on(op.read(&object_path)).map_err(|e| {
-                FsError::BackendFs(format!("failed to read oss object {object_path}: {e}"))
-            })?;
+            let data = run_oss_with_retry(&sync_ctx.mountpoint, "read", &object_path, || {
+                runtime.block_on(op.read(&object_path))
+            })
+            .map_err(|e| FsError::BackendFs(format!("failed to read oss object {object_path}: {e}")))?;
             if let Some(parent) = local_path.parent() {
                 fs::create_dir_all(parent).map_err(FsError::IOError)?;
             }
@@ -1831,7 +1992,8 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
         if let Some(old) = old_entry {
             if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins && old.etag.is_none()
             {
-                let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+                let remote_state =
+                    query_remote_object_state(&op, &runtime, &sync_ctx.mountpoint, object_path)?;
                 if is_remote_entry_conflicted(old, &remote_state, sync_ctx.consistency_strategy)? {
                     if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
                         isolate_conflict_local_file(sync_ctx, object_path, &local_file.path)?;
@@ -1875,6 +2037,7 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
                         upload_local_file_chunked_with_cas(
                             &op,
                             &runtime,
+                            &sync_ctx.mountpoint,
                             object_path,
                             &local_file.path,
                             sync_ctx.upload_chunk_size,
@@ -1887,6 +2050,7 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
                 Some(upload_local_file_chunked_with_cas(
                     &op,
                     &runtime,
+                    &sync_ctx.mountpoint,
                     object_path,
                     &local_file.path,
                     sync_ctx.upload_chunk_size,
@@ -1908,7 +2072,12 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
                         cas_unsupported = true;
                     }
                     OssConditionalOpOutcome::Conflict => {
-                        let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+                        let remote_state = query_remote_object_state(
+                            &op,
+                            &runtime,
+                            &sync_ctx.mountpoint,
+                            object_path,
+                        )?;
                         if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
                             isolate_conflict_local_file(sync_ctx, object_path, &local_file.path)?;
                             stats.isolated += 1;
@@ -1944,7 +2113,12 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
 
         if cas_unsupported {
             if let Some(old) = old_entry {
-                let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+                let remote_state = query_remote_object_state(
+                    &op,
+                    &runtime,
+                    &sync_ctx.mountpoint,
+                    object_path,
+                )?;
                 if is_remote_entry_conflicted(old, &remote_state, sync_ctx.consistency_strategy)? {
                     if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
                         isolate_conflict_local_file(sync_ctx, object_path, &local_file.path)?;
@@ -1980,13 +2154,15 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
             upload_local_file_chunked(
                 &op,
                 &runtime,
+                &sync_ctx.mountpoint,
                 object_path,
                 &local_file.path,
                 sync_ctx.upload_chunk_size,
             )?;
         }
 
-        let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+        let remote_state =
+            query_remote_object_state(&op, &runtime, &sync_ctx.mountpoint, object_path)?;
         let (etag, content_length) = match remote_state {
             RemoteObjectState::Existing {
                 etag,
@@ -2019,7 +2195,13 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
         if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins {
             let mut cas_unsupported = false;
             if let Some(etag) = old_entry.etag.as_deref() {
-                match delete_remote_object_with_cas(&op, &runtime, old_path, etag)? {
+                match delete_remote_object_with_cas(
+                    &op,
+                    &runtime,
+                    &sync_ctx.mountpoint,
+                    old_path,
+                    etag,
+                )? {
                     OssConditionalOpOutcome::Applied => {
                         stats.deleted += 1;
                         continue;
@@ -2032,7 +2214,8 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
                         cas_unsupported = true;
                     }
                     OssConditionalOpOutcome::Conflict => {
-                        let remote_state = query_remote_object_state(&op, &runtime, old_path)?;
+                        let remote_state =
+                            query_remote_object_state(&op, &runtime, &sync_ctx.mountpoint, old_path)?;
                         if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
                             if let RemoteObjectState::Existing { .. } = remote_state {
                                 let local_path = local_cache_path_for_object(sync_ctx, old_path)?;
@@ -2063,7 +2246,8 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
             }
 
             if cas_unsupported || old_entry.etag.is_none() {
-                let remote_state = query_remote_object_state(&op, &runtime, old_path)?;
+                let remote_state =
+                    query_remote_object_state(&op, &runtime, &sync_ctx.mountpoint, old_path)?;
                 if is_remote_entry_conflicted(old_entry, &remote_state, sync_ctx.consistency_strategy)?
                 {
                     if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
@@ -2096,7 +2280,9 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
             }
         }
 
-        match runtime.block_on(op.delete(old_path)) {
+        match run_oss_with_retry(&sync_ctx.mountpoint, "delete", old_path, || {
+            runtime.block_on(op.delete(old_path))
+        }) {
             Ok(_) => {
                 stats.deleted += 1;
             }
@@ -3158,6 +3344,42 @@ pub mod tests {
         );
         assert_eq!(resolve_oss_upload_chunk_size(Some(4096)).unwrap(), 4096);
         assert!(resolve_oss_upload_chunk_size(Some(0)).is_err());
+    }
+
+    #[test]
+    fn test_oss_retry_backoff_delay() {
+        assert_eq!(
+            oss_retry_backoff_delay(1),
+            Duration::from_millis(OSS_RETRY_BASE_BACKOFF_MS)
+        );
+        assert_eq!(
+            oss_retry_backoff_delay(2),
+            Duration::from_millis(OSS_RETRY_BASE_BACKOFF_MS * 2)
+        );
+        assert_eq!(
+            oss_retry_backoff_delay(3),
+            Duration::from_millis(OSS_RETRY_BASE_BACKOFF_MS * 4)
+        );
+        assert_eq!(
+            oss_retry_backoff_delay(20),
+            Duration::from_millis(OSS_RETRY_MAX_BACKOFF_MS)
+        );
+    }
+
+    #[test]
+    fn test_is_retryable_oss_error() {
+        let temporary = opendal::Error::new(OpenDalErrorKind::PermissionDenied, "temporary")
+            .set_temporary();
+        assert!(is_retryable_oss_error(&temporary));
+
+        let unexpected = opendal::Error::new(OpenDalErrorKind::Unexpected, "server error");
+        assert!(is_retryable_oss_error(&unexpected));
+
+        let rate_limited = opendal::Error::new(OpenDalErrorKind::RateLimited, "rate limited");
+        assert!(is_retryable_oss_error(&rate_limited));
+
+        let conflict = opendal::Error::new(OpenDalErrorKind::ConditionNotMatch, "conflict");
+        assert!(!is_retryable_oss_error(&conflict));
     }
 
     #[test]
