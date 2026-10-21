@@ -357,29 +357,95 @@ spec:
 }
 
 #[test]
-fn guest_pull_container_group_override() -> Result<(), Box<dyn std::error::Error>> {
-    for (name, container_context, pod_groups, expected_groups) in [
-        (
-            "user_and_group",
-            "runAsUser: 65534\n        runAsGroup: 65534",
-            "",
-            vec![65534],
-        ),
-        // This image makes root a member of GID 10 in /etc/group.
-        (
-            "group_only",
-            "runAsGroup: 65534",
-            "    supplementalGroups: [10]\n",
-            vec![10, 65534],
-        ),
-        (
-            "explicit_pod_groups",
-            "runAsUser: 65534\n        runAsGroup: 65534",
-            "    fsGroup: 2000\n    supplementalGroups: [0, 3000]\n",
-            vec![0, 2000, 3000, 65534],
-        ),
-    ] {
-        let workdir = prepare_workdir(&format!("guest_pull_container_group_override_{name}"), &[]);
+fn guest_pull_container_identity_overrides_pod_identity() -> Result<(), Box<dyn std::error::Error>>
+{
+    let workdir = prepare_workdir("guest_pull_container_identity_overrides_pod_identity", &[]);
+    let pod_yaml_path = workdir.join("pod.yaml");
+    fs::write(
+        &pod_yaml_path,
+        r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: container-identity-overrides-pod-identity
+spec:
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command: ["/bin/sh", "-c", "echo hello"]
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+"#,
+    )?;
+
+    let output = genpolicy_succeeds(|cmd| {
+        cmd.arg("--yaml-file").arg(&pod_yaml_path).arg("--raw-out");
+    })?;
+    let stdout = String::from_utf8(output.stdout)?;
+    let (_, data) = stdout.rsplit_once("policy_data := ").expect("policy data");
+    let data: serde_json::Value = serde_json::from_str(data)?;
+    let containers = data["containers"].as_array().expect("containers");
+    let workload = containers
+        .iter()
+        .find(|c| c["OCI"]["Process"]["Args"] == serde_json::json!(["/bin/sh", "-c", "echo hello"]))
+        .expect("workload container");
+
+    assert_eq!(workload["OCI"]["Process"]["User"]["UID"], 65534);
+    assert_eq!(workload["OCI"]["Process"]["User"]["GID"], 65534);
+    assert_eq!(
+        workload["OCI"]["Process"]["User"]["AdditionalGids"],
+        serde_json::json!([65534])
+    );
+
+    Ok(())
+}
+
+#[test]
+fn guest_pull_container_identity_overrides_respect_pod_group_settings(
+) -> Result<(), Box<dyn std::error::Error>> {
+    struct TestCase {
+        name: &'static str,
+        image: &'static str,
+        pod_context: &'static str,
+        container_context: &'static str,
+        expected_uid: u32,
+        expected_gid: u32,
+        expected_groups: &'static [u32],
+    }
+
+    let cases = [
+        TestCase {
+            name: "supplemental_groups_preserved",
+            image: "quay.io/prometheus/busybox:latest",
+            pod_context: "    runAsUser: 0\n    runAsGroup: 0\n    supplementalGroups: [10]\n",
+            container_context: "        runAsGroup: 65534\n",
+            expected_uid: 0,
+            expected_gid: 65534,
+            expected_groups: &[10, 65534],
+        },
+        TestCase {
+            name: "fs_and_supplemental_groups_preserved",
+            image: "quay.io/prometheus/busybox:latest",
+            pod_context: "    runAsUser: 0\n    runAsGroup: 0\n    fsGroup: 2000\n    supplementalGroups: [0, 3000]\n",
+            container_context: "        runAsUser: 65534\n        runAsGroup: 65534\n",
+            expected_uid: 65534,
+            expected_gid: 65534,
+            expected_groups: &[0, 2000, 3000, 65534],
+        },
+    ];
+
+    for case in cases {
+        let workdir = prepare_workdir(
+            &format!(
+                "guest_pull_container_identity_overrides_respect_pod_group_settings_{}",
+                case.name
+            ),
+            &[],
+        );
         let pod_yaml_path = workdir.join("pod.yaml");
         fs::write(
             &pod_yaml_path,
@@ -388,18 +454,19 @@ fn guest_pull_container_group_override() -> Result<(), Box<dyn std::error::Error
 apiVersion: v1
 kind: Pod
 metadata:
-  name: container-group-override
+  name: container-identity-override-preserves-pod-groups
 spec:
   securityContext:
-    runAsUser: 0
-    runAsGroup: 0
-{pod_groups}  containers:
-    - name: busybox
-      image: "quay.io/prometheus/busybox:latest"
+{pod_context}  containers:
+    - name: workload
+      image: "{image}"
       command: ["/bin/sh", "-c", "echo hello"]
       securityContext:
-        {container_context}
-"#
+{container_context}
+"#,
+                pod_context = case.pod_context,
+                image = case.image,
+                container_context = case.container_context,
             ),
         )?;
 
@@ -416,11 +483,21 @@ spec:
                 c["OCI"]["Process"]["Args"] == serde_json::json!(["/bin/sh", "-c", "echo hello"])
             })
             .expect("workload container");
-        assert_eq!(workload["OCI"]["Process"]["User"]["GID"], 65534, "{name}");
+        assert_eq!(
+            workload["OCI"]["Process"]["User"]["UID"], case.expected_uid,
+            "{}",
+            case.name
+        );
+        assert_eq!(
+            workload["OCI"]["Process"]["User"]["GID"], case.expected_gid,
+            "{}",
+            case.name
+        );
         assert_eq!(
             workload["OCI"]["Process"]["User"]["AdditionalGids"],
-            serde_json::json!(expected_groups),
-            "{name}"
+            serde_json::json!(case.expected_groups),
+            "{}",
+            case.name
         );
     }
     Ok(())

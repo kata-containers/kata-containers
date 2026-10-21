@@ -1329,7 +1329,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn container_identity_override_replaces_inherited_groups() {
+    fn container_group_override_replaces_inherited_groups() {
         for (context, expected_uid, expected_gid, expected_groups) in [
             (
                 "runAsUser: 65534\nrunAsGroup: 2000",
@@ -1337,7 +1337,6 @@ mod tests {
                 2000,
                 vec![123, 2000],
             ),
-            ("runAsUser: 65534", 65534, 1000, vec![123, 1000]),
             ("runAsGroup: 2000", 0, 2000, vec![2000]),
             ("runAsUser: 9999\nrunAsGroup: 2000", 9999, 2000, vec![2000]),
         ] {
@@ -1364,6 +1363,59 @@ mod tests {
                     .collect::<Vec<_>>(),
                 expected_groups,
                 "{context}"
+            );
+        }
+    }
+
+    #[test]
+    fn container_user_override_resolves_primary_and_additional_groups() {
+        struct TestCase {
+            name: &'static str,
+            initial_gid: u32,
+            passwd: &'static str,
+            group: &'static str,
+            expected_gid: u32,
+            expected_groups: &'static [u32],
+        }
+
+        let cases = [TestCase {
+            name: "image_primary_group_used_without_pod_group",
+            initial_gid: 0,
+            passwd: "root:x:0:0::/:/bin/sh\nnobody:x:65534:1000::/:/bin/sh\n",
+            group: "shared:x:123:nobody\n",
+            expected_gid: 1000,
+            expected_groups: &[123, 1000],
+        }];
+
+        for case in cases {
+            let mut container = Container {
+                securityContext: Some(serde_yaml::from_str("runAsUser: 65534").unwrap()),
+                ..Default::default()
+            };
+            container.registry.passwd = case.passwd.into();
+            container.registry.group = case.group.into();
+
+            let mut process = policy::KataProcess::default();
+            process.User.GID = case.initial_gid;
+            process.User.AdditionalGids.insert(case.initial_gid);
+
+            container.get_process_fields(&mut process);
+
+            let actual = (
+                process.User.UID,
+                process.User.GID,
+                process
+                    .User
+                    .AdditionalGids
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+            );
+            assert_eq!(
+                actual,
+                (65534, case.expected_gid, case.expected_groups.to_vec()),
+                "{}: (UID, GID, AdditionalGids)",
+                case.name
             );
         }
     }
