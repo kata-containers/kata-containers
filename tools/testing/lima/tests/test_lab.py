@@ -183,8 +183,57 @@ bash -c 'helm template chart --values ci.yaml; helm version'
         self.assertIn(f"findmnt -rn -M {lab.source} -t virtiofs", args[-1])
         self.assertIn(f"test -w {lab.source}", args[-1])
 
+    def test_branch_worktree_keeps_original_edits_and_mounts_git_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repo = self.repository(base / "repo")
+            (repo / "src/runtime-rs/marker").write_text("uncommitted original edit\n")
+            lab = module.Lab(module.read_target(ROOT / "targets/macos.json"), source=repo)
+            lab.root = base / "controller"
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                lab.select_worktree(branch="main", create=True)
+            self.assertEqual((lab.source / "src/runtime-rs/marker").read_text(), "committed\n")
+            self.assertEqual((repo / "src/runtime-rs/marker").read_text(), "uncommitted original edit\n")
+            self.assertEqual(module.git_common_dir(lab.source), (repo / ".git").resolve())
+            mounts = lab.source_mounts()
+            self.assertEqual([m["location"] for m in mounts], [str(lab.source), str((repo / ".git").resolve())])
+            self.assertTrue(all(m["location"] == m["mountPoint"] and m["writable"] for m in mounts))
 
+    def test_pr_worktree_selects_its_ci_image_and_reuses_the_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repo = self.repository(base / "repo")
+            subprocess.run(["git", "-C", str(repo), "update-ref", "refs/pull/123/head", "HEAD"], check=True)
+            lab = module.Lab(module.read_target(ROOT / "targets/macos.json"), source=repo)
+            lab.root = base / "controller"
+            command = lab.source_command
+            def local_fetch(args, **kwargs):
+                args = [str(repo) if arg == "https://github.com/kata-containers/kata-containers.git" else arg for arg in args]
+                return command(args, **kwargs)
+            with patch.object(lab, "source_command", side_effect=local_fetch), \
+                    contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                lab.select_worktree(pr="123", create=True)
+            sha = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+            self.assertEqual(lab.image, f"ghcr.io/kata-containers/kata-deploy-ci:123-{sha}-arm64")
+            (lab.source / "src/runtime-rs/marker").write_text("preserved worktree edit\n")
+            other = module.Lab(lab.target, source=repo)
+            other.root = lab.root
+            with patch.object(other, "source_command", wraps=other.source_command) as run, \
+                    contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                other.select_worktree(pr="123")
+            self.assertEqual(other.state_path, lab.state_path)
+            self.assertEqual((other.source / "src/runtime-rs/marker").read_text(), "preserved worktree edit\n")
+            self.assertFalse(any("fetch" in call.args[0] for call in run.call_args_list))
 
+    def test_worktree_dry_run_never_creates_or_fetches(self):
+        lab = self.lab(dry_run=True)
+        with tempfile.TemporaryDirectory() as directory:
+            lab.root = Path(directory)
+            with patch("subprocess.run") as run, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                lab.select_worktree(pr="123", create=True)
+                lab.create_vm()
+            run.assert_not_called()
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_baremetal_existing_cluster_installs_only_kata(self):
         lab = module.Lab({"name": "baremetal", "backend": "baremetal", "arch": "amd64"})
@@ -306,8 +355,32 @@ bash -c 'helm template chart --values ci.yaml; helm version'
         lab = self.lab("macos")
         self.assertEqual(lab.image, "quay.io/kata-containers/kata-deploy-ci:kata-containers-latest")
 
+    def test_runtime_selection_is_forwarded_without_changing_the_build(self):
+        target = module.read_target(ROOT / "targets/macos.json")
+        lab = module.Lab(target, dry_run=True, runtime="qemu-nvidia-cpu-runtime-rs", release="4.3.0")
+        self.assertEqual(lab.ci_environment["KATA_HYPERVISOR"], "qemu-nvidia-cpu-runtime-rs")
+        self.assertEqual(lab.image, "quay.io/kata-containers/kata-deploy:4.3.0")
+        self.assertEqual(lab.state_path, module.Lab(target, release="4.3.0").state_path)
+        with patch.object(lab, "run") as run:
+            lab.ci_guest("smoke")
+        self.assertIn("export KATA_HYPERVISOR=qemu-nvidia-cpu-runtime-rs\n", run.call_args.kwargs["input"])
 
+    def test_runtime_option_overrides_the_advanced_ci_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "ci.json"
+            config.write_text(json.dumps({"KATA_HYPERVISOR": "qemu", "CONTAINER_ENGINE_VERSION": "2.4.2"}))
+            lab = module.Lab(module.read_target(ROOT / "targets/macos.json"),
+                             ci_config=config, runtime="qemu-nvidia-cpu-runtime-rs")
+        self.assertEqual(lab.ci_environment["KATA_HYPERVISOR"], "qemu-nvidia-cpu-runtime-rs")
+        self.assertEqual(lab.ci_environment["CONTAINER_ENGINE_VERSION"], "2.4.2")
+        self.assertEqual(lab.image, "quay.io/kata-containers/kata-deploy-ci:kata-containers-latest")
 
+    def test_runtime_rejects_shell_syntax_before_running_commands(self):
+        for runtime in ("../qemu", "qemu; touch unwanted", "-qemu"):
+            with self.subTest(runtime=runtime), patch("subprocess.run") as run:
+                with self.assertRaisesRegex(module.LabError, "Kata shim name"):
+                    module.Lab(module.read_target(ROOT / "targets/macos.json"), runtime=runtime)
+                run.assert_not_called()
 
     def test_releases_use_separate_owned_vms_and_teardown_records(self):
         target = module.read_target(ROOT / "targets/macos.json")

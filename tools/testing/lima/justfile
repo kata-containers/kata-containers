@@ -7,10 +7,14 @@ kata_source := env("JUST_KATA_SOURCE", "../../..")
 kubernetes := env("JUST_KATA_KUBERNETES", "kubeadm")
 ci_config := env("JUST_KATA_CI_CONFIG", "ci/default.json")
 release := env("JUST_KATA_RELEASE", "")
+runtime := env("JUST_KATA_RUNTIME", "")
 backend := env("JUST_KATA_BACKEND", "lima")
 host := env("JUST_KATA_HOST", "")
+pr := env("JUST_KATA_PR", "")
+branch := env("JUST_KATA_BRANCH", "")
+image := env("JUST_KATA_IMAGE", "")
 kubeconfig := env("JUST_KATA_KUBECONFIG", "")
-runner := "python3 scripts/lab.py --target " + quote(target) + " --source " + quote(kata_source) + " --kubernetes " + quote(kubernetes) + " --ci-config " + quote(ci_config) + " --release " + quote(release) + " --backend " + quote(backend) + " --host " + quote(host) + " --kubeconfig " + quote(kubeconfig)
+runner := "python3 scripts/lab.py --target " + quote(target) + " --source " + quote(kata_source) + " --kubernetes " + quote(kubernetes) + " --ci-config " + quote(ci_config) + " --release " + quote(release) + " --runtime " + quote(runtime) + " --backend " + quote(backend) + " --host " + quote(host) + " --pr " + quote(pr) + " --branch " + quote(branch) + " --image " + quote(image) + " --kubeconfig " + quote(kubeconfig)
 
 default:
     @just --list

@@ -70,12 +70,15 @@ def read_target(path):
 
 
 class Lab:
-    def __init__(self, target, dry_run=False, root=ROOT, source=None, kubernetes="kubeadm", ci_config=None, helm_values=None, release=None, host=None, kubeconfig=None):
+    def __init__(self, target, dry_run=False, root=ROOT, source=None, kubernetes="kubeadm", ci_config=None, helm_values=None, release=None, runtime=None, host=None, image=None, kubeconfig=None):
         self.target = target
         self.root = root
         self.dry_run = dry_run
         self.host = host
+        self.release = release
+        self.requested_image = image
         self.kubeconfig = kubeconfig
+        self.pr_image = False
         if host and (target["backend"] != "baremetal" or not re.fullmatch(r"[A-Za-z0-9_@.:-]+", host) or host.startswith("-")):
             raise LabError("host must be an SSH alias or user@node for the baremetal backend")
         self.pins = json.loads((root / "pins.json").read_text())
@@ -93,10 +96,24 @@ class Lab:
         self.ci_environment = json.loads((root / "ci/default.json").read_text())
         if ci_config:
             self.ci_environment.update(json.loads(Path(ci_config).read_text()))
+        if runtime:
+            if not re.fullmatch(r"[a-z][a-z0-9-]*", runtime):
+                raise LabError("runtime must be a Kata shim name, for example qemu-nvidia-cpu-runtime-rs")
+            self.ci_environment["KATA_HYPERVISOR"] = runtime
         if release:
             if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", release):
                 raise LabError("release must be a valid container image tag, for example 4.3.0")
             self.ci_environment.update(DOCKER_REPO="kata-containers/kata-deploy", DOCKER_TAG=release)
+        if image:
+            if release:
+                raise LabError("Select image or release, not both")
+            reference, separator, tag = image.rpartition(":")
+            registry, slash, repository = reference.partition("/")
+            if not separator or not slash or not re.fullmatch(r"[A-Za-z0-9_.:-]+", registry) or \
+                    not re.fullmatch(r"[a-z0-9][a-z0-9_./-]*", repository) or \
+                    not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", tag):
+                raise LabError("image must be a fully qualified tagged image, such as ghcr.io/kata-containers/kata-deploy-ci:tag")
+            self.ci_environment.update(DOCKER_REGISTRY=registry, DOCKER_REPO=repository, DOCKER_TAG=tag)
         self.helm_values = Path(helm_values) if helm_values else (
             root / "ci/apple-values.yaml" if target.get("vm_type") == "vz" else None)
         for key, value in self.ci_environment.items():
@@ -118,6 +135,53 @@ class Lab:
         if target["backend"] == "lima":
             identity.update(mount_type="virtiofs", uid=os.getuid())
         self.signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+    def source_command(self, args, **kwargs):
+        return self.execute(args, **kwargs) if self.host else self.run(args, **kwargs)
+
+    def select_worktree(self, pr=None, branch=None, create=False):
+        if not pr and not branch:
+            return
+        if pr and branch:
+            raise LabError("Select pr or branch, not both")
+        if pr and (not str(pr).isdigit() or int(pr) < 1):
+            raise LabError("pr must be a positive pull request number")
+        if branch and (branch.startswith("-") or not re.fullmatch(r"[A-Za-z0-9_./-]+", branch) or ".." in branch):
+            raise LabError("branch must be a local Git branch, remote-tracking ref, or commit")
+        label = f"pr-{pr}" if pr else f"branch-{branch}"
+        key = hashlib.sha256((str(self.source) + "\0" + label).encode()).hexdigest()[:12]
+        if self.host:
+            home = "/REMOTE_HOME" if self.dry_run else self.source_command(
+                ["sh", "-c", 'printf "%s" "$HOME"'], capture=True).stdout
+            cache = Path(home) / ".cache/kata-lab/worktrees"
+            exists = False if self.dry_run else self.source_command(
+                ["test", "-e", str(cache / key)], check=False).returncode == 0
+        else:
+            cache = self.root / ".state/worktrees"
+            exists = (cache / key).exists()
+        checkout = cache / key
+        if not exists:
+            if not create:
+                raise LabError("No worktree prepared for this selection; run up or an install command first")
+            self.source_command(["mkdir", "-p", str(cache)])
+            git = ["git", "-C", str(self.source)]
+            if pr:
+                self.source_command([*git, "fetch", "https://github.com/kata-containers/kata-containers.git",
+                                     f"refs/pull/{pr}/head"])
+                ref = "FETCH_HEAD"
+            else:
+                ref = f"{branch}^{{commit}}"
+            revision = self.source_command([*git, "rev-parse", "--verify", ref], capture=True).stdout.strip()
+            self.source_command([*git, "worktree", "add", "--detach", str(checkout), revision or ref])
+        self.source = checkout
+        revision = "PR_HEAD" if self.dry_run else self.source_command(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"], capture=True).stdout.strip()
+        if pr and not self.release and not self.requested_image:
+            self.ci_environment.update(DOCKER_REGISTRY="ghcr.io", DOCKER_REPO="kata-containers/kata-deploy-ci",
+                                       DOCKER_TAG=f"{pr}-{revision}-{self.target['arch']}", GH_PR_NUMBER=str(pr))
+            self.pr_image = True
+        self.refresh_identity()
+        print(f"Source worktree: {checkout} ({label}, {revision})")
 
     def run(self, args, *, input=None, capture=False, check=True, timeout=None, env=None, stdin=None):
         print("+ " + shlex.join(str(arg) for arg in args), file=sys.stderr, flush=True)
@@ -198,6 +262,13 @@ class Lab:
         return self.execute(["bash", "-s", "--", action, *arguments], input=script, capture=capture)
 
     def doctor(self):
+        if self.pr_image:
+            if not self.dry_run and not shutil.which("oras"):
+                raise LabError("Install oras (or enter nix develop) to verify the PR's CI image before installation")
+            try:
+                self.run(["oras", "manifest", "fetch", "--descriptor", self.image], capture=True, timeout=60)
+            except subprocess.CalledProcessError as error:
+                raise LabError(f"PR image unavailable: {self.image}; wait for that architecture's CI build or select image=/release=") from error
         if self.target["backend"] == "baremetal":
             if not self.host and sys.platform != "linux":
                 raise LabError("Local baremetal installation requires Linux; use host=user@node for a remote node")
@@ -475,9 +546,14 @@ def main():
     parser.add_argument("--helm-values", default=os.environ.get("JUST_KATA_HELM_VALUES"))
     parser.add_argument("--release", default=os.environ.get("JUST_KATA_RELEASE"),
                         help="test a published release in a separate VM instead of the latest CI build")
+    parser.add_argument("--runtime", default=os.environ.get("JUST_KATA_RUNTIME"),
+                        help="Kata shim name, for example qemu-runtime-rs or qemu-nvidia-cpu-runtime-rs")
     parser.add_argument("--backend", choices=["lima", "baremetal"], default=os.environ.get("JUST_KATA_BACKEND", "lima"))
     parser.add_argument("--host", default=os.environ.get("JUST_KATA_HOST"), help="SSH alias or user@node for baremetal")
     parser.add_argument("--arch", choices=["amd64", "arm64"], default=os.environ.get("JUST_KATA_ARCH"))
+    parser.add_argument("--pr", default=os.environ.get("JUST_KATA_PR"), help="Kata pull request number")
+    parser.add_argument("--branch", default=os.environ.get("JUST_KATA_BRANCH"), help="Git branch, remote-tracking ref, or commit")
+    parser.add_argument("--image", default=os.environ.get("JUST_KATA_IMAGE"), help="fully qualified tagged kata-deploy image")
     parser.add_argument("--kubeconfig", default=os.environ.get("JUST_KATA_KUBECONFIG"), help="kubeconfig path on the execution node")
     parser.add_argument("action", choices=["doctor", "up", "install-kata", "install-cluster", "test", "ssh", "logs", "down", "load-image", "probe", "ci", "ci-script"])
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
@@ -498,10 +574,12 @@ def main():
             target = read_target(args.target)
         lab = Lab(target, args.dry_run, source=args.source,
                   kubernetes=args.kubernetes, ci_config=args.ci_config, helm_values=args.helm_values,
-                  release=args.release, host=args.host or None,
+                  release=args.release, runtime=args.runtime, host=args.host or None, image=args.image or None,
                   kubeconfig=args.kubeconfig or None)
         if args.backend == "baremetal" and not args.host and sys.platform != "linux" and not args.dry_run:
             raise LabError("Local baremetal commands require Linux; select host=user@node to run remotely")
+        lab.select_worktree(args.pr or None, args.branch or None,
+                            create=args.action in ("up", "install-kata", "install-cluster"))
         argument = args.arguments[0] if args.arguments else None
         print(f"Target: {lab.target['name']} ({lab.target['backend']}, {lab.target['arch']}), Kubernetes: {lab.kubernetes}", flush=True)
         print(f"Kata image: {lab.image}", flush=True)
