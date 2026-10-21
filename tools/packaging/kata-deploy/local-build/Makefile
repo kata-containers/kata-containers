@@ -29,6 +29,7 @@ BASE_TARBALLS = serial-targets \
 	stratovirt-tarball \
 	shim-v2-go-tarball \
 	shim-v2-rust-tarball \
+	td-shim-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-tarball \
@@ -331,6 +332,9 @@ boot-image-se-runtime-rs-tarball: $(DEPS)
 	${MAKE} $@-build
 
 stratovirt-tarball:
+	${MAKE} $@-build
+
+td-shim-tarball:
 	${MAKE} $@-build
 
 DEPS := agent-tarball
