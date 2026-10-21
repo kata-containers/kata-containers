@@ -17,7 +17,7 @@ use tokio::time::{timeout, Duration};
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 
-use crate::pod_resources::v1::GetPodResourcesRequest;
+use crate::pod_resources::v1::{GetPodResourcesRequest, PodResources};
 
 // containerd CRI annotations
 const SANDBOX_NAME_ANNOTATION: &str = "io.kubernetes.cri.sandbox-name";
@@ -115,22 +115,104 @@ pub async fn get_pod_cdi_devices(
         .pod_resources
         .ok_or_else(|| anyhow!("cold plug: PodResources is nil"))?;
 
-    // Format device specifications
-    let format_cdi_device_ids = |resource_name: &str, device_ids: &[String]| -> Vec<String> {
-        device_ids
-            .iter()
-            .map(|id| format!("{}={}", resource_name, id))
-            .collect()
-    };
+    Ok(pod_cdi_devices(&pod_resources))
+}
 
-    // Collect all device specifications from all containers
+// Returns the fully qualified CDI device names of the devices allocated to
+// the pod's containers, both by device plugins and by DRA drivers.
+fn pod_cdi_devices(pod_resources: &PodResources) -> Vec<String> {
     let mut devices = Vec::new();
     for container in &pod_resources.containers {
         for device in &container.devices {
-            let cdi_devices = format_cdi_device_ids(&device.resource_name, &device.device_ids);
-            devices.extend(cdi_devices);
+            devices.extend(
+                device
+                    .device_ids
+                    .iter()
+                    .map(|id| format!("{}={}", device.resource_name, id)),
+            );
+        }
+        for resource in &container.dynamic_resources {
+            for claim in &resource.claim_resources {
+                devices.extend(claim.cdi_devices.iter().map(|d| d.name.clone()));
+            }
         }
     }
 
-    Ok(devices)
+    devices
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pod_resources::v1::{
+        CdiDevice, ClaimResource, ContainerDevices, ContainerResources, DynamicResource,
+    };
+
+    fn container(
+        devices: Vec<ContainerDevices>,
+        dynamic_resources: Vec<DynamicResource>,
+    ) -> ContainerResources {
+        ContainerResources {
+            devices,
+            dynamic_resources,
+            ..Default::default()
+        }
+    }
+
+    fn device_plugin(resource_name: &str, ids: &[&str]) -> ContainerDevices {
+        ContainerDevices {
+            resource_name: resource_name.to_string(),
+            device_ids: ids.iter().map(|id| id.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn dra_claim(cdi_names: &[&[&str]]) -> DynamicResource {
+        DynamicResource {
+            claim_resources: cdi_names
+                .iter()
+                .map(|names| ClaimResource {
+                    cdi_devices: names
+                        .iter()
+                        .map(|n| CdiDevice {
+                            name: n.to_string(),
+                        })
+                        .collect(),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_pod_cdi_devices() {
+        let pod_resources = PodResources {
+            containers: vec![
+                container(
+                    vec![device_plugin("nvidia.com/pgpu", &["0", "1"])],
+                    vec![dra_claim(&[&["intel.com/gpu=a"], &["intel.com/gpu=b"]])],
+                ),
+                container(vec![], vec![]),
+                container(
+                    vec![],
+                    vec![dra_claim(&[&["intel.com/gpu=c", "intel.com/gpu=d"]])],
+                ),
+            ],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            pod_cdi_devices(&pod_resources),
+            vec![
+                "nvidia.com/pgpu=0",
+                "nvidia.com/pgpu=1",
+                "intel.com/gpu=a",
+                "intel.com/gpu=b",
+                "intel.com/gpu=c",
+                "intel.com/gpu=d",
+            ]
+        );
+        assert!(pod_cdi_devices(&PodResources::default()).is_empty());
+    }
 }
