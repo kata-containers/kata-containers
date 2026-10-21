@@ -595,20 +595,19 @@ fn parse_dev_vfio_group_id(s: &str) -> Option<u32> {
     base.parse::<u32>().ok()
 }
 
-/// Per-device cdev under iommufd (`/dev/vfio/devices/vfioN`). Matches Go
-/// `strings.HasPrefix(HostPath, IommufdDevPath)` in `pkg/device/drivers/vfio.go`, not only
-/// [`Path::starts_with`]: component-wise path prefix can disagree with string prefix for some
-/// `OsStr` forms, so we use the same string rule as the Go runtime.
-fn is_iommufd_devices_cdev_path(path: &Path) -> bool {
-    let s = path.to_string_lossy();
-    if !s.starts_with(DEV_VFIO_DEVICES) {
-        return false;
-    }
-    match s.as_bytes().get(DEV_VFIO_DEVICES.len()) {
-        None => true,
-        Some(b'/') => true,
-        Some(_) => false,
-    }
+/// Per-device cdev under iommufd (`/dev/vfio/devices/vfioN`).
+///
+/// Uses a string prefix rather than [`Path::starts_with`], like Go's
+/// `strings.HasPrefix(HostPath, IommufdDevPath)` in `pkg/device/drivers/vfio.go`:
+/// component-wise path prefix can disagree with string prefix for some `OsStr` forms.
+/// Unlike the Go check, the prefix must be followed by `/` and a non-empty device name, so
+/// the bare directory (`/dev/vfio/devices`, `/dev/vfio/devices/`) and siblings such as
+/// `/dev/vfio/devicesX` are not treated as a cdev.
+pub fn is_iommufd_devices_cdev_path(path: &Path) -> bool {
+    path.to_string_lossy()
+        .strip_prefix(DEV_VFIO_DEVICES)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .is_some_and(|name| !name.is_empty())
 }
 
 /// Main entry point: Discovers a VFIO device unit based on an IOMMU group path (/dev/vfio/<X>)
@@ -838,11 +837,25 @@ pub fn is_dev_vfio_group_path(host_path: &str) -> bool {
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Returns true if the VFIO group at `group_devnode` (e.g. `/dev/vfio/N`) contains
-/// an s390x AP mediated device.  Detection works by resolving the sysfs symlinks for
-/// every entry in `/sys/kernel/iommu_groups/<N>/devices/` and checking whether any of
-/// them resolves to a path under `/sys/devices/vfio_ap`.
+/// Resolves the canonical sysfs device behind an IOMMUFD cdev (`/dev/vfio/devices/vfioN`)
+/// via `/sys/class/vfio-dev/vfioN/device`.
+fn resolve_vfio_cdev_sysfs_device(cdev: &Path) -> Option<PathBuf> {
+    let name = cdev.file_name()?.to_str()?;
+    fs::canonicalize(Sysfs::default().vfio_dev(name).join("device")).ok()
+}
+
+/// Returns true if `group_devnode` is an s390x AP mediated device node.
+///
+/// - IOMMUFD cdev (`/dev/vfio/devices/vfioN`): the cdev's sysfs device must resolve
+///   under `/sys/devices/vfio_ap`.
+/// - Legacy group (`/dev/vfio/N`): detection works by resolving the sysfs symlinks for
+///   every entry in `/sys/kernel/iommu_groups/<N>/devices/` and checking whether any of
+///   them resolves to a path under `/sys/devices/vfio_ap`.
 pub fn is_vfio_ap_device(group_devnode: &Path) -> bool {
+    if is_iommufd_devices_cdev_path(group_devnode) {
+        return resolve_vfio_cdev_sysfs_device(group_devnode)
+            .is_some_and(|p| p.starts_with(SYS_VFIO_AP));
+    }
     let gid = match parse_dev_vfio_group_id(&group_devnode.to_string_lossy()) {
         Some(id) => id,
         None => return false,
@@ -865,20 +878,13 @@ pub fn is_vfio_ap_device(group_devnode: &Path) -> bool {
     false
 }
 
-/// Discovers an s390x VFIO-AP mediated device from its VFIO group path (`/dev/vfio/N`).
-///
-/// Reads the `matrix` file from the mdev's sysfs path to obtain the list of APQNs
-/// (Adjunct Processor Queue Numbers) assigned to this matrix device.
-pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
-    let gid = parse_dev_vfio_group_id(&group_devnode.to_string_lossy())
-        .ok_or_else(|| anyhow!("Invalid VFIO group path: {}", group_devnode.display()))?;
-
+/// Finds the AP mdev sysfs path inside legacy IOMMU group `gid` by resolving every entry in
+/// `/sys/kernel/iommu_groups/<gid>/devices/`.
+fn discover_vfio_ap_group_sysfs(gid: u32) -> Result<PathBuf> {
     let group_devices_dir = Path::new(SYS_IOMMU_GROUPS)
         .join(gid.to_string())
         .join("devices");
 
-    // Enumerate IOMMU group entries and find the AP mdev symlink.
-    let mut ap_sysfs_path: Option<PathBuf> = None;
     for ent in fs::read_dir(&group_devices_dir)
         .with_context(|| format!("Failed to read {}", group_devices_dir.display()))?
         .flatten()
@@ -886,14 +892,68 @@ pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
         let link_path = group_devices_dir.join(ent.file_name());
         if let Ok(resolved) = fs::canonicalize(&link_path) {
             if resolved.starts_with(SYS_VFIO_AP) {
-                ap_sysfs_path = Some(resolved);
-                break;
+                return Ok(resolved);
             }
         }
     }
+    Err(anyhow!("No VFIO-AP device found in IOMMU group {}", gid))
+}
 
-    let sysfs_dev =
-        ap_sysfs_path.ok_or_else(|| anyhow!("No VFIO-AP device found in IOMMU group {}", gid))?;
+/// Resolves an AP IOMMUFD cdev (`/dev/vfio/devices/vfioN`) to its mdev sysfs path, the
+/// IOMMUFD backend (`/dev/iommu` + cdev) and the cdev name (`vfioN`).
+fn discover_vfio_ap_cdev(cdev: &Path) -> Result<(PathBuf, VfioIommufdBackend, String)> {
+    if !is_char_dev(cdev) {
+        return Err(anyhow!("vfio device {} not found", cdev.display()));
+    }
+    let name = cdev
+        .file_name()
+        .ok_or_else(|| anyhow!("Invalid vfio device path"))?
+        .to_string_lossy()
+        .to_string();
+
+    let sysfs_dev = resolve_vfio_cdev_sysfs_device(cdev)
+        .filter(|p| p.starts_with(SYS_VFIO_AP))
+        .ok_or_else(|| anyhow!("No VFIO-AP device found behind cdev {}", cdev.display()))?;
+
+    let iommu_dev = PathBuf::from(DEV_IOMMU);
+    if !is_char_dev(&iommu_dev) {
+        return Err(anyhow!(
+            "{} not available; IOMMUFD passthrough requires it",
+            DEV_IOMMU
+        ));
+    }
+    let vfio_cdev = discover_vfio_cdev_by_name(&name, None, None)
+        .ok_or_else(|| anyhow!("no VFIO cdev found for {}", name))?;
+
+    Ok((
+        sysfs_dev,
+        VfioIommufdBackend {
+            iommufd_dev: iommu_dev,
+            cdevs: vec![vfio_cdev],
+        },
+        name,
+    ))
+}
+
+/// Discovers an s390x VFIO-AP mediated device from its VFIO node, which is either the
+/// legacy group path (`/dev/vfio/N`) or an IOMMUFD cdev (`/dev/vfio/devices/vfioN`).
+///
+/// Reads the `matrix` file from the mdev's sysfs path to obtain the list of APQNs
+/// (Adjunct Processor Queue Numbers) assigned to this matrix device.
+pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
+    let (sysfs_dev, gid, iommufd, id) = if is_iommufd_devices_cdev_path(group_devnode) {
+        let (sysfs_dev, iommufd, name) = discover_vfio_ap_cdev(group_devnode)?;
+        (sysfs_dev, None, Some(iommufd), format!("vfio-ap-{}", name))
+    } else {
+        let gid = parse_dev_vfio_group_id(&group_devnode.to_string_lossy())
+            .ok_or_else(|| anyhow!("Invalid VFIO group path: {}", group_devnode.display()))?;
+        (
+            discover_vfio_ap_group_sysfs(gid)?,
+            Some(gid),
+            None,
+            format!("vfio-ap-{}", gid),
+        )
+    };
 
     // Read APQNs from the `matrix` sysfs attribute (one APQN per line, e.g. "0a.0001").
     let matrix_path = sysfs_dev.join("matrix");
@@ -905,6 +965,10 @@ pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
         .filter(|l| !l.is_empty())
         .collect();
 
+    // An AP mdev maps to exactly one IOMMUFD cdev: `discover_vfio_ap_cdev()` always builds
+    // `cdevs` with a single entry, so `first()` simply extracts it (it is `None` on the legacy
+    // group path). `cdevs` is a `Vec` only because `VfioIommufdBackend` is shared with the PCI
+    // path, where one IOMMU group can hold several functions, each with its own cdev.
     let primary = DeviceInfo {
         addr: DeviceAddress::MdevUuid(
             sysfs_dev
@@ -913,20 +977,72 @@ pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
                 .unwrap_or_default(),
         ),
         sysfs_path: sysfs_dev.clone(),
+        vfio_cdev: iommufd.as_ref().and_then(|b| b.cdevs.first().cloned()),
         ..Default::default()
     };
 
     Ok(VfioDevice {
-        id: format!("vfio-ap-{}", gid),
+        id,
         device_type: VfioDeviceType::MediatedAp,
         bus_mode: VfioBusMode::Ccw,
         iommu_group: None,
-        iommu_group_id: Some(gid),
-        iommufd: None,
+        iommu_group_id: gid,
+        iommufd,
         devices: vec![primary.clone()],
         primary,
         labels: BTreeMap::new(),
         health: Health::Healthy,
         ap_devices,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_iommufd_devices_cdev_path() {
+        assert!(is_iommufd_devices_cdev_path(Path::new(
+            "/dev/vfio/devices/vfio0"
+        )));
+        assert!(!is_iommufd_devices_cdev_path(Path::new("/dev/vfio/12")));
+        assert!(!is_iommufd_devices_cdev_path(Path::new(
+            "/dev/vfio/devices"
+        )));
+        assert!(!is_iommufd_devices_cdev_path(Path::new(
+            "/dev/vfio/devices/"
+        )));
+        assert!(!is_iommufd_devices_cdev_path(Path::new(
+            "/dev/vfio/devicesX"
+        )));
+        assert!(!is_iommufd_devices_cdev_path(Path::new(
+            "/dev/vfio/devicesX/vfio0"
+        )));
+    }
+
+    #[test]
+    fn test_is_vfio_ap_device_missing_cdev_is_false() {
+        // A cdev that has no sysfs vfio-dev entry must not be classified as AP.
+        assert!(!is_vfio_ap_device(Path::new(
+            "/dev/vfio/devices/vfio-does-not-exist"
+        )));
+    }
+
+    #[test]
+    fn test_is_vfio_ap_device_invalid_path_is_false() {
+        assert!(!is_vfio_ap_device(Path::new("/dev/vfio/vfio")));
+        assert!(!is_vfio_ap_device(Path::new("/not/a/vfio/path")));
+    }
+
+    #[test]
+    fn test_discover_vfio_ap_device_missing_cdev_errors() {
+        let err = discover_vfio_ap_device(Path::new("/dev/vfio/devices/vfio-does-not-exist"))
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"), "{}", err);
+    }
+
+    #[test]
+    fn test_discover_vfio_ap_device_invalid_group_path_errors() {
+        assert!(discover_vfio_ap_device(Path::new("/dev/vfio/vfio")).is_err());
+    }
 }
