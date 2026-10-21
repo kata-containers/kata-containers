@@ -1121,7 +1121,7 @@ mod tests {
         LinuxResources, LinuxResourcesBuilder, SpecBuilder,
     };
     use oci_spec::runtime as oci;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
@@ -2109,74 +2109,83 @@ mod tests {
         assert_eq!(env, &vec!["PCIDEVICE_x=0000:02:00.0".to_string()]);
     }
 
-    #[test]
-    fn test_add_pci_mappings() {
-        let addr = |s| pci::Address::from_str(s).unwrap();
-        let mut pcimap = HashMap::new();
+    fn pci_pairs(pairs: &[(&str, &str)]) -> Vec<(pci::Address, pci::Address)> {
+        pairs
+            .iter()
+            .map(|(h, g)| {
+                (
+                    pci::Address::from_str(h).unwrap(),
+                    pci::Address::from_str(g).unwrap(),
+                )
+            })
+            .collect()
+    }
 
-        // Mappings of a container's devices accumulate.
-        add_pci_mappings(
-            &mut pcimap,
-            "c1",
-            vec![(addr("0000:00:02.1"), addr("0000:02:00.0"))],
-        )
-        .unwrap();
-        add_pci_mappings(
-            &mut pcimap,
-            "c1",
-            vec![(addr("0000:00:02.2"), addr("0000:03:00.0"))],
-        )
-        .unwrap();
-        // Other containers' mappings are kept separately.
-        add_pci_mappings(
-            &mut pcimap,
-            "c2",
-            vec![(addr("0000:00:02.3"), addr("0000:02:00.0"))],
-        )
-        .unwrap();
+    fn pci_mapping(pairs: &[(&str, &str)]) -> PciHostGuestMapping {
+        pci_pairs(pairs).into_iter().collect()
+    }
 
-        assert_eq!(
-            pcimap["c1"],
-            HashMap::from([
-                (addr("0000:00:02.1"), addr("0000:02:00.0")),
-                (addr("0000:00:02.2"), addr("0000:03:00.0")),
-            ])
-        );
-        assert_eq!(
-            pcimap["c2"],
-            HashMap::from([(addr("0000:00:02.3"), addr("0000:02:00.0"))])
-        );
+    #[fixture]
+    fn pcimap_with_c1() -> HashMap<String, PciHostGuestMapping> {
+        HashMap::from([(
+            "c1".to_string(),
+            pci_mapping(&[("0000:00:02.1", "0000:02:00.0")]),
+        )])
+    }
 
-        // Repeating a mapping is fine, mapping a host device to another
-        // guest address is not.
-        add_pci_mappings(
-            &mut pcimap,
-            "c1",
-            vec![(addr("0000:00:02.1"), addr("0000:02:00.0"))],
-        )
-        .unwrap();
-        // A rejected batch leaves the existing mappings untouched, also when
-        // the conflict is within the batch.
-        let before = pcimap.clone();
-        assert!(add_pci_mappings(
-            &mut pcimap,
-            "c1",
-            vec![
-                (addr("0000:00:02.4"), addr("0000:05:00.0")),
-                (addr("0000:00:02.1"), addr("0000:04:00.0")),
-            ]
-        )
-        .is_err());
-        assert!(add_pci_mappings(
-            &mut pcimap,
-            "c3",
-            vec![
-                (addr("0000:00:02.5"), addr("0000:02:00.0")),
-                (addr("0000:00:02.5"), addr("0000:03:00.0")),
-            ]
-        )
-        .is_err());
-        assert_eq!(pcimap, before);
+    // `expected` is the resulting mapping of `cid` when the batch is
+    // accepted, or None when it is rejected and nothing may change.
+    #[rstest]
+    #[case::new_container(
+        "c2",
+        &[("0000:00:02.3", "0000:02:00.0")],
+        Some(&[("0000:00:02.3", "0000:02:00.0")][..])
+    )]
+    #[case::accumulates_for_same_container(
+        "c1",
+        &[("0000:00:02.2", "0000:03:00.0")],
+        Some(&[("0000:00:02.1", "0000:02:00.0"), ("0000:00:02.2", "0000:03:00.0")][..])
+    )]
+    #[case::repeating_a_mapping_is_fine(
+        "c1",
+        &[("0000:00:02.1", "0000:02:00.0")],
+        Some(&[("0000:00:02.1", "0000:02:00.0")][..])
+    )]
+    #[case::conflict_with_existing_mapping(
+        "c1",
+        &[("0000:00:02.4", "0000:05:00.0"), ("0000:00:02.1", "0000:04:00.0")],
+        None
+    )]
+    #[case::conflict_within_batch(
+        "c3",
+        &[("0000:00:02.5", "0000:02:00.0"), ("0000:00:02.5", "0000:03:00.0")],
+        None
+    )]
+    fn test_add_pci_mappings(
+        mut pcimap_with_c1: HashMap<String, PciHostGuestMapping>,
+        #[case] cid: &str,
+        #[case] batch: &[(&str, &str)],
+        #[case] expected: Option<&[(&str, &str)]>,
+    ) {
+        let before = pcimap_with_c1.clone();
+
+        let res = add_pci_mappings(&mut pcimap_with_c1, cid, pci_pairs(batch));
+
+        match expected {
+            Some(mapping) => {
+                res.unwrap();
+                assert_eq!(pcimap_with_c1[cid], pci_mapping(mapping));
+                // Other containers' mappings are kept separately.
+                for (other, other_mapping) in before.iter().filter(|(c, _)| *c != cid) {
+                    assert_eq!(&pcimap_with_c1[other], other_mapping);
+                }
+            }
+            None => {
+                assert!(res.is_err());
+                // A rejected batch must leave all mappings untouched.
+                assert_eq!(pcimap_with_c1, before);
+            }
+        }
     }
 
     #[tokio::test]
