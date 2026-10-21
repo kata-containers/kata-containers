@@ -14,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use std::thread::JoinHandle;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use caps::{CapSet, Capability};
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
@@ -71,8 +71,10 @@ pub(crate) const OSSFS: &str = "ossfs";
 
 const OSS_CACHE_DATA_DIR: &str = "data";
 const OSS_CACHE_INDEX_FILE: &str = ".dragonball_oss_cache_index.json";
+const OSS_CONFLICTS_DIR: &str = ".conflicts";
 const OSS_WRITE_THROUGH_INTERVAL_SECS: u64 = 1;
 const OSS_ASYNC_FLUSH_INTERVAL_SECS: u64 = 30;
+const OSS_DEFAULT_UPLOAD_CHUNK_SIZE: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
 struct OssFsConfig {
@@ -97,6 +99,8 @@ struct OssFsConfig {
     flush_interval_secs: Option<u64>,
     #[serde(default, alias = "consistency")]
     consistency_strategy: Option<String>,
+    #[serde(default)]
+    upload_chunk_size: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +114,7 @@ enum OssWritePolicy {
 enum OssConsistencyStrategy {
     LocalWins,
     EtagGuard,
+    RemoteWins,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +125,7 @@ struct OssSyncContext {
     cache_root: PathBuf,
     cache_data_dir: PathBuf,
     consistency_strategy: OssConsistencyStrategy,
+    upload_chunk_size: usize,
 }
 
 #[derive(Debug)]
@@ -175,6 +181,17 @@ struct OssWritebackSyncStats {
     deleted: usize,
     skipped_conflicts: usize,
     unchanged: usize,
+    isolated: usize,
+    remote_wins: usize,
+}
+
+#[derive(Debug, Clone)]
+enum RemoteObjectState {
+    NotFound,
+    Existing {
+        etag: Option<String>,
+        content_length: u64,
+    },
 }
 
 /// Info of backend filesystems of VirtioFs
@@ -488,8 +505,13 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
 
         let stats = sync_local_cache_to_oss(&backend.sync_ctx)?;
         info!(
-            "{VIRTIO_FS_NAME}: ossfs final flush done at {mountpoint}, uploaded {}, deleted {}, conflicts {}, unchanged {}",
-            stats.uploaded, stats.deleted, stats.skipped_conflicts, stats.unchanged
+            "{VIRTIO_FS_NAME}: ossfs final flush done at {mountpoint}, uploaded {}, deleted {}, conflicts {}, unchanged {}, isolated {}, remote_wins {}",
+            stats.uploaded,
+            stats.deleted,
+            stats.skipped_conflicts,
+            stats.unchanged,
+            stats.isolated,
+            stats.remote_wins
         );
         Ok(())
     }
@@ -505,8 +527,13 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
 
         let stats = sync_local_cache_to_oss(&backend.sync_ctx)?;
         info!(
-            "{VIRTIO_FS_NAME}: ossfs flush done at {mountpoint}, uploaded {}, deleted {}, conflicts {}, unchanged {}",
-            stats.uploaded, stats.deleted, stats.skipped_conflicts, stats.unchanged
+            "{VIRTIO_FS_NAME}: ossfs flush done at {mountpoint}, uploaded {}, deleted {}, conflicts {}, unchanged {}, isolated {}, remote_wins {}",
+            stats.uploaded,
+            stats.deleted,
+            stats.skipped_conflicts,
+            stats.unchanged,
+            stats.isolated,
+            stats.remote_wins
         );
         Ok(())
     }
@@ -631,6 +658,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let consistency_strategy =
             parse_oss_consistency_strategy(cfg.consistency_strategy.as_deref())?;
         let flush_interval = resolve_oss_flush_interval(write_policy, cfg.flush_interval_secs)?;
+        let upload_chunk_size = resolve_oss_upload_chunk_size(cfg.upload_chunk_size)?;
 
         let cache_base = cfg
             .local_cache_dir
@@ -652,6 +680,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             cache_root,
             cache_data_dir: cache_data_dir.clone(),
             consistency_strategy,
+            upload_chunk_size,
         };
 
         fs::create_dir_all(&sync_ctx.cache_data_dir).map_err(FsError::IOError)?;
@@ -664,8 +693,14 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         if write_policy != OssWritePolicy::ReadOnly {
             let stats = sync_local_cache_to_oss(&sync_ctx)?;
             info!(
-                "{VIRTIO_FS_NAME}: ossfs initial writeback sync done at {}, uploaded {}, deleted {}, conflicts {}, unchanged {}",
-                mountpoint, stats.uploaded, stats.deleted, stats.skipped_conflicts, stats.unchanged
+                "{VIRTIO_FS_NAME}: ossfs initial writeback sync done at {}, uploaded {}, deleted {}, conflicts {}, unchanged {}, isolated {}, remote_wins {}",
+                mountpoint,
+                stats.uploaded,
+                stats.deleted,
+                stats.skipped_conflicts,
+                stats.unchanged,
+                stats.isolated,
+                stats.remote_wins
             );
         }
 
@@ -980,8 +1015,9 @@ fn parse_oss_consistency_strategy(strategy: Option<&str>) -> FsResult<OssConsist
         "etag-guard" | "etag_guard" | "if-match" | "if_match" => {
             Ok(OssConsistencyStrategy::EtagGuard)
         }
+        "remote-wins" | "remote_wins" => Ok(OssConsistencyStrategy::RemoteWins),
         invalid => Err(FsError::BackendFs(format!(
-            "invalid ossfs consistency strategy {invalid}, expected local-wins/etag-guard"
+            "invalid ossfs consistency strategy {invalid}, expected local-wins/etag-guard/remote-wins"
         ))),
     }
 }
@@ -1007,6 +1043,17 @@ fn resolve_oss_flush_interval(
     }
 
     Ok(Duration::from_secs(secs))
+}
+
+fn resolve_oss_upload_chunk_size(chunk_size: Option<usize>) -> FsResult<usize> {
+    let chunk_size = chunk_size.unwrap_or(OSS_DEFAULT_UPLOAD_CHUNK_SIZE);
+    if chunk_size == 0 {
+        return Err(FsError::BackendFs(
+            "ossfs upload_chunk_size must be greater than 0".to_string(),
+        ));
+    }
+
+    Ok(chunk_size)
 }
 
 fn build_oss_operator(cfg: &OssFsConfig) -> FsResult<OpenDalOperator> {
@@ -1159,6 +1206,11 @@ fn oss_object_path_from_local_suffix(prefix: &str, local_suffix: &str) -> String
     }
 }
 
+fn local_cache_path_for_object(sync_ctx: &OssSyncContext, object_path: &str) -> FsResult<PathBuf> {
+    let relative_path = oss_object_relative_path(object_path, &sync_ctx.prefix)?;
+    Ok(sync_ctx.cache_data_dir.join(relative_path))
+}
+
 fn local_cache_state(path: &Path) -> FsResult<LocalCacheState> {
     let metadata = fs::metadata(path).map_err(FsError::IOError)?;
     let mtime_ns = metadata
@@ -1292,37 +1344,160 @@ fn collect_local_cache_files(
     Ok(files)
 }
 
-fn is_remote_entry_conflicted(
+fn query_remote_object_state(
     op: &OpenDalOperator,
     runtime: &tokio::runtime::Runtime,
     object_path: &str,
+) -> FsResult<RemoteObjectState> {
+    match runtime.block_on(op.stat(object_path)) {
+        Ok(meta) => Ok(RemoteObjectState::Existing {
+            etag: meta.etag().map(ToString::to_string),
+            content_length: meta.content_length(),
+        }),
+        Err(e) if e.kind() == OpenDalErrorKind::NotFound => Ok(RemoteObjectState::NotFound),
+        Err(e) => Err(FsError::BackendFs(format!(
+            "failed to stat remote oss object {object_path}: {e}"
+        ))),
+    }
+}
+
+fn is_remote_state_conflicted(old: &OssCacheEntry, remote_state: &RemoteObjectState) -> bool {
+    match remote_state {
+        RemoteObjectState::NotFound => old.etag.is_some() || old.content_length > 0,
+        RemoteObjectState::Existing {
+            etag,
+            content_length,
+        } => {
+            if let (Some(old_etag), Some(remote_etag)) = (old.etag.as_deref(), etag.as_deref()) {
+                return old_etag != remote_etag;
+            }
+
+            old.content_length != *content_length
+        }
+    }
+}
+
+fn is_remote_entry_conflicted(
     old: &OssCacheEntry,
+    remote_state: &RemoteObjectState,
     strategy: OssConsistencyStrategy,
 ) -> FsResult<bool> {
     if strategy == OssConsistencyStrategy::LocalWins {
         return Ok(false);
     }
 
-    let remote_meta = match runtime.block_on(op.stat(object_path)) {
-        Ok(meta) => Some(meta),
-        Err(e) if e.kind() == OpenDalErrorKind::NotFound => None,
-        Err(e) => {
+    Ok(is_remote_state_conflicted(old, remote_state))
+}
+
+fn isolate_conflict_local_file(
+    sync_ctx: &OssSyncContext,
+    object_path: &str,
+    local_path: &Path,
+) -> FsResult<PathBuf> {
+    let relative_path = local_path.strip_prefix(&sync_ctx.cache_data_dir).map_err(|e| {
+        FsError::BackendFs(format!(
+            "failed to strip local cache prefix for conflict file {}: {e}",
+            local_path.display()
+        ))
+    })?;
+    let base_conflict_path = sync_ctx.cache_root.join(OSS_CONFLICTS_DIR).join(relative_path);
+    if let Some(parent) = base_conflict_path.parent() {
+        fs::create_dir_all(parent).map_err(FsError::IOError)?;
+    }
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let file_name = base_conflict_path
+        .file_name()
+        .ok_or_else(|| {
+            FsError::BackendFs(format!(
+                "failed to get filename for conflict file {}",
+                local_path.display()
+            ))
+        })?
+        .to_string_lossy();
+    let conflict_file_name = format!("{file_name}.conflict-{nanos}");
+    let conflict_path = base_conflict_path.with_file_name(conflict_file_name);
+
+    fs::rename(local_path, &conflict_path).map_err(FsError::IOError)?;
+    warn!(
+        "{VIRTIO_FS_NAME}: isolated conflict file for {object_path} at {}",
+        conflict_path.display()
+    );
+    Ok(conflict_path)
+}
+
+fn download_remote_object_to_local(
+    op: &OpenDalOperator,
+    runtime: &tokio::runtime::Runtime,
+    sync_ctx: &OssSyncContext,
+    object_path: &str,
+    local_path: &Path,
+    remote_state: &RemoteObjectState,
+) -> FsResult<OssCacheEntry> {
+    let data = runtime
+        .block_on(op.read(object_path))
+        .map_err(|e| FsError::BackendFs(format!("failed to read remote object {object_path}: {e}")))?;
+    if let Some(parent) = local_path.parent() {
+        fs::create_dir_all(parent).map_err(FsError::IOError)?;
+    }
+    let tmp_path = local_path.with_extension("oss.remote.tmp");
+    fs::write(&tmp_path, data.to_vec()).map_err(FsError::IOError)?;
+    fs::rename(&tmp_path, local_path).map_err(|e| {
+        let _ = fs::remove_file(&tmp_path);
+        FsError::IOError(e)
+    })?;
+    let local_state = local_cache_state(local_path)?;
+    let (etag, content_length) = match remote_state {
+        RemoteObjectState::Existing {
+            etag,
+            content_length,
+        } => (etag.clone(), *content_length),
+        RemoteObjectState::NotFound => {
             return Err(FsError::BackendFs(format!(
-                "failed to stat remote oss object {object_path}: {e}"
+                "remote object {object_path} disappeared while applying remote-wins at {}",
+                sync_ctx.mountpoint
             )))
         }
     };
 
-    let Some(remote_meta) = remote_meta else {
-        return Ok(old.etag.is_some() || old.content_length > 0);
-    };
+    Ok(OssCacheEntry {
+        etag,
+        content_length,
+        local_size: local_state.size,
+        local_mtime_ns: local_state.mtime_ns,
+    })
+}
 
-    let remote_etag = remote_meta.etag();
-    if let (Some(old_etag), Some(remote_etag)) = (old.etag.as_deref(), remote_etag) {
-        return Ok(old_etag != remote_etag);
+fn upload_local_file_chunked(
+    op: &OpenDalOperator,
+    runtime: &tokio::runtime::Runtime,
+    object_path: &str,
+    local_path: &Path,
+    chunk_size: usize,
+) -> FsResult<()> {
+    let mut file = File::open(local_path).map_err(FsError::IOError)?;
+    let mut writer = runtime
+        .block_on(op.writer(object_path))
+        .map_err(|e| FsError::BackendFs(format!("failed to open oss writer for {object_path}: {e}")))?;
+    let mut buf = vec![0u8; chunk_size];
+    loop {
+        let bytes_read = file.read(&mut buf).map_err(FsError::IOError)?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        runtime
+            .block_on(writer.write(buf[..bytes_read].to_vec()))
+            .map_err(|e| FsError::BackendFs(format!("failed to write chunk for {object_path}: {e}")))?;
     }
-
-    Ok(old.content_length != remote_meta.content_length())
+    runtime
+        .block_on(writer.close())
+        .map_err(|e| FsError::BackendFs(format!("failed to close writer for {object_path}: {e}")))?;
+    Ok(())
 }
 
 fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadSyncStats> {
@@ -1497,35 +1672,66 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
         }
 
         if let Some(old) = old_entry {
-            if is_remote_entry_conflicted(
-                &op,
-                &runtime,
-                object_path,
-                old,
-                sync_ctx.consistency_strategy,
-            )? {
-                warn!(
-                    "{VIRTIO_FS_NAME}: skip flushing {} at {} due to remote conflict",
-                    object_path, sync_ctx.mountpoint
-                );
-                stats.skipped_conflicts += 1;
-                new_index.entries.insert(object_path.clone(), old.clone());
-                continue;
+            if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins {
+                let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+                if is_remote_entry_conflicted(old, &remote_state, sync_ctx.consistency_strategy)? {
+                    if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
+                        isolate_conflict_local_file(sync_ctx, object_path, &local_file.path)?;
+                        stats.isolated += 1;
+
+                        if let RemoteObjectState::Existing { .. } = remote_state {
+                            let canonical_local_path =
+                                local_cache_path_for_object(sync_ctx, object_path)?;
+                            let new_entry = download_remote_object_to_local(
+                                &op,
+                                &runtime,
+                                sync_ctx,
+                                object_path,
+                                &canonical_local_path,
+                                &remote_state,
+                            )?;
+                            new_index.entries.insert(object_path.clone(), new_entry);
+                        }
+                        stats.remote_wins += 1;
+                        continue;
+                    }
+
+                    warn!(
+                        "{VIRTIO_FS_NAME}: skip flushing {} at {} due to remote conflict",
+                        object_path, sync_ctx.mountpoint
+                    );
+                    stats.skipped_conflicts += 1;
+                    new_index.entries.insert(object_path.clone(), old.clone());
+                    continue;
+                }
             }
         }
 
-        let data = fs::read(&local_file.path).map_err(FsError::IOError)?;
-        runtime.block_on(op.write(object_path, data)).map_err(|e| {
-            FsError::BackendFs(format!("failed to upload {object_path} to oss: {e}"))
-        })?;
-        let remote_meta = runtime.block_on(op.stat(object_path)).map_err(|e| {
-            FsError::BackendFs(format!("failed to stat remote object {object_path}: {e}"))
-        })?;
+        upload_local_file_chunked(
+            &op,
+            &runtime,
+            object_path,
+            &local_file.path,
+            sync_ctx.upload_chunk_size,
+        )?;
+        let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+        let (etag, content_length) = match remote_state {
+            RemoteObjectState::Existing {
+                etag,
+                content_length,
+            } => (etag, content_length),
+            RemoteObjectState::NotFound => {
+                return Err(FsError::BackendFs(format!(
+                    "uploaded object {object_path} not found after write at {}",
+                    sync_ctx.mountpoint
+                )))
+            }
+        };
         new_index.entries.insert(
             object_path.clone(),
             OssCacheEntry {
-                etag: remote_meta.etag().map(ToString::to_string),
-                content_length: remote_meta.content_length(),
+                etag,
+                content_length,
                 local_size: local_file.state.size,
                 local_mtime_ns: local_file.state.mtime_ns,
             },
@@ -1538,22 +1744,36 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
             continue;
         }
 
-        if is_remote_entry_conflicted(
-            &op,
-            &runtime,
-            old_path,
-            old_entry,
-            sync_ctx.consistency_strategy,
-        )? {
-            warn!(
-                "{VIRTIO_FS_NAME}: skip deleting remote {} at {} due to conflict",
-                old_path, sync_ctx.mountpoint
-            );
-            stats.skipped_conflicts += 1;
-            new_index
-                .entries
-                .insert(old_path.clone(), old_entry.clone());
-            continue;
+        if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins {
+            let remote_state = query_remote_object_state(&op, &runtime, old_path)?;
+            if is_remote_entry_conflicted(old_entry, &remote_state, sync_ctx.consistency_strategy)? {
+                if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
+                    if let RemoteObjectState::Existing { .. } = remote_state {
+                        let local_path = local_cache_path_for_object(sync_ctx, old_path)?;
+                        let new_entry = download_remote_object_to_local(
+                            &op,
+                            &runtime,
+                            sync_ctx,
+                            old_path,
+                            &local_path,
+                            &remote_state,
+                        )?;
+                        new_index.entries.insert(old_path.clone(), new_entry);
+                    }
+                    stats.remote_wins += 1;
+                    continue;
+                }
+
+                warn!(
+                    "{VIRTIO_FS_NAME}: skip deleting remote {} at {} due to conflict",
+                    old_path, sync_ctx.mountpoint
+                );
+                stats.skipped_conflicts += 1;
+                new_index
+                    .entries
+                    .insert(old_path.clone(), old_entry.clone());
+                continue;
+            }
         }
 
         match runtime.block_on(op.delete(old_path)) {
@@ -2586,6 +2806,10 @@ pub mod tests {
             parse_oss_consistency_strategy(Some("etag-guard")).unwrap(),
             OssConsistencyStrategy::EtagGuard
         );
+        assert_eq!(
+            parse_oss_consistency_strategy(Some("remote-wins")).unwrap(),
+            OssConsistencyStrategy::RemoteWins
+        );
         assert!(parse_oss_consistency_strategy(Some("unknown")).is_err());
     }
 
@@ -2604,6 +2828,41 @@ pub mod tests {
             Duration::from_secs(0)
         );
         assert!(resolve_oss_flush_interval(OssWritePolicy::AsyncFlush, Some(0)).is_err());
+    }
+
+    #[test]
+    fn test_resolve_oss_upload_chunk_size() {
+        assert_eq!(
+            resolve_oss_upload_chunk_size(None).unwrap(),
+            OSS_DEFAULT_UPLOAD_CHUNK_SIZE
+        );
+        assert_eq!(resolve_oss_upload_chunk_size(Some(4096)).unwrap(), 4096);
+        assert!(resolve_oss_upload_chunk_size(Some(0)).is_err());
+    }
+
+    #[test]
+    fn test_is_remote_state_conflicted() {
+        let old = OssCacheEntry {
+            etag: Some("etag-1".to_string()),
+            content_length: 4,
+            local_size: 4,
+            local_mtime_ns: 100,
+        };
+        assert!(!is_remote_state_conflicted(
+            &old,
+            &RemoteObjectState::Existing {
+                etag: Some("etag-1".to_string()),
+                content_length: 4,
+            }
+        ));
+        assert!(is_remote_state_conflicted(
+            &old,
+            &RemoteObjectState::Existing {
+                etag: Some("etag-2".to_string()),
+                content_length: 4,
+            }
+        ));
+        assert!(is_remote_state_conflicted(&old, &RemoteObjectState::NotFound));
     }
 
     #[test]
