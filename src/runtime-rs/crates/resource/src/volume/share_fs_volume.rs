@@ -427,13 +427,15 @@ impl ShareFsVolume {
         agent: Arc<dyn Agent>,
         volume_manager: Arc<VolumeManager>,
     ) -> Result<Self> {
-        // The file_name is in the format of "sandbox-{uuid}-{file_name}"
+        // The file_name is in the format of "sandbox-{uuid}-{file_name}".
+        // Use the mount destination basename, falling back to the source basename.
         let source_path = get_mount_path(m.source());
-        let file_name = Path::new(&source_path)
+        let file_name = m
+            .destination()
             .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap();
+            .or_else(|| Path::new(&source_path).file_name())
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("failed to derive share file name for mount {:?}", m))?;
         let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {

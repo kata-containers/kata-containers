@@ -118,7 +118,7 @@ impl RootFsResource {
                 let layer = &rootfs_mounts[0];
                 let mut inner = self.inner.write().await;
 
-                if is_guest_pull_volume(share_fs, layer) {
+                if is_guest_pull_volume(layer) {
                     let mount_options = layer.options.clone();
                     let virtual_volume: Arc<dyn Rootfs> = Arc::new(
                         VirtualVolume::new(cid, annotations, mount_options.to_vec())
@@ -198,9 +198,8 @@ fn is_single_layer_rootfs(rootfs_mounts: &[Mount]) -> bool {
     rootfs_mounts.len() == 1
 }
 
-pub fn is_guest_pull_volume(
-    share_fs: &Option<Arc<dyn ShareFs>>,
-    m: &kata_types::mount::Mount,
-) -> bool {
-    share_fs.is_none() && is_kata_virtual_volume(m)
+/// Returns true if the mount is a guest-pull virtual volume, independent of
+/// whether filesystem sharing is enabled.
+pub fn is_guest_pull_volume(m: &kata_types::mount::Mount) -> bool {
+    is_kata_virtual_volume(m)
 }
