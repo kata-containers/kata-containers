@@ -1044,7 +1044,7 @@ impl AgentPolicy {
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
-        // Resource-level settings from user's YAML - e.g., pod-level or deployment-level.
+        // First, apply pod-level UID and GID values.
         let mut must_check_passwd = false;
         resource.get_process_fields(&mut process, &mut must_check_passwd, is_pause_container);
         debug!(
@@ -1083,15 +1083,15 @@ impl AgentPolicy {
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
-        // Container-level settings from user's YAML.
+        // Next, apply container-level UID and GID overrides.
         yaml_container.get_process_fields(&mut process);
         debug!(
             "get_container_process: after yaml_container.get_process_fields: User = {:?}",
             process.User
         );
 
-        // Explicit pod groups supplement the final container identity and must
-        // survive any runAsUser/runAsGroup override at the container level.
+        // Finally, apply pod-level fsGroup and supplementalGroups after container-level ID
+        // overrides.
         apply_pod_groups_to_process(
             &mut process,
             resource.get_pod_security_context(),

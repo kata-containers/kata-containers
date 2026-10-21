@@ -1205,8 +1205,11 @@ impl Container {
             }
 
             if context.runAsUser.is_some() || context.runAsGroup.is_some() {
-                // WithAdditionalGIDs uses the final identity, so groups from
-                // the image or pod user must not survive a container override.
+                // Container-level runAsUser and runAsGroup override the corresponding UID/GID
+                // values selected from image and pod settings. When either field is specified,
+                // reset AdditionalGids to the effective primary GID. The /etc/group memberships
+                // for the effective UID are added below; policy.rs applies pod fsGroup and
+                // supplementalGroups afterward.
                 process.User.AdditionalGids.clear();
                 process.User.AdditionalGids.insert(process.User.GID);
                 debug!(
@@ -1331,13 +1334,19 @@ mod tests {
     #[test]
     fn container_group_override_replaces_inherited_groups() {
         for (context, expected_uid, expected_gid, expected_groups) in [
+            // Override UID and GID: discard inherited GID 0, use container GID 2000, and add
+            // image group 123 for UID 65534.
             (
                 "runAsUser: 65534\nrunAsGroup: 2000",
                 65534,
                 2000,
                 vec![123, 2000],
             ),
+            // Override GID: retain UID 0, discard inherited GID 0, and use container GID 2000.
+            // UID 0 has no supplementary image memberships.
             ("runAsGroup: 2000", 0, 2000, vec![2000]),
+            // Override UID and GID using a UID without a primary-GID mapping or supplementary
+            // image memberships; explicit GID 2000 is the only resulting group.
             ("runAsUser: 9999\nrunAsGroup: 2000", 9999, 2000, vec![2000]),
         ] {
             let mut container = Container {
@@ -1378,14 +1387,18 @@ mod tests {
             expected_groups: &'static [u32],
         }
 
-        let cases = [TestCase {
-            name: "image_primary_group_used_without_pod_group",
-            initial_gid: 0,
-            passwd: "root:x:0:0::/:/bin/sh\nnobody:x:65534:1000::/:/bin/sh\n",
-            group: "shared:x:123:nobody\n",
-            expected_gid: 1000,
-            expected_groups: &[123, 1000],
-        }];
+        let cases = [
+            // Override UID: /etc/passwd maps UID 65534 to primary GID 1000, and /etc/group adds
+            // image group 123.
+            TestCase {
+                name: "image_primary_group_used_without_pod_group",
+                initial_gid: 0,
+                passwd: "root:x:0:0::/:/bin/sh\nnobody:x:65534:1000::/:/bin/sh\n",
+                group: "shared:x:123:nobody\n",
+                expected_gid: 1000,
+                expected_groups: &[123, 1000],
+            },
+        ];
 
         for case in cases {
             let mut container = Container {
