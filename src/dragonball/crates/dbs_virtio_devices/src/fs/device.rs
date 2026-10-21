@@ -13,7 +13,8 @@ use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
-use std::time::Duration;
+use std::thread::JoinHandle;
+use std::time::{Duration, UNIX_EPOCH};
 
 use caps::{CapSet, Capability};
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
@@ -30,6 +31,7 @@ use nydus_rafs::blobfs::{BlobFs, Config as BlobfsConfig};
 use nydus_rafs::{fs::Rafs, RafsIoRead};
 use opendal::options::ListOptions;
 use opendal::services::Oss as OssService;
+use opendal::ErrorKind as OpenDalErrorKind;
 use opendal::Operator as OpenDalOperator;
 use rlimit::Resource;
 use serde::{Deserialize, Serialize};
@@ -69,8 +71,10 @@ pub(crate) const OSSFS: &str = "ossfs";
 
 const OSS_CACHE_DATA_DIR: &str = "data";
 const OSS_CACHE_INDEX_FILE: &str = ".dragonball_oss_cache_index.json";
+const OSS_WRITE_THROUGH_INTERVAL_SECS: u64 = 1;
+const OSS_ASYNC_FLUSH_INTERVAL_SECS: u64 = 30;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct OssFsConfig {
     endpoint: String,
     #[serde(alias = "bucket_name")]
@@ -87,12 +91,70 @@ struct OssFsConfig {
     local_cache_dir: Option<String>,
     #[serde(default)]
     cache_dir: Option<String>,
+    #[serde(default, alias = "writeback_mode", alias = "write_mode")]
+    write_policy: Option<String>,
+    #[serde(default)]
+    flush_interval_secs: Option<u64>,
+    #[serde(default, alias = "consistency")]
+    consistency_strategy: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OssWritePolicy {
+    ReadOnly,
+    WriteThrough,
+    AsyncFlush,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OssConsistencyStrategy {
+    LocalWins,
+    EtagGuard,
+}
+
+#[derive(Debug, Clone)]
+struct OssSyncContext {
+    config: OssFsConfig,
+    mountpoint: String,
+    prefix: String,
+    cache_root: PathBuf,
+    cache_data_dir: PathBuf,
+    consistency_strategy: OssConsistencyStrategy,
+}
+
+#[derive(Debug)]
+struct OssFlushWorker {
+    stop_tx: mpsc::Sender<()>,
+    handle: JoinHandle<()>,
+}
+
+#[derive(Debug)]
+struct OssBackendState {
+    sync_ctx: OssSyncContext,
+    write_policy: OssWritePolicy,
+    worker: Option<OssFlushWorker>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct LocalCacheState {
+    size: u64,
+    mtime_ns: u128,
+}
+
+#[derive(Debug, Clone)]
+struct LocalCacheFile {
+    path: PathBuf,
+    state: LocalCacheState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct OssCacheEntry {
     etag: Option<String>,
     content_length: u64,
+    #[serde(default)]
+    local_size: u64,
+    #[serde(default)]
+    local_mtime_ns: u128,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -101,10 +163,18 @@ struct OssCacheIndex {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct OssSyncStats {
+struct OssDownloadSyncStats {
     downloaded: usize,
     reused: usize,
     removed: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct OssWritebackSyncStats {
+    uploaded: usize,
+    deleted: usize,
+    skipped_conflicts: usize,
+    unchanged: usize,
 }
 
 /// Info of backend filesystems of VirtioFs
@@ -131,6 +201,7 @@ pub struct VirtioFs<AS: GuestAddressSpace> {
     pub(crate) handler: Box<dyn VirtioRegionHandler>,
     pub(crate) fs: Arc<Vfs>,
     pub(crate) backend_fs: HashMap<String, BackendFsInfo>,
+    oss_backends: HashMap<String, OssBackendState>,
     pub(crate) subscriber_id: Option<SubscriberId>,
     pub(crate) id: String,
     pub(crate) rate_limiter: Option<RateLimiter>,
@@ -268,6 +339,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             handler,
             fs: Arc::new(Vfs::new(vfs_opts)),
             backend_fs: HashMap::new(),
+            oss_backends: HashMap::new(),
             subscriber_id: None,
             id: tag.to_string(),
             rate_limiter,
@@ -384,6 +456,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 }
             }
             "umount" => {
+                self.flush_oss_backend_before_umount(mountpoint)?;
                 self.fs.umount(mountpoint).map_err(|e| {
                     error!("umount {e:?}");
                     FsError::InvalidData
@@ -391,6 +464,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 self.backend_fs.remove(mountpoint);
                 Ok(())
             }
+            "flush" => self.flush_oss_backend(mountpoint),
             "update" => {
                 info!("switch backend");
                 self.update_rafs(source, mountpoint, config)
@@ -400,6 +474,41 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 Err(FsError::InvalidData)
             }
         }
+    }
+
+    fn flush_oss_backend_before_umount(&mut self, mountpoint: &str) -> FsResult<()> {
+        let Some(mut backend) = self.oss_backends.remove(mountpoint) else {
+            return Ok(());
+        };
+
+        stop_oss_flush_worker(&mut backend.worker);
+        if backend.write_policy == OssWritePolicy::ReadOnly {
+            return Ok(());
+        }
+
+        let stats = sync_local_cache_to_oss(&backend.sync_ctx)?;
+        info!(
+            "{VIRTIO_FS_NAME}: ossfs final flush done at {mountpoint}, uploaded {}, deleted {}, conflicts {}, unchanged {}",
+            stats.uploaded, stats.deleted, stats.skipped_conflicts, stats.unchanged
+        );
+        Ok(())
+    }
+
+    fn flush_oss_backend(&mut self, mountpoint: &str) -> FsResult<()> {
+        let backend = self.oss_backends.get(mountpoint).ok_or_else(|| {
+            FsError::BackendFs(format!("ossfs mount point {mountpoint} not found"))
+        })?;
+
+        if backend.write_policy == OssWritePolicy::ReadOnly {
+            return Ok(());
+        }
+
+        let stats = sync_local_cache_to_oss(&backend.sync_ctx)?;
+        info!(
+            "{VIRTIO_FS_NAME}: ossfs flush done at {mountpoint}, uploaded {}, deleted {}, conflicts {}, unchanged {}",
+            stats.uploaded, stats.deleted, stats.skipped_conflicts, stats.unchanged
+        );
+        Ok(())
     }
 
     fn mount_blobfs(
@@ -518,6 +627,10 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let cfg = config.ok_or_else(|| FsError::BackendFs("no oss config file".to_string()))?;
         let cfg: OssFsConfig = serde_json::from_str(&cfg)
             .map_err(|e| FsError::BackendFs(format!("invalid ossfs config: {e}")))?;
+        let write_policy = parse_oss_write_policy(cfg.write_policy.as_deref())?;
+        let consistency_strategy =
+            parse_oss_consistency_strategy(cfg.consistency_strategy.as_deref())?;
+        let flush_interval = resolve_oss_flush_interval(write_policy, cfg.flush_interval_secs)?;
 
         let cache_base = cfg
             .local_cache_dir
@@ -532,22 +645,58 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let namespace = oss_cache_namespace(&cfg.bucket, &prefix);
         let cache_root = Path::new(cache_base).join(namespace);
         let cache_data_dir = cache_root.join(OSS_CACHE_DATA_DIR);
+        let sync_ctx = OssSyncContext {
+            config: cfg,
+            mountpoint: mountpoint.to_string(),
+            prefix,
+            cache_root,
+            cache_data_dir: cache_data_dir.clone(),
+            consistency_strategy,
+        };
 
-        fs::create_dir_all(&cache_data_dir).map_err(FsError::IOError)?;
-        let stats = sync_oss_objects_to_cache(&cfg, &prefix, &cache_root, &cache_data_dir)?;
+        fs::create_dir_all(&sync_ctx.cache_data_dir).map_err(FsError::IOError)?;
+        let stats = sync_oss_objects_to_cache(&sync_ctx)?;
         info!(
-            "{VIRTIO_FS_NAME}: ossfs cache sync done, downloaded {}, reused {}, removed {}, prefix {}",
-            stats.downloaded, stats.reused, stats.removed, prefix
+            "{VIRTIO_FS_NAME}: ossfs cache pull sync done at {}, downloaded {}, reused {}, removed {}",
+            mountpoint, stats.downloaded, stats.reused, stats.removed
         );
 
+        if write_policy != OssWritePolicy::ReadOnly {
+            let stats = sync_local_cache_to_oss(&sync_ctx)?;
+            info!(
+                "{VIRTIO_FS_NAME}: ossfs initial writeback sync done at {}, uploaded {}, deleted {}, conflicts {}, unchanged {}",
+                mountpoint, stats.uploaded, stats.deleted, stats.skipped_conflicts, stats.unchanged
+            );
+        }
+
         self.mount_passthroughfs(
-            cache_data_dir.to_string_lossy().into_owned(),
+            sync_ctx.cache_data_dir.to_string_lossy().into_owned(),
             mountpoint,
             dax_threshold_size_kb,
         )?;
         if let Some(info) = self.backend_fs.get_mut(mountpoint) {
             info.fstype = OSSFS.to_string();
         }
+        let worker = if write_policy == OssWritePolicy::ReadOnly {
+            None
+        } else {
+            Some(start_oss_flush_worker(
+                sync_ctx.clone(),
+                flush_interval,
+                mountpoint.to_string(),
+            )?)
+        };
+        if let Some(mut old_backend) = self.oss_backends.remove(mountpoint) {
+            stop_oss_flush_worker(&mut old_backend.worker);
+        }
+        self.oss_backends.insert(
+            mountpoint.to_string(),
+            OssBackendState {
+                sync_ctx,
+                write_policy,
+                worker,
+            },
+        );
 
         Ok(())
     }
@@ -731,6 +880,14 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
     }
 }
 
+impl<AS: GuestAddressSpace> Drop for VirtioFs<AS> {
+    fn drop(&mut self) {
+        for backend in self.oss_backends.values_mut() {
+            stop_oss_flush_worker(&mut backend.worker);
+        }
+    }
+}
+
 fn parse_prefetch_files(prefetch_list_path: Option<String>) -> Option<Vec<PathBuf>> {
     let prefetch_files: Option<Vec<PathBuf>> = match prefetch_list_path {
         Some(p) => {
@@ -791,6 +948,120 @@ fn normalize_oss_prefix(source: &str, object_prefix: Option<&str>) -> String {
         String::new()
     } else {
         format!("{}/", parts.join("/"))
+    }
+}
+
+fn parse_oss_write_policy(policy: Option<&str>) -> FsResult<OssWritePolicy> {
+    let Some(policy) = policy else {
+        return Ok(OssWritePolicy::ReadOnly);
+    };
+
+    match policy.trim().to_ascii_lowercase().as_str() {
+        "read-only" | "readonly" | "read_only" | "none" => Ok(OssWritePolicy::ReadOnly),
+        "write-through" | "writethrough" | "write_through" | "sync" => {
+            Ok(OssWritePolicy::WriteThrough)
+        }
+        "async-flush" | "async_flush" | "async" => Ok(OssWritePolicy::AsyncFlush),
+        invalid => Err(FsError::BackendFs(format!(
+            "invalid ossfs write policy {invalid}, expected read-only/write-through/async-flush"
+        ))),
+    }
+}
+
+fn parse_oss_consistency_strategy(strategy: Option<&str>) -> FsResult<OssConsistencyStrategy> {
+    let Some(strategy) = strategy else {
+        return Ok(OssConsistencyStrategy::LocalWins);
+    };
+
+    match strategy.trim().to_ascii_lowercase().as_str() {
+        "local-wins" | "local_wins" | "last-write-wins" | "last_write_wins" => {
+            Ok(OssConsistencyStrategy::LocalWins)
+        }
+        "etag-guard" | "etag_guard" | "if-match" | "if_match" => {
+            Ok(OssConsistencyStrategy::EtagGuard)
+        }
+        invalid => Err(FsError::BackendFs(format!(
+            "invalid ossfs consistency strategy {invalid}, expected local-wins/etag-guard"
+        ))),
+    }
+}
+
+fn resolve_oss_flush_interval(
+    policy: OssWritePolicy,
+    interval_secs: Option<u64>,
+) -> FsResult<Duration> {
+    let default_interval = match policy {
+        OssWritePolicy::ReadOnly => 0,
+        OssWritePolicy::WriteThrough => OSS_WRITE_THROUGH_INTERVAL_SECS,
+        OssWritePolicy::AsyncFlush => OSS_ASYNC_FLUSH_INTERVAL_SECS,
+    };
+
+    let secs = interval_secs.unwrap_or(default_interval);
+    if matches!(policy, OssWritePolicy::ReadOnly) {
+        return Ok(Duration::from_secs(0));
+    }
+    if secs == 0 {
+        return Err(FsError::BackendFs(
+            "ossfs flush_interval_secs must be greater than 0 for write policy".to_string(),
+        ));
+    }
+
+    Ok(Duration::from_secs(secs))
+}
+
+fn build_oss_operator(cfg: &OssFsConfig) -> FsResult<OpenDalOperator> {
+    let mut builder = OssService::default()
+        .bucket(&cfg.bucket)
+        .endpoint(&cfg.endpoint)
+        .access_key_id(&cfg.access_key_id)
+        .access_key_secret(&cfg.access_key_secret);
+    if let Some(token) = cfg.security_token.as_deref() {
+        builder = builder.security_token(token);
+    }
+    if let Some(addressing_style) = cfg.addressing_style.as_deref() {
+        builder = builder.addressing_style(addressing_style);
+    }
+
+    OpenDalOperator::new(builder)
+        .map_err(|e| FsError::BackendFs(format!("failed to initialize oss operator: {e}")))
+}
+
+fn start_oss_flush_worker(
+    sync_ctx: OssSyncContext,
+    flush_interval: Duration,
+    mountpoint: String,
+) -> FsResult<OssFlushWorker> {
+    let (stop_tx, stop_rx) = mpsc::channel();
+    let worker_name = format!("virtiofs-oss-flush-{}", mountpoint.replace('/', "_"));
+    let handle = std::thread::Builder::new()
+        .name(worker_name)
+        .spawn(move || loop {
+            match stop_rx.recv_timeout(flush_interval) {
+                Ok(_) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if let Err(e) = sync_local_cache_to_oss(&sync_ctx) {
+                        warn!(
+                            "{VIRTIO_FS_NAME}: ossfs background flush failed at {}: {:?}",
+                            sync_ctx.mountpoint, e
+                        );
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        })
+        .map_err(|e| FsError::BackendFs(format!("failed to start ossfs flush worker: {e}")))?;
+
+    Ok(OssFlushWorker { stop_tx, handle })
+}
+
+fn stop_oss_flush_worker(worker: &mut Option<OssFlushWorker>) {
+    let Some(worker) = worker.take() else {
+        return;
+    };
+
+    let _ = worker.stop_tx.send(());
+    if let Err(e) = worker.handle.join() {
+        warn!("{VIRTIO_FS_NAME}: ossfs flush worker join failed: {:?}", e);
     }
 }
 
@@ -855,6 +1126,66 @@ fn oss_object_relative_path(object_path: &str, prefix: &str) -> FsResult<PathBuf
     Ok(local_path)
 }
 
+fn local_relative_path_to_object_suffix(relative_path: &Path) -> FsResult<String> {
+    let mut parts = Vec::new();
+    for part in relative_path.components() {
+        match part {
+            Component::Normal(name) => parts.push(name.to_string_lossy().to_string()),
+            Component::CurDir => {}
+            _ => {
+                return Err(FsError::BackendFs(format!(
+                    "local cache path {} contains invalid path components",
+                    relative_path.display()
+                )));
+            }
+        }
+    }
+
+    if parts.is_empty() {
+        return Err(FsError::BackendFs(format!(
+            "local cache path {} resolves to an empty object key",
+            relative_path.display()
+        )));
+    }
+
+    Ok(parts.join("/"))
+}
+
+fn oss_object_path_from_local_suffix(prefix: &str, local_suffix: &str) -> String {
+    if prefix.is_empty() {
+        local_suffix.to_string()
+    } else {
+        format!("{prefix}{local_suffix}")
+    }
+}
+
+fn local_cache_state(path: &Path) -> FsResult<LocalCacheState> {
+    let metadata = fs::metadata(path).map_err(FsError::IOError)?;
+    let mtime_ns = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+
+    Ok(LocalCacheState {
+        size: metadata.len(),
+        mtime_ns,
+    })
+}
+
+fn entry_has_local_state(entry: &OssCacheEntry) -> bool {
+    entry.local_size != 0 || entry.local_mtime_ns != 0
+}
+
+fn is_local_state_dirty(old: &OssCacheEntry, state: LocalCacheState) -> bool {
+    if !entry_has_local_state(old) {
+        return false;
+    }
+
+    old.local_size != state.size || old.local_mtime_ns != state.mtime_ns
+}
+
 fn is_oss_cache_entry_fresh(
     old: &OssCacheEntry,
     remote_etag: Option<&str>,
@@ -916,32 +1247,96 @@ fn prune_empty_parent_dirs(path: &Path, root: &Path) {
     }
 }
 
-fn sync_oss_objects_to_cache(
-    cfg: &OssFsConfig,
+fn collect_local_cache_files_recursive(
+    base_dir: &Path,
+    current_dir: &Path,
     prefix: &str,
-    cache_root: &Path,
-    cache_data_dir: &Path,
-) -> FsResult<OssSyncStats> {
-    let mut builder = OssService::default()
-        .bucket(&cfg.bucket)
-        .endpoint(&cfg.endpoint)
-        .access_key_id(&cfg.access_key_id)
-        .access_key_secret(&cfg.access_key_secret);
-    if let Some(token) = cfg.security_token.as_deref() {
-        builder = builder.security_token(token);
-    }
-    if let Some(addressing_style) = cfg.addressing_style.as_deref() {
-        builder = builder.addressing_style(addressing_style);
+    files: &mut HashMap<String, LocalCacheFile>,
+) -> FsResult<()> {
+    for entry in fs::read_dir(current_dir).map_err(FsError::IOError)? {
+        let entry = entry.map_err(FsError::IOError)?;
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(FsError::IOError)?;
+        if file_type.is_dir() {
+            collect_local_cache_files_recursive(base_dir, &path, prefix, files)?;
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+
+        let relative_path = path.strip_prefix(base_dir).map_err(|e| {
+            FsError::BackendFs(format!(
+                "failed to strip local cache prefix for {}: {e}",
+                path.display()
+            ))
+        })?;
+        let local_suffix = local_relative_path_to_object_suffix(relative_path)?;
+        let object_path = oss_object_path_from_local_suffix(prefix, &local_suffix);
+        let state = local_cache_state(&path)?;
+        files.insert(object_path, LocalCacheFile { path, state });
     }
 
-    let op = OpenDalOperator::new(builder)
-        .map_err(|e| FsError::BackendFs(format!("failed to initialize oss operator: {e}")))?;
+    Ok(())
+}
+
+fn collect_local_cache_files(
+    cache_data_dir: &Path,
+    prefix: &str,
+) -> FsResult<HashMap<String, LocalCacheFile>> {
+    let mut files = HashMap::new();
+    if !cache_data_dir.exists() {
+        return Ok(files);
+    }
+    collect_local_cache_files_recursive(cache_data_dir, cache_data_dir, prefix, &mut files)?;
+    Ok(files)
+}
+
+fn is_remote_entry_conflicted(
+    op: &OpenDalOperator,
+    runtime: &tokio::runtime::Runtime,
+    object_path: &str,
+    old: &OssCacheEntry,
+    strategy: OssConsistencyStrategy,
+) -> FsResult<bool> {
+    if strategy == OssConsistencyStrategy::LocalWins {
+        return Ok(false);
+    }
+
+    let remote_meta = match runtime.block_on(op.stat(object_path)) {
+        Ok(meta) => Some(meta),
+        Err(e) if e.kind() == OpenDalErrorKind::NotFound => None,
+        Err(e) => {
+            return Err(FsError::BackendFs(format!(
+                "failed to stat remote oss object {object_path}: {e}"
+            )))
+        }
+    };
+
+    let Some(remote_meta) = remote_meta else {
+        return Ok(old.etag.is_some() || old.content_length > 0);
+    };
+
+    let remote_etag = remote_meta.etag();
+    if let (Some(old_etag), Some(remote_etag)) = (old.etag.as_deref(), remote_etag) {
+        return Ok(old_etag != remote_etag);
+    }
+
+    Ok(old.content_length != remote_meta.content_length())
+}
+
+fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadSyncStats> {
+    let op = build_oss_operator(&sync_ctx.config)?;
     let runtime = TokioRuntimeBuilder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| FsError::BackendFs(format!("failed to initialize tokio runtime: {e}")))?;
 
-    let list_path = if prefix.is_empty() { "/" } else { prefix };
+    let list_path = if sync_ctx.prefix.is_empty() {
+        "/"
+    } else {
+        sync_ctx.prefix.as_str()
+    };
     let entries = runtime
         .block_on(op.list_options(
             list_path,
@@ -954,10 +1349,10 @@ fn sync_oss_objects_to_cache(
             FsError::BackendFs(format!("failed to list oss objects at {list_path}: {e}"))
         })?;
 
-    let index_path = cache_root.join(OSS_CACHE_INDEX_FILE);
+    let index_path = sync_ctx.cache_root.join(OSS_CACHE_INDEX_FILE);
     let old_index = load_oss_cache_index(&index_path);
     let mut new_index = OssCacheIndex::default();
-    let mut stats = OssSyncStats::default();
+    let mut stats = OssDownloadSyncStats::default();
     let mut synced_paths = HashSet::new();
 
     for entry in entries {
@@ -966,18 +1361,17 @@ fn sync_oss_objects_to_cache(
         }
 
         let object_path = entry.path().to_string();
-        let relative_path = oss_object_relative_path(&object_path, prefix)?;
-        let local_path = cache_data_dir.join(&relative_path);
+        let relative_path = oss_object_relative_path(&object_path, &sync_ctx.prefix)?;
+        let local_path = sync_ctx.cache_data_dir.join(&relative_path);
         let metadata = runtime.block_on(op.stat(&object_path)).map_err(|e| {
             FsError::BackendFs(format!("failed to stat oss object {object_path}: {e}"))
         })?;
         let content_length = metadata.content_length();
         let etag = metadata.etag().map(ToString::to_string);
+        let old_entry = old_index.entries.get(&object_path);
 
         let can_reuse = local_path.exists()
-            && old_index
-                .entries
-                .get(&object_path)
+            && old_entry
                 .map(|old| is_oss_cache_entry_fresh(old, etag.as_deref(), content_length))
                 .unwrap_or(false);
 
@@ -999,34 +1393,56 @@ fn sync_oss_objects_to_cache(
             })?;
             stats.downloaded += 1;
         }
+        let local_state = local_cache_state(&local_path)?;
+        let local_dirty = old_entry
+            .map(|old| is_local_state_dirty(old, local_state))
+            .unwrap_or(false);
 
         synced_paths.insert(object_path.clone());
-        new_index.entries.insert(
-            object_path,
-            OssCacheEntry {
-                etag,
-                content_length,
-            },
-        );
+        if can_reuse && local_dirty {
+            if let Some(old) = old_entry {
+                new_index.entries.insert(object_path, old.clone());
+            }
+        } else {
+            new_index.entries.insert(
+                object_path,
+                OssCacheEntry {
+                    etag,
+                    content_length,
+                    local_size: local_state.size,
+                    local_mtime_ns: local_state.mtime_ns,
+                },
+            );
+        }
     }
 
-    for old_path in old_index.entries.keys() {
+    for (old_path, old_entry) in &old_index.entries {
         if synced_paths.contains(old_path) {
             continue;
         }
 
-        let relative_path = match oss_object_relative_path(old_path, prefix) {
+        let relative_path = match oss_object_relative_path(old_path, &sync_ctx.prefix) {
             Ok(path) => path,
             Err(e) => {
                 warn!("{VIRTIO_FS_NAME}: skip removing stale cache for {old_path}: {e:?}");
                 continue;
             }
         };
-        let local_path = cache_data_dir.join(relative_path);
+        let local_path = sync_ctx.cache_data_dir.join(relative_path);
+        if local_path.exists() {
+            let local_state = local_cache_state(&local_path)?;
+            if is_local_state_dirty(old_entry, local_state) {
+                new_index
+                    .entries
+                    .insert(old_path.clone(), old_entry.clone());
+                continue;
+            }
+        }
+
         match fs::remove_file(&local_path) {
             Ok(_) => {
                 stats.removed += 1;
-                prune_empty_parent_dirs(&local_path, cache_data_dir);
+                prune_empty_parent_dirs(&local_path, &sync_ctx.cache_data_dir);
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {}
             Err(e) => {
@@ -1035,6 +1451,120 @@ fn sync_oss_objects_to_cache(
                     local_path.display(),
                     e
                 );
+            }
+        }
+    }
+
+    persist_oss_cache_index(&index_path, &new_index)?;
+    Ok(stats)
+}
+
+fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSyncStats> {
+    let op = build_oss_operator(&sync_ctx.config)?;
+    let runtime = TokioRuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| FsError::BackendFs(format!("failed to initialize tokio runtime: {e}")))?;
+    let index_path = sync_ctx.cache_root.join(OSS_CACHE_INDEX_FILE);
+    let old_index = load_oss_cache_index(&index_path);
+    let local_files = collect_local_cache_files(&sync_ctx.cache_data_dir, &sync_ctx.prefix)?;
+    let mut new_index = OssCacheIndex::default();
+    let mut stats = OssWritebackSyncStats::default();
+
+    for (object_path, local_file) in &local_files {
+        let old_entry = old_index.entries.get(object_path);
+        let local_dirty = old_entry
+            .map(|old| is_local_state_dirty(old, local_file.state))
+            .unwrap_or(true);
+        if !local_dirty {
+            stats.unchanged += 1;
+            if let Some(old) = old_entry {
+                if entry_has_local_state(old) {
+                    new_index.entries.insert(object_path.clone(), old.clone());
+                } else {
+                    new_index.entries.insert(
+                        object_path.clone(),
+                        OssCacheEntry {
+                            etag: old.etag.clone(),
+                            content_length: old.content_length,
+                            local_size: local_file.state.size,
+                            local_mtime_ns: local_file.state.mtime_ns,
+                        },
+                    );
+                }
+            }
+            continue;
+        }
+
+        if let Some(old) = old_entry {
+            if is_remote_entry_conflicted(
+                &op,
+                &runtime,
+                object_path,
+                old,
+                sync_ctx.consistency_strategy,
+            )? {
+                warn!(
+                    "{VIRTIO_FS_NAME}: skip flushing {} at {} due to remote conflict",
+                    object_path, sync_ctx.mountpoint
+                );
+                stats.skipped_conflicts += 1;
+                new_index.entries.insert(object_path.clone(), old.clone());
+                continue;
+            }
+        }
+
+        let data = fs::read(&local_file.path).map_err(FsError::IOError)?;
+        runtime.block_on(op.write(object_path, data)).map_err(|e| {
+            FsError::BackendFs(format!("failed to upload {object_path} to oss: {e}"))
+        })?;
+        let remote_meta = runtime.block_on(op.stat(object_path)).map_err(|e| {
+            FsError::BackendFs(format!("failed to stat remote object {object_path}: {e}"))
+        })?;
+        new_index.entries.insert(
+            object_path.clone(),
+            OssCacheEntry {
+                etag: remote_meta.etag().map(ToString::to_string),
+                content_length: remote_meta.content_length(),
+                local_size: local_file.state.size,
+                local_mtime_ns: local_file.state.mtime_ns,
+            },
+        );
+        stats.uploaded += 1;
+    }
+
+    for (old_path, old_entry) in &old_index.entries {
+        if local_files.contains_key(old_path) {
+            continue;
+        }
+
+        if is_remote_entry_conflicted(
+            &op,
+            &runtime,
+            old_path,
+            old_entry,
+            sync_ctx.consistency_strategy,
+        )? {
+            warn!(
+                "{VIRTIO_FS_NAME}: skip deleting remote {} at {} due to conflict",
+                old_path, sync_ctx.mountpoint
+            );
+            stats.skipped_conflicts += 1;
+            new_index
+                .entries
+                .insert(old_path.clone(), old_entry.clone());
+            continue;
+        }
+
+        match runtime.block_on(op.delete(old_path)) {
+            Ok(_) => {
+                stats.deleted += 1;
+            }
+            Err(e) if e.kind() == OpenDalErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(FsError::BackendFs(format!(
+                    "failed to delete remote object {old_path}: {e}"
+                )))
             }
         }
     }
@@ -2027,6 +2557,82 @@ pub mod tests {
         let namespace = oss_cache_namespace("my-bucket", "base/prefix/");
         assert!(!namespace.contains('/'));
         assert!(!namespace.contains(':'));
+    }
+
+    #[test]
+    fn test_parse_oss_write_policy() {
+        assert_eq!(
+            parse_oss_write_policy(None).unwrap(),
+            OssWritePolicy::ReadOnly
+        );
+        assert_eq!(
+            parse_oss_write_policy(Some("write-through")).unwrap(),
+            OssWritePolicy::WriteThrough
+        );
+        assert_eq!(
+            parse_oss_write_policy(Some("async_flush")).unwrap(),
+            OssWritePolicy::AsyncFlush
+        );
+        assert!(parse_oss_write_policy(Some("invalid-mode")).is_err());
+    }
+
+    #[test]
+    fn test_parse_oss_consistency_strategy() {
+        assert_eq!(
+            parse_oss_consistency_strategy(None).unwrap(),
+            OssConsistencyStrategy::LocalWins
+        );
+        assert_eq!(
+            parse_oss_consistency_strategy(Some("etag-guard")).unwrap(),
+            OssConsistencyStrategy::EtagGuard
+        );
+        assert!(parse_oss_consistency_strategy(Some("unknown")).is_err());
+    }
+
+    #[test]
+    fn test_resolve_oss_flush_interval() {
+        assert_eq!(
+            resolve_oss_flush_interval(OssWritePolicy::WriteThrough, None).unwrap(),
+            Duration::from_secs(OSS_WRITE_THROUGH_INTERVAL_SECS)
+        );
+        assert_eq!(
+            resolve_oss_flush_interval(OssWritePolicy::AsyncFlush, Some(15)).unwrap(),
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            resolve_oss_flush_interval(OssWritePolicy::ReadOnly, Some(0)).unwrap(),
+            Duration::from_secs(0)
+        );
+        assert!(resolve_oss_flush_interval(OssWritePolicy::AsyncFlush, Some(0)).is_err());
+    }
+
+    #[test]
+    fn test_is_local_state_dirty() {
+        let old = OssCacheEntry {
+            etag: Some("etag".to_string()),
+            content_length: 4,
+            local_size: 4,
+            local_mtime_ns: 100,
+        };
+        let state = LocalCacheState {
+            size: 4,
+            mtime_ns: 100,
+        };
+        assert!(!is_local_state_dirty(&old, state));
+
+        let changed = LocalCacheState {
+            size: 8,
+            mtime_ns: 101,
+        };
+        assert!(is_local_state_dirty(&old, changed));
+
+        let unknown_old = OssCacheEntry {
+            etag: Some("etag".to_string()),
+            content_length: 4,
+            local_size: 0,
+            local_mtime_ns: 0,
+        };
+        assert!(!is_local_state_dirty(&unknown_old, changed));
     }
 
     #[test]
