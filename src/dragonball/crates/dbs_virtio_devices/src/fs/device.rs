@@ -4,13 +4,13 @@
 
 use kata_sys_util::netns::NetnsGuard;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, ErrorKind, Read};
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
@@ -28,7 +28,12 @@ use nix::sys::memfd;
 use nydus_api::ConfigV2;
 use nydus_rafs::blobfs::{BlobFs, Config as BlobfsConfig};
 use nydus_rafs::{fs::Rafs, RafsIoRead};
+use opendal::options::ListOptions;
+use opendal::services::Oss as OssService;
+use opendal::Operator as OpenDalOperator;
 use rlimit::Resource;
+use serde::{Deserialize, Serialize};
+use tokio::runtime::Builder as TokioRuntimeBuilder;
 use virtio_bindings::bindings::virtio_config::{VIRTIO_F_ACCESS_PLATFORM, VIRTIO_F_VERSION_1};
 use virtio_queue::QueueT;
 use vm_memory::{
@@ -60,6 +65,47 @@ const CACHE_NONE_TIMEOUT: u64 = 0;
 pub(crate) const PASSTHROUGHFS: &str = "passthroughfs";
 pub(crate) const BLOBFS: &str = "blobfs";
 pub(crate) const RAFS: &str = "rafs";
+pub(crate) const OSSFS: &str = "ossfs";
+
+const OSS_CACHE_DATA_DIR: &str = "data";
+const OSS_CACHE_INDEX_FILE: &str = ".dragonball_oss_cache_index.json";
+
+#[derive(Debug, Deserialize)]
+struct OssFsConfig {
+    endpoint: String,
+    #[serde(alias = "bucket_name")]
+    bucket: String,
+    access_key_id: String,
+    access_key_secret: String,
+    #[serde(default)]
+    security_token: Option<String>,
+    #[serde(default)]
+    addressing_style: Option<String>,
+    #[serde(default, alias = "object_prefix")]
+    object_prefix: Option<String>,
+    #[serde(default)]
+    local_cache_dir: Option<String>,
+    #[serde(default)]
+    cache_dir: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct OssCacheEntry {
+    etag: Option<String>,
+    content_length: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+struct OssCacheIndex {
+    entries: HashMap<String, OssCacheEntry>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct OssSyncStats {
+    downloaded: usize,
+    reused: usize,
+    removed: usize,
+}
 
 /// Info of backend filesystems of VirtioFs
 #[allow(dead_code)]
@@ -303,8 +349,12 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         prefetch_list_path: Option<String>,
         dax_threshold_size_kb: Option<u64>,
     ) -> FsResult<()> {
+        let config_present = config
+            .as_ref()
+            .map(|cfg| !cfg.trim().is_empty())
+            .unwrap_or(false);
         debug!(
-            "source {source:?}, fstype {fstype:?}, mountpoint {mountpoint:?}, config {config:?}, ops {ops:?}, prefetch_list_path {prefetch_list_path:?}, dax_threshold_size_kb 0x{dax_threshold_size_kb:x?}"
+            "source {source:?}, fstype {fstype:?}, mountpoint {mountpoint:?}, config_present {config_present:?}, ops {ops:?}, prefetch_list_path {prefetch_list_path:?}, dax_threshold_size_kb 0x{dax_threshold_size_kb:x?}"
         );
         match ops {
             "mount" => {
@@ -323,6 +373,9 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                     }
                     Some("Rafs") | Some(RAFS) => {
                         self.mount_rafs(source, mountpoint, config, prefetch_list_path)
+                    }
+                    Some("OssFs") | Some(OSSFS) => {
+                        self.mount_ossfs(source, mountpoint, config, dax_threshold_size_kb)
                     }
                     _ => {
                         error!("http_server: type is not invalid.");
@@ -451,6 +504,52 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 Err(FsError::InvalidData)
             }
         }
+    }
+
+    fn mount_ossfs(
+        &mut self,
+        source: String,
+        mountpoint: &str,
+        config: Option<String>,
+        dax_threshold_size_kb: Option<u64>,
+    ) -> FsResult<()> {
+        debug!("http_server ossfs");
+
+        let cfg = config.ok_or_else(|| FsError::BackendFs("no oss config file".to_string()))?;
+        let cfg: OssFsConfig = serde_json::from_str(&cfg)
+            .map_err(|e| FsError::BackendFs(format!("invalid ossfs config: {e}")))?;
+
+        let cache_base = cfg
+            .local_cache_dir
+            .as_deref()
+            .or(cfg.cache_dir.as_deref())
+            .ok_or_else(|| {
+                FsError::BackendFs(
+                    "ossfs requires local_cache_dir (or cache_dir) in config".to_string(),
+                )
+            })?;
+        let prefix = normalize_oss_prefix(&source, cfg.object_prefix.as_deref());
+        let namespace = oss_cache_namespace(&cfg.bucket, &prefix);
+        let cache_root = Path::new(cache_base).join(namespace);
+        let cache_data_dir = cache_root.join(OSS_CACHE_DATA_DIR);
+
+        fs::create_dir_all(&cache_data_dir).map_err(FsError::IOError)?;
+        let stats = sync_oss_objects_to_cache(&cfg, &prefix, &cache_root, &cache_data_dir)?;
+        info!(
+            "{VIRTIO_FS_NAME}: ossfs cache sync done, downloaded {}, reused {}, removed {}, prefix {}",
+            stats.downloaded, stats.reused, stats.removed, prefix
+        );
+
+        self.mount_passthroughfs(
+            cache_data_dir.to_string_lossy().into_owned(),
+            mountpoint,
+            dax_threshold_size_kb,
+        )?;
+        if let Some(info) = self.backend_fs.get_mut(mountpoint) {
+            info.fstype = OSSFS.to_string();
+        }
+
+        Ok(())
     }
 
     fn mount_rafs(
@@ -668,6 +767,280 @@ fn parse_prefetch_files(prefetch_list_path: Option<String>) -> Option<Vec<PathBu
         None => None,
     };
     prefetch_files
+}
+
+fn normalize_oss_prefix(source: &str, object_prefix: Option<&str>) -> String {
+    fn normalize_prefix_part(part: &str) -> Option<String> {
+        let trimmed = part.trim().trim_matches('/');
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    }
+
+    let mut parts = Vec::new();
+    if let Some(prefix) = object_prefix.and_then(normalize_prefix_part) {
+        parts.push(prefix);
+    }
+    if let Some(prefix) = normalize_prefix_part(source) {
+        parts.push(prefix);
+    }
+
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("{}/", parts.join("/"))
+    }
+}
+
+fn oss_cache_namespace(bucket: &str, prefix: &str) -> String {
+    let mut raw = format!("{bucket}_{prefix}");
+    if raw.is_empty() {
+        raw.push_str("default");
+    }
+
+    raw.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn oss_object_relative_path(object_path: &str, prefix: &str) -> FsResult<PathBuf> {
+    let normalized_object_path = object_path.trim_start_matches('/');
+    let normalized_prefix = prefix.trim_start_matches('/');
+
+    let relative = if normalized_prefix.is_empty() {
+        normalized_object_path
+    } else {
+        normalized_object_path
+            .strip_prefix(normalized_prefix)
+            .ok_or_else(|| {
+                FsError::BackendFs(format!(
+                    "oss object path {object_path} is not under configured prefix {prefix}"
+                ))
+            })?
+    };
+    let relative = relative.trim_start_matches('/');
+    if relative.is_empty() {
+        return Err(FsError::BackendFs(format!(
+            "oss object path {object_path} resolves to an empty local path"
+        )));
+    }
+
+    let mut local_path = PathBuf::new();
+    for part in Path::new(relative).components() {
+        match part {
+            Component::Normal(name) => local_path.push(name),
+            Component::CurDir => {}
+            _ => {
+                return Err(FsError::BackendFs(format!(
+                    "oss object path {object_path} contains invalid path components"
+                )));
+            }
+        }
+    }
+
+    if local_path.as_os_str().is_empty() {
+        return Err(FsError::BackendFs(format!(
+            "oss object path {object_path} resolves to an invalid local path"
+        )));
+    }
+
+    Ok(local_path)
+}
+
+fn is_oss_cache_entry_fresh(
+    old: &OssCacheEntry,
+    remote_etag: Option<&str>,
+    remote_content_length: u64,
+) -> bool {
+    if let (Some(old_etag), Some(remote_etag)) = (old.etag.as_deref(), remote_etag) {
+        return old_etag == remote_etag;
+    }
+
+    old.content_length == remote_content_length
+}
+
+fn load_oss_cache_index(index_path: &Path) -> OssCacheIndex {
+    let content = match fs::read_to_string(index_path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == ErrorKind::NotFound => return OssCacheIndex::default(),
+        Err(e) => {
+            warn!(
+                "{VIRTIO_FS_NAME}: failed to read ossfs cache index {}: {:?}",
+                index_path.display(),
+                e
+            );
+            return OssCacheIndex::default();
+        }
+    };
+
+    serde_json::from_str(&content).unwrap_or_else(|e| {
+        warn!(
+            "{VIRTIO_FS_NAME}: failed to parse ossfs cache index {}: {:?}",
+            index_path.display(),
+            e
+        );
+        OssCacheIndex::default()
+    })
+}
+
+fn persist_oss_cache_index(index_path: &Path, index: &OssCacheIndex) -> FsResult<()> {
+    let encoded = serde_json::to_vec(index).map_err(|e| {
+        FsError::BackendFs(format!(
+            "failed to serialize ossfs cache index {}: {e}",
+            index_path.display()
+        ))
+    })?;
+    fs::write(index_path, encoded).map_err(FsError::IOError)
+}
+
+fn prune_empty_parent_dirs(path: &Path, root: &Path) {
+    let mut current = path.parent();
+    while let Some(parent) = current {
+        if !parent.starts_with(root) || parent == root {
+            break;
+        }
+
+        match fs::remove_dir(parent) {
+            Ok(_) => current = parent.parent(),
+            Err(e) if e.kind() == ErrorKind::DirectoryNotEmpty => break,
+            Err(_) => break,
+        }
+    }
+}
+
+fn sync_oss_objects_to_cache(
+    cfg: &OssFsConfig,
+    prefix: &str,
+    cache_root: &Path,
+    cache_data_dir: &Path,
+) -> FsResult<OssSyncStats> {
+    let mut builder = OssService::default()
+        .bucket(&cfg.bucket)
+        .endpoint(&cfg.endpoint)
+        .access_key_id(&cfg.access_key_id)
+        .access_key_secret(&cfg.access_key_secret);
+    if let Some(token) = cfg.security_token.as_deref() {
+        builder = builder.security_token(token);
+    }
+    if let Some(addressing_style) = cfg.addressing_style.as_deref() {
+        builder = builder.addressing_style(addressing_style);
+    }
+
+    let op = OpenDalOperator::new(builder)
+        .map_err(|e| FsError::BackendFs(format!("failed to initialize oss operator: {e}")))?;
+    let runtime = TokioRuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| FsError::BackendFs(format!("failed to initialize tokio runtime: {e}")))?;
+
+    let list_path = if prefix.is_empty() { "/" } else { prefix };
+    let entries = runtime
+        .block_on(op.list_options(
+            list_path,
+            ListOptions {
+                recursive: true,
+                ..Default::default()
+            },
+        ))
+        .map_err(|e| {
+            FsError::BackendFs(format!("failed to list oss objects at {list_path}: {e}"))
+        })?;
+
+    let index_path = cache_root.join(OSS_CACHE_INDEX_FILE);
+    let old_index = load_oss_cache_index(&index_path);
+    let mut new_index = OssCacheIndex::default();
+    let mut stats = OssSyncStats::default();
+    let mut synced_paths = HashSet::new();
+
+    for entry in entries {
+        if !entry.metadata().mode().is_file() {
+            continue;
+        }
+
+        let object_path = entry.path().to_string();
+        let relative_path = oss_object_relative_path(&object_path, prefix)?;
+        let local_path = cache_data_dir.join(&relative_path);
+        let metadata = runtime.block_on(op.stat(&object_path)).map_err(|e| {
+            FsError::BackendFs(format!("failed to stat oss object {object_path}: {e}"))
+        })?;
+        let content_length = metadata.content_length();
+        let etag = metadata.etag().map(ToString::to_string);
+
+        let can_reuse = local_path.exists()
+            && old_index
+                .entries
+                .get(&object_path)
+                .map(|old| is_oss_cache_entry_fresh(old, etag.as_deref(), content_length))
+                .unwrap_or(false);
+
+        if can_reuse {
+            stats.reused += 1;
+        } else {
+            let data = runtime.block_on(op.read(&object_path)).map_err(|e| {
+                FsError::BackendFs(format!("failed to read oss object {object_path}: {e}"))
+            })?;
+            if let Some(parent) = local_path.parent() {
+                fs::create_dir_all(parent).map_err(FsError::IOError)?;
+            }
+
+            let tmp_path = local_path.with_extension("oss.tmp");
+            fs::write(&tmp_path, data.to_vec()).map_err(FsError::IOError)?;
+            fs::rename(&tmp_path, &local_path).map_err(|e| {
+                let _ = fs::remove_file(&tmp_path);
+                FsError::IOError(e)
+            })?;
+            stats.downloaded += 1;
+        }
+
+        synced_paths.insert(object_path.clone());
+        new_index.entries.insert(
+            object_path,
+            OssCacheEntry {
+                etag,
+                content_length,
+            },
+        );
+    }
+
+    for old_path in old_index.entries.keys() {
+        if synced_paths.contains(old_path) {
+            continue;
+        }
+
+        let relative_path = match oss_object_relative_path(old_path, prefix) {
+            Ok(path) => path,
+            Err(e) => {
+                warn!("{VIRTIO_FS_NAME}: skip removing stale cache for {old_path}: {e:?}");
+                continue;
+            }
+        };
+        let local_path = cache_data_dir.join(relative_path);
+        match fs::remove_file(&local_path) {
+            Ok(_) => {
+                stats.removed += 1;
+                prune_empty_parent_dirs(&local_path, cache_data_dir);
+            }
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            Err(e) => {
+                warn!(
+                    "{VIRTIO_FS_NAME}: failed to remove stale cache file {}: {:?}",
+                    local_path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    persist_oss_cache_index(&index_path, &new_index)?;
+    Ok(stats)
 }
 
 fn kb_to_bytes(kb: u64) -> FsResult<u64> {
@@ -1623,6 +1996,37 @@ pub mod tests {
         // Not exist prefetch list
         let files = parse_prefetch_files(Some("no_such_file".to_string()));
         assert_eq!(files, None);
+    }
+
+    #[test]
+    fn test_normalize_oss_prefix() {
+        assert_eq!(normalize_oss_prefix("/", None), "");
+        assert_eq!(normalize_oss_prefix("/dataset", None), "dataset/");
+        assert_eq!(
+            normalize_oss_prefix("/dataset", Some("base-prefix")),
+            "base-prefix/dataset/"
+        );
+        assert_eq!(
+            normalize_oss_prefix("/", Some("base-prefix/")),
+            "base-prefix/"
+        );
+    }
+
+    #[test]
+    fn test_oss_object_relative_path() {
+        assert_eq!(
+            oss_object_relative_path("base/prefix/hello/world.txt", "base/prefix/").unwrap(),
+            PathBuf::from("hello/world.txt")
+        );
+        assert!(oss_object_relative_path("../escape.txt", "").is_err());
+        assert!(oss_object_relative_path("base/prefix/../../escape.txt", "base/prefix/").is_err());
+    }
+
+    #[test]
+    fn test_oss_cache_namespace() {
+        let namespace = oss_cache_namespace("my-bucket", "base/prefix/");
+        assert!(!namespace.contains('/'));
+        assert!(!namespace.contains(':'));
     }
 
     #[test]

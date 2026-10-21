@@ -35,6 +35,11 @@ nix = { workspace = true }
 nydus-api = "0.4.1"
 nydus-rafs = "0.4.1"
 nydus-storage = "0.7.2"
+opendal = { default-features = false, features = [
+  "blocking",
+  "http-transport-reqwest-rustls",
+  "services-oss",
+], version = "0.59.5" }
 rlimit = "0.7.0"
 sendfd = "0.4.3"
 serde = { features = ["derive"], version = "1.0.27" }
@@ -42,6 +47,7 @@ serde_json = "1.0.9"
 thiserror = { workspace = true }
 threadpool = "1"
 timerfd = "1.0"
+tokio = { features = ["rt"], workspace = true }
 vhost-rs = { optional = true, package = "vhost", version = "0.15.0" }
 virtio-bindings = { workspace = true }
 virtio-queue = { workspace = true }
