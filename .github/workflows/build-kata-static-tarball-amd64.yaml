@@ -64,6 +64,7 @@ jobs:
           - qemu-no-shared-fs
           - qemu-snp-experimental
           - qemu-tdx-experimental
+          - td-shim
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
