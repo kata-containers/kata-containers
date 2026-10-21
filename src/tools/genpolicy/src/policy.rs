@@ -531,6 +531,18 @@ enum K8sEnvFromSource {
 }
 
 impl AgentPolicy {
+    pub(crate) fn exit_if_invalid_pod_security_context(resource: &dyn yaml::K8sResource) {
+        // Kubernetes passes Pod-level UID and GID directly to the sandbox. CRI requires a sandbox
+        // UID when a GID is set, so the runtime must reject this before consulting the pause image.
+        if resource
+            .get_pod_security_context()
+            .is_some_and(|context| context.runAsGroup.is_some() && context.runAsUser.is_none())
+        {
+            eprintln!("ERROR: pod securityContext.runAsGroup requires securityContext.runAsUser.");
+            exit(1);
+        }
+    }
+
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
         let mut secrets = Vec::new();
@@ -559,6 +571,7 @@ impl AgentPolicy {
                     }
                 }
 
+                Self::exit_if_invalid_pod_security_context(&*resource);
                 resource.init(config, &doc_mapping, silent).await;
 
                 // ConfigMap and Secret documents contain additional input for policy generation.

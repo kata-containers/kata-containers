@@ -143,6 +143,61 @@ the input YAML",
 }
 
 #[test]
+fn pod_group_without_pod_user_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let workdir = prepare_workdir("pod_group_without_pod_user_is_rejected", &[]);
+    let pod_yaml_path = workdir.join("pod.yaml");
+    let list_yaml_path = workdir.join("list.yaml");
+    fs::write(
+        &pod_yaml_path,
+        r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-group-without-pod-user
+spec:
+  securityContext:
+    runAsGroup: 46
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      securityContext:
+        runAsUser: 37
+"#,
+    )?;
+    fs::write(
+        &list_yaml_path,
+        r#"---
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: pod-group-without-pod-user
+    spec:
+      securityContext:
+        runAsGroup: 46
+      containers:
+        - name: busybox
+          image: "quay.io/prometheus/busybox:latest"
+          securityContext:
+            runAsUser: 37
+"#,
+    )?;
+
+    for yaml_path in [&pod_yaml_path, &list_yaml_path] {
+        genpolicy_fails_with(
+            "pod securityContext.runAsGroup requires securityContext.runAsUser",
+            |cmd| {
+                cmd.arg("--yaml-file").arg(yaml_path);
+            },
+        )?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn guest_pull_missing_supplemental_groups_exits() -> Result<(), Box<dyn std::error::Error>> {
     let test_case_dir = "guest_pull_missing_supplemental_groups";
     let workdir = prepare_workdir(test_case_dir, &[]);
