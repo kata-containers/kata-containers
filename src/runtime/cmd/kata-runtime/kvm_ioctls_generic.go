@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build amd64 || arm64 || s390x || riscv64
+//go:build amd64 || arm64 || s390x || riscv64 || loong64
 
 package main
 
