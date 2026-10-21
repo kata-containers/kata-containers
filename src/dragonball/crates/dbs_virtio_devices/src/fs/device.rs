@@ -6,13 +6,13 @@ use kata_sys_util::netns::NetnsGuard;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, ErrorKind, Read};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -29,7 +29,7 @@ use nix::sys::memfd;
 use nydus_api::ConfigV2;
 use nydus_rafs::blobfs::{BlobFs, Config as BlobfsConfig};
 use nydus_rafs::{fs::Rafs, RafsIoRead};
-use opendal::options::ListOptions;
+use opendal::options::{DeleteOptions, ListOptions, WriteOptions};
 use opendal::services::Oss as OssService;
 use opendal::ErrorKind as OpenDalErrorKind;
 use opendal::Operator as OpenDalOperator;
@@ -126,6 +126,7 @@ struct OssSyncContext {
     cache_data_dir: PathBuf,
     consistency_strategy: OssConsistencyStrategy,
     upload_chunk_size: usize,
+    sync_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Debug)]
@@ -192,6 +193,13 @@ enum RemoteObjectState {
         etag: Option<String>,
         content_length: u64,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OssConditionalOpOutcome {
+    Applied,
+    Conflict,
+    Unsupported,
 }
 
 /// Info of backend filesystems of VirtioFs
@@ -681,6 +689,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             cache_data_dir: cache_data_dir.clone(),
             consistency_strategy,
             upload_chunk_size,
+            sync_lock: Arc::new(Mutex::new(())),
         };
 
         fs::create_dir_all(&sync_ctx.cache_data_dir).map_err(FsError::IOError)?;
@@ -1281,7 +1290,50 @@ fn persist_oss_cache_index(index_path: &Path, index: &OssCacheIndex) -> FsResult
             index_path.display()
         ))
     })?;
-    fs::write(index_path, encoded).map_err(FsError::IOError)
+
+    let parent = index_path.parent().ok_or_else(|| {
+        FsError::BackendFs(format!(
+            "failed to get parent directory for index {}",
+            index_path.display()
+        ))
+    })?;
+    fs::create_dir_all(parent).map_err(FsError::IOError)?;
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let file_name = index_path
+        .file_name()
+        .ok_or_else(|| {
+            FsError::BackendFs(format!(
+                "failed to get file name for index {}",
+                index_path.display()
+            ))
+        })?
+        .to_string_lossy();
+    let tmp_name = format!(".{file_name}.tmp-{nanos}");
+    let tmp_path = parent.join(tmp_name);
+
+    {
+        let mut tmp_file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)
+            .map_err(FsError::IOError)?;
+        tmp_file.write_all(&encoded).map_err(FsError::IOError)?;
+        tmp_file.sync_all().map_err(FsError::IOError)?;
+    }
+
+    fs::rename(&tmp_path, index_path).map_err(|e| {
+        let _ = fs::remove_file(&tmp_path);
+        FsError::IOError(e)
+    })?;
+
+    let dir_file = File::open(parent).map_err(FsError::IOError)?;
+    dir_file.sync_all().map_err(FsError::IOError)
 }
 
 fn prune_empty_parent_dirs(path: &Path, root: &Path) {
@@ -1472,6 +1524,16 @@ fn download_remote_object_to_local(
     })
 }
 
+fn classify_conditional_oss_error(e: &opendal::Error) -> Option<OssConditionalOpOutcome> {
+    match e.kind() {
+        OpenDalErrorKind::ConditionNotMatch
+        | OpenDalErrorKind::Conflict
+        | OpenDalErrorKind::NotFound => Some(OssConditionalOpOutcome::Conflict),
+        OpenDalErrorKind::Unsupported => Some(OssConditionalOpOutcome::Unsupported),
+        _ => None,
+    }
+}
+
 fn upload_local_file_chunked(
     op: &OpenDalOperator,
     runtime: &tokio::runtime::Runtime,
@@ -1480,8 +1542,12 @@ fn upload_local_file_chunked(
     chunk_size: usize,
 ) -> FsResult<()> {
     let mut file = File::open(local_path).map_err(FsError::IOError)?;
+    let write_opts = WriteOptions {
+        chunk: Some(chunk_size),
+        ..Default::default()
+    };
     let mut writer = runtime
-        .block_on(op.writer(object_path))
+        .block_on(op.writer_options(object_path, write_opts))
         .map_err(|e| FsError::BackendFs(format!("failed to open oss writer for {object_path}: {e}")))?;
     let mut buf = vec![0u8; chunk_size];
     loop {
@@ -1498,6 +1564,91 @@ fn upload_local_file_chunked(
         .block_on(writer.close())
         .map_err(|e| FsError::BackendFs(format!("failed to close writer for {object_path}: {e}")))?;
     Ok(())
+}
+
+fn upload_local_file_chunked_with_cas(
+    op: &OpenDalOperator,
+    runtime: &tokio::runtime::Runtime,
+    object_path: &str,
+    local_path: &Path,
+    chunk_size: usize,
+    expected_etag: Option<&str>,
+    if_not_exists: bool,
+) -> FsResult<OssConditionalOpOutcome> {
+    let mut write_opts = WriteOptions {
+        chunk: Some(chunk_size),
+        ..Default::default()
+    };
+    if let Some(etag) = expected_etag {
+        write_opts.if_match = Some(etag.to_string());
+    }
+    if if_not_exists {
+        write_opts.if_not_exists = true;
+    }
+
+    let mut file = File::open(local_path).map_err(FsError::IOError)?;
+    let mut writer = match runtime.block_on(op.writer_options(object_path, write_opts)) {
+        Ok(writer) => writer,
+        Err(e) => {
+            if let Some(outcome) = classify_conditional_oss_error(&e) {
+                return Ok(outcome);
+            }
+            return Err(FsError::BackendFs(format!(
+                "failed to open conditional oss writer for {object_path}: {e}"
+            )));
+        }
+    };
+
+    let mut buf = vec![0u8; chunk_size];
+    loop {
+        let bytes_read = file.read(&mut buf).map_err(FsError::IOError)?;
+        if bytes_read == 0 {
+            break;
+        }
+        if let Err(e) = runtime.block_on(writer.write(buf[..bytes_read].to_vec())) {
+            if let Some(outcome) = classify_conditional_oss_error(&e) {
+                return Ok(outcome);
+            }
+            return Err(FsError::BackendFs(format!(
+                "failed to write conditional chunk for {object_path}: {e}"
+            )));
+        }
+    }
+
+    if let Err(e) = runtime.block_on(writer.close()) {
+        if let Some(outcome) = classify_conditional_oss_error(&e) {
+            return Ok(outcome);
+        }
+        return Err(FsError::BackendFs(format!(
+            "failed to close conditional writer for {object_path}: {e}"
+        )));
+    }
+
+    Ok(OssConditionalOpOutcome::Applied)
+}
+
+fn delete_remote_object_with_cas(
+    op: &OpenDalOperator,
+    runtime: &tokio::runtime::Runtime,
+    object_path: &str,
+    expected_etag: &str,
+) -> FsResult<OssConditionalOpOutcome> {
+    let delete_opts = DeleteOptions {
+        if_match: Some(expected_etag.to_string()),
+        ..Default::default()
+    };
+
+    match runtime.block_on(op.delete_options(object_path, delete_opts)) {
+        Ok(_) => Ok(OssConditionalOpOutcome::Applied),
+        Err(e) => {
+            if let Some(outcome) = classify_conditional_oss_error(&e) {
+                return Ok(outcome);
+            }
+            Err(FsError::BackendFs(format!(
+                "failed to conditionally delete remote object {object_path}: {e}"
+            )))
+        }
+    }
 }
 
 fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadSyncStats> {
@@ -1635,6 +1786,12 @@ fn sync_oss_objects_to_cache(sync_ctx: &OssSyncContext) -> FsResult<OssDownloadS
 }
 
 fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSyncStats> {
+    let _sync_guard = sync_ctx.sync_lock.lock().map_err(|e| {
+        FsError::BackendFs(format!(
+            "failed to acquire ossfs sync lock at {}: {e}",
+            sync_ctx.mountpoint
+        ))
+    })?;
     let op = build_oss_operator(&sync_ctx.config)?;
     let runtime = TokioRuntimeBuilder::new_current_thread()
         .enable_all()
@@ -1672,7 +1829,8 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
         }
 
         if let Some(old) = old_entry {
-            if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins {
+            if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins && old.etag.is_none()
+            {
                 let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
                 if is_remote_entry_conflicted(old, &remote_state, sync_ctx.consistency_strategy)? {
                     if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
@@ -1707,13 +1865,127 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
             }
         }
 
-        upload_local_file_chunked(
-            &op,
-            &runtime,
-            object_path,
-            &local_file.path,
-            sync_ctx.upload_chunk_size,
-        )?;
+        let mut uploaded_via_cas = false;
+        let mut cas_unsupported = false;
+        if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins {
+            let cas_outcome = if let Some(old) = old_entry {
+                old.etag
+                    .as_deref()
+                    .map(|etag| {
+                        upload_local_file_chunked_with_cas(
+                            &op,
+                            &runtime,
+                            object_path,
+                            &local_file.path,
+                            sync_ctx.upload_chunk_size,
+                            Some(etag),
+                            false,
+                        )
+                    })
+                    .transpose()?
+            } else {
+                Some(upload_local_file_chunked_with_cas(
+                    &op,
+                    &runtime,
+                    object_path,
+                    &local_file.path,
+                    sync_ctx.upload_chunk_size,
+                    None,
+                    true,
+                )?)
+            };
+
+            if let Some(cas_outcome) = cas_outcome {
+                match cas_outcome {
+                    OssConditionalOpOutcome::Applied => {
+                        uploaded_via_cas = true;
+                    }
+                    OssConditionalOpOutcome::Unsupported => {
+                        warn!(
+                            "{VIRTIO_FS_NAME}: ossfs conditional upload unsupported for {}, fallback to non-conditional write at {}",
+                            object_path, sync_ctx.mountpoint
+                        );
+                        cas_unsupported = true;
+                    }
+                    OssConditionalOpOutcome::Conflict => {
+                        let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+                        if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
+                            isolate_conflict_local_file(sync_ctx, object_path, &local_file.path)?;
+                            stats.isolated += 1;
+                            if let RemoteObjectState::Existing { .. } = remote_state {
+                                let canonical_local_path =
+                                    local_cache_path_for_object(sync_ctx, object_path)?;
+                                let new_entry = download_remote_object_to_local(
+                                    &op,
+                                    &runtime,
+                                    sync_ctx,
+                                    object_path,
+                                    &canonical_local_path,
+                                    &remote_state,
+                                )?;
+                                new_index.entries.insert(object_path.clone(), new_entry);
+                            }
+                            stats.remote_wins += 1;
+                        } else {
+                            warn!(
+                                "{VIRTIO_FS_NAME}: skip flushing {} at {} due to CAS conflict",
+                                object_path, sync_ctx.mountpoint
+                            );
+                            stats.skipped_conflicts += 1;
+                            if let Some(old) = old_entry {
+                                new_index.entries.insert(object_path.clone(), old.clone());
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+
+        if cas_unsupported {
+            if let Some(old) = old_entry {
+                let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
+                if is_remote_entry_conflicted(old, &remote_state, sync_ctx.consistency_strategy)? {
+                    if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
+                        isolate_conflict_local_file(sync_ctx, object_path, &local_file.path)?;
+                        stats.isolated += 1;
+                        if let RemoteObjectState::Existing { .. } = remote_state {
+                            let canonical_local_path =
+                                local_cache_path_for_object(sync_ctx, object_path)?;
+                            let new_entry = download_remote_object_to_local(
+                                &op,
+                                &runtime,
+                                sync_ctx,
+                                object_path,
+                                &canonical_local_path,
+                                &remote_state,
+                            )?;
+                            new_index.entries.insert(object_path.clone(), new_entry);
+                        }
+                        stats.remote_wins += 1;
+                    } else {
+                        warn!(
+                            "{VIRTIO_FS_NAME}: skip flushing {} at {} due to fallback conflict",
+                            object_path, sync_ctx.mountpoint
+                        );
+                        stats.skipped_conflicts += 1;
+                        new_index.entries.insert(object_path.clone(), old.clone());
+                    }
+                    continue;
+                }
+            }
+        }
+
+        if !uploaded_via_cas {
+            upload_local_file_chunked(
+                &op,
+                &runtime,
+                object_path,
+                &local_file.path,
+                sync_ctx.upload_chunk_size,
+            )?;
+        }
+
         let remote_state = query_remote_object_state(&op, &runtime, object_path)?;
         let (etag, content_length) = match remote_state {
             RemoteObjectState::Existing {
@@ -1745,34 +2017,82 @@ fn sync_local_cache_to_oss(sync_ctx: &OssSyncContext) -> FsResult<OssWritebackSy
         }
 
         if sync_ctx.consistency_strategy != OssConsistencyStrategy::LocalWins {
-            let remote_state = query_remote_object_state(&op, &runtime, old_path)?;
-            if is_remote_entry_conflicted(old_entry, &remote_state, sync_ctx.consistency_strategy)? {
-                if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
-                    if let RemoteObjectState::Existing { .. } = remote_state {
-                        let local_path = local_cache_path_for_object(sync_ctx, old_path)?;
-                        let new_entry = download_remote_object_to_local(
-                            &op,
-                            &runtime,
-                            sync_ctx,
-                            old_path,
-                            &local_path,
-                            &remote_state,
-                        )?;
-                        new_index.entries.insert(old_path.clone(), new_entry);
+            let mut cas_unsupported = false;
+            if let Some(etag) = old_entry.etag.as_deref() {
+                match delete_remote_object_with_cas(&op, &runtime, old_path, etag)? {
+                    OssConditionalOpOutcome::Applied => {
+                        stats.deleted += 1;
+                        continue;
                     }
-                    stats.remote_wins += 1;
+                    OssConditionalOpOutcome::Unsupported => {
+                        warn!(
+                            "{VIRTIO_FS_NAME}: ossfs conditional delete unsupported for {}, fallback to stat+delete at {}",
+                            old_path, sync_ctx.mountpoint
+                        );
+                        cas_unsupported = true;
+                    }
+                    OssConditionalOpOutcome::Conflict => {
+                        let remote_state = query_remote_object_state(&op, &runtime, old_path)?;
+                        if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
+                            if let RemoteObjectState::Existing { .. } = remote_state {
+                                let local_path = local_cache_path_for_object(sync_ctx, old_path)?;
+                                let new_entry = download_remote_object_to_local(
+                                    &op,
+                                    &runtime,
+                                    sync_ctx,
+                                    old_path,
+                                    &local_path,
+                                    &remote_state,
+                                )?;
+                                new_index.entries.insert(old_path.clone(), new_entry);
+                            }
+                            stats.remote_wins += 1;
+                        } else {
+                            warn!(
+                                "{VIRTIO_FS_NAME}: skip deleting remote {} at {} due to CAS conflict",
+                                old_path, sync_ctx.mountpoint
+                            );
+                            stats.skipped_conflicts += 1;
+                            new_index
+                                .entries
+                                .insert(old_path.clone(), old_entry.clone());
+                        }
+                        continue;
+                    }
+                }
+            }
+
+            if cas_unsupported || old_entry.etag.is_none() {
+                let remote_state = query_remote_object_state(&op, &runtime, old_path)?;
+                if is_remote_entry_conflicted(old_entry, &remote_state, sync_ctx.consistency_strategy)?
+                {
+                    if sync_ctx.consistency_strategy == OssConsistencyStrategy::RemoteWins {
+                        if let RemoteObjectState::Existing { .. } = remote_state {
+                            let local_path = local_cache_path_for_object(sync_ctx, old_path)?;
+                            let new_entry = download_remote_object_to_local(
+                                &op,
+                                &runtime,
+                                sync_ctx,
+                                old_path,
+                                &local_path,
+                                &remote_state,
+                            )?;
+                            new_index.entries.insert(old_path.clone(), new_entry);
+                        }
+                        stats.remote_wins += 1;
+                        continue;
+                    }
+
+                    warn!(
+                        "{VIRTIO_FS_NAME}: skip deleting remote {} at {} due to conflict",
+                        old_path, sync_ctx.mountpoint
+                    );
+                    stats.skipped_conflicts += 1;
+                    new_index
+                        .entries
+                        .insert(old_path.clone(), old_entry.clone());
                     continue;
                 }
-
-                warn!(
-                    "{VIRTIO_FS_NAME}: skip deleting remote {} at {} due to conflict",
-                    old_path, sync_ctx.mountpoint
-                );
-                stats.skipped_conflicts += 1;
-                new_index
-                    .entries
-                    .insert(old_path.clone(), old_entry.clone());
-                continue;
             }
         }
 
@@ -2863,6 +3183,44 @@ pub mod tests {
             }
         ));
         assert!(is_remote_state_conflicted(&old, &RemoteObjectState::NotFound));
+    }
+
+    #[test]
+    fn test_classify_conditional_oss_error() {
+        let conflict = opendal::Error::new(OpenDalErrorKind::ConditionNotMatch, "conflict");
+        assert_eq!(
+            classify_conditional_oss_error(&conflict),
+            Some(OssConditionalOpOutcome::Conflict)
+        );
+
+        let unsupported = opendal::Error::new(OpenDalErrorKind::Unsupported, "unsupported");
+        assert_eq!(
+            classify_conditional_oss_error(&unsupported),
+            Some(OssConditionalOpOutcome::Unsupported)
+        );
+
+        let other = opendal::Error::new(OpenDalErrorKind::PermissionDenied, "permission denied");
+        assert_eq!(classify_conditional_oss_error(&other), None);
+    }
+
+    #[test]
+    fn test_persist_oss_cache_index_roundtrip() {
+        let tmp_file = TempFile::new().unwrap();
+        let index_path = tmp_file.as_path().with_extension("oss_index.json");
+        let mut index = OssCacheIndex::default();
+        index.entries.insert(
+            "prefix/path/file.txt".to_string(),
+            OssCacheEntry {
+                etag: Some("etag-123".to_string()),
+                content_length: 1234,
+                local_size: 1234,
+                local_mtime_ns: 42,
+            },
+        );
+
+        persist_oss_cache_index(&index_path, &index).unwrap();
+        let loaded = load_oss_cache_index(&index_path);
+        assert_eq!(loaded, index);
     }
 
     #[test]
