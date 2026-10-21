@@ -2079,6 +2079,9 @@ type VFIODevice struct {
 	DevfsDev string
 }
 
+// IommufdObjectID is the ID of the iommufd object shared by all VFIO devices.
+const IommufdObjectID = "iommufd0"
+
 // VFIODeviceTransport is a map of the vfio device name that corresponds to
 // each transport.
 var VFIODeviceTransport = map[VirtioTransport]string{
@@ -2141,9 +2144,19 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	}
 
 	if strings.HasPrefix(vfioDev.DevfsDev, pkgDevice.IommufdDevPath) {
-		qemuParams = append(qemuParams, "-object")
-		qemuParams = append(qemuParams, fmt.Sprintf("iommufd,id=iommufd%s", vfioDev.ID))
-		deviceParams = append(deviceParams, fmt.Sprintf("iommufd=iommufd%s", vfioDev.ID))
+		// All VFIO devices share one iommufd object. The kernel requires
+		// every device of an IOMMU group to bind to the same iommufd
+		// context, so one object per device fails with EPERM for devices
+		// that share a group. QEMU also reuses the IOAS for devices on the
+		// same object (iommufd_cdev_attach() in hw/vfio/iommufd.c), so
+		// guest RAM is pinned and charged against RLIMIT_MEMLOCK once
+		// rather than once per device.
+		if !config.iommufdObjectAdded {
+			qemuParams = append(qemuParams, "-object")
+			qemuParams = append(qemuParams, fmt.Sprintf("iommufd,id=%s", IommufdObjectID))
+			config.iommufdObjectAdded = true
+		}
+		deviceParams = append(deviceParams, fmt.Sprintf("iommufd=%s", IommufdObjectID))
 	}
 
 	qemuParams = append(qemuParams, "-device")
@@ -3089,6 +3102,9 @@ type Config struct {
 	PidFile string
 
 	qemuParams []string
+
+	// iommufdObjectAdded is set once the shared iommufd object is emitted.
+	iommufdObjectAdded bool
 
 	Debug bool
 }

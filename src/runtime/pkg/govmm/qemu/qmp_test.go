@@ -1232,17 +1232,63 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 	bdf := "04:00.0"
 	romfile := ""
 
+	type qmpCommand struct {
+		name   string
+		result string
+		data   interface{}
+	}
+
 	for _, tc := range []struct {
 		name      string
 		iommufdID string
+		commands  []qmpCommand
+		wantErr   bool
 	}{
 		{
-			name:      "with IOMMUFD",
-			iommufdID: "0",
+			name:      "with new IOMMUFD object",
+			iommufdID: "iommufd0",
+			commands: []qmpCommand{
+				{"qom-get", "error", nil},
+				{"object-add", "return", nil},
+				{"device_add", "return", nil},
+			},
+		},
+		{
+			name:      "with existing IOMMUFD object",
+			iommufdID: "iommufd0",
+			commands: []qmpCommand{
+				{"qom-get", "return", "iommufd"},
+				{"device_add", "return", nil},
+			},
+		},
+		{
+			// Another hotplug created the object between our lookup
+			// and object-add, so object-add fails with a duplicate ID.
+			name:      "with IOMMUFD object created concurrently",
+			iommufdID: "iommufd0",
+			commands: []qmpCommand{
+				{"qom-get", "error", nil},
+				{"object-add", "error", nil},
+				{"qom-get", "return", "iommufd"},
+				{"device_add", "return", nil},
+			},
+		},
+		{
+			name:      "with IOMMUFD object creation failure",
+			iommufdID: "iommufd0",
+			commands: []qmpCommand{
+				{"qom-get", "error", nil},
+				{"object-add", "error", nil},
+				{"qom-get", "error", nil},
+			},
+			wantErr: true,
 		},
 		{
 			name:      "without IOMMUFD",
 			iommufdID: "",
+			commands: []qmpCommand{
+				{"device_add", "return", nil},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1254,17 +1300,20 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 			// Note: At the time of writing, the QMPTestCommandBuffer does not
 			// support verifying parameters passed to object-add and device_add.
 			// So we just verify that the commands are sent in the correct order.
-			if tc.iommufdID != "" {
-				buf.AddCommand("object-add", nil, "return", nil)
+			for _, cmd := range tc.commands {
+				buf.AddCommand(cmd.name, nil, cmd.result, cmd.data)
 			}
-			buf.AddCommand("device_add", nil, "return", nil)
 
 			cfg := QMPConfig{Logger: qmpTestLogger{}}
 			q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 			checkVersion(t, connectedCh)
 
 			err := q.ExecuteVFIODeviceAdd(context.Background(), "devID", bdf, "rp1", romfile, tc.iommufdID)
-			if err != nil {
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error")
+				}
+			} else if err != nil {
 				t.Fatalf("Unexpected error %v", err)
 			}
 			q.Shutdown()
