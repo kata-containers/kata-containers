@@ -1097,7 +1097,10 @@ impl AgentPolicy {
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Next, apply container-level UID and GID overrides.
-        yaml_container.get_process_fields(&mut process);
+        let pod_run_as_group_is_set = resource
+            .get_pod_security_context()
+            .is_some_and(|context| context.runAsGroup.is_some());
+        yaml_container.get_process_fields(&mut process, pod_run_as_group_is_set);
         debug!(
             "get_container_process: after yaml_container.get_process_fields: User = {:?}",
             process.User

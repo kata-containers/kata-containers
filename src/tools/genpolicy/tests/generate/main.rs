@@ -491,6 +491,15 @@ fn guest_pull_container_identity_overrides_respect_pod_group_settings(
             expected_gid: 65534,
             expected_groups: &[0, 2000, 3000, 65534],
         },
+        TestCase {
+            name: "pod_primary_group_preserved",
+            image: "docker.io/prom/prometheus@sha256:8672a850efe2f9874702406c8318704edb363587f8c2ca88586b4c8fdb5cea24",
+            pod_context: "    runAsUser: 0\n    runAsGroup: 1234\n",
+            container_context: "        runAsUser: 65534\n",
+            expected_uid: 65534,
+            expected_gid: 1234,
+            expected_groups: &[1234],
+        },
     ];
 
     for case in cases {
