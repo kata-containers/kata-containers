@@ -968,6 +968,22 @@ impl Vm {
                 .unwrap_or_default(),
         )
         .map_err(StartMicroVmError::Vcpu)?;
+
+        // Device attachment order determines guest-visible MMIO and IRQ
+        // assignments. Load the saved block attachment phases before device
+        // creation instead of inferring them from root/read-only properties.
+        #[cfg(feature = "virtio-blk")]
+        {
+            use crate::snapshot::MicrovmState;
+            let snapshot = MicrovmState::load_from_file(state_path)
+                .map_err(|e| StartMicroVmError::RestoreMicroVm(e.to_string()))?;
+            if let Some(block_state) = &snapshot.device_states.block {
+                self.device_manager
+                    .block_manager
+                    .prepare_restore_layout(block_state)
+                    .map_err(|e| StartMicroVmError::RestoreMicroVm(e.to_string()))?;
+            }
+        }
         // Recreate host-side devices and fresh vCPU objects without requiring
         // a boot source. The snapshot supplies guest memory, the finalized
         // kernel command line and all vCPU state before execution resumes.
