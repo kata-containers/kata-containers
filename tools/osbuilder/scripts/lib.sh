@@ -47,6 +47,51 @@ check_program()
 	type "$1" >/dev/null 2>&1
 }
 
+# Subject CNs of root CAs whose private keys are publicly known
+# (https://github.com/kata-containers/kata-containers/issues/14106).
+compromised_ca_cns=(
+	"AAA Certificate Services"
+	"emSign ECC Root CA - G3"
+)
+
+# Print the "subject=" lines among openssl's output on stdin that name one of
+# compromised_ca_cns. OpenSSL 3 prints "CN=name, ...", 1.1.1 prints "/CN=name/..."
+# or "CN = name".
+grep_compromised_ca_subjects()
+{
+	local cns
+	cns=$(IFS='|'; echo "${compromised_ca_cns[*]}")
+	grep -E "^subject=.*CN ?= ?(${cns})(,|/|\$)" || true
+}
+
+# Fail if a CA bundle that ends up in a guest trusts one of compromised_ca_cns.
+check_ca_bundle()
+{
+	local bundle="${1:?CA bundle path is required}"
+	local subjects bad
+
+	check_program openssl || die "openssl is required to inspect ${bundle}"
+	[[ -s "${bundle}" ]] || die "CA bundle ${bundle} is missing or empty"
+
+	subjects=$(openssl crl2pkcs7 -nocrl -certfile "${bundle}" |
+		openssl pkcs7 -print_certs -noout) || die "failed to parse CA bundle ${bundle}"
+	[[ "${subjects}" == *subject=* ]] || die "no certificates found in CA bundle ${bundle}"
+
+	bad=$(grep_compromised_ca_subjects <<<"${subjects}")
+	[[ -z "${bad}" ]] || die "refusing to ship ${bundle}, it trusts compromised CA certificates: ${bad}"
+}
+
+# Succeed if the single PEM certificate in $1 is one of compromised_ca_cns.
+is_compromised_ca_cert()
+{
+	local cert="${1:?certificate path is required}"
+	local subject
+
+	check_program openssl || die "openssl is required to inspect ${cert}"
+	subject=$(openssl x509 -noout -subject -in "${cert}") || die "failed to parse certificate ${cert}"
+	[[ -n "$(grep_compromised_ca_subjects <<<"${subject}")" ]]
+}
+
 check_root()
 {
 	if [[ "$(id -u)" != "0" ]]; then

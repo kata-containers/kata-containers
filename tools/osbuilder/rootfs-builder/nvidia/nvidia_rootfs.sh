@@ -534,6 +534,8 @@ chisseled_init() {
 	cp -a "${stage_one}"/sbin/ldconfig sbin/ldconfig
 
 	cp -a "${stage_one}"/etc/ssl/certs/ca-certificates.crt etc/ssl/certs/.
+	# A cached stage one may predate the check in the Ubuntu build_rootfs.
+	check_ca_bundle etc/ssl/certs/ca-certificates.crt
 
 	local conf_file="etc/modprobe.d/0000-nvidia.conf"
 	echo 'options nvidia NVreg_DeviceFileMode=0660' > "${conf_file}"
