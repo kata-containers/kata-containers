@@ -433,3 +433,12 @@ func TestConfigValid(t *testing.T) {
 	result = config.valid()
 	assert.True(result)
 }
+
+func TestBlockPlainEmptyDirMountOptions(t *testing.T) {
+	assert := assert.New(t)
+
+	// The default list is what genpolicy-settings.json pins for
+	// emptyDir_plain, and discard stays first in both lists.
+	assert.Equal([]string{blockVolumeDiscardOption}, blockPlainEmptyDirMountOptions(false))
+	assert.Equal([]string{blockVolumeDiscardOption, blockVolumeNoInitItableOption}, blockPlainEmptyDirMountOptions(true))
+}
