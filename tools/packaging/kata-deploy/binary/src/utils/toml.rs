@@ -529,6 +529,10 @@ fn parse_toml_value(value: &str) -> Item {
     if value.starts_with('[') && value.ends_with(']') {
         let array_str = &value[1..value.len() - 1];
         let mut array = toml_edit::Array::new();
+        // Splitting an empty interior would manufacture one empty string.
+        if array_str.trim().is_empty() {
+            return Item::Value(Value::Array(array));
+        }
         for item in array_str.split(',') {
             let item = item.trim().trim_matches('"');
             array.push(Value::String(Formatted::new(item.to_string())));
@@ -551,6 +555,35 @@ mod tests {
     use super::*;
     use rstest::rstest;
     use tempfile::NamedTempFile;
+
+    #[rstest]
+    #[case("[]", vec![])]
+    #[case("[ ]", vec![])]
+    #[case("[\n\t]", vec![])]
+    #[case("[\"\"]", vec![""])]
+    #[case("[\"example.com/probe\"]", vec!["example.com/probe"])]
+    #[case("[\"\", \"example.com/probe\"]", vec!["", "example.com/probe"])]
+    fn set_array_value_preserves_entries(
+        #[case] input: &str,
+        #[case] expected: Vec<&str>,
+        #[values("", "{{ template \"base\" . }}\n")] header: &str,
+    ) {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), format!("{header}entries = [\"old\"]\n")).unwrap();
+
+        set_toml_value(file.path(), "entries", input).unwrap();
+
+        let content = std::fs::read_to_string(file.path()).unwrap();
+        let body = content.strip_prefix(header).unwrap();
+        let doc = body.parse::<DocumentMut>().unwrap();
+        let actual: Vec<&str> = doc["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap())
+            .collect();
+        assert_eq!(actual, expected);
+    }
 
     // --- split_non_toml_header ---
 

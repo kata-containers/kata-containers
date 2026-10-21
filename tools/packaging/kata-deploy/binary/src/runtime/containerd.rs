@@ -1281,6 +1281,52 @@ mod tests {
         );
     }
 
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
+    #[case(CONTAINERD_LEGACY_CRI_PLUGIN_ID)]
+    fn empty_derived_annotations_remain_empty_in_containerd(#[case] pluginid: &str) {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.qemu]\nenable_annotations = []\n",
+        )
+        .unwrap();
+        let containerd_file = dir.path().join("containerd.toml");
+        std::fs::write(&containerd_file, "").unwrap();
+        let params = ContainerdRuntimeParams {
+            runtime_name: "kata-qemu".to_string(),
+            runtime_path: "/opt/kata/bin/containerd-shim-kata-v2".to_string(),
+            config_path: config_file.to_str().unwrap().to_string(),
+            pod_annotations: pod_annotations_for_kata_config(&config_file, &[]).unwrap(),
+            container_annotations: DEFAULT_CONTAINER_ANNOTATIONS.to_string(),
+            snapshotter: None,
+        };
+
+        write_containerd_runtime_config(&containerd_file, pluginid, &params).unwrap();
+
+        let doc = std::fs::read_to_string(&containerd_file)
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        let annotations = doc["plugins"][pluginid.trim_matches('"')]["containerd"]["runtimes"]
+            ["kata-qemu"]["pod_annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            annotations.is_empty(),
+            "unexpected entries: {annotations:?}"
+        );
+    }
+
     #[test]
     fn a_runtime_enabling_no_annotation_still_gets_the_extras() {
         let dir = tempfile::tempdir().unwrap();
