@@ -71,5 +71,6 @@ virtio-fs-pro = [
 virtio-mem = ["virtio-mmio"]
 virtio-mmio = []
 virtio-net = ["virtio-mmio"]
+virtio-pmem = ["virtio-mmio"]
 virtio-rng = ["virtio-mmio"]
 virtio-vsock = ["virtio-mmio"]

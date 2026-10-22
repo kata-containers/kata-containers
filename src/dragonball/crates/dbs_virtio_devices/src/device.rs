@@ -329,7 +329,15 @@ impl<R: GuestMemoryRegion> Clone for VirtioSharedMemoryList<R> {
 /// permission to change vm_as.
 pub trait VirtioRegionHandler: Send {
     /// Insert GuestRegionMmap to vm_as & address_space.
-    fn insert_region(&mut self, region: Arc<GuestRegionMmap>) -> Result<()>;
+    fn insert_region(&mut self, region: Arc<GuestRegionMmap>) -> Result<()> {
+        self.insert_regions(vec![region])
+    }
+
+    /// Insert all regions into both address spaces, or leave both unchanged.
+    fn insert_regions(&mut self, regions: Vec<Arc<GuestRegionMmap>>) -> Result<()>;
+
+    /// Remove all regions from both address spaces, or leave both unchanged.
+    fn remove_regions(&mut self, regions: &[Arc<GuestRegionMmap>]) -> Result<()>;
 }
 
 /// Trait for Virtio transport layer to manage virtio devices.

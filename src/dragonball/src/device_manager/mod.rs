@@ -24,7 +24,7 @@ use dbs_device::DeviceIo;
 use dbs_interrupt::UserspaceIoapicManager;
 use dbs_interrupt::{InterruptManager, KvmIrqManager};
 use dbs_legacy_devices::ConsoleHandler;
-#[cfg(feature = "dbs-virtio-devices")]
+#[cfg(feature = "host-device")]
 use dbs_pci::CAPABILITY_BAR_SIZE;
 use dbs_utils::epoll_manager::EpollManager;
 use kvm_ioctls::VmFd;
@@ -108,9 +108,9 @@ use self::net_dev_mgr::NetworkDeviceMgr;
 pub mod fs_dev_mgr;
 #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
 use self::fs_dev_mgr::FsDeviceMgr;
-#[cfg(feature = "virtio-fs")]
+#[cfg(any(feature = "virtio-fs", feature = "virtio-pmem"))]
 mod memory_region_handler;
-#[cfg(feature = "virtio-fs")]
+#[cfg(any(feature = "virtio-fs", feature = "virtio-pmem"))]
 pub use self::memory_region_handler::*;
 
 #[cfg(feature = "virtio-mem")]
@@ -118,6 +118,12 @@ pub use self::memory_region_handler::*;
 pub mod mem_dev_mgr;
 #[cfg(feature = "virtio-mem")]
 use self::mem_dev_mgr::MemDeviceMgr;
+
+#[cfg(feature = "virtio-pmem")]
+/// Device manager for virtio-pmem devices.
+pub mod pmem_dev_mgr;
+#[cfg(feature = "virtio-pmem")]
+use self::pmem_dev_mgr::PmemDeviceMgr;
 
 #[cfg(feature = "virtio-balloon")]
 /// Device manager for virtio-balloon devices.
@@ -679,6 +685,9 @@ pub struct DeviceManager {
     #[cfg(feature = "virtio-mem")]
     pub(crate) mem_manager: MemDeviceMgr,
 
+    #[cfg(feature = "virtio-pmem")]
+    pub(crate) pmem_manager: PmemDeviceMgr,
+
     #[cfg(feature = "virtio-balloon")]
     pub(crate) balloon_manager: BalloonDeviceMgr,
 
@@ -758,6 +767,8 @@ impl DeviceManager {
             fs_manager: Arc::new(Mutex::new(FsDeviceMgr::default())),
             #[cfg(feature = "virtio-mem")]
             mem_manager: MemDeviceMgr::default(),
+            #[cfg(feature = "virtio-pmem")]
+            pmem_manager: PmemDeviceMgr::default(),
             #[cfg(feature = "virtio-balloon")]
             balloon_manager: BalloonDeviceMgr::default(),
             #[cfg(feature = "virtio-rng")]
@@ -985,6 +996,11 @@ impl DeviceManager {
         self.rng_manager
             .attach_devices(&mut ctx)
             .map_err(StartMicroVmError::RngDeviceError)?;
+
+        #[cfg(feature = "virtio-pmem")]
+        self.pmem_manager
+            .attach_devices(&mut ctx)
+            .map_err(StartMicroVmError::PmemDeviceError)?;
 
         #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
         let kernel_config = {
@@ -1487,7 +1503,7 @@ impl DeviceManager {
     }
 
     /// Deregister Virtio device from IoManager
-    #[cfg(feature = "host-device")]
+    #[cfg(feature = "dbs-virtio-devices")]
     pub fn deregister_virtio_device(
         device: &Arc<dyn DeviceIo>,
         ctx: &mut DeviceOpContext,
@@ -1735,6 +1751,8 @@ mod tests {
                 vsock_manager: VsockDeviceMgr::default(),
                 #[cfg(feature = "virtio-mem")]
                 mem_manager: MemDeviceMgr::default(),
+                #[cfg(feature = "virtio-pmem")]
+                pmem_manager: PmemDeviceMgr::default(),
                 #[cfg(feature = "virtio-balloon")]
                 balloon_manager: BalloonDeviceMgr::default(),
                 #[cfg(feature = "virtio-rng")]

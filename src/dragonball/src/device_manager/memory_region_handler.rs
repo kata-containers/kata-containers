@@ -8,7 +8,7 @@ use std::sync::Arc;
 use dbs_address_space::{AddressSpace, AddressSpaceRegion, AddressSpaceRegionType};
 use dbs_virtio_devices::{Error as VirtioError, VirtioRegionHandler};
 use log::{debug, error};
-use vm_memory::{FileOffset, GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};
+use vm_memory::{GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 
@@ -24,7 +24,7 @@ use crate::address_space_manager::GuestAddressSpaceImpl;
 ///   memory address and length in the table. The virtio device memory belongs to the MMIO
 ///   space and does not belong to the Guest Memory space. Therefore, it cannot be configured
 ///   into the e820 table. When creating AddressSpaceRegion we use
-///   AddressSpaceRegionType::ReservedMemory type, in this way, address_space will know that
+///   AddressSpaceRegionType::DAXMemory type, in this way, address_space will know that
 ///   this region a special memory, it will don't put the this memory in e820 table.
 ///
 /// This function relies on the atomic-guest-memory feature. Without this feature enabled, memory
@@ -37,66 +37,104 @@ pub struct DeviceVirtioRegionHandler {
     pub(crate) address_space: AddressSpace,
 }
 
-impl DeviceVirtioRegionHandler {
-    fn insert_address_space(
+impl VirtioRegionHandler for DeviceVirtioRegionHandler {
+    fn insert_regions(
         &mut self,
-        region: Arc<GuestRegionMmap>,
+        regions: Vec<Arc<GuestRegionMmap>>,
     ) -> std::result::Result<(), VirtioError> {
-        let file_offset = match region.file_offset() {
-            // TODO: use from_arc
-            Some(f) => Some(FileOffset::new(f.file().try_clone()?, 0)),
-            None => None,
-        };
-
-        let as_region = Arc::new(AddressSpaceRegion::build(
-            AddressSpaceRegionType::DAXMemory,
-            region.start_addr(),
-            region.size() as u64,
-            None,
-            file_offset,
-            region.flags(),
-            region.prot(),
-            false,
-        ));
-
-        self.address_space.insert_region(as_region).map_err(|e| {
-            error!("inserting address apace error: {e}");
-            // dbs-virtio-devices should not depend on dbs-address-space.
-            // So here io::Error is used instead of AddressSpaceError directly.
-            VirtioError::IOError(io::Error::other(format!(
-                "invalid address space region ({0:#x}, {1:#x})",
-                region.start_addr().0,
-                region.len()
-            )))
-        })?;
+        let guard = self.vm_as.lock().unwrap();
+        let mut memory = (*self.vm_as.memory()).clone();
+        let mut address_regions = Vec::with_capacity(regions.len());
+        for region in regions {
+            debug!("add guest device memory region: {region:?}");
+            address_regions.push(Arc::new(AddressSpaceRegion::build(
+                AddressSpaceRegionType::DAXMemory,
+                region.start_addr(),
+                region.len(),
+                None,
+                region.file_offset().cloned(),
+                region.flags(),
+                region.prot(),
+                false,
+            )));
+            memory = memory.insert_region(region).map_err(|e| {
+                error!("failed to insert guest device memory region: {e:?}");
+                VirtioError::InsertMmap
+            })?;
+        }
+        // Validate the whole batch before publishing either address space.
+        self.address_space
+            .insert_regions(address_regions)
+            .map_err(|e| {
+                VirtioError::IOError(io::Error::other(format!(
+                    "invalid device address space: {e}"
+                )))
+            })?;
+        guard.replace(memory);
         Ok(())
     }
 
-    fn insert_vm_as(
+    fn remove_regions(
         &mut self,
-        region: Arc<GuestRegionMmap>,
+        regions: &[Arc<GuestRegionMmap>],
     ) -> std::result::Result<(), VirtioError> {
-        let vm_as_new = self.vm_as.memory().insert_region(region).map_err(|e| {
-            error!("DeviceVirtioRegionHandler failed to insert guest memory region: {e:?}.");
-            VirtioError::InsertMmap
-        })?;
-        // Do not expect poisoned lock here, so safe to unwrap().
-        self.vm_as.lock().unwrap().replace(vm_as_new);
-
+        let guard = self.vm_as.lock().unwrap();
+        let mut memory = (*self.vm_as.memory()).clone();
+        for region in regions {
+            let (updated, _) = memory
+                .remove_region(region.start_addr(), region.len())
+                .map_err(|e| {
+                    error!("failed to remove guest device memory region: {e:?}");
+                    VirtioError::InsertMmap
+                })?;
+            memory = updated;
+        }
+        let address_regions = regions
+            .iter()
+            .map(|region| (region.start_addr(), region.len()))
+            .collect::<Vec<_>>();
+        self.address_space
+            .remove_regions(&address_regions)
+            .map_err(|e| VirtioError::IOError(io::Error::other(e.to_string())))?;
+        guard.replace(memory);
         Ok(())
     }
 }
 
-impl VirtioRegionHandler for DeviceVirtioRegionHandler {
-    fn insert_region(
-        &mut self,
-        region: Arc<GuestRegionMmap>,
-    ) -> std::result::Result<(), VirtioError> {
-        debug!("add geust memory region to address_space/vm_as, new region: {region:?}");
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbs_address_space::{AddressSpaceLayout, AddressSpaceRegionType};
+    use vm_memory::{GuestAddress, GuestMemory, GuestMemoryMmap, MmapRegion};
 
-        self.insert_address_space(region.clone())?;
-        self.insert_vm_as(region)?;
+    #[test]
+    fn test_insert_and_remove_regions() {
+        let vm_as = AddressSpace::convert_into_vm_as(
+            GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x1000)]).unwrap(),
+        );
+        let layout = AddressSpaceLayout::new((1 << 46) - 1, 0, 0x1fff);
+        let address_space = AddressSpace::from_regions(
+            vec![Arc::new(AddressSpaceRegion::new(
+                AddressSpaceRegionType::DefaultMemory,
+                GuestAddress(0),
+                0x1000,
+            ))],
+            layout,
+        );
+        let mut handler = DeviceVirtioRegionHandler {
+            vm_as: vm_as.clone(),
+            address_space: address_space.clone(),
+        };
+        let region = Arc::new(
+            GuestRegionMmap::new(MmapRegion::new(0x1000).unwrap(), GuestAddress(0x2000)).unwrap(),
+        );
 
-        Ok(())
+        handler.insert_regions(vec![region.clone()]).unwrap();
+        assert!(vm_as.memory().find_region(GuestAddress(0x2000)).is_some());
+        assert!(address_space.is_dax_region(GuestAddress(0x2000)));
+
+        handler.remove_regions(&[region]).unwrap();
+        assert!(vm_as.memory().find_region(GuestAddress(0x2000)).is_none());
+        assert!(!address_space.is_dax_region(GuestAddress(0x2000)));
     }
 }

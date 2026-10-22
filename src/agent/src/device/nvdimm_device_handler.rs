@@ -8,9 +8,10 @@ use crate::device::{DeviceContext, DeviceHandler, DeviceInfo, SpecUpdate, BLOCK}
 use crate::linux_abi::ACPI_DEV_PATH;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use kata_types::device::DRIVER_NVDIMM_TYPE;
 use protocols::agent::Device;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -28,7 +29,12 @@ impl DeviceHandler for VirtioNvdimmDeviceHandler {
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         if device.vm_path.is_empty() {
-            return Err(anyhow!("Invalid path for nvdimm device"));
+            bail!("Invalid path for nvdimm device");
+        }
+        if !Path::new(&device.vm_path).exists() {
+            wait_for_pmem_device(ctx.sandbox, device.vm_path())
+                .await
+                .context("failed to get pmem device")?;
         }
         Ok(DeviceInfo::new(device.vm_path(), true)
             .context("New device info")?
@@ -76,7 +82,8 @@ impl PmemBlockMatcher {
 impl UeventMatcher for PmemBlockMatcher {
     fn is_match(&self, uev: &Uevent) -> bool {
         uev.subsystem == BLOCK
-            && uev.devpath.starts_with(ACPI_DEV_PATH)
+            && (uev.devpath.starts_with(ACPI_DEV_PATH)
+                || uev.devpath.starts_with("/devices/virtio-mmio-cmdline/"))
             && uev.devpath.ends_with(&self.suffix)
             && !uev.devname.is_empty()
     }
@@ -115,7 +122,7 @@ mod tests {
         #[case] should_match: bool,
     ) {
         let matcher = PmemBlockMatcher::new(matcher_devname);
-        let uev = create_pmem_uevent(uevent_devname, uevent_region);
+        let mut uev = create_pmem_uevent(uevent_devname, uevent_region);
 
         assert_eq!(
             matcher.is_match(&uev),
@@ -125,6 +132,10 @@ mod tests {
             if should_match { "match" } else { "reject" },
             uevent_devname
         );
+        uev.devpath = format!(
+            "/devices/virtio-mmio-cmdline/virtio-mmio.0/virtio0/ndbus0/region{uevent_region}/namespace{uevent_region}.0/block/{uevent_devname}"
+        );
+        assert_eq!(matcher.is_match(&uev), should_match);
     }
 
     #[rstest]
