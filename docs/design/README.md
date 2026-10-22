@@ -20,6 +20,7 @@ Kata Containers design documents:
 - [Design for direct-assigned volume](direct-blk-device-assignment.md)
 - [Design for core-scheduling](core-scheduling.md)
 - [Virtualization Reference Architecture](kata-vra.md)
+- [Envd in workload containers](envd.md)
 ---
 
 - [Design proposals](proposals)
