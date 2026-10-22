@@ -16,8 +16,7 @@ use containerd_shim_protos::protobuf::well_known_types::any::Any;
 use containerd_shim_protos::shim::event::Envelope;
 use containerd_shim_protos::shim::events;
 use containerd_shim_protos::shim_async::Events;
-use ttrpc::r#async::TtrpcContext;
-use ttrpc::MessageHeader;
+use containerd_shim_protos::ttrpc::{r#async::TtrpcContext, MessageHeader};
 
 // Ttrpc address passed from container runtime.
 // For now containerd will pass the address, and CRI-O will not.

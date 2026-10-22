@@ -98,6 +98,10 @@ impl ConnectConfig {
             reconnect_timeout_ms: reconnect_timeout_ms.max(MIN_RECONNECT_TIMEOUT_MS),
         }
     }
+
+    pub(crate) fn reconnect_timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.reconnect_timeout_ms)
+    }
 }
 
 #[derive(Debug, PartialEq)]

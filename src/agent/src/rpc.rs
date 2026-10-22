@@ -2803,6 +2803,7 @@ mod tests {
             mh: MessageHeader::default(),
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,
+            connection_data: Default::default(),
         }
     }
 

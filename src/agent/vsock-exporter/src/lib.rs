@@ -24,7 +24,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use tokio_vsock::VsockStream;
+use tokio_vsock::{VsockAddr, VsockStream};
 
 const ANY_CID: &str = "any";
 
@@ -193,7 +193,7 @@ impl Builder {
 }
 
 async fn connect_vsock(cid: u32, port: u32) -> Result<VsockStream, Error> {
-    match VsockStream::connect(cid, port).await {
+    match VsockStream::connect(VsockAddr::new(cid, port)).await {
         Ok(conn) => Ok(conn),
         Err(e) => Err(Error::ConnectionError(e.to_string())),
     }

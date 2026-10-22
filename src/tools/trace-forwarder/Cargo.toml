@@ -22,7 +22,7 @@ opentelemetry = { features = ["trace"], version = "0.32.0" }
 opentelemetry-otlp = { features = ["grpc-tonic", "trace"], version = "0.32.0" }
 opentelemetry_sdk = { features = ["rt-tokio"], version = "0.32.1" }
 tokio = { features = ["rt-multi-thread"], version = "1" }
-vsock = "0.2.3"
+vsock.workspace = true
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
