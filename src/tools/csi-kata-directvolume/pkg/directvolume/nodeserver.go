@@ -281,14 +281,10 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 		}
 	}
 
-	if deviceUpperPath, err := utils.GetStoragePath(dv.config.StoragePath, volumeID); err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("get device UpperPath %s failed: %v", deviceUpperPath, err))
-	} else {
-		if err = os.RemoveAll(deviceUpperPath); err != nil {
-			return nil, status.Error(codes.Internal, fmt.Sprintf("remove device upper path: %s failed %v", deviceUpperPath, err.Error()))
-		}
-		klog.Infof("direct volume %s has been removed.", deviceUpperPath)
-	}
+	// NB: do not delete the raw disk here. The CSI spec reserves backing
+	// storage teardown for ControllerDeleteVolume; deleting it on
+	// NodeUnstage makes the volume effectively ephemeral, ignoring
+	// reclaimPolicy: Retain and losing any data the workload wrote.
 
 	if err := os.RemoveAll(stagingTargetPath); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("remove staging target path: %v", err))

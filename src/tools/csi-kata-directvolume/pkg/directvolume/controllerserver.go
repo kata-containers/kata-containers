@@ -211,6 +211,19 @@ func (dv *directVolume) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeR
 				klog.Infof("Removed backing file %s for volume %s", backingFile, volId)
 			}
 		}
+	} else {
+		// Non-SPDK directvol: release the upper storage directory
+		// that holds the rawdisk backing file. This is the CSI-spec
+		// place for backing-storage teardown; NodeUnstage must not
+		// do it because that would silently turn every PV into an
+		// ephemeral one (ignoring reclaimPolicy: Retain).
+		if storagePath, err := utils.GetStoragePath(dv.config.StoragePath, volId); err != nil {
+			klog.Warningf("Failed to resolve storage path for volume %s: %v", volId, err)
+		} else if err := os.RemoveAll(storagePath); err != nil {
+			klog.Warningf("Failed to remove storage path %s for volume %s: %v", storagePath, volId, err)
+		} else {
+			klog.Infof("Removed storage path %s for volume %s", storagePath, volId)
+		}
 	}
 
 	if err := dv.deleteVolume(volId); err != nil {
