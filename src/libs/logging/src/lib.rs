@@ -83,6 +83,7 @@ pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::Asyn
 
 pub enum LogDestination {
     File(Box<dyn Write + Send + Sync>),
+    RotatingFile(Box<dyn Write + Send + Sync>),
     Journal,
 }
 
@@ -119,6 +120,18 @@ pub fn create_logger_with_destination(
             // `destination` is `File`.
             let json_drain = slog_json::Json::new(writer)
                 .add_default_keys()
+                .build()
+                .fuse();
+
+            Box::new(json_drain)
+        }
+        LogDestination::RotatingFile(writer) => {
+            // FileRotator checks its size threshold when the writer is
+            // flushed. Keep the normal file destination buffered, but flush
+            // each JSON record for a rotating destination.
+            let json_drain = slog_json::Json::new(writer)
+                .add_default_keys()
+                .set_flush(true)
                 .build()
                 .fuse();
 
@@ -389,7 +402,7 @@ mod tests {
     use serde_json::{json, Value};
     use slog::{crit, debug, error, info, warn, Logger};
     use std::io::prelude::*;
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
 
     #[test]
     fn test_get_log_levels() {
@@ -607,6 +620,26 @@ mod tests {
             .get(record_key)
             .expect("failed to find record key field");
         assert_eq!(field_record_value, record_value);
+    }
+
+    #[test]
+    fn test_rotating_file_destination_flushes_each_record() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("runtime.log");
+        let mut writer = FileRotator::new(&path).unwrap();
+        writer.rotate_threshold(1).rotate_count(1).open().unwrap();
+
+        let (logger, guard) = create_logger_with_destination(
+            "name",
+            "source",
+            slog::Level::Info,
+            LogDestination::RotatingFile(Box::new(writer)),
+        );
+        info!(logger, "record");
+        drop(guard);
+        drop(logger);
+
+        assert!(path.with_extension("log.1").is_file());
     }
 
     #[test]
