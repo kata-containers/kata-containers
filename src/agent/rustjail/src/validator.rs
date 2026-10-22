@@ -328,6 +328,8 @@ pub fn validate(conf: &Config) -> Result<()> {
         rootless_euid(oci).context("rootless euid")?;
     }
 
+    crate::envd::validate_mount_source(oci)?;
+
     Ok(())
 }
 
@@ -631,5 +633,45 @@ mod tests {
         let linux = Linux::default();
         config.spec.as_mut().unwrap().set_linux(Some(linux));
         validate(&config).unwrap_err();
+    }
+
+    #[test]
+    fn test_validate_envd_guest_source() {
+        use kata_types::{annotations::KATA_ANNO_CFG_RUNTIME_ENVD, mount::ENVD_CONTAINER_PATH};
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut spec = Spec::default();
+        spec.root_mut().as_mut().unwrap().set_path("/".into());
+        spec.set_hostname(None);
+        spec.set_linux(Some(Linux::default()));
+        spec.annotations_mut()
+            .get_or_insert_with(Default::default)
+            .insert(
+                KATA_ANNO_CFG_RUNTIME_ENVD.to_string(),
+                r#"{"port":49983,"args":[]}"#.to_string(),
+            );
+        spec.set_mounts(Some(vec![oci::MountBuilder::default()
+            .source(dir.path())
+            .destination(ENVD_CONTAINER_PATH)
+            .typ("bind")
+            .options(vec!["bind".to_string(), "ro".to_string()])
+            .build()
+            .unwrap()]));
+        let mut config = Config {
+            spec: Some(spec),
+            ..Default::default()
+        };
+
+        assert!(validate(&config)
+            .unwrap_err()
+            .to_string()
+            .contains("envd guest source must be a regular executable file"));
+
+        let file = dir.path().join("envd");
+        fs::write(&file, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
+        config.spec.as_mut().unwrap().mounts_mut().as_mut().unwrap()[0].set_source(Some(file));
+        validate(&config).unwrap();
     }
 }

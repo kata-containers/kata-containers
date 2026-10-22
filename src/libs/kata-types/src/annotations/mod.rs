@@ -31,6 +31,9 @@ pub mod dockershim;
 /// Third-party annotations.
 pub mod thirdparty;
 
+#[cfg(test)]
+mod envd_tests;
+
 // Common section
 /// Prefix for Kata specific annotations
 pub const KATA_ANNO_PREFIX: &str = "io.katacontainers.";
@@ -303,6 +306,55 @@ pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_QUEUE_SIZE: &str =
 // Runtime related annotations
 /// Prefix for Runtime configurations.
 pub const KATA_ANNO_CFG_RUNTIME_PREFIX: &str = "io.katacontainers.config.runtime.";
+/// JSON configuration for envd in the first non-pause container of a sandbox.
+pub const KATA_ANNO_CFG_RUNTIME_ENVD: &str = "io.katacontainers.config.runtime.envd";
+
+/// Sandbox annotation configuration; the runtime expands args before agent delivery.
+#[derive(Debug, Clone, serde::Serialize, Deserialize, PartialEq, Eq)]
+pub struct EnvdAnnotation {
+    /// Guest listening port, available to the caller for host port mapping.
+    pub port: u16,
+    /// Complete argument vector, excluding argv[0]; the runtime expands `{port}`.
+    pub args: Vec<String>,
+    /// Optional guest executable path; omitted values use `ENVD_GUEST_PATH`.
+    /// The runtime consumes this field when preparing the container mount.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest_path: Option<String>,
+}
+
+impl EnvdAnnotation {
+    /// Parse and validate an envd sandbox annotation.
+    pub fn parse(raw: &str) -> anyhow::Result<Self> {
+        use anyhow::{ensure, Context};
+
+        ensure!(
+            raw.trim_start().starts_with('{'),
+            "envd annotation must be a JSON object"
+        );
+        let config: Self = serde_json::from_str(raw).context("invalid envd annotation")?;
+        ensure!(config.port != 0, "envd port must be between 1 and 65535");
+        ensure!(
+            config.args.iter().all(|arg| !arg.contains('\0')),
+            "envd args must not contain NUL"
+        );
+        if let Some(path) = &config.guest_path {
+            ensure!(
+                std::path::Path::new(path).is_absolute() && !path.contains('\0'),
+                "envd guest_path must be an absolute path without NUL"
+            );
+        }
+        Ok(config)
+    }
+
+    /// Expand port placeholders while preserving argument boundaries.
+    pub fn resolve_args(&mut self) {
+        let port = self.port.to_string();
+        for arg in &mut self.args {
+            *arg = arg.replace("{port}", &port);
+        }
+    }
+}
+
 /// runtime name
 pub const KATA_ANNO_CFG_RUNTIME_NAME: &str = "io.katacontainers.config.runtime.name";
 /// hypervisor name

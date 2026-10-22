@@ -23,6 +23,7 @@ nav:
       - Local Builds & Deployment: how-to/how-to-build-and-deploy-local-artifacts.md
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
       - Rootless VMM: how-to/how-to-run-rootless-vmm.md
+      - Run envd inside a container: how-to/envd.md
     - Contributing:
       - Documentation: doc-contributing.md
   - Releases:
