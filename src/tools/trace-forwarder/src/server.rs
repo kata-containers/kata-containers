@@ -12,7 +12,7 @@ use slog::{debug, o, Logger};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixListener;
 use std::sync::Arc;
-use vsock::{SockAddr, VsockListener};
+use vsock::{VsockAddr, VsockListener};
 
 use crate::tracer;
 
@@ -143,7 +143,7 @@ fn start_std_vsock(
     cid: u32,
     dump_only: bool,
 ) -> Result<()> {
-    let sock_addr = SockAddr::new_vsock(cid, port);
+    let sock_addr = VsockAddr::new(cid, port);
     let listener = VsockListener::bind(&sock_addr)?;
 
     debug!(logger, "Waiting for connections";
