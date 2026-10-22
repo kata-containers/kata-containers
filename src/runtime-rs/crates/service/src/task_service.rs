@@ -11,8 +11,8 @@ use std::{
 
 use async_trait::async_trait;
 use common::types::{TaskRequest, TaskResponse};
+use containerd_shim_protos::ttrpc::{self, r#async::TtrpcContext};
 use containerd_shim_protos::{api, shim_async};
-use ttrpc::{self, r#async::TtrpcContext};
 
 use runtimes::RuntimeHandlerManager;
 

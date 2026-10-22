@@ -14,7 +14,6 @@ pub use manager::VirtContainerManager;
 mod process;
 
 use common::{error::Error, types::ContainerProcess};
-use containerd_shim_protos::ttrpc;
 
 /// Check if the signal is a termination signal (SIGKILL or SIGTERM).
 ///
@@ -52,4 +51,48 @@ pub fn convert_agent_error(err: anyhow::Error) -> anyhow::Error {
 
     // Return original error if no known patterns matched
     err
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{convert_agent_error, Error};
+
+    #[test]
+    fn test_convert_agent_connection_errors() {
+        for error in [
+            ttrpc::Error::LocalClosed,
+            ttrpc::Error::RemoteClosed,
+            ttrpc::Error::Eof,
+        ] {
+            let error = anyhow::Error::new(error).context("signal process");
+            let converted = convert_agent_error(error);
+            assert!(matches!(
+                converted.downcast_ref::<Error>(),
+                Some(Error::AgentConnectionClosed)
+            ));
+        }
+    }
+
+    #[test]
+    fn test_convert_agent_not_found() {
+        let error = ttrpc::error::get_rpc_status(ttrpc::Code::NOT_FOUND, "process already gone");
+        let error = anyhow::Error::new(error).context("signal process");
+        let converted = convert_agent_error(error);
+        assert!(matches!(
+            converted.downcast_ref::<Error>(),
+            Some(Error::ProcessAlreadyTerminated)
+        ));
+    }
+
+    #[test]
+    fn test_convert_agent_other_errors() {
+        let error = ttrpc::error::get_rpc_status(ttrpc::Code::PERMISSION_DENIED, "signal denied");
+        let converted =
+            convert_agent_error(anyhow::Error::new(error.clone()).context("signal process"));
+        assert_eq!(converted.downcast_ref::<ttrpc::Error>(), Some(&error));
+        assert_eq!(converted.to_string(), "signal process");
+
+        let converted = convert_agent_error(anyhow::anyhow!("other error"));
+        assert_eq!(converted.to_string(), "other error");
+    }
 }
