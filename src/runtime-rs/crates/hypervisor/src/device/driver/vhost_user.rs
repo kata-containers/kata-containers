@@ -57,6 +57,10 @@ pub struct VhostUserConfig {
 
     /// device path in guest
     pub virt_path: String,
+
+    /// Reconnect timeout in seconds for the vhost-user socket.
+    /// Zero disables reconnecting. Only meaningful for QEMU chardev sockets.
+    pub reconnect_time: u32,
 }
 
 #[derive(Debug, Clone, Default)]
