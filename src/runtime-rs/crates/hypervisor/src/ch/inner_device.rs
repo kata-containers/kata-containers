@@ -16,6 +16,7 @@ use crate::ProtectionDeviceConfig;
 use crate::ShareFsConfig;
 use crate::ShareFsDevice;
 use crate::VfioDevice;
+use crate::VhostUserConfig;
 use crate::VmmState;
 use crate::{BlockConfigModern, BlockDeviceModern};
 use anyhow::{anyhow, ensure, Context, Result};
@@ -29,7 +30,8 @@ use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_N
 use ch_config::DiskConfig;
 use ch_config::ImageType;
 use ch_config::{
-    net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, ProtectionDevConfig, VsockConfig,
+    net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, ProtectionDevConfig, VhostMode,
+    VsockConfig,
 };
 use kata_sys_util::netns::NetnsGuard;
 use kata_types::config::hypervisor::RateLimiterConfig;
@@ -81,6 +83,7 @@ impl CloudHypervisorInner {
             match device {
                 DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Network(_) => self.pending_devices.insert(0, device.clone()),
+                DeviceType::VhostUserNetwork(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Vfio(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Protection(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::BlockModern(_) => self.pending_devices.insert(0, device.clone()),
@@ -422,6 +425,9 @@ impl CloudHypervisorInner {
                     net_config.fds = Some(fds);
                     network_devices.push(net_config);
                 }
+                DeviceType::VhostUserNetwork(device) => {
+                    network_devices.push(NetConfig::try_from(device.config)?);
+                }
                 DeviceType::Vfio(vfio_device) => {
                     // A device with multi-funtions, or a IOMMU group with one more
                     // devices, the Primary device is selected to be passed to VM.
@@ -501,6 +507,32 @@ impl TryFrom<NetworkConfig> for NetConfig {
         }
 
         Err(anyhow!("Missing mac address for network device"))
+    }
+}
+
+// A vhost-user-net device is cold-plugged at boot. Cloud Hypervisor listens
+// on the socket and the backend connects to it, the same model DAN uses
+// with Dragonball: the runtime refuses a socket path that already exists.
+impl TryFrom<VhostUserConfig> for NetConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(cfg: VhostUserConfig) -> Result<Self, Self::Error> {
+        let mac = cfg
+            .mac_address
+            .parse()
+            .with_context(|| format!("invalid MAC for vhost-user-net {}", cfg.dev_id))?;
+
+        Ok(NetConfig {
+            id: Some(cfg.dev_id),
+            mac,
+            // The runtime counts queue pairs, Cloud Hypervisor counts queues.
+            num_queues: cfg.num_queues * 2,
+            queue_size: u16::try_from(cfg.queue_size)?,
+            vhost_user: true,
+            vhost_socket: Some(cfg.socket_path),
+            vhost_mode: VhostMode::Server,
+            ..Default::default()
+        })
     }
 }
 
@@ -587,6 +619,7 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 mod tests {
     use super::*;
     use crate::Address;
+    use crate::VhostUserNetDevice;
     use rstest::rstest;
 
     #[actix_rt::test]
@@ -641,6 +674,49 @@ mod tests {
             }
         }
         assert!(ch.pending_devices.is_empty());
+    }
+
+    fn vhost_user_net_config(mac: &str) -> VhostUserConfig {
+        VhostUserConfig {
+            dev_id: "eth0".into(),
+            socket_path: "/run/vhost-user/net.sock".into(),
+            mac_address: mac.into(),
+            device_type: crate::VhostUserType::Net,
+            num_queues: 1,
+            queue_size: 256,
+            ..Default::default()
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_cold_plug_vhost_user_net() {
+        let mut ch = CloudHypervisorInner::default();
+        let device =
+            VhostUserNetDevice::new("eth0".into(), vhost_user_net_config("02:68:73:00:00:02"));
+        ch.add_device(DeviceType::VhostUserNetwork(device))
+            .await
+            .unwrap();
+
+        let (_, nets, _, _, _) = ch.get_shared_devices().await.unwrap();
+        let nets = nets.unwrap();
+        assert_eq!(nets.len(), 1);
+        let net = &nets[0];
+        assert!(net.vhost_user);
+        assert_eq!(
+            net.vhost_socket.as_deref(),
+            Some("/run/vhost-user/net.sock")
+        );
+        assert_eq!(net.vhost_mode, VhostMode::Server);
+        assert_eq!(net.mac.bytes, [0x02, 0x68, 0x73, 0x00, 0x00, 0x02]);
+        assert_eq!(net.num_queues, 2);
+        assert_eq!(net.queue_size, 256);
+        assert!(net.tap.is_none() && net.fds.is_none());
+        assert!(ch.pending_devices.is_empty());
+    }
+
+    #[test]
+    fn test_vhost_user_net_rejects_bad_mac() {
+        assert!(NetConfig::try_from(vhost_user_net_config("")).is_err());
     }
 
     #[rstest]
