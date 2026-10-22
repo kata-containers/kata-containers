@@ -43,6 +43,7 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
+    sandbox_annotations: HashMap<String, String>,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -69,6 +70,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
+        sandbox_annotations: HashMap<String, String>,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -79,6 +81,7 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
+            sandbox_annotations,
         }
     }
 
@@ -132,12 +135,18 @@ impl ContainerManager for VirtContainerManager {
             }
         }
 
+        let mut containers = self.containers.write().await;
+        // Selection and insertion share the container-map lock, so concurrent
+        // creates cannot both become the first workload.
+        let envd = crate::envd::select(
+            &self.sandbox_annotations,
+            &spec,
+            containers.values().map(|c| &c.spec),
+        )?;
         self.oom_notifier
             .track(&config.container_id, &config.bundle, &spec)
             .await;
-
-        let mut containers = self.containers.write().await;
-        if let Err(e) = container.create(spec).await {
+        if let Err(e) = container.create(spec, envd).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }

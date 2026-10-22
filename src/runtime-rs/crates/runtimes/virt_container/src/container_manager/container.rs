@@ -46,7 +46,7 @@ pub struct Container {
     pid: u32,
     pub container_id: ContainerID,
     config: ContainerConfig,
-    spec: oci::Spec,
+    pub(super) spec: oci::Spec,
     inner: Arc<RwLock<ContainerInner>>,
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
@@ -111,7 +111,11 @@ impl Container {
         })
     }
 
-    pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
+    pub async fn create(
+        &self,
+        mut spec: oci::Spec,
+        envd: Option<kata_types::annotations::EnvdAnnotation>,
+    ) -> Result<()> {
         // process oci spec
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
@@ -275,6 +279,10 @@ impl Container {
                 .passfd_io_init(hvsock_uds_path, *passfd_port)
                 .await?;
         }
+
+        // All host volume processing is complete. This bind source belongs to
+        // the guest image and must never be shared or resolved on the host.
+        crate::envd::configure(&mut spec, envd)?;
 
         info!(
             sl!(),

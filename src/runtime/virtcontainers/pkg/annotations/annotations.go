@@ -272,6 +272,9 @@ const (
 const (
 	kataAnnotRuntimePrefix = kataConfAnnotationsPrefix + "runtime."
 
+	// Envd configures envd in the first non-pause container using port and args.
+	Envd = kataAnnotRuntimePrefix + "envd"
+
 	// DisableGuestSeccomp is a sandbox annotation that determines if seccomp should be applied inside guest.
 	DisableGuestSeccomp = kataAnnotRuntimePrefix + "disable_guest_seccomp"
 
