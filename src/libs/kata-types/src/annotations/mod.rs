@@ -303,6 +303,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_QUEUE_SIZE: &str =
 // Runtime related annotations
 /// Prefix for Runtime configurations.
 pub const KATA_ANNO_CFG_RUNTIME_PREFIX: &str = "io.katacontainers.config.runtime.";
+/// JSON configuration for envd in the first non-pause container of a sandbox.
+pub const KATA_ANNO_CFG_RUNTIME_ENVD: &str = "io.katacontainers.config.runtime.envd";
+
 /// runtime name
 pub const KATA_ANNO_CFG_RUNTIME_NAME: &str = "io.katacontainers.config.runtime.name";
 /// hypervisor name
