@@ -4,7 +4,10 @@
 //! Optional guest-image envd injection. No supervisor or readiness wait.
 
 use std::{
+    fs::File,
+    io::Write,
     os::unix::fs::PermissionsExt,
+    os::unix::io::FromRawFd,
     os::unix::process::CommandExt,
     path::Path,
     process::{Command, Stdio},
@@ -12,6 +15,7 @@ use std::{
 
 use anyhow::{ensure, Context, Result};
 use kata_types::annotations::{EnvdAnnotation, KATA_ANNO_CFG_RUNTIME_ENVD};
+use nix::fcntl::{fcntl, FcntlArg};
 use nix::unistd::{fork, ForkResult};
 
 use kata_types::mount::{ENVD_CONTAINER_PATH, ENVD_GUEST_PATH};
@@ -66,7 +70,11 @@ fn args(spec: &oci_spec::runtime::Spec) -> Result<Option<Vec<String>>> {
 
 fn command(args: &[String], path: &str) -> Command {
     let mut command = Command::new(path);
-    command.args(args).stdin(Stdio::null());
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     command
 }
 
@@ -85,8 +93,15 @@ pub fn start_if_enabled(spec: &oci_spec::runtime::Spec) {
         Ok(ForkResult::Parent { .. }) => (),
         Err(err) => eprintln!("envd fork failed: {}", err),
         Ok(ForkResult::Child) => {
+            // Keep exec failures visible, but close this copy on successful
+            // exec so envd and its descendants cannot hold workload output open.
+            let error_output = fcntl(std::io::stderr(), FcntlArg::F_DUPFD_CLOEXEC(3))
+                .ok()
+                .map(|fd| unsafe { File::from_raw_fd(fd) });
             let error = command(&args, ENVD_CONTAINER_PATH).exec();
-            eprintln!("envd start failed: {}", error);
+            if let Some(mut output) = error_output {
+                let _ = writeln!(output, "envd start failed: {}", error);
+            }
             unsafe { libc::_exit(127) }
         }
     }
@@ -258,7 +273,9 @@ mod tests {
             &script,
             format!(
                 "#!/bin/sh\nset -eu\ntest ! -e /proc/self/fd/{fd}\n\
-             test \"$(readlink /proc/self/fd/0)\" = /dev/null\n\
+             for stream in 0 1 2; do\n\
+             test \"$(readlink /proc/$$/fd/$stream)\" = /dev/null\n\
+             done\n\
              printf '%s\\n' \"$*\" \"$(id -u)\" \"$(pwd)\" \"$HOME\" > '{out}'\n\
              cat /proc/self/cgroup >> '{out}'\n",
                 fd = fd,
@@ -292,6 +309,83 @@ mod tests {
                     fs::read_to_string("/proc/self/cgroup").unwrap(),
                 );
                 assert_eq!(fs::read_to_string(output).unwrap(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn workload_output_closes_while_envd_and_its_child_are_alive() {
+        use nix::{
+            fcntl::OFlag,
+            sys::{signal::kill, wait::waitpid},
+            unistd::{dup2_stderr, dup2_stdout, pipe2, Pid},
+        };
+        use std::{
+            io::{BufRead, BufReader, Read},
+            net::Shutdown,
+            os::unix::{io::IntoRawFd, net::UnixStream},
+            time::Duration,
+        };
+
+        let (stdout, stdout_writer) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK).unwrap();
+        let (stderr, stderr_writer) = pipe2(OFlag::O_CLOEXEC | OFlag::O_NONBLOCK).unwrap();
+        let (control, child_control) = UnixStream::pair().unwrap();
+        control
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+
+        match unsafe { fork() }.unwrap() {
+            ForkResult::Child => {
+                drop(control);
+                drop(stdout);
+                drop(stderr);
+                if dup2_stdout(&stdout_writer).is_err() || dup2_stderr(&stderr_writer).is_err() {
+                    unsafe { libc::_exit(126) }
+                }
+                drop(stdout_writer);
+                drop(stderr_writer);
+
+                // A separate control socket keeps the fake daemon and its child
+                // alive after all workload output writers have been dropped.
+                let control_fd = child_control.into_raw_fd();
+                if unsafe { libc::dup2(control_fd, 9) } < 0
+                    || unsafe { libc::fcntl(9, libc::F_SETFD, 0) } < 0
+                {
+                    unsafe { libc::_exit(126) }
+                }
+                if control_fd != 9 {
+                    unsafe { libc::close(control_fd) };
+                }
+                let args = vec![
+                    "-c".to_string(),
+                    "/bin/cat <&9 & child=$!; printf '%s\\n' \"$child\" >&9; wait \"$child\""
+                        .to_string(),
+                ];
+                let _ = command(&args, "/bin/sh").exec();
+                unsafe { libc::_exit(127) }
+            }
+            ForkResult::Parent { child } => {
+                drop(child_control);
+                drop(stdout_writer);
+                drop(stderr_writer);
+                defer! {
+                    // EOF on the control socket lets cat exit; the shell reaps
+                    // it before exiting, including if an assertion below fails.
+                    let _ = control.shutdown(Shutdown::Write);
+                    let _ = waitpid(child, None);
+                }
+
+                let mut descendant = String::new();
+                BufReader::new(&control).read_line(&mut descendant).unwrap();
+                let descendant = Pid::from_raw(descendant.trim().parse().unwrap());
+                kill(child, None).unwrap();
+                kill(descendant, None).unwrap();
+
+                // Even with both processes still running, the workload's
+                // output readers must observe EOF rather than WouldBlock.
+                let mut byte = [0];
+                assert_eq!(File::from(stdout).read(&mut byte).unwrap(), 0);
+                assert_eq!(File::from(stderr).read(&mut byte).unwrap(), 0);
             }
         }
     }

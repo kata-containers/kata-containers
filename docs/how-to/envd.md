@@ -1,6 +1,6 @@
 # Run envd inside a container
 
-Kata's Go and Rust runtimes can start an optional envd process in the first
+Kata's Rust runtime (`runtime-rs`) can start an optional envd process in the first
 non-pause container of a sandbox. Standalone containers are also eligible.
 
 Provide an executable, statically linked envd inside the guest. By default,
@@ -56,9 +56,11 @@ workload becomes eligible again.
 The agent forks envd immediately before the selected container's init process
 executes, after the Start FIFO, hooks, and security setup. It runs the argument
 vector directly, without a shell, in the container's namespaces, cgroup,
-working directory, environment, and user context. Standard input is `/dev/null`;
-standard output and error are inherited from the container. Exec processes do
-not start another envd.
+working directory, environment, and user context. Standard input, output, and
+error are connected to `/dev/null`. This prevents envd and its descendants from
+holding workload output pipes open after init exits, including with shared PID
+namespaces and passfd I/O. Envd logs are discarded. Exec processes do not start
+another envd.
 
 Kata does not supervise envd, wait for readiness, restart it, or configure host
 port forwarding. The caller must arrange connectivity and readiness checks.
