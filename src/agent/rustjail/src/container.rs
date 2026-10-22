@@ -585,6 +585,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let root = fs::canonicalize(&rootfs)?;
     let rootfs = root.to_str().unwrap();
 
+    let envd = if init {
+        crate::envd::Envd::prepare_if_requested(&spec)?
+    } else {
+        None
+    };
+
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // setup rootfs
         if let Ok(systemd_cm) = systemd_cm {
@@ -841,6 +847,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    if let Some(envd) = envd {
+        envd.start();
+    }
     do_exec(&args);
 }
 
@@ -1061,10 +1070,8 @@ impl BaseContainer for LinuxContainer {
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(slave_raw) };
             // Create temporary OwnedFd for dup operations, then forget it since stdin owns the fd
             let slave_fd = unsafe { OwnedFd::from_raw_fd(slave_raw) };
-            child_stdout =
-                unsafe { std::process::Stdio::from_raw_fd(unistd::dup(&slave_fd)?.into_raw_fd()) };
-            child_stderr =
-                unsafe { std::process::Stdio::from_raw_fd(unistd::dup(&slave_fd)?.into_raw_fd()) };
+            child_stdout = slave_fd.try_clone()?.into();
+            child_stderr = slave_fd.try_clone()?.into();
             std::mem::forget(slave_fd); // Don't close - stdin owns it
 
             if let Some(proc_io) = &mut p.proc_io {
