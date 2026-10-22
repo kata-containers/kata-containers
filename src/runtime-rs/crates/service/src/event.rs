@@ -141,5 +141,6 @@ fn default_ttrpc_context() -> TtrpcContext {
         mh: MessageHeader::default(),
         metadata: HashMap::default(),
         timeout_nano: 0,
+        connection_data: Default::default(),
     }
 }

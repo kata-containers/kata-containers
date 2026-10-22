@@ -8,8 +8,7 @@ use rustjail::process::ProcessIo;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio_vsock::SockAddr::Vsock;
-use tokio_vsock::{VsockListener, VsockStream};
+use tokio_vsock::{VsockAddr, VsockListener, VsockStream};
 
 lazy_static! {
     static ref HVSOCK_STREAMS: Arc<Mutex<HashMap<u32, VsockStream>>> =
@@ -23,10 +22,10 @@ fn sl() -> slog::Logger {
 
 pub(crate) async fn start_listen(port: u32) -> Result<()> {
     info!(sl(), "start listening on port {}", port);
-    let mut listener = VsockListener::bind(libc::VMADDR_CID_ANY, port)?;
+    let listener = VsockListener::bind(VsockAddr::new(libc::VMADDR_CID_ANY, port))?;
     tokio::spawn(async move {
         loop {
-            if let Ok((stream, Vsock(addr))) = listener.accept().await {
+            if let Ok((stream, addr)) = listener.accept().await {
                 // We should insert the stream into the mapping as soon
                 // to minimize the risk of encountering race conditions.
                 let port = addr.port();

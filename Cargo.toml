@@ -163,8 +163,9 @@ cgroups = { features = ["oci"], package = "cgroups-rs", version = "0.5.1" }
 clap = { features = ["derive"], version = "4.5.40" }
 const_format = "0.2.30"
 container-device-interface = "1.1.1"
-containerd-shim = { features = ["async"], version = "0.11.0" }
-containerd-shim-protos = { features = ["async"], version = "0.11.0" }
+# Use the merged ttrpc 0.10 adaptation until the next shim release.
+containerd-shim = { features = ["async"], git = "https://github.com/containerd/rust-extensions", rev = "137eb2660504e7fe7dce18df61e7239761afc8f0" }
+containerd-shim-protos = { features = ["async"], git = "https://github.com/containerd/rust-extensions", rev = "137eb2660504e7fe7dce18df61e7239761afc8f0" }
 derivative = "2.2.0"
 devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
 flate2 = "1.1.5"
@@ -235,13 +236,15 @@ tempfile = "3.19.1"
 thiserror = "2.0.18"
 tokio = "1.46.1"
 tokio-util = "0.7.17"
-tokio-vsock = "0.3.4"
+tokio-vsock = "0.7.2"
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.18.0"
 tracing-subscriber = "0.3.20"
-ttrpc = "0.9.0"
+ttrpc = { version = "0.10.0", default-features = false, features = ["rustprotobuf"] }
+ttrpc-codegen = "0.7.0"
 url = "2.5.4"
+vsock = "0.5.4"
 which = "4.3.0"
 
 # Per-package release profile overrides for kata-deploy. The kata-deploy
