@@ -16,6 +16,30 @@ pub fn is_enabled() -> Result<bool> {
     Ok(enabled)
 }
 
+/// Whether the kernel command line explicitly turns SELinux on. The kernel
+/// honours the last `selinux=` occurrence, so this does too.
+pub fn requested_on_cmdline(cmdline: &str) -> bool {
+    cmdline
+        .split_whitespace()
+        .filter_map(|param| param.strip_prefix("selinux="))
+        .next_back()
+        == Some("1")
+}
+
+/// Whether a policy has been loaded. Until then the kernel reports the initial
+/// SID's bare name (`kernel`) as the context of every task instead of a full
+/// `user:role:type:level` context.
+pub fn policy_loaded() -> bool {
+    ["/proc/self/attr/selinux/current", "/proc/self/attr/current"]
+        .iter()
+        .find_map(|path| fs::read_to_string(path).ok())
+        .is_some_and(|context| is_full_context(&context))
+}
+
+fn is_full_context(context: &str) -> bool {
+    context.trim_end_matches(['\0', '\n']).contains(':')
+}
+
 pub fn add_mount_label(data: &mut String, label: &str) {
     if data.is_empty() {
         let context = format!("context=\"{label}\"");
@@ -55,6 +79,24 @@ mod tests {
     fn test_is_enabled() {
         let ret = is_enabled();
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
+    }
+
+    #[test]
+    fn test_requested_on_cmdline() {
+        assert!(requested_on_cmdline("console=hvc0 selinux=1 quiet"));
+        assert!(!requested_on_cmdline("console=hvc0 selinux=0"));
+        assert!(!requested_on_cmdline("console=hvc0"));
+        assert!(!requested_on_cmdline("selinux=1 selinux=0"));
+        assert!(requested_on_cmdline("selinux=0 selinux=1"));
+        assert!(!requested_on_cmdline("kata.selinux=1"));
+    }
+
+    #[test]
+    fn test_is_full_context() {
+        assert!(!is_full_context("kernel\0"));
+        assert!(!is_full_context(""));
+        assert!(is_full_context("system_u:system_r:kata_agent_t:s0\0"));
+        assert!(!is_full_context("unconfined\n"));
     }
 
     #[test]
