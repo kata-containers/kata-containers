@@ -27,6 +27,9 @@ pub mod cpu;
 /// Contants and data types related to device.
 pub mod device;
 
+/// Shared envd configuration and executable paths.
+pub mod envd;
+
 /// Constants and data types related to handler.
 pub mod handler;
 

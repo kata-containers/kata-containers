@@ -841,6 +841,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    // Start envd if requested, but only for the container's init process.
+    if init {
+        crate::envd::start_if_enabled(&spec);
+    }
     do_exec(&args);
 }
 
