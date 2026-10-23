@@ -29,6 +29,7 @@ scopeguard.workspace = true
 slog.workspace = true
 slog-scope.workspace = true
 
+async-io = "1.13.0"
 async-trait.workspace = true
 bit-vec = "0.8.0"
 futures.workspace = true
