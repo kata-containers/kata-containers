@@ -2291,12 +2291,17 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 
 // Start starts a sandbox. The containers that are making the sandbox
 // will be started.
-func (s *Sandbox) Start(ctx context.Context) error {
+func (s *Sandbox) Start(ctx context.Context) (err error) {
 	if err := s.state.ValidTransition(s.state.State, types.StateRunning); err != nil {
 		return err
 	}
 
 	guestTimeSyncGeneration := s.beginGuestTimeSyncStart()
+	defer func() {
+		if err != nil {
+			s.stopGuestTimeSync()
+		}
+	}()
 
 	prevState := s.state.State
 

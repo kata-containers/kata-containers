@@ -24,6 +24,7 @@ import (
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -245,7 +246,11 @@ type guestTimeSyncTestAgent struct {
 }
 
 func (a *guestTimeSyncTestAgent) setGuestDateTime(ctx context.Context, now time.Time) error {
-	a.calls <- now
+	select {
+	case a.calls <- now:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	a.callMutex.Lock()
 	if a.failures > 0 {
@@ -351,6 +356,112 @@ func TestFailedVMStartCleanupStopsGuestTimeSync(t *testing.T) {
 		assert.True(t, canceled, "agent stopped before guest time synchronization exited")
 	case <-time.After(time.Second):
 		t.Fatal("agent was not stopped during failed VM start cleanup")
+	}
+}
+
+type guestTimeSyncTestStore struct {
+	persistapi.PersistDriver
+}
+
+func (*guestTimeSyncTestStore) ToDisk(persistapi.SandboxState, map[string]persistapi.ContainerState) error {
+	return fmt.Errorf("sandbox persistence failed")
+}
+
+func TestFailedSandboxStartStopsGuestTimeSync(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		withContainer bool
+		wantError     string
+	}{
+		{
+			name:          "container start",
+			withContainer: true,
+			wantError:     "Container not ready or stopped",
+		},
+		{
+			name:      "sandbox persistence",
+			wantError: "sandbox persistence failed",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			network, err := NewNetwork()
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			testAgent := &guestTimeSyncTestAgent{
+				mockAgent:  &mockAgent{},
+				calls:      make(chan time.Time, 1),
+				block:      true,
+				callStart:  make(chan struct{}),
+				callCancel: make(chan struct{}),
+			}
+			sandbox := &Sandbox{
+				id:         testSandboxID,
+				agent:      testAgent,
+				config:     &SandboxConfig{GuestTimeSyncInterval: 1},
+				containers: map[string]*Container{},
+				devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
+				hypervisor: &mockHypervisor{},
+				network:    network,
+				state:      types.SandboxState{State: types.StateReady},
+				store:      &guestTimeSyncTestStore{},
+			}
+			if test.withContainer {
+				sandbox.containers[testContainerID] = &Container{
+					id:      testContainerID,
+					sandbox: sandbox,
+					state:   types.ContainerState{State: types.StateRunning},
+				}
+			}
+
+			generation := sandbox.beginGuestTimeSyncStart()
+			sandbox.startGuestTimeSync(generation, time.Millisecond)
+			done := sandbox.guestTimeSyncDone
+			t.Cleanup(sandbox.stopGuestTimeSync)
+
+			select {
+			case <-testAgent.callStart:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for guest time synchronization")
+			}
+
+			err = sandbox.Start(context.Background())
+			assert.ErrorContains(t, err, test.wantError)
+
+			select {
+			case <-done:
+			default:
+				t.Error("failed sandbox start returned before guest time synchronization exited")
+			}
+			assert.Nil(t, sandbox.guestTimeSyncCancel)
+			assert.False(t, sandbox.guestTimeSyncEnabled)
+		})
+	}
+}
+
+func TestGuestTimeSyncAgentCancellationWithFullChannel(t *testing.T) {
+	testAgent := &guestTimeSyncTestAgent{
+		mockAgent: &mockAgent{},
+		calls:     make(chan time.Time, 1),
+	}
+	testAgent.calls <- time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result := make(chan error, 1)
+	go func() {
+		result <- testAgent.setGuestDateTime(ctx, time.Now())
+	}()
+
+	cancel()
+	select {
+	case err := <-result:
+		assert.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		<-testAgent.calls
+		<-result
+		t.Fatal("guest time synchronization did not cancel with a full call channel")
 	}
 }
 
