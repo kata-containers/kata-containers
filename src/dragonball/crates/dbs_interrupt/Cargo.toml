@@ -16,7 +16,7 @@ dbs-arch = { workspace = true }
 dbs-device = { workspace = true }
 kvm-bindings = { optional = true, workspace = true }
 kvm-ioctls = { optional = true, workspace = true }
-libc = "0.2"
+libc = { workspace = true }
 vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
