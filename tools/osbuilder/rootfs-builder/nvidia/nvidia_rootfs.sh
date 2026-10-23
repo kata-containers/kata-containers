@@ -534,6 +534,8 @@ chisseled_init() {
 	cp -a "${stage_one}"/sbin/ldconfig sbin/ldconfig
 
 	cp -a "${stage_one}"/etc/ssl/certs/ca-certificates.crt etc/ssl/certs/.
+	# A cached stage one may predate the check in the Ubuntu build_rootfs.
+	check_ca_bundle etc/ssl/certs/ca-certificates.crt
 
 	local conf_file="etc/modprobe.d/0000-nvidia.conf"
 	echo 'options nvidia NVreg_DeviceFileMode=0660' > "${conf_file}"
@@ -781,7 +783,7 @@ assemble_nvidia_gpu_extension() {
 			"${extension}/usr/share/nvidia/nvswitch/fabricmanager.cfg"
 	fi
 
-	# Materialize the SONAME symlinks (e.g. libcuda.so.1 -> libcuda.so.595.58.03)
+	# Materialize the SONAME symlinks (e.g. libcuda.so.1 -> libcuda.so.<driver-version>)
 	# inside the lib dir. The extension ships only the versioned files, so without
 	# this `nvidia-ctk cdi generate` has no symlink to replicate into the
 	# container (it reproduces existing links, it does not synthesize SONAMEs) and

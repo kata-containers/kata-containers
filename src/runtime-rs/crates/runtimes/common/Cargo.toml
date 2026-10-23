@@ -5,6 +5,10 @@ license = { workspace = true }
 name = "common"
 version = "0.1.0"
 
+[dev-dependencies]
+rstest = { workspace = true }
+tempfile = { workspace = true }
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -14,12 +18,16 @@ containerd-shim-protos = { features = ["sandbox"], workspace = true }
 nix = { workspace = true }
 oci-spec = { workspace = true }
 protobuf = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { features = ["fs", "process", "rt-multi-thread"], workspace = true }
+tracing = { workspace = true }
 
 # Local dependencies
 agent = { workspace = true }
+hypervisor = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 protocols = { workspace = true }

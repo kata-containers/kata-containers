@@ -206,7 +206,7 @@ impl Container {
 
         let container_devices = self
             .resource_manager
-            .handler_devices(&config.container_id, linux)
+            .handler_devices(&config.container_id, linux, &mut inner.devices)
             .await?;
         let devices_agent = annotate_container_devices(&mut spec, container_devices)
             .context("annotate container devices failed")?;
@@ -578,13 +578,14 @@ impl Container {
 
         let mut inner = self.inner.write().await;
         let device_manager = self.resource_manager.get_device_manager().await;
-        inner
+        let stopped = inner
             .stop_process(container_process, true, &device_manager)
             .await
-            .context("stop process")?;
+            .context("stop process");
 
-        // update vcpus, mems and host cgroups
-        if container_process.process_type == ProcessType::Container {
+        if container_process.process_type == ProcessType::Container
+            && (stopped.is_ok() || inner.init_process.get_status().await == ProcessStatus::Stopped)
+        {
             self.resource_manager
                 .update_linux_resource(
                     &self.config.container_id,
@@ -594,7 +595,26 @@ impl Container {
                 .await?;
         }
 
-        Ok(())
+        stopped
+    }
+
+    pub async fn finish_cleanup(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        if inner.init_process.get_status().await != ProcessStatus::Stopped
+            || !inner.has_pending_cleanup()
+        {
+            return Ok(());
+        }
+
+        let device_manager = self.resource_manager.get_device_manager().await;
+        inner
+            .cleanup_container(
+                self.container_id.container_id.as_str(),
+                true,
+                &device_manager,
+            )
+            .await
+            .context("clean up container")
     }
 
     async fn copy_termination_log(&self) {

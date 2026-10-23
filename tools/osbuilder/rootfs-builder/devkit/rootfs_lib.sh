@@ -18,14 +18,21 @@ build_rootfs() {
 	# done (upstream's documented recipe): the devkit seeds its resolver from the
 	# guest at runtime (devkit-init), and a released artefact must carry neither
 	# the build machine's DNS servers nor its hostname.
+	#
+	# The devkit installs its own ca-certificates, so it needs the -updates and
+	# -security pockets: the release pocket alone freezes the CA bundle (and every
+	# other package) at whatever shipped on release day.
 	# shellcheck disable=SC2016,SC2154
 	if ! mmdebstrap --mode auto --arch "${DEB_ARCH}" --variant required \
 			--components="${REPO_COMPONENTS}" \
 			--include "${PACKAGES[*]}${EXTRA_PKGS:+ ${EXTRA_PKGS}}" \
 			--customize-hook='rm -f "$1/etc/resolv.conf" "$1/etc/hostname"' \
-			"${OS_VERSION}" "${rootfs_dir}" "${REPO_URL}"; then
+			"${OS_VERSION}" "${rootfs_dir}" "${REPO_URL}" \
+			"deb ${REPO_URL} ${OS_VERSION}-updates ${REPO_COMPONENTS}" \
+			"deb ${REPO_URL} ${OS_VERSION}-security ${REPO_COMPONENTS}"; then
 		die "mmdebstrap failed for the devkit rootfs"
 	fi
+	check_ca_bundle "${rootfs_dir}/etc/ssl/certs/ca-certificates.crt"
 
 	# Expose busybox-static at the path devkit-init bootstraps from on the
 	# shell-less guest base.

@@ -159,3 +159,10 @@ Virt
 sysfs
 openrc
 ultravisor
+AAVMF
+XICS
+XIVE
+Rego
+kcli
+podvm
+eMudhra

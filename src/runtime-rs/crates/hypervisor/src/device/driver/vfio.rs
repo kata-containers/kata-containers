@@ -680,16 +680,9 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
             .expect("Failed to run modprobe vfio-pci");
     }
 
-    // Arm does not need cmdline to open iommu, just set it through bios.
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        // check intel_iommu=on
-        let cmdline = fs::read_to_string("/proc/cmdline").unwrap();
-        if cmdline.contains("iommu=off") || !cmdline.contains("iommu=") {
-            return Err(anyhow!("iommu isn't set on kernel cmdline"));
-        }
-    }
-
+    // An IOMMU the kernel enabled registers itself in /sys/class/iommu,
+    // whether a kernel parameter turned it on or the kernel's default did
+    // (CONFIG_INTEL_IOMMU_DEFAULT_ON); intel_iommu=off leaves none there.
     if !do_check_iommu_on().context("check iommu on failed")? {
         return Err(anyhow!("IOMMU not enabled yet."));
     }

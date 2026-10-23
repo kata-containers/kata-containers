@@ -1110,15 +1110,16 @@ fn debug_tool_paths(component: &str) -> &'static [&'static str] {
 }
 
 /// Extract debug tooling when debug is on, remove it when off so a redeploy
-/// never leaves it behind. Extraction is best-effort: a missing tarball only
-/// warns, since an image may be built without the tools.
+/// never leaves it behind. Debug-only installs may omit the tools, but devkit
+/// requires its host console client and must not silently succeed without it.
 fn reconcile_debug_tools(config: &Config, extracted: &mut HashSet<String>) -> Result<()> {
-    if config.debug {
+    if config.debug || config.devkit_enabled {
         extract_debug_tools_in(
             DEBUG_TOOL_COMPONENTS,
             Path::new(TARBALLS_DIR),
             &config.host_install_dir,
             true,
+            config.devkit_enabled,
             extracted,
         )
     } else {
@@ -1154,6 +1155,7 @@ fn extract_debug_tools_in(
     tarballs_dir: &Path,
     host_install_dir: &str,
     debug: bool,
+    required: bool,
     extracted: &mut HashSet<String>,
 ) -> Result<()> {
     if !debug {
@@ -1169,6 +1171,12 @@ fn extract_debug_tools_in(
         let tarball_path = tarballs_dir.join(&tarball_name);
 
         if !tarball_path.exists() {
+            anyhow::ensure!(
+                !required,
+                "devkit requires host tool '{}', but its archive is missing: {}",
+                component,
+                tarball_path.display()
+            );
             warn!(
                 "debug: optional tool '{}' not found at {}; skipping. Rebuild the \
                  kata-deploy image with the '{}' component to enable it.",
@@ -1179,8 +1187,17 @@ fn extract_debug_tools_in(
             continue;
         }
 
-        info!("debug: extracting optional tool '{}'", component);
+        info!("debug: extracting tool '{}'", component);
         if let Err(e) = extract_tarball(&tarball_path, host_install_dir) {
+            if required {
+                return Err(e).with_context(|| {
+                    format!(
+                        "devkit requires host tool '{}': failed to extract {}",
+                        component,
+                        tarball_path.display()
+                    )
+                });
+            }
             warn!(
                 "debug: failed to extract optional tool '{}' from {}: {:#}; skipping",
                 component,
@@ -1191,6 +1208,20 @@ fn extract_debug_tools_in(
         }
 
         extracted.insert((*component).to_string());
+    }
+
+    if required {
+        for component in components {
+            for rel in debug_tool_paths(component) {
+                let path = Path::new(host_install_dir).join(rel);
+                anyhow::ensure!(
+                    path.is_file(),
+                    "devkit requires host tool '{}' at {}, but it was not installed",
+                    component,
+                    path.display()
+                );
+            }
+        }
     }
 
     Ok(())
@@ -3204,7 +3235,15 @@ image = "/opt/kata/share/kata-containers/kata-containers-mariner.img"
         let dest = tmp.path().to_str().unwrap();
         let mut extracted: HashSet<String> = HashSet::new();
 
-        extract_debug_tools_in(&["kata-ctl"], tmp.path(), dest, false, &mut extracted).unwrap();
+        extract_debug_tools_in(
+            &["kata-ctl"],
+            tmp.path(),
+            dest,
+            false,
+            false,
+            &mut extracted,
+        )
+        .unwrap();
 
         assert!(extracted.is_empty());
     }
@@ -3220,6 +3259,7 @@ image = "/opt/kata/share/kata-containers/kata-containers-mariner.img"
             tarballs.path(),
             dest.path().to_str().unwrap(),
             true,
+            false,
             &mut extracted,
         )
         .unwrap();
@@ -3238,12 +3278,121 @@ image = "/opt/kata/share/kata-containers/kata-containers-mariner.img"
             tarballs.path(),
             dest.path().to_str().unwrap(),
             true,
+            false,
             &mut extracted,
         )
         .unwrap();
 
         assert_eq!(extracted.len(), 1);
         assert!(extracted.contains("kata-ctl"));
+    }
+
+    fn write_debug_tool_tarball(tarballs: &Path, entry: &str) {
+        let file = fs::File::create(tarballs.join("kata-static-kata-ctl.tar.zst")).unwrap();
+        let encoder = zstd::Encoder::new(file, 0).unwrap();
+        let mut archive = tar::Builder::new(encoder);
+        let contents = b"kata-ctl test binary";
+        let mut header = tar::Header::new_gnu();
+        header.set_size(contents.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        archive
+            .append_data(&mut header, entry, &contents[..])
+            .unwrap();
+        archive.into_inner().unwrap().finish().unwrap();
+    }
+
+    #[test]
+    fn test_devkit_installs_kata_ctl() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        write_debug_tool_tarball(tarballs.path(), "./opt/kata/bin/kata-ctl");
+        let mut extracted = HashSet::new();
+
+        extract_debug_tools_in(
+            DEBUG_TOOL_COMPONENTS,
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            true,
+            &mut extracted,
+        )
+        .unwrap();
+
+        assert_eq!(
+            fs::read(dest.path().join("bin/kata-ctl")).unwrap(),
+            b"kata-ctl test binary"
+        );
+        assert!(extracted.contains("kata-ctl"));
+    }
+
+    #[test]
+    fn test_devkit_requires_kata_ctl_tarball() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let mut extracted = HashSet::new();
+
+        let err = extract_debug_tools_in(
+            DEBUG_TOOL_COMPONENTS,
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            true,
+            &mut extracted,
+        )
+        .unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("devkit requires host tool 'kata-ctl'"));
+        assert!(err.to_string().contains("archive is missing"));
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_debug_tool_extraction_failure_is_fatal_only_for_devkit(#[case] required: bool) {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        fs::write(
+            tarballs.path().join("kata-static-kata-ctl.tar.zst"),
+            "invalid archive",
+        )
+        .unwrap();
+        let mut extracted = HashSet::new();
+
+        let result = extract_debug_tools_in(
+            DEBUG_TOOL_COMPONENTS,
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            required,
+            &mut extracted,
+        );
+
+        assert_eq!(result.is_err(), required);
+        assert!(extracted.is_empty());
+    }
+
+    #[test]
+    fn test_devkit_rejects_tarball_without_kata_ctl() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        write_debug_tool_tarball(tarballs.path(), "./usr/bin/kata-ctl");
+        let mut extracted = HashSet::new();
+
+        let err = extract_debug_tools_in(
+            DEBUG_TOOL_COMPONENTS,
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            true,
+            &mut extracted,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("but it was not installed"));
+        assert!(!dest.path().join("bin/kata-ctl").exists());
     }
 
     #[test]
