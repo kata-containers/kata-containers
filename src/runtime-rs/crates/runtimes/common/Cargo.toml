@@ -14,6 +14,7 @@ tempfile = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+cgroups = { workspace = true }
 containerd-shim-protos = { features = ["sandbox"], workspace = true }
 nix = { workspace = true }
 oci-spec = { workspace = true }
