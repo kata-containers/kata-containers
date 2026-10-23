@@ -659,15 +659,12 @@ coco_guest_components() {
 	info "nvidia: installing the confidential containers guest components tarball"
 
 	local -r coco_bin_dir="usr/local/bin"
-	local -r etc_dir="etc"
 	local -r pause_dir="pause_bundle"
 
 	mkdir -p "${coco_bin_dir}"
 	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent-nv  "${coco_bin_dir}/attestation-agent"
 	cp -a "${stage_one}/${coco_bin_dir}"/api-server-rest       "${coco_bin_dir}/."
 	cp -a "${stage_one}/${coco_bin_dir}"/confidential-data-hub "${coco_bin_dir}/."
-
-	cp -a "${stage_one}/${etc_dir}"/ocicrypt_config.json "${etc_dir}/."
 
 	mkdir -p "${pause_dir}/rootfs"
 	cp -a "${stage_one}/${pause_dir}"/config.json  "${pause_dir}/."
