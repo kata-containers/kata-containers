@@ -686,6 +686,46 @@ build_rootfs_distro()
 	fi
 }
 
+# The distribution's apparmor.service loads every profile found in
+# /etc/apparmor.d during boot. If it runs, workload profiles would already be
+# in the kernel before the kata-agent is asked to apply one, and the agent
+# could not tell whether a profile is loaded from the intended source.
+#
+# The contract is that the official base image must not preload workload
+# profiles through the distribution service. That is weaker than permanently
+# disabling it, so this installs a preset rather than masking the unit: a
+# preset is how a distribution expresses "do not enable this by default",
+# and it leaves the service available for anyone who enables it explicitly.
+#
+# Being a no-op when the distribution ships no such unit keeps the non-systemd
+# and AGENT_INIT=yes builds working unchanged.
+disable_distro_apparmor_service()
+{
+	local preset_dir="${ROOTFS_DIR}/usr/lib/systemd/system-preset"
+	local unit_name="apparmor.service"
+
+	[[ -d "${ROOTFS_DIR}" ]] || return 0
+
+	# Nothing to do when apparmor.service is not part of this rootfs.
+	[[ -f "${ROOTFS_DIR}/lib/systemd/system/${unit_name}" ]] || \
+		[[ -f "${ROOTFS_DIR}/usr/lib/systemd/system/${unit_name}" ]] || return 0
+
+	mkdir -p "${preset_dir}"
+	cat > "${preset_dir}/10-kata-apparmor.preset" <<-EOF
+		# Do not let the distribution enable apparmor.service: the base image
+		# must not preload workload profiles. Keep it available for explicit
+		# enablement.
+		disable ${unit_name}
+	EOF
+
+	# Drop any enablement the packaging already created, so the preset and the
+	# on-disk state agree.
+	local wants_dir
+	while IFS= read -r wants_dir; do
+		rm -f "${wants_dir}/${unit_name}"
+	done < <(find "${ROOTFS_DIR}" -type d -name '*.wants' -print 2>/dev/null)
+}
+
 # Used to create a minimal directory tree where the agent can be installed.
 # This is used when a distro is not specified.
 prepare_overlay()
@@ -1033,6 +1073,7 @@ main()
 
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
+	disable_distro_apparmor_service
 
 	if is_nvidia_variant; then
 		# The monolith and nvidia base continue to share stage-one.

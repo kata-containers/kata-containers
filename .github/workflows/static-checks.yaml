@@ -55,6 +55,66 @@ jobs:
     with:
       instance: ubuntu-24.04
 
+  guest-apparmor-checks:
+    name: guest-apparmor-checks
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apparmor coreutils findutils libc-bin make python3 shellcheck util-linux
+          ./ci/install_yq.sh
+          echo "GO_VERSION=$(yq '.languages.golang.version' versions.yaml)" >> "$GITHUB_ENV"
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Setup Go for runtime configuration recipes
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Setup Rust
+        run: |
+          ./tests/install_rust.sh
+          echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Check AppArmor shell syntax
+        run: |
+          bash -n tests/guest-apparmor-rootfs.sh
+          bash -n src/agent/kata-extension-mount-generator.sh
+          bash -n src/agent/kata-extension-mount-generator-test.sh
+          bash -n tests/integration/kubernetes/k8s-apparmor-test.sh
+          bash -n tools/packaging/kata-deploy/local-build/kata-deploy-binaries.sh
+          bash -n tools/packaging/kata-deploy/local-build/tests/apparmor-policy-test.sh
+          bash -n tests/integration/kubernetes/guest-apparmor-ci.sh
+          shellcheck tests/integration/kubernetes/guest-apparmor-ci.sh
+      - name: Check rootfs and extension startup dependencies
+        run: |
+          bash tests/guest-apparmor-rootfs.sh
+          bash src/agent/kata-extension-mount-generator-test.sh
+          bash tests/integration/kubernetes/k8s-apparmor-test.sh
+      - name: Test packaging policy validator with the real parser available
+        run: |
+          command -v apparmor_parser
+          command -v iconv
+          bash tools/packaging/kata-deploy/local-build/tests/apparmor-policy-test.sh
+      - name: Check generated Go and Rust QEMU TOML configurations
+        run: python3 src/runtime/tests/test_apparmor_config.py
+      - name: Test isolated Rust AppArmor extension validator
+        run: |
+          validator_tests=$(mktemp "${RUNNER_TEMP}/guest-extension-tests.XXXXXX")
+          trap 'rm -f -- "$validator_tests"' EXIT
+          rustc --test -D warnings src/runtime-rs/crates/runtimes/virt_container/src/guest_extension.rs -o "$validator_tests"
+          "$validator_tests"
+      - name: Test disposable-runner configuration and failure cases
+        run: python3 tests/integration/kubernetes/guest-apparmor-ci-config.py self-test
+
   build-checks-depending-on-kvm:
     name: build-checks-depending-on-kvm
     runs-on: ubuntu-24.04

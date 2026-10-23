@@ -50,6 +50,9 @@ jobs:
           { vmm: qemu, containerd_version: minimum },
           { vmm: qemu-runtime-rs, containerd_version: latest },
           { vmm: qemu-runtime-rs, containerd_version: minimum },
+          # Separate opt-in legs; regular QEMU suites keep their default guest.
+          { vmm: qemu, containerd_version: latest, guest_apparmor: "yes", k8s_test_union: k8s-apparmor.bats },
+          { vmm: qemu-runtime-rs, containerd_version: latest, guest_apparmor: "yes", k8s_test_union: k8s-apparmor.bats },
           { vmm: clh-runtime-rs, containerd_version: latest },
           # TODO: Remove k8s_test_union once CLH supports multi-layer images with EROFS.
           { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged, k8s_test_union: k8s-vm-templating.bats },
@@ -74,6 +77,9 @@ jobs:
       KUBERNETES: vanilla
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
       K8S_TEST_UNION: ${{ matrix.environment.k8s_test_union }}
+      KATA_GUEST_APPARMOR_TEST: ${{ matrix.environment.guest_apparmor || 'no' }}
+      KATA_K8S_APPARMOR_API: field
+      K8S_TEST_DEBUG_RETRY: ${{ matrix.environment.guest_apparmor == 'yes' && 'false' || 'true' }}
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
@@ -82,6 +88,13 @@ jobs:
       EROFS_MERGE_MODE: ${{ matrix.environment.erofs_merge_mode }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Prepare AppArmor evidence directory
+        if: matrix.environment.guest_apparmor == 'yes'
+        run: |
+          evidence_dir="${RUNNER_TEMP}/guest-apparmor-evidence"
+          mkdir -p "$evidence_dir"
+          printf 'KATA_GUEST_APPARMOR_EVIDENCE_DIR=%s\n' "$evidence_dir" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
@@ -131,6 +144,17 @@ jobs:
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
+      - name: Configure systemd guest and real AppArmor CI fixture
+        if: matrix.environment.guest_apparmor == 'yes'
+        timeout-minutes: 10
+        run: |
+          mkdir -p "$KATA_GUEST_APPARMOR_EVIDENCE_DIR"
+          sudo apt-get update
+          sudo apt-get install -y apparmor cryptsetup-bin python3 util-linux
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,KATA_GUEST_APPARMOR_TEST,KATA_HYPERVISOR \
+            bash tests/integration/kubernetes/guest-apparmor-ci.sh configure \
+            2>&1 | tee "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/configure.log"
+
       - name: Run tests
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -138,6 +162,33 @@ jobs:
       - name: Report tests
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
+      - name: Collect AppArmor runner, runtime, agent and guest-console evidence
+        if: always() && matrix.environment.guest_apparmor == 'yes'
+        run: |
+          mkdir -p "$KATA_GUEST_APPARMOR_EVIDENCE_DIR"
+          # Hypervisor and agent debugging are enabled in the CI drop-in;
+          # their console/log output is forwarded to the runner journal.
+          sudo journalctl --no-pager > "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/runner-journal.log"
+          sudo containerd --config /etc/containerd/config.toml config dump \
+            > "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/containerd-effective.toml"
+
+      - name: Upload AppArmor evidence (approval alone is not a test result)
+        if: always() && matrix.environment.guest_apparmor == 'yes'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: guest-apparmor-${{ matrix.environment.vmm }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/guest-apparmor-evidence
+            tests/integration/kubernetes/reports
+
+      - name: Remove the temporary host AppArmor fixture and guest CI drop-in
+        if: always() && matrix.environment.guest_apparmor == 'yes'
+        timeout-minutes: 3
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,KATA_GUEST_APPARMOR_TEST,KATA_HYPERVISOR \
+            bash tests/integration/kubernetes/guest-apparmor-ci.sh cleanup
 
       - name: Delete kata-deploy
         if: always()
