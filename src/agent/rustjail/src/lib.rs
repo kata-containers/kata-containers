@@ -29,6 +29,7 @@ pub mod capabilities;
 pub mod cgroups;
 pub mod cgroups_rs;
 pub mod container;
+mod envd;
 pub mod mount;
 pub mod pipestream;
 pub mod process;

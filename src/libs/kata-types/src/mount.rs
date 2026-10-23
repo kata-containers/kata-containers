@@ -18,6 +18,11 @@ pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
 /// The Mount should be ignored by the host and handled by the guest.
 pub const KATA_GUEST_MOUNT_PREFIX: &str = "kata:guest-mount:";
 
+/// Fixed envd executable in the guest image.
+pub const ENVD_GUEST_PATH: &str = "/usr/libexec/kata-containers/kata-envd";
+/// Container destination on /dev tmpfs, including for read-only root filesystems.
+pub const ENVD_CONTAINER_PATH: &str = "/dev/.kata-containers/kata-envd";
+
 /// The sharedfs volume is mounted by guest OS before starting the kata-agent.
 pub const KATA_SHAREDFS_GUEST_PREMOUNT_TAG: &str = "kataShared";
 

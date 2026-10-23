@@ -1705,6 +1705,12 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	// Host volume handling is complete. Inject the guest-local executable
+	// directly into the agent spec so its source is never shared from the host.
+	if err = sandbox.configureEnvd(c, grpcSpec); err != nil {
+		return nil, err
+	}
+
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
 		ExecId:       c.id,

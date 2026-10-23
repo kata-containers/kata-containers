@@ -841,6 +841,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    if init {
+        crate::envd::start_if_enabled(&spec);
+    }
     do_exec(&args);
 }
 
