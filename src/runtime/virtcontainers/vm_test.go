@@ -84,3 +84,52 @@ func TestNewVM(t *testing.T) {
 	_, err = NewVM(ctx, config)
 	assert.Nil(err)
 }
+
+type checkAgentReadyTestAgent struct {
+	mockAgent
+	checkErr      error
+	checked       bool
+	disconnects   int
+	disconnectErr error
+}
+
+func (a *checkAgentReadyTestAgent) check(ctx context.Context) error {
+	a.checked = true
+	return a.checkErr
+}
+
+func (a *checkAgentReadyTestAgent) disconnect(ctx context.Context) error {
+	a.disconnects++
+	return a.disconnectErr
+}
+
+func TestCheckAgentReadyDisconnectIsBestEffort(t *testing.T) {
+	assert := assert.New(t)
+
+	agent := &checkAgentReadyTestAgent{
+		disconnectErr: context.Canceled,
+	}
+	vm := &VM{
+		agent: agent,
+	}
+
+	err := vm.CheckAgentReady(context.Background())
+	assert.NoError(err)
+	assert.True(agent.checked)
+	assert.Equal(1, agent.disconnects)
+}
+
+func TestCheckAgentReadyReturnsCheckError(t *testing.T) {
+	assert := assert.New(t)
+
+	agent := &checkAgentReadyTestAgent{
+		checkErr: context.Canceled,
+	}
+	vm := &VM{
+		agent: agent,
+	}
+
+	err := vm.CheckAgentReady(context.Background())
+	assert.ErrorIs(err, context.Canceled)
+	assert.Equal(1, agent.disconnects)
+}
