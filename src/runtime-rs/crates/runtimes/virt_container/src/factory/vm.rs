@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
 #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
-use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
+use hypervisor::{qemu::Qemu, Hypervisor, Param, HYPERVISOR_QEMU};
 use kata_types::config::{Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig};
 use resource::{cpu_mem::initial_size::InitialSizeManager, ResourceManager};
 use runtime_spec;
@@ -110,13 +110,20 @@ impl TemplateVm {
     /// Initializes the configured hypervisor for Kata.
     async fn new_hypervisor(
         config: &VmConfig,
-        _toml_config: &TomlConfig,
+        toml_config: &TomlConfig,
     ) -> Result<Arc<dyn Hypervisor>> {
+        let mut hypervisor_config = config.hypervisor_config.clone();
+        let agent_params = toml_config
+            .get_agent_kernel_params()?
+            .into_iter()
+            .map(|(key, value)| Param::new(&key, &value).to_string())
+            .collect::<Result<Vec<_>>>()?;
+        hypervisor_config.boot_info.add_kernel_params(agent_params);
+
         let hypervisor: Arc<dyn Hypervisor> = match config.hypervisor_name.as_str() {
             HYPERVISOR_QEMU => {
                 let h = Qemu::new();
-                h.set_hypervisor_config(config.hypervisor_config.clone())
-                    .await;
+                h.set_hypervisor_config(hypervisor_config).await;
                 Arc::new(h)
             }
             #[cfg(all(
@@ -125,17 +132,15 @@ impl TemplateVm {
             ))]
             hypervisor::HYPERVISOR_NAME_CH => {
                 let h = hypervisor::ch::CloudHypervisor::new();
-                h.set_hypervisor_config(config.hypervisor_config.clone())
-                    .await;
+                h.set_hypervisor_config(hypervisor_config).await;
                 Arc::new(h)
             }
             #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
             HYPERVISOR_DRAGONBALL => {
                 let h = Dragonball::new();
-                h.set_hypervisor_config(config.hypervisor_config.clone())
-                    .await;
-                if _toml_config.runtime.use_passfd_io {
-                    h.set_passfd_listener_port(_toml_config.runtime.passfd_listener_port)
+                h.set_hypervisor_config(hypervisor_config).await;
+                if toml_config.runtime.use_passfd_io {
+                    h.set_passfd_listener_port(toml_config.runtime.passfd_listener_port)
                         .await;
                 }
                 Arc::new(h)
@@ -332,5 +337,69 @@ impl TemplateVm {
     /// Resume resumes a paused VM.
     pub async fn resume(&self) -> Result<()> {
         self.hypervisor.resume_vm().await.context("resume vm")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn assert_factory_agent_debug_kernel_params(hypervisor_name: &str) {
+        for debug in [false, true] {
+            for debug_console_enabled in [false, true] {
+                let mut toml_config = TomlConfig::default();
+                toml_config.runtime.hypervisor_name = hypervisor_name.to_string();
+                toml_config.runtime.agent_name = AGENT_KATA.to_string();
+                toml_config.agent.insert(
+                    AGENT_KATA.to_string(),
+                    AgentConfig {
+                        debug,
+                        debug_console_enabled,
+                        ..Default::default()
+                    },
+                );
+                let mut hypervisor_config = HypervisorConfig::default();
+                hypervisor_config.boot_info.kernel_params = "existing=value".to_string();
+                toml_config
+                    .hypervisor
+                    .insert(hypervisor_name.to_string(), hypervisor_config);
+
+                let config = VmConfig::new(&toml_config);
+                let hypervisor = TemplateVm::new_hypervisor(&config, &toml_config)
+                    .await
+                    .unwrap();
+                let boot_config = hypervisor.hypervisor_config().await;
+                let params: Vec<_> = boot_config
+                    .boot_info
+                    .kernel_params
+                    .split_whitespace()
+                    .collect();
+
+                assert!(params.contains(&"existing=value"));
+                assert_eq!(params.contains(&"agent.log=debug"), debug);
+                assert_eq!(
+                    params.contains(&"agent.debug_console"),
+                    debug_console_enabled
+                );
+                assert_eq!(
+                    params.contains(&"agent.debug_console_vport=1026"),
+                    debug_console_enabled
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_factory_agent_debug_kernel_params() {
+        assert_factory_agent_debug_kernel_params(HYPERVISOR_QEMU).await;
+    }
+
+    #[cfg(all(
+        feature = "cloud-hypervisor",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    #[tokio::test]
+    async fn test_factory_clh_agent_debug_kernel_params() {
+        assert_factory_agent_debug_kernel_params(hypervisor::HYPERVISOR_NAME_CH).await;
     }
 }
