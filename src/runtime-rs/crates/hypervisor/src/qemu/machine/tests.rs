@@ -216,10 +216,32 @@ fn with_hugepages_preserves_egm_backends() {
     ));
 }
 
+// ---- Q35 x86_64: vanilla kata, 2-socket NUMA, 8 pre-provisioned root ports ----
+//
+// Production capture: DGX x86 host, 2026-07-07.  65 vCPUs, 73728M total,
+// 36864M per socket pinned to host NUMA node via /dev/shm.  8 pcie-root-ports
+// pre-provisioned on pcie.0 for GPU cold-plug (hot_plug_vfio=no-port).
+//
+// Blocked on Phase 3:
+//   - Q35 machine in Platform::to_qemu_args (no gic-version, no highmem-mmio-size)
+//   - MemoryBackend::File { host_nodes, policy } fields for NUMA SHM pinning
+//   - Objects::numa_distances for -numa dist entries
+//   - HostTopology fields for NUMA node + SHM path per socket
+
+#[test]
+#[ignore = "Phase 3: Q35 machine + NUMA SHM memory model not yet implemented"]
+fn q35_vanilla_kata_x86() {
+    // HostTopology shape TBD in Phase 3.
+    // 2 sockets: socket 0 cpus 0-32 (host-node 0), socket 1 cpus 33-65 (host-node 1).
+    // No gpu_smmu_groups, no egm_sockets.
+    // 8 cold-plug root ports on pcie.0 (cold_plug_vfio=root-port, pcie_root_port=8);
+    // NUMA distance 20 between the two nodes.
+    todo!("Phase 3")
+}
+
 // ---- Grace Config 1: single GPU, 1 SMMU, 9 NUMA nodes ----
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_1_single_gpu() {
     check(
         HostTopology {
@@ -234,7 +256,6 @@ fn grace_1_single_gpu() {
 // ---- Grace Config 2: 4 GPUs, 1 GPU per SMMU, 33 NUMA nodes ----
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_2_four_gpus_1_per_smmu() {
     check(
         HostTopology {
@@ -257,7 +278,6 @@ fn grace_2_four_gpus_1_per_smmu() {
 // ---- Grace Config 3: 4 GPUs, 2 GPUs per SMMU, 33 NUMA nodes ----
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_3_four_gpus_2_per_smmu() {
     check(
         HostTopology {
@@ -298,19 +318,16 @@ fn grace_4_gpu_and_nic() {
 // ---- Grace Config 5: vCMDQ, hugepages backing ----
 
 #[test]
-#[ignore = "Phase 5"]
 fn grace_5_vcmdq() {
     // Config 5 backs guest RAM with hugepages: with_hugepages() swaps the
     // primary backend to mem-path=/dev/hugepages/ with prealloc=on before
-    // emission.  The call is a stub until Phase 5 implements it, so the test
-    // stays ignored, but the body already documents the required step.
+    // emission.
     let topo = HostTopology {
         sockets: single_socket(0..4),
         gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
         egm_sockets: vec![],
     };
-    let mut platform =
-        Platform::from_config_defaults(16 << 30).expect("Platform::from_config_defaults");
+    let mut platform = Platform::from_config_defaults(16 << 30).expect("build");
     platform.apply_host_defaults(&topo);
     let platform = platform.with_hugepages("/dev/hugepages/");
     let got = platform.to_qemu_args().expect("to_qemu_args");
@@ -321,7 +338,6 @@ fn grace_5_vcmdq() {
 // ---- Grace Config 6: vEGM, 1 GPU per socket, 4 sockets ----
 
 #[test]
-#[ignore = "Phase 5"]
 fn grace_6_vegm_1_per_socket() {
     check(
         HostTopology {
@@ -391,7 +407,6 @@ fn grace_6_vegm_1_per_socket() {
 // ---- Grace Config 7: vEGM, 2 GPUs per socket, 2 sockets ----
 
 #[test]
-#[ignore = "Phase 5"]
 fn grace_7_vegm_2_per_socket() {
     check(
         HostTopology {
@@ -452,28 +467,5 @@ fn q35_coco_snp_single_gpu() {
     // HostTopology shape TBD in Phase 3.
     // 1 socket, cpus 0-16, host-node 1; GPU 0000:e1:00.0 on pxb-pcie bus_nr=32.
     // sev-snp-guest: cbitpos=51, reduced-phys-bits=1, kernel-hashes=on, policy=196608.
-    todo!("Phase 3")
-}
-
-// ---- Q35 x86_64: vanilla kata, 2-socket NUMA, 8 cold-plug root ports ----
-//
-// Production capture: DGX x86 host, 2026-07-07.  65 vCPUs, 73728M total,
-// 36864M per socket pinned to host NUMA node via /dev/shm.  8 pcie-root-ports
-// pre-provisioned on pcie.0 for GPU cold-plug (hot_plug_vfio=no-port).
-//
-// Blocked on Phase 3:
-//   - Q35 machine in Platform::to_qemu_args (no gic-version, no highmem-mmio-size)
-//   - MemoryBackend::File { host_nodes, policy } fields for NUMA SHM pinning
-//   - Objects::numa_distances for -numa dist entries
-//   - HostTopology fields for NUMA node + SHM path per socket
-
-#[test]
-#[ignore = "Phase 3: Q35 machine + NUMA SHM memory model not yet implemented"]
-fn q35_vanilla_kata_x86() {
-    // HostTopology shape TBD in Phase 3.
-    // 2 sockets: socket 0 cpus 0-32 (host-node 0), socket 1 cpus 33-65 (host-node 1).
-    // No gpu_smmu_groups, no egm_sockets.
-    // 8 cold-plug root ports on pcie.0 (cold_plug_vfio=root-port, pcie_root_port=8);
-    // NUMA distance 20 between the two nodes.
     todo!("Phase 3")
 }
