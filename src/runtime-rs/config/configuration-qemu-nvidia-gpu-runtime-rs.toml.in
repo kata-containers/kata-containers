@@ -91,6 +91,11 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM_NV@"
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
 
+# CPU model
+# CPU model to pass to QEMU's -cpu option, for example `cpu_model = "host"`.
+# If left empty, the CPU model defaults to `host`.
+cpu_model = ""
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
