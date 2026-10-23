@@ -239,6 +239,11 @@ get_virtiofsd_image_name() {
 	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps ".externals.virtiofsd.toolchain")-${libc}-$(get_last_modification "${virtiofsd_script_dir}")-$(uname -m)"
 }
 
+get_td_shim_image_name() {
+	td_shim_script_dir="${repo_root_dir}/tools/packaging/static-build/td-shim"
+	echo "${BUILDER_REGISTRY}:td-shim-$(get_from_kata_deps ".externals.td-shim.toolchain")-$(get_last_modification "${td_shim_script_dir}")-$(uname -m)"
+}
+
 get_libseccomp_hash() {
 	merge_two_hashes \
 		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
