@@ -77,6 +77,9 @@ func (s *Sandbox) Start(ctx context.Context) error {
 
 // Stop implements the VCSandbox function of the same name.
 func (s *Sandbox) Stop(ctx context.Context, force bool) error {
+	if s.StopFunc != nil {
+		return s.StopFunc(force)
+	}
 	return nil
 }
 
@@ -92,6 +95,9 @@ func (s *Sandbox) Resume() error {
 
 // Delete implements the VCSandbox function of the same name.
 func (s *Sandbox) Delete(ctx context.Context) error {
+	if s.DeleteFunc != nil {
+		return s.DeleteFunc()
+	}
 	return nil
 }
 
@@ -253,6 +259,14 @@ func (s *Sandbox) GetAgentURL() (string, error) {
 
 func (s *Sandbox) GetHypervisorPid() (int, error) {
 	return 0, nil
+}
+
+// HasPhysicalEndpoint implements the VCSandbox function of the same name.
+func (s *Sandbox) HasPhysicalEndpoint() bool {
+	if s.HasPhysicalEndpointFunc != nil {
+		return s.HasPhysicalEndpointFunc()
+	}
+	return false
 }
 
 func (s *Sandbox) RescanNetwork(ctx context.Context) error {
