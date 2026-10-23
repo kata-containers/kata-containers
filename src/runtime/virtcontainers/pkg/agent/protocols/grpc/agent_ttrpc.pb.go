@@ -39,6 +39,7 @@ type AgentServiceService interface {
 	MemAgentMemcgSet(context.Context, *MemAgentMemcgConfig) (*emptypb.Empty, error)
 	MemAgentCompactSet(context.Context, *MemAgentCompactConfig) (*emptypb.Empty, error)
 	CreateSandbox(context.Context, *CreateSandboxRequest) (*emptypb.Empty, error)
+	SetSandboxHosts(context.Context, *SetSandboxHostsRequest) (*emptypb.Empty, error)
 	DestroySandbox(context.Context, *DestroySandboxRequest) (*emptypb.Empty, error)
 	OnlineCPUMem(context.Context, *OnlineCPUMemRequest) (*emptypb.Empty, error)
 	ReseedRandomDev(context.Context, *ReseedRandomDevRequest) (*emptypb.Empty, error)
@@ -259,6 +260,13 @@ func RegisterAgentServiceService(srv *ttrpc.Server, svc AgentServiceService) {
 					return nil, err
 				}
 				return svc.CreateSandbox(ctx, &req)
+			},
+			"SetSandboxHosts": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+				var req SetSandboxHostsRequest
+				if err := unmarshal(&req); err != nil {
+					return nil, err
+				}
+				return svc.SetSandboxHosts(ctx, &req)
 			},
 			"DestroySandbox": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 				var req DestroySandboxRequest
@@ -592,6 +600,14 @@ func (c *agentserviceClient) MemAgentCompactSet(ctx context.Context, req *MemAge
 func (c *agentserviceClient) CreateSandbox(ctx context.Context, req *CreateSandboxRequest) (*emptypb.Empty, error) {
 	var resp emptypb.Empty
 	if err := c.client.Call(ctx, "grpc.AgentService", "CreateSandbox", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *agentserviceClient) SetSandboxHosts(ctx context.Context, req *SetSandboxHostsRequest) (*emptypb.Empty, error) {
+	var resp emptypb.Empty
+	if err := c.client.Call(ctx, "grpc.AgentService", "SetSandboxHosts", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

@@ -187,6 +187,11 @@ auto_generate_policy_enabled() {
 	[[ "${AUTO_GENERATE_POLICY}" == "yes" ]]
 }
 
+# runtime-rs ships volumes as EROFS images rather than over copy_file.
+erofs_volumes_enabled() {
+	[[ "${EROFS_VOLUMES:-}" == "yes" ]]
+}
+
 is_coco_platform() {
 	is_confidential_runtime_class "${KATA_HYPERVISOR}"
 }
@@ -381,6 +386,11 @@ install_genpolicy_drop_ins() {
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || is_arm64_host; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
+	fi
+
+	# 30-* runtime features
+	if erofs_volumes_enabled; then
+		cp "${examples_dir}/30-erofs-volumes-drop-in.json" "${settings_d}/"
 	fi
 }
 

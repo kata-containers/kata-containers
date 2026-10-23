@@ -526,6 +526,11 @@ pub struct SetGuestDateTimeRequest {
 }
 
 #[derive(PartialEq, Clone, Default)]
+pub struct SetSandboxHostsRequest {
+    pub hosts: Vec<String>,
+}
+
+#[derive(PartialEq, Clone, Default)]
 pub struct AgentDetails {
     pub version: String,
     pub init_daemon: bool,
