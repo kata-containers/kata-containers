@@ -400,9 +400,15 @@ impl DragonballInner {
                 "boot_from_template is not supported on this architecture"
             ));
         }
-        self.vmm_instance
-            .instance_start()
-            .context("Failed to start vmm")?;
+        if self.config.vm_template.boot_to_be_template {
+            self.vmm_instance
+                .instance_start_for_template()
+                .context("Failed to start template vmm")?;
+        } else {
+            self.vmm_instance
+                .instance_start()
+                .context("Failed to start vmm")?;
+        }
         self.state = VmmState::VmRunning;
         Ok(())
     }

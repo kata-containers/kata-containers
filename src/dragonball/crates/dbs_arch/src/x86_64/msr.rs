@@ -141,11 +141,10 @@ static WHITELISTED_MSR_RANGES: &[MsrRange] = &[
     SINGLE_MSR!(MSR_IA32_TSCDEADLINE),
     MSR_RANGE!(APIC_BASE_MSR, APIC_MSR_INDEXES),
     SINGLE_MSR!(MSR_IA32_BNDCFGS),
-    SINGLE_MSR!(MSR_KVM_WALL_CLOCK_NEW),
-    SINGLE_MSR!(MSR_KVM_SYSTEM_TIME_NEW),
-    SINGLE_MSR!(MSR_KVM_ASYNC_PF_EN),
-    SINGLE_MSR!(MSR_KVM_STEAL_TIME),
-    SINGLE_MSR!(MSR_KVM_PV_EOI_EN),
+    MSR_RANGE!(
+        MSR_KVM_RANGE_START,
+        MSR_KVM_RANGE_END - MSR_KVM_RANGE_START + 1
+    ),
     SINGLE_MSR!(MSR_EFER),
     SINGLE_MSR!(MSR_STAR),
     SINGLE_MSR!(MSR_LSTAR),
@@ -194,11 +193,15 @@ pub const APIC_BASE_MSR: u32 = 0x800;
 pub const APIC_MSR_INDEXES: u32 = 0x400;
 
 /// Custom MSRs fall in the range 0x4b564d00-0x4b564dff
+const MSR_KVM_RANGE_START: u32 = 0x4b56_4d00;
+const MSR_KVM_RANGE_END: u32 = 0x4b56_4dff;
+
 pub const MSR_KVM_WALL_CLOCK_NEW: u32 = 0x4b56_4d00;
 pub const MSR_KVM_SYSTEM_TIME_NEW: u32 = 0x4b56_4d01;
 pub const MSR_KVM_ASYNC_PF_EN: u32 = 0x4b56_4d02;
 pub const MSR_KVM_STEAL_TIME: u32 = 0x4b56_4d03;
 pub const MSR_KVM_PV_EOI_EN: u32 = 0x4b56_4d04;
+pub const MSR_KVM_ASYNC_PF_INT: u32 = 0x4b56_4d06;
 
 pub const MSR_EFER: u32 = 3221225600;
 pub const MSR_STAR: u32 = 3221225601;
@@ -761,6 +764,15 @@ mod tests {
     }
 
     #[test]
+    fn test_kvm_custom_msr_range() {
+        assert!(msr_should_serialize(0x4b56_4d06));
+        assert!(msr_should_serialize(0x4b56_4d07));
+        assert!(msr_should_serialize(MSR_KVM_RANGE_END));
+        assert!(!msr_should_serialize(MSR_KVM_RANGE_START - 1));
+        assert!(!msr_should_serialize(MSR_KVM_RANGE_END + 1));
+    }
+
+    #[test]
     fn test_msr_contains() {
         let msr_range_a = MSR_RANGE!(0xEA, 9);
         let msr_a = 0x8888;
@@ -774,5 +786,10 @@ mod tests {
     fn test_supported_msrs() {
         let kvm = Kvm::new().unwrap();
         assert!(supported_guest_msrs(&kvm).is_ok());
+    }
+
+    #[test]
+    fn test_apf_interrupt_msr_should_serialize() {
+        assert!(msr_should_serialize(0x4b56_4d06));
     }
 }
