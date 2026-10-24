@@ -376,7 +376,7 @@ async fn extract_block_device_info(
 /// - Overlay metadata that combines the writable upper with the EROFS lower.
 pub(crate) struct ErofsMultiLayerRootfs {
     guest_path: String,
-    device_ids: Vec<String>,
+    device_ids: tokio::sync::Mutex<Vec<String>>,
     // Writable layer storage (upper layer), typically ext4 and optional when
     // the agent creates a /run-backed upper.
     rwlayer_storage: Option<Storage>,
@@ -873,7 +873,7 @@ impl ErofsMultiLayerRootfs {
 
         Ok(Self {
             guest_path: container_path,
-            device_ids,
+            device_ids: tokio::sync::Mutex::new(device_ids),
             rwlayer_storage,
             erofs_storages,
             cleanup_paths,
@@ -919,7 +919,7 @@ impl Rootfs for ErofsMultiLayerRootfs {
     }
 
     async fn get_device_ids(&self) -> Result<Vec<String>> {
-        Ok(self.device_ids.clone())
+        Ok(self.device_ids.lock().await.clone())
     }
 
     async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
@@ -932,9 +932,10 @@ impl Rootfs for ErofsMultiLayerRootfs {
             Ok(())
         };
 
-        let mut dm = device_manager.write().await;
-        for device_id in &self.device_ids {
-            dm.try_remove_device(device_id).await?;
+        let mut device_ids = self.device_ids.lock().await;
+        while let Some(id) = device_ids.last() {
+            DeviceManager::remove_device(device_manager, id).await?;
+            device_ids.pop();
         }
 
         // Remove temporary VMDK files (GPT leading metadata, padding, descriptor).
@@ -1043,5 +1044,53 @@ mod tests {
             mount("overlay", &[]),
         ];
         assert!(is_erofs_multi_layer(&mounts));
+    }
+    #[tokio::test]
+    async fn cleanup_retry_does_not_release_a_finished_layer_twice() {
+        use super::Rootfs;
+        use hypervisor::{
+            device::{device_manager::do_handle_device, DeviceConfig, DeviceType},
+            BlockConfigModern,
+        };
+        let manager = crate::test_utils::device_manager().await;
+        let mut ids = Vec::new();
+        let mut shared = None;
+        for (path, owners) in [
+            ("/dev/failed-erofs-layer", 1),
+            ("/dev/shared-erofs-layer", 3),
+        ] {
+            let config = DeviceConfig::BlockCfgModern(BlockConfigModern {
+                path_on_host: path.into(),
+                driver_option: "virtio-blk-pci".into(),
+                ..Default::default()
+            });
+            for _ in 0..owners {
+                let DeviceType::BlockModern(device) =
+                    do_handle_device(&manager, &config).await.unwrap()
+                else {
+                    unreachable!()
+                };
+                if owners > 1 {
+                    shared = Some(device.clone());
+                }
+                if !ids.contains(&device.lock().await.device_id) {
+                    ids.push(device.lock().await.device_id.clone());
+                }
+            }
+        }
+        let failed = ids[0].clone();
+        let rootfs = super::ErofsMultiLayerRootfs {
+            guest_path: String::new(),
+            device_ids: tokio::sync::Mutex::new(ids),
+            rwlayer_storage: None,
+            erofs_storages: vec![],
+            cleanup_paths: vec![],
+            generated_artifacts_dir: Default::default(),
+        };
+        assert!(rootfs.cleanup(&manager).await.is_err());
+        assert_eq!(rootfs.get_device_ids().await.unwrap(), [failed]);
+        assert_eq!(shared.as_ref().unwrap().lock().await.attach_count, 2);
+        assert!(rootfs.cleanup(&manager).await.is_err());
+        assert_eq!(shared.unwrap().lock().await.attach_count, 2);
     }
 }

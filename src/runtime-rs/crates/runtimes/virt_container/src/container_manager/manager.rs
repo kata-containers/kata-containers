@@ -82,6 +82,22 @@ impl VirtContainerManager {
         }
     }
 
+    fn cleanup_failed_create(
+        mut container: Container,
+        oom_notifier: Arc<CrioOomNotifier>,
+    ) -> tokio::task::JoinHandle<()> {
+        // Own the container before cleanup's first await. Dropping the RPC
+        // future must not drop its unreleased resources.
+        tokio::spawn(async move {
+            let id = container.container_id.to_string();
+            if let Err(err) = container.cleanup().await {
+                warn!(sl!(), "failed to cleanup container {:?}", err);
+            }
+            container.orphan_device_references().await;
+            oom_notifier.forget(&id).await;
+        })
+    }
+
     async fn get_vmm_master_tid(&self) -> Result<u32> {
         self.vmm_master_tid
             .get_or_try_init(|| self.hypervisor.get_vmm_master_tid())
@@ -96,7 +112,7 @@ impl ContainerManager for VirtContainerManager {
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
         let vmm_master_tid = self.get_vmm_master_tid().await?;
 
-        let mut container = Container::new(
+        let container = Container::new(
             vmm_master_tid,
             config.clone(),
             spec.clone(),
@@ -136,15 +152,24 @@ impl ContainerManager for VirtContainerManager {
             .track(&config.container_id, &config.bundle, &spec)
             .await;
 
+        // Orphan unplugs can wait on the guest. Retry them before taking the
+        // containers lock so other containers' state and teardown can proceed.
+        if let Err(e) = self
+            .resource_manager
+            .release_orphaned_device_references()
+            .await
+        {
+            warn!(sl!(), "{:#}", e);
+        }
+
         let mut containers = self.containers.write().await;
         if let Err(e) = container.create(spec).await {
             // Unplugging waits on the guest; the failed container is never
             // inserted, so nothing else needs to wait on this lock meanwhile.
             drop(containers);
-            if let Err(inner_e) = container.cleanup().await {
-                warn!(sl!(), "failed to cleanup container {:?}", inner_e);
-            }
-            self.oom_notifier.forget(&config.container_id).await;
+            Self::cleanup_failed_create(container, self.oom_notifier.clone())
+                .await
+                .context("join failed container cleanup")?;
 
             return Err(e);
         }
@@ -172,55 +197,68 @@ impl ContainerManager for VirtContainerManager {
         let container_id = &process.container_id.container_id;
         match process.process_type {
             ProcessType::Container => {
+                let vmm_pid = self.get_vmm_master_tid().await?;
                 let mut c = self
                     .containers
                     .write()
                     .await
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
-                // Returning an error here blocks containerd from processing the exit
-                // and reaching sandbox teardown, so report the cleanup failure and continue.
-                if let Err(e) = c.finish_cleanup().await {
-                    error!(
-                        sl!(),
-                        "failed to finish cleanup of container {}: {:?}", container_id, e
-                    );
-                }
-
-                // A task that never started has no exit-driven cleanup to release its mounts.
-                let status = c.state_process(process).await.context("state process")?;
-                if status.status == ProcessStatus::Created {
-                    if let Err(e) = c.cleanup().await {
-                        warn!(
-                            logger_with_process(process),
-                            "failed to clean up container deleted before start: {:?}", e
+                let container_id = container_id.clone();
+                let process = process.clone();
+                let resource_manager = self.resource_manager.clone();
+                tokio::spawn(async move {
+                    // Returning an error here blocks containerd from processing the exit
+                    // and reaching sandbox teardown, so report the cleanup failure and continue.
+                    if let Err(e) = c.finish_cleanup().await {
+                        error!(
+                            sl!(),
+                            "failed to finish cleanup of container {}: {:?}", container_id, e
                         );
                     }
-                }
 
-                // Poststop Hooks:
-                // * should be run in runtime namespace
-                // * should be run after the container is deleted but before delete operation returns
-                // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststop
-                let c_spec = c.spec().await;
+                    // A task that never started has no exit-driven cleanup to release its mounts.
+                    let status = c.state_process(&process).await.context("state process");
+                    if matches!(&status, Ok(s) if s.status == ProcessStatus::Created) {
+                        if let Err(e) = c.cleanup().await {
+                            warn!(
+                                logger_with_process(&process),
+                                "failed to clean up container deleted before start: {:?}", e
+                            );
+                        }
+                    }
+                    c.orphan_device_references().await;
+                    if let Err(e) = resource_manager.release_orphaned_device_references().await {
+                        warn!(sl!(), "{:#}", e);
+                    }
+                    status?;
 
-                let vmm_pid = self.get_vmm_master_tid().await?;
-                let state = spec::State {
-                    version: c_spec.version().clone(),
-                    id: c.container_id.to_string(),
-                    status: spec::ContainerState::Stopped,
-                    pid: vmm_pid as i32,
-                    bundle: c.config().await.bundle,
-                    annotations: c_spec.annotations().clone().unwrap_or_default(),
-                };
-                if let Some(hooks) = c_spec.hooks().as_ref() {
-                    let mut poststop_hook_states = HookStates::new();
-                    poststop_hook_states
-                        .execute_hooks(from_hooks(hooks.poststop()), Some(state))?;
-                }
+                    // Poststop Hooks:
+                    // * should be run in runtime namespace
+                    // * should be run after the container is deleted but before delete operation returns
+                    // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststop
+                    let c_spec = c.spec().await;
 
-                c.state_process(process).await.context("state process")
+                    let state = spec::State {
+                        version: c_spec.version().clone(),
+                        id: c.container_id.to_string(),
+                        status: spec::ContainerState::Stopped,
+                        pid: vmm_pid as i32,
+                        bundle: c.config().await.bundle,
+                        annotations: c_spec.annotations().clone().unwrap_or_default(),
+                    };
+                    if let Some(hooks) = c_spec.hooks().as_ref() {
+                        let mut poststop_hook_states = HookStates::new();
+                        poststop_hook_states
+                            .execute_hooks(from_hooks(hooks.poststop()), Some(state))?;
+                    }
+
+                    c.state_process(&process).await.context("state process")
+                })
+                .await
+                .context("join container deletion")?
             }
+
             ProcessType::Exec => {
                 let containers = self.containers.read().await;
                 let c = containers
@@ -505,5 +543,141 @@ impl ContainerManager for VirtContainerManager {
     async fn is_sandbox_container(&self, process: &ContainerProcess) -> bool {
         process.process_type == ProcessType::Container
             && process.container_id.container_id == self.sid
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hypervisor::{
+        device::{device_manager::do_handle_device, DeviceConfig, DeviceType},
+        qemu::Qemu,
+        BlockConfigModern,
+    };
+    use kata_types::config::TomlConfig;
+    use persist::sandbox_persist::Persist;
+    use resource::{
+        cgroups::cgroup_persist::CgroupState, manager::ManagerArgs, resource_persist::ResourceState,
+    };
+    async fn manager() -> VirtContainerManager {
+        let agent = Arc::new(agent::kata::KataAgent::new(Default::default()));
+        let hypervisor = Arc::new(Qemu::new());
+        // Restore only opens managers for these nonexistent cgroups. It does
+        // not create cgroups or move the test process into one.
+        let resources = Arc::new(
+            ResourceManager::restore(
+                ManagerArgs {
+                    sid: "cancel-cleanup-test".into(),
+                    agent: agent.clone(),
+                    hypervisor: hypervisor.clone(),
+                    config: TomlConfig::default(),
+                },
+                ResourceState {
+                    cgroup_state: Some(CgroupState {
+                        path: Some("cancel-cleanup-test".into()),
+                        overhead_path: Some("cancel-cleanup-test-overhead".into()),
+                        sandbox_cgroup_only: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap(),
+        );
+        VirtContainerManager::new(
+            "sandbox",
+            0,
+            agent,
+            hypervisor,
+            resources,
+            Arc::new(CrioOomNotifier::default()),
+        )
+    }
+
+    #[rstest::rstest]
+    #[case::delete(true)]
+    #[case::failed_create(false)]
+    #[tokio::test]
+    async fn cancellation_during_cleanup_preserves_resources(#[case] deleting: bool) {
+        let manager = manager().await;
+        manager.vmm_master_tid.set(42).unwrap();
+        let devices = manager.resource_manager.get_device_manager().await;
+        let config = DeviceConfig::BlockCfgModern(BlockConfigModern {
+            path_on_host: "/dev/cancel-cleanup-test".into(),
+            driver_option: "virtio-blk-pci".into(),
+            ..Default::default()
+        });
+        let DeviceType::BlockModern(device) = do_handle_device(&devices, &config).await.unwrap()
+        else {
+            unreachable!()
+        };
+        do_handle_device(&devices, &config).await.unwrap();
+        let container = Container::new(
+            42,
+            ContainerConfig {
+                container_id: "cancel-cleanup-test".into(),
+                bundle: String::new(),
+                rootfs_mounts: vec![],
+                terminal: false,
+                options: None,
+                stdin: None,
+                stdout: None,
+                stderr: None,
+            },
+            oci::Spec::default(),
+            manager.agent.clone(),
+            manager.resource_manager.clone(),
+            None,
+        )
+        .await
+        .unwrap();
+        let inner = container.inner.clone();
+        let mut held = inner.write().await;
+        held.set_state(ProcessStatus::Stopped).await;
+        held.devices.push(device.lock().await.device_id.clone());
+        if deleting {
+            manager
+                .containers
+                .write()
+                .await
+                .insert("cancel-cleanup-test".into(), container);
+            let process = ContainerProcess::new("cancel-cleanup-test", "").unwrap();
+            {
+                let delete = manager.delete_process(&process);
+                tokio::pin!(delete);
+                tokio::select! {
+                    biased;
+                    result = &mut delete => panic!("Delete skipped blocked cleanup: {:?}", result),
+                    _ = tokio::task::yield_now() => {}
+                }
+            }
+            assert!(manager.containers.read().await.is_empty());
+        } else {
+            let cleanup = VirtContainerManager::cleanup_failed_create(
+                container,
+                manager.oom_notifier.clone(),
+            );
+            tokio::task::yield_now().await;
+            assert!(!cleanup.is_finished());
+            drop(cleanup);
+        }
+        // Both caller futures have now gone away while cleanup was blocked.
+        drop(held);
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if device.lock().await.attach_count == 1 && inner.read().await.devices.is_empty() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        manager
+            .resource_manager
+            .release_orphaned_device_references()
+            .await
+            .unwrap();
+        assert_eq!(device.lock().await.attach_count, 1);
     }
 }
