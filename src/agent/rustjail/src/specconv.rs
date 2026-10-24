@@ -16,4 +16,7 @@ pub struct CreateOpts {
     pub rootless_euid: bool,
     pub rootless_cgroup: bool,
     pub container_name: String,
+    /// Bound, in bytes, on the containers' memory taken together, set as
+    /// memory.max on their parent cgroup when it is created. Zero means none.
+    pub pod_memory_max_bytes: u64,
 }
