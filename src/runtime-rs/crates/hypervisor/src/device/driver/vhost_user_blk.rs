@@ -11,7 +11,7 @@ use super::VhostUserConfig;
 use crate::{
     device::{
         topology::PCIeTopology,
-        util::{do_decrease_count, do_increase_count},
+        util::{detach_removed, detach_step, do_decrease_count, do_increase_count, DetachStep},
         Device, DeviceType,
     },
     Hypervisor as hypervisor,
@@ -77,22 +77,14 @@ impl Device for VhostUserBlkDevice {
         _pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn hypervisor,
     ) -> Result<Option<u64>> {
-        // get the count of device detached, and detach once it reaches 0
-        if self
-            .decrease_attach_count()
-            .await
-            .context("failed to decrease attach count")?
-        {
-            return Ok(None);
-        }
-
-        if let Err(e) = h
-            .remove_device(DeviceType::VhostUserBlk(self.clone()))
-            .await
-        {
-            self.increase_attach_count().await?;
-
-            return Err(e);
+        match detach_step(&mut self.attach_count) {
+            DetachStep::Release => return Ok(None),
+            DetachStep::Remove => {
+                h.remove_device(DeviceType::VhostUserBlk(self.clone()))
+                    .await?;
+                detach_removed(&mut self.attach_count);
+            }
+            DetachStep::Finish => {}
         }
 
         Ok(Some(self.config.index))
