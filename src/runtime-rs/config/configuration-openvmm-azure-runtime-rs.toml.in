@@ -192,6 +192,11 @@ enable_mem_prealloc = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Sizing a huge page backed VM from the pod's hugepages-<size> reservation is
+# supported with Dragonball only; see configuration-dragonball.toml.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable running the VMM as a non-root user.
 # By default the VMM run as root. When this is set to true, the VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
