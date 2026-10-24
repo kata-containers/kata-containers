@@ -1804,6 +1804,42 @@ func (c *Container) stats(ctx context.Context) (*ContainerStats, error) {
 	return c.sandbox.agent.statsContainer(ctx, c.sandbox, *c)
 }
 
+// Huge pages cannot be resized in place, yet a resize sends every size as zero
+// and containerd appends those entries to the container's own. Keep one entry
+// per page size, the last, and the held reservation where the update says zero.
+func updatedHugepageLimits(held, update []specs.LinuxHugepageLimit) (keep, apply []specs.LinuxHugepageLimit) {
+	if len(update) == 0 {
+		return held, update
+	}
+
+	var sizes []string
+	heldBySize := make(map[string]uint64)
+	updateBySize := make(map[string]uint64)
+	for _, l := range held {
+		if _, ok := heldBySize[l.Pagesize]; !ok {
+			sizes = append(sizes, l.Pagesize)
+		}
+		heldBySize[l.Pagesize] = l.Limit
+	}
+	for _, l := range update {
+		_, seen := heldBySize[l.Pagesize]
+		if _, ok := updateBySize[l.Pagesize]; !ok && !seen {
+			sizes = append(sizes, l.Pagesize)
+		}
+		updateBySize[l.Pagesize] = l.Limit
+	}
+
+	limits := make([]specs.LinuxHugepageLimit, 0, len(sizes))
+	for _, size := range sizes {
+		limit, ok := updateBySize[size]
+		if !ok || limit == 0 {
+			limit = heldBySize[size]
+		}
+		limits = append(limits, specs.LinuxHugepageLimit{Pagesize: size, Limit: limit})
+	}
+	return limits, limits
+}
+
 func (c *Container) update(ctx context.Context, resources specs.LinuxResources) error {
 	if err := c.checkSandboxRunning("update"); err != nil {
 		return err
@@ -1816,6 +1852,7 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 	if c.config.Resources.CPU == nil {
 		c.config.Resources.CPU = &specs.LinuxCPU{}
 	}
+	heldCPU := *c.config.Resources.CPU
 
 	if cpu := resources.CPU; cpu != nil {
 		if p := cpu.Period; p != nil && *p != 0 {
@@ -1835,16 +1872,15 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 	if c.config.Resources.Memory == nil {
 		c.config.Resources.Memory = &specs.LinuxMemory{}
 	}
+	heldMemory := *c.config.Resources.Memory
+	heldHugepages := append([]specs.LinuxHugepageLimit(nil), c.config.Resources.HugepageLimits...)
 
 	if mem := resources.Memory; mem != nil && mem.Limit != nil {
 		c.config.Resources.Memory.Limit = mem.Limit
 	}
 
-	// Follow the huge pages the container holds as well, so that a later
-	// update carrying none of them is still told the reservation this one
-	// asked for rather than the one the container was created with.
-	if len(resources.HugepageLimits) != 0 {
-		c.config.Resources.HugepageLimits = resources.HugepageLimits
+	if hugePagePodSized(&c.sandbox.config.HypervisorConfig) {
+		c.config.Resources.HugepageLimits, resources.HugepageLimits = updatedHugepageLimits(c.config.Resources.HugepageLimits, resources.HugepageLimits)
 	}
 
 	if err := c.sandbox.updateResources(ctx); err != nil {
@@ -1864,7 +1900,17 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		}
 	}
 
-	return c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources)
+	if err := c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources); err != nil {
+		// A refused update must not stay recorded for later checks.
+		var refusal guestCapacityRefusal
+		if errors.As(err, &refusal) {
+			*c.config.Resources.CPU = heldCPU
+			*c.config.Resources.Memory = heldMemory
+			c.config.Resources.HugepageLimits = heldHugepages
+		}
+		return err
+	}
+	return nil
 }
 
 func (c *Container) pause(ctx context.Context) error {

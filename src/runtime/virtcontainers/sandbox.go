@@ -733,6 +733,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	// After validation, so MemorySize is what the VM would boot with.
+	if err := s.sizeHugepageBackedVMFromPod(&sandboxConfig); err != nil {
+		return nil, err
+	}
+
 	// Start the event loop if not already started when fs sharing is not used
 	if sandboxConfig.HypervisorConfig.SharedFS == config.NoSharedFS {
 		// Start the StartFileEventWatcher method as a goroutine
@@ -847,6 +852,117 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	return coldPlugVFIO, nil
+}
+
+// Variables so tests can stand in for the host.
+var (
+	readPodHugetlbLimit = resCtrl.HugetlbLimitBytes
+	readVMHugepageSize  = func() (uint64, error) {
+		return hugepageSizeBytes(defaultHugepagesMountpoint)
+	}
+)
+
+// Whether the hypervisor takes guest RAM from the hugetlb pool when
+// enable_hugepages is set. Only then is the pod's reservation the VM's size.
+func hypervisorBacksGuestRAMWithHugePages(hypervisorType HypervisorType) bool {
+	switch hypervisorType {
+	case QemuHypervisor, ClhHypervisor:
+		return true
+	default:
+		return false
+	}
+}
+
+// Whether the pod's huge page reservation sizes this huge page backed guest
+// and bounds its containers: enable_hugepages_pod_sizing.
+func hugePagePodSized(hc *HypervisorConfig) bool {
+	return hc.HugePages && hc.HugePagesPodSizing
+}
+
+// Floor for a VM sized from the pod's reservation. default_memory cannot serve:
+// the runtime cannot tell its own substituted default from a configured one.
+const minHugePageBackedVMMiB = 1024
+
+// Sizes the VM from hugetlb.<size>.max on the pod's cgroup, which caps the
+// mapping its RAM comes from. The CRI does not carry it (k/enhancements#4113).
+func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) error {
+	hc := &sandboxConfig.HypervisorConfig
+	if !hugePagePodSized(hc) || !sandboxConfig.StaticResourceMgmt {
+		return nil
+	}
+	if !hypervisorBacksGuestRAMWithHugePages(sandboxConfig.HypervisorType) {
+		s.Logger().WithField("hypervisor", string(sandboxConfig.HypervisorType)).Info(
+			"the hypervisor does not take the guest's memory from the huge page pool; sizing the VM from default_memory")
+		return nil
+	}
+	if s.state.State != "" {
+		return nil
+	}
+	if !sandboxConfig.SandboxCgroupOnly {
+		s.Logger().Info("the hypervisor runs outside the pod's cgroup; sizing the huge page backed VM from default_memory")
+		return nil
+	}
+
+	spec := s.GetPatchedOCISpec()
+	if spec == nil || spec.Linux == nil || spec.Linux.CgroupsPath == "" {
+		return nil
+	}
+	podCgroup, err := resCtrl.PodCgroupPath(spec.Linux.CgroupsPath)
+	if err != nil {
+		s.Logger().WithError(err).WithField("cgroup-path", spec.Linux.CgroupsPath).Warn("cannot find the pod's cgroup; sizing the huge page backed VM from default_memory")
+		return nil
+	}
+
+	pageSize, err := readVMHugepageSize()
+	if err != nil {
+		s.Logger().WithError(err).Warn("cannot tell the VM's huge page size; sizing the VM from default_memory")
+		return nil
+	}
+	podResource := resCtrl.HugepagesResourceName(pageSize)
+
+	reserved, stated, err := readPodHugetlbLimit(podCgroup, pageSize)
+	if err != nil {
+		s.Logger().WithError(err).WithField("pod-cgroup", podCgroup).Warn("cannot read the pod's huge page allowance; sizing the VM from default_memory")
+		return nil
+	}
+	if !stated {
+		s.Logger().WithFields(logrus.Fields{
+			"pod-cgroup":   podCgroup,
+			"pod-resource": podResource,
+		}).Info("the pod states no huge page allowance; sizing the VM from default_memory")
+		return nil
+	}
+
+	reservedMB := reserved >> utils.MibToBytesShift
+	switch {
+	case reservedMB == 0:
+		return fmt.Errorf("the VM is backed by huge pages but its pod reserved none: request %s on a container of the pod, or give the runtime class a pod overhead of %s (pod cgroup %s)", podResource, podResource, podCgroup)
+	case reservedMB > math.MaxUint32:
+		return fmt.Errorf("the pod's %s reservation of %d bytes is larger than a VM can be sized to (pod cgroup %s)", podResource, reserved, podCgroup)
+	case hc.DefaultMaxMemorySize > 0 && reservedMB > hc.DefaultMaxMemorySize:
+		return fmt.Errorf("the pod reserved %d MiB of %s, more than the %d MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup %s)", reservedMB, podResource, hc.DefaultMaxMemorySize, podCgroup)
+	case reservedMB < minHugePageBackedVMMiB:
+		return fmt.Errorf("the pod reserved %d MiB of %s, less than the %d MiB a guest needs: reserve more on a container of the pod or as the runtime class's pod overhead (pod cgroup %s)", reservedMB, podResource, minHugePageBackedVMMiB, podCgroup)
+	}
+
+	if reservedMB < uint64(hc.MemorySize) {
+		// default_memory sizes a guest nothing else sizes; it is not a floor.
+		s.Logger().WithFields(logrus.Fields{
+			"pod-resource":      podResource,
+			"reserved-mb":       reservedMB,
+			"default-memory-mb": hc.MemorySize,
+		}).Info("the pod reserved fewer huge pages than default_memory: its guest is smaller than the ones this configuration boots by default")
+	}
+
+	s.Logger().WithFields(logrus.Fields{
+		"pod-cgroup":        podCgroup,
+		"pod-resource":      podResource,
+		"reserved-mb":       reservedMB,
+		"default-memory-mb": hc.MemorySize,
+	}).Info("sizing the huge page backed VM from the pod's huge page reservation")
+	hc.MemorySize = uint32(reservedMB)
+
+	return nil
 }
 
 func (s *Sandbox) createResourceController() error {
@@ -1793,12 +1909,26 @@ func (s *Sandbox) addContainer(c *Container) error {
 	return nil
 }
 
+// Points each container of a pod sized guest at its entry in s.config.Containers,
+// which append and delete move.
+func (s *Sandbox) relinkContainerConfigs() {
+	if !hugePagePodSized(&s.config.HypervisorConfig) {
+		return
+	}
+	for i := range s.config.Containers {
+		if c, ok := s.containers[s.config.Containers[i].ID]; ok {
+			c.config = &s.config.Containers[i]
+		}
+	}
+}
+
 // CreateContainer creates a new container in the sandbox
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
 func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error) {
 	// Update sandbox config to include the new container's config
 	s.config.Containers = append(s.config.Containers, contConfig)
+	s.relinkContainerConfigs()
 
 	var err error
 
@@ -1807,6 +1937,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 			if len(s.config.Containers) > 0 {
 				// delete container config
 				s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
+				s.relinkContainerConfigs()
 			}
 		}
 	}()
@@ -1952,12 +2083,17 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 	}
 
 	// Update sandbox config
+	if hugePagePodSized(&s.config.HypervisorConfig) {
+		detached := *c.config
+		c.config = &detached
+	}
 	for idx, contConfig := range s.config.Containers {
 		if contConfig.ID == containerID {
 			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
 			break
 		}
 	}
+	s.relinkContainerConfigs()
 
 	// update the sandbox resource controller
 	if err = s.resourceControllerUpdate(ctx); err != nil {
