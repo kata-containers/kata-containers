@@ -444,25 +444,37 @@ impl NetworkDeviceMgr {
                 "id" => config.id(),
             );
 
-            match Self::create_device(&config, &mut ctx) {
-                Ok(device) => {
-                    let dev = DeviceManager::create_mmio_virtio_device(
-                        device,
-                        &mut ctx,
-                        config.use_shared_irq.unwrap_or(self.use_shared_irq),
-                        config.use_generic_irq(),
-                    )
-                    .map_err(NetworkDeviceError::DeviceManager)?;
-                    ctx.insert_hotplug_mmio_device(&dev, None)
-                        .map_err(NetworkDeviceError::DeviceManager)?;
-                    // live-upgrade need save/restore device from info.device.
-                    self.info_list[device_index].set_device(dev);
+            let result = (|| {
+                let device = Self::create_device(&config, &mut ctx)?;
+                let dev = DeviceManager::create_mmio_virtio_device(
+                    device,
+                    &mut ctx,
+                    config.use_shared_irq.unwrap_or(self.use_shared_irq),
+                    config.use_generic_irq(),
+                )
+                .map_err(NetworkDeviceError::DeviceManager)?;
+                if let Err(operation) = ctx.insert_hotplug_mmio_device(&dev, None) {
+                    if let Err(cleanup) = DeviceManager::destroy_mmio_device(dev.clone(), &mut ctx)
+                    {
+                        // Retain uncertain resources for teardown and prevent
+                        // a retry from replacing their owner.
+                        self.info_list[device_index].set_device(dev);
+                        return Err(NetworkDeviceError::DeviceManager(
+                            DeviceMgrError::Rollback {
+                                operation: Box::new(operation),
+                                cleanup: Box::new(cleanup),
+                            },
+                        ));
+                    }
+                    return Err(NetworkDeviceError::DeviceManager(operation));
                 }
-                Err(e) => {
-                    self.info_list.remove(device_index);
-                    return Err(e);
-                }
+                self.info_list[device_index].set_device(dev);
+                Ok(())
+            })();
+            if result.is_err() && self.info_list[device_index].device.is_none() {
+                self.info_list.remove(device_index);
             }
+            return result;
         }
 
         Ok(())
@@ -864,6 +876,186 @@ mod tests {
             use_shared_irq: None,
             use_generic_irq: None,
         }
+    }
+
+    #[cfg(all(feature = "virtio-net", feature = "hotplug", feature = "dbs-upcall"))]
+    #[derive(Clone, Copy)]
+    enum HotplugFailure {
+        MissingMemory,
+        InvalidQueue,
+        Registration,
+        Upcall,
+    }
+
+    #[cfg(all(feature = "virtio-net", feature = "hotplug", feature = "dbs-upcall"))]
+    fn check_hotplug_failure_rollback(failure: HotplugFailure) {
+        use dbs_device::resources::ResourceConstraint;
+        use dbs_upcall::{DevMgrService, UpcallClient, UpcallClientError};
+        use dbs_virtio_devices::vsock::backend::VsockInnerBackend;
+
+        let missing_memory = matches!(failure, HotplugFailure::MissingMemory);
+        let invalid_queue = matches!(failure, HotplugFailure::InvalidQueue);
+        let registration_failure = matches!(failure, HotplugFailure::Registration);
+        let mut vm = create_vm_for_test();
+        let requests = [
+            ResourceConstraint::MmioAddress {
+                range: None,
+                align: 0,
+                size: 0x2000,
+            },
+            ResourceConstraint::LegacyIrq { irq: None },
+        ];
+        let resources = vm.device_manager().res_manager.clone();
+        let expected = resources
+            .allocate_device_resources(&requests, false)
+            .unwrap();
+        resources.free_device_resources(&expected).unwrap();
+        let mmio_base = expected.get_mmio_address_ranges()[0].0;
+        let scenario = failure as u8;
+        let tap_name = format!("db{:x}{scenario}", std::process::id());
+        let mut cfg = net_config(
+            Backend::Virtio(virtio_backend_config("rollback-net", &tap_name)),
+            "02:23:45:67:89:0a",
+            2,
+        );
+        cfg.use_shared_irq = Some(false);
+        cfg.use_generic_irq = Some(false);
+        if invalid_queue {
+            cfg.queue_size = Some(3);
+        }
+
+        if registration_failure {
+            use dbs_device::device_manager::IoManagerContext;
+            struct ExistingDevice;
+            impl dbs_device::DeviceIo for ExistingDevice {
+                fn read(
+                    &self,
+                    _: dbs_device::IoAddress,
+                    _: dbs_device::IoAddress,
+                    data: &mut [u8],
+                ) {
+                    data.fill(0xa5);
+                }
+                fn as_any(&self) -> &dyn std::any::Any {
+                    self
+                }
+            }
+            // Occupy the bus without reserving the allocator's next range.
+            let io = super::super::DeviceManagerContext::new(
+                vm.device_manager().io_manager.clone(),
+                vm.device_manager().io_lock.clone(),
+            );
+            let mut tx = io.begin_tx();
+            io.register_device_io(&mut tx, Arc::new(ExistingDevice), &expected)
+                .unwrap();
+            io.commit_tx(tx);
+        }
+
+        // Repeat with the same identity and resources: no failed attempt may
+        // reserve the device name, MMIO range, IRQ, or TAP for the next one.
+        for _ in 0..2 {
+            let mut ctx = DeviceOpContext::new(
+                Some(vm.epoll_manager().clone()),
+                vm.device_manager(),
+                if missing_memory {
+                    None
+                } else {
+                    vm.vm_as().cloned()
+                },
+                vm.vm_address_space().cloned(),
+                true,
+                Some(vm.vm_config().clone()),
+                vm.shared_info().clone(),
+            );
+            let vsock = VsockInnerBackend::new().unwrap();
+            ctx.upcall_client = Some(Arc::new(
+                UpcallClient::new(
+                    vsock.get_connector(),
+                    vm.epoll_manager().clone(),
+                    DevMgrService {},
+                )
+                .unwrap(),
+            ));
+            let err = vm
+                .device_manager_mut()
+                .net_manager
+                .insert_device(ctx, cfg.clone())
+                .unwrap_err();
+            if missing_memory {
+                assert!(matches!(
+                    err,
+                    NetworkDeviceError::DeviceManager(DeviceMgrError::InvalidOperation)
+                ));
+            } else if invalid_queue {
+                assert!(matches!(
+                    err,
+                    NetworkDeviceError::DeviceManager(DeviceMgrError::Virtio(_))
+                ));
+            } else if registration_failure {
+                assert!(matches!(
+                    err,
+                    NetworkDeviceError::DeviceManager(DeviceMgrError::IoManager(
+                        dbs_device::device_manager::Error::DeviceOverlap
+                    ))
+                ));
+            } else {
+                assert!(matches!(
+                    err,
+                    NetworkDeviceError::DeviceManager(DeviceMgrError::HotplugDevice(
+                        UpcallClientError::UpcallIsNotConnected
+                    ))
+                ));
+            }
+            assert!(vm.device_manager().net_manager.info_list.is_empty());
+            let mut value = [0; 4];
+            let read = vm
+                .device_manager()
+                .io_manager()
+                .load()
+                .mmio_read(mmio_base, &mut value);
+            if registration_failure {
+                read.unwrap();
+                assert_eq!(value, [0xa5; 4]);
+            } else {
+                assert!(read.is_err());
+            }
+            let reclaimed = resources
+                .allocate_device_resources(&requests, false)
+                .unwrap();
+            assert_eq!(reclaimed, expected);
+            resources.free_device_resources(&reclaimed).unwrap();
+            let tap = std::ffi::CString::new(tap_name.as_str()).unwrap();
+            // SAFETY: tap is a valid NUL-terminated interface name.
+            assert_eq!(unsafe { libc::if_nametoindex(tap.as_ptr()) }, 0);
+        }
+    }
+
+    #[cfg(all(feature = "virtio-net", feature = "hotplug", feature = "dbs-upcall"))]
+    #[test]
+    fn test_hotplug_net_missing_memory_rolls_back() {
+        skip_if_kvm_unaccessable!();
+        check_hotplug_failure_rollback(HotplugFailure::MissingMemory);
+    }
+
+    #[cfg(all(feature = "virtio-net", feature = "hotplug", feature = "dbs-upcall"))]
+    #[test]
+    fn test_hotplug_net_invalid_queue_rolls_back() {
+        skip_if_kvm_unaccessable!();
+        check_hotplug_failure_rollback(HotplugFailure::InvalidQueue);
+    }
+
+    #[cfg(all(feature = "virtio-net", feature = "hotplug", feature = "dbs-upcall"))]
+    #[test]
+    fn test_hotplug_net_upcall_failure_rolls_back() {
+        skip_if_kvm_unaccessable!();
+        check_hotplug_failure_rollback(HotplugFailure::Upcall);
+    }
+
+    #[cfg(all(feature = "virtio-net", feature = "hotplug", feature = "dbs-upcall"))]
+    #[test]
+    fn test_hotplug_net_registration_failure_preserves_existing_device() {
+        skip_if_kvm_unaccessable!();
+        check_hotplug_failure_rollback(HotplugFailure::Registration);
     }
 
     #[cfg(feature = "virtio-net")]
