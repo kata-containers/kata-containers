@@ -1094,6 +1094,7 @@ dependencies = [
  "agent",
  "anyhow",
  "async-trait",
+ "cgroups-rs",
  "containerd-shim-protos",
  "hypervisor",
  "kata-sys-util",
