@@ -1140,55 +1140,59 @@ impl Qmp {
         Ok(())
     }
 
+    /// Waits until QEMU has finished removing `device_id`.
+    ///
+    /// QEMU drops a device from /machine/peripheral in the same step that
+    /// unrealizes it and releases its host resources, so its absence there is
+    /// the completion signal. A DEVICE_DELETED event is not: device ids are
+    /// reused, and an event left queued by an earlier unplug of the same id
+    /// would end the wait while the device is still present.
     fn wait_for_device_deleted(&mut self, device_id: &str, timeout: Duration) -> Result<()> {
         const POLL_INTERVAL: Duration = Duration::from_millis(100);
         let deadline = Instant::now() + timeout;
-
-        self.qmp
-            .inner_mut()
-            .get_mut_write()
-            .set_read_timeout(Some(timeout))?;
-
-        let result = loop {
-            if let Err(e) = self.qmp.nop() {
-                warn!(sl!(), "The QMP nop() failed for {}: {:?}", device_id, e);
-            }
-
-            let found = self.qmp.events().any(|event| {
-                matches!(event, qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
-                    if data.device.as_deref() == Some(device_id))
-            });
-            if found {
-                info!(
-                    sl!(),
-                    "The QMP received DEVICE_DELETED event for {}", device_id
+        // The cloned descriptor shares socket options with the QMP reader.
+        // Cap each read by the remaining budget without extending its timeout.
+        let stream = self.qmp.inner_mut().get_mut_write().try_clone()?;
+        let read_timeout = stream.read_timeout()?;
+        let result = (|| {
+            let mut last_err = None;
+            loop {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(last_err.unwrap_or_else(|| anyhow!("device is still present")))
+                        .with_context(|| {
+                            format!(
+                                "timed out ({:?}) waiting for QEMU to remove device {}",
+                                timeout, device_id
+                            )
+                        });
+                }
+                stream.set_read_timeout(Some(read_timeout.unwrap_or(remaining).min(remaining)))?;
+                let present = self.device_exists(device_id);
+                // Nothing consumes these events, and every reply buffers more.
+                self.qmp.events().for_each(drop);
+                match present {
+                    Ok(false) => {
+                        info!(sl!(), "device {} has been removed by QEMU", device_id);
+                        return Ok(());
+                    }
+                    Ok(true) => {}
+                    Err(err) => {
+                        debug!(
+                            sl!(),
+                            "polling for removal of {} failed: {:#}", device_id, err
+                        );
+                        last_err = Some(err);
+                    }
+                }
+                thread::sleep(
+                    POLL_INTERVAL.min(deadline.saturating_duration_since(Instant::now())),
                 );
-                break Ok(());
             }
-
-            let now = Instant::now();
-            if now >= deadline {
-                break Err(anyhow!(
-                    "timed out ({:?}) waiting for DEVICE_DELETED event for {}",
-                    timeout,
-                    device_id
-                ));
-            }
-            thread::sleep(POLL_INTERVAL.min(deadline - now));
-        };
-
-        // Reset the default read timeout for subsequent QMP operations.
-        // Failure here is non-fatal — a stale timeout only affects the next
-        // QMP read, not the already-completed device removal.
-        if let Err(e) = self
-            .qmp
-            .inner_mut()
-            .get_mut_write()
-            .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
-        {
-            warn!(sl!(), "Failed to reset read timeout: {:?}", e);
-        }
-
+        })();
+        stream
+            .set_read_timeout(read_timeout)
+            .context("restore QMP read timeout")?;
         result
     }
 
@@ -1947,5 +1951,280 @@ mod tests {
             collect_block_fdsets(fdsets),
             HashMap::from([("drive-2".to_string(), vec![7, 8])])
         );
+    }
+
+    use serde_json::{json, Value};
+    use std::io::{BufRead, Write};
+    use std::os::unix::net::UnixListener;
+    use std::sync::{Arc, Mutex};
+
+    const DEV: &str = "vfio-dev0";
+
+    /// How the fake QEMU treats device_del of a present device.
+    #[derive(Clone, Copy)]
+    enum Unplug {
+        /// The guest releases it after this many further qom-list queries.
+        After(usize),
+        /// The guest never releases it.
+        Never,
+    }
+
+    struct FakeQemu {
+        devices: Vec<String>,
+        unplug: Unplug,
+        pending: Option<usize>,
+        /// Sent ahead of the next reply, as QEMU does with async events.
+        queued_events: Vec<Value>,
+        poll_failures: usize,
+        poll_delay: Option<Duration>,
+    }
+
+    impl FakeQemu {
+        fn reply(&mut self, command: &str, args: &Value) -> Value {
+            match command {
+                "qom-list" => {
+                    if self.poll_failures > 0 {
+                        self.poll_failures -= 1;
+                        return json!({"error": {"class": "GenericError", "desc": "scripted poll failure"}});
+                    }
+                    if let Some(left) = self.pending.as_mut() {
+                        if *left == 0 {
+                            self.devices.clear();
+                            self.pending = None;
+                        } else {
+                            *left -= 1;
+                        }
+                    }
+                    let list: Vec<Value> = self
+                        .devices
+                        .iter()
+                        .map(|d| json!({"name": d, "type": "child<vfio-pci>"}))
+                        .collect();
+                    json!({ "return": list })
+                }
+                "device_del" => {
+                    assert_eq!(args["id"], DEV);
+                    if let Unplug::After(n) = self.unplug {
+                        self.pending = Some(n);
+                    }
+                    json!({"return": {}})
+                }
+                other => panic!("unexpected QMP command {}", other),
+            }
+        }
+    }
+
+    struct FakeQmp {
+        qmp: Qmp,
+        qemu: Arc<Mutex<FakeQemu>>,
+        _dir: tempfile::TempDir,
+    }
+
+    fn serve(listener: UnixListener, qemu: Arc<Mutex<FakeQemu>>) {
+        let (stream, _) = listener.accept().unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut send = |v: Value| writeln!(writer, "{v}").is_ok();
+        if !send(json!({"QMP": {
+            "version": {"qemu": {"micro": 0, "minor": 2, "major": 9}, "package": ""},
+            "capabilities": []
+        }})) {
+            return;
+        }
+        for line in std::io::BufReader::new(stream).lines() {
+            let Ok(line) = line else { return };
+            let request: Value = serde_json::from_str(&line).unwrap();
+            let command = request["execute"].as_str().unwrap();
+            let (reply, delay) = match command {
+                "qmp_capabilities" => (json!({"return": {}}), None),
+                "query-fdsets" => (json!({"return": []}), None),
+                _ => {
+                    let mut qemu = qemu.lock().unwrap();
+                    for event in qemu.queued_events.drain(..) {
+                        if !send(event) {
+                            return;
+                        }
+                    }
+                    let delay = if command == "qom-list" {
+                        qemu.poll_delay.take()
+                    } else {
+                        None
+                    };
+                    (qemu.reply(command, &request["arguments"]), delay)
+                }
+            };
+            if let Some(delay) = delay {
+                thread::sleep(delay);
+            }
+            if !send(reply) {
+                return;
+            }
+        }
+    }
+
+    fn fake_qmp(devices: &[&str], unplug: Unplug) -> FakeQmp {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qmp.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+        let qemu = Arc::new(Mutex::new(FakeQemu {
+            devices: devices.iter().map(|d| d.to_string()).collect(),
+            unplug,
+            pending: None,
+            queued_events: Vec::new(),
+            poll_failures: 0,
+            poll_delay: None,
+        }));
+        let served = qemu.clone();
+        thread::spawn(move || serve(listener, served));
+        FakeQmp {
+            qmp: Qmp::new(path.to_str().unwrap()).unwrap(),
+            qemu,
+            _dir: dir,
+        }
+    }
+
+    #[test]
+    fn wait_retries_transient_qmp_errors() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(0));
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        fake.qemu.lock().unwrap().poll_failures = 2;
+        fake.qmp
+            .wait_for_device_deleted(DEV, Duration::from_secs(1))
+            .unwrap();
+        assert!(fake.qemu.lock().unwrap().devices.is_empty());
+        assert_eq!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "qom-list")
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn wait_recovers_after_a_socket_read_timeout() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(1));
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        let read_timeout = Some(Duration::from_millis(20));
+        fake.qmp
+            .qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(read_timeout)
+            .unwrap();
+        fake.qemu.lock().unwrap().poll_delay = Some(Duration::from_millis(60));
+        fake.qmp
+            .wait_for_device_deleted(DEV, Duration::from_secs(1))
+            .unwrap();
+        assert!(fake.qemu.lock().unwrap().devices.is_empty());
+        assert_eq!(
+            fake.qmp
+                .qmp
+                .inner_mut()
+                .get_mut_write()
+                .read_timeout()
+                .unwrap(),
+            read_timeout
+        );
+    }
+
+    #[test]
+    fn wait_reports_the_last_qmp_error_at_its_deadline() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        fake.qemu.lock().unwrap().poll_failures = usize::MAX;
+        let timeout = Duration::from_millis(150);
+        let start = Instant::now();
+        let error = fake.qmp.wait_for_device_deleted(DEV, timeout).unwrap_err();
+        assert!(start.elapsed() >= timeout);
+        let message = format!("{error:#}");
+        assert!(message.contains("timed out"), "{}", message);
+        assert!(message.contains("scripted poll failure"), "{}", message);
+        assert!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "qom-list")
+                .count()
+                >= 2
+        );
+    }
+
+    #[test]
+    fn wait_caps_socket_reads_to_the_remaining_budget_and_restores_timeout() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        let read_timeout = Some(Duration::from_secs(2));
+        fake.qmp
+            .qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(read_timeout)
+            .unwrap();
+        fake.qemu.lock().unwrap().poll_delay = Some(Duration::from_millis(750));
+        let start = Instant::now();
+        let error = fake
+            .qmp
+            .wait_for_device_deleted(DEV, Duration::from_millis(100))
+            .unwrap_err();
+        assert!(start.elapsed() < Duration::from_millis(500));
+        assert!(format!("{error:#}").contains("timed out"));
+        assert_eq!(
+            fake.qmp
+                .qmp
+                .inner_mut()
+                .get_mut_write()
+                .read_timeout()
+                .unwrap(),
+            read_timeout
+        );
+    }
+
+    #[test]
+    fn wait_returns_once_device_is_removed() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(2));
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        fake.qmp
+            .wait_for_device_deleted(DEV, Duration::from_secs(5))
+            .unwrap();
+        assert!(fake.qemu.lock().unwrap().devices.is_empty());
+    }
+
+    #[test]
+    fn wait_times_out_while_device_is_present() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        let err = fake
+            .qmp
+            .wait_for_device_deleted(DEV, Duration::from_millis(300))
+            .unwrap_err();
+        let err = format!("{err:#}");
+        assert!(err.contains("timed out"), "{}", err);
+    }
+
+    #[test]
+    fn wait_ignores_stale_device_deleted_event() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        fake.qemu.lock().unwrap().queued_events.push(json!({
+            "event": "DEVICE_DELETED",
+            "data": {"device": DEV, "path": format!("/machine/peripheral/{DEV}")},
+            "timestamp": {"seconds": 1, "microseconds": 0}
+        }));
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        assert!(fake
+            .qmp
+            .wait_for_device_deleted(DEV, Duration::from_millis(300))
+            .is_err());
     }
 }
