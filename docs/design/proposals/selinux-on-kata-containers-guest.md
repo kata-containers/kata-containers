@@ -1,0 +1,854 @@
+# SELinux inside the Kata Containers guest VM
+
+An earlier version of this RFC was reviewed by `Markus Rudy`, `Steve Horsman`,
+and `Zvonko Kaiser`.
+
+## Summary
+
+A Kata pod runs in a virtual machine. Inside that machine, kata-agent creates
+containers, mounts their filesystems, and starts their processes. Confidential
+Containers adds attestation, image decryption, and secret delivery. The NVIDIA
+guest also runs GPU services.
+
+The VM isolates the pod from the host. Inside the guest, we also want to
+protect guest services and their secrets from a compromised container. The
+host must still treat the whole guest as untrusted.
+
+This proposal adds an enforcing SELinux policy to the guest used by the NVIDIA
+runtime classes. Workloads run in `container_t`; kata-agent, the confidential-
+computing components, and the NVIDIA services run in separate service domains.
+The policy restricts access to guest resources and prevents container content
+from being executed as a program in those service domains.
+
+NVRC loads the policy before starting the agent and guest services. The policy
+ships as a separately measured guest extension. This RFC proposes the security
+boundary and its initial scope: the NVIDIA runtime classes.
+
+## Threat model
+
+### What are we protecting?
+
+Kata must protect the host even if the whole guest is compromised. SELinux
+inside the guest adds protection for the guest services and the data they hold.
+
+There are two cases we want to address:
+
+* A compromised container escapes its namespaces, but the guest kernel is still
+  trusted. The process stays in `container_t`. It should not be able to read
+  CDH's private keys, take over guest services, or disable SELinux.
+* A guest service handles a malicious image during container setup. Code from
+  that image should not run with the service's permissions, whether through
+  direct execution or executable mappings.
+
+The second case is about removing ways to run container code as a guest
+service. It does not mean we have found an exploitable bug in those services.
+
+If protecting the host is the only goal, the VM already provides that boundary.
+The benefit here is protecting things the workload should not have, such as
+CDH's decryption keys or credentials. That benefit needs to justify the extra
+policy and maintenance work. We are starting with the NVIDIA runtime classes.
+
+### What can the attacker do?
+
+Assume the attacker controls a container, including root, and can escape its
+namespaces without compromising the guest kernel. It can reach guest files,
+devices, and network endpoints that the namespaces would normally hide.
+It still runs in `container_t`: being root or leaving a namespace does not
+change its SELinux domain.
+
+It can also use the APIs exposed to workloads and contact Trustee directly.
+An approved image can still contain an application that is later compromised.
+
+In a confidential deployment, the host is also untrusted. It can change boot
+inputs or leave out an extension. The verifier must reject a guest that does
+not have the required policy and enforcement settings before releasing secrets.
+This relies on CoCo's TEE and attestation support. Guest SELinux alone cannot
+protect a conventional VM from a malicious host.
+
+### What do we trust?
+
+We trust the guest kernel, boot code, SELinux policy, and file labels. The
+agent, confidential-data-hub (CDH), attestation-agent (AA), NVIDIA services,
+and mount helper remain part of the trusted computing base. SELinux limits
+what they can do. AA and CDH share `kata_coco_t`, so this policy does not
+separate them from each other.
+
+We also rely on the verifier and Trustee to check the guest measurements and
+workload policy, and decide which resources to release. Attesting the guest
+or measuring an image does not identify the container making a later request.
+
+### What access should be restricted?
+
+| Resource | Required restriction |
+| ----- | ----- |
+| Agent permissions | Container code must not run as the agent or enter an unconfined domain |
+| CDH's image keys, LUKS passphrases, and KBS credentials, where used | Containers must not read secrets kept for CDH's own use |
+| Private AA and CDH sockets | Only the services that need them should have access |
+| Evidence sources, including `configfs` and TEE devices | Containers must not bypass the workload API to generate evidence directly |
+| Guest-pull and scratch backing devices | Containers must not use raw device access to bypass file permissions |
+| SELinux policy, enforcement, booleans, and labels | Containers must not be able to change them |
+
+The policy in the appendix has passed CI, but still needs work on `/run`
+labels, evidence access, and networking to meet these goals. Checks need to
+use the compiled policy, including permissions inherited from Fedora and
+container-selinux, and the labels actually used in the guest.
+
+### What about AA, CDH, and Trustee access?
+
+AA and CDH's private UNIX sockets are separate from the REST API exposed to
+workloads. CoCo provides a
+[resource API](https://confidentialcontainers.org/docs/features/get-resource/)
+and an optional
+[evidence API](https://confidentialcontainers.org/docs/features/get-attestation/).
+A container can use those APIs without opening the private sockets. Blocking
+the sockets or `configfs` does not block access through the REST API.
+
+SELinux can limit access to a domain, such as `kata_coco_t`. It does not tell
+a shared REST API which container made a request. Trustee must still decide
+which resources a request is allowed to access. A compromised workload can
+use any API and secrets that were deliberately made available to it.
+
+We also need to restrict a container that contacts Trustee without going
+through AA or CDH. Dedicated SELinux port types can help, but we need to check
+inherited network permissions too. Labeling port 443 affects other HTTPS
+traffic; it does not identify a particular KBS or stop access through a proxy.
+The network restrictions need to account for these cases while allowing normal
+workload traffic. This is still missing from the policy in the appendix.
+
+We cannot rely on the container being unable to get evidence: the evidence
+API may be enabled, and an escaped container may reach other evidence sources.
+The verifier still needs to check the guest and workload policy. CoCo's
+[evidence API documentation](https://confidentialcontainers.org/docs/features/get-attestation/#security)
+also explains the risk of different workloads producing interchangeable evidence.
+
+### What is outside this threat model?
+
+Guest-kernel compromise that bypasses SELinux, host or hypervisor bugs, TEE
+compromise, side channels, and denial of service are outside this proposal.
+A compromised guest service can still abuse the permissions it has. Blocking
+executable memory does not prevent all memory-corruption attacks.
+
+This proposal also does not promise isolation between every pair of containers
+or protect secrets already given to a compromised workload.
+
+## Why add a boundary inside the guest?
+
+The container image comes from outside the guest. It may contain an ordinary
+application, proprietary code, model weights, or malicious code. Guest services
+must handle it without giving its contents their own privileges.
+
+There are two related concerns.
+
+### Keeping workload code out of guest service domains
+
+kata-agent must execute the container entrypoint. That execution should enter
+`container_t`. If a guest service instead executes image content while retaining
+its own domain, that content receives the service's SELinux permissions. It does
+not need to escape a container first.
+
+The proposed policy builds on Fedora's targeted policy and container-selinux.
+Some inherited runtime permissions are too broad for this purpose. Without
+additional constraints, they allow the agent to execute container files in its
+own domain or transition into domains that are unconfined in the base policy.
+
+Execution restrictions also need to cover executable mappings. A process can map
+a file with execute permission and run code from it without calling `execve`.
+Restricting entrypoints alone does not cover that path.
+
+Overlayfs complicates this restriction because it checks access to backing files
+using credentials retained from mount setup. If the agent mounts the overlay, it
+needs mapping permissions that we want to withhold from the agent itself.
+
+Overlayfs checks both the calling process's access to the overlay and the
+saved credentials' access to the backing files, including SELinux permissions.
+Mounting a directory as a lower layer does not bypass those checks, even as
+root. See the kernel's
+[overlayfs permission model](https://docs.kernel.org/filesystems/overlayfs.html#permission-model).
+
+The proposal moves the agent's overlay mounts into a small helper,
+`kata_overlay_mount_t`. The helper mounts the overlay and exits. Overlayfs
+retains its credentials, while the agent can be denied permission to map
+container content. The policy also denies the agent executable anonymous memory
+permissions that could otherwise let it read image content and copy it into
+executable memory.
+
+The helper has mapping permissions that the agent does not have. Overlayfs
+needs them when the container uses the mount. The helper cannot execute
+container files as its own program and exits after mounting. Denying `execmem`
+alone would still let the agent map container files. Denying those mappings
+without moving the mount to the helper would also break container startup.
+
+These restrictions remove ways for container content to run with service
+privileges. They do not establish that an attacker can reach every such path in
+the current code.
+
+### Protecting confidential material inside the guest
+
+In Confidential Containers, attestation can authorize the release of image keys
+and other secrets to the guest. The services that receive and use that material
+are part of the trusted computing base.
+
+Guest SELinux can restrict which other processes may access it. A workload
+should receive its own decrypted filesystem and the secrets intended for it,
+without gaining access to the data hub's credentials or other confidential
+material simply because it runs in the same VM.
+
+For example, CDH may hold image-decryption keys, LUKS passphrases, or KBS
+credentials. We need to protect where these are kept and prevent the container
+from requesting them through another interface. Secrets deliberately given to
+the workload remain available if that workload is compromised.
+
+This does not remove kata-agent or the confidential-data-hub from the trust
+model. The data hub decrypts and prepares the image. The agent needs access to
+container files to start the workload. The proposal does not hide the image from
+components that must handle it.
+
+Attestation and SELinux address different parts of this problem. Attestation
+provides evidence about the guest that booted. SELinux restricts access within
+that guest after workloads and secrets arrive.
+
+## What the existing controls provide
+
+| Control | Role | Remaining concern |
+| ----- | ----- | ----- |
+| VM isolation | Isolates the guest from the host | Workloads and guest services share a guest kernel |
+| Agent API policy | Restricts requests accepted from the host | Does not govern every file access or execution inside the guest |
+| Namespaces, cgroups, capabilities, and seccomp | Restrict container visibility, resources, and operations | Do not provide the proposed SELinux separation between workloads and guest services |
+| dm-verity | Detects changes to protected guest images and extensions | Does not constrain how services handle container content |
+| Measured boot and attestation | Support decisions about whether to trust a guest and release secrets | Do not enforce access restrictions after release |
+
+SELinux adds mandatory access control within the VM. It complements these
+controls and relies on the guest kernel to enforce it.
+
+## Proposed behavior
+
+When guest SELinux is enabled and enforcing:
+
+* Container processes run in `container_t`. Leaving a namespace does not, by
+  itself, change their SELinux domain or grant the agent's permissions.
+* kata-agent runs in `kata_agent_t`. The confidential-computing components share
+  `kata_coco_t`, and the NVIDIA services use `kata_nvidia_t`.
+* Container content cannot serve as a program image for those service domains.
+  The agent can start a container through a transition into `container_t`.
+* The agent cannot enter an unconfined domain through the inherited runtime
+  helper transitions.
+* The agent uses `kata-overlay-mount` for its container overlays and cannot map
+  container content itself.
+* GPU userspace supplied through CDI can run in the container's domain without
+  moving the workload into the NVIDIA service domain.
+* NVRC locks policy loading, enforcement changes, and booleans after loading the
+  policy. A systemd-based image can do the same before starting workloads.
+* A guest configured to require SELinux fails to start if the required policy
+  cannot be loaded.
+
+Guest SELinux is selected through the Kata configuration, which sets the guest
+kernel command line, including `enforcing=1`. This is independent of SELinux
+on the host. Without guest SELinux, behavior stays as it is today. If it is
+required, a missing or invalid policy must stop workload startup.
+
+The guest kernel command line and policy extension are measured. In a
+confidential deployment, the verifier must check both before releasing secrets.
+A missing extension or disabled/permissive SELinux must be rejected when
+enforcement is required. The guest must load and lock the policy before
+starting workloads.
+
+This gives a container that escapes its namespaces another restriction to cross
+before it can take over a guest service. The benefit applies to ordinary Kata
+pods as well as confidential workloads: compromising one container should not
+automatically give an attacker the agent's authority over the pod.
+
+The first implementation is limited to the NVIDIA runtime classes. The module
+reported to have passed CI with `enforcing=1` is included in the [policy
+appendix](#appendix-cil-policy).
+
+## Limits of the proposal
+
+The guest kernel remains trusted. A kernel compromise that bypasses SELinux is
+outside this boundary, as are vulnerabilities in the hypervisor or host kernel.
+
+The agent remains privileged. It creates namespaces, mounts filesystems, and
+starts processes. Compromising `kata_agent_t` is still a runtime compromise,
+even with restrictions on its execution and domain transitions.
+
+The confidential-data-hub still mounts the guest-pull overlay itself. It
+therefore retains permission to map container content, including executable
+mappings. The policy blocks direct execution of that content as `kata_coco_t`,
+but does not yet close the executable-mapping path. Moving these mounts to the
+helper requires a guest-components change.
+
+The execution restriction applies to files labeled `container_file_t`,
+`container_ro_file_t`, `container_var_lib_t`, `container_runtime_tmpfs_t`,
+`svirt_home_t`, `svirt_image_t`, `svirt_tmp_t`, `svirt_tmpfs_t`, or `unlabeled_t`,
+as listed in `kata_container_content` in the appendix. It is not a general
+guarantee that a service cannot execute attacker-controlled bytes. Writable
+types that a service may also execute need separate review.
+
+The proposal also does not establish isolation between every pair of containers.
+That depends on their labels, MCS categories, shared resources, and the
+remaining container policy.
+
+For confidential data, the relevant permissions need to be checked against the
+compiled policy and actual runtime labels. Blocking access to the coco extension
+alone does not demonstrate that workload processes cannot read every credential,
+socket, key file, or backing device used by the confidential-computing services.
+
+The policy reuses Fedora's targeted policy and container-selinux, with a Kata
+module and constraints on inherited permissions. It therefore needs review as a
+combined policy.
+
+The policy is packaged separately from the base image. Changes to the file
+contexts used to label the base image still require a matching base-image build.
+
+Other guest configurations are outside the initial implementation.
+
+## Implementation and validation
+
+The goal is to run the supported workloads with SELinux enforcing while
+blocking the access described in the threat model. We should test the main
+restrictions and document what still needs work.
+
+* Review the compiled policy and runtime labels. Give private files and sockets
+  under `/run` their own types where shared labels would expose them.
+* Check access from `container_t`, including outside the container namespaces.
+  The process should not be able to read CDH's private keys, use private service
+  sockets, generate evidence directly, or open raw guest-pull and scratch
+  devices. It should also be unable to take over guest services, enter their
+  domains, or change SELinux settings and protected labels.
+* Check direct Trustee access and requests through the REST API. Keep normal
+  workload networking working, and make sure Trustee rejects requests for
+  resources the caller is not allowed to access.
+* Check execution, mappings, and domain transitions for container files while
+  keeping workload startup and CDI working. Move CDH's guest-pull mounts to
+  the helper so CDH no longer needs to map container content.
+* Check startup with missing or invalid policy. When SELinux is required,
+  startup must fail. Also check that the verifier rejects missing or unapproved
+  extensions and disabled/permissive SELinux before releasing secrets. Repeat
+  the relevant checks when policy, labels, or services change.
+
+The result should be that a compromised container cannot read CDH's private
+keys and credentials or obtain them through another interface. We can use the
+NVIDIA implementation to decide whether the benefit is worth extending this
+to other runtime classes.
+
+## Appendix: CIL policy
+
+The full module produced and tested is reproduced below so the proposed policy
+can be reviewed with this RFC. It is installed on top of Fedora's targeted
+policy and container-selinux; it is not a standalone policy.
+
+```cil
+; Copyright (c) 2026 NVIDIA Corporation
+;
+; SPDX-License-Identifier: Apache-2.0
+;
+; Kata guest SELinux module, installed on top of Fedora's targeted policy and
+; container-selinux. Workloads run as container_t exactly as on an SELinux host;
+; this module only adds the guest-side domains and the labels for content that
+; carries no security.selinux xattrs (extensions and container rootfs layers).
+;
+; NVRC loads the resulting binary policy as PID 1, so it and everything it
+; spawns before exec'ing the agent start out as kernel_t. Domains are entered
+; through the file types below:
+;
+;   kata_agent_exec_t      /usr/bin/kata-agent in the base  -> kata_agent_t
+;   kata_gpu_extension_t   gpu extension (context= mount)   -> kata_nvidia_t
+;   kata_coco_extension_t  coco extension (context= mount)  -> kata_coco_t
+;   fsadm_exec_t           unpacked base-image dd, mke2fs   -> kata_mkfs_t
+;   kata_overlay_mount_exec_t /usr/bin/kata-overlay-mount   -> kata_overlay_mount_t
+;   kata_extension_t       any other extension              (no transition)
+;
+
+(type kata_agent_t)
+(type kata_coco_t)
+(type kata_mkfs_t)
+(type kata_nvidia_t)
+(type kata_overlay_mount_t)
+
+(type kata_agent_exec_t)
+(type kata_overlay_mount_exec_t)
+(type kata_coco_extension_t)
+(type kata_gpu_extension_t)
+(type kata_extension_t)
+(type kata_scratch_device_t)
+
+(roletype system_r kata_agent_t)
+(roletype system_r kata_coco_t)
+(roletype system_r kata_mkfs_t)
+(roletype system_r kata_nvidia_t)
+(roletype system_r kata_overlay_mount_t)
+(roletype object_r kata_agent_exec_t)
+(roletype object_r kata_overlay_mount_exec_t)
+(roletype object_r kata_coco_extension_t)
+(roletype object_r kata_gpu_extension_t)
+(roletype object_r kata_extension_t)
+(roletype object_r kata_scratch_device_t)
+
+(typeattribute kata_guest_domain)
+(typeattributeset kata_guest_domain (kata_agent_t kata_coco_t kata_nvidia_t))
+
+(typeattribute kata_extension_file_type)
+(typeattributeset kata_extension_file_type
+    (kata_coco_extension_t kata_gpu_extension_t kata_extension_t))
+
+(typeattributeset domain (kata_guest_domain))
+(typeattributeset domain (kata_mkfs_t kata_overlay_mount_t))
+(typeattributeset daemon (kata_guest_domain))
+(typeattributeset nsswitch_domain (kata_guest_domain))
+(typeattributeset syslog_client_type (kata_guest_domain))
+(typeattributeset kernel_system_state_reader (kata_guest_domain))
+(typeattributeset can_receive_kernel_messages (kata_guest_domain))
+
+(typeattributeset file_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_extension_file_type))
+(typeattributeset device_node (kata_scratch_device_t))
+(typeattributeset non_security_file_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_extension_file_type))
+(typeattributeset non_auth_file_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_extension_file_type))
+; Only the agent binary is an exec_type: container-selinux lets every sandbox
+; domain run any exec_type, which would expose the extensions to containers.
+(typeattributeset exec_type (kata_agent_exec_t))
+(typeattributeset entry_type
+    (kata_agent_exec_t kata_overlay_mount_exec_t kata_coco_extension_t kata_gpu_extension_t))
+
+; runc's type is container_runtime_t. container-selinux puts the runtime
+; rules on container_runtime_domain, then calls unconfined_domain() on
+; container_runtime_t itself. The agent takes the rules. It is not an
+; unconfined domain, so it is not unconfined_domain_type,
+; files_unconfined_type, devices_unconfined_type, filesystem_unconfined_type,
+; kern_unconfined, corenet_unconfined_type, or selinux_unconfined_type
+; (policy load, setenforce, setbool, module load).
+;
+; container_runtime_domain_template() adds the process-identity and role
+; exemptions, raw fixed-disk access, and a read-only walk of proc. Those
+; are the template, not the unconfined set.
+(typeattributeset container_runtime_domain (kata_agent_t))
+(typeattributeset can_change_process_identity (kata_agent_t))
+(typeattributeset can_change_process_role (kata_agent_t))
+(typeattributeset can_dump_kernel (kata_agent_t))
+(typeattributeset fixed_disk_raw_read (kata_agent_t))
+(typeattributeset fixed_disk_raw_write (kata_agent_t))
+; kernel_read_all_proc() from that template. Read-only: kern_unconfined
+; would be write and execute on every proc type.
+(allow kata_agent_t proc_type (dir (getattr search open read lock ioctl)))
+(allow kata_agent_t proc_type (file (getattr open read ioctl lock)))
+(allow kata_agent_t proc_type (lnk_file (getattr read)))
+
+; container_runtime_domain still allows a transition to spc_t, kmod_t,
+; mount_t, fsadm_t, lvm_t, and install_t, and an exec of container_file_t
+; with no exec label type-transitions to spc_t. Those types are unconfined.
+; An allow inherited from the attribute cannot be removed. This constraint
+; denies the domain change anyway: the agent may enter only itself,
+; container_t, kata_coco_t, or the overlay mount helper.
+(classpermission kata_agent_process_change)
+(classpermissionset kata_agent_process_change (process (transition dyntransition)))
+(classpermission kata_agent_process2_change)
+(classpermissionset kata_agent_process2_change (process2 (nnp_transition nosuid_transition)))
+(constrain kata_agent_process_change
+    (or
+        (not (eq t1 kata_agent_t))
+        (eq t2 (kata_agent_t container_t kata_coco_t kata_overlay_mount_t))))
+(constrain kata_agent_process2_change
+    (or
+        (not (eq t1 kata_agent_t))
+        (eq t2 (kata_agent_t container_t kata_coco_t kata_overlay_mount_t))))
+
+; The agent can read container files. With executable anonymous memory it
+; could copy one into its own mappings without ever mapping the file, so
+; the runtime attribute's execmem, execstack, and execheap are denied.
+(classpermission kata_agent_exec_memory)
+(classpermissionset kata_agent_exec_memory (process (execmem execstack execheap)))
+(constrain kata_agent_exec_memory (not (eq t1 kata_agent_t)))
+
+; A container binary must not run in a guest domain. The runtime attribute
+; grants the agent entrypoint, execute_no_trans, and map on container content,
+; and an explicit exec label skips the spc_t transition above. kata_coco_t
+; can also execute container_file_t in place. Those allows cannot be deleted.
+; Only a container domain may use container content as a program image, so
+; the exec that starts a workload still enters container_t, and the same
+; file cannot be the agent, the data hub, or the NVIDIA stack.
+; execute stays allowed: that is the permission the agent uses to start it.
+(typeattribute kata_container_content)
+(typeattributeset kata_container_content
+    (container_file_t container_ro_file_t container_var_lib_t
+     container_runtime_tmpfs_t svirt_home_t svirt_image_t svirt_tmp_t
+     svirt_tmpfs_t unlabeled_t))
+(classpermission kata_container_content_exec)
+(classpermissionset kata_container_content_exec (file (entrypoint execute_no_trans)))
+(constrain kata_container_content_exec
+    (or
+        (not (eq t2 kata_container_content))
+        (eq t1 container_domain)))
+
+; overlayfs checks the mounter's credentials against the backing file on
+; every mapping in the overlay. The agent leaves its overlay mounts to
+; kata-overlay-mount, so the agent itself cannot map container content.
+; The data hub still mounts the guest-pull overlay and keeps map until it
+; uses the helper too. No other guest domain may map container content.
+(typeattribute kata_overlay_mounter)
+(typeattributeset kata_overlay_mounter (kata_overlay_mount_t kata_coco_t))
+(classpermission kata_container_content_map)
+(classpermissionset kata_container_content_map (file (map)))
+(constrain kata_container_content_map
+    (or
+        (not (eq t2 kata_container_content))
+        (or (eq t1 container_domain) (eq t1 kata_overlay_mounter))))
+
+; The agent's tmpfs files, including memfds, are container_runtime_tmpfs_t,
+; which containers can also write. Anything the agent or its hooks execute
+; from that type enters container_t. The NVIDIA CDI hook runs its cloned
+; ldconfig this way against the container's libraries.
+(typetransition kata_agent_t container_runtime_tmpfs_t process container_t)
+
+; domain_can_mmap_files is off and NVRC locks booleans, so map needs an explicit
+; allow. Keep the formatter from mapping any other block device even if the
+; boolean is turned on.
+(classpermission kata_mkfs_block_map)
+(classpermissionset kata_mkfs_block_map (blk_file (map)))
+(constrain kata_mkfs_block_map
+    (or
+        (not (eq t1 kata_mkfs_t))
+        (eq t2 kata_scratch_device_t)))
+
+; What the agent does once it is no longer an unconfined domain. Harvested
+; from the first confined NVIDIA GPU run.
+; /dev/console is still a node on the rootfs.
+(allow kata_agent_t root_t (chr_file (read write ioctl)))
+; NVRC mounts a tmpfs over /etc/ld.so.cache, and the agent maps it.
+(allow kata_agent_t tmpfs_t (file (open map)))
+; /dev/shm, /dev/ptmx replaced by a symlink, /dev/mapper/control,
+; /dev/null, and bind-mounts of /dev/kmsg and /dev/net/tun into a container.
+(allow kata_agent_t device_t (dir (create)))
+(allow kata_agent_t device_t (chr_file (read write open ioctl unlink mounton)))
+(allow kata_agent_t device_t (lnk_file (create)))
+; The channel to the host shim. The accepted socket is read and written by
+; the agent's worker thread; without that the ttrpc connection closes.
+(allow kata_agent_t self (vsock_socket (create bind listen accept read write)))
+; fs::write of /sys/class/scsi_host/hostN/scan opens that file with O_CREAT.
+(allow kata_agent_t sysfs_t (dir (add_name)))
+(allow kata_agent_t sysfs_t (file (create)))
+; The CDI hook runs in place from the gpu extension, after a propagation remount.
+(allow kata_agent_t kata_gpu_extension_t (filesystem (remount)))
+(allow kata_agent_t kata_gpu_extension_t (file (execute execute_no_trans)))
+; CPU tests run the devkit debug extension. It has the fallback extension
+; type. devkit-enter stays the agent and writes the devkit overlay
+; (resolv.conf, a kata-ctl copy). New files keep the parent directory's type.
+(allow kata_agent_t kata_extension_t (file (execute execute_no_trans write create unlink setattr)))
+(allow kata_agent_t kata_extension_t (dir (add_name remove_name create rename reparent)))
+; Stop a container: SIGTERM, then SIGKILL.
+(allow kata_agent_t container_t (process (signal sigkill)))
+; Starting pause enters container_t. Inherit signal state, rlimits, and the
+; AT_SECURE flag; otherwise the workload starts in glibc secure mode.
+(allow kata_agent_t container_t (process (siginh rlimitinh noatsecure)))
+; Start attestation-agent from the coco extension. The type transition into
+; kata_coco_t is already allowed, and the constraint keeps it there.
+(allow kata_agent_t kata_coco_extension_t (file (execute)))
+; The agent calls CDH and stats the attestation socket. /run is tmpfs_t
+; until something labels it container_runtime_tmpfs_t; both have shown up.
+(allow kata_agent_t tmpfs_t (sock_file (getattr write)))
+(allow kata_agent_t container_runtime_tmpfs_t (sock_file (getattr write)))
+(allow kata_agent_t kata_coco_t (unix_stream_socket (connectto)))
+; Block emptyDir formats with mkfs.ext4. The agent pins its own exec label,
+; so the process stays kata_agent_t. fsadm_t is unconfined and stays denied.
+; The disk it formats, /dev/sdc, is a fixed disk. Membership in
+; fixed_disk_raw_read does not grant this access.
+(allow kata_agent_t fsadm_exec_t (file (execute execute_no_trans)))
+(allow kata_agent_t fixed_disk_device_t (blk_file (read write open ioctl)))
+; Base rootfs label, applied by mkfs.erofs --file-contexts at image build.
+(filecon "/usr/bin/kata-agent" file (system_u object_r kata_agent_exec_t ((s0) (s0))))
+; Fedora labels /lib/ld-*.so and /usr/bin/ldconfig. The NVIDIA image has the
+; dynamic linker under /lib64 and ldconfig under /sbin, which otherwise stay
+; default_t.
+(filecon "/lib64/ld-[^/]*\.so(\.[^/]*)*" any (system_u object_r ld_so_t ((s0) (s0))))
+(filecon "/sbin/ldconfig" any (system_u object_r ldconfig_exec_t ((s0) (s0))))
+(filecon "/usr/sbin/ldconfig" any (system_u object_r ldconfig_exec_t ((s0) (s0))))
+; CDH formats the guest-pull volume with mke2fs. Fedora labels the
+; /usr/sbin paths; the NVIDIA image has them under /sbin.
+(filecon "/sbin/mke2fs" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/usr/sbin/mke2fs" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/sbin/mkfs.ext4" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/usr/sbin/mkfs.ext4" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+; CDH also runs /bin/dd while preparing that volume. Fedora labels
+; /usr/bin/dd; the NVIDIA image has it under /bin.
+(filecon "/bin/dd" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+(filecon "/usr/bin/dd" any (system_u object_r fsadm_exec_t ((s0) (s0))))
+
+; Entering the domains. NVRC runs as kernel_t: it execs the agent and spawns the
+; NVIDIA daemons and tools from the gpu extension. The agent launches the guest
+; components from the coco extension.
+(typetransition kernel_t kata_agent_exec_t process kata_agent_t)
+(typetransition kernel_t kata_gpu_extension_t process kata_nvidia_t)
+(typetransition kata_agent_t kata_coco_extension_t process kata_coco_t)
+; CDH invokes the immutable base-image formatter. Keep it out of the broad
+; confidential-components domain and give the short-lived child only the
+; block-device access needed to format the scratch volume.
+(typetransition kata_coco_t fsadm_exec_t process kata_mkfs_t)
+; cryptsetup creates the mapped node that mke2fs formats. Give that node a
+; dedicated type instead of granting the formatter every guest block device.
+(typetransition kata_coco_t device_t blk_file kata_scratch_device_t)
+
+(allow kernel_t kata_agent_exec_t (file (getattr open read map execute)))
+(allow kernel_t kata_gpu_extension_t (file (getattr open read map execute)))
+(allow kernel_t kata_agent_t (process (transition siginh rlimitinh noatsecure)))
+(allow kernel_t kata_nvidia_t (process (transition siginh rlimitinh noatsecure)))
+; Fedora already transitions NVRC's modprobe and veritysetup. Inherit signal
+; state, rlimits, and the AT_SECURE flag on those execs. The agent stays
+; unable to enter kmod_t; that transition is still constrained.
+(allow kernel_t kmod_t (process (siginh rlimitinh noatsecure)))
+(allow kernel_t kernel_generic_helper_t (process (siginh rlimitinh noatsecure)))
+(allow kata_agent_t kata_coco_t (process (transition siginh rlimitinh noatsecure)))
+(allow kata_coco_t kata_mkfs_t (process (transition siginh rlimitinh noatsecure)))
+; The coco extension is mounted nosuid, same as the gpu extension.
+(allow kata_agent_t kata_coco_t (process2 (nosuid_transition)))
+
+(allow kata_agent_t kata_agent_exec_t (file (entrypoint getattr open read map execute)))
+(allow kata_nvidia_t kata_gpu_extension_t (file (entrypoint getattr open read map execute)))
+; cryptsetup is on the extension and is executed in place, so it stays
+; kata_coco_t instead of transitioning.
+(allow kata_coco_t kata_coco_extension_t (file (entrypoint getattr open read map execute execute_no_trans)))
+(allow kata_mkfs_t fsadm_exec_t (file (entrypoint getattr open read map execute)))
+(allow kata_mkfs_t fsadm_exec_t (lnk_file (getattr read)))
+(allow kata_mkfs_t kata_scratch_device_t (blk_file (getattr open read write ioctl)))
+; CDH also zeroes the device with dd, which is fsadm_exec_t too. Both read
+; NVRC's tmpfs /etc/ld.so.cache, and dd reads /dev/zero, which is still the
+; unlabeled devtmpfs type. stdio is the console node on the rootfs, and CDH
+; collects the output through pipes.
+(allow kata_mkfs_t tmpfs_t (file (getattr open read map)))
+(allow kata_mkfs_t device_t (chr_file (getattr open read)))
+(allow kata_mkfs_t root_t (chr_file (read write)))
+(allow kata_mkfs_t kata_coco_t (fifo_file (getattr read write ioctl)))
+
+; The agent runs /usr/bin/kata-overlay-mount for every container overlay.
+; overlayfs keeps the helper's credentials and uses them for every access to
+; a layer: lookups, copy-up, whiteouts, xattrs, and the second mmap check.
+; So this domain gets the file access of a container overlay, but never
+; entrypoint or execute_no_trans, and the helper exits once it has mounted.
+; Its only other caller-controlled input is the context= label, and it can
+; relabel a superblock only to container content.
+(filecon "/usr/bin/kata-overlay-mount" file (system_u object_r kata_overlay_mount_exec_t ((s0) (s0))))
+(typetransition kata_agent_t kata_overlay_mount_exec_t process kata_overlay_mount_t)
+(allow kata_agent_t kata_overlay_mount_exec_t (file (getattr open read execute)))
+(allow kata_agent_t kata_overlay_mount_t (process (transition siginh rlimitinh noatsecure)))
+(allow kata_overlay_mount_t kata_overlay_mount_exec_t (file (entrypoint getattr open read map execute)))
+; stdin is /dev/null, still the devtmpfs type; stdout and stderr are pipes
+; back to the agent. The loader cache is NVRC's tmpfs.
+(allow kata_overlay_mount_t kata_agent_t (fd (use)))
+(allow kata_overlay_mount_t kata_agent_t (fifo_file (getattr read write ioctl)))
+(allow kata_overlay_mount_t kata_agent_t (process (sigchld)))
+(allow kata_overlay_mount_t device_t (chr_file (getattr read write)))
+; /dev/console is still a node on the rootfs.
+(allow kata_overlay_mount_t root_t (chr_file (read write)))
+(allow kata_overlay_mount_t tmpfs_t (file (getattr open read map)))
+(allow kata_overlay_mount_t tmpfs_t (filesystem (getattr)))
+(allow kata_overlay_mount_t self (capability (chown dac_override dac_read_search fowner fsetid mknod setfcap sys_admin)))
+(allow kata_overlay_mount_t file_type (dir (getattr search)))
+; The new overlay starts as fs_t. context= moves it to a container type,
+; and a later mount can move it from one container type to another. Both
+; stay inside container content.
+(allow kata_overlay_mount_t fs_t (filesystem (getattr mount relabelfrom)))
+(allow kata_overlay_mount_t kata_container_content (filesystem (getattr mount relabelfrom relabelto)))
+(allow kata_overlay_mount_t kata_container_content
+    (dir (getattr search open read ioctl lock write add_name remove_name create rmdir rename reparent setattr mounton)))
+(allow kata_overlay_mount_t kata_container_content
+    (file (getattr open read write append create unlink rename link setattr lock ioctl map execute execmod)))
+(allow kata_overlay_mount_t kata_container_content
+    (lnk_file (getattr read create unlink rename setattr)))
+(allow kata_overlay_mount_t kata_container_content
+    (chr_file (getattr open read write ioctl create unlink rename setattr)))
+(allow kata_overlay_mount_t kata_container_content
+    (fifo_file (getattr open read write create unlink rename setattr)))
+(allow kata_overlay_mount_t kata_container_content
+    (sock_file (getattr open read write create unlink rename setattr)))
+
+; NVRC mounts every extension but the selinux one with context=<type>, which
+; needs the type to be associable with its own superblock.
+(allow kata_extension_file_type self (filesystem (associate)))
+(allow kernel_t kata_extension_file_type (filesystem (mount unmount getattr relabelfrom relabelto)))
+; context= is checked as relabelfrom the superblock's initial SID. EROFS has
+; used both unlabeled_t and fs_t here across the guest mount paths.
+(allow kernel_t unlabeled_t (filesystem (relabelfrom)))
+(allow kernel_t fs_t (filesystem (relabelfrom)))
+
+; NVRC loads and locks the policy, mounts extension content over the base
+; rootfs, disables module loading, and then starts the agent and NVIDIA stack.
+(allow kernel_t security_t (security (setbool)))
+(allow kernel_t proc_security_t (file (open write)))
+(allow kernel_t tmpfs_t (dir (mounton)))
+(allow kernel_t lib_t (dir (mounton)))
+(allow kernel_t ld_so_cache_t (file (mounton)))
+; NVRC runs /sbin/ldconfig in place while bringing up the base image.
+(allow kernel_t ldconfig_exec_t (file (execute_no_trans)))
+(allow kernel_t self (process (setrlimit)))
+(allow kernel_t kata_agent_t (process (share)))
+(allow kernel_t kata_nvidia_t (process2 (nosuid_transition)))
+
+; NVRC invokes veritysetup before mounting each dm-verity extension. Fedora
+; transitions that helper into kernel_generic_helper_t. Loading a dm-verity
+; table takes CAP_SYS_ADMIN; without it veritysetup exits and NVRC panics.
+(allow kernel_generic_helper_t device_t (filesystem (getattr)))
+(allow kernel_generic_helper_t device_t (dir (write add_name)))
+(allow kernel_generic_helper_t device_t (blk_file (create getattr open read write ioctl setattr)))
+(allow kernel_generic_helper_t device_t (chr_file (getattr open read write ioctl)))
+(allow kernel_generic_helper_t proc_t (file (getattr open read)))
+(allow kernel_generic_helper_t root_t (chr_file (read write)))
+(allow kernel_generic_helper_t tmpfs_t (file (read write map execute)))
+(allow kernel_generic_helper_t kernel_t (system (ipc_info)))
+(allow kernel_generic_helper_t self (capability (chown mknod sys_admin)))
+
+; modprobe reads modules directly from the GPU extension before NVRC locks
+; module loading.
+(allow kmod_t kata_gpu_extension_t (system (module_load)))
+; NVRC binds the extension firmware onto /lib/firmware/nvidia. The firmware
+; loader reads it with kernel credentials. Unknown permissions are denied, so
+; this is the only firmware the guest can load.
+(allow kernel_t kata_gpu_extension_t (system (firmware_load)))
+
+; Guest services read extension content (libraries, configs, the pause bundle,
+; which the agent copies into the container's own rootfs).
+(typeattribute kata_extension_reader)
+(typeattributeset kata_extension_reader
+    (and (domain) (not (container_domain kata_mkfs_t kata_overlay_mount_t))))
+(allow kata_extension_reader kata_extension_file_type (dir (getattr search open read)))
+(allow kata_extension_reader kata_extension_file_type (file (getattr open read map)))
+(allow kata_extension_reader kata_extension_file_type (lnk_file (getattr read)))
+
+; CDI bind-mounts the NVIDIA userspace (libraries, nvidia-smi, ...) from the gpu
+; extension into GPU containers, which run it in place. No other extension is
+; visible to containers.
+(allow container_domain kata_gpu_extension_t (dir (getattr search open read)))
+(allow container_domain kata_gpu_extension_t (file (getattr open read map execute execute_no_trans)))
+(allow container_domain kata_gpu_extension_t (lnk_file (getattr read)))
+
+; The agent creates passed-through GPU character devices on the container's
+; private /dev tmpfs. The mount label makes them container_runtime_tmpfs_t.
+; vLLM creates POSIX semaphores there, nginx listens on a unix socket, and
+; nvidia-smi creates /dev/nvidia-caps.
+(allow container_t container_runtime_tmpfs_t (chr_file (create getattr open read write ioctl map setattr)))
+(allow container_t container_runtime_tmpfs_t (dir (create setattr write add_name remove_name)))
+(allow container_t container_runtime_tmpfs_t (file (create write link unlink)))
+(allow container_t container_runtime_tmpfs_t (lnk_file (read)))
+(allow container_t container_runtime_tmpfs_t (sock_file (create getattr open read setattr unlink write)))
+; vLLM serves with io_uring, including a kernel polling thread. The guest
+; kernel checks io_uring allowed at setup; only containers get it.
+(allow container_t io_uring_t (anon_inode (create map read write)))
+(allow container_t self (io_uring (allowed sqpoll)))
+
+; A volume with no security.selinux xattrs has an unlabeled root. Label what
+; the container creates there as container content instead of letting
+; container_t read and write every unlabeled file in the guest.
+(typetransition container_t unlabeled_t dir container_file_t)
+(typetransition container_t unlabeled_t file container_file_t)
+(typetransition container_t unlabeled_t lnk_file container_file_t)
+(allow container_t unlabeled_t (dir (getattr search open read write add_name remove_name create rmdir)))
+
+; /proc/<pid> inodes take the task's domain, so a container pid has to be
+; allowed to live on procfs.
+(allow container_t proc_t (filesystem (associate)))
+
+; container_use_devices is off, and the policy lock means the guest cannot
+; turn it on. CPU tests open guest device nodes that stay device_t, such as
+; the tun device and /dev/kmsg, and read the guest kernel log.
+(allow container_t device_node (chr_file (getattr ioctl open read write)))
+(allow container_t kernel_t (system (syslog_read)))
+; The sysctl test writes /proc/sys/vm/max_map_count from the container. Every
+; vm sysctl shares this type, so the container can write the rest of them too.
+(allow container_t sysctl_vm_t (file (write)))
+
+; Baseline harvested from NVIDIA GPU CI.
+; dcgm-exporter runs the labeled /sbin/ldconfig in its own domain.
+(allow kata_nvidia_t ldconfig_exec_t (file (getattr open read map execute execute_no_trans)))
+(allow kata_nvidia_t device_t (dir (write add_name create setattr)))
+(allow kata_nvidia_t device_t (chr_file (create getattr open read write ioctl map setattr)))
+(allow kata_nvidia_t device_t (sock_file (write)))
+(allow kata_nvidia_t kata_gpu_extension_t (dir (watch)))
+(allow kata_nvidia_t kernel_t (system (syslog_read)))
+(allow kata_nvidia_t kmod_exec_t (file (getattr open read map execute execute_no_trans)))
+(allow kata_nvidia_t modules_conf_t (dir (getattr search open read)))
+(allow kata_nvidia_t modules_conf_t (file (getattr open read)))
+(allow kata_nvidia_t modules_object_t (dir (search)))
+(allow kata_nvidia_t root_t (chr_file (read write)))
+; NVML, the persistence daemon, nvidia-ctk, and DCGM issue privileged GPU ioctls.
+(allow kata_nvidia_t self (capability (mknod sys_admin)))
+(allow kata_nvidia_t self (capability2 (perfmon)))
+; NVML's task runner sets its own scheduling policy.
+(allow kata_nvidia_t self (process (setsched)))
+(allow kata_nvidia_t self (tcp_socket (listen accept)))
+(allow kata_nvidia_t self (unix_stream_socket (connectto)))
+(allow kata_nvidia_t sysctl_net_t (dir (search)))
+(allow kata_nvidia_t sysctl_net_t (file (open read)))
+(allow kata_nvidia_t sysctl_vm_t (file (getattr open read)))
+(allow kata_nvidia_t tmpfs_t (dir (create)))
+(allow kata_nvidia_t tmpfs_t (file (create getattr open read write append map execute lock setattr rename)))
+(allow kata_nvidia_t tmpfs_t (sock_file (create getattr write)))
+(allow kata_nvidia_t unreserved_port_t (tcp_socket (name_bind)))
+
+; Confidential guests run attestation-agent and the confidential-data-hub as
+; kata_coco_t. They read an SNP report from configfs, talk to each other on
+; /run/confidential-containers, and open the passed-through GPU nodes.
+(allow kata_coco_t configfs_t (dir (getattr search write add_name remove_name create rmdir)))
+(allow kata_coco_t configfs_t (file (getattr open read create write)))
+(allow kata_coco_t container_runtime_tmpfs_t (dir (getattr search write add_name create)))
+; LUKS headers live on the confidential-containers tmpfs.
+(allow kata_coco_t container_runtime_tmpfs_t (file (getattr open read create write lock)))
+(allow kata_coco_t container_runtime_tmpfs_t (sock_file (create getattr write)))
+(allow kata_coco_t device_t (dir (write add_name remove_name)))
+(allow kata_coco_t device_t (filesystem (getattr)))
+(allow kata_coco_t device_t (chr_file (getattr open read write ioctl create setattr)))
+(allow kata_coco_t device_t (blk_file (getattr open read write ioctl create setattr unlink)))
+(allow kata_coco_t kata_scratch_device_t (blk_file (getattr open read write ioctl create setattr unlink)))
+(allow kata_coco_t fixed_disk_device_t (blk_file (getattr open read write ioctl)))
+(allow kata_coco_t root_t (chr_file (read write ioctl)))
+; The attestation socket is created on /run, which is still tmpfs_t. CDH also
+; connects to the KBS on 443 and on its node port, and mounts the guest-pull
+; overlay.
+(allow kata_coco_t tmpfs_t (dir (create)))
+; Runtime data on /run, and the loader maps NVRC's tmpfs /etc/ld.so.cache.
+; The CoCo binaries and their formatters stay unpacked, so this type is never
+; executable.
+(allow kata_coco_t tmpfs_t (file (getattr open read write map)))
+(allow kata_coco_t tmpfs_t (sock_file (create getattr write)))
+(allow kata_coco_t tmpfs_t (filesystem (getattr)))
+(allow kata_coco_t fs_t (filesystem (getattr mount)))
+(allow kata_coco_t proc_t (filesystem (mount)))
+(allow kata_coco_t fsadm_exec_t (file (getattr open read map execute)))
+(allow kata_coco_t fsadm_exec_t (lnk_file (read)))
+(allow kata_coco_t http_port_t (tcp_socket (name_connect)))
+(allow kata_coco_t kata_gpu_extension_t (file (execute execute_no_trans)))
+(allow kata_coco_t sysctl_vm_t (file (getattr open read)))
+(allow kata_coco_t self (capability (mknod chown fowner fsetid setfcap dac_override dac_read_search)))
+; attestation-agent collects GPU evidence through NVML, which issues
+; privileged GPU ioctls and raises its worker threads' priority.
+(allow kata_coco_t self (capability (sys_admin sys_nice)))
+; cryptsetup sets its own scheduling while opening the scratch device.
+(allow kata_coco_t self (process (setsched)))
+(allow kata_coco_t kernel_t (process (setsched)))
+(allow kata_coco_t kernel_t (system (ipc_info)))
+(allow kata_coco_t self (capability2 (perfmon)))
+(allow kata_coco_t self (tcp_socket (listen accept)))
+(allow kata_coco_t self (unix_stream_socket (connectto)))
+(allow kata_coco_t unreserved_port_t (tcp_socket (name_bind name_connect)))
+
+; Container rootfs content. Neither snapshotter delivers security.selinux
+; xattrs:
+;
+;  - erofs: the agent mounts the container overlay with context=<mountLabel>.
+;  - nydus (guest pull): CDH unpacks layers under /run/kata-containers/image,
+;    on /run (tmpfs, created before policy load, so tmpfs_t) or on a freshly
+;    formatted ext4 secure mount whose root has no label (unlabeled_t). The
+;    transitions below give that content container_file_t at creation, which
+;    the overlay CDH builds then exposes to container_t.
+(typetransition kata_agent_t tmpfs_t dir "kata-containers" container_file_t)
+(typetransition kernel_t tmpfs_t dir "kata-containers" container_file_t)
+(typetransition kata_coco_t unlabeled_t dir container_file_t)
+(typetransition kata_coco_t unlabeled_t file container_file_t)
+(typetransition kata_coco_t unlabeled_t lnk_file container_file_t)
+; mkfs leaves the ext4 root unlabeled. Lookups of that directory are
+; search; creating "layers" needs write and add_name. Children still
+; take container_file_t from the transitions above.
+(allow kata_coco_t unlabeled_t (dir (search write add_name)))
+(allow kata_coco_t container_file_t (dir (getattr search open read write add_name remove_name create setattr rmdir reparent rename mounton)))
+(allow kata_coco_t container_file_t (file (getattr open read write append create setattr unlink rename link map execute execute_no_trans)))
+(allow kata_coco_t container_file_t (chr_file (create unlink)))
+(allow kata_coco_t container_file_t (sock_file (create getattr write)))
+(allow kata_coco_t container_file_t (lnk_file (getattr read create setattr unlink rename)))
+```
