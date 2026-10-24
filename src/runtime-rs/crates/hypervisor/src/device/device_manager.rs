@@ -5,7 +5,7 @@
 //
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -102,6 +102,7 @@ impl SharedInfo {
 #[derive(Debug)]
 pub struct DeviceManager {
     devices: HashMap<String, ArcMutexDevice>,
+    pending_removals: HashSet<String>,
     hypervisor: Arc<dyn Hypervisor>,
     shared_info: SharedInfo,
     pcie_topology: Option<PCIeTopology>,
@@ -115,6 +116,7 @@ impl DeviceManager {
         let devices = HashMap::<String, ArcMutexDevice>::new();
         Ok(DeviceManager {
             devices,
+            pending_removals: HashSet::new(),
             hypervisor,
             shared_info: SharedInfo::new().await,
             pcie_topology: PCIeTopology::new(topo_config),
@@ -146,6 +148,9 @@ impl DeviceManager {
     }
 
     async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
+        if self.pending_removals.contains(device_id) {
+            return Err(anyhow!("device {} has an unfinished removal", device_id));
+        }
         // find the device
         let device = self
             .devices
@@ -196,6 +201,9 @@ impl DeviceManager {
 
     pub async fn try_remove_device(&mut self, device_id: &str) -> Result<()> {
         if let Some(dev) = self.devices.get(device_id) {
+            // Set this before any await: cancellation or a failed unplug must
+            // not let another owner reuse a device the guest may still remove.
+            self.pending_removals.insert(device_id.to_string());
             let mut device_guard = dev.lock().await;
 
             // Snapshot all state needed after detach before changing the reference count.
@@ -207,6 +215,7 @@ impl DeviceManager {
 
             // If it's still in use, it should be just skipped.
             if still_in_use {
+                self.pending_removals.remove(device_id);
                 return Ok(());
             }
 
@@ -216,6 +225,7 @@ impl DeviceManager {
 
             drop(device_guard);
             self.devices.remove(device_id);
+            self.pending_removals.remove(device_id);
 
             return Ok(());
         }
@@ -715,7 +725,10 @@ pub async fn find_cold_plugged_vfio_ap(
 mod tests {
     use super::DeviceManager;
     use crate::{
-        device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
+        device::{
+            device_manager::{do_handle_device, get_block_device_info},
+            DeviceConfig, DeviceType,
+        },
         qemu::Qemu,
         BlockConfigModern, KATA_BLK_DEV_TYPE,
     };
@@ -853,5 +866,107 @@ mod tests {
                 "qdev ID must start with an ASCII alphabetic character for QEMU"
             );
         }
+    }
+
+    /// A block device attached `owners` times. The VM is not running, so the
+    /// hypervisor refuses the final removal.
+    async fn shared_block_device(owners: usize) -> (Arc<RwLock<DeviceManager>>, String) {
+        let d = new_device_manager().await.unwrap();
+        let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
+            path_on_host: "/dev/shared-test-device".to_string(),
+            driver_option: get_block_device_info(&d).await.block_device_driver,
+            ..Default::default()
+        });
+        let mut device_id = String::new();
+        for _ in 0..owners {
+            device_id = match do_handle_device(&d, &dev_info).await.unwrap() {
+                DeviceType::BlockModern(device) => device.lock().await.device_id.clone(),
+                other => panic!("unexpected device {}", other),
+            };
+        }
+        (d, device_id)
+    }
+
+    async fn attach_count(d: &RwLock<DeviceManager>, device_id: &str) -> Option<u64> {
+        match d.read().await.get_device_info(device_id).await.ok()? {
+            DeviceType::BlockModern(device) => Some(device.lock().await.attach_count),
+            other => panic!("unexpected device {}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_final_detach_keeps_the_reference() {
+        let (d, device_id) = shared_block_device(1).await;
+
+        assert!(d.write().await.try_remove_device(&device_id).await.is_err());
+
+        assert_eq!(attach_count(&d, &device_id).await, Some(1));
+    }
+
+    #[tokio::test]
+    async fn failed_detach_blocks_reuse_until_removal_finishes() {
+        let (d, device_id) = shared_block_device(1).await;
+        let device = match d.read().await.get_device_info(&device_id).await.unwrap() {
+            DeviceType::BlockModern(device) => device,
+            other => panic!("unexpected device {}", other),
+        };
+        let mut config = device.lock().await.config.clone();
+        config.driver_option = get_block_device_info(&d).await.block_device_driver;
+        let config = DeviceConfig::BlockCfgModern(config);
+
+        assert!(d.write().await.try_remove_device(&device_id).await.is_err());
+        assert!(do_handle_device(&d, &config).await.is_err());
+        assert_eq!(attach_count(&d, &device_id).await, Some(1));
+
+        // The earlier unplug completed after the timeout. A removal retry
+        // reconciles it before this host device can be attached again.
+        device.lock().await.attach_count = 0;
+        d.write().await.try_remove_device(&device_id).await.unwrap();
+        do_handle_device(&d, &config).await.unwrap();
+        assert!(d.read().await.get_device_info(&device_id).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn cancelled_detach_blocks_reuse_until_a_retry() {
+        let (d, device_id) = shared_block_device(1).await;
+        let device = match d.read().await.get_device_info(&device_id).await.unwrap() {
+            DeviceType::BlockModern(device) => device,
+            other => panic!("unexpected device {}", other),
+        };
+        let mut config = device.lock().await.config.clone();
+        config.driver_option = get_block_device_info(&d).await.block_device_driver;
+        let config = DeviceConfig::BlockCfgModern(config);
+        let device_guard = device.lock().await;
+        {
+            let mut manager = d.write().await;
+            let detach = manager.try_remove_device(&device_id);
+            tokio::pin!(detach);
+            tokio::select! {
+                biased;
+                result = &mut detach => panic!("detach unexpectedly finished: {:?}", result),
+                _ = tokio::task::yield_now() => {}
+            }
+        }
+        drop(device_guard);
+
+        assert!(do_handle_device(&d, &config).await.is_err());
+        assert_eq!(attach_count(&d, &device_id).await, Some(1));
+        device.lock().await.attach_count = 0;
+        d.write().await.try_remove_device(&device_id).await.unwrap();
+        do_handle_device(&d, &config).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn detach_cancelled_after_removal_is_finished_on_retry() {
+        let (d, device_id) = shared_block_device(1).await;
+        if let DeviceType::BlockModern(device) =
+            d.read().await.get_device_info(&device_id).await.unwrap()
+        {
+            device.lock().await.attach_count = 0;
+        }
+
+        d.write().await.try_remove_device(&device_id).await.unwrap();
+
+        assert_eq!(attach_count(&d, &device_id).await, None);
     }
 }
