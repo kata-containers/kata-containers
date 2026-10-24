@@ -350,18 +350,37 @@ fn run_parser(parser: &Path, root: &Path, profile: &Path, action: &[&str]) -> Re
     Ok(output)
 }
 
+/// True when mountinfo already carries a securityfs mount exactly at SECURITYFS_PATH.
+fn securityfs_mounted(mountinfo: &str) -> bool {
+    mountinfo.lines().any(|line| {
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if !matches!(fields.get(4), Some(point) if *point == SECURITYFS_PATH) {
+            return false;
+        }
+        let Some(separator) = fields.iter().position(|field| *field == "-") else {
+            return false;
+        };
+        matches!(fields.get(separator + 1).copied(), Some("securityfs"))
+    })
+}
+
 fn ensure_securityfs() -> Result<()> {
     if Path::new(PROFILES_PATH).is_file() {
         return Ok(());
     }
-    fs::create_dir_all(SECURITYFS_PATH)?;
-    crate::mount::mount(
-        Some("securityfs"),
-        Path::new(SECURITYFS_PATH),
-        Some("securityfs"),
-        MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOEXEC,
-        None::<&str>,
-    )?;
+    // The guest init usually mounts securityfs for whichever LSM is active. Repeatedly
+    // mounting it fails with EBUSY, and that raw error would hide the diagnosis below, so
+    // only mount it when it is genuinely absent.
+    if !securityfs_mounted(&fs::read_to_string("/proc/self/mountinfo")?) {
+        fs::create_dir_all(SECURITYFS_PATH)?;
+        crate::mount::mount(
+            Some("securityfs"),
+            Path::new(SECURITYFS_PATH),
+            Some("securityfs"),
+            MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOEXEC,
+            None::<&str>,
+        )?;
+    }
     if !Path::new(PROFILES_PATH).is_file() {
         bail!("securityfs is mounted but guest AppArmor is not active");
     }
@@ -594,6 +613,36 @@ fn policy_rule_code(line: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn securityfs_mount_detection() {
+        // What a SELinux-only guest init leaves behind: securityfs is mounted, AppArmor is
+        // not active, so ensure_securityfs must reach its diagnosis instead of EBUSY.
+        let selinux_guest = "21 19 0:20 / /sys/kernel/security rw,nosuid,nodev,noexec,relatime - securityfs securityfs rw
+22 21 0:21 / /sys/fs/selinux rw,context=system_u:object_r:selinuxfs_t:s0 - selinuxfs selinuxfs rw
+";
+        assert!(securityfs_mounted(selinux_guest));
+
+        let absent = "19 18 0:18 / /sys/fs/cgroup rw,nosuid - cgroup2 none rw
+";
+        assert!(!securityfs_mounted(absent));
+
+        // A different filesystem on the same path, and a nested mount below it, must not
+        // be mistaken for the real thing.
+        assert!(!securityfs_mounted(
+            "21 19 0:20 / /sys/kernel/security rw - tmpfs tmpfs rw
+"
+        ));
+        assert!(!securityfs_mounted(
+            "21 19 0:20 / /sys/kernel/security/extra rw - securityfs securityfs rw
+"
+        ));
+        // Malformed line without the type separator must not panic.
+        assert!(!securityfs_mounted(
+            "1 2 0:1 / /sys/kernel/security rw
+"
+        ));
+    }
     #[derive(Default)]
     struct Backend {
         source: Option<PolicySource>,
