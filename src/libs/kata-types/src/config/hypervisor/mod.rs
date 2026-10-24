@@ -992,6 +992,9 @@ pub struct MemoryInfo {
     /// This value is used by runtime-rs static sandbox sizing as:
     /// - if no memory limits are provided: use `default_memory`
     /// - if memory limits are provided: use `overhead_memory + workload_memory`
+    /// - if the guest RAM comes from the hugetlb pool (`enable_hugepages` with
+    ///   `hugepage_type = "hugetlbfs"`) and `enable_hugepages_pod_sizing` is
+    ///   set: use the pod's `hugepages-<size>` reservation
     #[serde(default)]
     pub overhead_memory: u32,
 
@@ -1015,6 +1018,11 @@ pub struct MemoryInfo {
     /// Use huge pages for VM RAM.
     #[serde(default)]
     pub enable_hugepages: bool,
+
+    /// Sizes a guest backed by hugetlbfs from the pod's `hugepages-<size>`
+    /// reservation and bounds each container in the guest by its own.
+    #[serde(default)]
+    pub enable_hugepages_pod_sizing: bool,
 
     /// Huge page type:
     /// - `hugetlbfs`
