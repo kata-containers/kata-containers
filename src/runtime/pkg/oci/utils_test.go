@@ -1523,6 +1523,7 @@ func TestStaticSandboxSizingWithHugePages(t *testing.T) {
 	testCases := []struct {
 		description   string
 		hugePages     bool
+		podSizing     bool
 		expectedMemMB uint32
 	}{
 		{
@@ -1531,10 +1532,16 @@ func TestStaticSandboxSizingWithHugePages(t *testing.T) {
 			expectedMemMB: 3072,
 		},
 		{
+			description:   "the workload memory limit sizes a huge page backed guest without enable_hugepages_pod_sizing",
+			hugePages:     true,
+			expectedMemMB: 3072,
+		},
+		{
 			// The guest's memory comes from the hugetlb pool, which the
 			// workload's memory limit is not charged against.
-			description:   "default_memory alone sizes a huge page backed guest",
+			description:   "default_memory alone sizes a huge page backed guest sized from the pod",
 			hugePages:     true,
+			podSizing:     true,
 			expectedMemMB: 2048,
 		},
 	}
@@ -1543,9 +1550,10 @@ func TestStaticSandboxSizingWithHugePages(t *testing.T) {
 		runtimeConfig := RuntimeConfig{
 			HypervisorType: vc.QemuHypervisor,
 			HypervisorConfig: vc.HypervisorConfig{
-				MemorySize: 2048,
-				NumVCPUsF:  1,
-				HugePages:  tt.hugePages,
+				MemorySize:         2048,
+				NumVCPUsF:          1,
+				HugePages:          tt.hugePages,
+				HugePagesPodSizing: tt.podSizing,
 			},
 			StaticSandboxResourceMgmt: true,
 			SandboxCPUs:               2,

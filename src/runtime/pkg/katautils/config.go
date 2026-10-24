@@ -152,6 +152,7 @@ type hypervisor struct {
 	MemPrealloc                    bool                      `toml:"enable_mem_prealloc"`
 	ReclaimGuestFreedMemory        bool                      `toml:"reclaim_guest_freed_memory"`
 	HugePages                      bool                      `toml:"enable_hugepages"`
+	HugePagesPodSizing             bool                      `toml:"enable_hugepages_pod_sizing"`
 	VirtioMem                      bool                      `toml:"enable_virtio_mem"`
 	IOMMU                          bool                      `toml:"enable_iommu"`
 	IOMMUPlatform                  bool                      `toml:"enable_iommu_platform"`
@@ -1087,6 +1088,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemPrealloc:                   h.MemPrealloc,
 		ReclaimGuestFreedMemory:       h.ReclaimGuestFreedMemory,
 		HugePages:                     h.HugePages,
+		HugePagesPodSizing:            h.HugePagesPodSizing,
 		IOMMU:                         h.IOMMU,
 		IOMMUPlatform:                 h.getIOMMUPlatform(),
 		GuestNUMANodes:                h.defaultGuestNUMANodes(),
@@ -1276,6 +1278,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemPrealloc:                    h.MemPrealloc,
 		ReclaimGuestFreedMemory:        h.ReclaimGuestFreedMemory,
 		HugePages:                      h.HugePages,
+		HugePagesPodSizing:             h.HugePagesPodSizing,
 		Debug:                          h.Debug,
 		DisableNestingChecks:           h.DisableNestingChecks,
 		BlockDeviceDriver:              blockDriver,
@@ -2063,6 +2066,10 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	if err := checkHugePagesPodSizingConfig(config); err != nil {
+		return err
+	}
+
 	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
@@ -2071,6 +2078,23 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	return nil
+}
+
+// enable_hugepages_pod_sizing sizes a static VM, created for its pod, whose huge pages are charged to the pod's cgroup.
+func checkHugePagesPodSizingConfig(config oci.RuntimeConfig) error {
+	if !config.HypervisorConfig.HugePagesPodSizing {
+		return nil
+	}
+	if !config.StaticSandboxResourceMgmt {
+		return errors.New("enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt")
+	}
+	if !config.SandboxCgroupOnly {
+		return errors.New("enable_hugepages_pod_sizing needs sandbox_cgroup_only")
+	}
+	if config.FactoryConfig.Template || config.FactoryConfig.VMCacheNumber > 0 {
+		return errors.New("enable_hugepages_pod_sizing sizes each VM from its pod, so it cannot use VM templates or the VM cache")
+	}
 	return nil
 }
 
