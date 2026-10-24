@@ -1,0 +1,9 @@
+{
+  "name": "macos",
+  "backend": "lima",
+  "vm_type": "vz",
+  "arch": "arm64",
+  "cpus": 4,
+  "memory_mib": 16384,
+  "disk_gib": 50
+}

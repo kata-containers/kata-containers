@@ -1,0 +1,12 @@
+{
+  "CONTAINER_ENGINE": "containerd",
+  "CONTAINER_ENGINE_VERSION": "latest",
+  "CONTAINER_RUNTIME": "containerd",
+  "KATA_HYPERVISOR": "qemu-runtime-rs",
+  "KATA_HOST_OS": "ubuntu",
+  "K8S_TEST_HOST_TYPE": "small",
+  "DOCKER_REGISTRY": "quay.io",
+  "DOCKER_REPO": "kata-containers/kata-deploy-ci",
+  "DOCKER_TAG": "kata-containers-latest",
+  "target_branch": "main"
+}
