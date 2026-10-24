@@ -257,6 +257,37 @@ pub struct AgentService {
     oma: Option<mem_agent::agent::MemAgent>,
 }
 
+/// The SELinux context the container's init process is configured to run as. It is registered when
+/// the container is created so a later exec can be checked against it; empty means the container
+/// was created unlabeled, which keeps the documented inherit-the-caller behaviour.
+fn created_selinux_label(process: &oci::Process) -> String {
+    process.selinux_label().clone().unwrap_or_default()
+}
+
+/// Decide the SELinux context for an exec'd process from the identity registered at creation.
+/// A missing registration is a state error and fails closed, like the adjacent AppArmor binding:
+/// guessing an identity would let an exec fall back to the caller's domain. An explicitly
+/// registered empty label keeps the documented unlabeled behaviour, where the request is neither
+/// adopted nor rejected.
+fn exec_selinux_label(
+    cid: &str,
+    registered: Option<&String>,
+    requested: Option<&str>,
+) -> Result<Option<String>> {
+    let bound = registered.ok_or_else(|| {
+        anyhow!("Missing SELinux container security state for {cid}, refusing to guess the exec identity")
+    })?;
+
+    rustjail::selinux::exec_label(
+        if bound.is_empty() {
+            None
+        } else {
+            Some(bound.as_str())
+        },
+        requested,
+    )
+}
+
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -277,7 +308,7 @@ impl AgentService {
 
         let use_sandbox_pidns = req.sandbox_pidns();
 
-        let mut oci = match req.OCI.into_option() {
+        let mut oci: Spec = match req.OCI.into_option() {
             Some(spec) => spec.into(),
             None => {
                 error!(sl(), "no oci spec in the create container request!");
@@ -411,6 +442,9 @@ impl AgentService {
 
             let new_p =
                 confidential_data_hub::image::get_process(p, is_pod_sandbox, create_storages)?;
+            // Register the context the init process really runs as, not the inbound one:
+            // guest-pull replaces the entire pause process, whose label can differ.
+            let created_selinux_label = created_selinux_label(&new_p);
             let prepared = s
                 .apparmor_profiles
                 .prepare(new_p.apparmor_profile().as_deref())
@@ -446,11 +480,11 @@ impl AgentService {
                 return Err(err);
             }
 
-            Ok((ctr, prepared))
+            Ok((ctr, prepared, created_selinux_label))
         }
         .await;
 
-        let (ctr, prepared) = match result {
+        let (ctr, prepared, created_selinux_label) = match result {
             Ok(created) => created,
             Err(err) => {
                 if let Err(cleanup) = rollback_failed_container(&mut s, &cid).await {
@@ -462,7 +496,9 @@ impl AgentService {
             }
         };
         s.add_container(ctr);
-        s.container_apparmor_profiles.insert(cid, prepared);
+        s.container_apparmor_profiles.insert(cid.clone(), prepared);
+        s.container_selinux_labels
+            .insert(cid, created_selinux_label);
         info!(sl(), "created container!");
 
         Ok(())
@@ -544,6 +580,13 @@ impl AgentService {
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let mut ocip: oci::Process = process.into();
+
+        let exec_selinux = exec_selinux_label(
+            &cid,
+            sandbox.container_selinux_labels.get(&cid),
+            ocip.selinux_label().as_deref(),
+        )?;
+        ocip.set_selinux_label(exec_selinux);
         let bound_profile = sandbox
             .container_apparmor_profiles
             .get(&cid)
@@ -2298,6 +2341,7 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
     sandbox.container_mounts.remove(cid);
     sandbox.containers.remove(cid);
     sandbox.container_apparmor_profiles.remove(cid);
+    sandbox.container_selinux_labels.remove(cid);
     // Remove any host -> guest mappings for this container
     sandbox.pcimap.remove(cid);
     Ok(())
@@ -3102,6 +3146,104 @@ mod tests {
         )
         .unwrap()
         .is_none());
+    }
+
+    #[tokio::test]
+    async fn test_selinux_container_binding_is_removed_before_id_reuse() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let cid = "reused-selinux-id";
+        let label = "system_u:system_r:container_t:s0:c42,c99";
+        sandbox
+            .container_selinux_labels
+            .insert(cid.into(), label.into());
+        remove_container_resources(&mut sandbox, cid).await.unwrap();
+        assert!(!sandbox.container_selinux_labels.contains_key(cid));
+        // Once the registration is gone, exec refuses: it must neither fall back to the caller's
+        // domain nor adopt the identity the request happens to carry for the reused id.
+        for requested in [None, Some(label)] {
+            let err = exec_selinux_label(cid, sandbox.container_selinux_labels.get(cid), requested)
+                .expect_err("an unregistered container must not exec");
+            assert!(err
+                .to_string()
+                .contains("Missing SELinux container security state"));
+        }
+    }
+
+    #[test]
+    fn test_exec_selinux_label_distinguishes_missing_from_unlabeled() {
+        let bound = "system_u:system_r:container_t:s0:c42,c99".to_string();
+        let other = "system_u:system_r:spc_t:s0";
+
+        // Absent registration is a state error, whether or not the request carries a label.
+        assert!(exec_selinux_label("absent", None, None).is_err());
+        assert!(exec_selinux_label("absent", None, Some(other)).is_err());
+
+        // Explicitly registered unlabeled container: existing behaviour is preserved, and the
+        // request is ignored rather than adopted or rejected.
+        assert_eq!(
+            exec_selinux_label("void", Some(&String::new()), None).unwrap(),
+            None
+        );
+        assert_eq!(
+            exec_selinux_label("void", Some(&String::new()), Some(other)).unwrap(),
+            None
+        );
+
+        // Registered identity: inherited, accepted when repeated, refused when different,
+        // including a same-type context with another MCS scope.
+        assert_eq!(
+            exec_selinux_label("bound", Some(&bound), None)
+                .unwrap()
+                .as_deref(),
+            Some(bound.as_str())
+        );
+        assert_eq!(
+            exec_selinux_label("bound", Some(&bound), Some(&bound))
+                .unwrap()
+                .as_deref(),
+            Some(bound.as_str())
+        );
+        assert!(exec_selinux_label("bound", Some(&bound), Some(other)).is_err());
+        assert!(exec_selinux_label(
+            "bound",
+            Some(&bound),
+            Some("system_u:system_r:container_t:s0")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_created_selinux_label_is_read_from_the_final_process() {
+        let mut inbound = oci::Process::default();
+        inbound.set_selinux_label(Some("system_u:system_r:container_t:s0:c1,c2".to_string()));
+        let mut pause = oci::Process::default();
+        pause.set_selinux_label(Some("system_u:system_r:container_t:s0:c9,c8".to_string()));
+
+        assert_eq!(
+            created_selinux_label(&inbound),
+            "system_u:system_r:container_t:s0:c1,c2"
+        );
+        // The process guest pull would install can carry a different context, and the
+        // registration must follow that final process instead of the inbound one.
+        assert_eq!(
+            created_selinux_label(&pause),
+            "system_u:system_r:container_t:s0:c9,c8"
+        );
+        assert_ne!(
+            created_selinux_label(&pause),
+            created_selinux_label(&inbound)
+        );
+        // Unlabeled registers an explicit empty state, which is not a missing registration.
+        assert_eq!(created_selinux_label(&oci::Process::default()), "");
+
+        // Without a guest-pull volume, get_process keeps the inbound process, so the normal
+        // path registers the identity the request asked for.
+        let kept = confidential_data_hub::image::get_process(&inbound, true, &[]).unwrap();
+        assert_eq!(
+            created_selinux_label(&kept),
+            "system_u:system_r:container_t:s0:c1,c2"
+        );
     }
 
     #[tokio::test]

@@ -121,6 +121,10 @@ pub struct Sandbox {
     pub apparmor_profiles: rustjail::apparmor::ProfileRegistry,
     /// An explicit None is an unconfined container, not an absent binding.
     pub container_apparmor_profiles: HashMap<String, Option<rustjail::apparmor::PreparedProfile>>,
+    /// SELinux context recorded for each container at create time. Exec must run in this
+    /// identity; it is never taken from the exec request alone. An entry registered as empty is
+    /// an explicitly unlabeled container; a missing entry is a state error and exec refuses.
+    pub container_selinux_labels: HashMap<String, String>,
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
@@ -160,6 +164,7 @@ impl Sandbox {
             containers: HashMap::new(),
             apparmor_profiles: rustjail::apparmor::ProfileRegistry::default(),
             container_apparmor_profiles: HashMap::new(),
+            container_selinux_labels: HashMap::new(),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             container_verity_devices: HashMap::new(),

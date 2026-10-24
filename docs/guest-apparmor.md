@@ -132,6 +132,37 @@ the binding, including when an ID is later reused.
 transitional compatibility handling, not an approved Kubernetes API. A requested
 `kata-default` fails unless the selected extension actually supplies that policy.
 
+### Guest SELinux identity alongside the AppArmor binding
+
+At CreateContainer the agent also records the SELinux context of the process that
+init really runs as. That value is read after guest-pull substitution rather than
+from the inbound OCI spec: pulling the pause image inside the guest replaces the
+whole process, and a recorded identity that does not match init would make Exec
+compare itself against the wrong value.
+
+| Registered container identity | Exec request | Behavior |
+| --- | --- | --- |
+| context | absent or empty | Run in the recorded context |
+| context | the same context | Run in the recorded context |
+| context | a different context | Reject; no process is created |
+| empty (unlabeled container) | any value | Preserve existing behavior: the request is ignored and the child inherits the caller's domain |
+| missing entry | any value | Reject as a state error, like a missing AppArmor binding |
+
+`disable_guest_selinux` is decided before a request context is parsed, on the create
+path and the exec path alike, so turning the feature off cannot produce an exec-only
+validation failure that create never had. When the feature is on, the runtime
+normalizes the exec request with the same rules create uses — the host-authored type
+becomes the container domain unless `guest_selinux_label` is configured — only so the
+agent has a comparable string; the agent owns the decision.
+
+Scope: the unlabeled row keeps existing behavior rather than establishing a binding,
+and the caller's domain is not necessarily the container init's domain. Deleting a
+container clears its registration, so a reused ID cannot adopt a stale identity, and
+an exec that targets a container with no registration fails closed. Out of scope
+here: SELinux policy and domain transitions themselves, and privileged containers on
+guests where device creation fails before Exec is reached. This adds no SELinux
+policy source and is not an escape-prevention guarantee.
+
 ## Failure layers and Kubernetes boundary
 
 | Failure | Expected boundary |
