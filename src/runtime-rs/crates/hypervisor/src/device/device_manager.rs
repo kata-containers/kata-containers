@@ -617,27 +617,23 @@ pub async fn do_handle_device(
     d: &RwLock<DeviceManager>,
     dev_info: &DeviceConfig,
 ) -> Result<DeviceType> {
-    let device_id = d
-        .write()
-        .await
+    // One lock for all three steps: new_device() may hand back the id of a
+    // device another owner is detaching, and the final detach removes it.
+    let mut device_manager = d.write().await;
+    let device_id = device_manager
         .new_device(dev_info)
         .await
         .context("failed to create device")?;
 
-    d.write()
-        .await
+    device_manager
         .try_add_device(&device_id)
         .await
         .context("failed to add device")?;
 
-    let device_info = d
-        .read()
-        .await
+    device_manager
         .get_device_info(&device_id)
         .await
-        .context("failed to get device info")?;
-
-    Ok(device_info)
+        .context("failed to get device info")
 }
 
 pub async fn do_update_device(
