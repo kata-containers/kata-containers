@@ -21,10 +21,10 @@ use qapi_qmp::{
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
-use std::io::BufReader;
+use std::io::{self, BufRead, BufReader, Read};
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::str::FromStr;
@@ -41,6 +41,9 @@ const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
 const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
+// Outlast the initial wait so a timed-out orphan does not immediately wait
+// another full timeout on the next container operation.
+const UNPLUG_REISSUE_AFTER: Duration = Duration::from_secs(30);
 
 fn collect_block_fdsets(fdsets: Vec<qmp::FdsetInfo>) -> HashMap<String, Vec<i64>> {
     let mut block_fdsets: HashMap<String, Vec<i64>> = HashMap::new();
@@ -58,8 +61,43 @@ fn collect_block_fdsets(fdsets: Vec<qmp::FdsetInfo>) -> HashMap<String, Vec<i64>
     block_fdsets
 }
 
+// qapi clears its decode buffer after a read error. Retain a partial JSON
+// line here so a socket timeout cannot discard the beginning of a response.
+struct QmpReader {
+    reader: BufReader<UnixStream>,
+    partial: Vec<u8>,
+    ready: bool,
+}
+
+impl Read for QmpReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let available = self.fill_buf()?;
+        let len = available.len().min(buf.len());
+        buf[..len].copy_from_slice(&available[..len]);
+        self.consume(len);
+        Ok(len)
+    }
+}
+
+impl BufRead for QmpReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if !self.ready {
+            self.reader.read_until(b'\n', &mut self.partial)?;
+            self.ready = true;
+        }
+        Ok(&self.partial)
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.partial.drain(..amount);
+        if self.partial.is_empty() {
+            self.ready = false;
+        }
+    }
+}
+
 pub struct Qmp {
-    qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
+    qmp: qapi::Qmp<qapi::Stream<QmpReader, UnixStream>>,
 
     // This is basically the output of
     // `cat /sys/devices/system/memory/block_size_bytes`
@@ -86,6 +124,11 @@ pub struct Qmp {
     // backend is removed because format drivers such as VMDK may reopen an
     // extent after blockdev-add completes.
     block_fdsets: HashMap<String, Vec<i64>>,
+
+    // Unplugs awaiting confirmation, with the last device_del attempt time.
+    unplug_requested: HashMap<String, Instant>,
+    deleted_devices: HashSet<String>,
+    pending_qom_list: bool,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -108,13 +151,20 @@ impl Qmp {
 
             let mut qmp = Qmp {
                 qmp: qapi::Qmp::new(qapi::Stream::new(
-                    BufReader::new(stream.try_clone()?),
+                    QmpReader {
+                        reader: BufReader::new(stream.try_clone()?),
+                        partial: Vec::new(),
+                        ready: false,
+                    },
                     stream,
                 )),
                 guest_memory_block_size: 0,
                 ccw_subchannel: None,
                 pci_bridge_devices: HashMap::new(),
                 block_fdsets: HashMap::new(),
+                unplug_requested: HashMap::new(),
+                deleted_devices: HashSet::new(),
+                pending_qom_list: false,
             };
 
             let info = qmp.qmp.handshake().context("qmp handshake failed")?;
@@ -142,9 +192,50 @@ impl Qmp {
             .with_context(|| format!("timed out waiting for QMP ready: {}", qmp_sock_path))
     }
 
+    fn collect_deleted_events(&mut self) {
+        for event in self.qmp.events() {
+            if let qapi_qmp::Event::DEVICE_DELETED { data, .. } = event {
+                if let Some(id) = data.device {
+                    self.deleted_devices.insert(id);
+                }
+            }
+        }
+    }
+
+    fn read_qom_list(&mut self) -> qapi::ExecuteResult<qmp::qom_list> {
+        let result = self.qmp.read_response::<qmp::qom_list>();
+        // A QMP error is a completed response. A transport error leaves the
+        // response outstanding, including across this method's callers.
+        if !matches!(result, Err(qapi::ExecuteError::Io(_))) {
+            self.pending_qom_list = false;
+        }
+        self.collect_deleted_events();
+        result
+    }
+
+    fn finish_pending_qom_list(&mut self) -> Result<()> {
+        if self.pending_qom_list {
+            match self.read_qom_list() {
+                Ok(_) | Err(qapi::ExecuteError::Qapi(_)) => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(())
+    }
+
+    fn execute<C: qapi::Command>(&mut self, command: &C) -> qapi::ExecuteResult<C> {
+        // Never let another command consume a delayed polling response.
+        if self.pending_qom_list {
+            match self.read_qom_list() {
+                Ok(_) | Err(qapi::ExecuteError::Qapi(_)) => {}
+                Err(err) => return Err(err),
+            }
+        }
+        self.qmp.execute(command)
+    }
+
     fn refresh_block_fdsets(&mut self) -> Result<()> {
         let fdsets = self
-            .qmp
             .execute(&qmp::query_fdsets {})
             .context("query QEMU fdsets")?;
         self.block_fdsets = collect_block_fdsets(fdsets);
@@ -180,48 +271,45 @@ impl Qmp {
     }
 
     pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
-        self.qmp
-            .execute(&migrate_set_capabilities {
-                capabilities: vec![MigrationCapabilityStatus {
-                    capability: MigrationCapability::x_ignore_shared,
-                    state: true,
-                }],
-            })
-            .map(|_| ())
-            .context("set ignore shared memory capability")
+        self.execute(&migrate_set_capabilities {
+            capabilities: vec![MigrationCapabilityStatus {
+                capability: MigrationCapability::x_ignore_shared,
+                state: true,
+            }],
+        })
+        .map(|_| ())
+        .context("set ignore shared memory capability")
     }
 
     pub fn execute_migration(&mut self, uri: &str) -> Result<()> {
-        self.qmp
-            .execute(&migrate {
-                channels: None,
-                detach: None,
-                resume: None,
-                uri: Some(uri.to_string()),
-            })
-            .map(|_| ())
-            .context("execute migration")
+        self.execute(&migrate {
+            channels: None,
+            detach: None,
+            resume: None,
+            uri: Some(uri.to_string()),
+        })
+        .map(|_| ())
+        .context("execute migration")
     }
 
     pub async fn execute_query_migrate(&mut self) -> Result<MigrationInfo> {
-        let migrate_info = self.qmp.execute(&qmp::query_migrate {})?;
+        let migrate_info = self.execute(&qmp::query_migrate {})?;
 
         Ok(migrate_info)
     }
 
     pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
-        self.qmp
-            .execute(&migrate_incoming {
-                channels: None,
-                exit_on_error: None,
-                uri: Some(uri.to_string()),
-            })
-            .map(|_| ())
-            .context("execute migration incoming")
+        self.execute(&migrate_incoming {
+            channels: None,
+            exit_on_error: None,
+            uri: Some(uri.to_string()),
+        })
+        .map(|_| ())
+        .context("execute migration incoming")
     }
 
     pub fn hotplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {
-        let hotpluggable_cpus = self.qmp.execute(&qmp::query_hotpluggable_cpus {})?;
+        let hotpluggable_cpus = self.execute(&qmp::query_hotpluggable_cpus {})?;
         //info!(sl!(), "hotpluggable CPUs: {:#?}", hotpluggable_cpus);
 
         let mut hotplugged = 0;
@@ -273,7 +361,7 @@ impl Qmp {
                     }
                 }
             }
-            self.qmp.execute(&qmp::device_add {
+            self.execute(&qmp::device_add {
                 bus: None,
                 id: Some(vcpu_id_from_core_id(core_id)),
                 driver: driver.clone(),
@@ -292,7 +380,7 @@ impl Qmp {
     }
 
     pub fn hotunplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {
-        let hotpluggable_cpus = self.qmp.execute(&qmp::query_hotpluggable_cpus {})?;
+        let hotpluggable_cpus = self.execute(&qmp::query_hotpluggable_cpus {})?;
 
         let mut hotunplugged = 0;
         for vcpu in &hotpluggable_cpus {
@@ -307,7 +395,7 @@ impl Qmp {
                 info!(sl!(), "hotpluggable vcpu {} not hotplugged yet", core_id);
                 continue;
             }
-            self.qmp.execute(&qmp::device_del {
+            self.execute(&qmp::device_del {
                 id: vcpu_id_from_core_id(core_id),
             })?;
             hotunplugged += 1;
@@ -330,7 +418,7 @@ impl Qmp {
     }
 
     pub fn hotplugged_memory_size(&mut self) -> Result<u64> {
-        let memory_frontends = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+        let memory_frontends = self.execute(&qapi_qmp::query_memory_devices {})?;
 
         let mut hotplugged_mem_size = 0_u64;
 
@@ -386,7 +474,7 @@ impl Qmp {
     /// Automatically detects if virtio-mem is available and uses it; otherwise falls back to pc-dimm.
     pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
         // Query existing memory devices to detect virtio-mem
-        let memory_devices = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+        let memory_devices = self.execute(&qapi_qmp::query_memory_devices {})?;
 
         // Check if virtio-mem device exists
         let has_virtio_mem = memory_devices
@@ -479,13 +567,13 @@ impl Qmp {
                 rom: None,
             },
         });
-        self.qmp.execute(&memory_backend)?;
+        self.execute(&memory_backend)?;
 
         let memory_frontend_id = format!("frontend-to-{memory_backend_id}");
 
         let mut mem_frontend_args = Dictionary::new();
         mem_frontend_args.insert("memdev".to_owned(), memory_backend_id.into());
-        self.qmp.execute(&qmp::device_add {
+        self.execute(&qmp::device_add {
             bus: None,
             id: Some(memory_frontend_id),
             driver: "pc-dimm".to_owned(),
@@ -498,7 +586,7 @@ impl Qmp {
     /// Cleanup virtio-mem resources on setup failure
     fn cleanup_virtio_mem_setup(&mut self, device_id: &str) {
         // Remove memory backend object
-        let _ = self.qmp.execute(&qmp::object_del {
+        let _ = self.execute(&qmp::object_del {
             id: "virtiomem".to_owned(),
         });
 
@@ -614,7 +702,7 @@ impl Qmp {
         };
 
         // Execute backend creation with cleanup on error
-        if let Err(e) = self.qmp.execute(&memory_backend) {
+        if let Err(e) = self.execute(&memory_backend) {
             self.cleanup_virtio_mem_setup(device_id);
             return if e.to_string().contains("Cannot allocate memory") {
                 Err(anyhow!("Failed to allocate {} MB for virtio-mem: {}. \
@@ -630,7 +718,7 @@ impl Qmp {
         device_args.insert("memdev".to_owned(), "virtiomem".into());
         device_args.insert("devno".to_owned(), devno.into());
 
-        if let Err(e) = self.qmp.execute(&qmp::device_add {
+        if let Err(e) = self.execute(&qmp::device_add {
             bus: None,
             id: Some(device_id.to_owned()),
             driver: "virtio-mem-ccw".to_owned(),
@@ -672,7 +760,7 @@ impl Qmp {
         );
 
         // Use qom-set to change the requested-size property of virtiomem0
-        self.qmp.execute(&qmp::qom_set {
+        self.execute(&qmp::qom_set {
             path: "virtiomem0".to_owned(),
             property: "requested-size".to_owned(),
             value: serde_json::json!(size_bytes),
@@ -687,7 +775,7 @@ impl Qmp {
 
     pub fn hotunplug_memory(&mut self, size: i64) -> Result<()> {
         // Query existing memory devices to detect virtio-mem
-        let memory_devices = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+        let memory_devices = self.execute(&qapi_qmp::query_memory_devices {})?;
 
         // Check if virtio-mem device exists
         let has_virtio_mem = memory_devices
@@ -788,8 +876,8 @@ impl Qmp {
                     }
                 };
 
-                self.qmp.execute(&qmp::device_del { id: frontend_id })?;
-                self.qmp.execute(&qmp::object_del { id: backend_id })?;
+                self.execute(&qmp::device_del { id: frontend_id })?;
+                self.execute(&qmp::object_del { id: backend_id })?;
             } else {
                 // This shouldn't happen as it was checked by find() above already.
                 return Err(anyhow!("memory device to hotunplug is not a dimm"));
@@ -829,7 +917,7 @@ impl Qmp {
 
         // Fallback: walk query-pci tree. Under OVMF, pcie-pci-bridge (pci-bridge-N)
         // is nested under rp-pci-bridge-N, not at the root of the PCI tree.
-        let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
+        let pci = self.execute(&qapi_qmp::query_pci {})?;
         for pci_info in &pci {
             if let Some((bus, slot)) = find_free_slot_in_pci_devices(&pci_info.devices) {
                 info!(
@@ -858,6 +946,7 @@ impl Qmp {
     }
 
     fn pass_fd(&mut self, fd: RawFd, fdname: &str) -> Result<()> {
+        self.finish_pending_qom_list()?;
         info!(sl!(), "passing fd {:?} as {}", fd, fdname);
 
         // Put the QMP 'getfd' command itself into the message payload.
@@ -892,6 +981,7 @@ impl Qmp {
     }
 
     fn pass_block_fd(&mut self, fd: RawFd, opaque: &str) -> Result<qmp::AddfdInfo> {
+        self.finish_pending_qom_list()?;
         let command = serde_json::json!({
             "execute": "add-fd",
             "arguments": { "opaque": opaque },
@@ -926,7 +1016,7 @@ impl Qmp {
     fn remove_fdset_ids(&mut self, node_name: &str, fdset_ids: Vec<i64>) {
         let mut failed = Vec::new();
         for fdset_id in fdset_ids {
-            if let Err(err) = self.qmp.execute(&qmp::remove_fd { fd: None, fdset_id }) {
+            if let Err(err) = self.execute(&qmp::remove_fd { fd: None, fdset_id }) {
                 warn!(
                     sl!(),
                     "failed to remove QEMU block fdset {} for {}: {:?}", fdset_id, node_name, err
@@ -1007,48 +1097,47 @@ impl Qmp {
             vhostfd_names.push(vhostfdname);
         }
 
-        self.qmp
-            .execute(&qapi_qmp::netdev_add(qapi_qmp::Netdev::tap {
-                id: netdev_id.clone(),
-                tap: qapi_qmp::NetdevTapOptions {
-                    br: None,
-                    downscript: None,
-                    fd: None,
-                    // Logic in cmdline_generator::Netdev::new() seems to
-                    // guarantee that there will always be at least one fd.
-                    fds: Some(fd_names.join(",")),
-                    helper: None,
-                    ifname: None,
-                    poll_us: None,
-                    queues: None,
-                    script: None,
-                    sndbuf: None,
-                    vhost: if vhostfd_names.is_empty() {
-                        None
-                    } else {
-                        Some(true)
-                    },
-                    vhostfd: None,
-                    vhostfds: if vhostfd_names.is_empty() {
-                        None
-                    } else {
-                        Some(vhostfd_names.join(","))
-                    },
-                    vhostforce: None,
-                    vnet_hdr: None,
+        self.execute(&qapi_qmp::netdev_add(qapi_qmp::Netdev::tap {
+            id: netdev_id.clone(),
+            tap: qapi_qmp::NetdevTapOptions {
+                br: None,
+                downscript: None,
+                fd: None,
+                // Logic in cmdline_generator::Netdev::new() seems to
+                // guarantee that there will always be at least one fd.
+                fds: Some(fd_names.join(",")),
+                helper: None,
+                ifname: None,
+                poll_us: None,
+                queues: None,
+                script: None,
+                sndbuf: None,
+                vhost: if vhostfd_names.is_empty() {
+                    None
+                } else {
+                    Some(true)
                 },
-            }))
-            .map_err(|e| {
-                if use_ccw_bus {
-                    if let Some(subchannel) = self.ccw_subchannel.as_mut() {
-                        let _ = subchannel.remove_device(&frontend_id);
-                    }
+                vhostfd: None,
+                vhostfds: if vhostfd_names.is_empty() {
+                    None
+                } else {
+                    Some(vhostfd_names.join(","))
+                },
+                vhostforce: None,
+                vnet_hdr: None,
+            },
+        }))
+        .map_err(|e| {
+            if use_ccw_bus {
+                if let Some(subchannel) = self.ccw_subchannel.as_mut() {
+                    let _ = subchannel.remove_device(&frontend_id);
                 }
+            }
 
-                anyhow!(e)
-            })?;
+            anyhow!(e)
+        })?;
 
-        let device_add_result = self.qmp.execute(&qmp::device_add {
+        let device_add_result = self.execute(&qmp::device_add {
             bus,
             id: Some(frontend_id.clone()),
             driver: virtio_net_device.get_device_driver().clone(),
@@ -1061,7 +1150,7 @@ impl Qmp {
                 }
             }
 
-            if let Err(del_err) = self.qmp.execute(&qmp::netdev_del {
+            if let Err(del_err) = self.execute(&qmp::netdev_del {
                 id: netdev_id.clone(),
             }) {
                 warn!(
@@ -1097,7 +1186,7 @@ impl Qmp {
         };
 
         let mut path = vec![];
-        let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
+        let pci = self.execute(&qapi_qmp::query_pci {})?;
         for pci_info in pci.iter() {
             if let Some(_device) = get_pci_path_by_qdev_id(&pci_info.devices, qdev_id, &mut path) {
                 let pci_path = format_str(&path);
@@ -1117,13 +1206,13 @@ impl Qmp {
         driver: &str,
         arguments: Dictionary,
     ) -> Result<()> {
-        if let Err(e) = self.qmp.execute(&qmp::device_add {
+        if let Err(e) = self.execute(&qmp::device_add {
             bus,
             id: Some(node_name.to_owned()),
             driver: driver.to_owned(),
             arguments,
         }) {
-            if let Err(blockdev_err) = self.qmp.execute(&qapi_qmp::blockdev_del {
+            if let Err(blockdev_err) = self.execute(&qapi_qmp::blockdev_del {
                 node_name: node_name.to_owned(),
             }) {
                 warn!(
@@ -1140,13 +1229,8 @@ impl Qmp {
         Ok(())
     }
 
-    /// Waits until QEMU has finished removing `device_id`.
-    ///
-    /// QEMU drops a device from /machine/peripheral in the same step that
-    /// unrealizes it and releases its host resources, so its absence there is
-    /// the completion signal. A DEVICE_DELETED event is not: device ids are
-    /// reused, and an event left queued by an earlier unplug of the same id
-    /// would end the wait while the device is still present.
+    /// Wait for both QOM disappearance and final DEVICE_DELETED notification.
+    /// QOM removal precedes the deferred release of VFIO host resources.
     fn wait_for_device_deleted(&mut self, device_id: &str, timeout: Duration) -> Result<()> {
         const POLL_INTERVAL: Duration = Duration::from_millis(100);
         let deadline = Instant::now() + timeout;
@@ -1169,14 +1253,16 @@ impl Qmp {
                 }
                 stream.set_read_timeout(Some(read_timeout.unwrap_or(remaining).min(remaining)))?;
                 let present = self.device_exists(device_id);
-                // Nothing consumes these events, and every reply buffers more.
-                self.qmp.events().for_each(drop);
                 match present {
-                    Ok(false) => {
+                    Ok(false) if self.deleted_devices.contains(device_id) => {
                         info!(sl!(), "device {} has been removed by QEMU", device_id);
                         return Ok(());
                     }
-                    Ok(true) => {}
+                    Ok(true) => {
+                        // An event for an older lifetime cannot complete this unplug.
+                        self.deleted_devices.remove(device_id);
+                    }
+                    Ok(false) => {}
                     Err(err) => {
                         debug!(
                             sl!(),
@@ -1370,7 +1456,7 @@ impl Qmp {
             self.block_fdsets.insert(node_name.clone(), fdset_ids);
         }
 
-        if let Err(err) = self.qmp.execute(&qapi_qmp::blockdev_add(blockdev_options)) {
+        if let Err(err) = self.execute(&qapi_qmp::blockdev_add(blockdev_options)) {
             self.remove_block_fdsets(&node_name);
             return Err(anyhow!("blockdev-add backend {:?}", err));
         }
@@ -1436,7 +1522,7 @@ impl Qmp {
             let subchannel = match self.ccw_subchannel.as_mut() {
                 Some(sub) => sub,
                 None => {
-                    self.qmp.execute(&qapi_qmp::blockdev_del {
+                    self.execute(&qapi_qmp::blockdev_del {
                         node_name: node_name.to_owned(),
                     })?;
                     self.remove_block_fdsets(&node_name);
@@ -1450,7 +1536,7 @@ impl Qmp {
             let slot = match subchannel.add_device(&node_name) {
                 Ok(s) => s,
                 Err(e) => {
-                    self.qmp.execute(&qapi_qmp::blockdev_del {
+                    self.execute(&qapi_qmp::blockdev_del {
                         node_name: node_name.to_owned(),
                     })?;
                     self.remove_block_fdsets(&node_name);
@@ -1495,7 +1581,6 @@ impl Qmp {
                 Ok(value) => value,
                 Err(err) => {
                     if self
-                        .qmp
                         .execute(&qapi_qmp::blockdev_del {
                             node_name: node_name.clone(),
                         })
@@ -1555,24 +1640,27 @@ impl Qmp {
 
         let result = (|| -> Result<()> {
             // Remove the frontend device (virtio-blk-pci / scsi-hd / virtio-blk-ccw).
-            self.qmp
-                .execute(&qmp::device_del {
-                    id: node_name.clone(),
-                })
-                .map_err(|e| anyhow!("device_del for block device {}: {:?}", node_name, e))?;
-
             // device_del is asynchronous — wait for the guest to acknowledge removal
             // before tearing down the backend, otherwise blockdev_del may fail with
             // "Node is still in use".
-            self.wait_for_device_deleted(&node_name, DEVICE_DELETED_TIMEOUT)
-                .context("hotunplug_block_device(): waiting for DEVICE_DELETED")?;
+            self.delete_device(&node_name)
+                .context("hotunplug_block_device(): remove frontend")?;
 
             // Remove the blockdev backend node.
-            self.qmp
-                .execute(&qapi_qmp::blockdev_del {
-                    node_name: node_name.clone(),
-                })
-                .map_err(|e| anyhow!("blockdev_del for block device {}: {:?}", node_name, e))?;
+            if let Err(e) = self.execute(&qapi_qmp::blockdev_del {
+                node_name: node_name.clone(),
+            }) {
+                if self
+                    .block_node_exists(&node_name)
+                    .context("query block node after failed blockdev_del")?
+                {
+                    return Err(anyhow!(
+                        "blockdev_del for block device {}: {:?}",
+                        node_name,
+                        e
+                    ));
+                }
+            }
 
             self.remove_block_fdsets(&node_name);
 
@@ -1667,8 +1755,7 @@ impl Qmp {
                 .get_mut_write()
                 .set_read_timeout(Some(Duration::from_millis(5000)))?;
             // send the VFIO hotplug request
-            self.qmp
-                .execute(&vfio_device_add)
+            self.execute(&vfio_device_add)
                 .map_err(|e| anyhow!("device_add vfio device failed {:?}", e))?;
             // reset read timeout with 250
             self.qmp
@@ -1691,53 +1778,8 @@ impl Qmp {
 
     /// Hotunplug a VFIO device.
     pub fn hotunplug_vfio_device(&mut self, hostdev_id: &str) -> Result<()> {
-        if !self
-            .device_exists(hostdev_id)
-            .context("query VFIO device before hotunplug")?
-        {
-            info!(
-                sl!(),
-                "hotunplug_vfio_device(): {} is already absent", hostdev_id
-            );
-            return Ok(());
-        }
-
-        if let Err(delete_err) = self.qmp.execute(&qmp::device_del {
-            id: hostdev_id.to_owned(),
-        }) {
-            return match self.device_exists(hostdev_id) {
-                Ok(false) => Ok(()),
-                Ok(true) => Err(anyhow!(
-                    "device_del for VFIO device {}: {:?}",
-                    hostdev_id,
-                    delete_err
-                )),
-                Err(query_err) => Err(anyhow!(
-                    "device_del for VFIO device {} failed: {:?}; state reconciliation failed: {:#}",
-                    hostdev_id,
-                    delete_err,
-                    query_err
-                )),
-            };
-        }
-
-        if let Err(wait_err) = self.wait_for_device_deleted(hostdev_id, DEVICE_DELETED_TIMEOUT) {
-            return match self.device_exists(hostdev_id) {
-                Ok(false) => Ok(()),
-                Ok(true) => Err(wait_err).context(
-                    format!(
-                        "hotunplug_vfio_device(): waiting for DEVICE_DELETED for {}",
-                        hostdev_id
-                    )
-                ),
-                Err(query_err) => Err(anyhow!(
-                    "waiting for DEVICE_DELETED for {} failed: {:#}; state reconciliation failed: {:#}",
-                    hostdev_id,
-                    wait_err,
-                    query_err
-                )),
-            };
-        }
+        self.delete_device(hostdev_id)
+            .with_context(|| format!("hotunplug VFIO device {hostdev_id}"))?;
 
         info!(
             sl!(),
@@ -1747,23 +1789,100 @@ impl Qmp {
         Ok(())
     }
 
-    pub fn device_exists(&mut self, device_name: &str) -> Result<bool> {
-        let devices = self.qmp.execute(&qapi_qmp::qom_list {
-            path: "/machine/peripheral".to_owned(),
-        })?;
-        Ok(devices.iter().any(|device| device.name == device_name))
+    /// Requests removal of `id`, waiting for completion on the first attempt.
+    /// Retries require both absence and DEVICE_DELETED, or return pending without
+    /// another full guest wait. Accepted requests are reissued only after the
+    /// cooldown so orphan cleanup does not stall every container operation.
+    fn delete_device(&mut self, id: &str) -> Result<()> {
+        if !self
+            .device_exists(id)
+            .context("query device before device_del")?
+        {
+            return self.complete_device_removal(id);
+        }
+        self.deleted_devices.remove(id);
+        if let Some(requested) = self.unplug_requested.get(id) {
+            if requested.elapsed() < UNPLUG_REISSUE_AFTER {
+                return Err(anyhow!(
+                    "unplug of {} requested {:?} ago, still present; retry after {:?}",
+                    id,
+                    requested.elapsed(),
+                    UNPLUG_REISSUE_AFTER
+                ));
+            }
+        }
+        let retrying = self.unplug_requested.contains_key(id);
+        let requested = Instant::now();
+        if retrying {
+            // Even a rejected reissue does not cancel the earlier accepted
+            // unplug. Keep it pending and rate-limit further reissues.
+            self.unplug_requested.insert(id.to_owned(), requested);
+        }
+        if let Err(delete_err) = self.execute(&qmp::device_del { id: id.to_owned() }) {
+            if self
+                .device_exists(id)
+                .with_context(|| format!("query device after failed device_del: {delete_err:?}"))?
+            {
+                return Err(anyhow!("device_del for {}: {:?}", id, delete_err));
+            }
+            return self.complete_device_removal(id);
+        }
+
+        self.unplug_requested.insert(id.to_owned(), requested);
+        if retrying {
+            // Orphan retries must not hold the device manager for another full
+            // guest timeout, even when enough time has passed to reissue.
+            if self
+                .device_exists(id)
+                .context("query device after repeated device_del")?
+            {
+                return Err(anyhow!("unplug of {} is still pending", id));
+            }
+        } else {
+            self.wait_for_device_deleted(id, DEVICE_DELETED_TIMEOUT)?;
+        }
+        self.complete_device_removal(id)
+    }
+
+    fn complete_device_removal(&mut self, id: &str) -> Result<()> {
+        if !self.deleted_devices.contains(id) {
+            return Err(anyhow!(
+                "device {} is absent but removal completion is pending",
+                id
+            ));
+        }
+        self.unplug_requested.remove(id);
+        Ok(())
+    }
+
+    /// Whether QEMU has a device with the qdev id `id`. Every device created
+    /// with an id is a child of /machine/peripheral, whatever bus it sits on.
+    pub fn device_exists(&mut self, id: &str) -> Result<bool> {
+        if !self.pending_qom_list {
+            self.qmp.write_command(&qapi_qmp::qom_list {
+                path: "/machine/peripheral".to_owned(),
+            })?;
+            self.pending_qom_list = true;
+        }
+        let devices = self.read_qom_list()?;
+        Ok(devices.iter().any(|device| device.name == id))
+    }
+
+    fn block_node_exists(&mut self, node_name: &str) -> Result<bool> {
+        let nodes = self.execute(&qapi_qmp::query_named_block_nodes { flat: Some(true) })?;
+        Ok(nodes
+            .iter()
+            .any(|node| node.node_name.as_deref() == Some(node_name)))
     }
 
     pub fn qmp_stop(&mut self) -> Result<()> {
-        self.qmp
-            .execute(&qmp::stop {})
+        self.execute(&qmp::stop {})
             .map(|_| ())
             .context("execute qmp stop")
     }
 
     pub fn qmp_cont(&mut self) -> Result<()> {
-        self.qmp
-            .execute(&qmp::cont {})
+        self.execute(&qmp::cont {})
             .map(|_| ())
             .context("execute qmp cont")
     }
@@ -1771,7 +1890,6 @@ impl Qmp {
     /// Get vCPU thread IDs through QMP query_cpus_fast.
     pub fn get_vcpu_thread_ids(&mut self) -> Result<VcpuThreadIds> {
         let vcpu_info = self
-            .qmp
             .execute(&qmp::query_cpus_fast {})
             .map_err(|e| anyhow!("query_cpus_fast failed: {:?}", e))?;
 
@@ -1953,6 +2071,7 @@ mod tests {
         );
     }
 
+    use rstest::rstest;
     use serde_json::{json, Value};
     use std::io::{BufRead, Write};
     use std::os::unix::net::UnixListener;
@@ -1967,20 +2086,30 @@ mod tests {
         After(usize),
         /// The guest never releases it.
         Never,
+        /// device_del fails and the device stays.
+        Rejected,
+        /// device_del fails because the device went away in the meantime.
+        Raced,
     }
 
     struct FakeQemu {
         devices: Vec<String>,
         unplug: Unplug,
         pending: Option<usize>,
+        /// Commands received after the handshake, in order.
+        commands: Vec<String>,
         /// Sent ahead of the next reply, as QEMU does with async events.
         queued_events: Vec<Value>,
         poll_failures: usize,
         poll_delay: Option<Duration>,
+        split_reply: bool,
+        completion_delay: usize,
+        finalizing: Option<usize>,
     }
 
     impl FakeQemu {
         fn reply(&mut self, command: &str, args: &Value) -> Value {
+            self.commands.push(command.to_string());
             match command {
                 "qom-list" => {
                     if self.poll_failures > 0 {
@@ -1991,6 +2120,15 @@ mod tests {
                         if *left == 0 {
                             self.devices.clear();
                             self.pending = None;
+                            self.finalizing = Some(self.completion_delay);
+                        } else {
+                            *left -= 1;
+                        }
+                    }
+                    if let Some(left) = self.finalizing.as_mut() {
+                        if *left == 0 {
+                            self.queued_events.push(deleted_event());
+                            self.finalizing = None;
                         } else {
                             *left -= 1;
                         }
@@ -2004,11 +2142,27 @@ mod tests {
                 }
                 "device_del" => {
                     assert_eq!(args["id"], DEV);
-                    if let Unplug::After(n) = self.unplug {
-                        self.pending = Some(n);
+                    match self.unplug {
+                        Unplug::After(n) => {
+                            self.pending = Some(n);
+                            json!({"return": {}})
+                        }
+                        Unplug::Never => json!({"return": {}}),
+                        Unplug::Rejected => {
+                            json!({"error": {"class": "GenericError", "desc": "rejected"}})
+                        }
+                        Unplug::Raced => {
+                            self.devices.clear();
+                            self.queued_events.push(deleted_event());
+                            json!({"error": {"class": "DeviceNotFound", "desc": "gone"}})
+                        }
                     }
-                    json!({"return": {}})
                 }
+                "stop" => json!({"return": {}}),
+                "blockdev-del" => {
+                    json!({"error": {"class": "GenericError", "desc": "no such node"}})
+                }
+                "query-named-block-nodes" => json!({"return": []}),
                 other => panic!("unexpected QMP command {}", other),
             }
         }
@@ -2020,14 +2174,23 @@ mod tests {
         _dir: tempfile::TempDir,
     }
 
+    impl FakeQmp {
+        fn commands(&self) -> Vec<String> {
+            self.qemu.lock().unwrap().commands.clone()
+        }
+    }
+
     fn serve(listener: UnixListener, qemu: Arc<Mutex<FakeQemu>>) {
         let (stream, _) = listener.accept().unwrap();
         let mut writer = stream.try_clone().unwrap();
-        let mut send = |v: Value| writeln!(writer, "{v}").is_ok();
-        if !send(json!({"QMP": {
-            "version": {"qemu": {"micro": 0, "minor": 2, "major": 9}, "package": ""},
-            "capabilities": []
-        }})) {
+        let send = |writer: &mut UnixStream, v: Value| writeln!(writer, "{v}").is_ok();
+        if !send(
+            &mut writer,
+            json!({"QMP": {
+                "version": {"qemu": {"micro": 0, "minor": 2, "major": 9}, "package": ""},
+                "capabilities": []
+            }}),
+        ) {
             return;
         }
         for line in std::io::BufReader::new(stream).lines() {
@@ -2040,7 +2203,7 @@ mod tests {
                 _ => {
                     let mut qemu = qemu.lock().unwrap();
                     for event in qemu.queued_events.drain(..) {
-                        if !send(event) {
+                        if !send(&mut writer, event) {
                             return;
                         }
                     }
@@ -2053,12 +2216,32 @@ mod tests {
                 }
             };
             if let Some(delay) = delay {
+                if qemu.lock().unwrap().split_reply {
+                    let reply = format!("{reply}\n");
+                    let middle = reply.len() / 2;
+                    if writer.write_all(&reply.as_bytes()[..middle]).is_err() {
+                        return;
+                    }
+                    thread::sleep(delay);
+                    if writer.write_all(&reply.as_bytes()[middle..]).is_err() {
+                        return;
+                    }
+                    continue;
+                }
                 thread::sleep(delay);
             }
-            if !send(reply) {
+            if !send(&mut writer, reply) {
                 return;
             }
         }
+    }
+
+    fn deleted_event() -> Value {
+        json!({
+            "event": "DEVICE_DELETED",
+            "data": {"device": DEV, "path": format!("/machine/peripheral/{DEV}")},
+            "timestamp": {"seconds": 1, "microseconds": 0}
+        })
     }
 
     fn fake_qmp(devices: &[&str], unplug: Unplug) -> FakeQmp {
@@ -2069,9 +2252,17 @@ mod tests {
             devices: devices.iter().map(|d| d.to_string()).collect(),
             unplug,
             pending: None,
-            queued_events: Vec::new(),
+            commands: Vec::new(),
+            queued_events: if devices.is_empty() {
+                vec![deleted_event()]
+            } else {
+                vec![]
+            },
             poll_failures: 0,
             poll_delay: None,
+            split_reply: false,
+            completion_delay: 0,
+            finalizing: None,
         }));
         let served = qemu.clone();
         thread::spawn(move || serve(listener, served));
@@ -2080,6 +2271,76 @@ mod tests {
             qemu,
             _dir: dir,
         }
+    }
+
+    #[rstest]
+    #[case::released_by_guest(Unplug::After(2))]
+    #[case::raced_with_guest(Unplug::Raced)]
+    fn hotunplug_vfio_device_converges(#[case] unplug: Unplug) {
+        let mut fake = fake_qmp(&[DEV], unplug);
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert!(fake.qemu.lock().unwrap().devices.is_empty());
+    }
+
+    #[test]
+    fn hotunplug_vfio_device_skips_absent_device() {
+        let mut fake = fake_qmp(&[], Unplug::Never);
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert_eq!(fake.commands(), ["qom-list"]);
+    }
+
+    #[test]
+    fn hotunplug_vfio_device_reports_rejected_unplug() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Rejected);
+        let err = fake.qmp.hotunplug_vfio_device(DEV).unwrap_err();
+        let err = format!("{err:#}");
+        assert!(err.contains("rejected"), "{}", err);
+    }
+
+    #[test]
+    fn wait_returns_once_device_is_removed() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(2));
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        fake.qmp
+            .wait_for_device_deleted(DEV, Duration::from_secs(5))
+            .unwrap();
+        assert!(fake.qemu.lock().unwrap().devices.is_empty());
+    }
+
+    #[test]
+    fn wait_times_out_while_device_is_present() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        let err = fake
+            .qmp
+            .wait_for_device_deleted(DEV, Duration::from_millis(300))
+            .unwrap_err();
+        let err = format!("{err:#}");
+        assert!(err.contains("timed out"), "{}", err);
+    }
+
+    #[test]
+    fn wait_ignores_stale_device_deleted_event() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        fake.qemu.lock().unwrap().queued_events.push(json!({
+            "event": "DEVICE_DELETED",
+            "data": {"device": DEV, "path": format!("/machine/peripheral/{DEV}")},
+            "timestamp": {"seconds": 1, "microseconds": 0}
+        }));
+        fake.qmp
+            .qmp
+            .execute(&qmp::device_del { id: DEV.into() })
+            .unwrap();
+        assert!(fake
+            .qmp
+            .wait_for_device_deleted(DEV, Duration::from_millis(300))
+            .is_err());
     }
 
     #[test]
@@ -2099,7 +2360,7 @@ mod tests {
                 .iter()
                 .filter(|command| *command == "qom-list")
                 .count(),
-            3
+            4
         );
     }
 
@@ -2131,6 +2392,66 @@ mod tests {
                 .unwrap(),
             read_timeout
         );
+    }
+
+    #[test]
+    fn wait_requires_finalization_after_qom_disappearance() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(0));
+        fake.qemu.lock().unwrap().completion_delay = 3;
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert!(fake.commands().iter().filter(|c| *c == "qom-list").count() >= 5);
+    }
+
+    #[test]
+    fn absent_device_without_completion_remains_pending() {
+        let mut fake = fake_qmp(&[], Unplug::Never);
+        fake.qemu.lock().unwrap().queued_events.clear();
+        fake.qmp.unplug_requested.insert(DEV.into(), Instant::now());
+        assert!(fake.qmp.hotunplug_vfio_device(DEV).is_err());
+        assert!(fake.qmp.unplug_requested.contains_key(DEV));
+        fake.qemu
+            .lock()
+            .unwrap()
+            .queued_events
+            .push(deleted_event());
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+    }
+
+    #[rstest]
+    #[case(false, false)]
+    #[case(true, false)]
+    #[case(false, true)]
+    #[case(true, true)]
+    fn delayed_poll_response_is_drained_before_another_command(
+        #[case] split: bool,
+        #[case] block_query: bool,
+    ) {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        {
+            let mut qemu = fake.qemu.lock().unwrap();
+            qemu.poll_delay = Some(Duration::from_millis(150));
+            qemu.split_reply = split;
+        }
+        assert!(fake
+            .qmp
+            .wait_for_device_deleted(DEV, Duration::from_millis(40))
+            .is_err());
+        assert!(fake.qmp.pending_qom_list);
+        fake.qmp
+            .qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        let command = if block_query {
+            assert!(!fake.qmp.block_node_exists("drive-0").unwrap());
+            "query-named-block-nodes"
+        } else {
+            fake.qmp.qmp_stop().unwrap();
+            "stop"
+        };
+        assert!(!fake.qmp.pending_qom_list);
+        assert_eq!(fake.commands(), ["qom-list", command]);
     }
 
     #[test]
@@ -2183,48 +2504,131 @@ mod tests {
     }
 
     #[test]
-    fn wait_returns_once_device_is_removed() {
-        let mut fake = fake_qmp(&[DEV], Unplug::After(2));
+    fn hotunplug_retry_does_not_wait_again_for_a_recent_request() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+        let started = Instant::now();
+        assert!(fake.qmp.hotunplug_vfio_device(DEV).is_err());
+        assert!(started.elapsed() >= DEVICE_DELETED_TIMEOUT);
+        let retry = Instant::now();
+        let error = fake.qmp.hotunplug_vfio_device(DEV).unwrap_err();
+        assert!(retry.elapsed() < Duration::from_secs(1));
+        assert!(format!("{error:#}").contains("still present"));
+        assert_eq!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "device_del")
+                .count(),
+            1
+        );
+
+        // A completed unplug is reconciled immediately, even during cooldown.
+        {
+            let mut qemu = fake.qemu.lock().unwrap();
+            qemu.devices.clear();
+            qemu.queued_events.push(deleted_event());
+        }
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert!(!fake.qmp.unplug_requested.contains_key(DEV));
+        // Reusing the ID must not inherit the previous device's cooldown.
+        {
+            let mut qemu = fake.qemu.lock().unwrap();
+            qemu.devices.push(DEV.into());
+            qemu.unplug = Unplug::After(0);
+        }
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert_eq!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "device_del")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn hotunplug_reissues_an_old_request() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(0));
         fake.qmp
-            .qmp
-            .execute(&qmp::device_del { id: DEV.into() })
-            .unwrap();
+            .unplug_requested
+            .insert(DEV.into(), Instant::now() - UNPLUG_REISSUE_AFTER);
+        assert!(fake.qmp.hotunplug_vfio_device(DEV).is_err());
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert!(fake.qemu.lock().unwrap().devices.is_empty());
+        assert!(!fake.qmp.unplug_requested.contains_key(DEV));
+        assert_eq!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "device_del")
+                .count(),
+            1
+        );
+    }
+
+    #[rstest]
+    #[case::accepted_but_wedged(Unplug::Never)]
+    #[case::reissue_rejected(Unplug::Rejected)]
+    fn old_unplug_retries_do_not_wait_again(#[case] unplug: Unplug) {
+        let mut fake = fake_qmp(&[DEV], unplug);
         fake.qmp
-            .wait_for_device_deleted(DEV, Duration::from_secs(5))
-            .unwrap();
+            .unplug_requested
+            .insert(DEV.into(), Instant::now() - UNPLUG_REISSUE_AFTER);
+        let retry = Instant::now();
+        assert!(fake.qmp.hotunplug_vfio_device(DEV).is_err());
+        assert!(retry.elapsed() < Duration::from_secs(1));
+        assert!(fake.qmp.unplug_requested.contains_key(DEV));
+        let retry = Instant::now();
+        assert!(fake.qmp.hotunplug_vfio_device(DEV).is_err());
+        assert!(retry.elapsed() < Duration::from_secs(1));
+        assert_eq!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "device_del")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn rejected_unplug_can_be_retried_without_cooldown() {
+        let mut fake = fake_qmp(&[DEV], Unplug::Rejected);
+        assert!(fake.qmp.hotunplug_vfio_device(DEV).is_err());
+        assert!(!fake.qmp.unplug_requested.contains_key(DEV));
+        fake.qemu.lock().unwrap().unplug = Unplug::After(0);
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert_eq!(
+            fake.commands()
+                .iter()
+                .filter(|command| *command == "device_del")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn pending_unplug_of_another_device_does_not_delay_removal() {
+        let mut fake = fake_qmp(&[DEV], Unplug::After(0));
+        fake.qmp
+            .unplug_requested
+            .insert("other-device".into(), Instant::now());
+        fake.qmp.hotunplug_vfio_device(DEV).unwrap();
+        assert!(fake.qmp.unplug_requested.contains_key("other-device"));
         assert!(fake.qemu.lock().unwrap().devices.is_empty());
     }
 
     #[test]
-    fn wait_times_out_while_device_is_present() {
-        let mut fake = fake_qmp(&[DEV], Unplug::Never);
-        fake.qmp
-            .qmp
-            .execute(&qmp::device_del { id: DEV.into() })
-            .unwrap();
-        let err = fake
-            .qmp
-            .wait_for_device_deleted(DEV, Duration::from_millis(300))
-            .unwrap_err();
-        let err = format!("{err:#}");
-        assert!(err.contains("timed out"), "{}", err);
-    }
-
-    #[test]
-    fn wait_ignores_stale_device_deleted_event() {
-        let mut fake = fake_qmp(&[DEV], Unplug::Never);
+    fn hotunplug_block_device_retry_skips_removed_parts() {
+        let mut fake = fake_qmp(&[], Unplug::Never);
         fake.qemu.lock().unwrap().queued_events.push(json!({
             "event": "DEVICE_DELETED",
-            "data": {"device": DEV, "path": format!("/machine/peripheral/{DEV}")},
+            "data": {"device": "drive-0", "path": "/machine/peripheral/drive-0"},
             "timestamp": {"seconds": 1, "microseconds": 0}
         }));
         fake.qmp
-            .qmp
-            .execute(&qmp::device_del { id: DEV.into() })
+            .hotunplug_block_device("virtio-blk-pci", 0)
             .unwrap();
-        assert!(fake
-            .qmp
-            .wait_for_device_deleted(DEV, Duration::from_millis(300))
-            .is_err());
+        assert_eq!(
+            fake.commands(),
+            ["qom-list", "blockdev-del", "query-named-block-nodes"]
+        );
     }
 }
