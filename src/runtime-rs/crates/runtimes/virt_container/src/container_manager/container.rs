@@ -27,11 +27,14 @@ use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{
-    cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
+    cdi_devices::container_device::annotate_container_devices,
+    cpu_mem::hugepage_sizing::{hugepages_resource_name, hugetlb_size_name, vm_huge_page_size},
+    ResourceManager, ResourceUpdateOp,
 };
 use tokio::sync::RwLock;
 
 use super::{
+    hugepages::{self, Guest, HugePageBook, Reservation},
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
@@ -40,6 +43,19 @@ use crate::container_manager::{is_termination_signal, logger_with_process};
 pub struct Exec {
     pub(crate) process: Process,
     pub(crate) oci_process: OCIProcess,
+}
+
+/// The pod's huge page state and its other running containers.
+pub(crate) struct PodHugePages {
+    pub book: Arc<tokio::sync::Mutex<HugePageBook>>,
+    pub others: Vec<Reservation>,
+}
+
+// What a container is given in a guest sized from the pod.
+struct HugePagePlan {
+    page: String,
+    guest: Guest,
+    copied: u64,
 }
 
 pub struct Container {
@@ -111,7 +127,7 @@ impl Container {
         })
     }
 
-    pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
+    pub async fn create(&self, mut spec: oci::Spec, pod: Option<&PodHugePages>) -> Result<()> {
         // process oci spec
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
@@ -143,6 +159,15 @@ impl Container {
             disable_guest_selinux,
         )
         .context("amend spec")?;
+
+        let container_name = k8s::container_name(&spec);
+        let plan = match pod {
+            Some(pod) => Some(
+                self.plan_huge_pages(&spec, &toml_config, pod, &container_name)
+                    .await?,
+            ),
+            None => None,
+        };
 
         // get mutable root from oci spec
         let root = match spec.root_mut() {
@@ -199,6 +224,12 @@ impl Container {
         }
         spec.set_mounts(Some(oci_mounts));
 
+        if plan.is_some() && storages.iter().any(|s| s.fs_type == hypervisor::HUGETLBFS) {
+            return Err(anyhow!(
+                "container {container_name} mounts a huge page volume, but huge pages inside the guest are not supported in a runtime class with enable_hugepages_pod_sizing"
+            ));
+        }
+
         let linux = spec
             .linux()
             .as_ref()
@@ -232,13 +263,14 @@ impl Container {
                 resource.set_block_io(None);
                 resource.set_network(None);
 
-                if is_hugetlb_backed(&toml_config) {
-                    let huge_pages = huge_pages_total(Some(resource));
-                    add_huge_pages_to_memory_limit(
+                if let Some(plan) = &plan {
+                    hugepages::bound_container(
                         resource,
-                        huge_pages,
-                        static_guest_memory_mb(&toml_config),
-                    );
+                        &plan.page,
+                        plan.guest,
+                        plan.copied,
+                        &container_name,
+                    )?;
                 }
             }
 
@@ -259,7 +291,6 @@ impl Container {
             filter_vfio_devices(linux, vfio_mode);
         }
 
-        let container_name = k8s::container_name(&spec);
         let mut shared_mounts = Vec::new();
         for shared_mount in &toml_config.runtime.shared_mounts {
             if shared_mount.dst_ctr == container_name {
@@ -317,12 +348,73 @@ impl Container {
             ..Default::default()
         };
 
-        self.agent
-            .create_container(r)
-            .await
-            .context("agent create container")?;
+        let applied_ceiling = r
+            .oci
+            .as_ref()
+            .and_then(|s| s.linux().as_ref())
+            .and_then(|l| l.resources().as_ref())
+            .map(|res| hugepages::memory_limit(Some(res)) as u64)
+            .unwrap_or(0);
+        let created = self.agent.create_container(r).await;
+        if let (Some(pod), Some(_), Ok(_)) = (pod, &plan, &created) {
+            pod.book
+                .lock()
+                .await
+                .applied
+                .insert(config.container_id.clone(), applied_ceiling);
+        }
+        created.context("agent create container")?;
         self.resource_manager.dump().await;
         Ok(())
+    }
+
+    // Works out what the container is given and refuses what the guest cannot hold.
+    async fn plan_huge_pages(
+        &self,
+        spec: &oci::Spec,
+        toml_config: &TomlConfig,
+        pod: &PodHugePages,
+        name: &str,
+    ) -> Result<HugePagePlan> {
+        let page_bytes = vm_huge_page_size().context("cannot tell the VM's huge page size")?;
+        let page = hugetlb_size_name(page_bytes)?;
+        let guest = static_guest(toml_config);
+        let vm_bytes = guest.memory_mib << 20;
+        let resources = spec.linux().as_ref().and_then(|l| l.resources().as_ref());
+        let this = Reservation {
+            id: self.config.container_id.clone(),
+            huge_pages: hugepages::huge_pages_of(resources, &page),
+            memory: hugepages::memory_limit(resources),
+        };
+        let mut rs = pod.others.clone();
+        rs.push(this.clone());
+        let resource = hugepages_resource_name(page_bytes);
+        if let Some(value) = hugepages::ambiguous_copy(&rs, vm_bytes) {
+            return Err(anyhow!(
+                "the pod level {resource} is copied into every container that does not declare it, and each container of this pod carries {} MiB of it, so a copy cannot be told from a declaration: declare {resource} on every container of the pod",
+                value >> 20
+            ));
+        }
+        let copied = hugepages::copied_reservation(&rs, vm_bytes);
+        let book = pod.book.lock().await;
+        hugepages::refuse_pod_ceilings(&rs, copied, &book.applied, guest, &this.id, name)?;
+        Ok(HugePagePlan {
+            page,
+            guest,
+            copied,
+        })
+    }
+
+    /// What the container carries for the pod's huge page checks, None once it stopped.
+    pub(crate) async fn reservation(&self) -> Option<(String, Option<LinuxResources>)> {
+        let inner = self.inner.read().await;
+        if inner.init_process.get_status().await == ProcessStatus::Stopped {
+            return None;
+        }
+        Some((
+            self.config.container_id.clone(),
+            inner.linux_resources.clone(),
+        ))
     }
 
     pub async fn start(
@@ -746,23 +838,56 @@ impl Container {
         Ok(Some(stats_resp))
     }
 
-    pub async fn update(&self, resources: &LinuxResources) -> Result<()> {
+    pub async fn update(
+        &self,
+        resources: &LinuxResources,
+        pod: Option<&PodHugePages>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
+        let toml_config = self.resource_manager.config().await;
 
-        // Follow the huge pages the container holds, so that a later update
-        // carrying none of them is still told the reservation this one asked
-        // for rather than the one the container was created with.
-        let mut current = resources.clone();
-        if huge_pages_total(Some(&current)) == 0 {
-            if let Some(held) = inner
-                .linux_resources
-                .as_ref()
-                .and_then(|held| held.hugepage_limits().clone())
-            {
-                current.set_hugepage_limits(Some(held));
+        // Check against the pod before recording, so a refusal leaves the container as it was.
+        let mut checked = None;
+        let mut merged = resources.clone();
+        if let Some(pod) = pod {
+            merged.set_hugepage_limits(hugepages::updated_limits(
+                inner
+                    .linux_resources
+                    .as_ref()
+                    .and_then(|l| l.hugepage_limits().as_ref()),
+                resources.hugepage_limits().as_ref(),
+            ));
+            let held_memory = inner.linux_resources.as_ref().and_then(|l| *l.memory());
+            if resources.memory().and_then(|m| m.limit()).is_none() {
+                let mut m = resources.memory().or(held_memory).unwrap_or_default();
+                m.set_limit(held_memory.and_then(|h| h.limit()));
+                merged.set_memory(Some(m));
             }
+            let page_bytes = vm_huge_page_size().context("cannot tell the VM's huge page size")?;
+            let page = hugetlb_size_name(page_bytes)?;
+            let guest = static_guest(&toml_config);
+            let held = hugepages::huge_pages_of(Some(&merged), &page);
+            let memory = hugepages::memory_limit(Some(&merged));
+            let name = k8s::container_name(&self.spec);
+            let this = Reservation {
+                id: self.config.container_id.clone(),
+                huge_pages: held,
+                memory,
+            };
+            let mut rs = pod.others.clone();
+            rs.push(this.clone());
+            let copied = hugepages::copied_reservation(&rs, guest.memory_mib << 20);
+            let book = pod.book.lock().await;
+            hugepages::refuse_pod_ceilings(&rs, copied, &book.applied, guest, &this.id, &name)?;
+            checked = Some((page, guest, copied, held, name));
         }
-        inner.linux_resources = Some(current);
+
+        let resources = if checked.is_some() {
+            &merged
+        } else {
+            resources
+        };
+        let previous = inner.linux_resources.replace(resources.clone());
 
         // update vcpus, mems and host cgroups
         let mut agent_resources = self
@@ -774,26 +899,20 @@ impl Container {
             )
             .await?;
 
-        // An update carries the limits the host is to apply now, and a resize
-        // of the memory limit alone does not repeat the huge page reservation
-        // the container was created with. Without folding that reservation in
-        // again the update would undo the ceiling the container was started
-        // with.
-        let toml_config = self.resource_manager.config().await;
-        if is_hugetlb_backed(&toml_config) {
-            if let Some(agent_resources) = agent_resources.as_mut() {
-                let mut huge_pages = huge_pages_total(Some(agent_resources));
-                if huge_pages == 0 {
-                    huge_pages = huge_pages_total(inner.linux_resources.as_ref());
-                }
-                add_huge_pages_to_memory_limit(
-                    agent_resources,
-                    huge_pages,
-                    static_guest_memory_mb(&toml_config),
-                );
+        if let (Some((page, guest, copied, held, name)), Some(res)) =
+            (&checked, agent_resources.as_mut())
+        {
+            hugepages::fold_held(res, page, *held);
+            if let Err(e) = hugepages::bound_container(res, page, *guest, *copied, name) {
+                inner.linux_resources = previous;
+                return Err(e);
             }
         }
 
+        let ceiling = agent_resources
+            .as_ref()
+            .map(|res| hugepages::memory_limit(Some(res)) as u64)
+            .unwrap_or(0);
         let req = agent::UpdateContainerRequest {
             container_id: self.container_id.container_id.clone(),
             resources: agent_resources,
@@ -803,6 +922,13 @@ impl Container {
             .update_container(req)
             .await
             .context("agent update container")?;
+        if let (Some(pod), Some(_)) = (pod, &checked) {
+            pod.book
+                .lock()
+                .await
+                .applied
+                .insert(self.config.container_id.clone(), ceiling);
+        }
         Ok(())
     }
 
@@ -909,163 +1035,31 @@ fn get_disable_guest_selinux(toml_config: &TomlConfig) -> bool {
     }
 }
 
-// is_hugetlb_backed tells whether the guest runs on memory taken from the
-// host's hugetlb pool, which is the memory a pod reserves as a
-// hugepages-<size> resource. Transparent huge pages come from ordinary memory
-// and are charged to the memory limit instead.
-fn is_hugetlb_backed(toml_config: &TomlConfig) -> bool {
-    match toml_config
-        .hypervisor
-        .get(&toml_config.runtime.hypervisor_name)
-    {
-        Some(hypervisor_config) => {
-            hypervisor_config.memory_info.enable_hugepages
-                && matches!(
-                    hypervisor_config.memory_info.hugepage_type,
-                    HugePageType::Hugetlbfs
-                )
-        }
-        None => false,
-    }
-}
-
-// static_guest_memory_mb returns the size of a guest that has all the memory it
-// will ever have, and 0 for one that grows on demand, as the memory a limit asks
-// for is hotplugged to it after the container is created.
-fn static_guest_memory_mb(toml_config: &TomlConfig) -> u32 {
-    if !toml_config.runtime.static_sandbox_resource_mgmt {
-        return 0;
-    }
-
+// is_pod_sized: a hugetlbfs backed guest sized from the pod's hugepages-<size>.
+pub(crate) fn is_pod_sized(toml_config: &TomlConfig) -> bool {
     toml_config
         .hypervisor
         .get(&toml_config.runtime.hypervisor_name)
-        .map(|hypervisor_config| hypervisor_config.memory_info.default_memory)
-        .unwrap_or(0)
-}
-
-/// add_huge_pages_to_memory_limit folds a container's huge page reservations
-/// into the memory limits the agent applies to it inside the guest.
-///
-/// The memory limit of a huge page backed container accounts for what the
-/// sandbox uses outside the guest: the memory the guest itself runs on comes
-/// from the hugetlb pool, and the pod reserves it as a hugepages-<size>
-/// resource instead. Inside the guest that reservation is ordinary RAM, charged
-/// to the container's memory cgroup like any other page, so applying the host
-/// limit verbatim caps the container far below the memory the pod reserved for
-/// it. Adding the reservation keeps the ceiling the pod described, and keeps it
-/// per container: a sidecar that reserves no huge pages stays bounded by its
-/// own limit.
-///
-/// Swap follows the limit, as it carries memory plus swap and a total below the
-/// memory limit is rejected. The room it left above the limit is kept, so
-/// holding the limit down does not take a configured swap allowance with it.
-///
-/// A guest whose size is fixed at boot passes that size as `guest_mem_mb`, and
-/// the sum is held below the memory such a guest can hold. A ceiling above it
-/// never stops the container: the guest's own OOM killer does, and it chooses
-/// among every process in the guest, where the agent and the guest's init sit at
-/// a lower oom_score_adj than a Kubernetes workload and are killed first, with
-/// the pod reporting neither a restart nor an OOM. Container aware runtimes read
-/// the ceiling too, and size themselves out of memory from one the guest cannot
-/// meet. A guest that grows on demand passes 0, as the memory to cover the sum
-/// is hotplugged to it later.
-fn add_huge_pages_to_memory_limit(
-    resources: &mut LinuxResources,
-    huge_pages: i64,
-    guest_mem_mb: u32,
-) {
-    if huge_pages <= 0 {
-        return;
-    }
-
-    let holdable = holdable_guest_memory_bytes(guest_mem_mb);
-    if let Some(memory) = resources.memory_mut() {
-        // Memory plus swap minus memory is the swap alone, and it survives
-        // both the addition and the holding below.
-        let swap_room = match (memory.limit(), memory.swap()) {
-            (Some(limit), Some(swap)) if limit > 0 && swap > limit => swap - limit,
-            _ => 0,
-        };
-
-        memory.set_limit(add_huge_pages_to_limit(memory.limit(), huge_pages));
-        memory.set_reservation(add_huge_pages_to_limit(memory.reservation(), huge_pages));
-        memory.set_swap(add_huge_pages_to_limit(memory.swap(), huge_pages));
-
-        if let Some(holdable) = holdable {
-            if memory.limit().unwrap_or(0) > holdable {
-                info!(
-                    sl!(),
-                    "the container's huge page reservation reaches past the guest: holding its memory limit to the {} bytes a {} MiB guest can hold",
-                    holdable,
-                    guest_mem_mb
-                );
-
-                memory.set_limit(Some(holdable));
-                if memory.swap().unwrap_or(0) > 0 {
-                    memory.set_swap(Some(holdable.saturating_add(swap_room)));
-                }
-            }
-            memory.set_reservation(hold_limit_to_guest(memory.reservation(), holdable));
-        }
-    }
-}
-
-/// huge_pages_total adds up the huge pages a container reserved, of whatever
-/// page sizes, saturating rather than wrapping on a spec that asks for more
-/// than there could ever be.
-fn huge_pages_total(resources: Option<&LinuxResources>) -> i64 {
-    resources
-        .and_then(|resources| {
-            resources.hugepage_limits().as_ref().map(|limits| {
-                limits
-                    .iter()
-                    .fold(0i64, |total, l| total.saturating_add(l.limit()))
-            })
+        .is_some_and(|hv| {
+            hv.memory_info.enable_hugepages
+                && hv.memory_info.enable_hugepages_pod_sizing
+                && matches!(hv.memory_info.hugepage_type, HugePageType::Hugetlbfs)
         })
-        .unwrap_or(0)
 }
 
-// holdable_guest_memory_bytes returns the memory a container in a guest of
-// guest_mem_mb can be held to, or None for a guest whose size is not known
-// upfront.
-//
-// A guest reports less memory than the VM was given: its kernel spends a 64
-// byte struct page on every 4 KiB page, a sixty-fourth of the whole, before
-// MemTotal is counted. What is left still has to carry the guest's kernel, the
-// agent and the page cache, so leave a sixty-fourth of it for them as well --
-// never less than 128 MiB, which is more than a small guest's share of either.
-fn holdable_guest_memory_bytes(guest_mem_mb: u32) -> Option<i64> {
-    if guest_mem_mb == 0 {
-        return None;
+// The guest a statically sized sandbox boots, default when it grows on demand.
+fn static_guest(toml_config: &TomlConfig) -> Guest {
+    if !toml_config.runtime.static_sandbox_resource_mgmt {
+        return Guest::default();
     }
-
-    const MIN_RESERVE_MB: u32 = 128;
-    let reserve_mb = (guest_mem_mb / 32).max(MIN_RESERVE_MB);
-    if reserve_mb >= guest_mem_mb {
-        return None;
-    }
-
-    Some(i64::from(guest_mem_mb - reserve_mb) * 1024 * 1024)
-}
-
-// hold_limit_to_guest keeps a memory limit at or below what the guest can hold,
-// leaving an unset (or unlimited) limit alone.
-fn hold_limit_to_guest(limit: Option<i64>, holdable: i64) -> Option<i64> {
-    match limit {
-        Some(limit) if limit > holdable => Some(holdable),
-        other => other,
-    }
-}
-
-// add_huge_pages_to_limit grows a memory limit by a huge page reservation,
-// leaving an unset (or unlimited) limit alone and saturating rather than
-// wrapping.
-fn add_huge_pages_to_limit(limit: Option<i64>, huge_pages: i64) -> Option<i64> {
-    match limit {
-        Some(limit) if limit > 0 => Some(limit.saturating_add(huge_pages)),
-        other => other,
-    }
+    toml_config
+        .hypervisor
+        .get(&toml_config.runtime.hypervisor_name)
+        .map(|hv| Guest {
+            memory_mib: hv.memory_info.default_memory as u64,
+            vcpus: hv.cpu_info.default_vcpus.ceil() as u64,
+        })
+        .unwrap_or_default()
 }
 
 // is_pid_namespace_enabled checks if Pid namespace for a container needs to be shared with its sandbox
@@ -1194,153 +1188,6 @@ mod tests {
         amend_spec(&mut spec, false, true).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label().is_none());
         assert!(spec.linux().as_ref().unwrap().mount_label().is_none());
-    }
-
-    #[test]
-    fn test_add_huge_pages_to_memory_limit() {
-        const GIB: i64 = 1024 * 1024 * 1024;
-        const HUGE_PAGES: i64 = 64 * GIB;
-
-        struct TestData<'a> {
-            desc: &'a str,
-            memory: oci::LinuxMemory,
-            huge_pages: Option<Vec<oci::LinuxHugepageLimit>>,
-            guest_mem_mb: u32,
-            expected: oci::LinuxMemory,
-        }
-
-        let huge_page_limits = || {
-            Some(vec![oci::LinuxHugepageLimitBuilder::default()
-                .page_size("1GB".to_owned())
-                .limit(HUGE_PAGES)
-                .build()
-                .unwrap()])
-        };
-
-        let memory = |limit: Option<i64>, reservation: Option<i64>, swap: Option<i64>| {
-            let mut memory = oci::LinuxMemory::default();
-            memory.set_limit(limit);
-            memory.set_reservation(reservation);
-            memory.set_swap(swap);
-            memory
-        };
-
-        let tests = &[
-            TestData {
-                desc: "the huge page reservation joins the limits the guest applies",
-                memory: memory(Some(2 * GIB), Some(2 * GIB), Some(2 * GIB)),
-                huge_pages: huge_page_limits(),
-                guest_mem_mb: 0,
-                expected: memory(
-                    Some(2 * GIB + HUGE_PAGES),
-                    Some(2 * GIB + HUGE_PAGES),
-                    Some(2 * GIB + HUGE_PAGES),
-                ),
-            },
-            TestData {
-                desc: "a container reserving no huge pages keeps its limit",
-                memory: memory(Some(256 * GIB / 1024), None, None),
-                huge_pages: None,
-                guest_mem_mb: 0,
-                expected: memory(Some(256 * GIB / 1024), None, None),
-            },
-            TestData {
-                desc: "an unset limit stays unlimited",
-                memory: memory(None, Some(0), Some(-1)),
-                huge_pages: huge_page_limits(),
-                guest_mem_mb: 0,
-                expected: memory(None, Some(0), Some(-1)),
-            },
-            TestData {
-                desc: "a reservation that cannot be added saturates",
-                memory: memory(Some(2 * GIB), None, None),
-                huge_pages: Some(vec![oci::LinuxHugepageLimitBuilder::default()
-                    .page_size("1GB".to_owned())
-                    .limit(i64::MAX)
-                    .build()
-                    .unwrap()]),
-                guest_mem_mb: 0,
-                expected: memory(Some(i64::MAX), None, None),
-            },
-            TestData {
-                desc: "a sum reaching past a fixed size guest is held to what it can hold",
-                memory: memory(Some(2 * GIB), Some(2 * GIB), Some(2 * GIB)),
-                huge_pages: Some(vec![oci::LinuxHugepageLimitBuilder::default()
-                    .page_size("1GB".to_owned())
-                    .limit(192 * GIB)
-                    .build()
-                    .unwrap()]),
-                // A 192Gi guest reports about 189Gi, so hold the container to
-                // 186Gi: 192Gi less a thirty-second of it.
-                guest_mem_mb: 192 * 1024,
-                expected: memory(Some(186 * GIB), Some(186 * GIB), Some(186 * GIB)),
-            },
-            TestData {
-                desc: "a small guest keeps the whole reserve",
-                memory: memory(Some(256 * GIB / 1024), None, None),
-                huge_pages: Some(vec![oci::LinuxHugepageLimitBuilder::default()
-                    .page_size("2MB".to_owned())
-                    .limit(2 * GIB)
-                    .build()
-                    .unwrap()]),
-                guest_mem_mb: 2 * 1024,
-                expected: memory(Some((2 * 1024 - 128) * GIB / 1024), None, None),
-            },
-            TestData {
-                desc: "a sum a fixed size guest can hold is left alone",
-                memory: memory(Some(GIB / 4), None, None),
-                huge_pages: Some(vec![oci::LinuxHugepageLimitBuilder::default()
-                    .page_size("1GB".to_owned())
-                    .limit(4 * GIB)
-                    .build()
-                    .unwrap()]),
-                guest_mem_mb: 192 * 1024,
-                expected: memory(Some(GIB / 4 + 4 * GIB), None, None),
-            },
-            TestData {
-                desc: "holding the limit down leaves the swap the container was given",
-                memory: memory(Some(2 * GIB), None, Some(4 * GIB)),
-                huge_pages: huge_page_limits(),
-                // The 2Gi of swap asked for above the memory limit stays
-                // above the 62Gi a 64Gi guest can hold.
-                guest_mem_mb: 64 * 1024,
-                expected: memory(Some(62 * GIB), None, Some(64 * GIB)),
-            },
-            TestData {
-                desc: "reservations of several page sizes saturate together",
-                memory: memory(Some(2 * GIB), None, None),
-                huge_pages: Some(vec![
-                    oci::LinuxHugepageLimitBuilder::default()
-                        .page_size("1GB".to_owned())
-                        .limit(i64::MAX)
-                        .build()
-                        .unwrap(),
-                    oci::LinuxHugepageLimitBuilder::default()
-                        .page_size("2MB".to_owned())
-                        .limit(2 * GIB)
-                        .build()
-                        .unwrap(),
-                ]),
-                guest_mem_mb: 0,
-                expected: memory(Some(i64::MAX), None, None),
-            },
-        ];
-
-        for d in tests.iter() {
-            let mut resources = LinuxResources::default();
-            resources.set_memory(Some(d.memory));
-            resources.set_hugepage_limits(d.huge_pages.clone());
-
-            let huge_pages = huge_pages_total(Some(&resources));
-            add_huge_pages_to_memory_limit(&mut resources, huge_pages, d.guest_mem_mb);
-
-            assert_eq!(
-                resources.memory().unwrap(),
-                d.expected,
-                "test case: {}",
-                d.desc
-            );
-        }
     }
 
     #[test]
