@@ -138,6 +138,9 @@ impl ContainerManager for VirtContainerManager {
 
         let mut containers = self.containers.write().await;
         if let Err(e) = container.create(spec).await {
+            // Unplugging waits on the guest; the failed container is never
+            // inserted, so nothing else needs to wait on this lock meanwhile.
+            drop(containers);
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }
@@ -169,8 +172,10 @@ impl ContainerManager for VirtContainerManager {
         let container_id = &process.container_id.container_id;
         match process.process_type {
             ProcessType::Container => {
-                let mut containers = self.containers.write().await;
-                let mut c = containers
+                let mut c = self
+                    .containers
+                    .write()
+                    .await
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
                 // Returning an error here blocks containerd from processing the exit
