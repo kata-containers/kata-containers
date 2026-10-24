@@ -412,6 +412,21 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     log_child!(cfd_log, "notify parent to send oci state");
     write_sync(cwfd, SYNC_SUCCESS, "")?;
 
+    // Policy was loaded and verified by the agent parent under the Sandbox
+    // lock. Helpers may select that identity, but must never load/replace it.
+    let buf = read_sync(crfd)?;
+    let prepared_apparmor_profile: Option<crate::apparmor::PreparedProfile> =
+        serde_json::from_slice(&buf)?;
+    crate::apparmor::validate_prepared(
+        oci_process.apparmor_profile().as_deref(),
+        prepared_apparmor_profile.as_ref(),
+    )?;
+    let apparmor_exec = prepared_apparmor_profile
+        .as_ref()
+        .map(crate::apparmor::ProfileExec::open)
+        .transpose()?;
+    write_sync(cwfd, SYNC_SUCCESS, "")?;
+
     let buf = read_sync(crfd)?;
     let state_str = std::str::from_utf8(&buf)?;
     let mut state: OCIState = serde_json::from_str(state_str)?;
@@ -671,6 +686,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // isn't root.
     if !uid.is_root() {
         set_stdio_permissions(uid)?;
+    }
+
+    // Select the already prepared Guest profile before changing credentials or
+    // dropping capabilities. The selection applies to the following execve.
+    if let Some(profile) = apparmor_exec {
+        profile.select().context("select guest AppArmor profile")?;
     }
 
     setid(uid, gid)?;
@@ -1610,6 +1631,10 @@ async fn join_namespaces(
     write_async(pipe_w, SYNC_DATA, process_str.as_str()).await?;
 
     info!(logger, "wait child received oci process");
+    read_async(pipe_r).await?;
+
+    let profile_str = serde_json::to_string(&p.apparmor_profile)?;
+    write_async(pipe_w, SYNC_DATA, &profile_str).await?;
     read_async(pipe_r).await?;
 
     info!(logger, "try to send state from parent to child");

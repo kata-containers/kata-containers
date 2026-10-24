@@ -11,6 +11,7 @@ logging::logger_with_subsystem!(sl, "virt-container");
 
 mod container_manager;
 pub mod factory;
+mod guest_extension;
 pub mod health_check;
 pub mod oom;
 pub mod sandbox;
@@ -238,6 +239,10 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
         .ok_or_else(|| anyhow!("failed to get hypervisor for {}", hypervisor_name))
         .context("get hypervisor")?;
 
+    for extra in &hypervisor_config.guest_extension_images {
+        guest_extension::validate_apparmor_extension(&extra.name, &extra.path)?;
+    }
+
     // TODO: support other hypervisor
     // issue: https://github.com/kata-containers/kata-containers/issues/4634
     match hypervisor_name.as_str() {
@@ -366,5 +371,43 @@ hypervisor_name="qemu"
 
         let res = new_hypervisor(&toml_config).await;
         assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_new_hypervisor_apparmor_extension() {
+        use kata_types::config::hypervisor::{GuestExtensionImage, Hypervisor as HypervisorConfig};
+
+        for (name, path, valid) in [
+            ("apparmor", "", false),
+            ("apparmor", " \t", false),
+            ("apparmor", "/nonexistent/apparmor.img", false),
+            ("apparmor", "/", false),
+            ("apparmor", "/bin/echo", true),
+            ("coco", "", true),
+            ("gpu", "/nonexistent/gpu.img", true),
+        ] {
+            let mut config = TomlConfig::default();
+            config.runtime.hypervisor_name = "qemu".to_owned();
+            config.hypervisor.insert(
+                "qemu".to_owned(),
+                HypervisorConfig {
+                    guest_extension_images: vec![GuestExtensionImage {
+                        name: name.to_owned(),
+                        path: path.to_owned(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            );
+            match new_hypervisor(&config).await {
+                Ok(_) => assert!(valid, "invalid AppArmor path {:?} was accepted", path),
+                Err(err) => {
+                    assert!(!valid, "{} path {:?} was rejected: {}", name, path, err);
+                    assert!(err
+                        .to_string()
+                        .contains("guest_extension_images 'apparmor'"));
+                }
+            }
+        }
     }
 }

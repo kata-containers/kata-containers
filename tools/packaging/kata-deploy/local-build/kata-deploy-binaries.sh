@@ -81,6 +81,7 @@ readonly MEASURED_ROOTFS_VARIANTS=(
 	base
 	confidential
 	coco-extension
+	apparmor-extension
 	devkit-extension
 	nvidia-gpu
 	nvidia-gpu-confidential
@@ -154,6 +155,7 @@ options:
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
+	rootfs-image-apparmor-extension
 	rootfs-image-coco-extension
 	rootfs-image-mariner
 	rootfs-initrd
@@ -1038,6 +1040,270 @@ install_image_devkit_extension() {
 	fi
 }
 
+# Install the guest AppArmor policy extension image (erofs+verity).
+#
+# This extension carries policy text only: profiles and any includes they need.
+# It deliberately ships no apparmor_parser and no shared libraries, because the
+# parser belongs to the base image. The kata-agent mounts this read-only before
+# it runs and loads a requested profile out of it with the base image's parser.
+#
+# There is no distro bootstrap here: the tree is assembled directly from the
+# reviewed policy in tools/packaging/apparmor-extension/policy and handed to
+# image_builder.sh, which is why this does not go through rootfs.sh at all.
+install_image_apparmor_extension() {
+	local component="rootfs-image-apparmor-extension"
+	local policy_dir="${repo_root_dir}/tools/packaging/apparmor-extension/policy"
+
+	[[ -d "${policy_dir}" ]] || die "AppArmor policy directory not found: ${policy_dir}"
+	[[ -n "$(ls -A "${policy_dir}/profiles" 2>/dev/null)" ]] || \
+		die "no AppArmor profiles found in ${policy_dir}/profiles"
+
+	# A wrong profile name would otherwise only surface as a failure inside a
+	# guest, so validate at build time with a real parser.
+	validate_apparmor_profiles "${policy_dir}"
+
+	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
+	local install_dir="${destdir}/${prefix}/share/kata-containers/"
+	local extension_img="${install_dir}/kata-containers-apparmor-extension.img"
+
+	mkdir -p "${install_dir}"
+
+	local extension_rootfs
+	extension_rootfs="$(mktemp -d "${repo_root_dir}/.apparmor-extension-rootfs.XXXX")"
+
+	cp -a "${policy_dir}/." "${extension_rootfs}/"
+	mkdir -p "${extension_rootfs}/metadata"
+	{
+		echo "name=apparmor"
+		echo "kata_version=$(get_kata_version)"
+		echo "policy_commit=$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
+			-- tools/packaging/apparmor-extension 2>/dev/null || echo unknown)"
+		echo "profiles=$(find "${extension_rootfs}/profiles" -mindepth 1 -type f -printf '%f\n' \
+			| sort | tr '\n' ' ')"
+	} > "${extension_rootfs}/metadata/manifest"
+
+	export USE_DOCKER="1"
+	export BUILD_VARIANT="apparmor-extension"
+	export FS_TYPE="erofs"
+	# s390x does not use a measured rootfs, so no dm-verity hash is produced.
+	if [[ "${ARCH}" == "s390x" ]]; then
+		export MEASURED_ROOTFS="no"
+	else
+		export MEASURED_ROOTFS="yes"
+	fi
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+
+	local rc=0
+	"${image_builder}" -o "${extension_img}" "${extension_rootfs}" || rc=$?
+
+	if command -v sudo >/dev/null 2>&1; then
+		sudo rm -rf --one-file-system "${extension_rootfs:?}"
+	else
+		rm -rf --one-file-system "${extension_rootfs:?}"
+	fi
+
+	[[ "${rc}" -eq 0 ]] || die "building the AppArmor extension image failed"
+	[[ -f "${extension_img}" ]] || die "image_builder.sh did not produce ${extension_img}"
+
+	if [[ -e "${install_dir}/root_hash_apparmor-extension.txt" ]]; then
+		info "Root hash file: ${install_dir}/root_hash_apparmor-extension.txt"
+	fi
+}
+
+# Check the entire policy tree before letting the parser open any includes.
+# Includes (and ABI files) must use literal paths relative to the policy root.
+# Optional includes may be absent, but must still stay inside this root.
+# Reject symlinks, including internal/dangling links, rather than copying a
+# tree whose meaning can change after validation.
+validate_apparmor_policy_tree() (
+	local policy_dir="$1" entry includes include_path optional listing device
+	local -a policy_files=()
+	listing="$(mktemp)"
+	trap 'rm -f -- "${listing}"' EXIT
+	device="$(stat -c %d -- "${policy_dir}")"
+	find "${policy_dir}" -xdev -print0 > "${listing}" || die "Cannot walk AppArmor policy root"
+
+	while IFS= read -r -d '' entry; do
+		if [[ -L "${entry}" || ( ! -f "${entry}" && ! -d "${entry}" ) ||
+			"$(stat -c %d -- "${entry}")" != "${device}" ]]; then
+			die "AppArmor policy tree contains a symlink, special file or device boundary: ${entry}"
+		fi
+		if [[ -f "${entry}" ]]; then
+			iconv -f UTF-8 -t UTF-8 "${entry}" >/dev/null || die "AppArmor policy file is not UTF-8 text: ${entry}"
+			policy_files+=("${entry}")
+		fi
+	done < "${listing}"
+	[[ "${#policy_files[@]}" -gt 0 ]] || die "AppArmor policy tree is empty"
+
+	# Use a deliberately small, auditable include syntax. In particular, do
+	# not let parser variables, absolute paths or ../ escape -b/-I.
+	includes="$(LC_ALL=C awk '
+		function invalid() {
+			print "ERROR: unsafe AppArmor include/ABI at " FILENAME ":" FNR ": " $0 > "/dev/stderr"
+			failed = 1
+		}
+		function rule_code(text, i, ch, quoted, code) {
+			# Ignore quoted rule paths and ordinary trailing comments. A real
+			# inline #include is unsupported, even if its target is relative.
+			for (i = 1; i <= length(text); i++) {
+				ch = substr(text, i, 1)
+				if (quoted) {
+					if (ch == "\\") i++
+					else if (ch == "\"") quoted = 0
+				} else if (ch == "\"") {
+					quoted = 1
+					code = code " "
+				} else if (ch == "#") {
+					if (substr(text, i) ~ /^#include([[:space:]<"]|$)/) invalid()
+					break
+				} else code = code ch
+			}
+			return code
+		}
+		{
+			line = $0
+			sub(/^[[:space:]]+/, "", line)
+			# Only contiguous #include is a directive. "# include ..." is
+			# an ordinary comment, as are comments discussing include rules.
+			if (line ~ /^#/) {
+				if (line !~ /^#include([[:space:]<"]|$)/) next
+				sub(/^#/, "", line)
+			}
+			if (line !~ /^(include|abi)([[:space:]<"]|$)/) {
+				line = rule_code(line)
+				if (line ~ /(^|[[:space:]{}])(include|abi)([[:space:]<"]|$)/) invalid()
+				next
+			}
+			is_abi = (line ~ /^abi[[:space:]]/)
+			sub(/^(include|abi)[[:space:]]*/, "", line)
+			optional = (!is_abi && line ~ /^if[[:space:]]+exists[[:space:]]*/)
+			if (optional) sub(/^if[[:space:]]+exists[[:space:]]*/, "", line)
+			opening = substr(line, 1, 1)
+			closing = (opening == "<" ? ">" : "\"")
+			if ((opening != "<" && opening != "\"") || !index(substr(line, 2), closing)) {
+				invalid()
+				next
+			}
+			end = index(substr(line, 2), closing) + 1
+			path = substr(line, 2, end - 2)
+			tail = substr(line, end + 1)
+			sub(/^[[:space:]]*/, "", tail)
+			if (is_abi) sub(/^,[[:space:]]*/, "", tail)
+			if ((tail != "" && tail !~ /^#/) || path == "" || path ~ /[@$*?[:cntrl:]]/ ||
+				index(path, "[") || index(path, "]") || index(path, "\\") ||
+				path ~ /^\// || path ~ /(^|\/)\.\.?($|\/)/) {
+				invalid()
+				next
+			}
+			print optional "\t" path
+		}
+		END { exit failed }
+	' "${policy_files[@]}")" || die "AppArmor policy include validation failed"
+
+	while IFS=$'\t' read -r optional include_path; do
+		[[ -n "${include_path}" ]] || continue
+		[[ "${optional}" == 1 || -e "${policy_dir}/${include_path}" ]] || \
+			die "AppArmor include/ABI is not shipped in the policy root: ${include_path}"
+	done <<< "${includes}"
+)
+
+# Parse every AppArmor profile in a policy root with a real parser, and require
+# each file to declare exactly one profile whose name matches the file name.
+#
+# The kata-agent resolves a requested profile by file name and then verifies
+# from the kernel that a profile with that name is loaded, so a mismatch between
+# the two would turn into a confusing runtime failure inside a guest. Checking
+# here keeps the extension's file names and profile names in step.
+#
+# A host parser is used when available. Otherwise probe the agent builder and
+# build it locally if needed: an existing image tag may predate the addition
+# of the apparmor package. No policy is loaded into the build host's kernel.
+validate_apparmor_profiles() (
+	local policy_dir="$1" lexical_root
+	[[ ! -L "${policy_dir%/}" ]] || die "AppArmor policy root must not be a symlink"
+	[[ -d "${policy_dir}" ]] || die "AppArmor policy directory not found: ${policy_dir}"
+	lexical_root="$(realpath -ms "${policy_dir}")"
+	policy_dir="$(realpath -e "${policy_dir}")"
+	[[ "${policy_dir}" == "${lexical_root}" ]] || die "AppArmor policy root must not contain symlinks"
+	validate_apparmor_policy_tree "${policy_dir}"
+	local profiles_dir="${policy_dir}/profiles"
+	[[ -d "${profiles_dir}" ]] || die "AppArmor profiles directory not found: ${profiles_dir}"
+	local -a profiles=()
+	local profile_file expected_name
+	shopt -s nullglob dotglob
+	for profile_file in "${profiles_dir}"/*; do
+		expected_name="${profile_file##*/}"
+		[[ -f "${profile_file}" && "${expected_name}" =~ ^[a-zA-Z0-9_.-]+$ &&
+			"${#expected_name}" -le 127 && "${expected_name}" != unconfined ]] || \
+			die "Invalid AppArmor profile file: ${profile_file}"
+		profiles+=("${profile_file}")
+	done
+	[[ "${#profiles[@]}" -gt 0 ]] || die "No AppArmor profiles found in ${profiles_dir}"
+
+	local engine="" image_name=""
+	local -a parser_command=() parser_options=()
+	if command -v apparmor_parser >/dev/null 2>&1; then
+		info "Validating AppArmor profiles with the host apparmor_parser"
+		parser_command=(apparmor_parser)
+		parser_options=(--config-file=/dev/null -Q -K -I "${policy_dir}" -b "${policy_dir}")
+	elif command -v docker >/dev/null 2>&1; then
+		engine="docker"
+		image_name="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
+		[[ -n "${image_name}" ]] || die "No agent builder image configured for AppArmor validation"
+		if ! "${engine}" run --rm --entrypoint /bin/sh "${image_name}" \
+			-c 'command -v apparmor_parser >/dev/null'; then
+			"${engine}" build \
+				--build-arg "RUST_TOOLCHAIN=$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
+				-t "${image_name}" "${static_build_dir}/agent" || die "Failed to build AppArmor parser image"
+		fi
+		"${engine}" run --rm --entrypoint /bin/sh "${image_name}" \
+			-c 'command -v apparmor_parser >/dev/null' || die "Agent builder has no apparmor_parser: ${image_name}"
+		info "Validating AppArmor profiles with apparmor_parser from ${image_name}"
+		parser_command=("${engine}" run --rm -v "${policy_dir}:/policy:ro"
+			--entrypoint apparmor_parser "${image_name}")
+		parser_options=(--config-file=/dev/null -Q -K -I /policy -b /policy)
+	else
+		die "no apparmor_parser on the host and no usable builder image to validate profiles with"
+	fi
+
+	local rc=0
+	local declared count parser_file
+	for profile_file in "${profiles[@]}"; do
+		expected_name="${profile_file##*/}"
+		parser_file="${profile_file}"
+		[[ -z "${engine}" ]] || parser_file="/policy/profiles/${expected_name}"
+		# -N alone does not compile all rules. Compile first, without kernel
+		# access or caches, then read names from stdout only; warnings stay on
+		# stderr and must never be counted as declared profile names.
+		if ! "${parser_command[@]}" "${parser_options[@]}" "${parser_file}" >/dev/null; then
+			echo "ERROR: AppArmor profile ${expected_name} failed to compile" >&2
+			rc=1
+			continue
+		fi
+		declared="$("${parser_command[@]}" "${parser_options[@]}" -N "${parser_file}")" || {
+			echo "ERROR: AppArmor profile ${expected_name} failed to parse" >&2
+			rc=1
+			continue
+		}
+
+		count="$(printf '%s\n' "${declared}" | grep -c . || true)"
+		if [[ "${count}" -ne 1 ]]; then
+			echo "ERROR: AppArmor profile ${expected_name} declares ${count} profiles; expected exactly 1" >&2
+			rc=1
+			continue
+		fi
+		if [[ "${declared}" != "${expected_name}" ]]; then
+			echo "ERROR: AppArmor profile file ${expected_name} declares itself as '${declared}'" >&2
+			echo "       the agent resolves profiles by file name, so the two must match" >&2
+			rc=1
+			continue
+		fi
+		info "Validated AppArmor profile ${declared}"
+	done
+
+	[[ "${rc}" -eq 0 ]] || die "AppArmor profile validation failed"
+)
 #Install cbl-mariner guest image
 install_image_mariner() {
 	export IMAGE_SIZE_ALIGNMENT_MB=2
@@ -2095,6 +2361,8 @@ handle_build() {
 	rootfs-image-confidential) install_image_confidential ;;
 
 	rootfs-image-coco-extension) install_image_coco_extension ;;
+
+	rootfs-image-apparmor-extension) install_image_apparmor_extension ;;
 
 	rootfs-image-devkit-extension) install_image_devkit_extension ;;
 

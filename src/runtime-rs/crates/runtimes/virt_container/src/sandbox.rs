@@ -964,6 +964,9 @@ impl VirtSandbox {
             VIRTIO_BLK_PCI.to_string()
         };
         for extra in &hv_config.guest_extension_images {
+            // Recheck before attaching: the image may have disappeared since
+            // configuration was loaded. AppArmor must not take the skip below.
+            crate::guest_extension::validate_apparmor_extension(&extra.name, &extra.path)?;
             if extra.path.is_empty() {
                 continue;
             }

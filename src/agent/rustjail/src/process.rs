@@ -97,6 +97,8 @@ pub struct Process {
     pub exit_code: i32,
     pub exit_watchers: Vec<Sender<i32>>,
     pub oci: OCIProcess,
+    /// Prepared by the agent parent, never taken from the OCI request.
+    pub apparmor_profile: Option<crate::apparmor::PreparedProfile>,
     pub logger: Logger,
     pub term_exit_notifier: Arc<Notify>,
 
@@ -158,6 +160,7 @@ impl Process {
             exit_code: 0,
             exit_watchers: Vec::new(),
             oci: ocip.clone(),
+            apparmor_profile: None,
             logger: logger.clone(),
             term_exit_notifier: Arc::new(Notify::new()),
             readers: HashMap::new(),

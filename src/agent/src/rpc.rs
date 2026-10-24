@@ -353,81 +353,116 @@ impl AgentService {
             .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
 
         let mut s = self.sandbox.lock().await;
+        if s.containers.contains_key(&cid) {
+            return Err(anyhow!("Container {cid} already exists"));
+        }
         s.container_mounts.insert(cid.clone(), m);
 
-        update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
+        let create_storages = &req.storages;
+        let shared_mounts = &req.shared_mounts;
+        // All failures after storage registration, including policy preparation
+        // and process IO setup, must use the same rollback boundary.
+        let result: Result<_> = async {
+            update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
 
-        // Append guest hooks
-        append_guest_hooks(&s, &mut oci)?;
+            // Append guest hooks
+            append_guest_hooks(&s, &mut oci)?;
 
-        // write spec to bundle path, hooks might
-        // read ocispec
-        let olddir = setup_bundle(&cid, &mut oci)?;
-        // restore the cwd for kata-agent process.
-        defer!(unistd::chdir(&olddir).unwrap());
+            // write spec to bundle path, hooks might
+            // read ocispec
+            let olddir = setup_bundle(&cid, &mut oci)?;
+            // restore the cwd for kata-agent process.
+            defer!(unistd::chdir(&olddir).unwrap());
 
-        // determine which cgroup driver to take and then assign to use_systemd_cgroup
-        // systemd: "[slice]:[prefix]:[name]"
-        // fs: "/path_a/path_b"
-        // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
-        let cgroups_path = &oci
-            .linux()
-            .as_ref()
-            .and_then(|linux| linux.cgroups_path().as_ref())
-            .map(|cgrps_path| cgrps_path.display().to_string())
-            .unwrap_or_default();
+            // determine which cgroup driver to take and then assign to use_systemd_cgroup
+            // systemd: "[slice]:[prefix]:[name]"
+            // fs: "/path_a/path_b"
+            // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
+            let cgroups_path = &oci
+                .linux()
+                .as_ref()
+                .and_then(|linux| linux.cgroups_path().as_ref())
+                .map(|cgrps_path| cgrps_path.display().to_string())
+                .unwrap_or_default();
 
-        let use_systemd_cgroup = if self.init_mode {
-            false
-        } else {
-            SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
-        };
+            let use_systemd_cgroup = if self.init_mode {
+                false
+            } else {
+                SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
+            };
 
-        let opts = CreateOpts {
-            cgroup_name: "".to_string(),
-            use_systemd_cgroup,
-            no_pivot_root: s.no_pivot_root,
-            no_new_keyring: false,
-            spec: Some(oci.clone()),
-            rootless_euid: false,
-            rootless_cgroup: false,
-            container_name,
-        };
+            let opts = CreateOpts {
+                cgroup_name: "".to_string(),
+                use_systemd_cgroup,
+                no_pivot_root: s.no_pivot_root,
+                no_new_keyring: false,
+                spec: Some(oci.clone()),
+                rootless_euid: false,
+                rootless_cgroup: false,
+                container_name,
+            };
 
-        let mut ctr: LinuxContainer = LinuxContainer::new(
-            cid.as_str(),
-            CONTAINER_BASE,
-            Some(s.devcg_info.clone()),
-            opts,
-            &sl(),
-        )?;
+            let pipe_size = AGENT_CONFIG.container_pipe_size;
 
-        let pipe_size = AGENT_CONFIG.container_pipe_size;
+            let Some(p) = oci.process() else {
+                info!(sl(), "no process configurations!");
+                return Err(anyhow!(nix::Error::EINVAL));
+            };
 
-        let Some(p) = oci.process() else {
-            info!(sl(), "no process configurations!");
-            return Err(anyhow!(nix::Error::EINVAL));
-        };
+            let new_p =
+                confidential_data_hub::image::get_process(p, is_pod_sandbox, create_storages)?;
+            let prepared = s
+                .apparmor_profiles
+                .prepare(new_p.apparmor_profile().as_deref())
+                .context("prepare container guest AppArmor profile")?;
+            let mut p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
+            p.apparmor_profile = prepared.clone();
 
-        let new_p = confidential_data_hub::image::get_process(p, is_pod_sandbox, &req.storages)?;
-        let p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
+            // Policy preparation and IO setup can fail. Do both before
+            // allocating a cgroup, so those errors need only bundle/storage
+            // rollback and cannot leave an unregistered container cgroup.
+            let mut ctr: LinuxContainer = LinuxContainer::new(
+                cid.as_str(),
+                CONTAINER_BASE,
+                Some(s.devcg_info.clone()),
+                opts,
+                &sl(),
+            )?;
 
-        // if starting container failed, we will do some rollback work
-        // to ensure no resources are leaked.
-        if let Err(err) = ctr.start(p).await {
-            error!(sl(), "failed to start container: {:?}", err);
-            if let Err(e) = ctr.destroy().await {
-                error!(sl(), "failed to destroy container: {:?}", e);
+            // if starting container failed, we will do some rollback work
+            // to ensure no resources are leaked.
+            let started: Result<()> = async {
+                ctr.start(p).await?;
+                s.update_shared_pidns(&ctr)?;
+                s.setup_shared_mounts(&ctr, shared_mounts)?;
+                Ok(())
             }
-            if let Err(e) = remove_container_resources(&mut s, &cid).await {
-                error!(sl(), "failed to remove container resources: {:?}", e);
+            .await;
+            if let Err(err) = started {
+                error!(sl(), "failed to start container: {:?}", err);
+                if let Err(e) = ctr.destroy().await {
+                    error!(sl(), "failed to destroy container: {:?}", e);
+                }
+                return Err(err);
             }
-            return Err(err);
+
+            Ok((ctr, prepared))
         }
+        .await;
 
-        s.update_shared_pidns(&ctr)?;
-        s.setup_shared_mounts(&ctr, &req.shared_mounts)?;
+        let (ctr, prepared) = match result {
+            Ok(created) => created,
+            Err(err) => {
+                if let Err(cleanup) = rollback_failed_container(&mut s, &cid).await {
+                    return Err(
+                        err.context(format!("container creation rollback failed: {cleanup:#}"))
+                    );
+                }
+                return Err(err);
+            }
+        };
         s.add_container(ctr);
+        s.container_apparmor_profiles.insert(cid, prepared);
         info!(sl(), "created container!");
 
         Ok(())
@@ -530,8 +565,21 @@ impl AgentService {
         }
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
-        let ocip = process.into();
-        let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
+        let mut ocip: oci::Process = process.into();
+        let bound_profile = sandbox
+            .container_apparmor_profiles
+            .get(&cid)
+            .ok_or_else(|| anyhow!("Missing AppArmor container security state for {cid}"))?;
+        let prepared = rustjail::apparmor::exec_profile(
+            bound_profile.as_ref(),
+            ocip.apparmor_profile().as_deref(),
+        )?;
+        if let Some(profile) = &prepared {
+            sandbox.apparmor_profiles.verify(profile)?;
+        }
+        ocip.set_apparmor_profile(prepared.as_ref().map(|p| p.name().to_owned()));
+        let mut p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
+        p.apparmor_profile = prepared;
 
         let ctr = sandbox
             .get_container(&cid)
@@ -2213,6 +2261,45 @@ fn update_container_namespaces(
     Ok(())
 }
 
+async fn rollback_failed_container(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+    rollback_failed_container_at(sandbox, cid, Path::new(CONTAINER_BASE)).await
+}
+
+async fn rollback_failed_container_at(sandbox: &mut Sandbox, cid: &str, base: &Path) -> Result<()> {
+    kata_sys_util::validate::verify_id(cid)?;
+    let bundle = base.join(cid);
+    let rootfs = bundle.join("rootfs");
+    if let Ok(metadata) = fs::symlink_metadata(&bundle) {
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(anyhow!(
+                "refusing to clean unsafe container bundle {}",
+                bundle.display()
+            ));
+        }
+    }
+    // Never remove_dir_all through a still-mounted workload rootfs. Detach the
+    // bind first, and refuse directory removal if any nested mount survives.
+    match nix::mount::umount2(&rootfs, nix::mount::MntFlags::MNT_DETACH) {
+        Ok(()) | Err(Errno::EINVAL | Errno::ENOENT) => (),
+        Err(err) => return Err(err).context("detach failed container rootfs"),
+    }
+    if parse_mount_table("/proc/self/mountinfo")?
+        .iter()
+        .any(|mount| Path::new(&mount.mount_point).starts_with(&bundle))
+    {
+        return Err(anyhow!(
+            "refusing to remove mounted container bundle {}",
+            bundle.display()
+        ));
+    }
+    remove_container_resources(sandbox, cid).await?;
+    match fs::remove_dir_all(&bundle) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err).context("remove failed container bundle"),
+    }
+}
+
 async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
     let mut cmounts: Vec<String> = vec![];
 
@@ -2248,6 +2335,7 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
 
     sandbox.container_mounts.remove(cid);
     sandbox.containers.remove(cid);
+    sandbox.container_apparmor_profiles.remove(cid);
     // Remove any host -> guest mappings for this container
     sandbox.pcimap.remove(cid);
     Ok(())
@@ -2560,13 +2648,17 @@ async fn do_add_swap_path(req: &AddSwapPathRequest) -> Result<()> {
 // - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
 // - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
 pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
+    setup_bundle_at(Path::new(CONTAINER_BASE), cid, spec)
+}
+
+fn setup_bundle_at(base: &Path, cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = if let Some(sr) = &spec.root() {
         sr
     } else {
         return Err(anyhow!(nix::Error::EINVAL));
     };
 
-    let bundle_path = Path::new(CONTAINER_BASE).join(cid);
+    let bundle_path = base.join(cid);
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
     let spec_root_path = spec_root.path();
@@ -3017,6 +3109,89 @@ mod tests {
         let mut oci = Spec::default();
         append_guest_hooks(&s, &mut oci).unwrap();
         assert_eq!(s.hooks, oci.hooks().clone());
+    }
+
+    #[tokio::test]
+    async fn test_apparmor_container_binding_is_removed_before_id_reuse() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let profile: rustjail::apparmor::PreparedProfile =
+            serde_json::from_value(serde_json::json!({
+                "name": "old-policy",
+                "source": { "mount": "test-mount", "sha256": "test-source" },
+                "kernel": { "algorithm": "sha256", "digest": "test-kernel" }
+            }))
+            .unwrap();
+        let cid = "reused-id";
+        sandbox
+            .container_apparmor_profiles
+            .insert(cid.into(), Some(profile));
+        remove_container_resources(&mut sandbox, cid).await.unwrap();
+        assert!(!sandbox.container_apparmor_profiles.contains_key(cid));
+        sandbox.container_apparmor_profiles.insert(cid.into(), None);
+        assert!(rustjail::apparmor::exec_profile(
+            sandbox.container_apparmor_profiles[cid].as_ref(),
+            Some("old-policy"),
+        )
+        .is_err());
+        assert!(rustjail::apparmor::exec_profile(
+            sandbox.container_apparmor_profiles[cid].as_ref(),
+            None,
+        )
+        .unwrap()
+        .is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_apparmor_failed_prepare_rolls_back_bundle_before_id_reuse() {
+        skip_if_not_root!();
+        unshare(CloneFlags::CLONE_NEWNS).unwrap();
+        mount::mount(
+            None::<&str>,
+            "/",
+            None::<&str>,
+            MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+            None::<&str>,
+        )
+        .unwrap();
+        let base = tempdir().unwrap();
+        let original = tempdir().unwrap();
+        let replacement = tempdir().unwrap();
+        fs::write(original.path().join("marker"), "original").unwrap();
+        fs::write(replacement.path().join("marker"), "replacement").unwrap();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let cid = "failed-create-reuse";
+        let rootfs = base.path().join(cid).join("rootfs");
+        // Keep all temporary bind mounts private and detached on assertion
+        // failure as well, so TempDir never traverses a mounted workload tree.
+        defer!({
+            let _ = mount::umount2(&rootfs, mount::MntFlags::MNT_DETACH);
+        });
+        for source in [original.path(), replacement.path()] {
+            let mut root = Root::default();
+            root.set_path(source.to_owned());
+            let mut spec = Spec::default();
+            spec.set_root(Some(root));
+            let cwd = setup_bundle_at(base.path(), cid, &mut spec).unwrap();
+            unistd::chdir(&cwd).unwrap();
+            assert_eq!(
+                fs::read_to_string(rootfs.join("marker")).unwrap(),
+                fs::read_to_string(source.join("marker")).unwrap()
+            );
+            sandbox.container_mounts.insert(cid.into(), vec![]);
+            assert!(sandbox
+                .apparmor_profiles
+                .prepare(Some("../invalid"))
+                .is_err());
+            rollback_failed_container_at(&mut sandbox, cid, base.path())
+                .await
+                .unwrap();
+            assert!(!base.path().join(cid).exists());
+            assert!(!sandbox.container_mounts.contains_key(cid));
+            assert!(source.join("marker").exists());
+        }
     }
 
     #[tokio::test]

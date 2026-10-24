@@ -117,6 +117,10 @@ pub struct Sandbox {
     pub id: String,
     pub hostname: String,
     pub containers: HashMap<String, LinuxContainer>,
+    /// Protected by the Sandbox mutex. Policy entries live for the whole VM.
+    pub apparmor_profiles: rustjail::apparmor::ProfileRegistry,
+    /// An explicit None is an unconfined container, not an absent binding.
+    pub container_apparmor_profiles: HashMap<String, Option<rustjail::apparmor::PreparedProfile>>,
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
@@ -154,6 +158,8 @@ impl Sandbox {
             hostname: String::new(),
             network: Network::new(),
             containers: HashMap::new(),
+            apparmor_profiles: rustjail::apparmor::ProfileRegistry::default(),
+            container_apparmor_profiles: HashMap::new(),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             container_verity_devices: HashMap::new(),

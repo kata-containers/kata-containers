@@ -569,6 +569,7 @@ func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
 		Env:             cmdEnvsToStringSlice(cmd.Envs),
 		Cwd:             cmd.WorkDir,
 		NoNewPrivileges: cmd.NoNewPrivileges,
+		ApparmorProfile: cmd.ApparmorProfile,
 	}
 
 	return process, nil
