@@ -230,6 +230,16 @@ impl ContainerInner {
             .await
             .context("clean rootfs");
 
+        // Not this container's failure, and not its to retry.
+        if let Err(e) = device_manager
+            .write()
+            .await
+            .release_orphaned_references()
+            .await
+        {
+            warn!(self.logger, "{:#}", e);
+        }
+
         let errors: Vec<String> = vec![devices, volumes, rootfs]
             .into_iter()
             .filter_map(|result| result.err().map(|err| format!("{err:#}")))
@@ -450,7 +460,9 @@ mod tests {
     use super::*;
     use agent::types::SetPolicyRequest;
     use async_trait::async_trait;
+    use hypervisor::device::{device_manager::do_handle_device, DeviceConfig, DeviceType};
     use hypervisor::qemu::Qemu;
+    use hypervisor::BlockConfigModern;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default)]
@@ -825,6 +837,38 @@ mod tests {
         assert_eq!(rootfs.cleanups(), 1);
         assert_eq!(inner.devices, ["missing-device"]);
         assert!(inner.has_pending_cleanup());
+    }
+
+    #[tokio::test]
+    async fn cleanup_retries_references_orphaned_by_deleted_containers() {
+        let (mut inner, _) = new_container(Arc::default()).await;
+        let device_manager = new_device_manager().await;
+        let config = DeviceConfig::BlockCfgModern(BlockConfigModern {
+            path_on_host: "/dev/orphaned-test-device".to_string(),
+            driver_option: "virtio-blk-pci".to_string(),
+            ..Default::default()
+        });
+        let mut shared = None;
+        for _ in 0..2 {
+            match do_handle_device(&device_manager, &config).await.unwrap() {
+                DeviceType::BlockModern(device) => shared = Some(device),
+                other => panic!("unexpected device {}", other),
+            }
+        }
+        let device = shared.unwrap();
+        let device_id = device.lock().await.device_id.clone();
+        // The VM is not running, so only the shared reference can be released.
+        device_manager
+            .write()
+            .await
+            .adopt_orphaned_references(vec![device_id.clone(), device_id]);
+
+        inner
+            .cleanup_container(CID, true, &device_manager)
+            .await
+            .expect("another owner's leftover failed this container's cleanup");
+
+        assert_eq!(device.lock().await.attach_count, 1);
     }
 
     #[tokio::test]

@@ -105,6 +105,8 @@ pub struct DeviceManager {
     hypervisor: Arc<dyn Hypervisor>,
     shared_info: SharedInfo,
     pcie_topology: Option<PCIeTopology>,
+    /// References whose owner was deleted before it could release them.
+    orphaned_references: Vec<String>,
 }
 
 impl DeviceManager {
@@ -118,7 +120,50 @@ impl DeviceManager {
             hypervisor,
             shared_info: SharedInfo::new().await,
             pcie_topology: PCIeTopology::new(topo_config),
+            orphaned_references: Vec::new(),
         })
+    }
+
+    /// Takes over device references an owner could not release before it was
+    /// deleted. Dropping them would keep the devices in the guest, and their
+    /// host resources held, until the sandbox goes away.
+    pub fn adopt_orphaned_references(&mut self, device_ids: Vec<String>) {
+        self.orphaned_references.extend(device_ids);
+    }
+
+    /// Retries releasing adopted references. Each one is dropped as soon as
+    /// it is released, so a cancelled call never releases one twice.
+    pub async fn release_orphaned_references(&mut self) -> Result<()> {
+        let mut failed = 0;
+        let mut first_err = None;
+        while failed < self.orphaned_references.len() {
+            let device_id = self.orphaned_references[failed].clone();
+            if !self.devices.contains_key(&device_id) {
+                warn!(
+                    sl!(),
+                    "orphaned reference to {} outlived its device", device_id
+                );
+                self.orphaned_references.remove(failed);
+                continue;
+            }
+            match self.try_remove_device(&device_id).await {
+                Ok(()) => {
+                    self.orphaned_references.remove(failed);
+                }
+                Err(err) => {
+                    first_err.get_or_insert(err);
+                    failed += 1;
+                }
+            }
+        }
+
+        match first_err {
+            Some(err) => Err(err.context(format!(
+                "failed to release {} orphaned device reference(s)",
+                failed
+            ))),
+            None => Ok(()),
+        }
     }
 
     pub fn get_pcie_topology(&self) -> Option<PCIeTopology> {
@@ -883,5 +928,33 @@ mod tests {
         d.write().await.try_remove_device(&device_id).await.unwrap();
 
         assert_eq!(attach_count(&d, &device_id).await, None);
+    }
+
+    #[rstest::rstest]
+    #[case::shared_device_is_released(2, true, Some(1), 0)]
+    #[case::refused_removal_is_kept(1, true, Some(1), 1)]
+    #[case::reference_without_device_is_dropped(1, false, Some(1), 0)]
+    #[tokio::test]
+    async fn orphaned_references_are_retried(
+        #[case] owners: usize,
+        #[case] device_exists: bool,
+        #[case] count_after: Option<u64>,
+        #[case] still_orphaned: usize,
+    ) {
+        let (d, device_id) = shared_block_device(owners).await;
+        let orphan = if device_exists {
+            device_id.clone()
+        } else {
+            "deleted-device".to_string()
+        };
+        d.write()
+            .await
+            .adopt_orphaned_references(vec![orphan.clone()]);
+
+        let released = d.write().await.release_orphaned_references().await;
+
+        assert_eq!(released.is_ok(), still_orphaned == 0);
+        assert_eq!(attach_count(&d, &device_id).await, count_after);
+        assert_eq!(d.read().await.orphaned_references.len(), still_orphaned);
     }
 }
