@@ -570,6 +570,7 @@ func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
 		Cwd:             cmd.WorkDir,
 		NoNewPrivileges: cmd.NoNewPrivileges,
 		ApparmorProfile: cmd.ApparmorProfile,
+		SelinuxLabel:    cmd.SelinuxLabel,
 	}
 
 	return process, nil
@@ -592,7 +593,18 @@ func (k *kataAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd
 
 	var kataProcess *grpc.Process
 
-	kataProcess, err := cmdToKataProcess(cmd)
+	// Decide the guest SELinux context for this exec request the same way createContainer
+	// decides it, including the shortcut for a disabled feature: with guest SELinux off the
+	// request is blanked before the context is parsed, so disabling the feature cannot add a
+	// validation failure that the create path never had.
+	label, err := execSelinuxLabel(cmd.SelinuxLabel, sandbox.config.GuestSeLinuxLabel,
+		sandbox.config.HypervisorConfig.DisableGuestSeLinux)
+	if err != nil {
+		return nil, err
+	}
+	cmd.SelinuxLabel = label
+
+	kataProcess, err = cmdToKataProcess(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -1054,6 +1066,46 @@ func translateHostMemsToGuest(hostMems string, numaNodes []types.GuestNUMANode) 
 	return cpuset.NewCPUSet(guestNodes...).String()
 }
 
+// execSelinuxLabel is the exec-side decision entry: a disabled guest SELinux blanks the request
+// without parsing it, exactly like the create path, and an absent request stays absent. Only an
+// enabled feature parses and normalizes the requested context, because the agent needs a
+// comparable string to check against the identity the container was created with.
+func execSelinuxLabel(label string, guestSeLinuxLabel string, disableGuestSeLinux bool) (string, error) {
+	if disableGuestSeLinux {
+		return "", nil
+	}
+
+	return normalizeSelinuxProcessLabel(label, guestSeLinuxLabel)
+}
+
+// normalizeSelinuxProcessLabel applies the guest-side adjustment to a process SELinux
+// context: a high-level runtime authors the context for the host KVM process, so the type
+// is retyped to the container domain unless a guest label is configured. createContainer and
+// exec share it so that an exec request can be checked against the created identity.
+func normalizeSelinuxProcessLabel(label string, guestSeLinuxLabel string) (string, error) {
+	if label == "" {
+		return "", nil
+	}
+
+	effective := label
+	if guestSeLinuxLabel != "" {
+		effective = guestSeLinuxLabel
+	}
+
+	processContext, err := selinux.NewContext(effective)
+	if err != nil {
+		return "", err
+	}
+
+	// Change the type from KVM to container because the type passed from the high-level
+	// runtime is for KVM process.
+	if guestSeLinuxLabel == "" {
+		processContext["type"] = defaultSeLinuxContainerType
+	}
+
+	return processContext.Get(), nil
+}
+
 func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
@@ -1071,24 +1123,11 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		if !disableGuestSeLinux {
 			k.Logger().Info("SELinux label will be applied to the container process inside guest")
 
-			var label string
-			if guestSeLinuxLabel != "" {
-				label = guestSeLinuxLabel
-			} else {
-				label = grpcSpec.Process.SelinuxLabel
-			}
-
-			processContext, err := selinux.NewContext(label)
+			normalized, err := normalizeSelinuxProcessLabel(grpcSpec.Process.SelinuxLabel, guestSeLinuxLabel)
 			if err != nil {
 				return err
 			}
-
-			// Change the type from KVM to container because the type passed from the high-level
-			// runtime is for KVM process.
-			if guestSeLinuxLabel == "" {
-				processContext["type"] = defaultSeLinuxContainerType
-			}
-			grpcSpec.Process.SelinuxLabel = processContext.Get()
+			grpcSpec.Process.SelinuxLabel = normalized
 		} else {
 			k.Logger().Info("Empty SELinux label for the process and the mount because guest SELinux is disabled")
 			grpcSpec.Process.SelinuxLabel = ""
