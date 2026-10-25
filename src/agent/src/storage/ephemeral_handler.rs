@@ -4,11 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
@@ -30,6 +31,49 @@ use kata_types::device::DRIVER_EPHEMERAL_TYPE;
 const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 const FS_GID_EQ: &str = "fsgid=";
 const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
+
+// A container's size= is its whole reservation for that page size, however many
+// volumes it mounts, so each (container, page size) adds its pages once.
+static HUGEPAGE_RESERVATIONS: std::sync::Mutex<BTreeSet<(String, u64)>> =
+    std::sync::Mutex::new(BTreeSet::new());
+
+fn read_nr_hugepages(path: &Path) -> Result<u64> {
+    let text = fs::read_to_string(path).context(format!("reading {:?}", path))?;
+    text.trim_end()
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", text, path))
+}
+
+fn write_nr_hugepages(path: &Path, pages: u64) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .open(path)
+        .context(format!("open nr_hugepages directory {:?}", path))?;
+    file.write_all(pages.to_string().as_bytes())
+        .context(format!("write nr_hugepages failed: {:?}", path))
+}
+
+/// Pages one storage added to the pool, so a failed mount can take them back.
+#[derive(Debug)]
+struct HugepageReservation {
+    nr_hugepages: PathBuf,
+    pages: u64,
+    key: Option<(String, u64)>,
+}
+
+impl HugepageReservation {
+    fn release(self) -> Result<()> {
+        let mut reserved = HUGEPAGE_RESERVATIONS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let current = read_nr_hugepages(&self.nr_hugepages)?;
+        write_nr_hugepages(&self.nr_hugepages, current.saturating_sub(self.pages))?;
+        if let Some(key) = &self.key {
+            reserved.remove(key);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub struct EphemeralHandler {}
@@ -54,9 +98,19 @@ impl StorageHandler for EphemeralHandler {
             // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
             // /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
             // options eg "pagesize=2097152,size=524288000"(2M, 500M)
-            Self::allocate_hugepages(ctx.logger, &storage.options.to_vec())
-                .context("allocate hugepages")?;
-            common_storage_handler(ctx.logger, &storage)?;
+            let reservation = Self::allocate_hugepages(
+                ctx.logger,
+                &storage.options.to_vec(),
+                ctx.cid,
+                Path::new(SYS_FS_HUGEPAGES_PREFIX),
+            )
+            .context("allocate hugepages")?;
+            if let Err(e) = common_storage_handler(ctx.logger, &storage) {
+                if let Some(Err(err)) = reservation.map(HugepageReservation::release) {
+                    warn!(ctx.logger, "failed to release hugepages"; "error" => ?err);
+                }
+                return Err(e);
+            }
         } else if !storage.options.is_empty() {
             // By now we only support one option field: "fsGroup" which
             // isn't an valid mount option, thus we should remove it when
@@ -87,8 +141,14 @@ impl StorageHandler for EphemeralHandler {
 }
 
 impl EphemeralHandler {
-    // Allocate hugepages by writing to sysfs
-    fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
+    // Add a container's reservation to the pool by writing to sysfs, so the
+    // pool is the sum over the pod's containers instead of the last one.
+    fn allocate_hugepages(
+        logger: &Logger,
+        options: &[String],
+        cid: &Option<String>,
+        sysfs: &Path,
+    ) -> Result<Option<HugepageReservation>> {
         info!(logger, "mounting hugePages storage options: {:?}", options);
 
         let (pagesize, size) = Self::get_pagesize_and_size_from_option(options)
@@ -101,40 +161,55 @@ impl EphemeralHandler {
 
         // sysfs entry is always of the form hugepages-${pagesize}kB
         // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
-        let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
+        let path = sysfs
             .join(format!("hugepages-{}kB", pagesize / 1024))
             .join("nr_hugepages");
 
-        // write numpages to nr_hugepages file.
-        let numpages = format!("{}", size / pagesize);
-        info!(logger, "write {} pages to {:?}", &numpages, &path);
+        let mut reserved = HUGEPAGE_RESERVATIONS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let key = cid.clone().map(|cid| (cid, pagesize));
+        if key.as_ref().is_some_and(|k| reserved.contains(k)) {
+            info!(logger, "the container's hugepages are already in the pool");
+            return Ok(None);
+        }
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .open(&path)
-            .context(format!("open nr_hugepages directory {:?}", path))?;
-
-        file.write_all(numpages.as_bytes())
-            .context(format!("write nr_hugepages failed: {:?}", path))?;
+        let pages = size / pagesize;
+        let current = read_nr_hugepages(&path)?;
+        let target = current
+            .checked_add(pages)
+            .ok_or_else(|| anyhow!("too many hugepages of size {}", pagesize))?;
+        info!(logger, "write {} pages to {:?}", target, &path);
+        write_nr_hugepages(&path, target)?;
 
         // Even if the write succeeds, the kernel isn't guaranteed to be
         // able to allocate all the pages we requested.  Verify that it
         // did.
-        let verify = fs::read_to_string(&path).context(format!("reading {:?}", path))?;
-        let allocated = verify
-            .trim_end()
-            .parse::<u64>()
-            .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", verify, path))?;
-        if allocated != size / pagesize {
-            return Err(anyhow!(
+        let shortfall = match read_nr_hugepages(&path) {
+            Ok(allocated) if allocated == target => None,
+            Ok(allocated) => Some(anyhow!(
                 "Only allocated {} of {} hugepages of size {}",
                 allocated,
-                numpages,
+                target,
                 pagesize
-            ));
+            )),
+            Err(e) => Some(e),
+        };
+        if let Some(e) = shortfall {
+            if let Err(err) = write_nr_hugepages(&path, current) {
+                warn!(logger, "failed to restore nr_hugepages"; "error" => ?err);
+            }
+            return Err(e);
         }
 
-        Ok(())
+        if let Some(key) = &key {
+            reserved.insert(key.clone());
+        }
+        Ok(Some(HugepageReservation {
+            nr_hugepages: path,
+            pages,
+            key,
+        }))
     }
 
     // Parse filesystem options string to retrieve hugepage details
@@ -295,5 +370,33 @@ mod tests {
                 assert!(r.is_err());
             }
         }
+    }
+
+    #[test]
+    fn test_allocate_hugepages_sums_containers() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sysfs = tempfile::tempdir().unwrap();
+        let dir = sysfs.path().join("hugepages-2048kB");
+        fs::create_dir_all(&dir).unwrap();
+        let nr = dir.join("nr_hugepages");
+        fs::write(&nr, "4").unwrap();
+        let read = || fs::read_to_string(&nr).unwrap();
+        let opts = |size: u64| vec![format!("pagesize=2097152,size={}", size)];
+        let cid = |id: &str| Some(format!("{}-{}", id, std::process::id()));
+        let allocate = |size, cid: &Option<String>| {
+            EphemeralHandler::allocate_hugepages(&logger, &opts(size), cid, sysfs.path()).unwrap()
+        };
+
+        assert!(allocate(2 << 20, &cid("a")).is_some());
+        assert_eq!(read(), "5");
+        assert!(allocate(2 << 20, &cid("a")).is_none());
+        assert_eq!(read(), "5");
+        let b = allocate(6 << 20, &cid("b")).unwrap();
+        assert_eq!(read(), "8");
+
+        b.release().unwrap();
+        assert_eq!(read(), "5");
+        assert!(allocate(6 << 20, &cid("b")).is_some());
+        assert_eq!(read(), "8");
     }
 }
