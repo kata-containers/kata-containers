@@ -614,3 +614,53 @@ func TestGatewaySetFromRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestRollbackScanEndpointsDetachesPhysicalEndpoint(t *testing.T) {
+	assert := assert.New(t)
+
+	var restoredBDF string
+	ep := &PhysicalEndpoint{
+		IfaceName: "eth0",
+		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+		BDF:       "0000:03:00.1",
+		Driver:    "mlx5_core",
+		bindToHost: func(endpoint *PhysicalEndpoint) error {
+			restoredBDF = endpoint.BDF
+			return nil
+		},
+	}
+	n := &LinuxNetwork{
+		eps: []Endpoint{ep},
+	}
+
+	n.rollbackScanEndpoints(context.Background(), nil, false, 0)
+	assert.Equal("0000:03:00.1", restoredBDF)
+	assert.Empty(n.eps)
+}
+
+func TestRollbackScanEndpointsPreservesEarlierEndpoints(t *testing.T) {
+	assert := assert.New(t)
+
+	nopHost := func(_ *PhysicalEndpoint) error { return nil }
+	existing := &PhysicalEndpoint{
+		IfaceName:  "eth0",
+		HardAddr:   net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x01}.String(),
+		BDF:        "0000:03:00.0",
+		Driver:     "mlx5_core",
+		bindToHost: nopHost,
+	}
+	added := &PhysicalEndpoint{
+		IfaceName:  "eth1",
+		HardAddr:   net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x02}.String(),
+		BDF:        "0000:03:00.1",
+		Driver:     "mlx5_core",
+		bindToHost: nopHost,
+	}
+	n := &LinuxNetwork{
+		eps: []Endpoint{existing, added},
+	}
+
+	n.rollbackScanEndpoints(context.Background(), nil, false, 1)
+	assert.Equal(1, len(n.eps))
+	assert.Equal(existing, n.eps[0])
+}
