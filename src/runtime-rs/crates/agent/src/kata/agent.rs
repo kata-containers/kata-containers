@@ -118,6 +118,7 @@ impl_agent!(
     list_interfaces | crate::Empty | crate::Interfaces | None,
     list_routes | crate::Empty | crate::Routes | None,
     create_sandbox | crate::CreateSandboxRequest | crate::Empty | None,
+    set_sandbox_hosts | crate::SetSandboxHostsRequest | crate::Empty | None,
     destroy_sandbox | crate::Empty | crate::Empty | None,
     reseed_random_dev | crate::ReseedRandomDevRequest | crate::Empty | None,
     set_guest_date_time | crate::SetGuestDateTimeRequest | crate::Empty | None,

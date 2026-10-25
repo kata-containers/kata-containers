@@ -1,0 +1,499 @@
+{
+  "bases": {
+    "create-container": {
+      "kind": "CreateContainerRequest",
+      "request": {
+        "OCI": {
+          "Annotations": {
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "io.katacontainers.pkg.oci.container_type": "pod_container",
+            "io.kubernetes.cri.container-name": "dummy",
+            "io.kubernetes.cri.container-type": "container",
+            "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "io.kubernetes.cri.sandbox-name": "dummy",
+            "io.kubernetes.cri.sandbox-namespace": "default",
+            "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+          },
+          "Linux": {
+            "GIDMappings": [],
+            "MaskedPaths": [
+              "/proc/acpi",
+              "/proc/asound",
+              "/proc/kcore",
+              "/proc/keys",
+              "/proc/latency_stats",
+              "/proc/timer_list",
+              "/proc/timer_stats",
+              "/proc/sched_debug",
+              "/sys/firmware",
+              "/proc/scsi"
+            ],
+            "MountLabel": "",
+            "Namespaces": [
+              {
+                "Path": "",
+                "Type": "ipc"
+              },
+              {
+                "Path": "",
+                "Type": "uts"
+              },
+              {
+                "Path": "",
+                "Type": "mount"
+              },
+              {
+                "Path": "/run/netns/podns",
+                "Type": "network"
+              }
+            ],
+            "ReadonlyPaths": [
+              "/proc/bus",
+              "/proc/fs",
+              "/proc/irq",
+              "/proc/sys",
+              "/proc/sysrq-trigger"
+            ],
+            "Resources": {
+              "Devices": []
+            },
+            "RootfsPropagation": ""
+          },
+          "Process": {
+            "Args": [
+              "/pause"
+            ],
+            "Capabilities": {
+              "Ambient": [],
+              "Bounding": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ],
+              "Effective": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ],
+              "Permitted": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ]
+            },
+            "Cwd": "/",
+            "NoNewPrivileges": false,
+            "SelinuxLabel": "",
+            "User": {
+              "AdditionalGids": [
+                0
+              ],
+              "UID": 65535,
+              "Username": ""
+            }
+          },
+          "Root": {
+            "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "Readonly": false
+          },
+          "Version": "1.1.0",
+          "Mounts": [
+            {
+              "destination": "/etc/hosts",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/hosts",
+              "type_": "bind"
+            },
+            {
+              "destination": "/dev/termination-log",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/var/lib/kubelet/pods/0d6f1f6e-2c8d-4a3b-9c1e-6f5a4b3c2d1e/containers/dummy/5b1d9c2a",
+              "type_": "bind"
+            },
+            {
+              "destination": "/etc/hostname",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/hostname",
+              "type_": "bind"
+            },
+            {
+              "destination": "/etc/resolv.conf",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/resolv.conf",
+              "type_": "bind"
+            },
+            {
+              "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+              "options": [
+                "rbind",
+                "rprivate",
+                "ro",
+                "ro",
+                "nosuid",
+                "nodev",
+                "noexec"
+              ],
+              "source": "/run/kata-containers/shared/containers/passthrough/1a2b3c4d5e-11223344-serviceaccount",
+              "type_": "bind"
+            },
+            {
+              "destination": "/config",
+              "options": [
+                "rbind",
+                "rprivate",
+                "ro",
+                "ro",
+                "nosuid",
+                "nodev",
+                "noexec"
+              ],
+              "source": "/run/kata-containers/shared/containers/passthrough/1a2b3c4d5e-9f8e7d6c-config",
+              "type_": "bind"
+            }
+          ]
+        },
+        "storages": [
+          {
+            "driver": "image_guest_pull",
+            "driver_options": [],
+            "fs_group": null,
+            "fstype": "overlay",
+            "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "options": [],
+            "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+          },
+          {
+            "driver": "blk",
+            "driver_options": [],
+            "fs_group": null,
+            "fstype": "erofs",
+            "mount_point": "/run/kata-containers/shared/containers/passthrough/1a2b3c4d5e-9f8e7d6c-config",
+            "options": [
+              "ro",
+              "nosuid",
+              "nodev",
+              "noexec",
+              "X-kata.dmverity-enabled=true",
+              "X-kata.dmverity.roothash=9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f",
+              "X-kata.dmverity.hashoffset=8192",
+              "X-kata.dmverity.blocksize=4096",
+              "X-kata.dmverity.hashsize=4096",
+              "X-kata.dmverity.salt=0000000000000000000000000000000000000000000000000000000000000000"
+            ],
+            "source": "02"
+          },
+          {
+            "driver": "blk",
+            "driver_options": [],
+            "fs_group": null,
+            "fstype": "erofs",
+            "mount_point": "/run/kata-containers/shared/containers/passthrough/1a2b3c4d5e-11223344-serviceaccount",
+            "options": [
+              "ro",
+              "nosuid",
+              "nodev",
+              "noexec",
+              "X-kata.dmverity-enabled=true",
+              "X-kata.dmverity.roothash=9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f9c4a1e2f",
+              "X-kata.dmverity.hashoffset=8192",
+              "X-kata.dmverity.blocksize=4096",
+              "X-kata.dmverity.hashsize=4096",
+              "X-kata.dmverity.salt=0000000000000000000000000000000000000000000000000000000000000000"
+            ],
+            "source": "03"
+          }
+        ]
+      }
+    },
+    "set-sandbox-hosts": {
+      "kind": "SetSandboxHostsRequest",
+      "request": {
+        "hosts": [
+          "# Kubernetes-managed hosts file.",
+          "127.0.0.1\tlocalhost",
+          "::1\tlocalhost ip6-localhost ip6-loopback",
+          "fe00::0\tip6-localnet",
+          "fe00::0\tip6-mcastprefix",
+          "fe00::1\tip6-allnodes",
+          "fe00::2\tip6-allrouters",
+          "10.244.0.5\tdummy.sub.default.svc.cluster.local\tdummy",
+          "",
+          "# Entries added by HostAliases.",
+          "10.99.99.99\tzvonko.example.com\talias.local",
+          "10.99.99.100\tsecond.example.com"
+        ]
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "EROFS volumes and agent-written sandbox files",
+      "allowed": true,
+      "base": "create-container"
+    },
+    {
+      "description": "content volume storage without noexec",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/storages/1/options/3"
+        }
+      ]
+    },
+    {
+      "description": "content volume mount without noexec",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/OCI/Mounts/5/options/6"
+        }
+      ]
+    },
+    {
+      "description": "dm-verity root hash that is not a sha256",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/storages/1/options/5",
+          "value": "X-kata.dmverity.roothash=abc"
+        }
+      ]
+    },
+    {
+      "description": "EROFS volume without dm-verity",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/storages/1/options/9"
+        },
+        {
+          "op": "remove",
+          "path": "/storages/1/options/8"
+        },
+        {
+          "op": "remove",
+          "path": "/storages/1/options/7"
+        },
+        {
+          "op": "remove",
+          "path": "/storages/1/options/6"
+        },
+        {
+          "op": "remove",
+          "path": "/storages/1/options/5"
+        },
+        {
+          "op": "remove",
+          "path": "/storages/1/options/4"
+        }
+      ]
+    },
+    {
+      "description": "EROFS storage for a volume the pod does not have",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/storages/1/mount_point",
+          "value": "/run/kata-containers/shared/containers/passthrough/1a2b3c4d5e-9f8e7d6c-etc"
+        }
+      ]
+    },
+    {
+      "description": "pod without a service account token",
+      "allowed": true,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/storages/2"
+        },
+        {
+          "op": "remove",
+          "path": "/OCI/Mounts/4"
+        }
+      ]
+    },
+    {
+      "description": "hosts mount pointing at another guest file",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/0/source",
+          "value": "/etc/shadow"
+        }
+      ]
+    },
+    {
+      "description": "termination log pointing at a guest file",
+      "allowed": false,
+      "base": "create-container",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/1/source",
+          "value": "/run/kata-containers/sandbox/hosts"
+        }
+      ]
+    },
+    {
+      "description": "hosts file kubelet wrote for the pod",
+      "allowed": true,
+      "base": "set-sandbox-hosts"
+    },
+    {
+      "description": "dual-stack pod",
+      "allowed": true,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "add",
+          "path": "/hosts/8",
+          "value": "fd00::5\tdummy.sub.default.svc.cluster.local\tdummy"
+        }
+      ]
+    },
+    {
+      "description": "extra host alias",
+      "allowed": false,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "add",
+          "path": "/hosts/-",
+          "value": "6.6.6.6\tevil.example.com"
+        }
+      ]
+    },
+    {
+      "description": "host aliases dropped",
+      "allowed": false,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/hosts/11"
+        },
+        {
+          "op": "remove",
+          "path": "/hosts/10"
+        },
+        {
+          "op": "remove",
+          "path": "/hosts/9"
+        },
+        {
+          "op": "remove",
+          "path": "/hosts/8"
+        }
+      ]
+    },
+    {
+      "description": "pod IP line naming another host",
+      "allowed": false,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hosts/7",
+          "value": "10.244.0.5\tdummy.sub.default.svc.cluster.local\tother"
+        }
+      ]
+    },
+    {
+      "description": "pod IP line without an IP",
+      "allowed": false,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hosts/7",
+          "value": "example.com\tdummy.sub.default.svc.cluster.local\tdummy"
+        }
+      ]
+    },
+    {
+      "description": "localhost redirected",
+      "allowed": false,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hosts/1",
+          "value": "6.6.6.6\tlocalhost"
+        }
+      ]
+    },
+    {
+      "description": "no pod IP line",
+      "allowed": false,
+      "base": "set-sandbox-hosts",
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/hosts/7"
+        }
+      ]
+    }
+  ]
+}

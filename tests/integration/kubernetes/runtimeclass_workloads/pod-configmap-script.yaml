@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-script-test-pod
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+    - name: test-container
+      image: quay.io/prometheus/busybox:latest
+      command: ["sh", "-c"]
+      args:
+        - |
+          if /etc/scripts/hello.sh; then echo direct-exec-allowed; else echo direct-exec-denied; fi
+          sh /etc/scripts/hello.sh
+      volumeMounts:
+        - name: scripts
+          mountPath: /etc/scripts
+  volumes:
+    - name: scripts
+      configMap:
+        name: test-configmap-script
+        defaultMode: 0755

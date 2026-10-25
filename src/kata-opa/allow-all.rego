@@ -31,6 +31,7 @@ default RemoveStaleVirtiofsShareMountsRequest := true
 default ReseedRandomDevRequest := true
 default ResumeContainerRequest := true
 default SetGuestDateTimeRequest := true
+default SetSandboxHostsRequest := true
 default SetPolicyRequest := true
 default SignalProcessRequest := true
 default StartContainerRequest := true

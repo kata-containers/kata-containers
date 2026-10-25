@@ -14,6 +14,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
         [[ "${KATA_HYPERVISOR}" == qemu-se* ]] && skip "test not working for IBM Z LPAR (see ${issue_url})"
+	erofs_volumes_enabled && skip "a volume shipped as an EROFS image does not see updates"
 
 	setup_common || die "setup_common failed"
 
@@ -53,6 +54,7 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
         [[ "${KATA_HYPERVISOR}" == qemu-se* ]] && skip "test not working for IBM Z LPAR (see ${issue_url})"
+	erofs_volumes_enabled && skip "a volume shipped as an EROFS image does not see updates"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"

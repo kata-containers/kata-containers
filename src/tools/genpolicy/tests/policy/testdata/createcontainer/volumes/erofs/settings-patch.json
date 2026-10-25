@@ -1,0 +1,7 @@
+[
+  {
+    "op": "replace",
+    "path": "/kata_config/erofs_volumes",
+    "value": true
+  }
+]

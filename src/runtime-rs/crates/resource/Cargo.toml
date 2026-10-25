@@ -31,7 +31,7 @@ inotify = "0.11.0"
 lazy_static = { workspace = true }
 libc = { workspace = true }
 netns-rs = { workspace = true }
-nix = { workspace = true }
+nix = { workspace = true, features = ["dir"] }
 oci-spec = { workspace = true }
 rand = { workspace = true }
 scopeguard = { workspace = true }
