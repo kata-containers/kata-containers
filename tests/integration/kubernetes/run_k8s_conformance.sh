@@ -226,6 +226,21 @@ install_e2e_binaries() {
 	"${bin_dir}/e2e.test" --version
 }
 
+# Images pulled before kata-deploy set discard_unpacked_layers = false, such as
+# the control plane ones, may have lost their layer blobs. Kata runtimes using
+# another snapshotter must unpack those layers again, so they fail with "content
+# digest not found", e.g. on the etcd image used by the Aggregator test.
+refetch_image_content() {
+	local image
+
+	[[ -n "${SNAPSHOTTER:-}" ]] || return 0
+	info "Refetching missing layers of the images already on the node"
+	for image in $(sudo ctr -n k8s.io images ls -q | grep -Ev '^sha256:|@sha256:'); do
+		sudo ctr -n k8s.io content fetch --platform "linux/$(arch_to_golang)" "${image}" >/dev/null 2>&1 || \
+			info "Could not refetch ${image}"
+	done
+}
+
 # The ubuntu-24.04 runner image ships podman. It has no daemon, so unlike
 # dockerd it does not set the iptables FORWARD policy to DROP. The build uses
 # the host network so it does not install NAT rules next to kube-proxy, and
@@ -370,6 +385,7 @@ main() {
 	mkdir -p "${CONFORMANCE_WORK_DIR}" "${CONFORMANCE_REPORT_DIR}"
 
 	install_e2e_binaries
+	refetch_image_content
 	trap delete_webhook EXIT
 	deploy_webhook
 
