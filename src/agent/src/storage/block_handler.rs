@@ -31,7 +31,8 @@ use crate::device::block_device_handler::{
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::storage::{
-    common_storage_handler, new_device, set_ownership, StorageContext, StorageHandler,
+    common_storage_handler, mount_storage, new_device, set_ownership, StorageContext,
+    StorageHandler,
 };
 use slog::Logger;
 #[cfg(target_arch = "s390x")]
@@ -77,15 +78,27 @@ async fn handle_block_storage(
             &mkfs_opts,
         )
         .await?;
+        set_emptydir_mode(&storage.mount_point)?;
+        set_ownership(logger, storage)?;
+        new_device(storage.mount_point.clone())
+    } else if options.should_create_filesystem {
+        ensure_block_filesystem(logger, storage).await?;
+        mount_storage(logger, storage)?;
+        set_emptydir_mode(&storage.mount_point)?;
         set_ownership(logger, storage)?;
         new_device(storage.mount_point.clone())
     } else {
-        if options.should_create_filesystem {
-            ensure_block_filesystem(logger, storage).await?;
-        }
         let path = common_storage_handler(logger, storage)?;
         new_device(path)
     }
+}
+
+// A freshly created filesystem has a root-owned 0755 root directory, while
+// kubelet creates emptyDir volumes world-writable, so non-root containers would
+// be unable to write to the volume.
+fn set_emptydir_mode(mount_point: &str) -> Result<()> {
+    fs::set_permissions(mount_point, fs::Permissions::from_mode(0o777))
+        .with_context(|| format!("set emptyDir mode on {mount_point}"))
 }
 
 fn block_storage_driver_options(storage: &Storage) -> Result<BlockStorageDriverOptions> {
