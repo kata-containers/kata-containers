@@ -543,6 +543,7 @@ function main() {
 			K8STESTS=run_kubernetes_nv_tests.sh
 			run_tests
 			;;
+		run-conformance) bash "${kubernetes_dir}/run_k8s_conformance.sh" ;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
 		cleanup) cleanup ;;
