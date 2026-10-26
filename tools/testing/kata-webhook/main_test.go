@@ -24,12 +24,15 @@ func TestAnnotatePodMutator(t *testing.T) {
 		nsBlacklist             map[string]bool
 		nsOnlyRegexp            *regexp.Regexp
 		minMemory               *string
+		defaultMemory           *string
 		container               corev1.Container
 		initContainer           corev1.Container
+		podLimits               corev1.ResourceList
 		wantMutatedRuntimeClass bool
 		wantErr                 bool
 		wantLimit               string
 		wantInitLimit           string
+		wantPodLimit            string
 	}{
 		{
 			name:                    "no filters",
@@ -104,6 +107,62 @@ func TestAnnotatePodMutator(t *testing.T) {
 			wantLimit:               "",
 		},
 		{
+			name:                    "cpu-only container limit gets a pod-level memory limit",
+			defaultMemory:           ptr("2Gi"),
+			container:               cpuLimitContainer("100m"),
+			initContainer:           cpuLimitContainer("100m"),
+			wantMutatedRuntimeClass: true,
+			wantLimit:               "",
+			wantInitLimit:           "",
+			wantPodLimit:            "2Gi",
+		},
+		{
+			name:          "pod-level memory limit covers the container requests",
+			defaultMemory: ptr("1Gi"),
+			container: corev1.Container{
+				Resources: corev1.ResourceRequirements{
+					Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")},
+					Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("3Gi")},
+				},
+			},
+			wantMutatedRuntimeClass: true,
+			wantPodLimit:            "3Gi",
+		},
+		{
+			name:                    "explicit container memory limit gets no pod-level limit",
+			defaultMemory:           ptr("2Gi"),
+			container:               memLimitContainer("512Mi"),
+			initContainer:           cpuLimitContainer("1"),
+			wantMutatedRuntimeClass: true,
+			wantLimit:               "512Mi",
+			wantPodLimit:            "",
+		},
+		{
+			name:                    "unlimited pod gets no pod-level limit",
+			defaultMemory:           ptr("2Gi"),
+			wantMutatedRuntimeClass: true,
+			wantPodLimit:            "",
+		},
+		{
+			name:          "explicit pod-level memory limit is kept",
+			defaultMemory: ptr("2Gi"),
+			podLimits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+			wantMutatedRuntimeClass: true,
+			wantPodLimit:            "1Gi",
+		},
+		{
+			name:          "cpu-only pod-level limit gets the default memory limit",
+			defaultMemory: ptr("2Gi"),
+			podLimits: corev1.ResourceList{
+				corev1.ResourceCPU: resource.MustParse("500m"),
+			},
+			wantMutatedRuntimeClass: true,
+			wantPodLimit:            "2Gi",
+		},
+		{
 			name:      "empty min memory returns error",
 			minMemory: ptr(""),
 			wantErr:   true,
@@ -123,6 +182,11 @@ func TestAnnotatePodMutator(t *testing.T) {
 			minMemory: ptr("-1Mi"),
 			wantErr:   true,
 		},
+		{
+			name:          "malformed default memory returns error",
+			defaultMemory: ptr("not-a-quantity"),
+			wantErr:       true,
+		},
 	}
 
 	expectedRuntimeClass := "kata"
@@ -133,6 +197,9 @@ func TestAnnotatePodMutator(t *testing.T) {
 			if tt.minMemory != nil {
 				t.Setenv(minMemoryLimitEnvKey, *tt.minMemory)
 			}
+			if tt.defaultMemory != nil {
+				t.Setenv(defaultMemoryLimitEnvKey, *tt.defaultMemory)
+			}
 
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -142,6 +209,9 @@ func TestAnnotatePodMutator(t *testing.T) {
 					Containers:     []corev1.Container{tt.container},
 					InitContainers: []corev1.Container{tt.initContainer},
 				},
+			}
+			if tt.podLimits != nil {
+				pod.Spec.Resources = &corev1.ResourceRequirements{Limits: tt.podLimits}
 			}
 
 			ar := &kwhmodel.AdmissionReview{
@@ -171,12 +241,18 @@ func TestAnnotatePodMutator(t *testing.T) {
 
 			assertMemoryLimit(t, mutated.Spec.Containers[0].Resources.Limits, tt.wantLimit)
 			assertMemoryLimit(t, mutated.Spec.InitContainers[0].Resources.Limits, tt.wantInitLimit)
+			var podLimits corev1.ResourceList
+			if mutated.Spec.Resources != nil {
+				podLimits = mutated.Spec.Resources.Limits
+			}
+			assertMemoryLimit(t, podLimits, tt.wantPodLimit)
 		})
 	}
 }
 
 func TestAnnotatePodMutatorPreservesUnknownFields(t *testing.T) {
 	whPolicy = &policy{}
+	t.Setenv(defaultMemoryLimitEnvKey, "2Gi")
 
 	obj := toUnstructured(t, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "testing-namespace"},

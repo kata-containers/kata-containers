@@ -86,3 +86,17 @@ Once configured, the webhook:
 * only applies to pods it actually moves to the Kata runtime class. Pods skipped
   for any of the reasons listed above, pods in the `sonobuoy` namespace, and pods
   that already set `runtimeClassName` keep their original limits
+
+## Setting a memory limit for CPU-only limits
+
+With static sandbox resource management, Kata sizes the VM from the pod limits
+only: requested vCPUs plus `overhead_vcpus`, and the memory limit plus
+`overhead_memory`. A pod that sets a CPU limit but no memory limit therefore
+gets a VM with only `overhead_memory`, which is too small to boot.
+
+To avoid that, set the `default_memory_limit` key of the `kata-webhook`
+ConfigMap to a quantity. When a pod sets a CPU limit, on a container or at the
+pod level, and no memory limit anywhere, the webhook sets the pod-level
+`spec.resources.limits.memory` to that value, or to the sum of the container
+memory requests if that is larger. The container resources are left untouched,
+and pods without any limits keep the configured default VM size.

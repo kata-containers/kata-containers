@@ -35,6 +35,12 @@ spec:
                   name: kata-webhook
                   key: min_memory_limit
                   optional: true
+            - name: DEFAULT_MEMORY_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: kata-webhook
+                  key: default_memory_limit
+                  optional: true
           args:
             - -tls-cert-file=/etc/webhook/certs/cert.pem
             - -tls-key-file=/etc/webhook/certs/key.pem
