@@ -12,6 +12,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	kwhmodel "github.com/slok/kubewebhook/v2/pkg/model"
 )
@@ -95,13 +97,9 @@ func TestAnnotatePodMutator(t *testing.T) {
 			wantLimit:               "268435456",
 		},
 		{
-			name:      "container without a memory limit stays unlimited",
-			minMemory: ptr("256Mi"),
-			container: corev1.Container{
-				Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{
-					corev1.ResourceCPU: resource.MustParse("1"),
-				}},
-			},
+			name:                    "container without a memory limit stays unlimited",
+			minMemory:               ptr("256Mi"),
+			container:               cpuLimitContainer("1"),
 			wantMutatedRuntimeClass: true,
 			wantLimit:               "",
 		},
@@ -150,22 +148,64 @@ func TestAnnotatePodMutator(t *testing.T) {
 				Namespace: "testing-namespace",
 			}
 
-			result, err := annotatePodMutator(context.Background(), ar, pod)
+			result, err := annotatePodMutator(context.Background(), ar, toUnstructured(t, pod))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("expected error: %v, got: %v", tt.wantErr, err)
-			} else if err == nil {
-				mutatedRuntimeClass := result.MutatedObject != nil && result.MutatedObject.(*corev1.Pod).Spec.RuntimeClassName != nil
-				if mutatedRuntimeClass != tt.wantMutatedRuntimeClass {
-					t.Errorf("expected mutation: %v, got: %v", tt.wantMutatedRuntimeClass, mutatedRuntimeClass)
-				}
-				if mutatedRuntimeClass && *result.MutatedObject.(*corev1.Pod).Spec.RuntimeClassName != expectedRuntimeClass {
-					t.Errorf("expected runtimeclass: %v, got %v", expectedRuntimeClass, result.MutatedObject.(*corev1.Pod).Spec.RuntimeClassName)
-				}
+				t.Fatalf("expected error: %v, got: %v", tt.wantErr, err)
+			}
+			if err != nil {
+				return
 			}
 
-			assertMemoryLimit(t, pod.Spec.Containers[0].Resources.Limits, tt.wantLimit)
-			assertMemoryLimit(t, pod.Spec.InitContainers[0].Resources.Limits, tt.wantInitLimit)
+			mutated := pod
+			if result.MutatedObject != nil {
+				mutated = fromUnstructured(t, result.MutatedObject)
+			}
+
+			mutatedRuntimeClass := mutated.Spec.RuntimeClassName != nil
+			if mutatedRuntimeClass != tt.wantMutatedRuntimeClass {
+				t.Errorf("expected mutation: %v, got: %v", tt.wantMutatedRuntimeClass, mutatedRuntimeClass)
+			}
+			if mutatedRuntimeClass && *mutated.Spec.RuntimeClassName != expectedRuntimeClass {
+				t.Errorf("expected runtimeclass: %v, got %v", expectedRuntimeClass, *mutated.Spec.RuntimeClassName)
+			}
+
+			assertMemoryLimit(t, mutated.Spec.Containers[0].Resources.Limits, tt.wantLimit)
+			assertMemoryLimit(t, mutated.Spec.InitContainers[0].Resources.Limits, tt.wantInitLimit)
 		})
+	}
+}
+
+func TestAnnotatePodMutatorPreservesUnknownFields(t *testing.T) {
+	whPolicy = &policy{}
+
+	obj := toUnstructured(t, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "testing-namespace"},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{cpuLimitContainer("1")}},
+	})
+	if err := unstructured.SetNestedField(obj.Object, "kept", "spec", "futureField"); err != nil {
+		t.Fatal(err)
+	}
+	containers, _, _ := unstructured.NestedSlice(obj.Object, "spec", "containers")
+	containers[0].(map[string]interface{})["futureContainerField"] = "kept"
+	if err := unstructured.SetNestedSlice(obj.Object, containers, "spec", "containers"); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := annotatePodMutator(context.Background(), &kwhmodel.AdmissionReview{Namespace: "testing-namespace"}, obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := result.MutatedObject.(*unstructured.Unstructured)
+
+	if v, _, _ := unstructured.NestedString(mutated.Object, "spec", "futureField"); v != "kept" {
+		t.Errorf("expected spec.futureField to be kept, got %q", v)
+	}
+	containers, _, _ = unstructured.NestedSlice(mutated.Object, "spec", "containers")
+	if v := containers[0].(map[string]interface{})["futureContainerField"]; v != "kept" {
+		t.Errorf("expected spec.containers[0].futureContainerField to be kept, got %v", v)
+	}
+	if v, _, _ := unstructured.NestedString(mutated.Object, "spec", "runtimeClassName"); v != "kata" {
+		t.Errorf("expected runtimeClassName kata, got %q", v)
 	}
 }
 
@@ -173,10 +213,38 @@ func ptr[T any](v T) *T {
 	return &v
 }
 
+func toUnstructured(t *testing.T, pod *corev1.Pod) *unstructured.Unstructured {
+	t.Helper()
+
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(pod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &unstructured.Unstructured{Object: obj}
+}
+
+func fromUnstructured(t *testing.T, obj metav1.Object) *corev1.Pod {
+	t.Helper()
+
+	pod := &corev1.Pod{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.(*unstructured.Unstructured).Object, pod); err != nil {
+		t.Fatal(err)
+	}
+	return pod
+}
+
 func memLimitContainer(memory string) corev1.Container {
 	return corev1.Container{
 		Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse(memory),
+		}},
+	}
+}
+
+func cpuLimitContainer(cpu string) corev1.Container {
+	return corev1.Container{
+		Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{
+			corev1.ResourceCPU: resource.MustParse(cpu),
 		}},
 	}
 }
