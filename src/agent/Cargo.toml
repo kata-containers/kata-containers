@@ -70,6 +70,7 @@ toml.workspace = true
 
 # Local dependencies
 kata-agent-policy = { optional = true, workspace = true }
+kata-agent-cc-op = { optional = true, workspace = true }
 kata-sys-util.workspace = true
 kata-types.workspace = true
 mem-agent.workspace = true
@@ -108,6 +109,7 @@ lto = true
 
 [features]
 agent-policy = ["kata-agent-policy"]
+cc-op = ["kata-agent-cc-op", "kata-agent-cc-op/cc-op", "rustjail/cc-op"]
 devicemapper = ["kata-types/devicemapper"]
 init-data = []
 seccomp = ["rustjail/seccomp"]
