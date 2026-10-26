@@ -23,7 +23,7 @@ self-hosted-runner:
     - ppc64le-k8s
     - ppc64le-small
     - ubuntu-24.04-ppc64le
-    - ubuntu-24.04-s390x
+    - ubuntu-26.04-s390x
     - riscv-builder
     - sev-snp
     - s390x
