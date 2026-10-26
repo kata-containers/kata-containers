@@ -1123,6 +1123,50 @@ mod test {
     use crate::share_fs::{ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig};
     use hypervisor::Hypervisor;
 
+    fn watcher_has_watches(watcher_id: u64) -> bool {
+        with_shared_inotify(|shared| {
+            Ok(shared
+                .routes
+                .values()
+                .flatten()
+                .any(|r| r.watcher_id == watcher_id))
+        })
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_fs_watchers_share_inotify() {
+        // Hidden directories are not watched, so avoid the default ".tmp" prefix.
+        let dir_a = tempfile::Builder::new().prefix("vol").tempdir().unwrap();
+        let dir_b = tempfile::Builder::new().prefix("vol").tempdir().unwrap();
+        std::fs::create_dir(dir_b.path().join("sub")).unwrap();
+
+        let watcher_a = FsWatcher::new(dir_a.path()).await.unwrap();
+        let watcher_b = FsWatcher::new(dir_b.path()).await.unwrap();
+        let id_a = watcher_a.registration.0;
+        let id_b = watcher_b.registration.0;
+
+        std::fs::write(dir_b.path().join("sub").join("file"), "data").unwrap();
+        with_shared_inotify(|shared| {
+            shared.dispatch_events();
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(watcher_a.pending_events.lock().unwrap().is_empty());
+        assert!(watcher_b
+            .pending_events
+            .lock()
+            .unwrap()
+            .contains(&dir_b.path().join("sub").join("file")));
+
+        drop(watcher_b);
+        assert!(!watcher_has_watches(id_b));
+        assert!(watcher_has_watches(id_a));
+        drop(watcher_a);
+        assert!(!watcher_has_watches(id_a));
+    }
+
     #[test]
     fn test_is_system_mount() {
         let sys_dir = "/sys";
