@@ -93,6 +93,22 @@ declare -A kata_skips=(
 	["Downward API should provide pod UID as env vars"]="a 96M VM can OOM the agent"
 )
 
+# Conformance tests the NVIDIA runtimes cannot pass by design. They run with
+# shared_fs = "none", where volumes are copied into the guest and guest writes
+# never reach the host, and with emptydir_mode = "block-plain":
+#   - "ignore failure matching on DisruptionTarget condition" has evicted pods
+#     touch a file in a hostPath volume, and only completes when their
+#     replacements find it there.
+#   - The two Variable Expansion subpath tests mount a subPath of an emptyDir.
+#     kubelet creates that subPath in the host directory, while a block emptyDir
+#     lives on a guest block device, so the subPath and the whole volume end up
+#     on different storage.
+declare -A no_shared_fs_skips=(
+	["should allow to use a pod failure policy to ignore failure matching on DisruptionTarget condition"]="hostPath writes stay in the guest"
+	["should allow substituting values in a volume subpath"]="subPath of a block emptyDir is not supported"
+	["should succeed in writing subpaths in container"]="subPath of a block emptyDir is not supported"
+)
+
 kata_skip_regex() {
 	local regex=""
 	local test_name
@@ -100,6 +116,11 @@ kata_skip_regex() {
 	for test_name in "${!kata_skips[@]}"; do
 		regex+="${regex:+|}${test_name}"
 	done
+	if [[ "${KATA_HYPERVISOR}" == *nvidia* ]]; then
+		for test_name in "${!no_shared_fs_skips[@]}"; do
+			regex+="${regex:+|}${test_name}"
+		done
+	fi
 	[[ -n "${CONFORMANCE_SKIP}" ]] && regex+="${regex:+|}${CONFORMANCE_SKIP}"
 
 	echo "${regex}"
