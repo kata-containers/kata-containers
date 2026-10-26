@@ -26,7 +26,10 @@ import (
 	kwhmutating "github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
 )
 
-const minMemoryLimitEnvKey = "MIN_MEMORY_LIMIT"
+const (
+	minMemoryLimitEnvKey     = "MIN_MEMORY_LIMIT"
+	defaultMemoryLimitEnvKey = "DEFAULT_MEMORY_LIMIT"
+)
 
 func getRuntimeClass(runtimeClassKey, defaultRuntimeClass string) string {
 	if runtimeClass, ok := os.LookupEnv(runtimeClassKey); ok {
@@ -35,21 +38,21 @@ func getRuntimeClass(runtimeClassKey, defaultRuntimeClass string) string {
 	return defaultRuntimeClass
 }
 
-func getMinMemoryLimit(minMemoryLimitKey string) (*resource.Quantity, error) {
-	value, ok := os.LookupEnv(minMemoryLimitKey)
+func getMemoryLimit(envKey string) (*resource.Quantity, error) {
+	value, ok := os.LookupEnv(envKey)
 	if !ok {
 		return nil, nil
 	}
 
-	minMemoryLimit, err := resource.ParseQuantity(value)
+	limit, err := resource.ParseQuantity(value)
 	if err != nil {
-		return nil, fmt.Errorf("invalid %s %q: %w", minMemoryLimitKey, value, err)
+		return nil, fmt.Errorf("invalid %s %q: %w", envKey, value, err)
 	}
-	if minMemoryLimit.Sign() <= 0 {
-		return nil, fmt.Errorf("invalid %s %q: must be greater than zero", minMemoryLimitKey, value)
+	if limit.Sign() <= 0 {
+		return nil, fmt.Errorf("invalid %s %q: must be greater than zero", envKey, value)
 	}
 
-	return &minMemoryLimit, nil
+	return &limit, nil
 }
 
 // The pod is mutated as unstructured data so that fields unknown to the
@@ -87,6 +90,52 @@ func setContainerMemoryLimits(obj *unstructured.Unstructured, field string, cont
 		return nil
 	}
 	return unstructured.SetNestedSlice(obj.Object, raw, "spec", field)
+}
+
+// With static sandbox sizing Kata sizes the VM from the pod limits only, so a
+// pod with a CPU limit but no memory limit gets a guest with nothing but the
+// configured memory overhead. Give such pods a pod-level memory limit, which
+// sizes the sandbox while leaving the container resources untouched. The limit
+// also covers the memory the containers request, as pod-level requests default
+// to it and must not be lower than the sum of the container requests.
+func setPodMemoryLimit(obj *unstructured.Unstructured, pod *corev1.Pod, fallback *resource.Quantity) error {
+	if fallback == nil {
+		return nil
+	}
+
+	hasCPULimit := false
+	requested := resource.Quantity{}
+	if pod.Spec.Resources != nil {
+		if _, ok := pod.Spec.Resources.Limits[corev1.ResourceMemory]; ok {
+			return nil
+		}
+		_, hasCPULimit = pod.Spec.Resources.Limits[corev1.ResourceCPU]
+	}
+	for _, containers := range [][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
+		for _, c := range containers {
+			if _, ok := c.Resources.Limits[corev1.ResourceMemory]; ok {
+				return nil
+			}
+			if _, ok := c.Resources.Limits[corev1.ResourceCPU]; ok {
+				hasCPULimit = true
+			}
+		}
+	}
+	if !hasCPULimit {
+		return nil
+	}
+	for _, c := range pod.Spec.Containers {
+		if r, ok := c.Resources.Requests[corev1.ResourceMemory]; ok {
+			requested.Add(r)
+		}
+	}
+
+	limit := fallback.DeepCopy()
+	if requested.Cmp(limit) > 0 {
+		limit = requested
+	}
+	fmt.Println("setting pod memory limit to", limit.String())
+	return unstructured.SetNestedField(obj.Object, limit.String(), "spec", "resources", "limits", "memory")
 }
 
 func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
@@ -132,7 +181,11 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 		return &kwhmutating.MutatorResult{}, nil
 	}
 
-	minMemoryLimit, err := getMinMemoryLimit(minMemoryLimitEnvKey)
+	minMemoryLimit, err := getMemoryLimit(minMemoryLimitEnvKey)
+	if err != nil {
+		return nil, err
+	}
+	defaultMemoryLimit, err := getMemoryLimit(defaultMemoryLimitEnvKey)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +194,9 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 		return nil, err
 	}
 	if err := setContainerMemoryLimits(u, "initContainers", pod.Spec.InitContainers, minMemoryLimit); err != nil {
+		return nil, err
+	}
+	if err := setPodMemoryLimit(u, pod, defaultMemoryLimit); err != nil {
 		return nil, err
 	}
 
