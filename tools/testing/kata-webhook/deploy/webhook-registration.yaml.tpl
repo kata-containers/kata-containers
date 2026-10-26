@@ -17,7 +17,7 @@ webhooks:
     clientConfig:
       service:
         name: pod-annotate-webhook
-        namespace: default
+        namespace: WEBHOOK_NS
         path: "/mutate"
       caBundle: CA_BUNDLE
     rules:
