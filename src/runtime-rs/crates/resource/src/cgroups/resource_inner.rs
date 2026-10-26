@@ -6,16 +6,21 @@
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error as _;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use cgroups::manager::is_systemd_cgroup;
-use cgroups::{CgroupPid, FsManager, Manager, SystemdManager};
+use cgroups::{CgroupPid, FreezerState, FsManager, Manager, SystemdManager};
 use hypervisor::{Hypervisor, VcpuThreadIds};
 use kata_types::cpu::CpuSet;
+use nix::errno::Errno;
 use nix::sched::{sched_setaffinity, CpuSet as NixCpuSet};
+use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use oci_spec::runtime::{LinuxCpu, LinuxCpuBuilder, LinuxResources, LinuxResourcesBuilder};
 use tokio::time::sleep;
@@ -25,6 +30,115 @@ use crate::cgroups::CgroupConfig;
 use crate::ResourceUpdateOp;
 
 pub type CgroupManager = Box<dyn Manager>;
+
+const KILL_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+fn procs_dir(cgroup: &dyn Manager) -> Option<PathBuf> {
+    // The unified hierarchy ignores the subsystem, while every v1 hierarchy
+    // lists the same processes.
+    [
+        None,
+        Some("freezer"),
+        Some("pids"),
+        Some("memory"),
+        Some("cpu"),
+    ]
+    .iter()
+    .find_map(|subsystem| cgroup.cgroup_path(*subsystem).ok())
+    .map(PathBuf::from)
+}
+
+fn read_procs(dir: &Path) -> Result<Vec<i32>> {
+    let procs = match fs::read_to_string(dir.join("cgroup.procs")) {
+        Ok(procs) => procs,
+        // destroy() moves stragglers out before removing the cgroup, but
+        // cleanup only reaches it once the VMM exit is confirmed.
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(vec![]),
+        Err(err) => return Err(err).with_context(|| format!("read {}", dir.display())),
+    };
+    procs
+        .lines()
+        .map(|pid| pid.parse().context("parse cgroup.procs"))
+        .collect()
+}
+
+/// An empty cgroup.procs does not imply populated 0: exiting threads can still
+/// hold memory and keep the cgroup busy. Cgroup v1 has no cgroup.events.
+fn is_populated(dir: &Path) -> Result<bool> {
+    let events = match fs::read_to_string(dir.join("cgroup.events")) {
+        Ok(events) => events,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err).with_context(|| format!("read {}", dir.display())),
+    };
+    Ok(events
+        .lines()
+        .any(|line| line.split_whitespace().eq(["populated", "1"])))
+}
+
+async fn empty_cgroup(cgroup: &dyn Manager, deadline: tokio::time::Instant) -> Result<()> {
+    let dir = procs_dir(cgroup).context("no cgroup.procs for the sandbox cgroup")?;
+    loop {
+        let procs = read_procs(&dir)?;
+        if procs.is_empty() {
+            if !is_populated(&dir)? {
+                return Ok(());
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(anyhow!("{} is still populated", dir.display()));
+            }
+            sleep(KILL_POLL_INTERVAL).await;
+            continue;
+        }
+        if procs.contains(&(process::id() as i32)) {
+            return Err(anyhow!(
+                "refusing to kill {}, the runtime runs in it",
+                dir.display()
+            ));
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!("{} still holds {:?}", dir.display(), procs));
+        }
+        kill_procs(cgroup, &dir)?;
+        sleep(KILL_POLL_INTERVAL).await;
+    }
+}
+
+fn kill_procs(cgroup: &dyn Manager, dir: &Path) -> Result<()> {
+    let kill_file = dir.join("cgroup.kill");
+    if kill_file.exists() {
+        return fs::write(&kill_file, "1")
+            .with_context(|| format!("write {}", kill_file.display()));
+    }
+
+    // Like runc without cgroup.kill: a frozen process can neither fork nor
+    // exit, so its PID cannot be reused before SIGKILL reaches it.
+    let frozen = match cgroup.freeze(FreezerState::Frozen) {
+        Ok(()) => true,
+        Err(err) => {
+            warn!(
+                sl!(),
+                "cannot freeze {}, killing unfrozen: {err}",
+                dir.display()
+            );
+            false
+        }
+    };
+    let result = read_procs(dir).and_then(|procs| {
+        for pid in procs {
+            match kill(Pid::from_raw(pid), Signal::SIGKILL) {
+                Ok(()) | Err(Errno::ESRCH) => {}
+                Err(err) => return Err(err).with_context(|| format!("kill {pid}")),
+            }
+        }
+        Ok(())
+    });
+    if frozen {
+        cgroup
+            .freeze(FreezerState::Thawed)
+            .with_context(|| format!("thaw {}", dir.display()))?;
+    }
+    result
+}
 
 pub(crate) struct CgroupsResourceInner {
     /// Container resources, key is container id, and value is resources.
@@ -39,6 +153,8 @@ pub(crate) struct CgroupsResourceInner {
     /// matches the sandbox cpuset size. Tracked so we know when to reset
     /// threads back to the full cpuset after a mismatch.
     is_vcpus_pinning_on: bool,
+    sandbox_cgroup_deleted: bool,
+    overhead_cgroup_deleted: bool,
 }
 
 impl CgroupsResourceInner {
@@ -111,8 +227,15 @@ impl CgroupsResourceInner {
     /// - `Ok((CgroupManager, Option<CgroupManager>))`: A tuple containing
     ///   the sandbox cgroup manager and an optional overhead cgroup
     ///   manager.
+    ///
+    /// `restoring` is true when the units already exist (`restore`). systemd
+    /// accepts `TimeoutStopUSec` only when a transient unit is created, and
+    /// refuses it on an existing scope with `PropertyReadOnly`, so the timeout
+    /// is set on creation only. The restored scope keeps the one it was
+    /// created with.
     fn new_cgroup_managers(
         config: &CgroupConfig,
+        restoring: bool,
     ) -> Result<(CgroupManager, Option<CgroupManager>)> {
         let use_systemd = is_systemd_cgroup(&config.path);
         let sandbox_cgroup = if use_systemd {
@@ -120,7 +243,9 @@ impl CgroupsResourceInner {
             // Set SIGTERM timeout to 5mins, so that the runtime has up to
             // 5mins to do graceful shutdown. Exceeding this timeout, the
             // systemd will forcibly kill the runtime by sending SIGKILL.
-            manager.set_term_timeout(300).context("set term timeout")?;
+            if !restoring {
+                manager.set_term_timeout(300).context("set term timeout")?;
+            }
             Box::new(manager) as Box<dyn Manager>
         } else {
             let manager = FsManager::new(&config.path).context("new fs manager")?;
@@ -132,9 +257,11 @@ impl CgroupsResourceInner {
         } else if use_systemd {
             let mut manager = SystemdManager::new(&config.overhead_path)
                 .context("new systemd manager for overhead")?;
-            manager
-                .set_term_timeout(300)
-                .context("set term timeout for overhead")?;
+            if !restoring {
+                manager
+                    .set_term_timeout(300)
+                    .context("set term timeout for overhead")?;
+            }
             Some(Box::new(manager) as Box<dyn Manager>)
         } else {
             let manager =
@@ -148,7 +275,7 @@ impl CgroupsResourceInner {
     /// Create a new `CgroupsResourceInner` instance.
     pub(crate) fn new(config: &CgroupConfig) -> Result<Self> {
         let (mut sandbox_cgroup, mut overhead_cgroup) =
-            Self::new_cgroup_managers(config).context("create new cgroups")?;
+            Self::new_cgroup_managers(config, false).context("create new cgroups")?;
 
         // The runtime is prioritized to be added to the overhead cgroup.
         let pid = CgroupPid::from(process::id() as u64);
@@ -176,12 +303,14 @@ impl CgroupsResourceInner {
             overhead_cgroup,
             enable_vcpus_pinning: config.enable_vcpus_pinning,
             is_vcpus_pinning_on: false,
+            sandbox_cgroup_deleted: false,
+            overhead_cgroup_deleted: false,
         })
     }
 
     pub(crate) fn restore(config: &CgroupConfig) -> Result<Self> {
         let (sandbox_cgroup, overhead_cgroup) =
-            Self::new_cgroup_managers(config).context("restore cgroups")?;
+            Self::new_cgroup_managers(config, true).context("restore cgroups")?;
 
         Ok(Self {
             resources: HashMap::new(),
@@ -189,6 +318,8 @@ impl CgroupsResourceInner {
             overhead_cgroup,
             enable_vcpus_pinning: config.enable_vcpus_pinning,
             is_vcpus_pinning_on: false,
+            sandbox_cgroup_deleted: false,
+            overhead_cgroup_deleted: false,
         })
     }
 }
@@ -437,18 +568,53 @@ impl CgroupsResourceInner {
 }
 
 impl CgroupsResourceInner {
-    pub(crate) async fn delete(&mut self) -> Result<()> {
-        self.sandbox_cgroup
-            .destroy()
-            .context("destroy sandbox cgroup")?;
+    /// A restored shim holds no child handles. The runtime joins these
+    /// cgroups before it forks the VMM and its daemons, and an in-process VMM
+    /// runs in the runtime itself, so an empty cgroup is the kernel's word
+    /// that the VMM is gone. Must not run in a shim that lives in them.
+    pub(crate) async fn kill_all_processes(&self, wait: Duration) -> Result<()> {
+        let cgroups: Vec<&dyn Manager> = std::iter::once(self.sandbox_cgroup.as_ref())
+            .chain(self.overhead_cgroup.as_deref())
+            .collect();
+        let deadline = tokio::time::Instant::now() + wait;
+        for cgroup in cgroups {
+            empty_cgroup(cgroup, deadline).await?;
+        }
+        Ok(())
+    }
 
-        if let Some(overhead_cgroup) = self.overhead_cgroup.as_mut() {
-            overhead_cgroup
+    pub(crate) async fn delete(&mut self) -> Result<()> {
+        let mut errors = Vec::new();
+        if !self.sandbox_cgroup_deleted {
+            match self
+                .sandbox_cgroup
                 .destroy()
-                .context("destroy overhead cgroup")?;
+                .context("destroy sandbox cgroup")
+            {
+                Ok(()) => self.sandbox_cgroup_deleted = true,
+                Err(e) => errors.push(e),
+            }
         }
 
-        Ok(())
+        if !self.overhead_cgroup_deleted {
+            if let Some(overhead_cgroup) = self.overhead_cgroup.as_mut() {
+                match overhead_cgroup.destroy().context("destroy overhead cgroup") {
+                    Ok(()) => self.overhead_cgroup_deleted = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                self.overhead_cgroup_deleted = true;
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            for error in &errors {
+                warn!(sl!(), "cgroup cleanup step failed: {error:#}");
+            }
+            Err(anyhow!("{} cgroup cleanup step(s) failed", errors.len()))
+        }
     }
 
     pub(crate) async fn update(
@@ -569,6 +735,8 @@ mod tests {
             overhead_cgroup: None,
             enable_vcpus_pinning: enable_pinning,
             is_vcpus_pinning_on: false,
+            sandbox_cgroup_deleted: false,
+            overhead_cgroup_deleted: false,
         }
     }
 
@@ -651,5 +819,133 @@ mod tests {
         let inner = make_inner_for_test(enable);
         assert_eq!(inner.enable_vcpus_pinning, enable);
         assert_eq!(inner.is_vcpus_pinning_on, expected_on);
+    }
+
+    /// A sibling of the test's own cgroup, which root can always create and
+    /// an unprivileged user can under a `systemd-run --user --scope`.
+    fn sibling_cgroup(name: &str) -> Option<String> {
+        if !Path::new("/sys/fs/cgroup/cgroup.controllers").exists() {
+            return None;
+        }
+        let own = fs::read_to_string("/proc/self/cgroup").ok()?;
+        let own = own.lines().find_map(|line| line.strip_prefix("0::"))?;
+        let parent = Path::new(own).parent()?;
+        let relative = parent.join(name);
+        let relative = relative.to_str()?.trim_start_matches('/').to_string();
+        fs::create_dir(Path::new("/sys/fs/cgroup").join(&relative)).ok()?;
+        Some(relative)
+    }
+
+    #[tokio::test]
+    async fn restored_shim_empties_the_sandbox_cgroup() {
+        let name = format!("kata-kill-test-{}", process::id());
+        let Some(relative) = sibling_cgroup(&name) else {
+            eprintln!("skipping: cannot create a cgroup v2 sibling");
+            return;
+        };
+        let dir = Path::new("/sys/fs/cgroup").join(&relative);
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        fs::write(dir.join("cgroup.procs"), child.id().to_string()).unwrap();
+        let cgroup = FsManager::new(&relative).unwrap();
+
+        let result = empty_cgroup(
+            &cgroup,
+            tokio::time::Instant::now() + Duration::from_secs(5),
+        )
+        .await;
+        let status = child.wait().unwrap();
+        fs::remove_dir(&dir).unwrap();
+
+        result.unwrap();
+        assert!(!status.success());
+        assert!(read_procs(&dir).unwrap().is_empty());
+    }
+
+    const VMM_LIKE_ENV: &str = "KATA_CGROUP_TEST_VMM_LIKE";
+
+    fn run_vmm_like() -> ! {
+        use std::io::Write;
+        let mut memory = vec![0u8; 3 << 30];
+        for byte in memory.iter_mut().step_by(4096) {
+            *byte = 1;
+        }
+        for _ in 0..8 {
+            std::thread::spawn(|| std::thread::sleep(Duration::from_secs(600)));
+        }
+        println!("ready");
+        std::io::stdout().flush().unwrap();
+        std::thread::sleep(Duration::from_secs(600));
+        std::hint::black_box(&memory);
+        process::exit(0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs root, cgroup v2 and 3 GiB of free memory"]
+    async fn emptied_cgroup_of_a_vmm_like_process_can_be_removed() {
+        use std::io::BufRead;
+        if std::env::var_os(VMM_LIKE_ENV).is_some() {
+            run_vmm_like();
+        }
+        let test = "cgroups::resource_inner::tests::\
+                    emptied_cgroup_of_a_vmm_like_process_can_be_removed";
+        let mut busy = 0;
+        // Repeat to catch the short interval between procs becoming empty and populated 0.
+        for i in 0..5 {
+            let name = format!("kata-exit-test-{}-{i}", process::id());
+            let Some(relative) = sibling_cgroup(&name) else {
+                eprintln!("skipping: cannot create a cgroup v2 sibling");
+                return;
+            };
+            let dir = Path::new("/sys/fs/cgroup").join(&relative);
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", test, "--ignored", "--nocapture"])
+                .env(VMM_LIKE_ENV, "1")
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            let stdout = std::io::BufReader::new(child.stdout.take().unwrap());
+            assert!(stdout.lines().any(|line| line.unwrap() == "ready"));
+            fs::write(dir.join("cgroup.procs"), child.id().to_string()).unwrap();
+            let cgroup = FsManager::new(&relative).unwrap();
+
+            let result = empty_cgroup(
+                &cgroup,
+                tokio::time::Instant::now() + Duration::from_secs(5),
+            )
+            .await;
+            let removed = fs::remove_dir(&dir);
+            child.wait().unwrap();
+            if removed.is_err() {
+                busy += 1;
+                fs::remove_dir(&dir).unwrap();
+            }
+            result.unwrap();
+        }
+        assert_eq!(
+            busy, 0,
+            "cgroup busy after empty_cgroup() in {busy} of 5 runs"
+        );
+    }
+
+    #[tokio::test]
+    async fn never_kills_the_cgroup_the_runtime_runs_in() {
+        if !Path::new("/sys/fs/cgroup/cgroup.controllers").exists() {
+            eprintln!("skipping: needs cgroup v2");
+            return;
+        }
+        let own = fs::read_to_string("/proc/self/cgroup").unwrap();
+        let own = own
+            .lines()
+            .find_map(|line| line.strip_prefix("0::"))
+            .unwrap();
+        let cgroup = FsManager::new(own.trim_start_matches('/')).unwrap();
+
+        let err = empty_cgroup(&cgroup, tokio::time::Instant::now())
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("the runtime runs in it"));
     }
 }

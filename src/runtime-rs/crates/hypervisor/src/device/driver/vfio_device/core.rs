@@ -282,8 +282,7 @@ fn discover_group_devices(group_id: u32) -> Result<Vec<DeviceInfo>> {
             .and_then(parse_class_code_u32);
         let driver = driver_name(&pci_path);
 
-        let numa_node =
-            parse_i32(pci_path.join("numa_node")).and_then(|n| if n < 0 { None } else { Some(n) });
+        let numa_node = parse_i32(pci_path.join("numa_node")).filter(|&n| n >= 0);
 
         out.push(DeviceInfo {
             addr: DeviceAddress::Pci(bdf),
@@ -537,8 +536,7 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
         .as_deref()
         .and_then(parse_class_code_u32);
     let driver = driver_name(&pci_path);
-    let numa_node =
-        parse_i32(pci_path.join("numa_node")).and_then(|n| if n < 0 { None } else { Some(n) });
+    let numa_node = parse_i32(pci_path.join("numa_node")).filter(|&n| n >= 0);
 
     let cdev = discover_vfio_cdev_by_name(&vfio_name, Some(bdf_str.clone()), None);
 

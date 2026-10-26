@@ -96,6 +96,10 @@ ctr run --rm -t --snapshotter blockfile docker.io/library/busybox:latest templat
 
 We can verify whether a VM was launched from a template or started normally by checking the launch parameters — if the parameters contain `incoming`, it indicates that the VM was started from a template rather than created directly.
 
+!!! note
+
+    VMs restored from a template reseed the guest RNG and sync the guest clock on startup. If the guest enforces an agent policy, it must allow `ReseedRandomDevRequest` and `SetGuestDateTimeRequest`.
+
 ## Performance Test
 
 The comparative experiment between **template-based VM** creation and **direct VM** creation showed that the template-based approach achieved a ≈ **73.2%** reduction in startup latency (average launch time of **0.6s** vs. **0.82s**) and a ≈ **79.8%** reduction in memory usage (average memory usage of **178.2 MiB** vs. **223.2 MiB**), demonstrating significant improvements in VM startup efficiency and resource utilization.

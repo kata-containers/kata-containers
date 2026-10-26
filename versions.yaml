@@ -73,7 +73,7 @@ assets:
     cloud_hypervisor:
       description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
-      version: "v51.1"
+      version: "v54.0"
 
     openvmm:
       description: >-
@@ -85,7 +85,7 @@ assets:
     firecracker:
       description: "Firecracker micro-VMM"
       url: "https://github.com/firecracker-microvm/firecracker"
-      version: "v1.12.1"
+      version: "v1.17.0"
 
     qemu:
       description: "VMM that uses KVM"
@@ -205,15 +205,15 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.52"
+    version: "v6.18.56"
     nvidia:
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.18.52"
+      version: "v6.18.56"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.52"
+    version: "v6.18.56"
 
 externals:
   description: "Third-party projects used by the system"
@@ -221,6 +221,10 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
+    # To test an NVRC pull request, set url to
+    # "oci://ghcr.io/nvidia/nvrc/nvrc-pr" and version to its head sha
+    # (published by adding the "publish-nvrc-from-pr" label there). The
+    # check-nvrc-is-released static check blocks merging that.
     version: "v0.1.7"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
@@ -228,9 +232,20 @@ externals:
     desc: "NVIDIA compute stack"
     driver:
       desc: "NVIDIA kernel driver"
-      version: "595.58.03"
+      version: "615.71.09"
       # yamllint disable-line rule:line-length
       url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
+      # Optional dedicated driver userspace repository - drivers released
+      # separately from the toolkit ship pinning/libnvidia-*/fabricmanager/
+      # nvlsm/imex in their own repo, not the CUDA one. Empty: the packages
+      # resolve from the repositories above as before.
+      repo:
+        x86_64:
+          url: ""
+          pkg: ""
+        aarch64:
+          url: ""
+          pkg: ""
     cuda:
       desc: "NVIDIA CUDA repository"
       repo:
@@ -262,7 +277,7 @@ externals:
       url: "https://github.com/NVIDIA/DCGM"
       exporter:
         desc: "NVIDIA DCGM exporter, released independently of DCGM itself"
-        version: "4.8.3.002-1"
+        version: "4.8.4.3955-1"
         url: "https://github.com/NVIDIA/dcgm-exporter"
     nvat:
       desc: "NVIDIA Attestation SDK"
@@ -432,23 +447,23 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     # When updating this, also update in go.mod files.
-    version: "1.26.7"
+    version: "1.26.9"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.26.7"
+      newest-version: "1.26.9"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
     # Keep in sync with rust-toolchain.toml
-    version: "1.96"
+    version: "1.97"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.96"
+      newest-version: "1.97"
 
   golangci-lint:
     description: "golangci-lint"

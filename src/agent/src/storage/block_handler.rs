@@ -279,10 +279,10 @@ impl StorageHandler for VirtioBlkPciHandler {
         // otherwise use the virt path provided in Storage Source
         if storage.source.starts_with("/dev") {
             let metadata = fs::metadata(&storage.source)
-                .context(format!("get metadata on file {:?}", &storage.source))?;
+                .context(format!("get metadata on file {:?}", storage.source))?;
             let mode = metadata.permissions().mode();
             if mode & libc::S_IFBLK == 0 {
-                return Err(anyhow!("Invalid device {}", &storage.source));
+                return Err(anyhow!("Invalid device {}", storage.source));
             }
             dev_num = get_device_number(&storage.source, Some(&metadata))?;
         } else {

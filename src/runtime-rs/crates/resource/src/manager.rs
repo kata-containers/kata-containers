@@ -199,9 +199,14 @@ impl ResourceManager {
         inner.handler_volumes(cid, spec).await
     }
 
-    pub async fn handler_devices(&self, cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
+    pub async fn handler_devices(
+        &self,
+        cid: &str,
+        linux: &Linux,
+        device_ids: &mut Vec<String>,
+    ) -> Result<Vec<ContainerDevice>> {
         let inner = self.inner.read().await;
-        inner.handler_devices(cid, linux).await
+        inner.handler_devices(cid, linux, device_ids).await
     }
 
     pub async fn dump(&self) {
@@ -222,6 +227,18 @@ impl ResourceManager {
     pub async fn cleanup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.cleanup().await
+    }
+
+    pub async fn has_passthrough_network_devices(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.has_passthrough_network_devices().await
+    }
+
+    /// Kills every process left in the sandbox cgroups and waits until
+    /// they are empty. Only for a shim that does not run in them.
+    pub async fn kill_sandbox_processes(&self, wait: std::time::Duration) -> Result<()> {
+        let inner = self.inner.read().await;
+        inner.cgroups_resource.kill_all_processes(wait).await
     }
 }
 

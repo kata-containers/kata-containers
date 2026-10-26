@@ -34,7 +34,7 @@ impl StorageHandler for LocalHandler {
     ) -> Result<Arc<dyn StorageDevice>> {
         fs::create_dir_all(&storage.mount_point).context(format!(
             "failed to create dir all {:?}",
-            &storage.mount_point
+            storage.mount_point
         ))?;
 
         let opts = parse_options(&storage.options);

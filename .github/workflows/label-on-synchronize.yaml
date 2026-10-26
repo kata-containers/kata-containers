@@ -1,0 +1,47 @@
+name: Remove ok-to-test label on synchronize
+
+# When a PR receives new commits (synchronize), remove the 'ok-to-test' label
+# unless the PR author is an org member or owner. This prevents a contributor
+# from receiving the label on a benign commit and then force-pushing arbitrary
+# code that runs in the privileged CI context (pull_request_target) with access
+# to repository secrets.
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] See #11332.
+    types:
+      - synchronize
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  remove-label-on-synchronize:
+    name: Remove ok-to-test on synchronize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write # needed to remove the ok-to-test label
+    steps:
+      - name: Remove ok-to-test label if author is not an org member
+        env:
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "${AUTHOR_ASSOCIATION}" == "MEMBER" || "${AUTHOR_ASSOCIATION}" == "OWNER" ]]; then
+            echo "Author is an org ${AUTHOR_ASSOCIATION} - label retained."
+            exit 0
+          fi
+
+          has_label=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json labels \
+            --jq 'any(.labels[]; .name == "ok-to-test")')
+          if [[ "${has_label}" == "true" ]]; then
+            echo "Author association is '${AUTHOR_ASSOCIATION}' - removing 'ok-to-test' label."
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "ok-to-test"
+          fi
+        shell: bash

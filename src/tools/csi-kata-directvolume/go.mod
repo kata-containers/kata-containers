@@ -1,7 +1,7 @@
 module kata-containers/csi-kata-directvolume
 
 // Keep in sync with version in versions.yaml
-go 1.26.7
+go 1.26.9
 
 // WARNING: Do NOT use `replace` directives as those break dependabot:
 // https://github.com/kata-containers/kata-containers/issues/11020
@@ -14,7 +14,7 @@ require (
 	github.com/kubernetes-csi/csi-lib-utils v0.16.0
 	github.com/pborman/uuid v1.2.1
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/grpc v1.83.2
 	k8s.io/apimachinery v0.28.2
 	k8s.io/klog/v2 v2.110.1
@@ -35,8 +35,8 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/djherbis/times.v1 v1.3.0 // indirect

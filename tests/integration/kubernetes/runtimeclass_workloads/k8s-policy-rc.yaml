@@ -22,7 +22,17 @@ spec:
       - name: nginxtest
         image: ${NGINX_IMAGE}
         ports:
-        - containerPort: 80
+        - name: http
+          containerPort: 80
+        # Probe ports are IntOrString in the Kubernetes API. Nothing else in
+        # this suite hands genpolicy either form, so cover both.
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+        livenessProbe:
+          tcpSocket:
+            port: http
         volumeMounts:
           - name: host-empty-vol
             mountPath: "/host/cache"

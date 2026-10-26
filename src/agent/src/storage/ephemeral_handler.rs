@@ -92,7 +92,7 @@ impl EphemeralHandler {
         info!(logger, "mounting hugePages storage options: {:?}", options);
 
         let (pagesize, size) = Self::get_pagesize_and_size_from_option(options)
-            .context(format!("parse mount options: {:?}", &options))?;
+            .context(format!("parse mount options: {:?}", options))?;
 
         info!(
             logger,
@@ -112,19 +112,19 @@ impl EphemeralHandler {
         let mut file = OpenOptions::new()
             .write(true)
             .open(&path)
-            .context(format!("open nr_hugepages directory {:?}", &path))?;
+            .context(format!("open nr_hugepages directory {:?}", path))?;
 
         file.write_all(numpages.as_bytes())
-            .context(format!("write nr_hugepages failed: {:?}", &path))?;
+            .context(format!("write nr_hugepages failed: {:?}", path))?;
 
         // Even if the write succeeds, the kernel isn't guaranteed to be
         // able to allocate all the pages we requested.  Verify that it
         // did.
-        let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
+        let verify = fs::read_to_string(&path).context(format!("reading {:?}", path))?;
         let allocated = verify
             .trim_end()
             .parse::<u64>()
-            .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
+            .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", verify, path))?;
         if allocated != size / pagesize {
             return Err(anyhow!(
                 "Only allocated {} of {} hugepages of size {}",
@@ -166,11 +166,11 @@ impl EphemeralHandler {
         let pagesize = pagesize_str
             .unwrap()
             .parse::<u64>()
-            .context(format!("parse pagesize: {:?}", &pagesize_str))?;
+            .context(format!("parse pagesize: {:?}", pagesize_str))?;
         let size = size_str
             .unwrap()
             .parse::<u64>()
-            .context(format!("parse size: {:?}", &size_str))?;
+            .context(format!("parse size: {:?}", size_str))?;
 
         Ok((pagesize, size))
     }

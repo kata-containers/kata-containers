@@ -8,6 +8,7 @@ nav:
       - installation.md
     - Configuration:
         - Helm: helm-configuration.md
+        - Kata Deploy RuntimeClasses: kata-deploy-runtimeclasses.md
         - Runtime: runtime-configuration.md
         - Annotations: pod-annotations.md
   - Platform Support:
@@ -21,9 +22,12 @@ nav:
       - NUMA Support: how-to/how-to-use-numa-with-kata.md
       - Local Builds & Deployment: how-to/how-to-build-and-deploy-local-artifacts.md
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
+      - Rootless VMM: how-to/how-to-run-rootless-vmm.md
     - Contributing:
       - Documentation: doc-contributing.md
   - Releases:
+    - "4.3.1": releases/4.3.1.md
+    - "4.3.0": releases/4.3.0.md
     - "4.2.0": releases/4.2.0.md
     - "4.1.0": releases/4.1.0.md
   - Misc:

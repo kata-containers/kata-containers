@@ -109,32 +109,28 @@ impl FcInner {
         }
         debug!(sl(), "Exec: {:?}", cmd);
 
+        selinux::apply_exec_label(
+            &mut cmd,
+            self.config.effective_selinux_label(),
+            "Firecracker",
+        )?;
+
         // Make sure we're in the correct Network Namespace
         unsafe {
-            let selinux_label = self.config.security_info.selinux_label.clone();
             let _pre = cmd.pre_exec(move || {
                 if let Some(netns_path) = &netns {
                     debug!(sl(), "set netns for vmm master {:?}", &netns_path);
                     let netns_fd = std::fs::File::open(netns_path);
                     let _ = setns(&netns_fd?, CloneFlags::CLONE_NEWNET).context("set netns failed");
                 }
-                if let Some(label) = selinux_label.as_ref() {
-                    if let Err(e) = selinux::set_exec_label(label) {
-                        error!(sl!(), "Failed to set SELinux label in child process: {}", e);
-                        // Don't return error here to avoid breaking the process startup
-                        // Log the error and continue
-                    } else {
-                        info!(
-                            sl!(),
-                            "Successfully set SELinux label in child process: {}", &label
-                        );
-                    }
-                }
                 Ok(())
             });
         }
 
-        let mut child = cmd.stderr(Stdio::piped()).spawn()?;
+        let mut child = cmd
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("spawn Firecracker")?;
 
         let stderr = child.stderr.take().unwrap();
         let exit_notify = self

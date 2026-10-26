@@ -144,7 +144,12 @@ impl SandboxBindMounts {
             mount::umount_timeout(mnt_dest, 0).context("umount bindmount failed")?;
         }
 
-        if fs::metadata(self.host_mounts_path.clone())?.is_dir() {
+        let is_dir = match fs::metadata(&self.host_mounts_path) {
+            Ok(md) => md.is_dir(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+            Err(e) => return Err(e.into()),
+        };
+        if is_dir {
             fs::remove_dir_all(self.host_mounts_path.clone()).context(format!(
                 "remove sandbox bindmount point {:?}.",
                 self.host_mounts_path.clone()
@@ -152,5 +157,55 @@ impl SandboxBindMounts {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{in_private_mount_namespace, is_mounted, set_immutable, SharedTmpfs};
+
+    #[test]
+    #[ignore = "requires root and mount namespace capabilities"]
+    fn test_cleanup_retry_after_partial_failure() {
+        if !in_private_mount_namespace(
+            "share_fs::sandbox_bind_mounts::tests::test_cleanup_retry_after_partial_failure",
+        ) {
+            return;
+        }
+        let tmpfs = SharedTmpfs::new();
+        let sid = tmpfs.sandbox();
+        let mut sources = vec![];
+        for name in ["ro-src", "rw-src"] {
+            let source = tmpfs.path().join(name);
+            fs::create_dir(&source).unwrap();
+            fs::write(source.join("sentinel"), name).unwrap();
+            sources.push(source);
+        }
+        let bind_mounts = SandboxBindMounts::new(
+            sid,
+            vec![
+                sources[0].display().to_string(),
+                format!("{}{}", sources[1].display(), SANDBOX_BIND_MOUNTS_RW),
+            ],
+        )
+        .unwrap();
+        bind_mounts.setup_sandbox_bind_mounts().unwrap();
+        let targets = ["ro-src", "rw-src"].map(|n| bind_mounts.host_mounts_path.join(n));
+        assert!(targets.iter().all(is_mounted));
+
+        set_immutable(&bind_mounts.host_mounts_path, true);
+        let result = bind_mounts.cleanup_sandbox_bind_mounts();
+        set_immutable(&bind_mounts.host_mounts_path, false);
+        assert!(result.is_err());
+        assert!(!targets.iter().any(is_mounted));
+
+        bind_mounts.cleanup_sandbox_bind_mounts().unwrap();
+        assert!(!bind_mounts.host_mounts_path.exists());
+        for source in &sources {
+            assert!(source.join("sentinel").exists());
+        }
+
+        bind_mounts.cleanup_sandbox_bind_mounts().unwrap();
     }
 }

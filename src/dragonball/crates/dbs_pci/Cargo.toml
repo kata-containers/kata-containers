@@ -11,7 +11,7 @@ repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/
 version = "0.1.0"
 
 [dependencies]
-byteorder = "1.4.3"
+byteorder = { workspace = true }
 dbs-address-space = { workspace = true }
 dbs-allocator = { workspace = true }
 dbs-boot = { workspace = true }
@@ -22,14 +22,14 @@ dbs-interrupt = { features = [
   "kvm-msi-irq",
 ], workspace = true }
 dbs-virtio-devices = { workspace = true }
-log = "0.4.14"
-serde = "1.0.27"
+log = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 
 dbs-utils = { workspace = true }
 kvm-bindings = { workspace = true }
 kvm-ioctls = { workspace = true }
-libc = "0.2.39"
+libc = { workspace = true }
 vfio-bindings = { workspace = true }
 vfio-ioctls = { workspace = true }
 virtio-queue = { workspace = true }

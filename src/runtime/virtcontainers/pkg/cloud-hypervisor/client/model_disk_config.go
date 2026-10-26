@@ -19,20 +19,23 @@ type DiskConfig struct {
 	Path              *string              `json:"path,omitempty"`
 	Readonly          *bool                `json:"readonly,omitempty"`
 	Direct            *bool                `json:"direct,omitempty"`
-	Iommu             *bool                `json:"iommu,omitempty"`
+	Iommu             *IommuType           `json:"iommu,omitempty"`
 	NumQueues         *int32               `json:"num_queues,omitempty"`
 	QueueSize         *int32               `json:"queue_size,omitempty"`
 	VhostUser         *bool                `json:"vhost_user,omitempty"`
 	VhostSocket       *string              `json:"vhost_socket,omitempty"`
 	RateLimiterConfig *RateLimiterConfig   `json:"rate_limiter_config,omitempty"`
 	PciSegment        *int32               `json:"pci_segment,omitempty"`
+	PciDeviceId       *int32               `json:"pci_device_id,omitempty"`
 	Id                *string              `json:"id,omitempty"`
 	Serial            *string              `json:"serial,omitempty"`
 	RateLimitGroup    *string              `json:"rate_limit_group,omitempty"`
 	QueueAffinity     *[]VirtQueueAffinity `json:"queue_affinity,omitempty"`
 	BackingFiles      *bool                `json:"backing_files,omitempty"`
 	Sparse            *bool                `json:"sparse,omitempty"`
-	ImageType         *string              `json:"image_type,omitempty"`
+	ImageType         *ImageType           `json:"image_type,omitempty"`
+	LockGranularity   *LockGranularity     `json:"lock_granularity,omitempty"`
+	GuestBlockSize    *int32               `json:"guest_block_size,omitempty"`
 }
 
 // NewDiskConfig instantiates a new DiskConfig object
@@ -45,7 +48,7 @@ func NewDiskConfig() *DiskConfig {
 	this.Readonly = &readonly
 	var direct bool = false
 	this.Direct = &direct
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var numQueues int32 = 1
 	this.NumQueues = &numQueues
@@ -57,6 +60,8 @@ func NewDiskConfig() *DiskConfig {
 	this.BackingFiles = &backingFiles
 	var sparse bool = true
 	this.Sparse = &sparse
+	var lockGranularity LockGranularity = LOCKGRANULARITY_BYTE_RANGE
+	this.LockGranularity = &lockGranularity
 	return &this
 }
 
@@ -69,7 +74,7 @@ func NewDiskConfigWithDefaults() *DiskConfig {
 	this.Readonly = &readonly
 	var direct bool = false
 	this.Direct = &direct
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var numQueues int32 = 1
 	this.NumQueues = &numQueues
@@ -81,6 +86,8 @@ func NewDiskConfigWithDefaults() *DiskConfig {
 	this.BackingFiles = &backingFiles
 	var sparse bool = true
 	this.Sparse = &sparse
+	var lockGranularity LockGranularity = LOCKGRANULARITY_BYTE_RANGE
+	this.LockGranularity = &lockGranularity
 	return &this
 }
 
@@ -181,9 +188,9 @@ func (o *DiskConfig) SetDirect(v bool) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *DiskConfig) GetIommu() bool {
+func (o *DiskConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -191,7 +198,7 @@ func (o *DiskConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DiskConfig) GetIommuOk() (*bool, bool) {
+func (o *DiskConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -207,8 +214,8 @@ func (o *DiskConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *DiskConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *DiskConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 
@@ -404,6 +411,38 @@ func (o *DiskConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
 }
 
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *DiskConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *DiskConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *DiskConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *DiskConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -597,9 +636,9 @@ func (o *DiskConfig) SetSparse(v bool) {
 }
 
 // GetImageType returns the ImageType field value if set, zero value otherwise.
-func (o *DiskConfig) GetImageType() string {
+func (o *DiskConfig) GetImageType() ImageType {
 	if o == nil || o.ImageType == nil {
-		var ret string
+		var ret ImageType
 		return ret
 	}
 	return *o.ImageType
@@ -607,7 +646,7 @@ func (o *DiskConfig) GetImageType() string {
 
 // GetImageTypeOk returns a tuple with the ImageType field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DiskConfig) GetImageTypeOk() (*string, bool) {
+func (o *DiskConfig) GetImageTypeOk() (*ImageType, bool) {
 	if o == nil || o.ImageType == nil {
 		return nil, false
 	}
@@ -623,9 +662,73 @@ func (o *DiskConfig) HasImageType() bool {
 	return false
 }
 
-// SetImageType gets a reference to the given string and assigns it to the ImageType field.
-func (o *DiskConfig) SetImageType(v string) {
+// SetImageType gets a reference to the given ImageType and assigns it to the ImageType field.
+func (o *DiskConfig) SetImageType(v ImageType) {
 	o.ImageType = &v
+}
+
+// GetLockGranularity returns the LockGranularity field value if set, zero value otherwise.
+func (o *DiskConfig) GetLockGranularity() LockGranularity {
+	if o == nil || o.LockGranularity == nil {
+		var ret LockGranularity
+		return ret
+	}
+	return *o.LockGranularity
+}
+
+// GetLockGranularityOk returns a tuple with the LockGranularity field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetLockGranularityOk() (*LockGranularity, bool) {
+	if o == nil || o.LockGranularity == nil {
+		return nil, false
+	}
+	return o.LockGranularity, true
+}
+
+// HasLockGranularity returns a boolean if a field has been set.
+func (o *DiskConfig) HasLockGranularity() bool {
+	if o != nil && o.LockGranularity != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetLockGranularity gets a reference to the given LockGranularity and assigns it to the LockGranularity field.
+func (o *DiskConfig) SetLockGranularity(v LockGranularity) {
+	o.LockGranularity = &v
+}
+
+// GetGuestBlockSize returns the GuestBlockSize field value if set, zero value otherwise.
+func (o *DiskConfig) GetGuestBlockSize() int32 {
+	if o == nil || o.GuestBlockSize == nil {
+		var ret int32
+		return ret
+	}
+	return *o.GuestBlockSize
+}
+
+// GetGuestBlockSizeOk returns a tuple with the GuestBlockSize field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetGuestBlockSizeOk() (*int32, bool) {
+	if o == nil || o.GuestBlockSize == nil {
+		return nil, false
+	}
+	return o.GuestBlockSize, true
+}
+
+// HasGuestBlockSize returns a boolean if a field has been set.
+func (o *DiskConfig) HasGuestBlockSize() bool {
+	if o != nil && o.GuestBlockSize != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetGuestBlockSize gets a reference to the given int32 and assigns it to the GuestBlockSize field.
+func (o *DiskConfig) SetGuestBlockSize(v int32) {
+	o.GuestBlockSize = &v
 }
 
 func (o DiskConfig) MarshalJSON() ([]byte, error) {
@@ -660,6 +763,9 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
 	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
+	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
@@ -680,6 +786,12 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.ImageType != nil {
 		toSerialize["image_type"] = o.ImageType
+	}
+	if o.LockGranularity != nil {
+		toSerialize["lock_granularity"] = o.LockGranularity
+	}
+	if o.GuestBlockSize != nil {
+		toSerialize["guest_block_size"] = o.GuestBlockSize
 	}
 	return json.Marshal(toSerialize)
 }

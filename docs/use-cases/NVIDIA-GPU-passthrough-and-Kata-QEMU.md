@@ -52,8 +52,9 @@ responsibilities are:
   [NVIDIA/sandbox-device-plugin](https://github.com/NVIDIA/sandbox-device-plugin)
   repository):
   - Creating host-side CDI specifications for GPU passthrough,
-    resulting in the file `/var/run/cdi/nvidia.yaml`, containing
-    `kind: nvidia.com/pgpu`
+    including `/var/run/cdi/nvidia.com-pgpu.yaml`, which contains
+    `kind: nvidia.com/pgpu`. On NVSwitch-based systems, the CDI directory
+    also contains `/var/run/cdi/nvidia.com-nvswitch.yaml`.
   - Allocating GPUs during pod deployment.
   - Discovering NVIDIA GPUs, their capabilities, and advertising these to
     the Kubernetes control plane (allocatable resources as type
@@ -300,8 +301,8 @@ $ deploy_k8s
 
 > **Note:**
 >
-> We recommend to configure your Kubelet with a higher
-> `runtimeRequestTimeout` timeout value than the two minute default timeout.
+> We recommend configuring Kubelet's `runtimeRequestTimeout` to `20m` instead
+> of its two-minute default.
 > Using the guest-pull mechanism, pulling large images may take a significant
 > amount of time and may delay container start, possibly leading your Kubelet
 > to de-allocate your pod before it transitions from the *container creating*
@@ -324,7 +325,10 @@ $ deploy_k8s
 > API to discover allocated GPU devices during sandbox creation. For
 > Kubernetes versions **older than 1.34**, you must explicitly enable the
 > `KubeletPodResourcesGet` feature gate in your Kubelet configuration. For
-> Kubernetes 1.34 and later, this feature is enabled by default.
+> Kubernetes 1.34 and later, this feature is enabled by default. You must also
+> explicitly enable the `RuntimeClassInImageCriApi` feature gate, which is
+> required when using multiple snapshotters side by side and is disabled by
+> default.
 
 #### GPU Operator
 
@@ -347,8 +351,12 @@ $ helm install --wait --generate-name \
 >
 > For heterogeneous clusters with different GPU types, you can specify an
 > empty `P_GPU_ALIAS` environment variable for the sandbox device plugin:
-> `-    --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \`
-> `-    --set 'kataSandboxDevicePlugin.env[0].value=""' \`
+>
+> ```bash
+> --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \
+> --set 'kataSandboxDevicePlugin.env[0].value=""'
+> ```
+>
 > This will cause the sandbox device plugin to create GPU model-specific
 > resource types (e.g., `nvidia.com/GH100_H100L_94GB`) instead of the
 > default `pgpu` type, which usually results in advertising a resource of
@@ -382,7 +390,7 @@ $ helm install kata-deploy \
     --namespace kata-system \
     --create-namespace \
     -f "https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/${VERSION}/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml" \
-    --set nfd.enabled=false \
+    --set node-feature-discovery.enabled=false \
     --wait --timeout 10m \
     "${CHART}" --version "${VERSION}"
 ```
@@ -514,17 +522,6 @@ To stop the pod, run: `kubectl delete pod cuda-vectoradd-kata`.
 
 ### Next steps
 
-#### NUMA topology for GPU locality
-
-On multi-NUMA hosts, enabling NUMA support ensures GPU memory accesses stay
-local to the NUMA node where the GPU is physically attached, avoiding
-cross-NUMA latency. The NVIDIA GPU configuration templates ship with
-`enable_numa = true` by default.
-
-For details on NUMA configuration, topology verification, and
-troubleshooting, see the
-[NUMA support guide](../how-to/how-to-use-numa-with-kata.md).
-
 #### Use multi-GPU passthrough
 
 If you have machines supporting multi-GPU passthrough, use a pod deployment
@@ -586,38 +583,6 @@ This modification is applied via the genpolicy drop-in configuration file
 `src/tools/genpolicy/drop-in-examples/20-oci-1.3.0-drop-in.json`.
 When using a newer (or older) containerd version, the OCI version field
 may need to be adjusted accordingly.
-
-#### Run Kata CI tests locally
-
-Upstream Kata CI runs the CUDA vectorAdd, NUMA, composite attestation, and
-NIM/RAG tests. For TEE GPU scenarios, KBS is required for the
-attestation and NIM tests, but not for CUDA or NUMA. The best place to get
-started running these tests locally is to look into our
-[NVIDIA CI workflow manifest](https://github.com/kata-containers/kata-containers/blob/main/.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml)
-and into the underlying
-[run_kubernetes_nv_tests.sh](https://github.com/kata-containers/kata-containers/blob/main/tests/integration/kubernetes/run_kubernetes_nv_tests.sh)
-script. For example, to run the CUDA vectorAdd scenario against the TEE GPU
-runtime class use the following commands. These tests generate Kata agent
-security policies, so first install `genpolicy` as described in
-[Deploy pods with Kata agent security policies](#deploy-pods-with-kata-agent-security-policies).
-Run the tests from a Kata Containers source tree checked out at the tag
-matching `VERSION`. This keeps the deployed runtime, `genpolicy` binary and
-settings, and test scripts at the same release version.
-
-```bash
-# create the kata runtime class the test framework uses
-$ export KATA_HYPERVISOR=qemu-nvidia-gpu-snp
-$ kubectl delete runtimeclass kata --ignore-not-found
-$ kubectl get runtimeclass "kata-${KATA_HYPERVISOR}" -o json | \
-    jq '.metadata.name = "kata" | del(.metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp)' | \
-    kubectl apply -f -
-$ cd tests/integration/kubernetes
-$ K8S_TEST_NV="k8s-nvidia-cuda.bats" ./gha-run.sh run-nv-tests
-```
-
-> **Note:**
->
-> The NIM tests require `NGC_API_KEY` to contain a valid NGC API key.
 
 #### Deploy pods using attestation
 

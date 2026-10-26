@@ -34,7 +34,7 @@ pub struct ShareVirtioFsNydusConfig {
 
 pub struct ShareVirtioFsNydus {
     config: ShareVirtioFsNydusConfig,
-    nydusd: Arc<RwLock<Option<Nydusd>>>,
+    nydusd: Arc<RwLock<Option<Arc<Nydusd>>>>,
     share_fs_mount: Arc<dyn ShareFsMount>,
     mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
 }
@@ -56,6 +56,7 @@ impl ShareVirtioFsNydus {
 
     async fn setup_nydusd(&self, h: &dyn Hypervisor) -> Result<()> {
         let jailer_root = h.get_jailer_root().await?;
+        let hypervisor_config = h.hypervisor_config().await;
         let sock_path = Path::new(&jailer_root).join("virtiofsd.sock");
         let api_sock_path = Path::new(&jailer_root).join(NYDUSD_API_SOCK);
 
@@ -71,16 +72,17 @@ impl ShareVirtioFsNydus {
         .validate()
         .context("validate nydusd config")?;
 
-        // start nydusd with the validated config
-        let nydusd = Nydusd::new(nydusd_config);
-        let pid = nydusd.start().await.context("failed to start nydusd")?;
+        let mut nydusd_guard = self.nydusd.write().await;
+        if nydusd_guard.is_some() {
+            return Err(anyhow!("nydusd already initialized"));
+        }
+        let nydusd = nydusd_guard.insert(Arc::new(Nydusd::new(nydusd_config)));
+        let pid = nydusd
+            .start(hypervisor_config.effective_selinux_label())
+            .await
+            .context("failed to start nydusd")?;
 
         info!(sl!(), "nydusd started with pid {}", pid);
-
-        {
-            let mut n = self.nydusd.write().await;
-            *n = Some(nydusd);
-        }
 
         Ok(())
     }
@@ -143,13 +145,16 @@ impl ShareFs for ShareVirtioFsNydus {
 
     async fn stop(&self) -> Result<()> {
         info!(sl!(), "stopping nydusd daemon");
-        let nydusd = {
-            let mut nydusd_guard = self.nydusd.write().await;
-            nydusd_guard.take()
-        };
-
+        let nydusd = self.nydusd.read().await.clone();
         if let Some(nydusd) = nydusd {
             nydusd.stop().await.context("failed to stop nydusd")?;
+            let mut nydusd_guard = self.nydusd.write().await;
+            if nydusd_guard
+                .as_ref()
+                .is_some_and(|current| Arc::ptr_eq(current, &nydusd))
+            {
+                *nydusd_guard = None;
+            }
         }
         Ok(())
     }
@@ -159,9 +164,11 @@ impl ShareFs for ShareVirtioFsNydus {
 impl NydusShareFs for ShareVirtioFsNydus {
     async fn mount_rafs(&self, cid: &str, rafs_meta: &str, config: &str) -> Result<String> {
         let mountpoint = format!("/rafs/{}/lowerdir", cid);
-        let nydusd_guard = self.nydusd.read().await;
-        let nydusd = nydusd_guard
-            .as_ref()
+        let nydusd = self
+            .nydusd
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| anyhow!("nydusd not initialized"))?;
 
         nydusd
@@ -173,13 +180,76 @@ impl NydusShareFs for ShareVirtioFsNydus {
     }
 
     async fn umount_rafs(&self, mountpoint: &str) -> Result<()> {
-        let nydusd_guard = self.nydusd.read().await;
-        let nydusd = nydusd_guard
-            .as_ref()
+        let nydusd = self
+            .nydusd
+            .read()
+            .await
+            .clone()
             .ok_or_else(|| anyhow!("nydusd not initialized"))?;
         nydusd
             .umount(mountpoint)
             .await
             .context("failed to umount rafs via nydusd API")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn stop_keeps_nydusd_after_cancellation() {
+        let share = ShareVirtioFsNydus::new("test", &SharedFsInfo::default()).unwrap();
+        let nydusd = Nydusd::new(NydusdConfig::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            PathBuf::new(),
+            PathBuf::new(),
+            false,
+            vec![],
+        ));
+        let lock = nydusd.hold_stop_lock_for_test().await;
+        *share.nydusd.write().await = Some(Arc::new(nydusd));
+
+        assert!(timeout(Duration::from_millis(10), share.stop())
+            .await
+            .is_err());
+        drop(lock);
+
+        assert!(share.nydusd.read().await.is_some());
+        share.stop().await.unwrap();
+        assert!(share.nydusd.read().await.is_none());
+        share.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stop_does_not_block_nydusd_access_while_waiting_for_exit() {
+        let share = ShareVirtioFsNydus::new("test", &SharedFsInfo::default()).unwrap();
+        let nydusd = Arc::new(Nydusd::new(NydusdConfig::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            PathBuf::new(),
+            PathBuf::new(),
+            false,
+            vec![],
+        )));
+        let stop_lock = nydusd.hold_stop_lock_for_test().await;
+        *share.nydusd.write().await = Some(nydusd);
+
+        let stopping = share.stop();
+        tokio::pin!(stopping);
+        assert!(matches!(
+            futures::poll!(stopping.as_mut()),
+            std::task::Poll::Pending
+        ));
+        assert!(timeout(Duration::from_millis(50), share.nydusd.read())
+            .await
+            .is_ok());
+
+        drop(stop_lock);
+        stopping.await.unwrap();
+        assert!(share.nydusd.read().await.is_none());
     }
 }

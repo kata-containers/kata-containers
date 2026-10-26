@@ -14,7 +14,7 @@ version = "0.1.0"
 anyhow = "1.0.31"
 byteorder = "1.4.3"
 fail = "0.5.1"
-hex = "0.4.3"
+hex = { workspace = true }
 lazy_static = "1.4.0"
 libc = "0.2.100"
 nix = { features = [

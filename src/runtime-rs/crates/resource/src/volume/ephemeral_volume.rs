@@ -49,7 +49,7 @@ impl EphemeralVolume {
 
         let file_name = Path::new(source)
             .file_name()
-            .context(format!("get file name from {:?}", &m.source()))?;
+            .context(format!("get file name from {:?}", m.source()))?;
         let source = Path::new(kata_guest_sandbox_dir().as_str())
             .join(KATA_EPHEMERAL_VOLUME_TYPE)
             .join(file_name)

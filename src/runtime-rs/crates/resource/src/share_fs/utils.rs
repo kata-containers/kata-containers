@@ -47,7 +47,7 @@ pub(crate) fn share_to_guest(
 ) -> Result<String> {
     let host_dest = do_get_host_path(target, sid, cid, is_volume, false);
     mount::bind_mount_unchecked(source, &host_dest, readonly, MsFlags::MS_SLAVE)
-        .with_context(|| format!("failed to bind mount {} to {}", source, &host_dest))?;
+        .with_context(|| format!("failed to bind mount {} to {}", source, host_dest))?;
 
     // bind mount remount event is not propagated to mount subtrees, so we have
     // to remount the read only dir mount point directly.

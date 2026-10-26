@@ -106,7 +106,7 @@ pub struct ContainerProcess {
 
 impl fmt::Display for ContainerProcess {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", &self)
+        write!(f, "{:?}", self)
     }
 }
 

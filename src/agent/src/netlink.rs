@@ -695,7 +695,7 @@ impl Handle {
             .toIPAddress
             .as_ref()
             .map(|to| to.address.as_str()) // Extract address field
-            .and_then(|addr| if addr.is_empty() { None } else { Some(addr) }) // Make sure it's not empty
+            .filter(|&addr| !addr.is_empty()) // Make sure it's not empty
             .ok_or_else(|| anyhow!("Unable to determine ip address of ARP neighbor"))?;
 
         let ip = IpAddr::from_str(ip_address)

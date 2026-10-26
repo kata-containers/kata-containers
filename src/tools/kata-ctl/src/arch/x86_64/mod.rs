@@ -246,11 +246,8 @@ mod arch_specific {
 
             match module_loaded {
                 Ok(_) => {
-                    let check = check_kernel_params(module);
-                    match check {
-                        Ok(_v) => info!(sl!(), "{} Ok", module.name),
-                        Err(e) => return Err(e),
-                    }
+                    check_kernel_params(module)?;
+                    info!(sl!(), "{} Ok", module.name);
                 }
                 Err(err) => {
                     warn!(sl!(), "{:}", err.replace('\n', ""))

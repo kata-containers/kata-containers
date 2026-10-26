@@ -618,6 +618,22 @@ get_latest_nvidia_driver_version() {
 	get_from_kata_deps ".externals.nvidia.driver.version"
 }
 
+get_nvidia_driver_cache_key() {
+	local version url
+	version=$(get_latest_nvidia_driver_version)
+	url=$(get_from_kata_deps ".externals.nvidia.driver.url")
+	# A tarball url replaces the GitHub tag as the driver source, so it
+	# must key the caches - otherwise a github-source artefact is served
+	# for a build requesting a different source drop. Cache keys only:
+	# the raw version above names the driver packages to install, and a
+	# suffixed version names packages that do not exist. The suffix test
+	# ignores a query string; the hash keys the complete url.
+	if [[ "${url%%\?*}" =~ \.tar\.(gz|xz)$ ]]; then
+		version+="-$(echo "${url}" | sha256sum | cut -c1-8)"
+	fi
+	echo "${version}"
+}
+
 get_latest_nvidia_ctk_version() {
 	get_from_kata_deps ".externals.nvidia.ctk.version"
 }
@@ -647,11 +663,21 @@ get_latest_nvidia_repo_version() {
 	local arch
 	arch="$(uname -m)"
 
-	echo "$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")" \
-		"$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")" \
-		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")" \
-		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")" \
-		| sha256sum | cut -c1-9
+	local repos
+	repos="$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")"
+	repos+=" $(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")"
+	repos+=" $(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")"
+	repos+=" $(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")"
+
+	# Joins the hash only when set, so the default (unset) key is
+	# identical to before the driver repo existed. Url and pkg stay
+	# separate fields - joined, different splits could collide.
+	local driver_repo_url driver_repo_pkg
+	driver_repo_url="$(get_from_kata_deps ".externals.nvidia.driver.repo.${arch}.url")"
+	driver_repo_pkg="$(get_from_kata_deps ".externals.nvidia.driver.repo.${arch}.pkg")"
+	[[ -n "${driver_repo_url}${driver_repo_pkg}" ]] && repos+=" ${driver_repo_url} ${driver_repo_pkg}"
+
+	echo "${repos}" | sha256sum | cut -c1-9
 }
 
 #Install guest image
@@ -680,7 +706,7 @@ install_image() {
 		latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${image_type}"
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_nvidia_driver_cache_key)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_upx_version)"
@@ -706,7 +732,7 @@ install_image() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			latest_artefact+="-$(get_nvidia_driver_cache_key)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -727,7 +753,7 @@ install_image() {
 		# Monolith: Kata NVIDIA modules + pinned driver/CTK userspace + NVRC init.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_nvidia_driver_cache_key)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1057,7 +1083,7 @@ install_initrd() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			latest_artefact+="-$(get_nvidia_driver_cache_key)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1075,7 +1101,7 @@ install_initrd() {
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
-		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_nvidia_driver_cache_key)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_dcgm_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1248,6 +1274,15 @@ install_cached_kernel_tarball_component() {
 
 	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
 	latest_builder_image="$(get_kernel_image_name)"
+
+	# The nvidia kernel tarball ships the out-of-tree driver modules, so
+	# the driver (version and source) must key its cache too - otherwise a
+	# driver bump serves modules built from the previous driver.
+	case ${kernel_name} in
+		kernel-nvidia-gpu*)
+			latest_artefact+="-$(get_nvidia_driver_cache_key)"
+			;;
+	esac
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
@@ -1501,7 +1536,9 @@ install_clh_helper() {
 # Install static cloud-hypervisor asset
 install_clh() {
 	if [[ "${ARCH}" == "x86_64" ]]; then
-		features="mshv,tdx"
+		# Cloud Hypervisor deliberately rejects the TDX feature as broken.
+		# Select the supported KVM backend explicitly and retain MSHV support.
+		features="kvm,mshv"
 	else
 		features=""
 	fi
@@ -1854,6 +1891,14 @@ install_tools_helper() {
 	tool=${1}
 
 	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/tools/"${tool}")"
+	if [[ "${tool}" == "kata-ctl" ]]; then
+		# Factory commands embed runtime-rs, including its hypervisor API code.
+		# Rebuild when that code or its workspace dependencies change.
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/libs")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/Cargo.toml")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/Cargo.lock")"
+	fi
 	latest_builder_image="$(get_tools_image_name)"
 
 	install_cached_tarball_component \

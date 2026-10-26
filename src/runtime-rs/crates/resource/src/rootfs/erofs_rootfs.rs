@@ -25,14 +25,18 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfigModern, BlockDeviceAio, VmdkConfig,
-};
-use kata_types::gpt_disk::{
-    extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
-    generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
-    parse_dmverity_metadata_file, ErofsLayer, GptDiskLayout, GptMetadataFiles,
+    virtio_blk_modern::BlockSourceFormat,
+    BlockConfigModern, BlockDeviceAio,
 };
 use kata_types::mount::Mount;
+use kata_types::{
+    gpt_disk::{
+        extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
+        generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
+        parse_dmverity_metadata_file, ErofsLayer, GptDiskLayout, GptMetadataFiles,
+    },
+    vmdk::VmdkConfig,
+};
 use oci_spec::runtime as oci;
 use std::collections::HashMap;
 use std::fs;
@@ -86,7 +90,7 @@ async fn generate_merged_erofs_vmdk(
     sid: &str,
     cid: &str,
     erofs_devices: &[String],
-) -> Result<(String, Option<VmdkConfig>)> {
+) -> Result<(String, BlockSourceFormat)> {
     if erofs_devices.is_empty() {
         return Err(anyhow!("no EROFS devices provided"));
     }
@@ -109,7 +113,7 @@ async fn generate_merged_erofs_vmdk(
             sl!(),
             "single EROFS device, using directly: {}", erofs_devices[0]
         );
-        return Ok((erofs_devices[0].clone(), None));
+        return Ok((erofs_devices[0].clone(), BlockSourceFormat::Raw));
     }
 
     // This reserved path identifies the block device and is included in logs;
@@ -127,7 +131,10 @@ async fn generate_merged_erofs_vmdk(
 
     let vmdk = create_vmdk_config(erofs_devices).context("failed to create VMDK layout")?;
 
-    Ok((vmdk_path.display().to_string(), Some(vmdk)))
+    Ok((
+        vmdk_path.display().to_string(),
+        BlockSourceFormat::Vmdk(vmdk),
+    ))
 }
 
 /// Create a VMDK layout for multiple EROFS extents (flatten device).
@@ -375,8 +382,10 @@ pub(crate) struct ErofsMultiLayerRootfs {
     rwlayer_storage: Option<Storage>,
     // Read-only EROFS layer storages (lower layers), one per partition in GPT mode
     erofs_storages: Vec<Storage>,
-    // Paths to generated GPT metadata files (head, padding) for cleanup
-    gpt_metadata_paths: Vec<PathBuf>,
+    // Temporary host files used by VMDK-backed rootfs layouts (GPT
+    // leading-metadata image, padding images, and descriptor), removed after
+    // device teardown.
+    cleanup_paths: Vec<PathBuf>,
     // Container-scoped runtime directory that may only contain generated helper artifacts.
     generated_artifacts_dir: PathBuf,
 }
@@ -398,7 +407,7 @@ impl ErofsMultiLayerRootfs {
         let mut device_ids = Vec::new();
         let mut rwlayer_storage: Option<Storage> = None;
         let mut erofs_storages: Vec<Storage> = Vec::new();
-        let mut gpt_metadata_paths: Vec<PathBuf> = Vec::new();
+        let mut cleanup_paths: Vec<PathBuf> = Vec::new();
         // Track whether GPT+VMDK erofs layers have already been processed in bulk.
         let mut gpt_erofs_processed = false;
 
@@ -577,9 +586,9 @@ impl ErofsMultiLayerRootfs {
                             generate_gpt_vmdk_with_layout(sid, cid, erofs_layers)
                                 .context("gptdisk: failed to generate GPT VMDK")?;
 
-                        // Track GPT metadata files (head + padding) for cleanup
-                        gpt_metadata_paths.push(gpt_files.head_path.clone());
-                        gpt_metadata_paths.extend(gpt_files.pad_paths.iter().cloned());
+                        // Track every generated file backing this VMDK for cleanup.
+                        cleanup_paths.push(gpt_files.head_path.clone());
+                        cleanup_paths.extend(gpt_files.pad_paths.iter().cloned());
                         for idx in 0..layout.partitions.len() {
                             if idx > 0 {
                                 // Check for padding files (only created when there are gaps)
@@ -589,10 +598,15 @@ impl ErofsMultiLayerRootfs {
                                     .unwrap()
                                     .join(format!("pad-{}.img", idx));
                                 if pad_path.exists() {
-                                    gpt_metadata_paths.push(pad_path);
+                                    cleanup_paths.push(pad_path);
                                 }
                             }
                         }
+                        // GPT assembly always produces a structured VMDK layout.
+                        // `erofs_path` is its reserved descriptor path. QEMU leaves
+                        // no file there, so cleanup is a no-op until a VMM
+                        // materializes the descriptor.
+                        cleanup_paths.push(PathBuf::from(&erofs_path));
 
                         info!(
                             sl!(),
@@ -603,7 +617,7 @@ impl ErofsMultiLayerRootfs {
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            vmdk: Some(vmdk),
+                            source: BlockSourceFormat::Vmdk(vmdk),
                             path_on_host: erofs_path,
                             is_readonly: true,
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
@@ -741,21 +755,31 @@ impl ErofsMultiLayerRootfs {
 
                         // Build a merged VMDK layout from all EROFS devices.
                         // Multiple devices use VMDK; a single device remains Raw.
-                        let (erofs_path, vmdk) =
+                        let (erofs_path, source) =
                             generate_merged_erofs_vmdk(sid, cid, &erofs_devices)
                                 .await
                                 .context("failed to generate EROFS VMDK")?;
+
+                        let is_vmdk = matches!(&source, BlockSourceFormat::Vmdk(_));
 
                         info!(
                             sl!(),
                             "EROFS block device config - path: {}, structured VMDK: {}",
                             erofs_path,
-                            vmdk.is_some()
+                            is_vmdk
                         );
+
+                        // Only a multi-device result has a structured VMDK layout
+                        // and reserves `erofs_path` for its descriptor. A
+                        // single-device result is raw EROFS, whose source path must
+                        // not be tracked as a generated temporary file.
+                        if is_vmdk {
+                            cleanup_paths.push(PathBuf::from(&erofs_path));
+                        }
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            vmdk,
+                            source,
                             path_on_host: erofs_path,
                             is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
@@ -852,7 +876,7 @@ impl ErofsMultiLayerRootfs {
             device_ids,
             rwlayer_storage,
             erofs_storages,
-            gpt_metadata_paths,
+            cleanup_paths,
             generated_artifacts_dir: PathBuf::from(kata_types::prefix_with_rootless_dir(
                 DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
             ))
@@ -913,9 +937,9 @@ impl Rootfs for ErofsMultiLayerRootfs {
             dm.try_remove_device(device_id).await?;
         }
 
-        // Clean up GPT metadata files (head, padding).
-        for metadata_path in &self.gpt_metadata_paths {
-            safely_remove_file(metadata_path, &self.generated_artifacts_dir)?;
+        // Remove temporary VMDK files (GPT leading metadata, padding, descriptor).
+        for file_path in &self.cleanup_paths {
+            safely_remove_file(file_path, &self.generated_artifacts_dir)?;
         }
 
         Ok(())

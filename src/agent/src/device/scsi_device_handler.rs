@@ -49,7 +49,7 @@ pub async fn get_scsi_device_name(
 
     scan_scsi_bus(scsi_addr)?;
     let uev = wait_for_uevent(sandbox, matcher).await?;
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, uev.devname))
 }
 
 // FIXME: This matcher is only correct if the guest has at most one

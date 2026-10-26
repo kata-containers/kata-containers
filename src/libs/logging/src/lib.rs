@@ -302,7 +302,7 @@ where
         let mut record_serializer = HashSerializer::new();
         record.kv().serialize(record, &mut record_serializer)?;
 
-        for (key, _) in record_serializer.fields.iter() {
+        for key in record_serializer.fields.keys() {
             logger_serializer.remove_field(key);
         }
 

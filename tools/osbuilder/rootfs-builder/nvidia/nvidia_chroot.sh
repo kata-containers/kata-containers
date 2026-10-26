@@ -27,6 +27,11 @@ tools_repo_pkg="${7:?tools_repo_pkg not specified}"
 ctk_version="${8:?ctk_version not specified}"
 dcgm_version="${9:?dcgm_version not specified}"
 dcgm_exporter_version="${10:?dcgm_exporter_version not specified}"
+# Optional: for drivers whose userspace packages require a dedicated
+# repository (not yet published on the repositories configured below).
+# If configured, url and package must both be supplied.
+driver_repo_url="${11:-}"
+driver_repo_pkg="${12:-}"
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -128,11 +133,30 @@ setup_apt_repositories() {
 	curl -fsSL -O "${cuda_repo_url}/${cuda_repo_pkg}"
 	dpkg -i "${cuda_repo_pkg}" && rm -f "${cuda_repo_pkg}"
 
+	# Drivers released separately from the toolkit ship their userspace
+	# (pinning, libnvidia-*, fabricmanager, nvlsm, imex) in a dedicated
+	# repository - without it those packages only resolve for drivers
+	# already published on the repositories above. The toolkit and driver
+	# repositories are disjoint package sets (shared cuda-keyring aside),
+	# so provenance only matters against the network repositories: local
+	# file origins are pinned at 900 (below), above the network ones, and
+	# nvidia-driver-pinning pins the driver set to exact versions - pins
+	# decide, never listing order. A half-configured pair must fail here:
+	# silently skipping it surfaces later as a misleading
+	# package-resolution error.
+	if [[ -n "${driver_repo_url}" || -n "${driver_repo_pkg}" ]]; then
+		[[ -n "${driver_repo_url}" && -n "${driver_repo_pkg}" ]] || \
+			die "driver repository misconfigured: url='${driver_repo_url}' pkg='${driver_repo_pkg}' - set both or neither"
+		curl -fsSL -O "${driver_repo_url}/${driver_repo_pkg}"
+		dpkg -i "${driver_repo_pkg}" && rm -f "${driver_repo_pkg}"
+	fi
+
 	# A local repo ships its signing key inside its own tree, but apt only
 	# trusts keys under /usr/share/keyrings - without this copy `apt update`
 	# rejects the repo as unsigned. A loop because [[ -e ]] would test the
 	# glob literally (nullglob: remote-repo flow matches nothing, skips).
-	for keyring in /var/cuda-repo-*-local/cuda-*-keyring.gpg; do
+	for keyring in /var/cuda-repo-*-local/cuda-*-keyring.gpg \
+		/var/nvidia-driver-local-repo-*/nvidia-driver-*-keyring.gpg; do
 		cp "${keyring}" /usr/share/keyrings/
 	done
 
@@ -172,6 +196,17 @@ install_nvidia_dcgm() {
 	# Both are version-locked because the repository only ever offers the newest
 	# DCGM, so an unpinned install re-bases the guest on whatever NVIDIA
 	# published last.
+	#
+	# -core depends on its sub-packages at exactly its own version, but apt
+	# picks the newest candidate for each of them, so pinning -core alone
+	# breaks as soon as NVIDIA respins the release (e.g. 1:4.7.0-1 -> -2).
+	# Pin the whole family so apt resolves it at ${dcgm_version}.
+	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-dcgm
+		Package: datacenter-gpu-manager-4-* dcgmi libdcgm nv-hostengine
+		Pin: version ${dcgm_version}
+		Pin-Priority: 1001
+	CHROOT_EOF
+
 	eval "${APT_INSTALL}" datacenter-gpu-manager-4-core="${dcgm_version}" \
 		datacenter-gpu-manager-exporter="${dcgm_exporter_version}"
 

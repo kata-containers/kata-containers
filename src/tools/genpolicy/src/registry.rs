@@ -150,12 +150,12 @@ impl Container {
         {
             Ok((m, d, c)) => (m, d, c),
             Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
-                panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
+                panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", message);
             }
             Err(e) => {
                 panic!(
                     "Failed to pull container image manifest and config - error: {:#?}",
-                    &e
+                    e
                 );
             }
         };
@@ -167,7 +167,7 @@ impl Container {
         );
         debug!("Container:new: config_layer string: {config_layer_str}");
         let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
-        debug!("Container:new: config_layer: {:?}", &config_layer);
+        debug!("Container:new: config_layer: {:?}", config_layer);
 
         let mut passwd = String::new();
         let mut group = String::new();
@@ -369,7 +369,7 @@ impl Container {
         let docker_config = &self.config_layer.config;
         debug!(
             "Container::get_process: getting process field for docker config with User = {:?}",
-            &docker_config.User
+            docker_config.User
         );
 
         /*
@@ -427,7 +427,7 @@ impl Container {
                     } else {
                         debug!(
                             "Container::get_process: parsing uid from user[0] = {}",
-                            &user[0]
+                            user[0]
                         );
                         process.User.UID = self.parse_user_string(user[0]);
 
@@ -467,7 +467,7 @@ impl Container {
                         process.User.AdditionalGids.insert(gid);
                         debug!(
                             "get_container_process: inserted GID = {gid} into AdditionalGids: User = {:?}",
-                            &process.User
+                            process.User
                         );
                     }
                     Err(e) => {
@@ -784,7 +784,7 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
                 debug!("build_auth: Docker credentials not found - using anonymous access.");
             } else {
                 warn!("build_auth: Docker credentials not found - using anonymous access. stderr = {}, stdout = {}",
-                    &stderr, &stdout);
+                    stderr, stdout);
             }
         }
         Err(e) => panic!("Error handling docker configuration file: {e}"),

@@ -205,7 +205,7 @@ pub async fn add_devices(
                         {
                             return Err(anyhow!(
                                 "Conflicting device updates for {}",
-                                &device.container_path
+                                device.container_path
                             ));
                         }
 
@@ -215,20 +215,7 @@ pub async fn add_devices(
                     }
 
                     let mut sb = sandbox.lock().await;
-                    let mut host_guest: PciHostGuestMapping = HashMap::new();
-                    for (host, guest) in update.pci {
-                        if let Some(other_guest) = host_guest.insert(host, guest) {
-                            return Err(anyhow!(
-                                "Conflicting guest address for host device {} ({} versus {})",
-                                host,
-                                guest,
-                                other_guest
-                            ));
-                        }
-                    }
-                    // Save all the host -> guest mappings per container upon
-                    // removal of the container, the mappings will be removed
-                    sb.pcimap.insert(cid.clone(), host_guest);
+                    add_pci_mappings(&mut sb.pcimap, cid, update.pci)?;
                 }
                 Err(e) => {
                     error!(logger, "failed to add devices, error: {e:?}");
@@ -244,8 +231,7 @@ pub async fn add_devices(
     }
 
     if let Some(process) = spec.process_mut() {
-        let env_vec: &mut Vec<String> =
-            &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
+        let env_vec = process.env_mut().get_or_insert_with(Vec::new);
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
 
@@ -264,6 +250,37 @@ pub async fn add_devices(
     }
 
     update_spec_devices(logger, spec, dev_updates)
+}
+
+/// Adds a device's host -> guest PCI address mappings to the mappings of
+/// container `cid`, which accumulate over all the container's devices and
+/// are removed together with the container. The mappings are only added if
+/// none of them conflicts with an existing mapping or with each other.
+fn add_pci_mappings(
+    pcimap: &mut HashMap<String, PciHostGuestMapping>,
+    cid: &str,
+    pci: Vec<(pci::Address, pci::Address)>,
+) -> Result<()> {
+    let existing = pcimap.get(cid);
+    let mut new = PciHostGuestMapping::new();
+    for (host, guest) in pci {
+        let other = new
+            .get(&host)
+            .or_else(|| existing.and_then(|m| m.get(&host)));
+        if let Some(other_guest) = other {
+            if *other_guest != guest {
+                return Err(anyhow!(
+                    "Conflicting guest address for host device {} ({} versus {})",
+                    host,
+                    guest,
+                    other_guest
+                ));
+            }
+        }
+        new.insert(host, guest);
+    }
+    pcimap.entry(cid.to_string()).or_default().extend(new);
+    Ok(())
 }
 
 /// Returns true if `devices` contains at least one entry whose
@@ -1104,7 +1121,7 @@ mod tests {
         LinuxResources, LinuxResourcesBuilder, SpecBuilder,
     };
     use oci_spec::runtime as oci;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
@@ -2058,6 +2075,117 @@ mod tests {
         let name = example_get_device_name(&sandbox, root_complex, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), devname);
+    }
+
+    #[tokio::test]
+    async fn test_add_devices_updates_spec_env_pci() {
+        let logger = create_test_logger();
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let cid = "0".to_string();
+
+        let host = pci::Address::from_str("0000:00:02.1").unwrap();
+        let guest = pci::Address::from_str("0000:02:00.0").unwrap();
+        sandbox
+            .lock()
+            .await
+            .pcimap
+            .insert(cid.clone(), HashMap::from([(host, guest)]));
+
+        let mut spec = SpecBuilder::default()
+            .process(
+                oci::ProcessBuilder::default()
+                    .env(vec!["PCIDEVICE_x=0000:00:02.1".to_string()])
+                    .build()
+                    .unwrap(),
+            )
+            .linux(Linux::default())
+            .build()
+            .unwrap();
+
+        let res = add_devices(&cid, &logger, &[], &mut spec, &sandbox).await;
+        assert!(res.is_ok(), "{}", res.unwrap_err());
+
+        let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
+        assert_eq!(env, &vec!["PCIDEVICE_x=0000:02:00.0".to_string()]);
+    }
+
+    fn pci_pairs(pairs: &[(&str, &str)]) -> Vec<(pci::Address, pci::Address)> {
+        pairs
+            .iter()
+            .map(|(h, g)| {
+                (
+                    pci::Address::from_str(h).unwrap(),
+                    pci::Address::from_str(g).unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    fn pci_mapping(pairs: &[(&str, &str)]) -> PciHostGuestMapping {
+        pci_pairs(pairs).into_iter().collect()
+    }
+
+    #[fixture]
+    fn pcimap_with_c1() -> HashMap<String, PciHostGuestMapping> {
+        HashMap::from([(
+            "c1".to_string(),
+            pci_mapping(&[("0000:00:02.1", "0000:02:00.0")]),
+        )])
+    }
+
+    // `expected` is the resulting mapping of `cid` when the batch is
+    // accepted, or None when it is rejected and nothing may change.
+    #[rstest]
+    #[case::new_container(
+        "c2",
+        &[("0000:00:02.3", "0000:02:00.0")],
+        Some(&[("0000:00:02.3", "0000:02:00.0")][..])
+    )]
+    #[case::accumulates_for_same_container(
+        "c1",
+        &[("0000:00:02.2", "0000:03:00.0")],
+        Some(&[("0000:00:02.1", "0000:02:00.0"), ("0000:00:02.2", "0000:03:00.0")][..])
+    )]
+    #[case::repeating_a_mapping_is_fine(
+        "c1",
+        &[("0000:00:02.1", "0000:02:00.0")],
+        Some(&[("0000:00:02.1", "0000:02:00.0")][..])
+    )]
+    #[case::conflict_with_existing_mapping(
+        "c1",
+        &[("0000:00:02.4", "0000:05:00.0"), ("0000:00:02.1", "0000:04:00.0")],
+        None
+    )]
+    #[case::conflict_within_batch(
+        "c3",
+        &[("0000:00:02.5", "0000:02:00.0"), ("0000:00:02.5", "0000:03:00.0")],
+        None
+    )]
+    fn test_add_pci_mappings(
+        mut pcimap_with_c1: HashMap<String, PciHostGuestMapping>,
+        #[case] cid: &str,
+        #[case] batch: &[(&str, &str)],
+        #[case] expected: Option<&[(&str, &str)]>,
+    ) {
+        let before = pcimap_with_c1.clone();
+
+        let res = add_pci_mappings(&mut pcimap_with_c1, cid, pci_pairs(batch));
+
+        match expected {
+            Some(mapping) => {
+                res.unwrap();
+                assert_eq!(pcimap_with_c1[cid], pci_mapping(mapping));
+                // Other containers' mappings are kept separately.
+                for (other, other_mapping) in before.iter().filter(|(c, _)| *c != cid) {
+                    assert_eq!(&pcimap_with_c1[other], other_mapping);
+                }
+            }
+            None => {
+                assert!(res.is_err());
+                // A rejected batch must leave all mappings untouched.
+                assert_eq!(pcimap_with_c1, before);
+            }
+        }
     }
 
     #[tokio::test]

@@ -19,10 +19,11 @@ type VsockConfig struct {
 	// Guest Vsock CID
 	Cid int64 `json:"cid"`
 	// Path to UNIX domain socket, used to proxy vsock connections.
-	Socket     string  `json:"socket"`
-	Iommu      *bool   `json:"iommu,omitempty"`
-	PciSegment *int32  `json:"pci_segment,omitempty"`
-	Id         *string `json:"id,omitempty"`
+	Socket      string     `json:"socket"`
+	Iommu       *IommuType `json:"iommu,omitempty"`
+	PciSegment  *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId *int32     `json:"pci_device_id,omitempty"`
+	Id          *string    `json:"id,omitempty"`
 }
 
 // NewVsockConfig instantiates a new VsockConfig object
@@ -33,7 +34,7 @@ func NewVsockConfig(cid int64, socket string) *VsockConfig {
 	this := VsockConfig{}
 	this.Cid = cid
 	this.Socket = socket
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -43,7 +44,7 @@ func NewVsockConfig(cid int64, socket string) *VsockConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewVsockConfigWithDefaults() *VsockConfig {
 	this := VsockConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -97,9 +98,9 @@ func (o *VsockConfig) SetSocket(v string) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *VsockConfig) GetIommu() bool {
+func (o *VsockConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -107,7 +108,7 @@ func (o *VsockConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *VsockConfig) GetIommuOk() (*bool, bool) {
+func (o *VsockConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -123,8 +124,8 @@ func (o *VsockConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *VsockConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *VsockConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 
@@ -158,6 +159,38 @@ func (o *VsockConfig) HasPciSegment() bool {
 // SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
 func (o *VsockConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *VsockConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VsockConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *VsockConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *VsockConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
 }
 
 // GetId returns the Id field value if set, zero value otherwise.
@@ -205,6 +238,9 @@ func (o VsockConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

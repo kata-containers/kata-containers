@@ -123,7 +123,7 @@ pub async fn get_virtio_blk_pci_device_name(
     let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path, root_complex);
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, uev.devname))
 }
 
 #[instrument]
@@ -162,7 +162,7 @@ pub async fn get_virtio_blk_ccw_device_name(
         .join(&devname)
         .to_str()
         .map(String::from)
-        .ok_or_else(|| anyhow!("CCW device name {} is not valid UTF-8", &devname))
+        .ok_or_else(|| anyhow!("CCW device name {} is not valid UTF-8", devname))
 }
 
 #[derive(Debug)]

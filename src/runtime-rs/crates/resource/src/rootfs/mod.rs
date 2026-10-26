@@ -169,7 +169,7 @@ impl RootFsResource {
                     };
                     Ok(share_rootfs)
                 } else {
-                    Err(anyhow!("unsupported rootfs {:?}", &layer))
+                    Err(anyhow!("unsupported rootfs {:?}", layer))
                 }?;
                 inner.rootfs.push(rootfs.clone());
                 Ok(rootfs)

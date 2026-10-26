@@ -16,8 +16,11 @@ import (
 
 // RestoreConfig struct for RestoreConfig
 type RestoreConfig struct {
-	SourceUrl string `json:"source_url"`
-	Prefault  *bool  `json:"prefault,omitempty"`
+	SourceUrl         string                    `json:"source_url"`
+	Prefault          *bool                     `json:"prefault,omitempty"`
+	MemoryRestoreMode *MemoryRestoreMode        `json:"memory_restore_mode,omitempty"`
+	Resume            *bool                     `json:"resume,omitempty"`
+	ZoneUpdates       *[]VmMemoryZoneUpdateData `json:"zone_updates,omitempty"`
 }
 
 // NewRestoreConfig instantiates a new RestoreConfig object
@@ -27,6 +30,8 @@ type RestoreConfig struct {
 func NewRestoreConfig(sourceUrl string) *RestoreConfig {
 	this := RestoreConfig{}
 	this.SourceUrl = sourceUrl
+	var memoryRestoreMode MemoryRestoreMode = MEMORYRESTOREMODE_COPY
+	this.MemoryRestoreMode = &memoryRestoreMode
 	return &this
 }
 
@@ -35,6 +40,8 @@ func NewRestoreConfig(sourceUrl string) *RestoreConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewRestoreConfigWithDefaults() *RestoreConfig {
 	this := RestoreConfig{}
+	var memoryRestoreMode MemoryRestoreMode = MEMORYRESTOREMODE_COPY
+	this.MemoryRestoreMode = &memoryRestoreMode
 	return &this
 }
 
@@ -94,6 +101,102 @@ func (o *RestoreConfig) SetPrefault(v bool) {
 	o.Prefault = &v
 }
 
+// GetMemoryRestoreMode returns the MemoryRestoreMode field value if set, zero value otherwise.
+func (o *RestoreConfig) GetMemoryRestoreMode() MemoryRestoreMode {
+	if o == nil || o.MemoryRestoreMode == nil {
+		var ret MemoryRestoreMode
+		return ret
+	}
+	return *o.MemoryRestoreMode
+}
+
+// GetMemoryRestoreModeOk returns a tuple with the MemoryRestoreMode field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RestoreConfig) GetMemoryRestoreModeOk() (*MemoryRestoreMode, bool) {
+	if o == nil || o.MemoryRestoreMode == nil {
+		return nil, false
+	}
+	return o.MemoryRestoreMode, true
+}
+
+// HasMemoryRestoreMode returns a boolean if a field has been set.
+func (o *RestoreConfig) HasMemoryRestoreMode() bool {
+	if o != nil && o.MemoryRestoreMode != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetMemoryRestoreMode gets a reference to the given MemoryRestoreMode and assigns it to the MemoryRestoreMode field.
+func (o *RestoreConfig) SetMemoryRestoreMode(v MemoryRestoreMode) {
+	o.MemoryRestoreMode = &v
+}
+
+// GetResume returns the Resume field value if set, zero value otherwise.
+func (o *RestoreConfig) GetResume() bool {
+	if o == nil || o.Resume == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Resume
+}
+
+// GetResumeOk returns a tuple with the Resume field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RestoreConfig) GetResumeOk() (*bool, bool) {
+	if o == nil || o.Resume == nil {
+		return nil, false
+	}
+	return o.Resume, true
+}
+
+// HasResume returns a boolean if a field has been set.
+func (o *RestoreConfig) HasResume() bool {
+	if o != nil && o.Resume != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetResume gets a reference to the given bool and assigns it to the Resume field.
+func (o *RestoreConfig) SetResume(v bool) {
+	o.Resume = &v
+}
+
+// GetZoneUpdates returns the ZoneUpdates field value if set, zero value otherwise.
+func (o *RestoreConfig) GetZoneUpdates() []VmMemoryZoneUpdateData {
+	if o == nil || o.ZoneUpdates == nil {
+		var ret []VmMemoryZoneUpdateData
+		return ret
+	}
+	return *o.ZoneUpdates
+}
+
+// GetZoneUpdatesOk returns a tuple with the ZoneUpdates field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RestoreConfig) GetZoneUpdatesOk() (*[]VmMemoryZoneUpdateData, bool) {
+	if o == nil || o.ZoneUpdates == nil {
+		return nil, false
+	}
+	return o.ZoneUpdates, true
+}
+
+// HasZoneUpdates returns a boolean if a field has been set.
+func (o *RestoreConfig) HasZoneUpdates() bool {
+	if o != nil && o.ZoneUpdates != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetZoneUpdates gets a reference to the given []VmMemoryZoneUpdateData and assigns it to the ZoneUpdates field.
+func (o *RestoreConfig) SetZoneUpdates(v []VmMemoryZoneUpdateData) {
+	o.ZoneUpdates = &v
+}
+
 func (o RestoreConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -101,6 +204,15 @@ func (o RestoreConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Prefault != nil {
 		toSerialize["prefault"] = o.Prefault
+	}
+	if o.MemoryRestoreMode != nil {
+		toSerialize["memory_restore_mode"] = o.MemoryRestoreMode
+	}
+	if o.Resume != nil {
+		toSerialize["resume"] = o.Resume
+	}
+	if o.ZoneUpdates != nil {
+		toSerialize["zone_updates"] = o.ZoneUpdates
 	}
 	return json.Marshal(toSerialize)
 }

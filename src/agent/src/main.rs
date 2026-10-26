@@ -124,6 +124,7 @@ lazy_static! {
 #[cfg(feature = "agent-policy")]
 lazy_static! {
     static ref AGENT_POLICY: Mutex<AgentPolicy> = Mutex::new(AgentPolicy::new());
+    static ref POLICY_STATE_LOCK: Mutex<()> = Mutex::new(());
 }
 
 #[derive(Parser)]

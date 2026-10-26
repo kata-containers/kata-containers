@@ -66,9 +66,9 @@ const (
 )
 
 const (
-	clhStateCreated = "Created"
-	clhStateRunning = "Running"
-	clhStatePaused  = "Paused"
+	clhStateCreated = chclient.VMSTATE_CREATED
+	clhStateRunning = chclient.VMSTATE_RUNNING
+	clhStatePaused  = chclient.VMSTATE_PAUSED
 )
 
 const (
@@ -468,24 +468,7 @@ func (clh *cloudHypervisor) enableProtection() error {
 
 	switch protection {
 	case tdxProtection:
-		firmwarePath, err := clh.config.FirmwareAssetPath()
-		if err != nil {
-			return err
-		}
-
-		if firmwarePath == "" {
-			return errors.New("Firmware path is not specified")
-		}
-
-		clh.vmconfig.Payload.SetFirmware(firmwarePath)
-
-		if clh.vmconfig.Platform == nil {
-			clh.vmconfig.Platform = chclient.NewPlatformConfig()
-		}
-		clh.vmconfig.Platform.SetTdx(true)
-
-		return nil
-
+		return errors.New("TDX protection is not supported by Cloud Hypervisor")
 	case sevProtection:
 		return errors.New("SEV protection is not supported by Cloud Hypervisor")
 	case snpProtection:
@@ -679,7 +662,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// set random device generator to hypervisor
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
-	clh.vmconfig.Rng.SetIommu(clh.config.IOMMU)
+	clh.vmconfig.Rng.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	// set the initial root/boot disk of hypervisor
 	assetPath, assetType, err := clh.config.ImageOrInitrdAssetPath()
@@ -691,7 +674,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		disk := chclient.NewDiskConfig()
 		disk.Path = &assetPath
 		disk.SetReadonly(true)
-		disk.SetImageType("Raw")
+		disk.SetImageType(chclient.IMAGETYPE_RAW)
 
 		diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
 		if diskRateLimiterConfig != nil {
@@ -712,24 +695,24 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		// Use HVC as the guest console only in debug mode, only
 		// for Confidential Guests
 		if clh.config.Debug {
-			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
+			clh.vmconfig.Console = chclient.NewConsoleConfig(chclient.CONSOLEMODE_TTY)
 		} else {
-			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+			clh.vmconfig.Console = chclient.NewConsoleConfig(chclient.CONSOLEMODE_OFF)
 		}
 
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+		clh.vmconfig.Serial = chclient.NewSerialConfig(chclient.CONSOLEMODE_OFF)
 	} else {
 		// Use serial port as the guest console only in debug mode,
 		// so that we can gather early OS booting log
 		if clh.config.Debug {
-			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
+			clh.vmconfig.Serial = chclient.NewSerialConfig(chclient.CONSOLEMODE_TTY)
 		} else {
-			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
+			clh.vmconfig.Serial = chclient.NewSerialConfig(chclient.CONSOLEMODE_OFF)
 		}
 
-		clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		clh.vmconfig.Console = chclient.NewConsoleConfig(chclient.CONSOLEMODE_OFF)
 	}
-	clh.vmconfig.Console.SetIommu(clh.config.IOMMU)
+	clh.vmconfig.Console.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
@@ -1118,8 +1101,8 @@ func (clh *cloudHypervisor) addInitdataDisk(initdataImage string) {
 	if clh.config.BlockDeviceCacheSet {
 		disk.Direct = &clh.config.BlockDeviceCacheDirect
 	}
-	disk.SetIommu(clh.config.IOMMU)
-	disk.SetImageType("Raw")
+	disk.SetIommu(clhIommuType(clh.config.IOMMU))
+	disk.SetImageType(chclient.IMAGETYPE_RAW)
 
 	if rl := clh.getDiskRateLimiterConfig(); rl != nil {
 		disk.SetRateLimiterConfig(*rl)
@@ -1158,7 +1141,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	clhDisk := *chclient.NewDiskConfig()
 	clhDisk.Path = &drive.File
 	clhDisk.Readonly = &drive.ReadOnly
-	clhDisk.SetImageType("Raw")
+	clhDisk.SetImageType(chclient.IMAGETYPE_RAW)
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 	if clh.config.BlockDeviceCacheSet {
 		clhDisk.Direct = &clh.config.BlockDeviceCacheDirect
@@ -1168,7 +1151,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	queueSize := int32(1024)
 	clhDisk.NumQueues = &queues
 	clhDisk.QueueSize = &queueSize
-	clhDisk.SetIommu(clh.config.IOMMU)
+	clhDisk.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
 	if diskRateLimiterConfig != nil {
@@ -1209,8 +1192,9 @@ func (clh *cloudHypervisor) coldPlugVFIODevice(device *config.VFIODev) error {
 		"bdf":    device.BDF,
 	}).Info("Cold-plugging VFIO device into VM config")
 
-	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
-	clhDevice.SetIommu(clh.config.IOMMU)
+	clhDevice := *chclient.NewDeviceConfig()
+	clhDevice.SetPath(device.SysfsDev)
+	clhDevice.SetIommu(clhIommuType(clh.config.IOMMU))
 	clhDevice.SetId(device.ID)
 
 	if clh.vmconfig.Devices != nil {
@@ -1231,8 +1215,9 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	defer cancel()
 
 	// Create the clh device config via the constructor to ensure default values are properly assigned
-	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
-	clhDevice.SetIommu(clh.config.IOMMU)
+	clhDevice := *chclient.NewDeviceConfig()
+	clhDevice.SetPath(device.SysfsDev)
+	clhDevice.SetIommu(clhIommuType(clh.config.IOMMU))
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
@@ -1904,11 +1889,6 @@ func (clh *cloudHypervisor) launchClh() error {
 //###########################################################################
 
 const (
-	cctOFF string = "Off"
-	cctTTY string = "Tty"
-)
-
-const (
 	cscAPIsocket string = "--api-socket"
 )
 
@@ -2106,7 +2086,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	}).Info("Adding HybridVSock")
 
 	clh.vmconfig.Vsock = chclient.NewVsockConfig(cid, path)
-	clh.vmconfig.Vsock.SetIommu(clh.config.IOMMU)
+	clh.vmconfig.Vsock.SetIommu(clhIommuType(clh.config.IOMMU))
 }
 
 func (clh *cloudHypervisor) getRateLimiterConfig(bwSize, bwOneTimeBurst, opsSize, opsOneTimeBurst int64) *chclient.RateLimiterConfig {
@@ -2176,7 +2156,7 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	if netRateLimiterConfig != nil {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
-	net.SetIommu(clh.config.IOMMU)
+	net.SetIommu(clhIommuType(clh.config.IOMMU))
 
 	if clh.netDevices != nil {
 		*clh.netDevices = append(*clh.netDevices, *net)
@@ -2345,4 +2325,12 @@ func pathExists(path string) bool {
 
 func (clh *cloudHypervisor) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
 	return nil
+}
+
+// clhIommuType maps Kata's IOMMU setting to the CLH device API.
+func clhIommuType(enabled bool) chclient.IommuType {
+	if enabled {
+		return chclient.IOMMUTYPE_VIRTIO
+	}
+	return chclient.IOMMUTYPE_OFF
 }

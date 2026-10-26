@@ -31,6 +31,7 @@ build_rootfs() {
 	ln -s /run "${rootfs_dir}/var/run"
 	cp --remove-destination /etc/resolv.conf "${rootfs_dir}/etc"
 
+	check_ca_bundle /etc/ssl/certs/ca-certificates.crt
 	local dir="${rootfs_dir}/etc/ssl/certs"
 	mkdir -p "${dir}"
 	cp --remove-destination /etc/ssl/certs/ca-certificates.crt "${dir}"

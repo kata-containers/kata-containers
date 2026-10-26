@@ -269,7 +269,7 @@ impl ConfigOps for Agent {
 
     fn validate(conf: &TomlConfig) -> Result<()> {
         AgentVendor::validate(conf)?;
-        for (_, agent_config) in conf.agent.iter() {
+        for agent_config in conf.agent.values() {
             agent_config.validate()?;
         }
         Ok(())

@@ -195,6 +195,12 @@ impl DragonballInner {
             return Ok(());
         }
 
+        let kernel_params = self.get_kernel_params()?;
+        self.set_boot_source(&kernel_params)
+            .context("set_boot_source")
+    }
+
+    fn get_kernel_params(&self) -> Result<String> {
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
 
         if self.config.boot_info.initrd.is_empty() {
@@ -212,6 +218,13 @@ impl DragonballInner {
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
+        // A bare key still activates extensions that do not use dm-verity.
+        for extra in &self.config.guest_extension_images {
+            kernel_params.append(&mut KernelParams::from_string(&format!(
+                "kata.extension.{}.verity_params={}",
+                extra.name, extra.verity_params
+            )));
+        }
         if let Some(passfd_listener_port) = self.passfd_listener_port {
             kernel_params.append(&mut KernelParams::from_string(&format!(
                 "{PASSFD_LISTENER_PORT}={passfd_listener_port}"
@@ -219,12 +232,7 @@ impl DragonballInner {
         }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
-        self.set_boot_source(
-            &kernel_params
-                .to_string()
-                .context("kernel params to string")?,
-        )
-        .context("set_boot_source")
+        kernel_params.to_string().context("kernel params to string")
     }
 
     pub(crate) fn run_vmm_server(&mut self) -> Result<()> {
@@ -294,7 +302,7 @@ impl DragonballInner {
     pub(crate) fn umount_jail_resource(&self, jailed_path: &str) -> Result<()> {
         let path = [self.jailer_root.as_str(), jailed_path].join("/");
         nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", &path))
+            .with_context(|| format!("umount path {}", path))
     }
 
     pub(crate) fn get_resource(&self, src: &str, dst: &str) -> Result<String> {
@@ -392,9 +400,15 @@ impl DragonballInner {
                 "boot_from_template is not supported on this architecture"
             ));
         }
-        self.vmm_instance
-            .instance_start()
-            .context("Failed to start vmm")?;
+        if self.config.vm_template.boot_to_be_template {
+            self.vmm_instance
+                .instance_start_for_template()
+                .context("Failed to start template vmm")?;
+        } else {
+            self.vmm_instance
+                .instance_start()
+                .context("Failed to start vmm")?;
+        }
         self.state = VmmState::VmRunning;
         Ok(())
     }
@@ -638,6 +652,48 @@ impl Persist for DragonballInner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_guest_extension_kernel_params() {
+        use kata_types::config::hypervisor::GuestExtensionImage;
+
+        let (tx, _) = mpsc::channel(1);
+        let mut inner = DragonballInner::new(tx);
+        inner.config.boot_info.initrd = "/initrd.img".into();
+        inner.config.guest_extension_images = vec![
+            GuestExtensionImage {
+                name: "coco".into(),
+                path: "/coco.img".into(),
+                verity_params: "root_hash=abc,salt=def,data_blocks=1234".into(),
+            },
+            GuestExtensionImage {
+                name: "devkit".into(),
+                path: "/devkit.img".into(),
+                verity_params: String::new(),
+            },
+        ];
+        inner.passfd_listener_port = Some(1234);
+
+        // Exercise both initrd and image boot paths without starting a VMM.
+        for initrd in ["/initrd.img", ""] {
+            inner.config.boot_info.initrd = initrd.into();
+            inner.config.boot_info.rootfs_type = "erofs".into();
+            inner.config.blockdev_info.block_device_driver = crate::VM_ROOTFS_DRIVER_BLK.into();
+            let params = inner.get_kernel_params().unwrap();
+            let tokens: Vec<&str> = params.split_whitespace().collect();
+            assert!(tokens.contains(
+                &"kata.extension.coco.verity_params=root_hash=abc,salt=def,data_blocks=1234"
+            ));
+            assert!(tokens.contains(&"kata.extension.devkit.verity_params"));
+            assert!(tokens.contains(&format!("{PASSFD_LISTENER_PORT}=1234").as_str()));
+        }
+
+        inner.config.guest_extension_images.clear();
+        assert!(!inner
+            .get_kernel_params()
+            .unwrap()
+            .contains("kata.extension."));
+    }
 
     #[test]
     fn test_template_restore_skips_boot_source_configuration() {

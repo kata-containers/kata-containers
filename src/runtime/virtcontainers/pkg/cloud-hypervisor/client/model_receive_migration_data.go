@@ -17,6 +17,11 @@ import (
 // ReceiveMigrationData struct for ReceiveMigrationData
 type ReceiveMigrationData struct {
 	ReceiverUrl string `json:"receiver_url"`
+	// Directory containing the TLS server certificate (server-cert.pem), the TLS server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem). TLS is only supported with tcp:<host>:<port> receiver URLs. Recommended for all TCP migrations. Omitting it is only intended for development and testing, as TCP migration is then unencrypted and unauthenticated.
+	TlsDir      *string                   `json:"tls_dir,omitempty"`
+	ZoneUpdates *[]VmMemoryZoneUpdateData `json:"zone_updates,omitempty"`
+	// Enable the background thread for faulting all remaining pages.
+	BackgroundFetchPages *bool `json:"background_fetch_pages,omitempty"`
 }
 
 // NewReceiveMigrationData instantiates a new ReceiveMigrationData object
@@ -26,6 +31,8 @@ type ReceiveMigrationData struct {
 func NewReceiveMigrationData(receiverUrl string) *ReceiveMigrationData {
 	this := ReceiveMigrationData{}
 	this.ReceiverUrl = receiverUrl
+	var backgroundFetchPages bool = true
+	this.BackgroundFetchPages = &backgroundFetchPages
 	return &this
 }
 
@@ -34,6 +41,8 @@ func NewReceiveMigrationData(receiverUrl string) *ReceiveMigrationData {
 // but it doesn't guarantee that properties required by API are set
 func NewReceiveMigrationDataWithDefaults() *ReceiveMigrationData {
 	this := ReceiveMigrationData{}
+	var backgroundFetchPages bool = true
+	this.BackgroundFetchPages = &backgroundFetchPages
 	return &this
 }
 
@@ -61,10 +70,115 @@ func (o *ReceiveMigrationData) SetReceiverUrl(v string) {
 	o.ReceiverUrl = v
 }
 
+// GetTlsDir returns the TlsDir field value if set, zero value otherwise.
+func (o *ReceiveMigrationData) GetTlsDir() string {
+	if o == nil || o.TlsDir == nil {
+		var ret string
+		return ret
+	}
+	return *o.TlsDir
+}
+
+// GetTlsDirOk returns a tuple with the TlsDir field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ReceiveMigrationData) GetTlsDirOk() (*string, bool) {
+	if o == nil || o.TlsDir == nil {
+		return nil, false
+	}
+	return o.TlsDir, true
+}
+
+// HasTlsDir returns a boolean if a field has been set.
+func (o *ReceiveMigrationData) HasTlsDir() bool {
+	if o != nil && o.TlsDir != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsDir gets a reference to the given string and assigns it to the TlsDir field.
+func (o *ReceiveMigrationData) SetTlsDir(v string) {
+	o.TlsDir = &v
+}
+
+// GetZoneUpdates returns the ZoneUpdates field value if set, zero value otherwise.
+func (o *ReceiveMigrationData) GetZoneUpdates() []VmMemoryZoneUpdateData {
+	if o == nil || o.ZoneUpdates == nil {
+		var ret []VmMemoryZoneUpdateData
+		return ret
+	}
+	return *o.ZoneUpdates
+}
+
+// GetZoneUpdatesOk returns a tuple with the ZoneUpdates field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ReceiveMigrationData) GetZoneUpdatesOk() (*[]VmMemoryZoneUpdateData, bool) {
+	if o == nil || o.ZoneUpdates == nil {
+		return nil, false
+	}
+	return o.ZoneUpdates, true
+}
+
+// HasZoneUpdates returns a boolean if a field has been set.
+func (o *ReceiveMigrationData) HasZoneUpdates() bool {
+	if o != nil && o.ZoneUpdates != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetZoneUpdates gets a reference to the given []VmMemoryZoneUpdateData and assigns it to the ZoneUpdates field.
+func (o *ReceiveMigrationData) SetZoneUpdates(v []VmMemoryZoneUpdateData) {
+	o.ZoneUpdates = &v
+}
+
+// GetBackgroundFetchPages returns the BackgroundFetchPages field value if set, zero value otherwise.
+func (o *ReceiveMigrationData) GetBackgroundFetchPages() bool {
+	if o == nil || o.BackgroundFetchPages == nil {
+		var ret bool
+		return ret
+	}
+	return *o.BackgroundFetchPages
+}
+
+// GetBackgroundFetchPagesOk returns a tuple with the BackgroundFetchPages field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ReceiveMigrationData) GetBackgroundFetchPagesOk() (*bool, bool) {
+	if o == nil || o.BackgroundFetchPages == nil {
+		return nil, false
+	}
+	return o.BackgroundFetchPages, true
+}
+
+// HasBackgroundFetchPages returns a boolean if a field has been set.
+func (o *ReceiveMigrationData) HasBackgroundFetchPages() bool {
+	if o != nil && o.BackgroundFetchPages != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetBackgroundFetchPages gets a reference to the given bool and assigns it to the BackgroundFetchPages field.
+func (o *ReceiveMigrationData) SetBackgroundFetchPages(v bool) {
+	o.BackgroundFetchPages = &v
+}
+
 func (o ReceiveMigrationData) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
 		toSerialize["receiver_url"] = o.ReceiverUrl
+	}
+	if o.TlsDir != nil {
+		toSerialize["tls_dir"] = o.TlsDir
+	}
+	if o.ZoneUpdates != nil {
+		toSerialize["zone_updates"] = o.ZoneUpdates
+	}
+	if o.BackgroundFetchPages != nil {
+		toSerialize["background_fetch_pages"] = o.BackgroundFetchPages
 	}
 	return json.Marshal(toSerialize)
 }

@@ -15,6 +15,8 @@ OnFailure=poweroff.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
 ExecStart=/usr/libexec/kata-extension-mount.sh %i
 ExecStop=/usr/libexec/kata-extension-umount.sh %i
 

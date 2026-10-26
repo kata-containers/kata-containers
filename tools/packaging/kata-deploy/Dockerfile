@@ -17,8 +17,15 @@ RUN apk add --no-cache zstd
 
 COPY ${KATA_ARTIFACTS_DIR}/kata-static-*.tar.zst ${DESTINATION}/tarballs/
 COPY ${KATA_ARTIFACTS_DIR}/kata-deploy-static-*.tar.zst ${DESTINATION}/tarballs/
+COPY ${KATA_ARTIFACTS_DIR}/VERSION ${DESTINATION}/
 COPY tools/packaging/kata-deploy/shim-components.json ${DESTINATION}/
 COPY versions.yaml ${DESTINATION}/
+
+# These architectures ship devkit and its host-side debug console client.
+# Refuse an incomplete deploy image instead of silently dropping kata-ctl.
+RUN case "$(uname -m)" in \
+        x86_64|aarch64) test -s "${DESTINATION}/tarballs/kata-static-kata-ctl.tar.zst" ;; \
+    esac
 
 RUN \
 	mkdir -p /opt/prebuilt && \

@@ -38,16 +38,6 @@ pub enum VmConfigError {
 
     #[error("VSOCK config error: {0}")]
     VsockError(VsockConfigError),
-
-    #[error("TDX requires virtio-blk VM rootfs driver")]
-    TDXVMRootfsNotVirtioBlk,
-
-    #[error("TDX requires virtio-blk container rootfs block device driver")]
-    TDXContainerRootfsNotVirtioBlk,
-
-    // LIMITATION: Current CH TDX limitation.
-    #[error("TDX requires an image=, not an initrd=")]
-    TDXDisallowsInitrd,
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -60,9 +50,6 @@ pub enum PmemConfigError {
 pub enum DiskConfigError {
     #[error("Need path for DiskConfig")]
     MissingPath,
-
-    #[error("Found unexpected path for DiskConfig with TDX: {0}")]
-    UnexpectedPathForTDX(String),
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -87,9 +74,6 @@ pub enum PayloadConfigError {
 
     #[error("No initrd/initramfs specified")]
     NoInitrd,
-
-    #[error("Need firmware for TDX")]
-    TDXFirmwareMissing,
 }
 
 #[derive(Error, Debug, PartialEq)]

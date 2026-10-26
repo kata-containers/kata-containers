@@ -336,3 +336,19 @@ jobs:
           persist-credentials: false
       - name: Check for broken symbolic links
         run: bash ci/check_broken_symlinks.sh
+
+  check-nvrc-is-released:
+    name: check-nvrc-is-released
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Ensure NVRC is pinned to a published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/check_nvrc_is_released.sh

@@ -47,6 +47,7 @@ pub use crate::device_manager::net_dev_mgr::{
 };
 #[cfg(feature = "virtio-rng")]
 pub use crate::device_manager::rng_dev_mgr::{RngDeviceConfigInfo, RngDeviceError};
+
 #[cfg(feature = "host-device")]
 use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError};
 #[cfg(feature = "virtio-vsock")]
@@ -183,6 +184,10 @@ pub enum VmmAction {
     /// Launch the microVM. This action can only be called before the microVM has booted.
     StartMicroVm,
 
+    /// Launch the microVM used to create a reusable template. The template
+    /// must not capture an established host upcall connection.
+    StartMicroVmForTemplate,
+
     /// Shutdown the vmicroVM. This action can only be called after the microVM has booted.
     /// When vmm is used as the crate by the other process, which is need to
     /// shutdown the vcpu threads and destory all of the object.
@@ -205,6 +210,8 @@ pub enum VmmAction {
         state_path: String,
         /// Path of the guest memory file to write.
         mem_path: String,
+        /// Whether the saved guest must acknowledge a vsock transport reset.
+        reset_vsock_transport: bool,
     },
 
     /// Launch the microVM by restoring it from a snapshot instead of cold
@@ -217,7 +224,18 @@ pub enum VmmAction {
         state_path: String,
         /// Path of the guest memory file to read.
         mem_path: String,
+        /// Whether this snapshot contains a pending vsock transport reset.
+        reset_vsock_pending: bool,
     },
+
+    /// Complete post-restore vsock readiness without blocking event dispatch.
+    #[cfg(feature = "virtio-vsock")]
+    FinalizeVsockRestore,
+
+    /// Arm a transport reset while the guest is running so a workload
+    /// checkpoint does not capture a live host connection.
+    #[cfg(feature = "virtio-vsock")]
+    ArmVsockTransportReset,
 
     /// Get the configuration of the microVM.
     GetVmConfiguration,
@@ -333,6 +351,9 @@ pub enum VmmData {
     HypervisorMetrics(String),
     /// Return vfio device's slot number in guest.
     VfioDeviceData(Option<u8>),
+    /// Whether restored vsock handlers are ready for host connections.
+    #[cfg(feature = "virtio-vsock")]
+    VsockRestoreReady(bool),
     /// Sync Hotplug
     SyncHotplug((mpsc::Sender<Option<i32>>, mpsc::Receiver<Option<i32>>)),
 }
@@ -386,7 +407,8 @@ impl VmmService {
             VmmAction::ConfigureBootSource(boot_source_body) => {
                 self.configure_boot_source(vmm, boot_source_body)
             }
-            VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr),
+            VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr, true),
+            VmmAction::StartMicroVmForTemplate => self.start_microvm(vmm, event_mgr, false),
             VmmAction::ShutdownMicroVm => self.shutdown_microvm(vmm),
             VmmAction::PauseMicroVm => self.pause_microvm(vmm),
             VmmAction::ResumeMicroVm => self.resume_microvm(vmm),
@@ -394,12 +416,40 @@ impl VmmService {
             VmmAction::SaveMicrovm {
                 state_path,
                 mem_path,
-            } => self.save_microvm(vmm, state_path, mem_path),
+                reset_vsock_transport,
+            } => self.save_microvm(vmm, state_path, mem_path, reset_vsock_transport),
             #[cfg(target_arch = "x86_64")]
             VmmAction::StartMicroVmFromSnapshot {
                 state_path,
                 mem_path,
-            } => self.start_microvm_from_snapshot(vmm, event_mgr, state_path, mem_path),
+                reset_vsock_pending,
+            } => self.start_microvm_from_snapshot(
+                vmm,
+                event_mgr,
+                state_path,
+                mem_path,
+                reset_vsock_pending,
+            ),
+            #[cfg(feature = "virtio-vsock")]
+            VmmAction::FinalizeVsockRestore => match vmm.get_vm_mut() {
+                Some(vm) => vm
+                    .device_manager_mut()
+                    .vsock_manager
+                    .finalize_restore()
+                    .map(VmmData::VsockRestoreReady)
+                    .map_err(VmmActionError::Vsock),
+                None => Err(VmmActionError::InvalidVMID),
+            },
+            #[cfg(feature = "virtio-vsock")]
+            VmmAction::ArmVsockTransportReset => match vmm.get_vm_mut() {
+                Some(vm) => vm
+                    .device_manager_mut()
+                    .vsock_manager
+                    .schedule_transport_reset()
+                    .map(|_| VmmData::Empty)
+                    .map_err(VmmActionError::Vsock),
+                None => Err(VmmActionError::InvalidVMID),
+            },
             VmmAction::GetVmConfiguration => Ok(VmmData::MachineConfiguration(Box::new(
                 self.machine_config.clone(),
             ))),
@@ -533,7 +583,12 @@ impl VmmService {
     }
 
     #[instrument(skip(self, event_mgr))]
-    fn start_microvm(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> VmmRequestResult {
+    fn start_microvm(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        initialize_upcall: bool,
+    ) -> VmmRequestResult {
         use self::StartMicroVmError::MicroVMAlreadyRunning;
         use self::VmmActionError::StartMicroVm;
 
@@ -543,7 +598,7 @@ impl VmmService {
             return Err(StartMicroVm(MicroVMAlreadyRunning));
         }
 
-        vm.start_microvm(event_mgr, seccomp_filters)
+        vm.start_microvm(event_mgr, seccomp_filters, initialize_upcall)
             .map(|_| VmmData::Empty)
             .map_err(StartMicroVm)
     }
@@ -578,11 +633,13 @@ impl VmmService {
         vmm: &mut Vmm,
         state_path: String,
         mem_path: String,
+        reset_vsock_transport: bool,
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         vm.save_microvm(
             std::path::Path::new(&state_path),
             std::path::Path::new(&mem_path),
+            reset_vsock_transport,
         )
         .map(|_| VmmData::Empty)
         .map_err(VmmActionError::SaveMicrovm)
@@ -596,6 +653,7 @@ impl VmmService {
         event_mgr: &mut EventManager,
         state_path: String,
         mem_path: String,
+        reset_vsock_pending: bool,
     ) -> VmmRequestResult {
         use self::StartMicroVmError::MicroVMAlreadyRunning;
         use self::VmmActionError::StartMicroVm;
@@ -611,6 +669,7 @@ impl VmmService {
             seccomp_filters,
             std::path::Path::new(&state_path),
             std::path::Path::new(&mem_path),
+            reset_vsock_pending,
         )
         .map(|_| VmmData::Empty)
         .map_err(StartMicroVm)
@@ -1686,6 +1745,7 @@ mod tests {
                     use_shared_irq: None,
                     use_generic_irq: None,
                     use_pci_bus: Some(true),
+                    serial: None,
                 }),
                 InstanceState::Uninitialized,
                 &|result| {

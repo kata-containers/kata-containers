@@ -32,6 +32,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Match the version metadata in the merged release tarballs. Release builds
+# can run before the tag is published; development builds identify the commit.
+if [[ "${RELEASE:-no}" == "yes" ]]; then
+	cp "${REPO_ROOT}/VERSION" "${ARTIFACTS_STAGE_DIR}/VERSION"
+else
+	git -C "${REPO_ROOT}" describe --tags > "${ARTIFACTS_STAGE_DIR}/VERSION"
+fi
+
 pushd "${REPO_ROOT}"
 
 arch=$(uname -m)

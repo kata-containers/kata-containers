@@ -6,6 +6,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use common::{
+    config::load_config,
     message::{Action, Message},
     types::{
         ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
@@ -16,16 +17,12 @@ use common::{
 };
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
-use hypervisor::{
-    utils::{
-        create_dir_all_with_inherit_owner, create_vmm_user, remove_dir_all_if_exists,
-        remove_vmm_user, vmm_user_runtime_dir,
-    },
-    Param,
+use hypervisor::utils::{
+    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user,
+    remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
 };
-use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
+use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
 use kata_types::{
-    annotations::Annotation,
     config::{
         default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig,
         KATA_PATH,
@@ -41,7 +38,6 @@ use netns_rs::{Env, NetNs};
 use nix::{sys::statfs, unistd::User};
 use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
-use protobuf::Message as ProtobufMessage;
 use resource::{
     cpu_mem::initial_size::InitialSizeManager,
     network::{dan_config_path, generate_netns_name},
@@ -52,7 +48,7 @@ use std::{
     collections::HashMap,
     env,
     ops::Deref,
-    os::unix::fs::{chown, MetadataExt},
+    os::unix::fs::chown,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -138,7 +134,7 @@ impl RuntimeHandlerManagerInner {
             name if name == VirtContainer::name() || name.is_empty() => {
                 VirtContainer::new_handler()
             }
-            _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
+            _ => return Err(anyhow!("Unsupported runtime: {}", config.runtime.name)),
         };
         let runtime_instance = runtime_handler
             .new_instance(
@@ -177,12 +173,7 @@ impl RuntimeHandlerManagerInner {
         spec: Option<&oci::Spec>,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
-        #[cfg(feature = "linux")]
-        LinuxContainer::init().context("init linux container")?;
-        #[cfg(feature = "wasm")]
-        WasmContainer::init().context("init wasm container")?;
-        #[cfg(feature = "virt")]
-        VirtContainer::init().context("init virt container")?;
+        init_runtime_handlers()?;
 
         let mut config =
             load_config(&sandbox_config.annotations, options).context("load config")?;
@@ -209,6 +200,7 @@ impl RuntimeHandlerManagerInner {
             // This makes it inaccessible to non-root users. We need to create a non-root accessible
             // netns and replace the original network namespace path in the config.
             if sandbox_config.network_env.network_created {
+                discard_created_netns(&mut sandbox_config.network_env)?;
                 let ns_name = generate_netns_name();
                 let rootless_raw_netns = NetNs::new_with_env(ns_name, RootlessEnv)?;
                 let path = Some(
@@ -252,6 +244,7 @@ impl RuntimeHandlerManagerInner {
         let dan_path = dan_config_path(&config, &self.id);
         // set netns to None if we want no network for the VM
         if config.runtime.disable_new_netns || dan_path.exists() {
+            discard_created_netns(&mut sandbox_config.network_env)?;
             sandbox_config.network_env.netns = None;
         }
 
@@ -315,6 +308,11 @@ impl RuntimeHandlerManager {
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
 
+        // After the shim disconnects, containerd invokes the shim binary's `delete`
+        // subcommand in a separate process. This path bypasses try_init(), so register
+        // the config plugins here before loading the sandbox configuration.
+        init_runtime_handlers()?;
+
         let config = if let Ok(spec) = load_oci_spec() {
             let annotations = spec.annotations().clone().unwrap_or_default();
             load_config(&annotations, &None).context("load config")?
@@ -347,6 +345,10 @@ impl RuntimeHandlerManager {
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
                     .context("failed to restore the sandbox")?;
+                sandbox
+                    .confirm_restored_vmm_exit()
+                    .await
+                    .context("failed to stop the restored VMM")?;
                 sandbox
                     .cleanup()
                     .await
@@ -704,17 +706,14 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::ShutdownContainer)
             }
             TaskRequest::WaitProcess(process_id) => {
+                // Wait returns when the process exits, as the Go runtime does;
+                // the VM teardown runs in Sandbox::wait_process. containerd
+                // treats the Wait reply as the exit, so for the sandbox
+                // container it must not run ahead of TaskExit, which a
+                // rootless or passthrough sandbox holds until its teardown.
                 let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
                 if cm.is_sandbox_container(&process_id).await {
-                    sandbox.stop().await.context("stop sandbox")?;
-
-                    // Release sandbox resources (cgroup, network, mounts, ...)
-                    // as soon as the sandbox container exits instead of waiting
-                    // for an explicit ShutdownContainer/Delete RPC.  Engines
-                    // like Docker only send those when the container is removed
-                    // (e.g. with `--rm`); without this the sandbox cgroup would
-                    // leak and collide with the next run.
-                    sandbox.cleanup().await.context("cleanup sandbox")?;
+                    sandbox.wait_exit_published().await;
                 }
                 Ok(TaskResponse::WaitProcess(exit_status))
             }
@@ -741,12 +740,18 @@ impl RuntimeHandlerManager {
                 let pid = shim_pid.pid;
                 let process_type = process_id.process_type;
                 let container_id = process_id.container_id().to_string();
-                tokio::spawn(async move {
-                    let result = sandbox.wait_process(cm, process_id, pid).await;
-                    if let Err(e) = result {
-                        error!(sl!(), "sandbox wait process error: {:?}", e);
-                    }
-                });
+                // CreateContainer already spawned the container's waiter. A
+                // second one would publish TaskExit twice, and for the sandbox
+                // container it queues behind the first waiter's teardown and
+                // then fails to find the deleted container.
+                if process_type == ProcessType::Exec {
+                    tokio::spawn(async move {
+                        let result = sandbox.wait_process(cm, process_id, pid).await;
+                        if let Err(e) = result {
+                            error!(sl!(), "sandbox wait process error: {:?}", e);
+                        }
+                    });
+                }
 
                 if process_type == ProcessType::Container {
                     let event = TaskStart {
@@ -808,6 +813,17 @@ impl RuntimeHandlerManager {
     }
 }
 
+// Remove before replacing the path: no other owner can clean up the old namespace.
+fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
+    if network_env.network_created {
+        if let Some(path) = network_env.netns.as_deref() {
+            remove_netns(Path::new(path)).context("remove unused network namespace")?;
+            network_env.netns = None;
+        }
+    }
+    Ok(())
+}
+
 // RootlessEnv implements netns_rs::Env trait to provide the rootless directory path
 // for creating network namespace in rootless mode.
 #[derive(Copy, Clone, Default, Debug)]
@@ -826,92 +842,13 @@ impl Env for RootlessEnv {
     }
 }
 
-/// Config override ordering(high to low):
-/// 1. environment variable
-/// 2. shimv2 create task option
-/// 3. If above two are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
-/// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
-#[instrument]
-fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
-    const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
-    let annotation = Annotation::new(an.clone());
-    // Clone a logger from global logger to ensure the logs in this function get flushed when drop
-    let logger = slog::Logger::clone(&slog_scope::logger());
-
-    let config_path = if let Ok(path) = std::env::var(KATA_CONF_FILE) {
-        if is_shipped_kata_config_path(&path) {
-            path
-        } else {
-            return Err(anyhow!(
-                "invalid KATA_CONF_FILE {:?}: only shipped Kata configuration files are accepted",
-                path
-            ));
-        }
-    } else if let Some(option) = option {
-        // Parse the containerd runtime options protobuf message to extract the config path.
-        // The options are passed as a serialized runtimeoptions.v1.Options protobuf message
-        // from containerd's configuration (e.g., [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata.options]).
-        match <protocols::runtimeoptions::Options as ProtobufMessage>::parse_from_bytes(option) {
-            Ok(opts) => opts.config_path,
-            Err(e) => {
-                // Log the error but don't fail - fall back to default config paths
-                let logger = slog::Logger::clone(&slog_scope::logger());
-                slog::warn!(
-                    logger,
-                    "failed to parse containerd runtime options: {}, falling back to default config paths",
-                    e
-                );
-                String::from("")
-            }
-        }
-    } else {
-        String::from("")
-    };
-
-    info!(logger, "get config path {:?}", &config_path);
-    let (mut toml_config, _) = TomlConfig::load_from_file(&config_path).context(format!(
-        "load TOML config failed (tried {:?})",
-        TomlConfig::get_default_config_file_list()
-    ))?;
-    annotation.update_config_by_annotation(&mut toml_config)?;
-    update_agent_kernel_params(&mut toml_config)?;
-
-    // validate configuration and return the error
-    toml_config.validate()?;
-
-    info!(logger, "get config content {:?}", &toml_config);
-    Ok(toml_config)
-}
-
-fn is_shipped_kata_config_path(config_path: &str) -> bool {
-    config_path_matches_defaults(config_path, TomlConfig::get_default_config_file_list())
-}
-
-fn config_path_matches_defaults(config_path: &str, default_config_paths: Vec<PathBuf>) -> bool {
-    let Ok(resolved_config_path) = std::fs::canonicalize(config_path) else {
-        return false;
-    };
-
-    default_config_paths
-        .into_iter()
-        .filter_map(|path| std::fs::canonicalize(path).ok())
-        .any(|path| path == resolved_config_path)
-}
-
-// this update the agent-specfic kernel parameters into hypervisor's bootinfo
-// the agent inside the VM will read from file cmdline to get the params and function
-fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
-    let mut params = vec![];
-    if let Ok(kv) = config.get_agent_kernel_params() {
-        for (k, v) in kv.into_iter() {
-            if let Ok(s) = Param::new(k.as_str(), v.as_str()).to_string() {
-                params.push(s);
-            }
-        }
-        if let Some(h) = config.hypervisor.get_mut(&config.runtime.hypervisor_name) {
-            h.boot_info.add_kernel_params(params);
-        }
-    }
+fn init_runtime_handlers() -> Result<()> {
+    #[cfg(feature = "linux")]
+    LinuxContainer::init().context("init linux container")?;
+    #[cfg(feature = "wasm")]
+    WasmContainer::init().context("init wasm container")?;
+    #[cfg(feature = "virt")]
+    VirtContainer::init().context("init virt container")?;
     Ok(())
 }
 
@@ -1028,11 +965,15 @@ impl Drop for RootlessSetupGuard {
 }
 
 fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
-    let user_name = create_vmm_user().context("failed to create vmm user")?;
-    let mut guard = RootlessSetupGuard::new(user_name.clone());
+    let vmm_user_name = create_vmm_user().context("failed to create vmm user")?;
+    let mut guard = RootlessSetupGuard::new(vmm_user_name.clone());
 
-    let user = User::from_name(&user_name)?
-        .ok_or_else(|| anyhow!("failed to get user by name {}, user not found", user_name))?;
+    let user = User::from_name(&vmm_user_name)?.ok_or_else(|| {
+        anyhow!(
+            "failed to get user by name {}, user not found",
+            vmm_user_name
+        )
+    })?;
 
     let uid = user.uid.as_raw();
     let gid = user.gid.as_raw();
@@ -1063,16 +1004,18 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     // Update the rootless dir prefix for guest_swap_path
     config.memory_info.guest_swap_path = prefix_with_rootless_dir("/run/kata-containers/swap");
 
-    let kvm_path = PathBuf::from("/dev/kvm");
-    let metadata = std::fs::metadata(&kvm_path)?;
-    let kvm_gid = metadata.gid();
-
-    config.security_info.rootless_user = Some(RootlessUser {
+    let mut rootless_vmm_credentials = RootlessUser {
         uid,
         gid,
-        groups: vec![kvm_gid],
-        user_name,
-    });
+        groups: Vec::new(),
+        user_name: vmm_user_name,
+    };
+    // The VMM opens /dev/kvm after dropping credentials. QEMU inherits vhost
+    // network and vsock FDs at exec; Cloud Hypervisor receives network tap FDs
+    // over its API.
+    authorize_rootless_device(Path::new("/dev/kvm"), &mut rootless_vmm_credentials, 0o6)?;
+
+    config.security_info.rootless_user = Some(rootless_vmm_credentials);
 
     Ok(guard)
 }
@@ -1081,6 +1024,7 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
 mod tests {
     use super::*;
     use common::types::ShutdownRequest;
+    use protobuf::Message as ProtobufMessage;
     use rstest::rstest;
     use tokio::sync::mpsc::channel;
 
@@ -1108,6 +1052,27 @@ mod tests {
         assert_eq!(runtime_dir.exists(), runtime_dir_survives);
     }
 
+    #[test]
+    fn test_discard_created_netns_keeps_path_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().display().to_string();
+
+        let mut network_env = SandboxNetworkEnv {
+            netns: Some(path.clone()),
+            network_created: true,
+        };
+        assert!(discard_created_netns(&mut network_env).is_err());
+        assert_eq!(network_env.netns, Some(path.clone()));
+
+        let mut network_env = SandboxNetworkEnv {
+            netns: Some(path.clone()),
+            network_created: false,
+        };
+        discard_created_netns(&mut network_env).unwrap();
+        assert_eq!(network_env.netns, Some(path));
+        assert!(dir.path().exists());
+    }
+
     // A ShutdownContainer RPC that arrives before any runtime instance was
     // created (e.g. after a failed CreateContainer) must still drive the shim
     // daemon to exit, otherwise the process is orphaned.  Verify it returns
@@ -1133,6 +1098,195 @@ mod tests {
         assert!(matches!(msg.action, Action::Shutdown));
     }
 
+    // Records every process a waiter is spawned for.
+    struct WaiterRecordingSandbox {
+        waiters: tokio::sync::mpsc::UnboundedSender<ContainerProcess>,
+    }
+
+    #[async_trait::async_trait]
+    impl Sandbox for WaiterRecordingSandbox {
+        async fn start(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn start_template(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn stop(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn cleanup(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn shutdown(&self) -> Result<()> {
+            unimplemented!()
+        }
+        async fn status(&self) -> Result<common::types::SandboxStatus> {
+            unimplemented!()
+        }
+        async fn wait(&self) -> Result<common::types::SandboxExitInfo> {
+            unimplemented!()
+        }
+        async fn set_iptables(&self, _is_ipv6: bool, _data: Vec<u8>) -> Result<Vec<u8>> {
+            unimplemented!()
+        }
+        async fn get_iptables(&self, _is_ipv6: bool) -> Result<Vec<u8>> {
+            unimplemented!()
+        }
+        async fn direct_volume_stats(&self, _volume_path: &str) -> Result<String> {
+            unimplemented!()
+        }
+        async fn direct_volume_resize(&self, _req: agent::ResizeVolumeRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn agent_sock(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn wait_process(
+            &self,
+            _cm: Arc<dyn common::ContainerManager>,
+            process_id: ContainerProcess,
+            _shim_pid: u32,
+        ) -> Result<()> {
+            self.waiters.send(process_id).unwrap();
+            Ok(())
+        }
+        async fn wait_exit_published(&self) {}
+        async fn rescan_network(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn agent_metrics(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn hypervisor_metrics(&self) -> Result<String> {
+            unimplemented!()
+        }
+        async fn set_policy(&self, _policy: &str) -> Result<()> {
+            unimplemented!()
+        }
+    }
+
+    struct StartingContainerManager;
+
+    #[async_trait::async_trait]
+    impl common::ContainerManager for StartingContainerManager {
+        async fn create_container(
+            &self,
+            _config: common::types::ContainerConfig,
+            _spec: oci::Spec,
+        ) -> Result<common::types::PID> {
+            unimplemented!()
+        }
+        async fn pause_container(&self, _id: &common::types::ContainerID) -> Result<()> {
+            unimplemented!()
+        }
+        async fn resume_container(&self, _id: &common::types::ContainerID) -> Result<()> {
+            unimplemented!()
+        }
+        async fn stats_container(
+            &self,
+            _id: &common::types::ContainerID,
+        ) -> Result<common::types::StatsInfo> {
+            unimplemented!()
+        }
+        async fn update_container(&self, _req: common::types::UpdateRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn connect_container(
+            &self,
+            _id: &common::types::ContainerID,
+        ) -> Result<common::types::PID> {
+            unimplemented!()
+        }
+        async fn close_process_io(&self, _process_id: &ContainerProcess) -> Result<()> {
+            unimplemented!()
+        }
+        async fn delete_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::ProcessStateInfo> {
+            unimplemented!()
+        }
+        async fn exec_process(&self, _req: common::types::ExecProcessRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn kill_process(&self, _req: &common::types::KillRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn resize_process_pty(&self, _req: &common::types::ResizePTYRequest) -> Result<()> {
+            unimplemented!()
+        }
+        async fn start_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::PID> {
+            Ok(common::types::PID::new(42))
+        }
+        async fn state_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::ProcessStateInfo> {
+            unimplemented!()
+        }
+        async fn wait_process(
+            &self,
+            _process_id: &ContainerProcess,
+        ) -> Result<common::types::ProcessExitStatus> {
+            unimplemented!()
+        }
+        async fn pid(&self) -> Result<common::types::PID> {
+            unimplemented!()
+        }
+        async fn need_shutdown_sandbox(&self, _req: &ShutdownRequest) -> bool {
+            unimplemented!()
+        }
+        async fn is_sandbox_container(&self, _process_id: &ContainerProcess) -> bool {
+            false
+        }
+    }
+
+    // CreateContainer already spawns the waiter for a container, so a second
+    // one from StartProcess would publish TaskExit twice, and for the sandbox
+    // container fail to find it once DeleteProcess has removed it. Execs never
+    // go through CreateContainer and rely on the StartProcess waiter.
+    #[rstest]
+    #[case::container_has_no_second_waiter("", false)]
+    #[case::exec_gets_its_waiter("exec-1", true)]
+    #[tokio::test]
+    async fn test_start_process_spawns_waiter_only_for_exec(
+        #[case] exec_id: &str,
+        #[case] waiter_expected: bool,
+    ) {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox {
+                waiters: waiters_tx,
+            }),
+            container_manager: Arc::new(StartingContainerManager),
+        }));
+
+        let process_id = ContainerProcess::new("test-cid", exec_id).unwrap();
+        let resp = manager
+            .handler_task_request(TaskRequest::StartProcess(process_id))
+            .await
+            .unwrap();
+        assert!(matches!(resp, TaskResponse::StartProcess(pid) if pid.pid == 42));
+
+        let waiter = tokio::time::timeout(std::time::Duration::from_millis(500), waiters_rx.recv())
+            .await
+            .ok()
+            .flatten();
+        match (waiter, waiter_expected) {
+            (Some(waited), true) => assert_eq!(waited.exec_id(), exec_id),
+            (None, false) => {}
+            (waited, _) => panic!(
+                "exec id {:?}: expected a waiter: {}, got {:?}",
+                exec_id, waiter_expected, waited
+            ),
+        }
+    }
+
     #[test]
     fn test_effective_log_level() {
         assert_eq!(effective_log_level(false, "info"), "info");
@@ -1142,49 +1296,25 @@ mod tests {
         assert_eq!(effective_log_level(true, "warn"), "warn");
     }
 
-    #[derive(Debug)]
-    enum ConfigPathCase {
-        Shipped,
-        NonShipped,
-        NonExistent,
-        Empty,
-    }
-
-    #[rstest]
-    #[case::shipped_config_is_accepted(ConfigPathCase::Shipped, true)]
-    #[case::non_shipped_config_is_rejected(ConfigPathCase::NonShipped, false)]
-    #[case::non_existent_path_is_rejected(ConfigPathCase::NonExistent, false)]
-    #[case::empty_path_is_rejected(ConfigPathCase::Empty, false)]
-    fn test_config_path_matches_defaults(
-        #[case] path_case: ConfigPathCase,
-        #[case] expected: bool,
-    ) {
+    #[test]
+    fn test_load_config_in_fresh_process() {
         let tmpdir = tempfile::tempdir().unwrap();
-        let shipped_path = tmpdir.path().join("shipped.toml");
-        let non_shipped_path = tmpdir.path().join("malicious.toml");
-        std::fs::write(&shipped_path, b"[hypervisor.qemu]\n").unwrap();
-        std::fs::write(&non_shipped_path, b"[hypervisor.qemu]\n").unwrap();
-
-        // Only the shipped path is treated as a default config location.
-        let default_config_paths = vec![shipped_path.clone()];
-
-        let config_path = match path_case {
-            ConfigPathCase::Shipped => shipped_path.to_string_lossy().to_string(),
-            ConfigPathCase::NonShipped => non_shipped_path.to_string_lossy().to_string(),
-            ConfigPathCase::NonExistent => tmpdir
-                .path()
-                .join("nonexistent.toml")
-                .to_string_lossy()
-                .to_string(),
-            ConfigPathCase::Empty => String::new(),
+        let path = tmpdir.path().join("configuration.toml");
+        std::fs::write(
+            &path,
+            "[hypervisor.qemu]\npath = \"/bin/sh\"\nkernel = \"/bin/sh\"\nimage = \"/bin/sh\"\n\
+             [agent.kata]\n[runtime]\nname = \"virt_container\"\nhypervisor_name = \"qemu\"\n\
+             agent_name = \"kata\"\n",
+        )
+        .unwrap();
+        let options = protocols::runtimeoptions::Options {
+            config_path: path.to_string_lossy().to_string(),
+            ..Default::default()
         };
+        let options = Some(options.write_to_bytes().unwrap());
 
-        assert_eq!(
-            config_path_matches_defaults(&config_path, default_config_paths),
-            expected,
-            "case {:?}: unexpected result for path {:?}",
-            path_case,
-            config_path,
-        );
+        init_runtime_handlers().unwrap();
+        let config = load_config(&HashMap::new(), &options).unwrap();
+        assert_eq!(config.runtime.hypervisor_name, "qemu");
     }
 }

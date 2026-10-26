@@ -5,6 +5,7 @@
 //
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -48,7 +49,12 @@ impl CgroupsResource {
 impl CgroupsResource {
     pub async fn delete(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
+        info!(sl!(), "cgroup cleanup lock acquired");
         inner.delete().await
+    }
+
+    pub async fn kill_all_processes(&self, wait: Duration) -> Result<()> {
+        self.inner.read().await.kill_all_processes(wait).await
     }
 
     pub async fn update(

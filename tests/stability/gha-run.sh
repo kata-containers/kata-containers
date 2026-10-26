@@ -22,16 +22,29 @@ IMAGE="docker.io/library/local-stressng:latest"
 function install_dependencies() {
 	info "Installing the dependencies needed for running the containerd-stability tests"
 
+	# Remove containerd if it's installed as it conflicts with another version of containerd
+	sudo apt-get remove -y containerd containerd.io || true
+	sudo rm -rf /etc/systemd/system/containerd.service
+
 	declare -a system_deps=(
 		jq
 		curl
 		gnupg
+		# podman-docker provides a docker-compatible CLI (without pulling in
+		# containerd as a dependency) so that build_dockerfile_image can build
+		# the stress-ng image after containerd.io has been removed above.
+		podman-docker
 	)
 
 	apt_get_update
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
+
+	# shellcheck disable=SC2154
+	install_cri_containerd "$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
+	sudo systemctl start containerd
+
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
 }
 

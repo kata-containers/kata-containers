@@ -183,6 +183,37 @@ true
 {{- end -}}
 
 {{/*
+Every enabled shim declares an architecture it can be installed on.
+
+What the install lays down is the per-architecture shim list, built below from
+each shim's supportedArches, while the RuntimeClasses are created for whatever is
+enabled, architecture or no architecture. A shim enabled without the field is
+therefore installed nowhere and still gets a RuntimeClass, naming a handler
+containerd is never told about - which surfaces much later, as a pod that stays
+in ContainerCreating. Only the generic shims are in values.yaml, so this is how
+enabling one of the shims that ship as a try-kata-*.values.yaml profile goes
+wrong.
+*/}}
+{{- define "kata-deploy.validateShimArches" -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- if and $shimEnabled (not $shimConfig.supportedArches) -}}
+{{- fail (printf "\n\nERROR: shim %q is enabled but its supportedArches is empty.\n\nA shim is only installed on an architecture its own supportedArches lists, so this one would be installed nowhere while still getting a RuntimeClass no pod can run on. values.yaml carries the generic shims only; %q comes from one of the try-kata-*.values.yaml profiles, so install with that profile (helm install ... -f try-kata-<flavour>.values.yaml), or copy the shim's whole block out of it - its snapshotter and guest-pull settings live there too.\n" $shimName $shimName) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Get enabled shims for a specific architecture from structured config.
 Uses null-based defaults for disableAll support:
 - enabled: ~ (null) + disableAll: false → enabled
@@ -666,6 +697,26 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- end }}
 - name: DEBUG
   value: {{ include "kata-deploy.getDebug" . | quote }}
+{{- $rootlessAmd64 := include "kata-deploy.getRootlessShimsForArch" (dict "root" . "arch" "amd64") | trim -}}
+{{- if $rootlessAmd64 }}
+- name: ROOTLESS_X86_64
+  value: {{ $rootlessAmd64 | quote }}
+{{- end }}
+{{- $rootlessArm64 := include "kata-deploy.getRootlessShimsForArch" (dict "root" . "arch" "arm64") | trim -}}
+{{- if $rootlessArm64 }}
+- name: ROOTLESS_AARCH64
+  value: {{ $rootlessArm64 | quote }}
+{{- end }}
+{{- $rootlessS390x := include "kata-deploy.getRootlessShimsForArch" (dict "root" . "arch" "s390x") | trim -}}
+{{- if $rootlessS390x }}
+- name: ROOTLESS_S390X
+  value: {{ $rootlessS390x | quote }}
+{{- end }}
+{{- $rootlessPpc64le := include "kata-deploy.getRootlessShimsForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+{{- if $rootlessPpc64le }}
+- name: ROOTLESS_PPC64LE
+  value: {{ $rootlessPpc64le | quote }}
+{{- end }}
 {{- $shimsAmd64 := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $shimsAmd64 }}
 - name: SHIMS_X86_64
@@ -1261,6 +1312,7 @@ site under a ConfigMap data key.
 {{- define "kata-deploy.perNodeJob" -}}
 {{- $root := .root -}}
 {{- $stage := .stage -}}
+{{- $rootless := include "kata-deploy.getRootlessShims" $root | trim -}}
 {{- /* The dispatcher polls each Job for its result. A Job deleted before the next
        poll leaves its node with no result, and that counts as a failure. */}}
 {{- if lt (int $root.Values.job.ttlSecondsAfterFinished) 60 -}}
@@ -1365,7 +1417,11 @@ spec:
 {{- /* Privileged, and holding the host root, because it runs the host's own modprobe. */}}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "load-kernel-modules" "action" "install-stage-load-kernel-modules" "privileged" true "mountHost" true "mountHostRoot" true "mountModulesLoad" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_check_t") | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
+{{- if $rootless }}
+{{- /* Run after validation because this stage changes persistent host state. */}}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "rootless-devices" "action" "install-stage-rootless-devices" "privileged" true "mountHost" true "mountHostRoot" true "hostRootWritable" true "mountHostDev" true "mountUdevRules" true) | nindent 8 }}
+{{- end }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true "mountUdevRules" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
       containers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_cri_t") | nindent 8 }}
 {{- else }}
@@ -1381,7 +1437,7 @@ spec:
        up even when the entries were dropped from the values first. */}}
 {{- include "kata-deploy.nodeBinariesInstallContainer" (dict "root" $root "name" "node-binaries-remove") | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true "mountUdevRules" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
@@ -1389,12 +1445,24 @@ spec:
           hostPath:
             path: /etc/modules-load.d
             type: DirectoryOrCreate
+{{- /* Unconditional, as modules-load-d: a rule written while rootless was on has
+       to be removable once it is off, when the stage that wrote it no longer runs. */}}
+        - name: udev-rules-d
+          hostPath:
+            path: /etc/udev/rules.d
+            type: DirectoryOrCreate
 {{- /* The cleanup pipeline holds the host root for the policy stage alone. */}}
 {{- if or (eq $stage "install") (include "kata-deploy.selinuxEnabled" $root | trim) }}
         - name: host-root
           hostPath:
             path: /
             type: Directory
+{{- if and (eq $stage "install") $rootless }}
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+{{- end }}
 {{- end }}
 {{- if and (eq $stage "install") (include "kata-deploy.nodeBinaries" $root | fromYaml) }}
         {{- /* Pod-local, so those images reach nothing of the node's. */}}
@@ -1675,7 +1743,11 @@ Arguments (dict):
   privileged  - bool, whether the container runs privileged
   mountHost   - bool, whether to mount the host paths (crio/containerd/install/...)
   mountHostRoot - bool, whether to mount the host root read-only at /host
-  hostRootWritable - bool, whether that host root mount is writable
+  hostRootWritable - bool, whether that host root mount is writable. Only for a
+                     stage that has to run a host tool which writes host state,
+                     such as semodule or groupadd.
+  mountHostDev - bool, whether to mount the host /dev writable at /host-dev
+  mountUdevRules - bool, whether to mount the host udev rules.d directory writable
   mountModulesLoad - bool, whether to mount the host modules-load.d directory writable
   selinuxDomain - SELinux type to confine this stage to, when selinux.enabled
 
@@ -1710,6 +1782,14 @@ Emitted at column 0; indent with `nindent` at the call site.
       mountPath: /host
       {{- /* The policy stage writes: semodule rebuilds the node's policy store. */}}
       readOnly: {{ not .hostRootWritable }}
+{{- end }}
+{{- if .mountHostDev }}
+    - name: host-dev
+      mountPath: /host-dev
+{{- end }}
+{{- if .mountUdevRules }}
+    - name: udev-rules-d
+      mountPath: /host-udev-rules.d
 {{- end }}
 {{- if .mountModulesLoad }}
     - name: modules-load-d
@@ -1897,6 +1977,55 @@ Note: EXPERIMENTAL_FORCE_GUEST_PULL only checks containerd.forceGuestPull, not c
 {{- end -}}
 
 {{/*
+Returns the enabled shims asking for a rootless VMM, on any architecture: the
+install stage and the host mounts they need are the same on every node.
+Output: comma-separated shim names.
+*/}}
+{{- define "kata-deploy.getRootlessShims" -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- $shimNames := list -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- if include "kata-deploy.isShimEnabled" (dict "shimConfig" $shimConfig "disableAll" $disableAll) | trim -}}
+{{- if and $shimConfig.hypervisor $shimConfig.hypervisor.rootless -}}
+{{- if not (and (hasSuffix "-runtime-rs" $shimName) (or (hasPrefix "qemu" $shimName) (eq $shimName "clh-runtime-rs"))) -}}
+{{- fail (printf "shims.%s.hypervisor.rootless is true, but %s does not run its VMM unprivileged. Only the runtime-rs QEMU shims and clh-runtime-rs do, so this install would leave %s privileged while provisioning host device access for it." $shimName $shimName $shimName) -}}
+{{- end -}}
+{{- $shimNames = append $shimNames $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if and $shimNames (eq ($.Values.deploymentMode | default "daemonset") "daemonset") -}}
+{{- /* The DaemonSet cannot provision host groups or device nodes. */ -}}
+{{- fail (printf "shims.%s.hypervisor.rootless requires deploymentMode: job. The DaemonSet has no privileged host-root stage to provision host device access from, so a rootless VMM could not start. Deploy with --set deploymentMode=job, or turn rootless off." (first $shimNames)) -}}
+{{- end -}}
+{{- join "," (sortAlpha $shimNames) -}}
+{{- end -}}
+
+{{/*
+Get ROOTLESS for a specific architecture from structured config
+Returns comma-separated list of shim names with hypervisor.rootless enabled
+*/}}
+{{- define "kata-deploy.getRootlessShimsForArch" -}}
+{{- $arch := .arch -}}
+{{- $disableAll := .root.Values.shims.disableAll | default false -}}
+{{- $shimNames := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- if include "kata-deploy.isShimEnabled" (dict "shimConfig" $shimConfig "disableAll" $disableAll) | trim -}}
+{{- if has $arch $shimConfig.supportedArches -}}
+{{- if and $shimConfig.hypervisor $shimConfig.hypervisor.rootless -}}
+{{- $shimNames = append $shimNames $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," (sortAlpha $shimNames) -}}
+{{- end -}}
+
+{{/*
 Returns "true" when a shim is enabled according to `enabled` + `disableAll`.
 Input:
   dict:
@@ -1976,7 +2105,9 @@ data:
 {{- end }}
 {{- end }}
 {{- if $handler }}
-    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}
+{{- $baseShim := index $.Values.shims ($runtime.baseConfig | default "") | default dict }}
+{{- $supportedArches := join "," ($baseShim.supportedArches | default list) }}
+    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}:{{ $supportedArches }}
 {{- end }}
 {{- end }}
 {{- range $name := keys .Values.customRuntimes.runtimes | sortAlpha }}

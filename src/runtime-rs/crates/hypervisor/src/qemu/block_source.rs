@@ -2,18 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::VmdkConfig;
-
 use anyhow::{anyhow, Context, Result};
+use kata_types::vmdk::validate_vmdk_layout;
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
 use std::path::Path;
+
+use crate::virtio_blk_modern::BlockSourceFormat;
 
 const BLOCK_FD_OPAQUE_PREFIX: &str = "kata-block:";
 
@@ -70,50 +70,6 @@ fn open_block_source(
     Ok((file, metadata))
 }
 
-fn render_vmdk_descriptor(
-    config: &VmdkConfig,
-    backing_paths: &HashMap<String, String>,
-) -> Result<String> {
-    let total_sectors = config
-        .total_sectors()
-        .ok_or_else(|| anyhow!("VMDK total sector count overflow"))?;
-    if total_sectors == 0 {
-        return Err(anyhow!("VMDK contains no non-empty extents"));
-    }
-
-    let mut descriptor = String::new();
-    writeln!(descriptor, "# Disk DescriptorFile")?;
-    writeln!(descriptor, "version=1")?;
-    writeln!(descriptor, "CID=fffffffe")?;
-    writeln!(descriptor, "parentCID=ffffffff")?;
-    writeln!(descriptor, "createType=\"twoGbMaxExtentFlat\"")?;
-    writeln!(descriptor)?;
-    writeln!(descriptor, "# Extent description")?;
-    for extent in &config.extents {
-        let path = backing_paths
-            .get(&extent.path_on_host)
-            .ok_or_else(|| anyhow!("missing prepared VMDK extent {}", extent.path_on_host))?;
-        writeln!(
-            descriptor,
-            "RW {} FLAT \"{}\" {}",
-            extent.sectors, path, extent.file_offset
-        )?;
-    }
-
-    let cylinders = total_sectors.div_ceil(63 * 16);
-    writeln!(descriptor)?;
-    writeln!(descriptor, "# The Disk Data Base")?;
-    writeln!(descriptor, "#DDB")?;
-    writeln!(descriptor)?;
-    writeln!(descriptor, "ddb.virtualHWVersion = \"4\"")?;
-    writeln!(descriptor, "ddb.geometry.cylinders = \"{cylinders}\"")?;
-    writeln!(descriptor, "ddb.geometry.heads = \"16\"")?;
-    writeln!(descriptor, "ddb.geometry.sectors = \"63\"")?;
-    writeln!(descriptor, "ddb.adapterType = \"ide\"")?;
-
-    Ok(descriptor)
-}
-
 fn create_vmdk_descriptor_file(
     descriptor_path: &Path,
     descriptor: &str,
@@ -159,7 +115,7 @@ fn create_vmdk_descriptor_file(
 /// once after their backing extents have been registered.
 pub(super) fn prepare_block_source<F>(
     path: &str,
-    vmdk: Option<&VmdkConfig>,
+    source: &BlockSourceFormat,
     is_readonly: bool,
     is_direct: bool,
     mut register: F,
@@ -167,7 +123,7 @@ pub(super) fn prepare_block_source<F>(
 where
     F: FnMut(File, &str) -> Result<String>,
 {
-    let Some(vmdk) = vmdk else {
+    let BlockSourceFormat::Vmdk(vmdk) = source else {
         let (file, metadata) = open_block_source(path, is_readonly, is_direct, false)?;
         let is_regular_file = metadata.is_file();
         let filename = register(file, "block-source")?;
@@ -177,21 +133,7 @@ where
         });
     };
 
-    if vmdk.extents.is_empty() {
-        return Err(anyhow!("VMDK contains no extents"));
-    }
-
-    let mut required_sectors_by_path: HashMap<&str, u64> = HashMap::new();
-    for extent in &vmdk.extents {
-        let required_sectors = extent
-            .file_offset
-            .checked_add(extent.sectors)
-            .ok_or_else(|| anyhow!("VMDK extent sector count overflow"))?;
-        required_sectors_by_path
-            .entry(extent.path_on_host.as_str())
-            .and_modify(|maximum| *maximum = (*maximum).max(required_sectors))
-            .or_insert(required_sectors);
-    }
+    let layout = validate_vmdk_layout(vmdk)?;
 
     let mut backing_paths = HashMap::new();
     for extent in &vmdk.extents {
@@ -203,9 +145,8 @@ where
         // O_DIRECT. QEMU fdsets require an exact O_DIRECT match, so preserve
         // that existing reopen behavior for delegated extent descriptors.
         let (file, metadata) = open_block_source(&extent.path_on_host, is_readonly, false, true)?;
-        let required_sectors = required_sectors_by_path
-            .get(extent.path_on_host.as_str())
-            .copied()
+        let required_sectors = layout
+            .required_sectors_for(&extent.path_on_host)
             .ok_or_else(|| anyhow!("missing VMDK extent size for {}", extent.path_on_host))?;
         if metadata.len().div_ceil(512) < required_sectors {
             return Err(anyhow!(
@@ -218,7 +159,12 @@ where
         backing_paths.insert(extent.path_on_host.clone(), fd_path);
     }
 
-    let descriptor = render_vmdk_descriptor(vmdk, &backing_paths)?;
+    let descriptor = layout.render_descriptor_with(|extent| {
+        backing_paths
+            .get(&extent.path_on_host)
+            .cloned()
+            .ok_or_else(|| anyhow!("missing prepared VMDK extent {}", extent.path_on_host))
+    })?;
     let descriptor =
         create_vmdk_descriptor_file(Path::new(path), &descriptor, is_readonly, is_direct)?;
     let filename = register(descriptor, "vmdk-descriptor")?;
@@ -232,6 +178,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_types::vmdk::VmdkConfig;
     use nix::fcntl::{fcntl, FcntlArg, OFlag};
     use std::cell::RefCell;
     use std::io::{Read, Seek, SeekFrom};
@@ -239,35 +186,22 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn renders_structured_vmdk_layout() {
-        let mut config = VmdkConfig::default();
-        config.push_extent("/images/first.raw", 8, 0);
-        config.push_extent("/images/first.raw", 4, 8);
-        config.push_extent("/images/second.raw", 16, 0);
-        let backing_paths = HashMap::from([
-            ("/images/first.raw".to_string(), "/dev/fdset/1".to_string()),
-            ("/images/second.raw".to_string(), "/dev/fdset/2".to_string()),
-        ]);
-
-        let descriptor = render_vmdk_descriptor(&config, &backing_paths).unwrap();
-        assert!(descriptor.contains("RW 8 FLAT \"/dev/fdset/1\" 0"));
-        assert!(descriptor.contains("RW 4 FLAT \"/dev/fdset/1\" 8"));
-        assert!(descriptor.contains("RW 16 FLAT \"/dev/fdset/2\" 0"));
-        assert!(descriptor.contains("ddb.geometry.cylinders = \"1\""));
-    }
-
-    #[test]
     fn prepares_raw_source_with_requested_access() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("disk.img");
         std::fs::write(&path, b"disk").unwrap();
 
-        let prepared =
-            prepare_block_source(path.to_str().unwrap(), None, true, false, |file, _| {
+        let prepared = prepare_block_source(
+            path.to_str().unwrap(),
+            &BlockSourceFormat::Raw,
+            true,
+            false,
+            |file, _| {
                 assert_eq!(file.metadata()?.len(), 4);
                 Ok("/dev/fdset/7".to_string())
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
 
         assert_eq!(prepared.filename, "/dev/fdset/7");
         assert!(prepared.is_regular_file);
@@ -279,11 +213,17 @@ mod tests {
         let path = dir.path().join("writable.raw");
         std::fs::write(&path, b"disk").unwrap();
 
-        prepare_block_source(path.to_str().unwrap(), None, false, false, |mut file, _| {
-            file.seek(SeekFrom::End(0))?;
-            file.write_all(b"-writable")?;
-            Ok("/dev/fdset/8".to_string())
-        })
+        prepare_block_source(
+            path.to_str().unwrap(),
+            &BlockSourceFormat::Raw,
+            false,
+            false,
+            |mut file, _| {
+                file.seek(SeekFrom::End(0))?;
+                file.write_all(b"-writable")?;
+                Ok("/dev/fdset/8".to_string())
+            },
+        )
         .unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), b"disk-writable");
@@ -295,10 +235,16 @@ mod tests {
         let path = dir.path().join("readonly.raw");
         std::fs::write(&path, b"readonly").unwrap();
 
-        prepare_block_source(path.to_str().unwrap(), None, true, false, |mut file, _| {
-            assert!(file.write_all(b"no").is_err());
-            Ok("/dev/fdset/8".to_string())
-        })
+        prepare_block_source(
+            path.to_str().unwrap(),
+            &BlockSourceFormat::Raw,
+            true,
+            false,
+            |mut file, _| {
+                assert!(file.write_all(b"no").is_err());
+                Ok("/dev/fdset/8".to_string())
+            },
+        )
         .unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), b"readonly");
@@ -319,7 +265,7 @@ mod tests {
         let registered = RefCell::new(Vec::new());
         let prepared = prepare_block_source(
             "merged.vmdk",
-            Some(&vmdk),
+            &BlockSourceFormat::Vmdk(vmdk),
             true,
             false,
             |mut file, label| {
@@ -353,11 +299,17 @@ mod tests {
         let path = dir.path().join("disk.img");
         std::fs::write(&path, vec![0u8; 4096]).unwrap();
 
-        prepare_block_source(path.to_str().unwrap(), None, true, true, |file, _| {
-            let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
-            assert!(flags.contains(OFlag::O_DIRECT));
-            Ok("/dev/fdset/8".to_string())
-        })
+        prepare_block_source(
+            path.to_str().unwrap(),
+            &BlockSourceFormat::Raw,
+            true,
+            true,
+            |file, _| {
+                let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
+                assert!(flags.contains(OFlag::O_DIRECT));
+                Ok("/dev/fdset/8".to_string())
+            },
+        )
         .unwrap();
     }
 
@@ -372,7 +324,7 @@ mod tests {
 
         prepare_block_source(
             descriptor.to_str().unwrap(),
-            Some(&vmdk),
+            &BlockSourceFormat::Vmdk(vmdk),
             true,
             true,
             |file, label| {
@@ -398,12 +350,17 @@ mod tests {
         std::fs::write(&target, b"disk").unwrap();
         symlink(&target, &link).unwrap();
 
-        let prepared =
-            prepare_block_source(link.to_str().unwrap(), None, true, false, |file, _| {
+        let prepared = prepare_block_source(
+            link.to_str().unwrap(),
+            &BlockSourceFormat::Raw,
+            true,
+            false,
+            |file, _| {
                 assert!(file.metadata()?.is_file());
                 Ok("/dev/fdset/1".to_string())
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
 
         assert_eq!(prepared.filename, "/dev/fdset/1");
         assert!(prepared.is_regular_file);
@@ -418,9 +375,13 @@ mod tests {
         vmdk.push_extent(extent.to_str().unwrap(), 1, 0);
         vmdk.push_extent(extent.to_str().unwrap(), 1, 1);
 
-        let error = prepare_block_source("disk.vmdk", Some(&vmdk), true, false, |_, _| {
-            Ok("/dev/fdset/1".to_string())
-        })
+        let error = prepare_block_source(
+            "disk.vmdk",
+            &BlockSourceFormat::Vmdk(vmdk),
+            true,
+            false,
+            |_, _| Ok("/dev/fdset/1".to_string()),
+        )
         .unwrap_err();
 
         assert!(error
@@ -435,10 +396,16 @@ mod tests {
         std::fs::write(&path, b"persistent").unwrap();
         let received = RefCell::new(None);
 
-        prepare_block_source(path.to_str().unwrap(), None, true, false, |file, _| {
-            *received.borrow_mut() = Some(file.try_clone()?);
-            Ok("/dev/fdset/1".to_string())
-        })
+        prepare_block_source(
+            path.to_str().unwrap(),
+            &BlockSourceFormat::Raw,
+            true,
+            false,
+            |file, _| {
+                *received.borrow_mut() = Some(file.try_clone()?);
+                Ok("/dev/fdset/1".to_string())
+            },
+        )
         .unwrap();
         std::fs::remove_file(&path).unwrap();
 

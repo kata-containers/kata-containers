@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{Config, NYDUS_FOR_KATA_TEE};
+use crate::config::{Config, ContainerdPaths, NYDUS_FOR_KATA_TEE};
 use crate::runtime;
 use crate::runtime::containerd;
 use crate::utils;
@@ -11,7 +11,7 @@ use crate::utils::toml as toml_utils;
 use anyhow::Result;
 use log::{info, warn};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn erofs_default_size(mode: Option<&str>) -> Result<&'static str> {
     match mode {
@@ -161,6 +161,40 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
     Ok(())
 }
 
+/// The name this installation gives its nydus snapshotter: the systemd unit, the
+/// containerd proxy plugin, and its socket and data directories.
+fn nydus_snapshotter_name(config: &Config) -> String {
+    match config.multi_install_suffix.as_ref() {
+        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
+        _ => NYDUS_FOR_KATA_TEE.to_string(),
+    }
+}
+
+fn nydus_service_unit_path(nydus_snapshotter: &str) -> String {
+    format!("/etc/systemd/system/{nydus_snapshotter}.service")
+}
+
+fn nydus_requested(config: &Config) -> bool {
+    config
+        .experimental_setup_snapshotter
+        .as_ref()
+        .is_some_and(|snapshotters| snapshotters.iter().any(|s| s == "nydus"))
+}
+
+/// The containerd configuration file snapshotter settings are written to.
+fn snapshotter_configuration_file(paths: &ContainerdPaths) -> PathBuf {
+    if paths.use_drop_in {
+        log::debug!(
+            "Snapshotter using drop-in config file: {}",
+            paths.drop_in_file
+        );
+        PathBuf::from(&paths.drop_in_file)
+    } else {
+        log::debug!("Snapshotter using main config file: {}", paths.config_file);
+        PathBuf::from(&paths.config_file)
+    }
+}
+
 pub async fn configure_nydus_snapshotter(
     config: &Config,
     configuration_file: &Path,
@@ -168,10 +202,7 @@ pub async fn configure_nydus_snapshotter(
 ) -> Result<()> {
     info!("Configuring {NYDUS_FOR_KATA_TEE}");
 
-    let nydus = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
-        _ => NYDUS_FOR_KATA_TEE.to_string(),
-    };
+    let nydus = nydus_snapshotter_name(config);
 
     let containerd_nydus = nydus.clone();
 
@@ -216,26 +247,13 @@ pub async fn configure_snapshotter(
     let pluginid =
         containerd::pluginid_for_snapshotter_annotations(runtime_plugin_id, &paths.config_file)?;
 
-    let configuration_file: std::path::PathBuf = if paths.use_drop_in {
-        let base_path = Path::new(&paths.drop_in_file).to_path_buf();
-
-        log::debug!("Snapshotter using drop-in config file: {:?}", base_path);
-        base_path
-    } else {
-        log::debug!("Snapshotter using main config file: {}", paths.config_file);
-        Path::new(&paths.config_file).to_path_buf()
-    };
+    let configuration_file = snapshotter_configuration_file(&paths);
 
     match snapshotter {
         "nydus" => {
             configure_nydus_snapshotter(config, &configuration_file, pluginid).await?;
 
-            let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
-                Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
-                _ => NYDUS_FOR_KATA_TEE.to_string(),
-            };
-
-            utils::host_systemctl(&["restart", &nydus_snapshotter]).await?;
+            utils::host_systemctl(&["restart", &nydus_snapshotter_name(config)]).await?;
         }
         "erofs" => {
             configure_erofs_snapshotter(config, &configuration_file).await?;
@@ -251,10 +269,7 @@ pub async fn configure_snapshotter(
 pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result<()> {
     info!("Deploying {NYDUS_FOR_KATA_TEE}");
 
-    let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
-        _ => NYDUS_FOR_KATA_TEE.to_string(),
-    };
+    let nydus_snapshotter = nydus_snapshotter_name(config);
 
     // Stop the service if it is currently running so we can replace the binaries safely.
     let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]).await;
@@ -304,7 +319,7 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
         "@NYDUS_OVERLAYFS_PATH@",
         &format!(
             "{}/{NYDUS_FOR_KATA_TEE}/nydus-overlayfs",
-            &config.host_install_dir
+            config.host_install_dir
         ),
     );
 
@@ -313,14 +328,14 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
         "@CONTAINERD_NYDUS_GRPC_BINARY@",
         &format!(
             "{}/{NYDUS_FOR_KATA_TEE}/containerd-nydus-grpc",
-            &config.host_install_dir
+            config.host_install_dir
         ),
     );
     service_content = service_content.replace(
         "@CONFIG_GUEST_PULLING@",
         &format!(
             "{}/{NYDUS_FOR_KATA_TEE}/config-guest-pulling.toml",
-            &config.host_install_dir
+            config.host_install_dir
         ),
     );
 
@@ -372,10 +387,7 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
         config_content,
     )?;
 
-    fs::write(
-        format!("/etc/systemd/system/{nydus_snapshotter}.service"),
-        service_content,
-    )?;
+    fs::write(nydus_service_unit_path(&nydus_snapshotter), service_content)?;
 
     utils::host_systemctl(&["daemon-reload"]).await?;
     utils::host_systemctl(&["enable", &format!("{nydus_snapshotter}.service")]).await?;
@@ -386,12 +398,9 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
 pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
     info!("Removing deployed {NYDUS_FOR_KATA_TEE}");
 
-    let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
-        _ => NYDUS_FOR_KATA_TEE.to_string(),
-    };
+    let nydus_snapshotter = nydus_snapshotter_name(config);
 
-    let service = format!("/etc/systemd/system/{nydus_snapshotter}.service");
+    let service = nydus_service_unit_path(&nydus_snapshotter);
     if Path::new(&service).exists() {
         utils::host_systemctl(&["disable", "--now", &format!("{nydus_snapshotter}.service")])
             .await?;
@@ -410,6 +419,45 @@ pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
     utils::host_systemctl(&["daemon-reload"]).await?;
 
     Ok(())
+}
+
+/// Remove the nydus snapshotter an earlier run of this installation deployed but
+/// the current one no longer asks for, such as an upgrade from a release whose
+/// default set it up. Install and uninstall otherwise only act on the snapshotters
+/// requested now, so it would keep running forever. The unit is named after this
+/// installation, so finding it is what makes it this installation's to remove.
+pub async fn remove_unrequested_nydus_snapshotter(config: &Config) -> Result<()> {
+    if nydus_requested(config) {
+        return Ok(());
+    }
+    let nydus_snapshotter = nydus_snapshotter_name(config);
+    if !Path::new(&nydus_service_unit_path(&nydus_snapshotter)).exists() {
+        return Ok(());
+    }
+    info!("{nydus_snapshotter} is deployed but no longer requested, removing it");
+    uninstall_nydus_snapshotter(config).await
+}
+
+/// Drop this installation's nydus proxy plugin from the containerd configuration
+/// when nydus is no longer requested. The configuration is edited in place, so an
+/// entry written by an earlier run stays otherwise, pointing at a socket nothing
+/// serves any more.
+pub async fn unconfigure_unrequested_nydus_snapshotter(
+    config: &Config,
+    runtime: &str,
+) -> Result<()> {
+    if nydus_requested(config) {
+        return Ok(());
+    }
+    let paths = config.get_containerd_paths(runtime).await?;
+    let configuration_file = snapshotter_configuration_file(&paths);
+    if !configuration_file.exists() {
+        return Ok(());
+    }
+    toml_utils::delete_toml_value(
+        &configuration_file,
+        &format!(".proxy_plugins.\"{}\"", nydus_snapshotter_name(config)),
+    )
 }
 
 pub async fn install_snapshotter(snapshotter: &str, config: &Config, runtime: &str) -> Result<()> {

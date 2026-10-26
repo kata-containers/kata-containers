@@ -90,8 +90,8 @@ spec:
         value: /tmp
     resources:
       limits:
-        nvidia.com/pgpu: "1"
-        cpu: "16"
+        nvidia.com/gpu: "1"
+        cpu: "8"
         memory: "16Gi"
     volumeMounts:
       - name: model

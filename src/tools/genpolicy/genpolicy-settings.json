@@ -233,6 +233,7 @@
                 "gpu_anno_value_regex": "^nvidia\\.com/gpu=[0-9]+$",
                 "gpu_gk_device_type": "vfio-pci-gk",
                 "pgpu_resource_keys": [
+                    "nvidia.com/gpu",
                     "nvidia.com/pgpu"
                 ]
             }

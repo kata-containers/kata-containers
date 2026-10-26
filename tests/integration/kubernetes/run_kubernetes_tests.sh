@@ -59,6 +59,7 @@ else
 		"k8s-policy-job.bats" \
 		"k8s-policy-logs.bats" \
 		"k8s-policy-pod.bats" \
+		"k8s-policy-pod2.bats" \
 		"k8s-policy-pvc.bats" \
 		"k8s-policy-rc.bats" \
 		"k8s-trusted-ephemeral-data-storage.bats" \
@@ -78,6 +79,7 @@ else
 		"k8s-cron-job.bats" \
 		"k8s-custom-dns.bats" \
 		"k8s-devkit-debug-console.bats" \
+		"k8s-direct-volume.bats" \
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-erofs-dmverity.bats" \
@@ -126,6 +128,7 @@ else
 		"k8s-qos-pods.bats" \
 		"k8s-sandbox-vcpus-allocation.bats" \
 		"k8s-scale-nginx.bats" \
+		"k8s-large-file-volume.bats" \
 	)
 
 	case ${K8S_TEST_HOST_TYPE} in

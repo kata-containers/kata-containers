@@ -21,6 +21,7 @@ pub(crate) struct ShareFsRootfs {
     guest_path: String,
     share_fs: Arc<dyn ShareFs>,
     config: ShareFsRootfsConfig,
+    mounted_bundle_rootfs: bool,
 }
 
 impl ShareFsRootfs {
@@ -34,7 +35,7 @@ impl ShareFsRootfs {
             let bundle_rootfs = format!("{bundle_path}/{ROOTFS}");
             rootfs.mount(&bundle_rootfs).context(format!(
                 "mount rootfs from {:?} to {}",
-                &rootfs, &bundle_rootfs
+                rootfs, bundle_rootfs
             ))?;
             bundle_rootfs
         } else {
@@ -59,6 +60,7 @@ impl ShareFsRootfs {
             guest_path: mount_result.guest_path,
             share_fs: Arc::clone(share_fs),
             config,
+            mounted_bundle_rootfs: rootfs.is_some(),
         })
     }
 }
@@ -89,8 +91,78 @@ impl Rootfs for ShareFsRootfs {
             .await
             .context("umount shared rootfs")?;
 
-        // Umount the bundle rootfs
-        umount_timeout(&self.config.source, 0).context("umount bundle rootfs")?;
+        // CRI-O supplies an already mounted rootfs with no rootfs mounts in the
+        // create request. Only unmount the source when we mounted it ourselves.
+        if self.mounted_bundle_rootfs {
+            umount_timeout(&self.config.source, 0).context("umount bundle rootfs")?;
+        }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::share_fs::do_get_host_path;
+    use crate::test_utils::{
+        device_manager, in_private_mount_namespace, inline_share_fs, is_mounted, set_immutable,
+        SharedTmpfs,
+    };
+    use std::{fs, path::Path};
+
+    // Fail removal after detaching the share to test cleanup of the remaining bundle rootfs.
+    #[actix_rt::test]
+    #[ignore = "requires root and mount namespace capabilities"]
+    async fn test_cleanup_retry_after_partial_failure() {
+        if !in_private_mount_namespace(
+            "rootfs::share_fs_rootfs::tests::test_cleanup_retry_after_partial_failure",
+        ) {
+            return;
+        }
+        let tmpfs = SharedTmpfs::new();
+        let sid = tmpfs.sandbox();
+        let share_fs = inline_share_fs(&sid);
+        let device_manager = device_manager().await;
+
+        let layers = tmpfs.path().join("layers");
+        for dir in ["lower", "upper", "work"] {
+            fs::create_dir_all(layers.join(dir)).unwrap();
+        }
+        let sentinel = layers.join("lower/sentinel");
+        fs::write(&sentinel, b"image data").unwrap();
+        let bundle = tmpfs.path().join("bundle");
+        let bundle_rootfs = bundle.join(ROOTFS);
+        fs::create_dir_all(&bundle_rootfs).unwrap();
+        let mount = Mount {
+            source: "overlay".into(),
+            fs_type: "overlay".into(),
+            options: vec![
+                format!("lowerdir={}", layers.join("lower").display()),
+                format!("upperdir={}", layers.join("upper").display()),
+                format!("workdir={}", layers.join("work").display()),
+            ],
+            ..Default::default()
+        };
+        let rootfs = ShareFsRootfs::new(&share_fs, "cid", bundle.to_str().unwrap(), Some(&mount))
+            .await
+            .unwrap();
+        let shared_rootfs = do_get_host_path(ROOTFS, &sid, "cid", false, false);
+        assert!(is_mounted(&bundle_rootfs));
+        assert!(is_mounted(&shared_rootfs));
+
+        let container_dir = Path::new(&shared_rootfs).parent().unwrap().to_owned();
+        set_immutable(&container_dir, true);
+        let result = rootfs.cleanup(&device_manager).await;
+        set_immutable(&container_dir, false);
+        assert!(result.is_err());
+        assert!(!is_mounted(&shared_rootfs));
+        assert!(is_mounted(&bundle_rootfs));
+
+        rootfs.cleanup(&device_manager).await.unwrap();
+        assert!(!is_mounted(&bundle_rootfs));
+        assert!(!Path::new(&shared_rootfs).exists());
+        assert_eq!(fs::read(&sentinel).unwrap(), b"image data");
+
+        rootfs.cleanup(&device_manager).await.unwrap();
     }
 }

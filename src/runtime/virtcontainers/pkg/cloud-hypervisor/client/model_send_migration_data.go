@@ -17,7 +17,21 @@ import (
 // SendMigrationData struct for SendMigrationData
 type SendMigrationData struct {
 	DestinationUrl string `json:"destination_url"`
-	Local          *bool  `json:"local,omitempty"`
+	// Deprecated: set memory_mode to \"MemFDs\" instead. If true, the request is treated as if memory_mode were \"MemFDs\".
+	// Deprecated
+	Local *bool `json:"local,omitempty"`
+	// Keep the source VM alive in a paused state after migration completes. This is only supported when memory_mode is \"MemFDs\" or the deprecated local property is true.
+	PreserveSource *bool `json:"preserve_source,omitempty"`
+	// The maximum downtime the migration aims for, in milliseconds. Defaults to 300ms.
+	DowntimeMs *int64 `json:"downtime_ms,omitempty"`
+	// The timeout for the migration (maximum total duration), in seconds. Defaults to 3600s (one hour).
+	TimeoutS        *int64           `json:"timeout_s,omitempty"`
+	TimeoutStrategy *TimeoutStrategy `json:"timeout_strategy,omitempty"`
+	// The number of parallel TCP connections to use for migration. Must be between 1 and 128. Multiple connections are not supported with UNIX domain socket migration.
+	Connections *int64 `json:"connections,omitempty"`
+	// Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client certificate (client-cert.pem), and TLS client key (client-key.pem). TLS is only supported with tcp:<host>:<port> destination URLs. Recommended for all TCP migrations. Omitting it is only intended for development and testing, as TCP migration is then unencrypted and unauthenticated.
+	TlsDir     *string        `json:"tls_dir,omitempty"`
+	MemoryMode *MigrationMode `json:"memory_mode,omitempty"`
 }
 
 // NewSendMigrationData instantiates a new SendMigrationData object
@@ -27,6 +41,20 @@ type SendMigrationData struct {
 func NewSendMigrationData(destinationUrl string) *SendMigrationData {
 	this := SendMigrationData{}
 	this.DestinationUrl = destinationUrl
+	var local bool = false
+	this.Local = &local
+	var preserveSource bool = false
+	this.PreserveSource = &preserveSource
+	var downtimeMs int64 = 300
+	this.DowntimeMs = &downtimeMs
+	var timeoutS int64 = 3600
+	this.TimeoutS = &timeoutS
+	var timeoutStrategy TimeoutStrategy = TIMEOUTSTRATEGY_CANCEL
+	this.TimeoutStrategy = &timeoutStrategy
+	var connections int64 = 1
+	this.Connections = &connections
+	var memoryMode MigrationMode = MIGRATIONMODE_PRECOPY
+	this.MemoryMode = &memoryMode
 	return &this
 }
 
@@ -35,6 +63,20 @@ func NewSendMigrationData(destinationUrl string) *SendMigrationData {
 // but it doesn't guarantee that properties required by API are set
 func NewSendMigrationDataWithDefaults() *SendMigrationData {
 	this := SendMigrationData{}
+	var local bool = false
+	this.Local = &local
+	var preserveSource bool = false
+	this.PreserveSource = &preserveSource
+	var downtimeMs int64 = 300
+	this.DowntimeMs = &downtimeMs
+	var timeoutS int64 = 3600
+	this.TimeoutS = &timeoutS
+	var timeoutStrategy TimeoutStrategy = TIMEOUTSTRATEGY_CANCEL
+	this.TimeoutStrategy = &timeoutStrategy
+	var connections int64 = 1
+	this.Connections = &connections
+	var memoryMode MigrationMode = MIGRATIONMODE_PRECOPY
+	this.MemoryMode = &memoryMode
 	return &this
 }
 
@@ -63,6 +105,7 @@ func (o *SendMigrationData) SetDestinationUrl(v string) {
 }
 
 // GetLocal returns the Local field value if set, zero value otherwise.
+// Deprecated
 func (o *SendMigrationData) GetLocal() bool {
 	if o == nil || o.Local == nil {
 		var ret bool
@@ -73,6 +116,7 @@ func (o *SendMigrationData) GetLocal() bool {
 
 // GetLocalOk returns a tuple with the Local field value if set, nil otherwise
 // and a boolean to check if the value has been set.
+// Deprecated
 func (o *SendMigrationData) GetLocalOk() (*bool, bool) {
 	if o == nil || o.Local == nil {
 		return nil, false
@@ -90,8 +134,233 @@ func (o *SendMigrationData) HasLocal() bool {
 }
 
 // SetLocal gets a reference to the given bool and assigns it to the Local field.
+// Deprecated
 func (o *SendMigrationData) SetLocal(v bool) {
 	o.Local = &v
+}
+
+// GetPreserveSource returns the PreserveSource field value if set, zero value otherwise.
+func (o *SendMigrationData) GetPreserveSource() bool {
+	if o == nil || o.PreserveSource == nil {
+		var ret bool
+		return ret
+	}
+	return *o.PreserveSource
+}
+
+// GetPreserveSourceOk returns a tuple with the PreserveSource field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetPreserveSourceOk() (*bool, bool) {
+	if o == nil || o.PreserveSource == nil {
+		return nil, false
+	}
+	return o.PreserveSource, true
+}
+
+// HasPreserveSource returns a boolean if a field has been set.
+func (o *SendMigrationData) HasPreserveSource() bool {
+	if o != nil && o.PreserveSource != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPreserveSource gets a reference to the given bool and assigns it to the PreserveSource field.
+func (o *SendMigrationData) SetPreserveSource(v bool) {
+	o.PreserveSource = &v
+}
+
+// GetDowntimeMs returns the DowntimeMs field value if set, zero value otherwise.
+func (o *SendMigrationData) GetDowntimeMs() int64 {
+	if o == nil || o.DowntimeMs == nil {
+		var ret int64
+		return ret
+	}
+	return *o.DowntimeMs
+}
+
+// GetDowntimeMsOk returns a tuple with the DowntimeMs field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetDowntimeMsOk() (*int64, bool) {
+	if o == nil || o.DowntimeMs == nil {
+		return nil, false
+	}
+	return o.DowntimeMs, true
+}
+
+// HasDowntimeMs returns a boolean if a field has been set.
+func (o *SendMigrationData) HasDowntimeMs() bool {
+	if o != nil && o.DowntimeMs != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetDowntimeMs gets a reference to the given int64 and assigns it to the DowntimeMs field.
+func (o *SendMigrationData) SetDowntimeMs(v int64) {
+	o.DowntimeMs = &v
+}
+
+// GetTimeoutS returns the TimeoutS field value if set, zero value otherwise.
+func (o *SendMigrationData) GetTimeoutS() int64 {
+	if o == nil || o.TimeoutS == nil {
+		var ret int64
+		return ret
+	}
+	return *o.TimeoutS
+}
+
+// GetTimeoutSOk returns a tuple with the TimeoutS field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetTimeoutSOk() (*int64, bool) {
+	if o == nil || o.TimeoutS == nil {
+		return nil, false
+	}
+	return o.TimeoutS, true
+}
+
+// HasTimeoutS returns a boolean if a field has been set.
+func (o *SendMigrationData) HasTimeoutS() bool {
+	if o != nil && o.TimeoutS != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTimeoutS gets a reference to the given int64 and assigns it to the TimeoutS field.
+func (o *SendMigrationData) SetTimeoutS(v int64) {
+	o.TimeoutS = &v
+}
+
+// GetTimeoutStrategy returns the TimeoutStrategy field value if set, zero value otherwise.
+func (o *SendMigrationData) GetTimeoutStrategy() TimeoutStrategy {
+	if o == nil || o.TimeoutStrategy == nil {
+		var ret TimeoutStrategy
+		return ret
+	}
+	return *o.TimeoutStrategy
+}
+
+// GetTimeoutStrategyOk returns a tuple with the TimeoutStrategy field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetTimeoutStrategyOk() (*TimeoutStrategy, bool) {
+	if o == nil || o.TimeoutStrategy == nil {
+		return nil, false
+	}
+	return o.TimeoutStrategy, true
+}
+
+// HasTimeoutStrategy returns a boolean if a field has been set.
+func (o *SendMigrationData) HasTimeoutStrategy() bool {
+	if o != nil && o.TimeoutStrategy != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTimeoutStrategy gets a reference to the given TimeoutStrategy and assigns it to the TimeoutStrategy field.
+func (o *SendMigrationData) SetTimeoutStrategy(v TimeoutStrategy) {
+	o.TimeoutStrategy = &v
+}
+
+// GetConnections returns the Connections field value if set, zero value otherwise.
+func (o *SendMigrationData) GetConnections() int64 {
+	if o == nil || o.Connections == nil {
+		var ret int64
+		return ret
+	}
+	return *o.Connections
+}
+
+// GetConnectionsOk returns a tuple with the Connections field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetConnectionsOk() (*int64, bool) {
+	if o == nil || o.Connections == nil {
+		return nil, false
+	}
+	return o.Connections, true
+}
+
+// HasConnections returns a boolean if a field has been set.
+func (o *SendMigrationData) HasConnections() bool {
+	if o != nil && o.Connections != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetConnections gets a reference to the given int64 and assigns it to the Connections field.
+func (o *SendMigrationData) SetConnections(v int64) {
+	o.Connections = &v
+}
+
+// GetTlsDir returns the TlsDir field value if set, zero value otherwise.
+func (o *SendMigrationData) GetTlsDir() string {
+	if o == nil || o.TlsDir == nil {
+		var ret string
+		return ret
+	}
+	return *o.TlsDir
+}
+
+// GetTlsDirOk returns a tuple with the TlsDir field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetTlsDirOk() (*string, bool) {
+	if o == nil || o.TlsDir == nil {
+		return nil, false
+	}
+	return o.TlsDir, true
+}
+
+// HasTlsDir returns a boolean if a field has been set.
+func (o *SendMigrationData) HasTlsDir() bool {
+	if o != nil && o.TlsDir != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsDir gets a reference to the given string and assigns it to the TlsDir field.
+func (o *SendMigrationData) SetTlsDir(v string) {
+	o.TlsDir = &v
+}
+
+// GetMemoryMode returns the MemoryMode field value if set, zero value otherwise.
+func (o *SendMigrationData) GetMemoryMode() MigrationMode {
+	if o == nil || o.MemoryMode == nil {
+		var ret MigrationMode
+		return ret
+	}
+	return *o.MemoryMode
+}
+
+// GetMemoryModeOk returns a tuple with the MemoryMode field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SendMigrationData) GetMemoryModeOk() (*MigrationMode, bool) {
+	if o == nil || o.MemoryMode == nil {
+		return nil, false
+	}
+	return o.MemoryMode, true
+}
+
+// HasMemoryMode returns a boolean if a field has been set.
+func (o *SendMigrationData) HasMemoryMode() bool {
+	if o != nil && o.MemoryMode != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetMemoryMode gets a reference to the given MigrationMode and assigns it to the MemoryMode field.
+func (o *SendMigrationData) SetMemoryMode(v MigrationMode) {
+	o.MemoryMode = &v
 }
 
 func (o SendMigrationData) MarshalJSON() ([]byte, error) {
@@ -101,6 +370,27 @@ func (o SendMigrationData) MarshalJSON() ([]byte, error) {
 	}
 	if o.Local != nil {
 		toSerialize["local"] = o.Local
+	}
+	if o.PreserveSource != nil {
+		toSerialize["preserve_source"] = o.PreserveSource
+	}
+	if o.DowntimeMs != nil {
+		toSerialize["downtime_ms"] = o.DowntimeMs
+	}
+	if o.TimeoutS != nil {
+		toSerialize["timeout_s"] = o.TimeoutS
+	}
+	if o.TimeoutStrategy != nil {
+		toSerialize["timeout_strategy"] = o.TimeoutStrategy
+	}
+	if o.Connections != nil {
+		toSerialize["connections"] = o.Connections
+	}
+	if o.TlsDir != nil {
+		toSerialize["tls_dir"] = o.TlsDir
+	}
+	if o.MemoryMode != nil {
+		toSerialize["memory_mode"] = o.MemoryMode
 	}
 	return json.Marshal(toSerialize)
 }

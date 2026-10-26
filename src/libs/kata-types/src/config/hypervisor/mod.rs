@@ -75,7 +75,8 @@ const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const MAX_BRIDGE_SIZE: u32 = 5;
-const MAX_NETWORK_QUEUES: u32 = 256;
+/// Maximum number of RX/TX queue pairs per network device.
+pub const MAX_NETWORK_QUEUES: u32 = 256;
 
 const KERNEL_PARAM_DELIMITER: &str = " ";
 /// Block size (in bytes) used by dm-verity block size validation.
@@ -1593,13 +1594,13 @@ impl SharedFsInfo {
         if !l.contains(&self.virtio_fs_cache.as_str()) {
             return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs cache mode: {}",
-                &self.virtio_fs_cache,
+                self.virtio_fs_cache,
             )));
         }
         if self.virtio_fs_is_dax && self.virtio_fs_cache_size == 0 {
             return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs DAX window size: {}",
-                &self.virtio_fs_cache_size,
+                self.virtio_fs_cache_size,
             )));
         }
         Ok(())
@@ -1825,6 +1826,24 @@ impl Hypervisor {
     pub fn validate_jailer_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_jailer_paths, path)
     }
+
+    /// Record the SELinux label for the VM's host processes. The label is
+    /// ignored when SELinux handling is disabled.
+    pub fn set_selinux_label(&mut self, label: Option<String>) {
+        if !self.disable_selinux {
+            self.security_info.selinux_label = label;
+        }
+    }
+
+    /// SELinux label to apply to the VM's host processes, or `None` when
+    /// SELinux handling is disabled or no label has been assigned.
+    pub fn effective_selinux_label(&self) -> Option<&str> {
+        if self.disable_selinux {
+            None
+        } else {
+            self.security_info.selinux_label.as_deref()
+        }
+    }
 }
 
 impl ConfigOps for Hypervisor {
@@ -1983,6 +2002,35 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_effective_selinux_label() {
+        let mut hypervisor = Hypervisor::default();
+        assert_eq!(hypervisor.effective_selinux_label(), None);
+
+        hypervisor.security_info.selinux_label = Some("label".to_string());
+        assert_eq!(hypervisor.effective_selinux_label(), Some("label"));
+
+        hypervisor.disable_selinux = true;
+        assert_eq!(hypervisor.effective_selinux_label(), None);
+    }
+
+    #[test]
+    fn test_set_selinux_label() {
+        let mut hypervisor = Hypervisor::default();
+        hypervisor.set_selinux_label(Some("label".to_string()));
+        assert_eq!(
+            hypervisor.security_info.selinux_label.as_deref(),
+            Some("label")
+        );
+
+        let mut hypervisor = Hypervisor {
+            disable_selinux: true,
+            ..Default::default()
+        };
+        hypervisor.set_selinux_label(Some("label".to_string()));
+        assert_eq!(hypervisor.security_info.selinux_label, None);
     }
 
     #[test]

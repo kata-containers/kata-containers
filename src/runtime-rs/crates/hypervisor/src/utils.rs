@@ -6,11 +6,11 @@
 
 use std::{
     collections::HashSet,
-    fs::{metadata, set_permissions, File, OpenOptions, Permissions},
+    fs::{metadata as fs_metadata, set_permissions, File, OpenOptions, Permissions},
     io,
     os::{
         fd::{BorrowedFd, RawFd},
-        unix::fs::{MetadataExt, PermissionsExt},
+        unix::fs::{FileTypeExt, MetadataExt, PermissionsExt},
     },
     path::{Path, PathBuf},
     process::Command,
@@ -88,6 +88,71 @@ pub fn get_jailer_root(sid: &str) -> String {
     [&sandbox_path, JAILER_ROOT].join("/")
 }
 
+// `sun_path` is 108 bytes, including the terminating NUL.
+pub const MAX_UNIX_SOCKET_PATH_LEN: usize = 107;
+
+pub fn check_unix_socket_path_len(path: &Path) -> Result<()> {
+    let len = path.as_os_str().len();
+    if len > MAX_UNIX_SOCKET_PATH_LEN {
+        return Err(anyhow!(
+            "unix socket path {} is {} bytes, longer than the {} bytes limit",
+            path.display(),
+            len,
+            MAX_UNIX_SOCKET_PATH_LEN
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn get_rootless_symlink_sandbox_path(sid: &str) -> String {
+    prefix_with_rootless_dir(sid)
+}
+
+pub fn get_rootless_symlink_jailer_root(sid: &str) -> String {
+    let sandbox_path = get_rootless_symlink_sandbox_path(sid);
+
+    [&sandbox_path, JAILER_ROOT].join("/")
+}
+
+// Socket paths under the rootless sandbox dir can exceed `sun_path`, so VMMs
+// connect through a symlink in a shorter directory instead.
+pub fn link_rootless_vmm_socket(sid: &str, socket: &Path) -> Result<PathBuf> {
+    link_socket_into_dir(Path::new(&get_rootless_symlink_jailer_root(sid)), socket)
+}
+
+fn link_socket_into_dir(dir: &Path, socket: &Path) -> Result<PathBuf> {
+    let name = socket
+        .file_name()
+        .ok_or_else(|| anyhow!("socket path {} has no file name", socket.display()))?;
+    let link = dir.join(name);
+    check_unix_socket_path_len(&link)?;
+
+    create_dir_all_with_inherit_owner(dir, 0o750)
+        .with_context(|| format!("create socket symlink dir {}", dir.display()))?;
+
+    // A previous start attempt of the same sandbox may have left the link behind.
+    match std::fs::symlink_metadata(&link) {
+        Ok(md) if md.file_type().is_symlink() => std::fs::remove_file(&link)
+            .with_context(|| format!("remove stale socket symlink {}", link.display()))?,
+        Ok(_) => {
+            return Err(anyhow!(
+                "{} exists and is not a socket symlink",
+                link.display()
+            ))
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Err(err) => {
+            return Err(err).with_context(|| format!("stat socket symlink {}", link.display()))
+        }
+    }
+
+    std::os::unix::fs::symlink(socket, &link)
+        .with_context(|| format!("symlink socket {} to {}", socket.display(), link.display()))?;
+
+    Ok(link)
+}
+
 // Clear the O_CLOEXEC which is set by default by Rust standard library on
 // file descriptors that it opens.  This function is mostly meant to be
 // called on descriptors to be passed to a child (hypervisor) process as
@@ -151,6 +216,185 @@ where
     set_uid_fn(user.uid).context("setuid failed")?;
 
     Ok(())
+}
+
+// Return the non-root owning group that grants `required_permissions`, or
+// None when the resource's other permissions already grant that access.
+fn select_rootless_access_group(
+    path: &Path,
+    mode: u32,
+    gid: u32,
+    required_permissions: u32,
+) -> Result<Option<u32>> {
+    if required_permissions == 0 || required_permissions & !0o7 != 0 {
+        return Err(anyhow!(
+            "invalid rootless VMM permissions {:o} for {}",
+            required_permissions,
+            path.display()
+        ));
+    }
+
+    if mode & required_permissions == required_permissions {
+        return Ok(None);
+    }
+
+    let group_permissions = required_permissions << 3;
+    if mode & group_permissions != group_permissions {
+        return Err(anyhow!(
+            "rootless VMM requires group permissions {:03o} on {} (mode {:04o})",
+            group_permissions,
+            path.display(),
+            mode & 0o7777,
+        ));
+    }
+
+    if gid == 0 {
+        return Err(anyhow!(
+            "rootless VMM refuses group-root access to {}",
+            path.display()
+        ));
+    }
+
+    Ok(Some(gid))
+}
+
+/// Authorize a rootless VMM to access a character device.
+///
+/// Verifies its Unix permissions and adds its non-root owning group to `user`
+/// when that group is required for access.
+pub fn authorize_rootless_device(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless device {}", path.display()))?;
+    if !metadata.file_type().is_char_device() {
+        return Err(anyhow!(
+            "rootless VMM device {} is not a character device",
+            path.display()
+        ));
+    }
+
+    authorize_rootless_resource_access(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        user,
+    )
+}
+
+/// Authorize a rootless VMM to access a Unix domain socket.
+///
+/// Validates socket access and traversal of every parent directory, updating
+/// `user` only after all checks succeed.
+pub fn authorize_rootless_socket(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless socket {}", path.display()))?;
+    if !metadata.file_type().is_socket() {
+        return Err(anyhow!(
+            "rootless VMM endpoint {} is not a Unix socket",
+            path.display()
+        ));
+    }
+
+    let mut candidate = user.clone();
+    authorize_rootless_resource_access(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        &mut candidate,
+    )?;
+
+    let mut parent = path.parent();
+    while let Some(directory) = parent {
+        let metadata = fs_metadata(directory).with_context(|| {
+            format!(
+                "get metadata for rootless socket parent {}",
+                directory.display()
+            )
+        })?;
+        if !metadata.is_dir() {
+            return Err(anyhow!(
+                "rootless VMM socket parent {} is not a directory",
+                directory.display()
+            ));
+        }
+        if !rootless_user_has_permission(
+            &candidate,
+            metadata.uid(),
+            metadata.gid(),
+            metadata.mode(),
+            0o1,
+        ) {
+            return Err(anyhow!(
+                "rootless VMM cannot traverse socket parent {} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+                directory.display(),
+                metadata.mode() & 0o7777,
+            ));
+        }
+        parent = directory.parent();
+    }
+
+    user.groups = candidate.groups;
+    Ok(())
+}
+
+fn authorize_rootless_resource_access(
+    path: &Path,
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    required_permissions: u32,
+    user: &mut RootlessUser,
+) -> Result<()> {
+    if rootless_user_has_permission(user, uid, gid, mode, required_permissions) {
+        return Ok(());
+    }
+
+    if uid == user.uid || gid == user.gid || user.groups.contains(&gid) {
+        return Err(anyhow!(
+            "rootless VMM cannot access {} with required permissions {:o} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+            path.display(),
+            required_permissions,
+            mode & 0o7777,
+        ));
+    }
+
+    if let Some(gid) = select_rootless_access_group(path, mode, gid, required_permissions)? {
+        if !user.groups.contains(&gid) {
+            user.groups.push(gid);
+        }
+    }
+
+    Ok(())
+}
+
+// Evaluate `permission` using Unix owner, group, then other-mode semantics.
+fn rootless_user_has_permission(
+    user: &RootlessUser,
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    permission: u32,
+) -> bool {
+    let permission = if uid == user.uid {
+        permission << 6
+    } else if gid == user.gid || user.groups.contains(&gid) {
+        permission << 3
+    } else {
+        permission
+    };
+
+    mode & permission == permission
 }
 
 pub fn open_named_tuntap(if_name: &str, queues: u32) -> Result<Vec<File>> {
@@ -269,7 +513,7 @@ pub fn chown_to_parent<P: AsRef<Path>>(path: P) -> io::Result<()> {
 
 fn first_valid_executable_path(paths: &[&str]) -> Result<String> {
     for p in paths {
-        if let Ok(m) = metadata(p) {
+        if let Ok(m) = fs_metadata(p) {
             if m.is_file() && m.mode() & 0o111 != 0 {
                 return Ok(p.to_string());
             }
@@ -325,9 +569,10 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
     Err(anyhow!("failed to remove VMM user"))
 }
 
-pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
-    remove_dir_all_if_exists(vm_path)?;
+pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
+    let path_result = remove_dir_all_if_exists(vm_path);
     if kata_types::rootless::is_rootless() {
+        let symlink_result = remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(sid));
         let user = &config
             .security_info
             .rootless_user
@@ -345,8 +590,9 @@ pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
                 );
             }
         }
+        symlink_result?;
     }
-    Ok(())
+    path_result
 }
 
 // QGS_SOCKET_PATH: the Unix Domain Socket Path served by Intel TDX Quote Generation Service
@@ -550,7 +796,8 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
+    use std::os::unix::net::UnixListener;
+    use std::path::{Path, PathBuf};
 
     use nix::unistd::chown;
     use nix::unistd::geteuid;
@@ -568,6 +815,184 @@ mod tests {
     use super::set_process_credentials_with;
     use super::vmm_user_runtime_dir;
     use super::SocketAddress;
+    use super::{
+        authorize_rootless_resource_access, authorize_rootless_socket, select_rootless_access_group,
+    };
+    use super::{check_unix_socket_path_len, link_socket_into_dir, MAX_UNIX_SOCKET_PATH_LEN};
+
+    #[test]
+    fn test_check_unix_socket_path_len() {
+        let path = |len: usize| PathBuf::from(format!("/{}", "a".repeat(len - 1)));
+
+        check_unix_socket_path_len(&path(MAX_UNIX_SOCKET_PATH_LEN)).unwrap();
+        let error = check_unix_socket_path_len(&path(MAX_UNIX_SOCKET_PATH_LEN + 1))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("108 bytes"), "{}", error);
+    }
+
+    #[test]
+    fn test_link_socket_into_dir() {
+        let tmp = TempDir::new().unwrap();
+        let socket = tmp.path().join("long").join("virtiofsd.sock");
+        fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        let _listener = UnixListener::bind(&socket).unwrap();
+        let dir = tmp.path().join("short").join("root");
+
+        let link = link_socket_into_dir(&dir, &socket).unwrap();
+        assert_eq!(link, dir.join("virtiofsd.sock"));
+        assert_eq!(fs::read_link(&link).unwrap(), socket);
+        std::os::unix::net::UnixStream::connect(&link).unwrap();
+
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/nonexistent", &link).unwrap();
+        let link = link_socket_into_dir(&dir, &socket).unwrap();
+        assert_eq!(fs::read_link(&link).unwrap(), socket);
+
+        fs::remove_file(&link).unwrap();
+        fs::write(&link, "").unwrap();
+        link_socket_into_dir(&dir, &socket).unwrap_err();
+        assert!(fs::symlink_metadata(&link).unwrap().is_file());
+    }
+
+    #[test]
+    fn test_link_socket_into_dir_rejects_long_link() {
+        let tmp = TempDir::new().unwrap();
+        let socket = tmp.path().join("virtiofsd.sock");
+        let dir = tmp.path().join("d".repeat(MAX_UNIX_SOCKET_PATH_LEN));
+
+        link_socket_into_dir(&dir, &socket).unwrap_err();
+        assert!(!dir.exists());
+    }
+
+    fn rootless_user() -> RootlessUser {
+        RootlessUser {
+            uid: 1000,
+            gid: 1000,
+            groups: Vec::new(),
+            user_name: "kata-test".to_string(),
+        }
+    }
+
+    // Model a user unrelated to the socket owner and group, with one existing
+    // supplementary group, so authorization must append the socket group.
+    fn socket_test_user(socket_path: &Path) -> RootlessUser {
+        let metadata = fs::metadata(socket_path).expect("stat socket");
+
+        RootlessUser {
+            uid: metadata.uid().wrapping_add(1),
+            gid: metadata.gid().wrapping_add(1),
+            groups: vec![metadata.gid().wrapping_add(2)],
+            user_name: "kata-socket-test".to_string(),
+        }
+    }
+
+    fn set_socket_group_access(socket_path: &Path) -> u32 {
+        fs::set_permissions(socket_path, fs::Permissions::from_mode(0o660))
+            .expect("set socket permissions");
+
+        let gid = fs::metadata(socket_path).expect("stat socket").gid();
+        if gid != 0 {
+            return gid;
+        }
+
+        assert_eq!(
+            geteuid().as_raw(),
+            0,
+            "changing a root-owned socket requires root"
+        );
+        let gid = 2000;
+        chown(socket_path, None, Some(Gid::from_raw(gid))).expect("set non-root socket group");
+        gid
+    }
+
+    #[test]
+    fn test_select_rootless_access_group() {
+        let path = Path::new("/dev/test");
+
+        assert_eq!(
+            select_rootless_access_group(path, 0o666, 0, 0o6).unwrap(),
+            None
+        );
+        assert_eq!(
+            select_rootless_access_group(path, 0o660, 2000, 0o6).unwrap(),
+            Some(2000)
+        );
+
+        let error = select_rootless_access_group(path, 0o640, 2000, 0o6)
+            .expect_err("group without write permission must be rejected");
+        assert!(error.to_string().contains("requires group permissions 060"));
+
+        let error = select_rootless_access_group(path, 0o660, 0, 0o6)
+            .expect_err("group root must be rejected");
+        assert!(error.to_string().contains("refuses group-root access"));
+    }
+
+    #[test]
+    fn test_authorize_rootless_resource_access() {
+        let path = Path::new("/run/test.sock");
+        let mut user = rootless_user();
+
+        authorize_rootless_resource_access(path, 0, 2000, 0o660, 0o2, &mut user).unwrap();
+        assert_eq!(user.groups, vec![2000]);
+
+        let error = authorize_rootless_resource_access(path, 0, 2001, 0o640, 0o2, &mut user)
+            .expect_err("group without write permission must be rejected");
+        assert!(error.to_string().contains("requires group permissions 020"));
+
+        let mut user = rootless_user();
+        authorize_rootless_resource_access(path, 0, 2000, 0o666, 0o2, &mut user).unwrap();
+        assert!(user.groups.is_empty());
+    }
+
+    #[test]
+    fn test_authorize_rootless_socket() {
+        let dir = TempDir::new().expect("create socket directory");
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755))
+            .expect("make socket directory traversable");
+        let socket_path = dir.path().join("qgs.socket");
+        let _listener = UnixListener::bind(&socket_path).expect("bind Unix socket");
+        let socket_gid = set_socket_group_access(&socket_path);
+        let mut user = socket_test_user(&socket_path);
+        let original_groups = user.groups.clone();
+
+        authorize_rootless_socket(&socket_path, &mut user, 0o2).expect("authorize rootless socket");
+
+        assert_eq!(user.groups, [original_groups, vec![socket_gid]].concat());
+    }
+
+    #[test]
+    fn test_authorize_rootless_socket_rejects_non_socket() {
+        let dir = TempDir::new().expect("create socket directory");
+        let socket_path = dir.path().join("qgs.socket");
+        fs::write(&socket_path, []).expect("create regular file");
+        let mut user = rootless_user();
+        let original_groups = user.groups.clone();
+
+        let error = authorize_rootless_socket(&socket_path, &mut user, 0o2)
+            .expect_err("regular file must be rejected");
+
+        assert!(error.to_string().contains("is not a Unix socket"));
+        assert_eq!(user.groups, original_groups);
+    }
+
+    #[test]
+    fn test_authorize_rootless_socket_rejects_untraversable_parent() {
+        let dir = TempDir::new().expect("create socket directory");
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700))
+            .expect("make socket directory private");
+        let socket_path = dir.path().join("qgs.socket");
+        let _listener = UnixListener::bind(&socket_path).expect("bind Unix socket");
+        set_socket_group_access(&socket_path);
+        let mut user = socket_test_user(&socket_path);
+        let original_groups = user.groups.clone();
+
+        let error = authorize_rootless_socket(&socket_path, &mut user, 0o2)
+            .expect_err("untraversable parent must be rejected");
+
+        assert!(error.to_string().contains("cannot traverse socket parent"));
+        assert_eq!(user.groups, original_groups);
+    }
 
     // The Set* prefix mirrors the setgroups/setgid/setuid syscalls these
     // variants stand for, so keep it despite clippy::enum_variant_names.
@@ -587,7 +1012,7 @@ mod tests {
         SetUid,
     }
 
-    fn rootless_user() -> RootlessUser {
+    fn credential_user() -> RootlessUser {
         RootlessUser {
             uid: 1001,
             gid: 1002,
@@ -601,7 +1026,7 @@ mod tests {
     #[case::without_supplementary_groups(Vec::new())]
     fn test_set_process_credentials_order(#[case] groups: Vec<u32>) {
         let operations = RefCell::new(Vec::new());
-        let mut user = rootless_user();
+        let mut user = credential_user();
         user.groups = groups.clone();
 
         set_process_credentials_with(
@@ -650,7 +1075,7 @@ mod tests {
     ) {
         let calls = Cell::new(0);
         let result = set_process_credentials_with(
-            &rootless_user(),
+            &credential_user(),
             |_| {
                 calls.set(calls.get() + 1);
                 if failed_step == CredentialStep::SetGroups {
@@ -884,7 +1309,7 @@ mod tests {
             let slice: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
             let err = first_valid_executable_path(&slice).unwrap_err();
-            let expected = format!("No valid executable found in paths: {:?}", &slice);
+            let expected = format!("No valid executable found in paths: {:?}", slice);
             assert_eq!(
                 err.to_string(),
                 expected,
@@ -906,7 +1331,7 @@ mod tests {
             let slice: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
             let err = first_valid_executable_path(&slice).unwrap_err();
-            let expected = format!("No valid executable found in paths: {:?}", &slice);
+            let expected = format!("No valid executable found in paths: {:?}", slice);
             assert_eq!(err.to_string(), expected, "non-exec file should be invalid");
         }
 

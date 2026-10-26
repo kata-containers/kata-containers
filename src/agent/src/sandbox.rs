@@ -304,7 +304,7 @@ impl Sandbox {
     }
 
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
-        for (_, c) in self.containers.iter_mut() {
+        for c in self.containers.values_mut() {
             for p in c.processes.values_mut() {
                 if p.pid == pid {
                     return Some(p);
@@ -363,7 +363,7 @@ impl Sandbox {
 
         let guest_cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
-        for (_, ctr) in self.containers.iter() {
+        for ctr in self.containers.values() {
             match ctr
                 .config
                 .spec

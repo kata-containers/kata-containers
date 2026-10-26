@@ -170,9 +170,28 @@ impl ContainerManager for VirtContainerManager {
         match process.process_type {
             ProcessType::Container => {
                 let mut containers = self.containers.write().await;
-                let c = containers
+                let mut c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+                // Returning an error here blocks containerd from processing the exit
+                // and reaching sandbox teardown, so report the cleanup failure and continue.
+                if let Err(e) = c.finish_cleanup().await {
+                    error!(
+                        sl!(),
+                        "failed to finish cleanup of container {}: {:?}", container_id, e
+                    );
+                }
+
+                // A task that never started has no exit-driven cleanup to release its mounts.
+                let status = c.state_process(process).await.context("state process")?;
+                if status.status == ProcessStatus::Created {
+                    if let Err(e) = c.cleanup().await {
+                        warn!(
+                            logger_with_process(process),
+                            "failed to clean up container deleted before start: {:?}", e
+                        );
+                    }
+                }
 
                 // Poststop Hooks:
                 // * should be run in runtime namespace
@@ -284,7 +303,7 @@ impl ContainerManager for VirtContainerManager {
         // agent returns ProcessAlreadyTerminated error.
         // For SIGKILL/SIGTERM, we should treat these as success since the
         // container is effectively terminated.
-        c.kill_process(&req.process, req.signal, req.all)
+        c.kill_process(self.containers.clone(), &req.process, req.signal, req.all)
             .await
             .or_else(|err| {
                 let is_term_signal = is_termination_signal(req.signal);

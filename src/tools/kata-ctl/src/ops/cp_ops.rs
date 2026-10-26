@@ -21,7 +21,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
 use crate::args::CpArguments;
-use crate::debug_console::{self, shell_quote, Session, EOT};
+use crate::debug_console::{self, shell_quote, Session};
 use crate::progress::{Meter, Progress};
 
 /// Where the devkit guest extension is mounted, and where the console shell can
@@ -41,6 +41,10 @@ const GUEST_STDERR: &str = "/tmp/.kata-ctl-cp.$$.err";
 /// and a multiple of 3, so each line encodes on its own with no padding until
 /// the last one.
 const B64_LINE_BYTES: usize = 57;
+
+/// A line that cannot occur in base64. End the upload explicitly instead of
+/// relying on the guest PTY interpreting Ctrl-D as an end-of-file event.
+const UPLOAD_END: &str = ".";
 
 /// How much of a failed command's output to keep for the error message.
 const DIAGNOSTIC_BYTES: usize = 4 * 1024;
@@ -181,8 +185,14 @@ fn copy_in(session: &mut Session, local: &Path, remote: &str) -> Result<()> {
     // root, so let the archive's modes through but not its ownership. tar's own
     // stderr can go straight into the framed output: nothing else comes back
     // this way, so there is no payload for it to corrupt.
+    // Stop the producer at a delimiter rather than sending a terminal EOF:
+    // the EOF character and its interpretation belong to the guest's PTY.
+    // The loop uses shell builtins and keeps the archive streaming.
     session.begin(&format!(
-        "base64 -d | tar -C {} --no-same-owner -xf -",
+        "while IFS= read -r __kc_line; do \
+         [ \"${{__kc_line}}\" = {UPLOAD_END} ] && break; \
+         printf '%s\\n' \"${{__kc_line}}\"; \
+         done | base64 -d | tar -C {} --no-same-owner -xf -",
         shell_quote(&dir)
     ))?;
 
@@ -289,7 +299,7 @@ fn copy_out(session: &mut Session, remote: &str, local: &Path) -> Result<()> {
 }
 
 /// Tar `src` under the name `entry`, base64 it, and push it at the command
-/// waiting on the other end of `sink`, then close that command's stdin.
+/// waiting on the other end of `sink`, then send its end-of-input delimiter.
 ///
 /// `progress` is metered on the archive rather than on the base64 leaving the
 /// socket, so what it counts is the copy the caller asked for and not the
@@ -316,8 +326,8 @@ fn send_archive(sink: &UnixStream, src: &Path, entry: &str, progress: Progress) 
     }
 
     let mut sink = out.finish()?;
-    sink.write_all(&[b'\n', EOT])
-        .context("close the guest command's stdin")?;
+    sink.write_all(format!("{UPLOAD_END}\n").as_bytes())
+        .context("send the upload end marker")?;
     sink.flush().context("flush to the guest")?;
 
     Ok(())
@@ -733,6 +743,35 @@ mod tests {
 
     fn read(path: &Path) -> Vec<u8> {
         fs::read(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+    }
+
+    /// Upload completion must not depend on the PTY's configured EOF byte.
+    /// A small file also exercises an upload that fits in the socket buffer.
+    #[test]
+    fn test_copy_small_file_with_a_nondefault_terminal_eof() {
+        let host = tempdir().unwrap();
+        let guest = tempdir().unwrap();
+        let src = host.path().join("payload");
+        fs::write(&src, b"devkit-cp-1234567890").unwrap();
+        let Some((sock, mut shell)) = console() else {
+            eprintln!("skipping: no pty-backed shell with tar and base64 here");
+            return;
+        };
+        let mut session = Session::new(sock);
+        assert_eq!(session.run("stty eof '^_'", &mut io::sink()).unwrap(), 0);
+        for _ in 0..10 {
+            let remote = guest.path().join("copied");
+            copy_in(&mut session, &src, remote.to_str().unwrap()).unwrap();
+            assert_eq!(read(&remote), read(&src));
+        }
+        // The delimiter must leave the console ready for another command.
+        assert_eq!(
+            session.capture("printf ready").unwrap(),
+            (0, "ready".into())
+        );
+        session.close();
+        let _ = shell.kill();
+        let _ = shell.wait();
     }
 
     /// Drive both directions against a real shell, so the whole tunnel is

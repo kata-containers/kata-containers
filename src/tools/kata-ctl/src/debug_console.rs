@@ -80,7 +80,7 @@ impl SockHandler for VsockConfig {
         let stream = unsafe { UnixStream::from_raw_fd(vsock_fd.into_raw_fd()) };
         // Connect the socket to vsock server.
         vsock_connect(stream.as_raw_fd(), &sock_addr)
-            .with_context(|| format!("failed to connect to server {:?}", &sock_addr))?;
+            .with_context(|| format!("failed to connect to server {:?}", sock_addr))?;
 
         Ok(stream)
     }
@@ -233,10 +233,6 @@ pub fn connect(sandbox_id: &str, vport: u32) -> Result<UnixStream> {
 
     setup_client(server_url, vport)
 }
-
-/// End-of-transmission. The guest terminal stays in canonical mode, so this at
-/// the start of a line is what closes the stdin of a running command.
-pub const EOT: u8 = 0x04;
 
 /// Appended to the marker to frame the output of a command. Neither is ever
 /// spelled out in what we write to the shell - both are only ever produced by

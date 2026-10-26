@@ -62,6 +62,10 @@ setup_file() {
 	echo "# containerd-shim-kata-v2: ${output}" >&3
 	[[ "${output}" == *"FOUND"* ]]
 
+	# Metadata must survive the image packaging and host installation steps.
+	run run_on_host "test -s /host/opt/kata/VERSION && test -s /host/opt/kata/versions.yaml"
+	[[ "${status}" -eq 0 ]]
+
 	# RuntimeClasses must exist (filter out AKS-managed ones)
 	local rc_count
 	rc_count=$(kubectl get runtimeclasses --no-headers 2>/dev/null | grep -v "kata-mshv-vm-isolation" | grep -c "kata" || true)

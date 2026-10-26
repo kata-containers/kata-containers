@@ -16,12 +16,13 @@ import (
 
 // PmemConfig struct for PmemConfig
 type PmemConfig struct {
-	File          string  `json:"file"`
-	Size          *int64  `json:"size,omitempty"`
-	Iommu         *bool   `json:"iommu,omitempty"`
-	DiscardWrites *bool   `json:"discard_writes,omitempty"`
-	PciSegment    *int32  `json:"pci_segment,omitempty"`
-	Id            *string `json:"id,omitempty"`
+	File          string     `json:"file"`
+	Size          *int64     `json:"size,omitempty"`
+	Iommu         *IommuType `json:"iommu,omitempty"`
+	DiscardWrites *bool      `json:"discard_writes,omitempty"`
+	PciSegment    *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId   *int32     `json:"pci_device_id,omitempty"`
+	Id            *string    `json:"id,omitempty"`
 }
 
 // NewPmemConfig instantiates a new PmemConfig object
@@ -31,7 +32,7 @@ type PmemConfig struct {
 func NewPmemConfig(file string) *PmemConfig {
 	this := PmemConfig{}
 	this.File = file
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var discardWrites bool = false
 	this.DiscardWrites = &discardWrites
@@ -43,7 +44,7 @@ func NewPmemConfig(file string) *PmemConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewPmemConfigWithDefaults() *PmemConfig {
 	this := PmemConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	var discardWrites bool = false
 	this.DiscardWrites = &discardWrites
@@ -107,9 +108,9 @@ func (o *PmemConfig) SetSize(v int64) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *PmemConfig) GetIommu() bool {
+func (o *PmemConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -117,7 +118,7 @@ func (o *PmemConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *PmemConfig) GetIommuOk() (*bool, bool) {
+func (o *PmemConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -133,8 +134,8 @@ func (o *PmemConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *PmemConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *PmemConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 
@@ -202,6 +203,38 @@ func (o *PmemConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
 }
 
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *PmemConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PmemConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *PmemConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *PmemConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *PmemConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -250,6 +283,9 @@ func (o PmemConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

@@ -7,8 +7,8 @@ use crate::device::pci_path::PciPath;
 use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_block_source};
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VcpuThreadIds;
-use crate::VmdkConfig;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
@@ -1243,7 +1243,7 @@ impl Qmp {
         discard_unmap: bool,
         logical_block_size: u32,
         physical_block_size: u32,
-        vmdk: Option<&VmdkConfig>,
+        source: &BlockSourceFormat,
         iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
@@ -1273,7 +1273,7 @@ impl Qmp {
         let mut fdset_ids = Vec::new();
         let prepared_source = match prepare_block_source(
             path_on_host,
-            vmdk,
+            source,
             is_readonly,
             is_direct.unwrap_or(false),
             |file, label| {
@@ -1317,7 +1317,7 @@ impl Qmp {
             }
         };
 
-        let blockdev_options = if vmdk.is_none() {
+        let blockdev_options = if matches!(source, BlockSourceFormat::Raw) {
             BlockdevOptions::raw {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
@@ -1680,6 +1680,71 @@ impl Qmp {
             .context("get device by qdev_id failed")?;
 
         Ok(Some(pci_path))
+    }
+
+    /// Hotunplug a VFIO device.
+    pub fn hotunplug_vfio_device(&mut self, hostdev_id: &str) -> Result<()> {
+        if !self
+            .device_exists(hostdev_id)
+            .context("query VFIO device before hotunplug")?
+        {
+            info!(
+                sl!(),
+                "hotunplug_vfio_device(): {} is already absent", hostdev_id
+            );
+            return Ok(());
+        }
+
+        if let Err(delete_err) = self.qmp.execute(&qmp::device_del {
+            id: hostdev_id.to_owned(),
+        }) {
+            return match self.device_exists(hostdev_id) {
+                Ok(false) => Ok(()),
+                Ok(true) => Err(anyhow!(
+                    "device_del for VFIO device {}: {:?}",
+                    hostdev_id,
+                    delete_err
+                )),
+                Err(query_err) => Err(anyhow!(
+                    "device_del for VFIO device {} failed: {:?}; state reconciliation failed: {:#}",
+                    hostdev_id,
+                    delete_err,
+                    query_err
+                )),
+            };
+        }
+
+        if let Err(wait_err) = self.wait_for_device_deleted(hostdev_id, DEVICE_DELETED_TIMEOUT) {
+            return match self.device_exists(hostdev_id) {
+                Ok(false) => Ok(()),
+                Ok(true) => Err(wait_err).context(
+                    format!(
+                        "hotunplug_vfio_device(): waiting for DEVICE_DELETED for {}",
+                        hostdev_id
+                    )
+                ),
+                Err(query_err) => Err(anyhow!(
+                    "waiting for DEVICE_DELETED for {} failed: {:#}; state reconciliation failed: {:#}",
+                    hostdev_id,
+                    wait_err,
+                    query_err
+                )),
+            };
+        }
+
+        info!(
+            sl!(),
+            "hotunplug_vfio_device(): successfully removed {}", hostdev_id
+        );
+
+        Ok(())
+    }
+
+    pub fn device_exists(&mut self, device_name: &str) -> Result<bool> {
+        let devices = self.qmp.execute(&qapi_qmp::qom_list {
+            path: "/machine/peripheral".to_owned(),
+        })?;
+        Ok(devices.iter().any(|device| device.name == device_name))
     }
 
     pub fn qmp_stop(&mut self) -> Result<()> {

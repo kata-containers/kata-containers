@@ -109,7 +109,7 @@ pub trait ConfigObjectOps {
 }
 
 /// Kata configuration information.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct TomlConfig {
     /// Configuration information for agents.
     #[serde(default)]

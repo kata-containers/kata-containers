@@ -32,7 +32,10 @@ use oci::{Linux, LinuxCpu, LinuxResources};
 use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
 use std::path::{Path, PathBuf};
-use tokio::{runtime, sync::RwLock};
+use tokio::{
+    runtime,
+    sync::{Mutex, RwLock},
+};
 
 use crate::{
     cdi_devices::{sort_options_by_pcipath, ContainerDevice, DeviceInfo},
@@ -65,6 +68,18 @@ pub(crate) struct ResourceManagerInner {
     pub cpu_resource: CpuResource,
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
+    cleanup_steps: Mutex<ResourceCleanupSteps>,
+}
+
+#[derive(Default)]
+struct ResourceCleanupSteps {
+    network: bool,
+    cgroup: bool,
+    bind_mounts: bool,
+    share_fs_daemon: bool,
+    share_fs_mount: bool,
+    swap: bool,
+    ephemeral_disks: bool,
 }
 
 impl ResourceManagerInner {
@@ -136,6 +151,7 @@ impl ResourceManagerInner {
             cpu_resource,
             mem_resource,
             swap_resource,
+            cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
         })
     }
 
@@ -510,7 +526,12 @@ impl ResourceManagerInner {
         self.volume_resource.handler_volumes(&ctx, cid, spec).await
     }
 
-    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
+    pub async fn handler_devices(
+        &self,
+        _cid: &str,
+        linux: &Linux,
+        device_ids: &mut Vec<String>,
+    ) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
 
         // Build a map of host_bdf -> Option<guest_pci_path> for cold-plugged
@@ -580,6 +601,7 @@ impl ResourceManagerInner {
                     // CCW, or virtual path, depending on the driver and configuration.
                     if let DeviceType::BlockModern(device_mod) = device_info {
                         let device = device_mod.lock().await.clone();
+                        device_ids.push(device.device_id.clone());
                         let id = if let Some(pci_path) = device.config.pci_path {
                             pci_path.to_string()
                         } else if let Some(scsi_address) = device.config.scsi_addr {
@@ -730,6 +752,7 @@ impl ResourceManagerInner {
                     if let DeviceType::VfioModern(vfio_dev) = device_info.clone() {
                         info!(sl!(), "device info: {:?}", vfio_dev.lock().await);
                         let vfio_device = vfio_dev.lock().await;
+                        device_ids.push(vfio_device.device_id.clone());
 
                         let group_num = d
                             .path()
@@ -816,6 +839,7 @@ impl ResourceManagerInner {
 
                         // create agent device
                         if let DeviceType::Vfio(device) = device_info {
+                            device_ids.push(device.device_id.clone());
                             let device_options = sort_options_by_pcipath(device.device_options);
                             let group_num = d
                                 .path()
@@ -956,52 +980,133 @@ impl ResourceManagerInner {
         }
     }
 
+    pub async fn has_passthrough_network_devices(&self) -> bool {
+        match &self.network {
+            Some(network) => network.has_passthrough_network_devices().await,
+            None => false,
+        }
+    }
+
     pub async fn cleanup(&self) -> Result<()> {
+        // Cleanup may be called repeatedly, including by sandbox shutdown retries.
+        // Only successful stages are marked complete; errors leave stages pending.
+        // Hold this lock across the attempt: a concurrent caller can retry
+        // failed stages, but cannot run them while the first attempt is active.
+        let mut steps = self.cleanup_steps.lock().await;
+        let mut errors = Vec::new();
         // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
-        if let Some(network) = &self.network {
-            if let Err(err) = network.remove(self.hypervisor.as_ref()).await {
-                warn!(sl!(), "failed to remove network: {}", err);
+        if !steps.network {
+            if let Some(network) = &self.network {
+                match network
+                    .remove(self.hypervisor.as_ref())
+                    .await
+                    .context("remove network")
+                {
+                    Ok(()) => steps.network = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                steps.network = true;
             }
         }
 
-        // clean up cgroup
-        self.cgroups_resource
-            .delete()
-            .await
-            .context("delete cgroup")?;
+        if !steps.cgroup {
+            info!(sl!(), "begin cgroup cleanup");
+            match self
+                .cgroups_resource
+                .delete()
+                .await
+                .context("delete cgroup")
+            {
+                Ok(()) => {
+                    steps.cgroup = true;
+                    info!(sl!(), "cgroup cleanup finished");
+                }
+                Err(e) => errors.push(e),
+            }
+        }
 
         // cleanup sandbox bind mounts: setup = false
-        self.handle_sandbox_bindmounts(false)
-            .await
-            .context("failed to cleanup sandbox bindmounts")?;
+        if !steps.bind_mounts {
+            match self
+                .handle_sandbox_bindmounts(false)
+                .await
+                .context("cleanup sandbox bindmounts")
+            {
+                Ok(()) => steps.bind_mounts = true,
+                Err(e) => errors.push(e),
+            }
+        }
 
         // stop share fs daemon (e.g., virtiofsd, nydusd) before cleaning up mount
-        if let Some(share_fs) = &self.share_fs {
-            share_fs
-                .stop()
-                .await
-                .context("failed to stop share fs daemon")?;
+        if !steps.share_fs_daemon {
+            if let Some(share_fs) = &self.share_fs {
+                match share_fs.stop().await.context("stop share fs daemon") {
+                    Ok(()) => steps.share_fs_daemon = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                steps.share_fs_daemon = true;
+            }
         }
 
         // clean up share fs mount
-        if let Some(share_fs) = &self.share_fs {
-            share_fs
-                .get_share_fs_mount()
-                .cleanup(&self.sid)
+        if steps.share_fs_daemon && !steps.share_fs_mount {
+            if let Some(share_fs) = &self.share_fs {
+                match share_fs
+                    .get_share_fs_mount()
+                    .cleanup(&self.sid)
+                    .await
+                    .context("cleanup host share path")
+                {
+                    Ok(()) => steps.share_fs_mount = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                // A sandbox restored by the shim's `delete` has no share fs
+                // instance, but its host share directory is still there when the
+                // original shim died or was ended before its own cleanup. Nothing
+                // else removes it. Without a directory this does nothing.
+                match share_fs::cleanup_host_share_path(&self.sid)
+                    .context("cleanup host share path of a restored sandbox")
+                {
+                    Ok(()) => steps.share_fs_mount = true,
+                    Err(e) => errors.push(e),
+                }
+            }
+        }
+
+        if !steps.swap {
+            if let Some(swap) = self.swap_resource.as_ref() {
+                match swap.clean().await.context("clean swap") {
+                    Ok(()) => steps.swap = true,
+                    Err(e) => errors.push(e),
+                }
+            } else {
+                steps.swap = true;
+            }
+        }
+
+        if !steps.ephemeral_disks {
+            match self
+                .volume_resource
+                .cleanup_ephemeral_disks()
                 .await
-                .context("failed to cleanup host path")?;
+                .context("cleanup ephemeral disks")
+            {
+                Ok(()) => steps.ephemeral_disks = true,
+                Err(e) => errors.push(e),
+            }
         }
 
-        if let Some(swap) = self.swap_resource.as_ref() {
-            swap.clean().await;
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            for error in &errors {
+                warn!(sl!(), "resource cleanup step failed: {error:#}");
+            }
+            Err(anyhow!("{} resource cleanup step(s) failed", errors.len()))
         }
-
-        self.volume_resource
-            .cleanup_ephemeral_disks()
-            .await
-            .context("failed to cleanup ephemeral disks")?;
-
-        Ok(())
     }
 
     pub async fn dump(&self) {
@@ -1149,6 +1254,7 @@ impl Persist for ResourceManagerInner {
             cpu_resource: CpuResource::default(),
             mem_resource,
             swap_resource,
+            cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
         })
     }
 }

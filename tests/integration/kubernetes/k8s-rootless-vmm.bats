@@ -9,15 +9,17 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 readonly QEMU_SANDBOX_PARAM="on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
-readonly ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS="${ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS:-30}"
+# GPU device reset can outlast the initial stop attempt before QEMU exits.
+readonly ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS="${ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS:-90}"
 
+# A retry may reuse a stale UID directory, so track this pod's temporary
+# account and directory rather than comparing whole-host snapshots.
 get_rootless_host_resources() {
-	local query="{ getent passwd | "
-	query+="awk -F: '\$1 ~ /^kata-[0-9]+$/ "
-	query+="&& \$5 ~ /Kata Containers temporary hypervisor user/ "
-	query+="{ print \"user:\" \$1 \":\" \$3 }'; "
-	query+="find /run/user -mindepth 1 -maxdepth 1 -type d "
-	query+="-printf 'dir:%f\\n' 2>/dev/null; } | sort"
+	local uid="$1"
+	local user="$2"
+	local query="{ getent passwd ${user} | awk -F: '{ print \"user:\" \$1 \":\" \$3 }'; "
+	query+="getent group ${user} | awk -F: '{ print \"group:\" \$1 \":\" \$3 }'; "
+	query+="test ! -d /run/user/${uid} || echo dir:${uid}; } | sort"
 
 	exec_host "${node}" "${query}"
 }
@@ -25,18 +27,21 @@ get_rootless_host_resources() {
 wait_for_rootless_host_resources() {
 	local actual_resources
 	local attempt
-	local expected_resources="$1"
+	local uid="$1"
+	local user="$2"
 
 	for ((attempt = 0; attempt < ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS; attempt++)); do
-		actual_resources="$(get_rootless_host_resources)"
-		[[ "${actual_resources}" == "${expected_resources}" ]] && return 0
+		actual_resources="$(get_rootless_host_resources "${uid}" "${user}")"
+		[[ -z "${actual_resources}" ]] && return 0
 		sleep 1
 	done
 
-	echo "Rootless host resources before the sandbox:"
-	echo "${expected_resources}"
-	echo "Rootless host resources after sandbox teardown:"
+	echo "Rootless host resources remaining after sandbox teardown:"
 	echo "${actual_resources}"
+	echo "Processes still running as rootless UID ${uid}:"
+	exec_host "${node}" "ps -u ${uid} -o pid,ppid,uid,stat,wchan:32,etime,args --no-headers || true"
+	echo "Mounts under /run/user/${uid}:"
+	exec_host "${node}" "findmnt -R /run/user/${uid} || true"
 	return 1
 }
 
@@ -54,11 +59,11 @@ request_gpu_for_nvidia_gpu_runtime_rs() {
 	local config="$1"
 
 	available_gpus="$(kubectl get node "${node}" \
-		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
+		-o jsonpath='{.status.allocatable.nvidia\.com/gpu}')"
 	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
-		die "${node} has no allocatable nvidia.com/pgpu resource"
+		die "${node} has no allocatable nvidia.com/gpu resource"
 
-	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
+	yq -i '.spec.containers[0].resources.limits."nvidia.com/gpu" = "1"' \
 		"${config}"
 }
 
@@ -83,15 +88,6 @@ qemu_rootless_skip_reason() {
 		return 0
 	fi
 
-	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
-	# actual confidential handlers excluded until rootless QEMU can access
-	# resources such as /dev/sev and the configured TDX QGS endpoint.
-	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
-		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
-		echo "rootless QEMU confidential host-resource access is not enabled yet"
-		return 0
-	fi
-
 	# Rootless policy testing is supported only by shared_fs=none runtime-rs
 	# handlers. Generated policy does not authorize the rootless host paths
 	# used with filesystem sharing. With shared_fs=none, policy adds an
@@ -105,6 +101,43 @@ qemu_rootless_skip_reason() {
 			echo "rootless QEMU with generated policy requires runtime-rs block-source FD transport"
 			return 0
 		fi
+	fi
+
+	# Inclusions:
+	# - the NVIDIA GPU TEE (SNP, TDX) runtime-rs handlers: for NVIDIA's TEE
+	# CI machine path, we will make use of kata-deploy to configure for rootless
+	# execution. For the time being, The SNP machine was configured by hand.
+	# - the non-TEE qemu-coco-dev handlers: these do not need device/socket access
+	# provisioning.
+	# Exclusions: as documented below.
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		# TEE device/socket access provisioning is only implement for runtime-rs.
+		if is_confidential_hardware "${KATA_HYPERVISOR}" && ! is_runtime_rs; then
+			echo "rootless TEE host-resource access requires runtime-rs"
+			return 0
+		fi
+
+		case "${KATA_HYPERVISOR}" in
+			# Standard SNP CI runners do not yet provision /dev/sev with
+			# scoped non-root access. Enable after the AMD setup is in place.
+			# runner configuration provides it.
+			qemu-snp-runtime-rs)
+				echo "rootless standard SNP host access provisioning is pending"
+				return 0
+				;;
+			# TDX runners need the QGS UDS deployed with a group that the
+			# rootless VMM can join. Enable after the TDX runner setup is in place.
+			qemu-tdx-runtime-rs)
+				echo "rootless TDX QGS socket provisioning is pending"
+				return 0
+				;;
+			# IBM Secure Execution runners need /dev/uv to have scoped non-root
+			# access. Enable after the runner setup is in place.
+			qemu-se-runtime-rs)
+				echo "rootless IBM Secure Execution host access provisioning is pending"
+				return 0
+				;;
+		esac
 	fi
 
 	return 1
@@ -251,13 +284,12 @@ EOF
 
 @test "VMM runs rootless with seccomp enabled" {
 	local cmdline
-	local host_resources
 	local seccomp_status
 	local vmm_gid
 	local vmm_pid
 	local vmm_status
 	local vmm_uid
-	host_resources="$(get_rootless_host_resources)"
+	local vmm_user
 
 	retry_kubectl_apply "${pod_config}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
@@ -273,6 +305,8 @@ EOF
 	[[ "${vmm_gid}" =~ ^[0-9]+$ ]]
 	(( vmm_uid != 0 ))
 	(( vmm_gid != 0 ))
+	vmm_user="$(exec_host "${node}" "getent passwd ${vmm_uid} | cut -d: -f1")"
+	[[ "${vmm_user}" =~ ^kata-[0-9]+$ ]]
 
 	if [[ "${KATA_HYPERVISOR}" == qemu* ]]; then
 		cmdline="$(exec_host "${node}" "tr '\\0' ' ' < /proc/${vmm_pid}/cmdline")"
@@ -290,7 +324,7 @@ EOF
 	[[ "$(awk '/^NoNewPrivs:/ {print $2}' <<< "${seccomp_status}")" == "1" ]]
 
 	kubectl delete -f "${pod_config}" --ignore-not-found=true
-	wait_for_rootless_host_resources "${host_resources}"
+	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
 }
 
 @test "VMM propagates ConfigMap updates while rootless" {

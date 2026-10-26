@@ -6,8 +6,9 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Path** | **string** |  | 
 **NumQueues** | **int32** |  | [default to 1]
-**Iommu** | Pointer to **bool** |  | [optional] [default to false]
+**Iommu** | Pointer to [**IommuType**](IommuType.md) |  | [optional] [default to IOMMUTYPE_OFF]
 **PciSegment** | Pointer to **int32** |  | [optional] 
+**PciDeviceId** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
 
 ## Methods
@@ -71,20 +72,20 @@ SetNumQueues sets NumQueues field to given value.
 
 ### GetIommu
 
-`func (o *VdpaConfig) GetIommu() bool`
+`func (o *VdpaConfig) GetIommu() IommuType`
 
 GetIommu returns the Iommu field if non-nil, zero value otherwise.
 
 ### GetIommuOk
 
-`func (o *VdpaConfig) GetIommuOk() (*bool, bool)`
+`func (o *VdpaConfig) GetIommuOk() (*IommuType, bool)`
 
 GetIommuOk returns a tuple with the Iommu field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetIommu
 
-`func (o *VdpaConfig) SetIommu(v bool)`
+`func (o *VdpaConfig) SetIommu(v IommuType)`
 
 SetIommu sets Iommu field to given value.
 
@@ -118,6 +119,31 @@ SetPciSegment sets PciSegment field to given value.
 `func (o *VdpaConfig) HasPciSegment() bool`
 
 HasPciSegment returns a boolean if a field has been set.
+
+### GetPciDeviceId
+
+`func (o *VdpaConfig) GetPciDeviceId() int32`
+
+GetPciDeviceId returns the PciDeviceId field if non-nil, zero value otherwise.
+
+### GetPciDeviceIdOk
+
+`func (o *VdpaConfig) GetPciDeviceIdOk() (*int32, bool)`
+
+GetPciDeviceIdOk returns a tuple with the PciDeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciDeviceId
+
+`func (o *VdpaConfig) SetPciDeviceId(v int32)`
+
+SetPciDeviceId sets PciDeviceId field to given value.
+
+### HasPciDeviceId
+
+`func (o *VdpaConfig) HasPciDeviceId() bool`
+
+HasPciDeviceId returns a boolean if a field has been set.
 
 ### GetId
 

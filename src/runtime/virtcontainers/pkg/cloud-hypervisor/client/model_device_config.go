@@ -16,21 +16,23 @@ import (
 
 // DeviceConfig struct for DeviceConfig
 type DeviceConfig struct {
-	Path               string  `json:"path"`
-	Iommu              *bool   `json:"iommu,omitempty"`
-	PciSegment         *int32  `json:"pci_segment,omitempty"`
-	Id                 *string `json:"id,omitempty"`
-	XNvGpudirectClique *int32  `json:"x_nv_gpudirect_clique,omitempty"`
+	// Sysfs path of the VFIO device. Exactly one of `path` or an externally-opened cdev FD must be supplied; an FD is passed out of band via SCM_RIGHTS on the UNIX domain socket, never in this body.
+	Path               *string    `json:"path,omitempty"`
+	Iommu              *IommuType `json:"iommu,omitempty"`
+	PciSegment         *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId        *int32     `json:"pci_device_id,omitempty"`
+	Id                 *string    `json:"id,omitempty"`
+	XNvGpudirectClique *int32     `json:"x_nv_gpudirect_clique,omitempty"`
+	XExcludeMmapBars   *[]int64   `json:"x_exclude_mmap_bars,omitempty"`
 }
 
 // NewDeviceConfig instantiates a new DeviceConfig object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDeviceConfig(path string) *DeviceConfig {
+func NewDeviceConfig() *DeviceConfig {
 	this := DeviceConfig{}
-	this.Path = path
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -40,39 +42,47 @@ func NewDeviceConfig(path string) *DeviceConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewDeviceConfigWithDefaults() *DeviceConfig {
 	this := DeviceConfig{}
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
 
-// GetPath returns the Path field value
+// GetPath returns the Path field value if set, zero value otherwise.
 func (o *DeviceConfig) GetPath() string {
-	if o == nil {
+	if o == nil || o.Path == nil {
 		var ret string
 		return ret
 	}
-
-	return o.Path
+	return *o.Path
 }
 
-// GetPathOk returns a tuple with the Path field value
+// GetPathOk returns a tuple with the Path field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DeviceConfig) GetPathOk() (*string, bool) {
-	if o == nil {
+	if o == nil || o.Path == nil {
 		return nil, false
 	}
-	return &o.Path, true
+	return o.Path, true
 }
 
-// SetPath sets field value
+// HasPath returns a boolean if a field has been set.
+func (o *DeviceConfig) HasPath() bool {
+	if o != nil && o.Path != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPath gets a reference to the given string and assigns it to the Path field.
 func (o *DeviceConfig) SetPath(v string) {
-	o.Path = v
+	o.Path = &v
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *DeviceConfig) GetIommu() bool {
+func (o *DeviceConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -80,7 +90,7 @@ func (o *DeviceConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *DeviceConfig) GetIommuOk() (*bool, bool) {
+func (o *DeviceConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -96,8 +106,8 @@ func (o *DeviceConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *DeviceConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *DeviceConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 
@@ -131,6 +141,38 @@ func (o *DeviceConfig) HasPciSegment() bool {
 // SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
 func (o *DeviceConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *DeviceConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DeviceConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *DeviceConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *DeviceConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
 }
 
 // GetId returns the Id field value if set, zero value otherwise.
@@ -197,9 +239,41 @@ func (o *DeviceConfig) SetXNvGpudirectClique(v int32) {
 	o.XNvGpudirectClique = &v
 }
 
+// GetXExcludeMmapBars returns the XExcludeMmapBars field value if set, zero value otherwise.
+func (o *DeviceConfig) GetXExcludeMmapBars() []int64 {
+	if o == nil || o.XExcludeMmapBars == nil {
+		var ret []int64
+		return ret
+	}
+	return *o.XExcludeMmapBars
+}
+
+// GetXExcludeMmapBarsOk returns a tuple with the XExcludeMmapBars field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DeviceConfig) GetXExcludeMmapBarsOk() (*[]int64, bool) {
+	if o == nil || o.XExcludeMmapBars == nil {
+		return nil, false
+	}
+	return o.XExcludeMmapBars, true
+}
+
+// HasXExcludeMmapBars returns a boolean if a field has been set.
+func (o *DeviceConfig) HasXExcludeMmapBars() bool {
+	if o != nil && o.XExcludeMmapBars != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetXExcludeMmapBars gets a reference to the given []int64 and assigns it to the XExcludeMmapBars field.
+func (o *DeviceConfig) SetXExcludeMmapBars(v []int64) {
+	o.XExcludeMmapBars = &v
+}
+
 func (o DeviceConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if true {
+	if o.Path != nil {
 		toSerialize["path"] = o.Path
 	}
 	if o.Iommu != nil {
@@ -208,11 +282,17 @@ func (o DeviceConfig) MarshalJSON() ([]byte, error) {
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
 	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
+	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
 	if o.XNvGpudirectClique != nil {
 		toSerialize["x_nv_gpudirect_clique"] = o.XNvGpudirectClique
+	}
+	if o.XExcludeMmapBars != nil {
+		toSerialize["x_exclude_mmap_bars"] = o.XExcludeMmapBars
 	}
 	return json.Marshal(toSerialize)
 }

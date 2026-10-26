@@ -125,6 +125,18 @@ impl DeviceManager {
         self.pcie_topology.clone()
     }
 
+    /// Resolve the requested queue pairs before creating the NIC and its TAP.
+    pub async fn network_queue_pairs(&self, requested: usize) -> usize {
+        let pairs = requested.clamp(1, self.hypervisor.network_queue_limit().await);
+        if pairs < requested {
+            info!(
+                sl!(),
+                "Reducing network queue pairs from {requested} to {pairs}"
+            );
+        }
+        pairs
+    }
+
     async fn get_block_device_info(&self) -> BlockDeviceInfo {
         self.hypervisor.hypervisor_config().await.blockdev_info
     }
@@ -185,33 +197,27 @@ impl DeviceManager {
     pub async fn try_remove_device(&mut self, device_id: &str) -> Result<()> {
         if let Some(dev) = self.devices.get(device_id) {
             let mut device_guard = dev.lock().await;
-            let result = match device_guard
-                .detach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
-                .await
-            {
-                Ok(index) => {
-                    if let Some(i) = index {
-                        // release the declared device index
-                        let is_pmem = match device_guard.get_device_info().await {
-                            DeviceType::BlockModern(dev) => {
-                                dev.lock().await.config.driver_option == *KATA_NVDIMM_DEV_TYPE
-                            }
-                            _ => false,
-                        };
-                        self.shared_info.release_device_index(i, is_pmem);
-                    }
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            };
 
-            // if detach success, remove it from device manager
-            if result.is_ok() {
-                drop(device_guard);
-                self.devices.remove(device_id);
+            // Snapshot all state needed after detach before changing the reference count.
+            let device_info = device_guard.get_device_info().await;
+            let (still_in_use, is_pmem) = detach_metadata(&device_info).await;
+            let index = device_guard
+                .detach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
+                .await?;
+
+            // If it's still in use, it should be just skipped.
+            if still_in_use {
+                return Ok(());
             }
 
-            return result;
+            if let Some(i) = index {
+                self.shared_info.release_device_index(i, is_pmem);
+            }
+
+            drop(device_guard);
+            self.devices.remove(device_id);
+
+            return Ok(());
         }
 
         Err(anyhow!(
@@ -655,6 +661,22 @@ pub async fn get_shared_fs_info(d: &RwLock<DeviceManager>) -> SharedFsInfo {
     d.read().await.get_shared_fs_info().await
 }
 
+async fn detach_metadata(device_info: &DeviceType) -> (bool, bool) {
+    match device_info {
+        DeviceType::VhostUserBlk(device) => (device.attach_count > 1, false),
+        DeviceType::BlockModern(device) => {
+            let device = device.lock().await;
+            (
+                device.attach_count > 1,
+                device.config.driver_option == *KATA_NVDIMM_DEV_TYPE,
+            )
+        }
+        DeviceType::Vfio(device) => (device.attach_count > 1, false),
+        DeviceType::VfioModern(device) => (device.lock().await.attach_count > 1, false),
+        _ => (false, false),
+    }
+}
+
 /// Returns the APQN list for a cold-plugged VFIO-AP device whose
 /// `iommu_group_devnode` matches `host_path`, or `None` if no such device is
 /// registered in the device manager.
@@ -699,6 +721,47 @@ mod tests {
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
 
+    #[cfg(all(
+        feature = "cloud-hypervisor",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    #[tokio::test]
+    async fn test_network_queue_pairs() {
+        use crate::{ch::CloudHypervisor, Hypervisor};
+        use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+
+        let clh = Arc::new(CloudHypervisor::new());
+        let dm = DeviceManager::new(clh.clone(), None).await.unwrap();
+        for (cpus, requested, expected) in [
+            (1.0, 8, 1),
+            (4.0, 8, 4),
+            (4.0, 2, 2),
+            (4.0, 4, 4),
+            (1.5, 8, 2),
+            (4.0, 0, 1),
+            (128.0, 512, 128),
+            (512.0, 256, 256),
+            (512.0, 512, 256),
+        ] {
+            let mut config = HypervisorConfig::default();
+            config.cpu_info.default_vcpus = cpus;
+            config.network_info.network_queues = requested as u32;
+            clh.set_hypervisor_config(config).await;
+            assert_eq!(dm.network_queue_pairs(requested).await, expected);
+            assert_eq!(
+                clh.hypervisor_config().await.network_info.network_queues,
+                requested as u32
+            );
+        }
+
+        let dm = DeviceManager::new(Arc::new(Qemu::new()), None)
+            .await
+            .unwrap();
+        assert_eq!(dm.network_queue_pairs(8).await, 8);
+        assert_eq!(dm.network_queue_pairs(256).await, 256);
+        assert_eq!(dm.network_queue_pairs(512).await, 256);
+    }
+
     async fn new_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
         let hypervisor_name: &str = "qemu";
         let toml_config = load_test_config(hypervisor_name.to_owned())?;
@@ -706,7 +769,7 @@ mod tests {
         let hypervisor_config = toml_config
             .hypervisor
             .get(hypervisor_name)
-            .ok_or_else(|| anyhow!("failed to get hypervisor for {}", &hypervisor_name))?;
+            .ok_or_else(|| anyhow!("failed to get hypervisor for {}", hypervisor_name))?;
 
         let hypervisor = Qemu::new();
         hypervisor
@@ -748,5 +811,29 @@ mod tests {
         } else {
             assert_eq!(1, 0)
         }
+    }
+
+    #[actix_rt::test]
+    async fn test_shared_block_device_is_retained_until_last_detach() {
+        let d = new_device_manager().await.unwrap();
+        let block_driver = get_block_device_info(&d).await.block_device_driver;
+        let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
+            path_on_host: "/dev/shared-test-device".to_string(),
+            driver_option: block_driver,
+            ..Default::default()
+        });
+
+        let device_id = d.write().await.new_device(&dev_info).await.unwrap();
+        d.write().await.try_add_device(&device_id).await.unwrap();
+        let matched_id = d.write().await.new_device(&dev_info).await.unwrap();
+        assert_eq!(device_id, matched_id);
+        d.write().await.try_add_device(&matched_id).await.unwrap();
+
+        d.write().await.try_remove_device(&device_id).await.unwrap();
+
+        let device_info = d.read().await.get_device_info(&device_id).await.unwrap();
+        assert!(
+            matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
+        );
     }
 }

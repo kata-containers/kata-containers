@@ -63,10 +63,10 @@ struct DaemonSetUpdateStrategy {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct RollingUpdateDaemonSet {
     #[serde(skip_serializing_if = "Option::is_none")]
-    maxSurge: Option<i32>,
+    maxSurge: Option<yaml::IntOrString>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    maxUnavailable: Option<i32>,
+    maxUnavailable: Option<yaml::IntOrString>,
 }
 
 #[async_trait]

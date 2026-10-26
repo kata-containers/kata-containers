@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::TryStreamExt;
 use rtnetlink::Handle;
 use scopeguard::defer;
 
@@ -86,10 +87,34 @@ impl NetworkModel for TcFilterModel {
         defer!({
             thread_handler.abort();
         });
-        let virt_index = fetch_index(&handle, &pair.virt_iface.name).await?;
-        handle.qdisc().del(virt_index as i32).execute().await?;
+        let mut links = handle
+            .link()
+            .get()
+            .match_name(pair.virt_iface.name.clone())
+            .execute();
+        let virt_index = match links.try_next().await {
+            Ok(Some(link)) => link.header.index,
+            Ok(None) => return Ok(()),
+            Err(err) if is_absent(&err) => return Ok(()),
+            Err(err) => return Err(err.into()),
+        };
+        match handle.qdisc().del(virt_index as i32).execute().await {
+            Ok(()) => {}
+            Err(err) if is_absent(&err) => {}
+            Err(err) => return Err(err.into()),
+        }
         Ok(())
     }
+}
+
+fn is_absent(err: &rtnetlink::Error) -> bool {
+    matches!(
+        err,
+        rtnetlink::Error::NetlinkError(msg)
+            if msg.code.is_some_and(|code| {
+                code.get() == -libc::ENOENT || code.get() == -libc::ENODEV
+            })
+    )
 }
 
 /// Add an ingress qdisc to the device at the given index, retrying on EBUSY
@@ -121,4 +146,30 @@ pub async fn fetch_index(handle: &Handle, name: &str) -> Result<u32> {
         .context("get link by name")?;
     let base = link.attrs();
     Ok(base.index)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::network::network_pair::{NetworkInterface, TapInterface};
+
+    #[tokio::test]
+    async fn deleting_tc_filter_after_cni_removes_interface_is_idempotent() {
+        let model = TcFilterModel::new().unwrap();
+        let pair = NetworkPair {
+            tap: TapInterface::default(),
+            virt_iface: NetworkInterface {
+                name: "kata_missing0".into(),
+                ..Default::default()
+            },
+            model: Arc::new(TcFilterModel::new().unwrap()),
+            network_qos: false,
+            network_queues: 1,
+        };
+
+        model.del(&pair).await.unwrap();
+        model.del(&pair).await.unwrap();
+    }
 }

@@ -11,6 +11,15 @@ set -o pipefail
 
 install_dest="/usr/local/bin"
 
+# Minimal build containers run as root and may not include sudo.
+function run_as_root() {
+	if [[ "${EUID}" -eq 0 ]]; then
+		"$@"
+	else
+		sudo "$@"
+	fi
+}
+
 function get_installed_oras_version() {
 	oras version | grep Version | sed -e s/Version:// | tr -d '[:blank:]'
 }
@@ -24,7 +33,7 @@ if command -v oras; then
 
 	echo "Proceeding to cleanup the previous installed version of ORAS, and install the version specified in the versions.yaml file"
 	oras_system_path=$(which oras)
-	sudo rm -f "${oras_system_path}"
+	run_as_root rm -f "${oras_system_path}"
 fi
 
 arch=$(uname -m)
@@ -40,6 +49,6 @@ echo "Downloading ORAS ${oras_required_version}"
 curl -OL "https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}"
 
 echo "Installing ORAS to ${install_dest}"
-sudo mkdir -p "${install_dest}"
-sudo tar -C "${install_dest}" -xzf "${oras_tarball}"
-sudo rm -f "${oras_tarball}"
+run_as_root mkdir -p "${install_dest}"
+run_as_root tar -C "${install_dest}" -xzf "${oras_tarball}"
+rm -f "${oras_tarball}"

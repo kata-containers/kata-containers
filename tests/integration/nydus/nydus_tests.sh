@@ -276,6 +276,13 @@ function teardown() {
 	fi
 
 	clean_env_ctr || rc=1
+	if [[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ||
+	      "${KATA_HYPERVISOR}" == "clh-runtime-rs" ||
+	      "${KATA_HYPERVISOR}" == "dragonball" ]] &&
+	   pgrep -f '/opt/kata/runtime-rs/bin/containerd-shim-kata-v2' >/dev/null; then
+		echo "Runtime-rs shim is still running; showing recent Kata journal entries"
+		sudo journalctl -t kata --since '5 minutes ago' --no-pager -n 300 || true
+	fi
 	check_processes "${KILL_TIMEOUT_SECS}"
 	return "${rc}"
 }

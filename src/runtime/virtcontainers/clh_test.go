@@ -146,6 +146,11 @@ func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
 	return nil, nil
 }
 
+func TestClhIommuType(t *testing.T) {
+	assert.Equal(t, chclient.IOMMUTYPE_OFF, clhIommuType(false))
+	assert.Equal(t, chclient.IOMMUTYPE_VIRTIO, clhIommuType(true))
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
@@ -816,7 +821,7 @@ func TestCloudHypervisorColdPlugVFIODevice(t *testing.T) {
 	// Verify the device was added to vmconfig.Devices
 	assert.NotNil(clh.vmconfig.Devices)
 	assert.Len(*clh.vmconfig.Devices, 1)
-	assert.Equal("/sys/bus/pci/devices/0000:41:00.0", (*clh.vmconfig.Devices)[0].Path)
+	assert.Equal("/sys/bus/pci/devices/0000:41:00.0", (*clh.vmconfig.Devices)[0].GetPath())
 	assert.Equal("gpu0", clh.devicesIds["gpu0"])
 
 	// Cold-plug a second device

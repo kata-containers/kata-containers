@@ -424,6 +424,7 @@ build_nvidia_gpu_extension_in_container()
 	local nvidia_dir="${script_dir}/nvidia"
 	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
 	local tools_repo_url tools_repo_pkg upx_version
+	local driver_repo_url driver_repo_pkg
 	local dcgm_version dcgm_exporter_version
 	local -a build_args run_args
 
@@ -440,6 +441,13 @@ build_nvidia_gpu_extension_in_container()
 	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.${ARCH}.nvidia-gpu.version")
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${ARCH}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${ARCH}.pkg")
+	driver_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.driver.repo.${ARCH}.url")
+	driver_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.driver.repo.${ARCH}.pkg")
+	# Both or neither - fail before anything builds, not an hour later
+	# inside the chroot.
+	if [[ -n "${driver_repo_url}${driver_repo_pkg}" ]] && { [[ -z "${driver_repo_url}" ]] || [[ -z "${driver_repo_pkg}" ]]; }; then
+		die "driver repository misconfigured: url='${driver_repo_url}' pkg='${driver_repo_pkg}' - set both or neither"
+	fi
 	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
 	upx_version=$(get_package_version_from_kata_yaml "externals.upx.version")
 	dcgm_version=$(get_package_version_from_kata_yaml "externals.nvidia.dcgm.version")
@@ -466,6 +474,8 @@ build_nvidia_gpu_extension_in_container()
 		--build-arg "CUDA_REPO_PKG=${cuda_repo_pkg}" \
 		--build-arg "TOOLS_REPO_URL=${tools_repo_url}" \
 		--build-arg "TOOLS_REPO_PKG=${tools_repo_pkg}" \
+		--build-arg "DRIVER_REPO_URL=${driver_repo_url}" \
+		--build-arg "DRIVER_REPO_PKG=${driver_repo_pkg}" \
 		--build-arg "CTK_VERSION=${ctk_version}" \
 		--build-arg "DCGM_VERSION=${dcgm_version}" \
 		--build-arg "DCGM_EXPORTER_VERSION=${dcgm_exporter_version}" \

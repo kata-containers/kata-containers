@@ -5,11 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
-use crate::ch::utils::get_rootless_symlink_sandbox_jailer_root;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
-use crate::utils::create_dir_all_with_inherit_owner;
 use crate::utils::open_named_tuntap;
+use crate::utils::{check_unix_socket_path_len, link_rootless_vmm_socket};
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
@@ -19,14 +18,14 @@ use crate::ShareFsDevice;
 use crate::VfioDevice;
 use crate::VmmState;
 use crate::{BlockConfigModern, BlockDeviceModern};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
     cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add_with_fds,
     cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
 };
-use ch_config::convert::DEFAULT_NUM_PCI_SEGMENTS;
+use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
 use ch_config::ImageType;
 use ch_config::{
@@ -40,22 +39,29 @@ use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::os::fd::AsRawFd;
 use std::os::fd::IntoRawFd;
-use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use virtio_bindings::bindings::virtio_blk::VIRTIO_BLK_ID_BYTES;
 
 const VIRTIO_FS: &str = "virtio-fs";
 
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+        if let DeviceType::Network(net) = &device {
+            ensure!(
+                (1..=self.network_queue_limit()).contains(&net.config.queue_num),
+                "network queue pairs must be normalized before attaching {}",
+                net.config.host_dev_name
+            );
+        }
         if self.state != VmmState::VmRunning {
             // If the VM is not running, add the device to the pending list to
             // be handled later.
             //
             // Note that:
             //
-            // - ShareFs (virtiofsd) is only needed in an non-DM and non-TDX scenario
+            // - ShareFs (virtiofsd) is only needed in a non-DM scenario
             //   for the container rootfs.
             //
             // - A DeviceType::BlockModern requested before the VM is running
@@ -191,7 +197,7 @@ impl CloudHypervisorInner {
 
         let device_config = DeviceConfig {
             path: PathBuf::from(sysfsdev),
-            iommu: false,
+            iommu: false.into(),
             ..Default::default()
         };
 
@@ -345,15 +351,8 @@ impl CloudHypervisorInner {
         // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
         clh_net_config.tap = None;
         clh_net_config.id = None;
-        // The `config.num_queues` is a queue *pair* count (1 RX + 1 TX per pair).
-        // Convert pairs into the actual queue count.
-        clh_net_config.num_queues = netdev.config.queue_num.max(1) * 2;
-
-        let files = open_named_tuntap(
-            &netdev.config.host_dev_name,
-            netdev.config.queue_num.max(1) as u32,
-        )
-        .context("open named tuntap")?;
+        let files = open_named_tuntap(&netdev.config.host_dev_name, netdev.config.queue_num as u32)
+            .context("open named tuntap")?;
 
         let fds = files.iter().map(|f| f.as_raw_fd()).collect();
 
@@ -387,62 +386,23 @@ impl CloudHypervisorInner {
                 DeviceType::ShareFs(dev) => {
                     let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
-                    let fs_cfg = if is_rootless() {
-                        // TODO: Replace this symlink workaround if a better approach for rootless socket paths appears.
-                        // In rootless mode the virtiofsd.sock lives under the rootless directory,
-                        // and its full path can exceed the 108-byte Unix domain socket limit.
-                        // To ensure the cloud-hypervisor VMM can connect to virtiofsd, create a
-                        // short symlink inside the rootless directory and point the VMM at it.
-                        let mut fs_cfg = FsConfig::try_from(settings)?;
-                        let rootless_symlink_sanbox_jailer_root =
-                            get_rootless_symlink_sandbox_jailer_root(self.id.as_str());
-
-                        create_dir_all_with_inherit_owner(
-                            rootless_symlink_sanbox_jailer_root.as_str(),
-                            0x750,
-                        )
-                        .map_err(|e| {
-                            anyhow!(
-                                "failed to create rootless sharefs symlink jailer root dir: {}",
-                                e
-                            )
-                        })?;
-                        let virtiofsd_name = fs_cfg.socket.file_name().ok_or_else(|| {
-                            anyhow!(
-                                "failed to get virtiofsd socket file name from path: {:?}",
-                                fs_cfg.socket
-                            )
-                        })?;
-                        let virtiofsd_symlink_path =
-                            PathBuf::from(rootless_symlink_sanbox_jailer_root.as_str())
-                                .join(virtiofsd_name);
-
-                        symlink(&fs_cfg.socket, &virtiofsd_symlink_path).map_err(|e| {
-                            anyhow!(
-                                "failed to create symlink for rootless sharefs socket: {}",
-                                e
-                            )
-                        })?;
-
-                        fs_cfg.socket = virtiofsd_symlink_path;
-
-                        fs_cfg
-                    } else {
-                        FsConfig::try_from(settings)?
-                    };
+                    let mut fs_cfg = FsConfig::try_from(settings)?;
+                    if is_rootless() {
+                        fs_cfg.socket = link_rootless_vmm_socket(&self.id, &fs_cfg.socket)
+                            .context("link rootless virtiofsd socket")?;
+                    }
+                    check_unix_socket_path_len(&fs_cfg.socket)?;
 
                     shared_fs_devices.push(fs_cfg);
                 }
                 DeviceType::Network(net_device) => {
-                    let network_queues_pairs =
-                        self.hypervisor_config().network_info.network_queues as usize;
+                    let network_queues_pairs = net_device.config.queue_num;
 
                     let mut net_config = NetConfig::try_from(net_device.config.clone())?;
                     // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
                     net_config.tap = None;
                     net_config.id = None;
 
-                    net_config.num_queues = network_queues_pairs * 2;
                     info!(
                         sl!(),
                         "network device queue pairs {:?}", network_queues_pairs
@@ -476,7 +436,7 @@ impl CloudHypervisorInner {
                     let sysfsdev = primary_device.sysfs_path.clone();
                     let device_config = DeviceConfig {
                         path: PathBuf::from(sysfsdev),
-                        iommu: false,
+                        iommu: false.into(),
                         ..Default::default()
                     };
                     info!(
@@ -493,9 +453,6 @@ impl CloudHypervisorInner {
                                 protection_device.host_data = sevsnp_cfg.host_data;
                             }
                         }
-                        ProtectionDeviceConfig::Tdx(tdx_config) => {
-                            protection_device.mrconfigid = tdx_config.mrconfigid;
-                        }
                         _ => info!(sl!(), "CH: unsupported protection device type"),
                     }
                 }
@@ -504,18 +461,6 @@ impl CloudHypervisorInner {
 
                     if self.is_vm_boot_file(&config.path_on_host) {
                         // Already handled through the VmConfig payload/disks.
-                        continue;
-                    }
-
-                    // The disk configuration has no serial field, so a device
-                    // the guest finds by serial would be unusable.
-                    if !config.serial_override.is_empty() {
-                        warn!(
-                            sl!(),
-                            "not cold-plugging block device {:?}: its serial {:?} cannot be expressed",
-                            config.path_on_host,
-                            config.serial_override
-                        );
                         continue;
                     }
 
@@ -545,7 +490,8 @@ impl TryFrom<NetworkConfig> for NetConfig {
             let net_config = NetConfig {
                 tap: Some(cfg.host_dev_name.clone()),
                 id: Some(cfg.virt_iface_name.clone()),
-                num_queues: cfg.queue_num,
+                // Kata counts RX/TX pairs; CLH counts individual virtqueues.
+                num_queues: cfg.queue_num * 2,
                 queue_size: cfg.queue_size as u16,
                 mac: MacAddr { bytes: mac.0 },
                 ..Default::default()
@@ -562,12 +508,33 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
     type Error = anyhow::Error;
 
     fn try_from(blkcfg: BlockConfigModern) -> Result<Self, Self::Error> {
+        // Cloud Hypervisor rejects serials longer than the virtio-blk ID.
+        if blkcfg.serial_override.len() > VIRTIO_BLK_ID_BYTES as usize {
+            return Err(anyhow!(
+                "virtio-blk serial must not exceed {VIRTIO_BLK_ID_BYTES} bytes"
+            ));
+        }
+
         let disk_config: DiskConfig = DiskConfig {
             path: Some(blkcfg.path_on_host.as_str().into()),
+            serial: if blkcfg.serial_override.is_empty() {
+                None
+            } else {
+                Some(blkcfg.serial_override)
+            },
             readonly: blkcfg.is_readonly,
-            num_queues: blkcfg.num_queues,
-            queue_size: blkcfg.queue_size as u16,
-            sparse: blkcfg.discard_unmap,
+            // Boot-time devices such as extensions leave queue settings unset.
+            // Cloud Hypervisor requires nonzero values even for cold-plugged disks.
+            num_queues: match blkcfg.num_queues {
+                0 => DEFAULT_DISK_QUEUES,
+                n => n,
+            },
+            queue_size: match blkcfg.queue_size {
+                0 => DEFAULT_DISK_QUEUE_SIZE,
+                sz => u16::try_from(sz)?,
+            },
+            // CLH fallocates writable disks to their full logical size when sparse is false.
+            sparse: true,
             image_type: ImageType::Raw,
             ..Default::default()
         };
@@ -620,14 +587,115 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 mod tests {
     use super::*;
     use crate::Address;
+    use rstest::rstest;
+
+    #[actix_rt::test]
+    async fn test_cold_plug_guest_extension_images() {
+        let mut ch = CloudHypervisorInner::default();
+        ch.config.boot_info.image = "/rootfs.img".into();
+
+        for (path, serial) in [
+            ("/rootfs.img", ""),
+            ("/coco.img", "extension-coco"),
+            ("/devkit.img", "extension-devkit"),
+            ("/initdata.img", ""),
+        ] {
+            let device = BlockDeviceModern {
+                device_id: path.into(),
+                attach_count: 0,
+                config: BlockConfigModern {
+                    path_on_host: path.into(),
+                    serial_override: serial.into(),
+                    is_readonly: true,
+                    ..Default::default()
+                },
+            };
+            ch.add_device(DeviceType::BlockModern(Arc::new(Mutex::new(device))))
+                .await
+                .unwrap();
+        }
+
+        let (_, _, _, _, disks) = ch.get_shared_devices().await.unwrap();
+        let disks = disks.unwrap();
+        // The boot rootfs is configured separately, so only extensions and
+        // initdata belong in the shared disks returned here.
+        assert!(disks
+            .iter()
+            .all(|disk| disk.path.as_ref() != Some(&PathBuf::from("/rootfs.img"))));
+        assert_eq!(disks.len(), 3);
+        for (disk, (path, serial)) in disks.iter().zip([
+            ("/coco.img", Some("extension-coco")),
+            ("/devkit.img", Some("extension-devkit")),
+            ("/initdata.img", None),
+        ]) {
+            assert_eq!(disk.path, Some(PathBuf::from(path)));
+            assert!(disk.readonly);
+            assert_eq!(disk.serial.as_deref(), serial);
+            assert_eq!(disk.num_queues, DEFAULT_DISK_QUEUES);
+            assert_eq!(disk.queue_size, DEFAULT_DISK_QUEUE_SIZE);
+            let json = serde_json::to_value(disk).unwrap();
+            if let Some(serial) = serial {
+                assert_eq!(json["serial"], serial);
+            } else {
+                assert!(json.get("serial").is_none());
+            }
+        }
+        assert!(ch.pending_devices.is_empty());
+    }
+
+    #[rstest]
+    #[case(0, 0, DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE)]
+    #[case(2, 256, 2, 256)]
+    #[case(0, 256, DEFAULT_DISK_QUEUES, 256)]
+    #[case(2, 0, 2, DEFAULT_DISK_QUEUE_SIZE)]
+    fn test_disk_queue_settings(
+        #[case] num_queues: usize,
+        #[case] queue_size: u32,
+        #[case] expected_queues: usize,
+        #[case] expected_size: u16,
+    ) {
+        let disk = DiskConfig::try_from(BlockConfigModern {
+            num_queues,
+            queue_size,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(disk.num_queues, expected_queues);
+        assert_eq!(disk.queue_size, expected_size);
+    }
 
     #[test]
-    fn test_networkconfig_to_netconfig() {
+    fn test_disk_queue_size_overflow() {
+        assert!(DiskConfig::try_from(BlockConfigModern {
+            queue_size: u16::MAX as u32 + 1,
+            ..Default::default()
+        })
+        .is_err());
+    }
+
+    #[rstest]
+    #[case("", true)]
+    #[case("extension-012345678", true)]
+    #[case("extension-0123456789", true)]
+    #[case("extension-01234567890", false)]
+    fn test_disk_serial_length(#[case] serial: &str, #[case] is_valid: bool) {
+        let result = DiskConfig::try_from(BlockConfigModern {
+            serial_override: serial.into(),
+            ..Default::default()
+        });
+        assert_eq!(result.is_ok(), is_valid);
+    }
+
+    #[rstest]
+    #[case(1)]
+    #[case(2)]
+    #[case(4)]
+    fn test_networkconfig_to_netconfig(#[case] queue_pairs: usize) {
         let mut cfg = NetworkConfig {
             host_dev_name: String::from("tap0"),
             virt_iface_name: String::from("eth0"),
             queue_size: 256,
-            queue_num: 2,
+            queue_num: queue_pairs,
             guest_mac: None,
             index: 1,
             allow_duplicate_mac: false,
@@ -649,7 +717,7 @@ mod tests {
         let expected = NetConfig {
             tap: Some(cfg.host_dev_name.clone()),
             id: Some(cfg.virt_iface_name.clone()),
-            num_queues: cfg.queue_num,
+            num_queues: cfg.queue_num * 2,
             queue_size: cfg.queue_size as u16,
             mac: MacAddr { bytes: v },
             ..Default::default()
@@ -658,5 +726,28 @@ mod tests {
         let net = NetConfig::try_from(cfg);
         assert!(net.is_ok());
         assert_eq!(net.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn test_network_queue_validation() {
+        let mut clh = CloudHypervisorInner::default();
+        clh.config.cpu_info.default_vcpus = 4.0;
+        for state in [VmmState::NotReady, VmmState::VmRunning] {
+            clh.state = state;
+            for queue_num in [0, 5] {
+                let device = NetworkDevice {
+                    config: NetworkConfig {
+                        queue_num,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let error = clh
+                    .add_device(DeviceType::Network(device))
+                    .await
+                    .unwrap_err();
+                assert!(error.to_string().contains("must be normalized"));
+            }
+        }
     }
 }

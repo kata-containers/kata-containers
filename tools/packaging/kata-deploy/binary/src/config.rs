@@ -220,6 +220,9 @@ pub struct Config {
     /// Enable dm-verity integrity for EROFS lower layers.
     /// Independent of rw-layer backing; works with both disk and memory modes.
     pub erofs_dmverity: bool,
+    /// Shims whose VMM runs unprivileged. Per shim, so a node only grants the
+    /// devices the shims that asked for it need.
+    pub rootless_shims_for_arch: Vec<String>,
     /// Startup taints to remove from the node once Kata is installed and the
     /// node has been labeled `katacontainers.io/kata-runtime=true`. Each entry
     /// is either a bare taint key (matches any effect) or `key:effect` (matches
@@ -325,13 +328,9 @@ impl Config {
             None => DEFAULT_KATA_INSTALL_DIR.to_string(),
         };
 
-        let multi_install_suffix = env::var("MULTI_INSTALL_SUFFIX").ok().and_then(|s| {
-            if s.trim().is_empty() {
-                None
-            } else {
-                Some(s)
-            }
-        });
+        let multi_install_suffix = env::var("MULTI_INSTALL_SUFFIX")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
         let dest_dir = if let Some(ref suffix) = multi_install_suffix {
             format!("{dest_dir}-{suffix}")
         } else {
@@ -398,7 +397,7 @@ impl Config {
         let custom_runtimes_from_configmap =
             env::var("CUSTOM_RUNTIMES_ENABLED").unwrap_or_else(|_| "false".to_string()) == "true";
         let mut custom_runtimes = if custom_runtimes_from_configmap {
-            parse_custom_runtimes()?
+            parse_custom_runtimes(&arch)?
         } else {
             Vec::new()
         };
@@ -445,6 +444,13 @@ impl Config {
             .unwrap_or_default()
             .trim()
             .eq_ignore_ascii_case("dmverity");
+
+        let rootless_shims_for_arch = get_arch_var("ROOTLESS", "", &arch)
+            .split(',')
+            .map(str::trim)
+            .filter(|shim| !shim.is_empty())
+            .map(str::to_string)
+            .collect();
 
         // Startup taints to remove after install+label. Comma- or whitespace-separated
         // list of `key` or `key:effect` entries. Empty/unset means "remove nothing".
@@ -518,6 +524,7 @@ impl Config {
             devkit_enabled,
             erofs_snapshotter_mode,
             erofs_dmverity,
+            rootless_shims_for_arch,
             startup_taints,
             container_runtime_version,
             k8s_distribution,
@@ -662,25 +669,6 @@ impl Config {
             _ => {}
         }
 
-        // Validate NVRC_ENABLE_DCGM
-        // Format: "shim1;shim2", naming the shims whose guests run DCGM.
-        //
-        // Only the NVIDIA GPU images carry DCGM and an NVRC to start it, so
-        // nvrc.dcgm=on anywhere else is a setting that would silently do
-        // nothing. Membership in shims_for_arch is deliberately not required:
-        // the chart builds this list from every enabled shim, and the same
-        // value reaches nodes of every architecture, so a GPU shim missing here
-        // means "not on this node" rather than a mistake.
-        for shim in &self.nvrc_enable_dcgm {
-            if !shim.contains("nvidia-gpu") {
-                return Err(anyhow::anyhow!(
-                    "NVRC_ENABLE_DCGM references '{}', which is not an NVIDIA GPU shim. \
-                     DCGM only runs in the NVIDIA GPU guest images.",
-                    shim
-                ));
-            }
-        }
-
         // Validate SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH
         // Format: "shim1:snapshotter1,shim2:snapshotter2"
         match self.snapshotter_handler_mapping_for_arch.as_ref() {
@@ -749,6 +737,19 @@ impl Config {
             }
         }
 
+        // Validate ROOTLESS
+        // This is a list of shim names
+        for shim in &self.rootless_shims_for_arch {
+            if !self.shims_for_arch.contains(shim) {
+                return Err(anyhow::anyhow!(
+                    "ROOTLESS for current architecture references unknown shim '{}'. \
+                     Valid shims: [{}]",
+                    shim,
+                    self.shims_for_arch.join(", ")
+                ));
+            }
+        }
+
         // Validate EROFS_SNAPSHOTTER_MODE.
         if let Some(mode) = self.erofs_snapshotter_mode.as_ref() {
             match mode.as_str() {
@@ -762,6 +763,23 @@ impl Config {
             }
         }
 
+        Ok(())
+    }
+
+    /// Installation-only: a rejected DCGM setting must not prevent cleanup.
+    pub fn validate_nvrc_enable_dcgm(&self) -> Result<()> {
+        // Only the NVIDIA GPU images carry DCGM and an NVRC to start it.
+        // Do not require membership in shims_for_arch: the chart lists every
+        // enabled shim, including ones for other architectures.
+        for shim in &self.nvrc_enable_dcgm {
+            if !shim.contains("nvidia-gpu") {
+                return Err(anyhow::anyhow!(
+                    "NVRC_ENABLE_DCGM references '{}', which is not an NVIDIA GPU shim. \
+                     DCGM only runs in the NVIDIA GPU guest images.",
+                    shim
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -823,6 +841,7 @@ impl Config {
             self.erofs_snapshotter_mode
         );
         info!("* EROFS_DMVERITY: {}", self.erofs_dmverity);
+        info!("* ROOTLESS: {}", self.rootless_shims_for_arch.join(","));
         info!(
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
@@ -1024,9 +1043,9 @@ fn get_arch() -> Result<String> {
 
 /// Parse custom runtimes from the mounted ConfigMap at /custom-configs/
 /// Reads the custom-runtimes.list file which contains entries in the format:
-/// handler:baseConfig:containerd_snapshotter:crio_pulltype
+/// handler:baseConfig:containerd_snapshotter:crio_pulltype:supported_arches
 /// Optionally reads drop-in files named dropin-{handler}.toml
-fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
+fn parse_custom_runtimes(arch: &str) -> Result<Vec<CustomRuntime>> {
     let custom_configs_dir = "/custom-configs";
     let list_file = format!("{}/custom-runtimes.list", custom_configs_dir);
 
@@ -1049,7 +1068,7 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
             continue;
         }
 
-        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype:supported_arches
         let parts: Vec<&str> = line.split(':').collect();
         let handler = parts.first().map(|s| s.trim()).unwrap_or("");
         if handler.is_empty() {
@@ -1064,6 +1083,17 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
             );
         }
 
+        let supported_arches = parts.get(4).map(|s| s.trim()).unwrap_or("");
+        if !custom_runtime_supports_arch(supported_arches, arch) {
+            log::info!(
+                "Skipping custom runtime {}: base config {} supports [{}], not {}",
+                handler,
+                base_config,
+                supported_arches,
+                helm_arch(arch)
+            );
+            continue;
+        }
         let containerd_snapshotter = parts
             .get(2)
             .map(|s| s.trim())
@@ -1110,6 +1140,24 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
         list_file
     );
     Ok(custom_runtimes)
+}
+
+/// Translate the Rust architecture spelling to the names used by Helm values.
+fn helm_arch(arch: &str) -> &str {
+    match arch {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        _ => arch,
+    }
+}
+
+/// An empty list preserves compatibility for custom bases that have no matching
+/// shims.<baseConfig> block in the chart.
+fn custom_runtime_supports_arch(supported_arches: &str, arch: &str) -> bool {
+    supported_arches.trim().is_empty()
+        || supported_arches
+            .split(',')
+            .any(|candidate| candidate.trim() == helm_arch(arch))
 }
 
 /// Look up `shim`'s value in a comma-separated "shim1:value1,shim2:value2"
@@ -1233,7 +1281,7 @@ fn synthesize_variant_runtimes(
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
         "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
-        "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu",
+        "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu-runtime-rs",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu qemu-runtime-rs",
         _ => "qemu", // Fallback to qemu for unknown architectures
@@ -1348,6 +1396,11 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64",
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
+            "ROOTLESS",
+            "ROOTLESS_X86_64",
+            "ROOTLESS_AARCH64",
+            "ROOTLESS_S390X",
+            "ROOTLESS_PPC64LE",
             "CONTAINERD_CONFIG_FILE_NAME",
             "CONTAINERD_EXTRA_POD_ANNOTATIONS",
             "CONTAINERD_SHIM_EXTRA_POD_ANNOTATIONS",
@@ -1432,6 +1485,26 @@ mod tests {
     #[case("riscv64", "qemu")]
     fn test_get_default_shim_for_arch(#[case] arch: &str, #[case] expected: &str) {
         assert_eq!(get_default_shim_for_arch(arch), expected);
+    }
+
+    #[rstest]
+    #[case("x86_64")]
+    #[case("aarch64")]
+    #[case("s390x")]
+    #[case("ppc64le")]
+    fn test_default_shims_have_components(#[case] arch: &str) {
+        let manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../shim-components.json")).unwrap();
+
+        for shim in get_default_shims_for_arch(arch).split_whitespace() {
+            let components = manifest["shims"][shim][arch]
+                .as_array()
+                .unwrap_or_else(|| panic!("Default shim {shim} has no components for {arch}"));
+            assert!(
+                !components.is_empty(),
+                "Default shim {shim} has no components for {arch}"
+            );
+        }
     }
 
     #[serial]
@@ -1655,6 +1728,15 @@ mod tests {
         assert!(lookup_mapping_value("", "qemu").is_none());
     }
 
+    #[test]
+    fn test_custom_runtime_supported_arches() {
+        assert!(custom_runtime_supports_arch("amd64,arm64", "x86_64"));
+        assert!(custom_runtime_supports_arch("amd64,arm64", "aarch64"));
+        assert!(!custom_runtime_supports_arch("amd64,arm64", "s390x"));
+        assert!(custom_runtime_supports_arch("", "s390x"));
+        assert!(custom_runtime_supports_arch("ppc64le", "ppc64le"));
+    }
+
     #[serial]
     #[test]
     fn test_multi_install_suffix_with_value() {
@@ -1807,8 +1889,24 @@ mod tests {
             config.nvrc_enable_dcgm,
             vec!["qemu-nvidia-gpu", "qemu-nvidia-gpu-snp-runtime-rs"]
         );
+        config.validate_nvrc_enable_dcgm().unwrap();
 
         cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_load_config_for_cleanup_with_invalid_dcgm() {
+        setup_minimal_env();
+        std::env::set_var("NVRC_ENABLE_DCGM", "qemu-nvidia-cpu-runtime-rs");
+
+        let result = Config::from_env();
+        cleanup_env_vars();
+
+        assert_eq!(
+            result.unwrap().nvrc_enable_dcgm,
+            vec!["qemu-nvidia-cpu-runtime-rs"]
+        );
     }
 
     #[serial]
@@ -1818,7 +1916,7 @@ mod tests {
         set_arch_var("SHIMS", "qemu qemu-nvidia-gpu");
         std::env::set_var("NVRC_ENABLE_DCGM", "qemu");
 
-        let result = Config::from_env();
+        let result = Config::from_env().unwrap().validate_nvrc_enable_dcgm();
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -1858,6 +1956,46 @@ mod tests {
         set_arch_var("EXPERIMENTAL_FORCE_GUEST_PULL", "clh,dragonball");
 
         assert_config_error_contains("EXPERIMENTAL_FORCE_GUEST_PULL");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_validate_rootless_invalid_shim() {
+        setup_minimal_env();
+        set_arch_var("SHIMS", "qemu-runtime-rs fc");
+        set_arch_var("DEFAULT_SHIM", "qemu-runtime-rs");
+        set_arch_var("ROOTLESS", "clh-runtime-rs");
+
+        assert_config_error_contains("ROOTLESS");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_rootless_is_read_per_shim() {
+        setup_minimal_env();
+        set_arch_var("SHIMS", "qemu-runtime-rs clh-runtime-rs");
+        set_arch_var("DEFAULT_SHIM", "qemu-runtime-rs");
+        set_arch_var("ROOTLESS", "qemu-runtime-rs,clh-runtime-rs");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.rootless_shims_for_arch,
+            vec!["qemu-runtime-rs", "clh-runtime-rs"]
+        );
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_rootless_defaults_to_no_shim() {
+        setup_minimal_env();
+        set_arch_var("SHIMS", "qemu-runtime-rs");
+        set_arch_var("DEFAULT_SHIM", "qemu-runtime-rs");
+
+        let config = Config::from_env().unwrap();
+        assert!(config.rootless_shims_for_arch.is_empty());
         cleanup_env_vars();
     }
 

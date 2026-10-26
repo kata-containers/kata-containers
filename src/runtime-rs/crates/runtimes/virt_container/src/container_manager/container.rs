@@ -206,7 +206,7 @@ impl Container {
 
         let container_devices = self
             .resource_manager
-            .handler_devices(&config.container_id, linux)
+            .handler_devices(&config.container_id, linux, &mut inner.devices)
             .await?;
         let devices_agent = annotate_container_devices(&mut spec, container_devices)
             .context("annotate container devices failed")?;
@@ -472,6 +472,7 @@ impl Container {
 
     pub async fn kill_process(
         &self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
         container_process: &ContainerProcess,
         signal: u32,
         all: bool,
@@ -503,7 +504,7 @@ impl Container {
         }
 
         match inner.signal_process(container_process, signal, all).await {
-            Ok(()) => Ok(()),
+            Ok(()) => {}
             Err(e) if is_term_signal && is_no_such_process_error(&e) => {
                 info!(
                     self.logger,
@@ -512,10 +513,25 @@ impl Container {
                     "process" => ?container_process,
                     "signal" => signal
                 );
-                Ok(())
             }
-            Err(e) => Err(e),
+            Err(e) => return Err(e),
         }
+
+        // Without a waiter, killing a Created task leaves Wait and force-delete blocked.
+        // Start has not set up IO, so this waiter must not copy it.
+        if is_term_signal
+            && container_process.exec_id.is_empty()
+            && process_status == ProcessStatus::Created
+            && inner.init_process.exit_watcher_tx.is_some()
+        {
+            inner
+                .init_process
+                .passfd_io_wait(containers, self.agent.clone())
+                .await
+                .context("wait for killed created container")?;
+        }
+
+        Ok(())
     }
 
     pub async fn exec_process(
@@ -562,13 +578,14 @@ impl Container {
 
         let mut inner = self.inner.write().await;
         let device_manager = self.resource_manager.get_device_manager().await;
-        inner
+        let stopped = inner
             .stop_process(container_process, true, &device_manager)
             .await
-            .context("stop process")?;
+            .context("stop process");
 
-        // update vcpus, mems and host cgroups
-        if container_process.process_type == ProcessType::Container {
+        if container_process.process_type == ProcessType::Container
+            && (stopped.is_ok() || inner.init_process.get_status().await == ProcessStatus::Stopped)
+        {
             self.resource_manager
                 .update_linux_resource(
                     &self.config.container_id,
@@ -578,7 +595,26 @@ impl Container {
                 .await?;
         }
 
-        Ok(())
+        stopped
+    }
+
+    pub async fn finish_cleanup(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        if inner.init_process.get_status().await != ProcessStatus::Stopped
+            || !inner.has_pending_cleanup()
+        {
+            return Ok(());
+        }
+
+        let device_manager = self.resource_manager.get_device_manager().await;
+        inner
+            .cleanup_container(
+                self.container_id.container_id.as_str(),
+                true,
+                &device_manager,
+            )
+            .await
+            .context("clean up container")
     }
 
     async fn copy_termination_log(&self) {

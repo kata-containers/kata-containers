@@ -88,7 +88,7 @@ struct StatefulSetUpdateStrategy {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct RollingUpdateStatefulSetStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
-    maxUnavailable: Option<String>,
+    maxUnavailable: Option<yaml::IntOrString>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     partition: Option<i32>,

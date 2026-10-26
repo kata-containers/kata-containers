@@ -16,13 +16,15 @@ the installation has been successful.
 This installation guide has only been verified under a Minikube Linux installation, using the
 [`kvm2`](https://minikube.sigs.k8s.io/docs/drivers/kvm2/) driver.
 
-> **Notes:**
-> - This installation guide may not work for macOS installations of Minikube, due to the lack of
-nested virtualization support on that platform.
-> - This installation guide has not been tested on a Windows installation.
-> - Kata under Minikube does not currently support Kata Firecracker (`kata-fc`).
->   Although the `kata-fc` binary will be installed as part of these instructions,
->   via `kata-deploy`, pods cannot be launched with `kata-fc`, and will fail to start.
+!!! note "Platform support"
+    - This installation guide may not work for macOS installations of Minikube, due to the lack of
+      nested virtualization support on that platform.
+    - This installation guide has not been tested on a Windows installation.
+    - Kata under Minikube does not currently support Kata Firecracker (`kata-fc`).
+      These instructions do not install it — `kata-deploy` only enables the
+      Firecracker shim when you ask for it with
+      [`try-kata-fc.values.yaml`](../helm-configuration.md#try-kata-fcvaluesyaml) —
+      and pods launched with `kata-fc` would fail to start here in any case.
 
 Before commencing installation, it is strongly recommended you read the
 [Minikube installation guide](https://kubernetes.io/docs/tasks/tools/install-minikube/).

@@ -71,7 +71,7 @@ impl MemResource {
         let mut mem_sandbox = 0;
         let resources = self.container_mem_resources.read().await;
 
-        for (_, r) in resources.iter() {
+        for r in resources.values() {
             let hugepage_limits = r.hugepage_limits().clone().unwrap_or_default();
             for l in hugepage_limits {
                 mem_sandbox += l.limit();

@@ -15,6 +15,12 @@
       "patch": []
     },
     {
+      "description": "reject a second sandbox because it would violate the policy state",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": []
+    },
+    {
       "description": "pidns",
       "base": "create-sandbox",
       "allowed": false,

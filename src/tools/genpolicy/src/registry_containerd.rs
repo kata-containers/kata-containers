@@ -63,7 +63,7 @@ impl Container {
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        debug!("config_layer: {:?}", &config_layer);
+        debug!("config_layer: {:?}", config_layer);
 
         let mut passwd = String::new();
         let mut group = String::new();
@@ -267,7 +267,7 @@ pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {
                 debug!("build_auth: Docker credentials not found - using anonymous access.");
             } else {
                 warn!("build_auth: Docker credentials not found - using anonymous access. stderr = {}, stdout = {}",
-                    &stderr, &stdout);
+                    stderr, stdout);
             }
         }
         Err(e) => panic!("Error handling docker configuration file: {e}"),

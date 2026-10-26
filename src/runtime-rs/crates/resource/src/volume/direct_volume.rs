@@ -55,7 +55,7 @@ pub(crate) async fn handle_direct_volume(
             if !e.is::<std::io::ErrorKind>() {
                 return Err(anyhow!(format!(
                     "unexpected error occurs when parse mount info for {:?}, with error {:?}",
-                    &m.source(),
+                    m.source(),
                     e.to_string()
                 )));
             }
@@ -66,7 +66,7 @@ pub(crate) async fn handle_direct_volume(
             if *error_kind != std::io::ErrorKind::NotFound {
                 return Err(anyhow!(format!(
                     "failed to parse volume mount info for {:?}, with error {:?}",
-                    &m.source(),
+                    m.source(),
                     e.to_string()
                 )));
             }
@@ -80,7 +80,7 @@ pub(crate) async fn handle_direct_volume(
         DirectVolumeType::RawBlock => Arc::new(
             rawblock_volume::RawblockVolume::new(d, m, &mount_info, read_only, sid)
                 .await
-                .with_context(|| format!("new sid {:?} rawblock volume {:?}", &sid, m))?,
+                .with_context(|| format!("new sid {:?} rawblock volume {:?}", sid, m))?,
         ),
         DirectVolumeType::Spdk => Arc::new(
             spdk_volume::SPDKVolume::new(d, m, &mount_info, read_only, sid)

@@ -26,6 +26,13 @@ For a simplified way to build just the upstream compatible host kernel, use the 
 
 **Tip**: It is easiest to first have Kata Containers running on your system and then modify it to run containers in SNP-VMs. Follow the [Developer guide](../Developer-Guide.md#warning) and then follow the below steps. Nonetheless, you can just follow this guide from the start.
 
+!!! note "Running the VMM unprivileged"
+    `/dev/sev` comes up as `root:root 0600`, so an unprivileged QEMU cannot open
+    it and an SNP sandbox with `rootless = true` fails to start. Granting group
+    access to it is host configuration, not something the shim does on the fly;
+    see [How to run a rootless VMM](how-to-run-rootless-vmm.md) for the contract
+    and for the `kata-deploy` setting that provisions it.
+
 ## How to build
 
 Follow all of the below steps to install Kata Containers with SNP-support from scratch. These steps mostly follow the developer guide with modifications to support SNP

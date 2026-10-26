@@ -174,7 +174,7 @@ async fn get_vfio_pci_device_name(
     let matcher = VfioMatcher::new(grp);
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
+    Ok(format!("{}/{}", SYSTEM_DEV_PATH, uev.devname))
 }
 
 #[derive(Debug)]
@@ -335,7 +335,7 @@ pub async fn wait_for_pci_device(
 ) -> Result<pci::Address> {
     info!(logger, "wait_for_pci_device at {}", pcipath);
     let root_bus_rel = create_pci_root_bus_path(root_complex); // "/devices/pci0000:00"
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, &root_bus_rel); // "/sys/devices/pci0000:00"
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, root_bus_rel); // "/sys/devices/pci0000:00"
     info!(
         logger,
         "wait_for_pci_device: root_bus_sysfs {} pcipath {}", &root_bus_sysfs, pcipath
@@ -368,7 +368,7 @@ pub async fn wait_for_pci_device(
         .devpath
         .rsplit('/')
         .next()
-        .ok_or_else(|| anyhow!("Bad device path {:?} in uevent", &uev.devpath))?;
+        .ok_or_else(|| anyhow!("Bad device path {:?} in uevent", uev.devpath))?;
 
     pci::Address::from_str(addr)
 }
@@ -398,7 +398,7 @@ where
     match fs::read_link(&grouppath) {
         // Device has no group
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(anyhow!("Error reading link {:?}: {}", &grouppath, e)),
+        Err(e) => Err(anyhow!("Error reading link {:?}: {}", grouppath, e)),
         Ok(group) => {
             if let Some(group) = group.file_name() {
                 if let Some(group) = group.to_str() {

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dummy
+spec:
+  runtimeClassName: kata-cc-isolation
+  containers:
+  - name: dummy
+    image: registry.k8s.io/pause:3.6
+    securityContext:
+      runAsUser: 65535
+      runAsGroup: 0

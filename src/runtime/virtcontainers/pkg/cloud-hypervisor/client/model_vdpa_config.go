@@ -16,11 +16,12 @@ import (
 
 // VdpaConfig struct for VdpaConfig
 type VdpaConfig struct {
-	Path       string  `json:"path"`
-	NumQueues  int32   `json:"num_queues"`
-	Iommu      *bool   `json:"iommu,omitempty"`
-	PciSegment *int32  `json:"pci_segment,omitempty"`
-	Id         *string `json:"id,omitempty"`
+	Path        string     `json:"path"`
+	NumQueues   int32      `json:"num_queues"`
+	Iommu       *IommuType `json:"iommu,omitempty"`
+	PciSegment  *int32     `json:"pci_segment,omitempty"`
+	PciDeviceId *int32     `json:"pci_device_id,omitempty"`
+	Id          *string    `json:"id,omitempty"`
 }
 
 // NewVdpaConfig instantiates a new VdpaConfig object
@@ -31,7 +32,7 @@ func NewVdpaConfig(path string, numQueues int32) *VdpaConfig {
 	this := VdpaConfig{}
 	this.Path = path
 	this.NumQueues = numQueues
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -43,7 +44,7 @@ func NewVdpaConfigWithDefaults() *VdpaConfig {
 	this := VdpaConfig{}
 	var numQueues int32 = 1
 	this.NumQueues = numQueues
-	var iommu bool = false
+	var iommu IommuType = IOMMUTYPE_OFF
 	this.Iommu = &iommu
 	return &this
 }
@@ -97,9 +98,9 @@ func (o *VdpaConfig) SetNumQueues(v int32) {
 }
 
 // GetIommu returns the Iommu field value if set, zero value otherwise.
-func (o *VdpaConfig) GetIommu() bool {
+func (o *VdpaConfig) GetIommu() IommuType {
 	if o == nil || o.Iommu == nil {
-		var ret bool
+		var ret IommuType
 		return ret
 	}
 	return *o.Iommu
@@ -107,7 +108,7 @@ func (o *VdpaConfig) GetIommu() bool {
 
 // GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *VdpaConfig) GetIommuOk() (*bool, bool) {
+func (o *VdpaConfig) GetIommuOk() (*IommuType, bool) {
 	if o == nil || o.Iommu == nil {
 		return nil, false
 	}
@@ -123,8 +124,8 @@ func (o *VdpaConfig) HasIommu() bool {
 	return false
 }
 
-// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
-func (o *VdpaConfig) SetIommu(v bool) {
+// SetIommu gets a reference to the given IommuType and assigns it to the Iommu field.
+func (o *VdpaConfig) SetIommu(v IommuType) {
 	o.Iommu = &v
 }
 
@@ -158,6 +159,38 @@ func (o *VdpaConfig) HasPciSegment() bool {
 // SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
 func (o *VdpaConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *VdpaConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VdpaConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *VdpaConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *VdpaConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
 }
 
 // GetId returns the Id field value if set, zero value otherwise.
@@ -205,6 +238,9 @@ func (o VdpaConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

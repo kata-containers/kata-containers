@@ -65,7 +65,7 @@ impl Uevent {
     #[instrument]
     async fn process_add(&self, logger: &Logger, sandbox: &Arc<Mutex<Sandbox>>) {
         // Special case for memory hot-adds first
-        let online_path = format!("{}/{}/online", SYSFS_DIR, &self.devpath);
+        let online_path = format!("{}/{}/online", SYSFS_DIR, self.devpath);
         if online_path.starts_with(SYSFS_MEMORY_ONLINE_PATH) {
             let _ = online_device(online_path.as_ref()).map_err(|e| {
                 error!(
@@ -116,7 +116,7 @@ pub async fn wait_for_uevent(
     sandbox: &Arc<Mutex<Sandbox>>,
     matcher: impl UeventMatcher,
 ) -> Result<Uevent> {
-    let logprefix = format!("Waiting for {:?}", &matcher);
+    let logprefix = format!("Waiting for {:?}", matcher);
 
     info!(sl(), "{}", logprefix);
     let mut sb = sandbox.lock().await;
@@ -150,7 +150,7 @@ pub async fn wait_for_uevent(
             return Err(anyhow!(
                 "Timeout after {:?} waiting for uevent {:?}",
                 hotplug_timeout,
-                &matcher
+                matcher
             ));
         }
     };

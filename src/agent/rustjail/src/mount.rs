@@ -267,7 +267,7 @@ pub fn init_rootfs(
                     if !meta.is_dir() {
                         return Err(anyhow!(
                             "Mount point {} must be ordinary directory: got {:?}",
-                            &mount_dest,
+                            mount_dest,
                             meta.file_type()
                         ));
                     }
@@ -348,7 +348,7 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
             Ok(_) if unsafe { stats.assume_init().f_type } == PROC_SUPER_MAGIC => Ok(()),
             Ok(_) | Err(_) => Err(anyhow!(format!(
                 "{} cannot be mounted to {} because it is not of type proc",
-                &mount_source, &mount_dest
+                mount_source, mount_dest
             ))),
         };
     }
@@ -356,7 +356,7 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
     if mount_dest.starts_with(PROC_PATH) {
         return Err(anyhow!(format!(
             "{} cannot be mounted because it is inside /proc",
-            &mount_dest
+            mount_dest
         )));
     }
 
@@ -448,12 +448,12 @@ fn mount_cgroups(
             &mount[..]
         };
 
-        let destination = format!("{}/{}", &mount_dest, base);
+        let destination = format!("{}/{}", mount_dest, base);
 
         if srcs.contains(source) {
             // already mounted, xxx,yyy style cgroup
             if key != base {
-                let src = format!("{}/{}", &mount_dest, key);
+                let src = format!("{}/{}", mount_dest, key);
                 unix::fs::symlink(destination.as_str(), &src[1..])?;
             }
 
@@ -476,7 +476,7 @@ fn mount_cgroups(
         mount_from(cfd_log, &bm, rootfs, mount_flags, "", "")?;
 
         if key != base {
-            let src = format!("{}/{}", &mount_dest, key);
+            let src = format!("{}/{}", mount_dest, key);
             unix::fs::symlink(destination.as_str(), &src[1..]).inspect_err(|e| {
                 log_child!(
                     cfd_log,
@@ -492,7 +492,7 @@ fn mount_cgroups(
     unistd::chdir(&olddir)?;
 
     if flags.contains(MsFlags::MS_RDONLY) {
-        let dest = format!("{}{}", rootfs, &mount_dest);
+        let dest = format!("{}{}", rootfs, mount_dest);
         mount(
             Some(dest.as_str()),
             dest.as_str(),
@@ -825,11 +825,9 @@ fn mount_from(
                 .as_ref()
                 .unwrap()
                 .file_name()
-                .ok_or_else(|| anyhow!("invalid device source path: {}", &mount_source))?
+                .ok_or_else(|| anyhow!("invalid device source path: {}", mount_source))?
                 .to_str()
-                .ok_or_else(|| {
-                    anyhow!("failed to convert device source path: {}", &mount_source)
-                })?;
+                .ok_or_else(|| anyhow!("failed to convert device source path: {}", mount_source))?;
 
             match device {
                 // SELinux does not support labeling of /proc or /sys
@@ -927,7 +925,7 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
         let path = dev_rel_path(dev_path).ok_or_else(|| {
             let msg = format!(
                 "{} is not a valid device path",
-                &dev.path().display().to_string().as_str()
+                dev.path().display().to_string().as_str()
             );
             anyhow!(msg)
         })?;

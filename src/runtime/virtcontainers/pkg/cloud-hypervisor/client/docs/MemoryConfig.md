@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **Hugepages** | Pointer to **bool** |  | [optional] [default to false]
 **HugepageSize** | Pointer to **int64** |  | [optional] 
 **Prefault** | Pointer to **bool** |  | [optional] [default to false]
+**Reserve** | Pointer to **bool** |  | [optional] [default to false]
 **Thp** | Pointer to **bool** |  | [optional] [default to true]
 **Zones** | Pointer to [**[]MemoryZoneConfig**](MemoryZoneConfig.md) |  | [optional] 
 
@@ -254,6 +255,31 @@ SetPrefault sets Prefault field to given value.
 `func (o *MemoryConfig) HasPrefault() bool`
 
 HasPrefault returns a boolean if a field has been set.
+
+### GetReserve
+
+`func (o *MemoryConfig) GetReserve() bool`
+
+GetReserve returns the Reserve field if non-nil, zero value otherwise.
+
+### GetReserveOk
+
+`func (o *MemoryConfig) GetReserveOk() (*bool, bool)`
+
+GetReserveOk returns a tuple with the Reserve field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetReserve
+
+`func (o *MemoryConfig) SetReserve(v bool)`
+
+SetReserve sets Reserve field to given value.
+
+### HasReserve
+
+`func (o *MemoryConfig) HasReserve() bool`
+
+HasReserve returns a boolean if a field has been set.
 
 ### GetThp
 
