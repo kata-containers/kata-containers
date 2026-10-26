@@ -105,6 +105,12 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1;
         avail_features |= 1u64 << VIRTIO_BLK_F_SIZE_MAX;
         avail_features |= 1u64 << VIRTIO_BLK_F_SEG_MAX;
+        // A volatile write cache the guest flushes, as libvirt's cache=none
+        // gives a disk: with the backend opened O_DIRECT, a write is not
+        // made durable on its own, and a guest flush is a host fdatasync
+        // (LocalFile::flush). Without it the guest takes the disk for
+        // write-through and never flushes (Nova Kata).
+        avail_features |= 1u64 << VIRTIO_BLK_F_FLUSH;
 
         if f_access_platform {
             avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
@@ -1254,6 +1260,11 @@ mod tests {
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2),
             dev.device_info.get_avail_features(2)
+        );
+        // The guest is offered a write cache to flush (Nova Kata).
+        assert_ne!(
+            dev.device_info.get_avail_features(0) & (1u32 << VIRTIO_BLK_F_FLUSH),
+            0
         );
         let mut config: [u8; 1] = [0];
         VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
