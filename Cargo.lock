@@ -3041,6 +3041,7 @@ dependencies = [
  "rust-ini",
  "safe-path",
  "seccompiler",
+ "semver",
  "serde",
  "serde_json",
  "serial_test 2.0.0",
