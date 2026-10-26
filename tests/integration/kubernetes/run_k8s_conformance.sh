@@ -57,9 +57,40 @@ excluded_namespaces=(kube-system kube-public kube-node-lease kube-flannel "${web
 # These are the only two [Conformance] tests in Kubernetes v1.37.1 with that
 # requirement. Other e2e tests that want two nodes are outside this suite and
 # skip themselves.
+#
+# Conformance tests that assume pods carry no RuntimeClass overhead. The Kata
+# RuntimeClasses declare a memory overhead for the VM, which the API server adds
+# to the pod requests and quota charges, so pods sized to just fit a 500Mi
+# quota are rejected at admission, e.g. 252Mi + 320Mi on qemu-runtime-rs:
+#   - "should create a ResourceQuota and capture the life of a pod"
+#   - "should verify ResourceQuota with terminating scopes"
+#
+# "resize with equivalents" creates a burstable pod with a CPU limit, no memory
+# limit and no pod-level resources, then requires spec.resources to stay nil.
+# Kata sizes the sandbox from limits only, so that pod would get a VM with
+# nothing but the runtime's memory overhead, which cannot boot. The webhook
+# therefore sets a pod-level memory limit, and the API server then defaults the
+# rest of spec.resources (the memory request becomes that limit, and the CPU
+# comes from the containers). The test compares that object to nil and fails
+# before it resizes anything.
+#
+# Five Downward API env var tests give their container a 64Mi memory limit.
+# Kata sizes the VM as that limit plus overhead_memory (32MiB), and in a 96M
+# guest the kernel, the agent and the container setup do not reliably fit:
+# about one pod in twenty fails at create with "Broken pipe" or "failed to
+# receive async message", because the OOM killer took the agent's child
+# process. The tests read the 64Mi limit back, so the webhook cannot raise it.
 declare -A kata_skips=(
 	["should have at least two untainted nodes"]="asserts the cluster has two schedulable nodes"
 	["should rollback without unnecessary restarts"]="DaemonSet rollback needs a second node to roll onto"
+	["should create a ResourceQuota and capture the life of a pod"]="RuntimeClass overhead exceeds the quota"
+	["should verify ResourceQuota with terminating scopes\\. "]="RuntimeClass overhead exceeds the quota"
+	["resize with equivalents \\[MinimumKubeletVersion:1.34\\] \\[Conformance\\]"]="pod-level memory limit makes spec.resources non-nil"
+	["Downward API should provide pod name, namespace and IP address as env vars"]="a 96M VM can OOM the agent"
+	["Downward API should provide host IP as an env var"]="a 96M VM can OOM the agent"
+	["Downward API should provide hostIPs as an env var"]="a 96M VM can OOM the agent"
+	["Downward API should provide container's limits.cpu/memory and requests.cpu/memory as env vars"]="a 96M VM can OOM the agent"
+	["Downward API should provide pod UID as env vars"]="a 96M VM can OOM the agent"
 )
 
 kata_skip_regex() {
