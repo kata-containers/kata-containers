@@ -15,4 +15,4 @@ jobs:
   build-checks:
     uses: ./.github/workflows/build-checks.yaml
     with:
-      instance: "ubuntu-24.04-ppc64le"
+      instance: "ubuntu-26.04-ppc64le"
