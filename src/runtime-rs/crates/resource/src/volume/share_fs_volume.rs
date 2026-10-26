@@ -12,7 +12,10 @@ use std::{
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -20,7 +23,7 @@ use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
-use inotify::{EventMask, Inotify, WatchMask};
+use inotify::{EventMask, Inotify, WatchDescriptor, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
 use rand::rng;
@@ -108,35 +111,177 @@ impl MonitorConfig {
     }
 }
 
-#[derive(Clone)]
+type PendingEvents = Arc<std::sync::Mutex<HashSet<PathBuf>>>;
+
+/// Watched directory and pending events of one FsWatcher.
+struct WatchRoute {
+    watcher_id: u64,
+    dir: PathBuf,
+    pending_events: PendingEvents,
+}
+
+/// All FsWatchers share a single inotify instance, as every instance counts
+/// against fs.inotify.max_user_instances (128 by default), which a sandbox
+/// with many watched volumes would otherwise exhaust.
+struct SharedInotify {
+    inotify: Inotify,
+    // The kernel returns the same descriptor when an inode is watched twice,
+    // so a descriptor can be routed to several watchers.
+    routes: HashMap<WatchDescriptor, Vec<WatchRoute>>,
+}
+
+static SHARED_INOTIFY: std::sync::Mutex<Option<SharedInotify>> = std::sync::Mutex::new(None);
+static NEXT_WATCHER_ID: AtomicU64 = AtomicU64::new(0);
+
+fn with_shared_inotify<R>(f: impl FnOnce(&mut SharedInotify) -> Result<R>) -> Result<R> {
+    let mut shared = SHARED_INOTIFY
+        .lock()
+        .map_err(|_| anyhow!("shared inotify lock poisoned"))?;
+    if shared.is_none() {
+        *shared = Some(SharedInotify {
+            inotify: Inotify::init().context("init inotify")?,
+            routes: HashMap::new(),
+        });
+    }
+    f(shared.as_mut().unwrap())
+}
+
+impl SharedInotify {
+    fn add_watch(
+        &mut self,
+        watcher_id: u64,
+        dir: &Path,
+        mask: WatchMask,
+        pending_events: &PendingEvents,
+    ) -> Result<()> {
+        let wd = self.inotify.watches().add(dir, mask)?;
+        self.routes.entry(wd).or_default().push(WatchRoute {
+            watcher_id,
+            dir: dir.to_path_buf(),
+            pending_events: pending_events.clone(),
+        });
+        Ok(())
+    }
+
+    fn remove_watcher(&mut self, watcher_id: u64) {
+        let mut unused = Vec::new();
+        for (wd, routes) in self.routes.iter_mut() {
+            routes.retain(|r| r.watcher_id != watcher_id);
+            if routes.is_empty() {
+                unused.push(wd.clone());
+            }
+        }
+        for wd in unused {
+            self.routes.remove(&wd);
+            // Fails if the kernel already dropped the watch, e.g. because the
+            // directory was deleted.
+            let _ = self.inotify.watches().remove(wd);
+        }
+    }
+
+    /// Read all queued events and dispatch them to the watchers they belong to.
+    fn dispatch_events(&mut self) {
+        let mut buffer = [0u8; 4096];
+        loop {
+            let events = match self.inotify.read_events(&mut buffer) {
+                Ok(events) => events,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return,
+                Err(e) => {
+                    error!(sl!(), "inotify error: {:?}", e);
+                    return;
+                }
+            };
+
+            let mut read_any = false;
+            for event in events {
+                read_any = true;
+                if !event.mask.intersects(
+                    EventMask::CREATE
+                        | EventMask::MODIFY
+                        | EventMask::DELETE
+                        | EventMask::MOVED_FROM
+                        | EventMask::MOVED_TO
+                        | EventMask::CLOSE_WRITE,
+                ) {
+                    continue;
+                }
+                let (Some(file_name), Some(routes)) = (event.name, self.routes.get(&event.wd))
+                else {
+                    continue;
+                };
+
+                let event_types: Vec<&str> = event
+                    .mask
+                    .iter()
+                    .map(|m| match m {
+                        EventMask::CREATE => "CREATE",
+                        EventMask::DELETE => "DELETE",
+                        EventMask::MODIFY => "MODIFY",
+                        EventMask::MOVED_FROM => "MOVED_FROM",
+                        EventMask::MOVED_TO => "MOVED_TO",
+                        EventMask::CLOSE_WRITE => "CLOSE_WRITE",
+                        _ => "OTHER",
+                    })
+                    .collect();
+
+                for route in routes {
+                    let full_path = route.dir.join(file_name);
+                    info!(
+                        sl!(),
+                        "handle events [{}] {:?} -> {:?}",
+                        event_types.join("|"),
+                        event.mask,
+                        full_path
+                    );
+                    if let Ok(mut pending) = route.pending_events.lock() {
+                        pending.insert(full_path);
+                    }
+                }
+            }
+            if !read_any {
+                return;
+            }
+        }
+    }
+}
+
+/// Removes the watcher's watches from the shared inotify instance on drop.
+struct WatcherRegistration(u64);
+
+impl Drop for WatcherRegistration {
+    fn drop(&mut self) {
+        let _ = with_shared_inotify(|shared| {
+            shared.remove_watcher(self.0);
+            Ok(())
+        });
+    }
+}
+
 struct FsWatcher {
     config: MonitorConfig,
-    inotify: Arc<Mutex<Inotify>>,
-    watch_dirs: Arc<Mutex<HashSet<PathBuf>>>,
-    pending_events: Arc<Mutex<HashSet<PathBuf>>>,
+    registration: WatcherRegistration,
+    pending_events: PendingEvents,
     need_sync: Arc<Mutex<bool>>,
 }
 
 impl FsWatcher {
     async fn new(source_path: &Path) -> Result<Self> {
-        let inotify = Inotify::init()?;
         let mon_cfg = MonitorConfig::new(source_path);
-        let mut watcher = Self {
+        let watcher = Self {
             config: mon_cfg,
-            inotify: Arc::new(Mutex::new(inotify)),
-            pending_events: Arc::new(Mutex::new(HashSet::new())),
-            watch_dirs: Arc::new(Mutex::new(HashSet::new())),
+            registration: WatcherRegistration(NEXT_WATCHER_ID.fetch_add(1, Ordering::Relaxed)),
+            pending_events: Arc::new(std::sync::Mutex::new(HashSet::new())),
             need_sync: Arc::new(Mutex::new(false)),
         };
 
-        watcher.add_watchers().await?;
+        watcher.add_watchers()?;
 
         Ok(watcher)
     }
 
     /// add watched directory recursively
-    async fn add_watchers(&mut self) -> Result<()> {
-        let mut watched_dirs = self.watch_dirs.lock().await;
+    fn add_watchers(&self) -> Result<()> {
+        let mut watched_dirs = HashSet::new();
         let config: &MonitorConfig = &self.config;
         let walker = WalkDir::new(&config.path)
             .follow_links(config.follow_symlinks)
@@ -155,11 +300,15 @@ impl FsWatcher {
             if entry.file_type().is_dir() {
                 let path = entry.path();
                 if watched_dirs.insert(path.to_path_buf()) {
-                    self.inotify
-                        .lock()
-                        .await
-                        .watches()
-                        .add(path, config.watch_events)?; // we don't use WatchMask::ALL_EVENTS
+                    // we don't use WatchMask::ALL_EVENTS
+                    with_shared_inotify(|shared| {
+                        shared.add_watch(
+                            self.registration.0,
+                            path,
+                            config.watch_events,
+                            &self.pending_events,
+                        )
+                    })?;
                 }
             }
         }
@@ -169,15 +318,13 @@ impl FsWatcher {
 
     /// start monitor
     pub async fn start_monitor(
-        &self,
+        self,
         agent: Arc<dyn Agent>,
         src: PathBuf,
         dst: PathBuf,
     ) -> JoinHandle<()> {
         let need_sync = self.need_sync.clone();
         let pending_events = self.pending_events.clone();
-        let inotify = self.inotify.clone();
-        let monitor_config = self.config.clone();
 
         // Perform a full sync before starting monitoring to ensure that files which exist before monitoring starts are also synced.
         let agent_sync = agent.clone();
@@ -185,7 +332,8 @@ impl FsWatcher {
         let dst_sync = dst.clone();
 
         tokio::spawn(async move {
-            let mut buffer = [0u8; 4096];
+            // Keep the watches registered until the task ends or is aborted.
+            let _watcher = self;
             let mut last_event_time = None;
 
             // Initial sync: ensure existing contents in the directory are synchronized
@@ -202,55 +350,15 @@ impl FsWatcher {
             }
 
             loop {
-                // use cloned inotify instance
-                match inotify.lock().await.read_events(&mut buffer) {
-                    Ok(events) => {
-                        for event in events {
-                            if !event.mask.intersects(
-                                EventMask::CREATE
-                                    | EventMask::MODIFY
-                                    | EventMask::DELETE
-                                    | EventMask::MOVED_FROM
-                                    | EventMask::MOVED_TO
-                                    | EventMask::CLOSE_WRITE,
-                            ) {
-                                continue;
-                            }
-
-                            if let Some(file_name) = event.name {
-                                let full_path = &monitor_config.path.join(file_name);
-                                let event_types: Vec<&str> = event
-                                    .mask
-                                    .iter()
-                                    .map(|m| match m {
-                                        EventMask::CREATE => "CREATE",
-                                        EventMask::DELETE => "DELETE",
-                                        EventMask::MODIFY => "MODIFY",
-                                        EventMask::MOVED_FROM => "MOVED_FROM",
-                                        EventMask::MOVED_TO => "MOVED_TO",
-                                        EventMask::CLOSE_WRITE => "CLOSE_WRITE",
-                                        _ => "OTHER",
-                                    })
-                                    .collect();
-
-                                info!(
-                                    sl!(),
-                                    "handle events [{}] {:?} -> {:?}",
-                                    event_types.join("|"),
-                                    event.mask,
-                                    full_path
-                                );
-                                pending_events.lock().await.insert(full_path.clone());
-                            }
-                        }
-                    }
-                    Err(e) => eprintln!("inotify error: {e}"),
-                }
+                let _ = with_shared_inotify(|shared| {
+                    shared.dispatch_events();
+                    Ok(())
+                });
 
                 // handle events to be synchronized
-                let events_paths = {
-                    let mut pending = pending_events.lock().await;
-                    pending.drain().collect::<Vec<_>>()
+                let events_paths = match pending_events.lock() {
+                    Ok(mut pending) => pending.drain().collect::<Vec<_>>(),
+                    Err(_) => Vec::new(),
                 };
                 if !events_paths.is_empty() {
                     *need_sync.lock().await = true;
