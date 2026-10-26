@@ -110,7 +110,27 @@ impl ContainerInner {
             .await
             .context("exec process")?;
         exec.process.set_status(ProcessStatus::Running).await;
+
+        let has_stdin = exec.process.stdin.is_some() || exec.process.terminal;
+        self.close_unused_stdin(process.clone().into(), has_stdin)
+            .await;
         Ok(())
+    }
+
+    // The agent gives every non-terminal process a stdin pipe. When no stdin was
+    // requested, close it so the process reads EOF, as it would from the
+    // /dev/null runc provides, instead of blocking on it forever.
+    async fn close_unused_stdin(&self, process_id: agent::ContainerProcessID, has_stdin: bool) {
+        if has_stdin {
+            return;
+        }
+        if let Err(e) = self
+            .agent
+            .close_stdin(agent::CloseStdinRequest { process_id })
+            .await
+        {
+            warn!(self.logger, "failed to close unused stdin: {:?}", e);
+        }
     }
 
     pub(crate) async fn win_resize_process(
@@ -159,6 +179,10 @@ impl ContainerInner {
             .context("start container")?;
 
         self.set_state(ProcessStatus::Running).await;
+
+        let has_stdin = self.init_process.stdin.is_some() || self.init_process.terminal;
+        self.close_unused_stdin(self.init_process.process.clone().into(), has_stdin)
+            .await;
 
         Ok(())
     }
