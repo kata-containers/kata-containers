@@ -244,6 +244,13 @@ impl Request {
         if self.request_type == RequestType::Discard {
             return self.execute_discard(disk, mem, data_descs);
         }
+        // A flush carries no data descriptor (a Linux guest's never does), so
+        // it is done here, not once per data descriptor: there it was never
+        // done and still acknowledged (Nova Kata).
+        if self.request_type == RequestType::Flush {
+            disk.flush().map_err(ExecuteError::Flush)?;
+            return Ok(0);
+        }
 
         self.check_capacity(disk, data_descs)?;
         disk.seek(SeekFrom::Start(self.sector << SECTOR_SHIFT))
@@ -266,10 +273,7 @@ impl Request {
                     disk.write_all(&buf)
                         .map_err(|e| ExecuteError::Write(GuestMemoryError::IOError(e)))?;
                 }
-                RequestType::Flush => match disk.flush() {
-                    Ok(_) => {}
-                    Err(e) => return Err(ExecuteError::Flush(e)),
-                },
+                RequestType::Flush => unreachable!(),
                 RequestType::GetDeviceID => {
                     if io.data_len < disk_id.len() {
                         return Err(ExecuteError::BadRequest(Error::InvalidOffset));

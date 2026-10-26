@@ -1621,6 +1621,36 @@ mod tests {
             assert_eq!(err_info, VIRTIO_BLK_S_OK);
         }
 
+        // A flush as a Linux guest sends it, a header and a status and no
+        // data descriptor, reaches the file: its error is the guest's
+        // (Nova Kata).
+        for (flush_error, status) in [(false, VIRTIO_BLK_S_OK), (true, VIRTIO_BLK_S_IOERR)] {
+            let mut file = DummyFile::new();
+            file.capacity = 0x100000;
+            file.flush_error = flush_error;
+            let mut handler = get_block_epoll_handler_with_file(file);
+            let m = &handler.vm_as.clone();
+            let vq = VirtQueue::new(GuestAddress(0), m, 16);
+            vq.avail.ring(0).store(0);
+            vq.avail.idx().store(1);
+            let q = vq.create_queue();
+            vq.dtable(0).set(0x1000, 0x1000, VIRTQ_DESC_F_NEXT, 1);
+            vq.dtable(1).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 0);
+            m.write_obj::<u32>(VIRTIO_BLK_T_FLUSH, GuestAddress(0x1000))
+                .unwrap();
+            m.write_obj::<u8>(0xff, GuestAddress(0x3000)).unwrap();
+
+            handler.queue = VirtioQueueConfig::new(
+                q,
+                Arc::new(EventFd::new(0).unwrap()),
+                Arc::new(NoopNotifier::new()),
+                0,
+            );
+            assert!(handler.process_queue());
+            let got: u8 = handler.vm_as.read_obj(GuestAddress(0x3000)).unwrap();
+            assert_eq!(got as u32, status);
+        }
+
         {
             // test for other execute type (not IN/OUT) : error
             let mut file = DummyFile::new();
