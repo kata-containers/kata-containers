@@ -22,7 +22,13 @@ use anyhow::{anyhow, bail, Context, Result};
 use cfg_if::cfg_if;
 use clap::Parser;
 use const_format::concatcp;
+
+#[cfg(feature = "cc-op")]
+use initdata::{InitdataReturnValue, AA_CONFIG_PATH, CCOP_CONFIG_PATH, CDH_CONFIG_PATH};
+
+#[cfg(not(feature = "cc-op"))]
 use initdata::{InitdataReturnValue, AA_CONFIG_PATH, CDH_CONFIG_PATH};
+
 use nix::fcntl::OFlag;
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -71,6 +77,10 @@ use uevent::watch_uevents;
 
 use futures::future::join_all;
 use rustjail::pipestream::PipeStream;
+
+#[cfg(feature = "cc-op")]
+use kata_agent_cc_op::{get_ccop_address, init_ccop, is_ccop_set};
+
 use tokio::{
     io::AsyncWrite,
     sync::{
@@ -437,6 +447,15 @@ async fn start_sandbox(
                 .await
                 .context("Failed to set policy from initdata")?;
         }
+    }
+    #[cfg(feature = "cc-op")]
+    match init_ccop(CCOP_CONFIG_PATH) {
+        Ok(_) => {
+            info!(logger, "main: cc-op PID = {}", std::process::id());
+            info!(logger, "main: cc-op ENABLED: {}", is_ccop_set());
+            info!(logger, "main: cc-op key address: {:p}", get_ccop_address());
+        }
+        Err(e) => info!(logger, "main: cc-op error: {}", e),
     }
 
     let mut oma = None;

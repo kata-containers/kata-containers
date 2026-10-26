@@ -15,6 +15,7 @@ capctl.workspace = true
 caps = "0.5.0"
 cfg-if.workspace = true
 cgroups.workspace = true
+kata-agent-cc-op = { workspace = true, optional = true}  
 lazy_static.workspace = true
 libc.workspace = true
 nix.workspace = true
@@ -61,3 +62,5 @@ test-utils.workspace = true
 
 [features]
 seccomp = ["libseccomp"]
+standard-oci-runtime = []
+cc-op = ["kata-agent-cc-op"]
