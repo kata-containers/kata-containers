@@ -47,7 +47,7 @@ if [[ ! -d "${HOME}/.docker" ]]; then
 fi
 
 "${script_dir}"/kata-deploy-copy-yq-installer.sh
-docker build -q -t build-kata-deploy \
+docker build -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID="${uid}" \
 	--build-arg GID="${gid}" \
