@@ -633,8 +633,13 @@ impl Container {
         }
 
         let annotations = self.spec.annotations().clone().unwrap_or_default();
+        // kubelet reads the termination message file under both policies;
+        // FallbackToLogsOnError only falls back to the logs when it is empty.
         let policy = annotations.get("io.kubernetes.container.terminationMessagePolicy");
-        if policy.map(|p| p.as_str()) != Some("File") {
+        if !matches!(
+            policy.map(|p| p.as_str()),
+            Some("File") | Some("FallbackToLogsOnError")
+        ) {
             return;
         }
 
