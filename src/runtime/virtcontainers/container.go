@@ -1646,8 +1646,11 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	// get failed if the process hasn't exited.
 	c.sandbox.agent.waitProcess(ctx, c, c.id)
 
+	// kubelet reads the termination message file under both policies;
+	// FallbackToLogsOnError only falls back to the logs when it is empty.
+	terminationMessagePolicy := c.config.Annotations["io.kubernetes.container.terminationMessagePolicy"]
 	if c.sandbox.config.HypervisorConfig.SharedFS == config.NoSharedFS &&
-		c.config.Annotations["io.kubernetes.container.terminationMessagePolicy"] == "File" {
+		(terminationMessagePolicy == "File" || terminationMessagePolicy == "FallbackToLogsOnError") {
 		terminationMessagePath := c.config.Annotations["io.kubernetes.container.terminationMessagePath"]
 		if terminationMessagePath != "" {
 			data, err := c.sandbox.agent.getDiagnosticData(ctx, "termination_log", c.id)
