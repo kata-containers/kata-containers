@@ -16,6 +16,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/sirupsen/logrus"
 	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
@@ -50,23 +52,53 @@ func getMinMemoryLimit(minMemoryLimitKey string) (*resource.Quantity, error) {
 	return &minMemoryLimit, nil
 }
 
-func enforceMinMemoryLimit(containers []corev1.Container, minimum resource.Quantity) {
+// The pod is mutated as unstructured data so that fields unknown to the
+// vendored k8s.io/api are preserved instead of being dropped from the patch.
+func setContainerMemoryLimits(obj *unstructured.Unstructured, field string, containers []corev1.Container, minimum *resource.Quantity) error {
+	if minimum == nil {
+		return nil
+	}
+	raw, found, err := unstructured.NestedSlice(obj.Object, "spec", field)
+	if err != nil || !found {
+		return err
+	}
+	if len(raw) != len(containers) {
+		return fmt.Errorf("spec.%s: expected %d entries, got %d", field, len(containers), len(raw))
+	}
+
+	changed := false
 	for i := range containers {
-		currentMemoryLimit, ok := containers[i].Resources.Limits[corev1.ResourceMemory]
-		if !ok || currentMemoryLimit.Cmp(minimum) >= 0 {
+		limit, ok := containers[i].Resources.Limits[corev1.ResourceMemory]
+		if !ok || limit.Cmp(*minimum) >= 0 {
 			continue
 		}
-
-		containers[i].Resources.Limits[corev1.ResourceMemory] = minimum
-		fmt.Println("memory limit too low. Updating to: ", containers[i].Resources.Limits)
+		container, ok := raw[i].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("spec.%s[%d] is not an object", field, i)
+		}
+		if err := unstructured.SetNestedField(container, minimum.String(), "resources", "limits", "memory"); err != nil {
+			return err
+		}
+		fmt.Println("memory limit of", field, containers[i].Name, "too low, updating to", minimum.String())
+		changed = true
 	}
+
+	if !changed {
+		return nil
+	}
+	return unstructured.SetNestedSlice(obj.Object, raw, "spec", field)
 }
 
 func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
-	pod, ok := obj.(*corev1.Pod)
+	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		// If not a pod just continue the mutation chain (if there is one) and don't do anything
 		return &kwhmutating.MutatorResult{}, nil
+	}
+
+	pod := &corev1.Pod{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, pod); err != nil {
+		return nil, fmt.Errorf("decoding pod: %w", err)
 	}
 
 	// The Namespace is not always available in the pod Spec
@@ -104,9 +136,12 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 	if err != nil {
 		return nil, err
 	}
-	if minMemoryLimit != nil {
-		enforceMinMemoryLimit(pod.Spec.Containers, *minMemoryLimit)
-		enforceMinMemoryLimit(pod.Spec.InitContainers, *minMemoryLimit)
+
+	if err := setContainerMemoryLimits(u, "containers", pod.Spec.Containers, minMemoryLimit); err != nil {
+		return nil, err
+	}
+	if err := setContainerMemoryLimits(u, "initContainers", pod.Spec.InitContainers, minMemoryLimit); err != nil {
+		return nil, err
 	}
 
 	// Mutate the pod
@@ -114,10 +149,12 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 
 	runtimeClassEnvKey := "RUNTIME_CLASS"
 	kataRuntimeClassName := getRuntimeClass(runtimeClassEnvKey, "kata")
-	pod.Spec.RuntimeClassName = &kataRuntimeClassName
+	if err := unstructured.SetNestedField(u.Object, kataRuntimeClassName, "spec", "runtimeClassName"); err != nil {
+		return nil, err
+	}
 
 	return &kwhmutating.MutatorResult{
-		MutatedObject: pod,
+		MutatedObject: u,
 	}, nil
 }
 
@@ -177,7 +214,7 @@ func main() {
 
 	mcfg := kwhmutating.WebhookConfig{
 		ID:      "podAnnotate",
-		Obj:     &corev1.Pod{},
+		Obj:     &unstructured.Unstructured{},
 		Mutator: mt,
 		Logger:  logger,
 	}
