@@ -1,0 +1,41 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ip-family-server
+  labels:
+    app: ip-family-server
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: nginx
+    image: ${NGINX_IMAGE}
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ip-family-client
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: busybox
+    image: quay.io/prometheus/busybox:latest
+    command: ["sleep", "infinity"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ip-family-svc
+spec:
+  ipFamilyPolicy: ${IP_FAMILY_POLICY}
+  selector:
+    app: ip-family-server
+  ports:
+  - port: 80
+    targetPort: 80
