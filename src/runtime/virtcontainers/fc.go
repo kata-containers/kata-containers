@@ -72,7 +72,7 @@ const (
 	// firecracker guest VM.
 	// We attach a pool of placeholder drives before the guest has started, and then
 	// patch the replace placeholder drives with drives with actual contents.
-	fcDiskPoolSize           = 8
+	FirecrackerDiskPoolSize  = 8
 	defaultHybridVSocketName = "kata.hvsock"
 
 	// This is the first usable vsock context ID. All the vsocks can use the same
@@ -188,6 +188,9 @@ func (fc *firecracker) truncateID(id string) string {
 }
 
 func (fc *firecracker) setConfig(config *HypervisorConfig) error {
+	if _, _, err := firecrackerBlockIndexRange(config.BlockDeviceReadOnlySlots, false); err != nil {
+		return err
+	}
 	fc.config = *config
 
 	return nil
@@ -868,9 +871,12 @@ func (fc *firecracker) createDiskPool(ctx context.Context) error {
 	span, _ := katatrace.Trace(ctx, fc.Logger(), "createDiskPool", fcTracingTags, map[string]string{"sandbox_id": fc.id})
 	defer span.End()
 
-	for i := 0; i < fcDiskPoolSize; i++ {
+	if _, _, err := firecrackerBlockIndexRange(fc.config.BlockDeviceReadOnlySlots, false); err != nil {
+		return err
+	}
+	for i := 0; i < FirecrackerDiskPoolSize; i++ {
 		driveID := fcDriveIndexToID(i)
-		isReadOnly := false
+		isReadOnly := i >= FirecrackerDiskPoolSize-int(fc.config.BlockDeviceReadOnlySlots)
 		isRootDevice := false
 
 		// Create a temporary file as a placeholder backend for the drive
@@ -1046,7 +1052,7 @@ func (fc *firecracker) fcAddBlockDrive(ctx context.Context, drive config.BlockDr
 	defer span.End()
 
 	driveID := drive.ID
-	isReadOnly := false
+	isReadOnly := drive.ReadOnly
 	isRootDevice := false
 
 	jailedDrive, err := fc.fcJailResource(drive.File, driveID)
@@ -1129,6 +1135,13 @@ func (fc *firecracker) AddDevice(ctx context.Context, devInfo interface{}, devTy
 // hotplugBlockDevice supported in Firecracker VMM
 // hot add or remove a block device.
 func (fc *firecracker) hotplugBlockDevice(ctx context.Context, drive config.BlockDrive, op Operation) (interface{}, error) {
+	first, last, rangeErr := firecrackerBlockIndexRange(fc.config.BlockDeviceReadOnlySlots, drive.ReadOnly)
+	if rangeErr != nil {
+		return nil, rangeErr
+	}
+	if drive.Index < 0 || drive.Index >= FirecrackerDiskPoolSize || (op == AddDevice && (drive.Index < first || drive.Index >= last)) {
+		return nil, fmt.Errorf("Firecracker disk index %d does not match read-only=%t slot range [%d,%d)", drive.Index, drive.ReadOnly, first, last)
+	}
 	if drive.Swap {
 		return nil, fmt.Errorf("firecracker doesn't support swap")
 	}
@@ -1337,4 +1350,18 @@ func (fc *firecracker) IsRateLimiterBuiltin() bool {
 
 func (fc *firecracker) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
 	return nil
+}
+
+// Read-only disk features are negotiated at boot and cannot change when a
+// placeholder's backing file is replaced. Use the same partition for allocation,
+// pool creation and attachment validation; never spill into another mode's slots.
+func firecrackerBlockIndexRange(readOnlySlots uint32, readOnly bool) (int, int, error) {
+	if readOnlySlots >= FirecrackerDiskPoolSize {
+		return 0, 0, fmt.Errorf("block_device_read_only_slots must be between 0 and %d, got %d", FirecrackerDiskPoolSize-1, readOnlySlots)
+	}
+	boundary := FirecrackerDiskPoolSize - int(readOnlySlots)
+	if readOnly {
+		return boundary, FirecrackerDiskPoolSize, nil
+	}
+	return 0, boundary, nil
 }

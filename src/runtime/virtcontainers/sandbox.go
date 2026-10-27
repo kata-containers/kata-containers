@@ -2273,8 +2273,20 @@ const maxBlockIndex = 65535
 // the BlockIndexMap and marks it as used. This index is used to maintain the
 // index at which a block device is assigned to a container in the sandbox.
 func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
+	return allocateSandboxBlockIndex(s, false)
+}
+
+func allocateSandboxBlockIndex(s *Sandbox, readOnly bool) (int, error) {
+	first, last := 0, maxBlockIndex
+	if s.config != nil && s.config.HypervisorType == FirecrackerHypervisor {
+		var err error
+		first, last, err = firecrackerBlockIndexRange(s.config.HypervisorConfig.BlockDeviceReadOnlySlots, readOnly)
+		if err != nil {
+			return -1, err
+		}
+	}
 	currentIndex := -1
-	for i := 0; i < maxBlockIndex; i++ {
+	for i := first; i < last; i++ {
 		if _, ok := s.state.BlockIndexMap[i]; !ok {
 			currentIndex = i
 			break
@@ -2418,8 +2430,8 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 
 // GetAndSetSandboxBlockIndex is used for getting and setting virtio-block indexes
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
-func (s *Sandbox) GetAndSetSandboxBlockIndex() (int, error) {
-	return s.getAndSetSandboxBlockIndex()
+func (s *Sandbox) GetAndSetSandboxBlockIndex(readOnly bool) (int, error) {
+	return allocateSandboxBlockIndex(s, readOnly)
 }
 
 // UnsetSandboxBlockIndex unsets block indexes

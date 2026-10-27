@@ -47,7 +47,7 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 	// Increment the block index for the sandbox. This is used to determine the name
 	// for the block device in the case where the block device is used as container
 	// rootfs and the predicted block device name needs to be provided to the agent.
-	index, err := devReceiver.GetAndSetSandboxBlockIndex()
+	index, err := devReceiver.GetAndSetSandboxBlockIndex(device.DeviceInfo.ReadOnly)
 
 	defer func() {
 		if err != nil {

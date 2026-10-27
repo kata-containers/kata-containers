@@ -56,7 +56,7 @@ func (device *VhostUserBlkDevice) Attach(ctx context.Context, devReceiver api.De
 	index := -1
 	updateBlockIndex := isVirtioBlkBlockDriver(device.DeviceInfo.DriverOptions)
 	if updateBlockIndex {
-		index, err = devReceiver.GetAndSetSandboxBlockIndex()
+		index, err = devReceiver.GetAndSetSandboxBlockIndex(false)
 	}
 
 	defer func() {
