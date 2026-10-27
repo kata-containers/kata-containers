@@ -18,3 +18,4 @@ spec:
   containers:
   - image: quay.io/prometheus/busybox:latest
     name: sandbox-cgroup-test
+    command: ["tail", "-f", "/dev/null"]

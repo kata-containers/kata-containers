@@ -16,5 +16,6 @@ spec:
   containers:
   - image: quay.io/prometheus/busybox:latest
     name: container
+    command: ["tail", "-f", "/dev/null"]
     securityContext:
       privileged: true

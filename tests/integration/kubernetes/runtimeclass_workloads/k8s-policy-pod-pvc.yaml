@@ -14,6 +14,7 @@ spec:
   containers:
     - name: busybox
       image: "quay.io/prometheus/busybox:latest"
+      command: ["tail", "-f", "/dev/null"]
       volumeDevices:
         - name: dev
           devicePath: /dev/csi0
