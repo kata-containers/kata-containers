@@ -9,6 +9,7 @@ use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::utils::open_named_tuntap;
 use crate::utils::{check_unix_socket_path_len, link_rootless_vmm_socket};
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
@@ -34,12 +35,16 @@ use ch_config::{
 use kata_sys_util::netns::NetnsGuard;
 use kata_types::config::hypervisor::RateLimiterConfig;
 use kata_types::rootless::is_rootless;
+use kata_types::vmdk::{validate_vmdk_layout, VmdkConfig};
 
 use safe_path::scoped_join;
 use std::convert::TryFrom;
+use std::fs::OpenOptions;
+use std::io::Write as _;
 use std::os::fd::AsRawFd;
 use std::os::fd::IntoRawFd;
-use std::path::PathBuf;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use virtio_bindings::bindings::virtio_blk::VIRTIO_BLK_ID_BYTES;
@@ -287,6 +292,10 @@ impl CloudHypervisorInner {
     }
 
     fn make_disk_config(&self, config: &BlockConfigModern) -> Result<DiskConfig> {
+        if let BlockSourceFormat::Vmdk(vmdk) = &config.source {
+            write_vmdk_descriptor(Path::new(&config.path_on_host), vmdk)?;
+        }
+
         let mut disk_config = DiskConfig::try_from(config.clone())?;
 
         disk_config.direct = config
@@ -515,6 +524,12 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
             ));
         }
 
+        // Cloud Hypervisor necessitates setting backing_files for VMDK.
+        let (image_type, backing_files) = match blkcfg.source {
+            BlockSourceFormat::Raw => (ImageType::Raw, false),
+            BlockSourceFormat::Vmdk(_) => (ImageType::FlatVmdk, true),
+        };
+
         let disk_config: DiskConfig = DiskConfig {
             path: Some(blkcfg.path_on_host.as_str().into()),
             serial: if blkcfg.serial_override.is_empty() {
@@ -535,12 +550,41 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
             },
             // CLH fallocates writable disks to their full logical size when sparse is false.
             sparse: true,
-            image_type: ImageType::Raw,
+            image_type,
+            backing_files,
             ..Default::default()
         };
 
         Ok(disk_config)
     }
+}
+
+// Write the descriptor text file for a VMDK layout to the specified path
+fn write_vmdk_descriptor(descriptor_path: &Path, vmdk: &VmdkConfig) -> Result<()> {
+    let descriptor = validate_vmdk_layout(vmdk)?
+        .render_descriptor_with(|extent| Ok(extent.path_on_host.clone()))?;
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o644)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(descriptor_path)
+        .with_context(|| {
+            format!(
+                "create VMDK descriptor {} for cloud-hypervisor",
+                descriptor_path.display()
+            )
+        })?;
+    file.write_all(descriptor.as_bytes()).with_context(|| {
+        format!(
+            "write VMDK descriptor {} for cloud-hypervisor",
+            descriptor_path.display()
+        )
+    })?;
+
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -662,6 +706,33 @@ mod tests {
         .unwrap();
         assert_eq!(disk.num_queues, expected_queues);
         assert_eq!(disk.queue_size, expected_size);
+    }
+
+    #[test]
+    fn test_vmdk_disk_config_uses_backing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first.raw");
+        let second = dir.path().join("second.raw");
+        let descriptor = dir.path().join("merged_fs.vmdk");
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(first.to_str().unwrap(), 1, 0);
+        vmdk.push_extent(second.to_str().unwrap(), 2, 0);
+
+        let disk = CloudHypervisorInner::default()
+            .make_disk_config(&BlockConfigModern {
+                path_on_host: descriptor.display().to_string(),
+                source: BlockSourceFormat::Vmdk(vmdk),
+                is_readonly: true,
+                ..Default::default()
+            })
+            .unwrap();
+
+        assert_eq!(disk.path, Some(descriptor.clone()));
+        assert_eq!(disk.image_type, ImageType::FlatVmdk);
+        assert!(disk.backing_files);
+        let contents = std::fs::read_to_string(&descriptor).unwrap();
+        assert!(contents.contains(&format!("RW 1 FLAT \"{}\" 0", first.display())));
+        assert!(contents.contains(&format!("RW 2 FLAT \"{}\" 0", second.display())));
     }
 
     #[test]
