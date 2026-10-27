@@ -68,7 +68,9 @@ pub const VIRTIO_SCSI: &str = "virtio-scsi";
 pub const VIRTIO_PMEM: &str = "virtio-pmem";
 
 mod firecracker;
-pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
+pub use self::firecracker::{
+    FirecrackerConfig, FIRECRACKER_DISK_POOL_SIZE, HYPERVISOR_NAME_FIRECRACKER,
+};
 
 const NO_VIRTIO_FS: &str = "none";
 const VIRTIO_FS: &str = "virtio-fs";
@@ -226,7 +228,7 @@ pub fn get_hypervisor_plugin(name: &str) -> Option<Arc<dyn ConfigPlugin>> {
 }
 
 /// Configuration information for block device.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockDeviceInfo {
     /// Block storage driver to be used for the hypervisor in case the container rootfs is backed
     /// by a block device. Options include:
@@ -266,6 +268,13 @@ pub struct BlockDeviceInfo {
     /// Denotes whether flush requests for the device are ignored.
     #[serde(default)]
     pub block_device_cache_noflush: bool,
+
+    /// Number of Firecracker block-device slots reserved for read-only disks.
+    /// Firecracker cannot change a drive's read-only setting with a post-boot
+    /// PATCH, so read-only disks must use slots configured read-only before
+    /// the guest starts. Defaults to one slot; zero disables the read-only pool.
+    #[serde(default = "default_block_device_read_only_slots")]
+    pub block_device_read_only_slots: u32,
 
     /// Specifies the logical sector size, in bytes, reported by block devices to the guest.
     /// Common values are 512 and 4096. Set to 0 to use the hypervisor default.
@@ -330,6 +339,36 @@ pub struct BlockDeviceInfo {
     /// block device multi-queue
     #[serde(default)]
     pub num_queues: usize,
+}
+
+fn default_block_device_read_only_slots() -> u32 {
+    1
+}
+
+impl Default for BlockDeviceInfo {
+    fn default() -> Self {
+        Self {
+            block_device_driver: String::new(),
+            block_device_aio: String::new(),
+            block_device_cache_set: false,
+            block_device_cache_direct: false,
+            block_device_cache_noflush: false,
+            block_device_read_only_slots: default_block_device_read_only_slots(),
+            block_device_logical_sector_size: 0,
+            block_device_physical_sector_size: 0,
+            disable_image_nvdimm: false,
+            memory_offset: 0,
+            enable_vhost_user_store: false,
+            vhost_user_store_path: String::new(),
+            valid_vhost_user_store_paths: Vec::new(),
+            disk_rate_limiter_bw_max_rate: 0,
+            disk_rate_limiter_bw_one_time_burst: None,
+            disk_rate_limiter_ops_max_rate: 0,
+            disk_rate_limiter_ops_one_time_burst: None,
+            queue_size: 0,
+            num_queues: 0,
+        }
+    }
 }
 
 impl BlockDeviceInfo {
@@ -2252,6 +2291,20 @@ mod tests {
             error_msg,
             expected_error_msg
         );
+    }
+
+    #[test]
+    fn test_block_device_read_only_slots_config_defaults() {
+        for (input, expected) in [
+            ("", 1),
+            ("block_device_read_only_slots = 0", 0),
+            ("block_device_read_only_slots = 3", 3),
+        ] {
+            // Exercise the flattened configuration used by existing TOML files.
+            let config: Hypervisor = toml::from_str(input).unwrap();
+            assert_eq!(config.blockdev_info.block_device_read_only_slots, expected);
+        }
+        assert_eq!(BlockDeviceInfo::default().block_device_read_only_slots, 1);
     }
 
     #[test]

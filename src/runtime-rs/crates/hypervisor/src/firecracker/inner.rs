@@ -20,6 +20,7 @@ use kata_types::{
 };
 use nix::sched::{setns, CloneFlags};
 use persist::sandbox_persist::Persist;
+use std::collections::HashMap;
 use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
@@ -44,6 +45,8 @@ pub struct FcInner {
     pub(crate) jailed: bool,
     pub(crate) run_dir: String,
     pub(crate) pending_devices: Vec<DeviceType>,
+    pub(crate) readonly_drive_slots: HashMap<u64, u64>,
+    pub(crate) writable_drive_slots: HashMap<u64, u64>,
     pub(crate) capabilities: Capabilities,
     pub(crate) fc_process: Mutex<Option<Child>>,
     pub(crate) exit_notify: Option<mpsc::Sender<()>>,
@@ -67,6 +70,8 @@ impl FcInner {
             jailed: false,
             run_dir: String::default(),
             pending_devices: vec![],
+            readonly_drive_slots: HashMap::new(),
+            writable_drive_slots: HashMap::new(),
             capabilities,
             fc_process: Mutex::new(None),
             exit_notify: Some(exit_notify),
@@ -250,6 +255,8 @@ impl Persist for FcInner {
             jailer_root: hypervisor_state.jailer_root,
             client: Client::unix(),
             pending_devices: vec![],
+            readonly_drive_slots: HashMap::new(),
+            writable_drive_slots: HashMap::new(),
             run_dir: String::new(),
             capabilities: Capabilities::new(),
             fc_process: Mutex::new(None),
