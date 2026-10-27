@@ -559,7 +559,7 @@ impl Machine {
         Machine {
             r#type: config.machine_info.machine_type.clone(),
             accel: "kvm".to_owned(),
-            options: config.machine_info.machine_accelerators.clone(),
+            options: config.machine_info.machine_properties.clone(),
             nvdimm: false,
             kernel_irqchip,
             confidential_guest_support: "".to_owned(),
