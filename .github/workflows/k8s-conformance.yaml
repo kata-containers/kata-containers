@@ -1,0 +1,71 @@
+# Build the amd64 kata-deploy image and run the Kubernetes conformance suite.
+#
+# The weekly run uses every hypervisor in run-k8s-conformance.yaml. A manual
+# run does the same unless its input names a subset. Pull request CI does not
+# call this workflow.
+name: Kubernetes conformance
+on:
+  schedule:
+    # Monday 06:00 UTC. The daily nightly workflow does not run this suite.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      k8s-conformance:
+        description: "all, or a comma-separated list (qemu-runtime-rs, qemu-nvidia-cpu-runtime-rs, clh-runtime-rs, dragonball, openvmm-azure-runtime-rs)"
+        required: false
+        type: string
+        default: all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-k8s-conformance
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build-kata-static-tarball-amd64:
+    permissions:
+      contents: read
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
+    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+    with:
+      tarball-suffix: -${{ github.sha }}-conformance
+      commit-hash: ${{ github.sha }}
+      target-branch: ${{ github.ref_name }}
+    secrets:
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
+
+  publish-kata-deploy-image-amd64:
+    needs: build-kata-static-tarball-amd64
+    permissions:
+      contents: read
+      packages: write # needed to push the kata-deploy image to ghcr.io
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      tarball-suffix: -${{ github.sha }}-conformance
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ github.sha }}-conformance-amd64
+      commit-hash: ${{ github.sha }}
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04
+      arch: amd64
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  run-k8s-conformance:
+    needs: publish-kata-deploy-image-amd64
+    permissions:
+      contents: read
+    uses: ./.github/workflows/run-k8s-conformance.yaml
+    with:
+      tarball-suffix: -${{ github.sha }}-conformance
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ github.sha }}-conformance-amd64
+      commit-hash: ${{ github.sha }}
+      pr-number: conformance
+      target-branch: ${{ github.ref_name }}
+      hypervisors: ${{ github.event_name == 'schedule' && 'all' || inputs.k8s-conformance }}

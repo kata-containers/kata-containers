@@ -1,8 +1,8 @@
 # Run the upstream Kubernetes conformance suite on a kubeadm cluster.
 #
-# The hypervisors live in the list below. The k8s-conformance input of
-# ci-devel selects from that list: "all", or a comma-separated subset such
-# as "qemu-runtime-rs,clh-runtime-rs".
+# The hypervisors live in the list below. k8s-conformance.yaml and the
+# k8s-conformance input of ci-devel select from that list: "all", or a
+# comma-separated subset such as "qemu-runtime-rs,clh-runtime-rs".
 name: CI | Run kubernetes conformance
 on:
   workflow_call:
