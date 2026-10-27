@@ -109,6 +109,55 @@ declare -A no_shared_fs_skips=(
 	["should succeed in writing subpaths in container"]="subPath of a block emptyDir is not supported"
 )
 
+# Conformance tests that do not fit on a node with fewer than
+# small_node_cpu_threshold allocatable CPUs. The GitHub-hosted runners have 4,
+# and every Kata pod also requests the RuntimeClass CPU overhead (250m), so
+# about a dozen pods fill the node after the control plane. Pods left over fail
+# scheduling with "Insufficient cpu", or kubelet rejects them with OutOfcpu.
+# All of them pass on a 12-CPU node:
+#   - "Guestbook application" starts six pods, 350m each with the overhead,
+#     next to the other parallel tests.
+#   - "deployment should support proportional scaling" waits for all 10
+#     replicas of its Deployment, 2.5 CPUs of overhead, to be running. While it
+#     waits, the pods it got starve the other parallel tests.
+#   - "Service endpoints latency" needs one more pod while the parallel tests
+#     already hold most of the CPU.
+#   - "should not cause race condition when used for configmaps" creates its
+#     replication controller again while the previous pods still hold their
+#     CPU, which leaves new pods Pending past the 5 minute timeout.
+#   - "should orphan pods created by rc if delete options say so" counts the
+#     pods of a 50-replica replication controller. Pods rejected with OutOfcpu
+#     are replaced, so the count is off.
+#   - "should delete a collection of pods" and "Should recreate evicted
+#     statefulset" need every pod they create to run, and kubelet rejects one
+#     of them with OutOfcpu while the parallel tests hold the CPU.
+#   - "should *not* be restarted with a tcp:8080 liveness probe" requires zero
+#     restarts over four minutes. With the node CPU saturated, a probe misses
+#     its one second timeout ("i/o timeout") and kubelet restarts the
+#     container.
+small_node_cpu_threshold=8
+declare -A small_node_skips=(
+	["Guestbook application should create and stop a working application"]="six pods with CPU overhead do not fit"
+	["deployment should support proportional scaling"]="ten replicas with CPU overhead do not fit"
+	["Service endpoints latency should not be very high"]="no CPU left for the latency pod"
+	["should not cause race condition when used for configmaps"]="replacement pods stay Pending on CPU"
+	["should orphan pods created by rc if delete options say so"]="OutOfcpu rejections change the pod count"
+	["Pods should delete a collection of pods"]="a pod is rejected with OutOfcpu"
+	["Should recreate evicted statefulset"]="a pod is rejected with OutOfcpu"
+	["should \\*not\\* be restarted with a tcp:8080 liveness probe"]="probes time out on a saturated node"
+)
+
+# Allocatable CPUs of the node, rounded down.
+node_allocatable_cpus() {
+	local cpu
+	cpu="$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.cpu}')"
+	if [[ "${cpu}" == *m ]]; then
+		echo $(( ${cpu%m} / 1000 ))
+	else
+		echo "${cpu}"
+	fi
+}
+
 kata_skip_regex() {
 	local regex=""
 	local test_name
@@ -118,6 +167,11 @@ kata_skip_regex() {
 	done
 	if [[ "${KATA_HYPERVISOR}" == *nvidia* ]]; then
 		for test_name in "${!no_shared_fs_skips[@]}"; do
+			regex+="${regex:+|}${test_name}"
+		done
+	fi
+	if (( $(node_allocatable_cpus) < small_node_cpu_threshold )); then
+		for test_name in "${!small_node_skips[@]}"; do
 			regex+="${regex:+|}${test_name}"
 		done
 	fi
