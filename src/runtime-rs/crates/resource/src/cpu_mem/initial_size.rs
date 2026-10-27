@@ -6,10 +6,20 @@
 
 use std::{collections::HashMap, convert::TryFrom};
 
-use anyhow::{ensure, Context, Result};
+use crate::cpu_mem::hugepage_sizing::{
+    host_has_cgroup_v2, hugepages_resource_name, pod_cgroup_path, pod_hugetlb_limit,
+    vm_huge_page_size, MIN_POD_SIZED_GUEST_MIB,
+};
+use anyhow::{anyhow, ensure, Context, Result};
 use kata_types::{
-    annotations::Annotation, config::TomlConfig, container::ContainerType,
-    cpu::LinuxContainerCpuResources, k8s::container_type,
+    annotations::Annotation,
+    config::{
+        hypervisor::{HugePageType, Hypervisor, HYPERVISOR_NAME_DRAGONBALL},
+        TomlConfig,
+    },
+    container::ContainerType,
+    cpu::LinuxContainerCpuResources,
+    k8s::container_type,
 };
 use oci_spec::runtime as oci;
 
@@ -113,15 +123,43 @@ impl TryFrom<&oci::Spec> for InitialSize {
 //
 // if the workload # of vcpus and memory is invalid for vmms, we still use default
 // value in toml_config
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct InitialSizeManager {
     resource: InitialSize,
+    // The sandbox's cgroupsPath, whose parent is the pod's cgroup.
+    pod_cgroup: Option<String>,
+}
+
+// The host state the sizing reads, so tests can stand in for it.
+trait HugetlbHost {
+    fn vm_huge_page_size(&self) -> Result<u64>;
+    fn has_cgroup_v2(&self) -> bool;
+    fn pod_hugetlb_limit(&self, pod_cgroup: &str, page_size: u64) -> Result<Option<u64>>;
+}
+
+struct PodHugetlbHost;
+
+impl HugetlbHost for PodHugetlbHost {
+    fn vm_huge_page_size(&self) -> Result<u64> {
+        vm_huge_page_size()
+    }
+    fn has_cgroup_v2(&self) -> bool {
+        host_has_cgroup_v2()
+    }
+    fn pod_hugetlb_limit(&self, pod_cgroup: &str, page_size: u64) -> Result<Option<u64>> {
+        pod_hugetlb_limit(pod_cgroup, page_size)
+    }
 }
 
 impl InitialSizeManager {
     pub fn new(spec: &oci::Spec) -> Result<Self> {
         Ok(Self {
             resource: InitialSize::try_from(spec).context("failed to construct static resource")?,
+            pod_cgroup: spec
+                .linux()
+                .as_ref()
+                .and_then(|linux| linux.cgroups_path().clone())
+                .map(|p| p.display().to_string()),
         })
     }
 
@@ -129,6 +167,7 @@ impl InitialSizeManager {
         Ok(Self {
             resource: InitialSize::try_from(annotation)
                 .context("failed to construct static resource")?,
+            pod_cgroup: None,
         })
     }
 
@@ -152,6 +191,10 @@ impl InitialSizeManager {
     }
 
     pub fn setup_config(&mut self, config: &mut TomlConfig) -> Result<()> {
+        self.setup_config_with(config, &PodHugetlbHost)
+    }
+
+    fn setup_config_with(&mut self, config: &mut TomlConfig, host: &dyn HugetlbHost) -> Result<()> {
         // update this data to the hypervisor config for later use by hypervisor
         let hypervisor_name = &config.runtime.hypervisor_name;
         let hv = config
@@ -160,6 +203,17 @@ impl InitialSizeManager {
             .context("failed to get hypervisor config")?;
 
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
+
+        // A hugetlbfs backed guest runs on what the pod reserves as hugepages-<size>,
+        // so that reservation sizes it below and its memory limit does not. Transparent
+        // huge pages are ordinary memory and are sized as usual.
+        let hugetlb_backed = hv.memory_info.enable_hugepages
+            && hv.memory_info.enable_hugepages_pod_sizing
+            && matches!(hv.memory_info.hugepage_type, HugePageType::Hugetlbfs);
+        ensure!(
+            !hugetlb_backed || config.runtime.static_sandbox_resource_mgmt,
+            "enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt"
+        );
 
         // Non-static mode keeps configured defaults unchanged.
         if !config.runtime.static_sandbox_resource_mgmt {
@@ -177,16 +231,102 @@ impl InitialSizeManager {
 
             hv.cpu_info.default_vcpus = (hv.cpu_info.overhead_vcpus + self.resource.vcpu).max(1.0);
 
-            hv.memory_info.default_memory = hv.memory_info.overhead_memory + self.resource.mem_mb;
+            if hugetlb_backed {
+                if self.resource.mem_mb > 0 {
+                    info!(
+                        sl!(),
+                        "sandbox is huge page backed: the workload memory limit does not size the VM"
+                    );
+                }
+            } else {
+                hv.memory_info.default_memory =
+                    hv.memory_info.overhead_memory + self.resource.mem_mb;
+            }
+
             hv.memory_info.default_maxmemory = hv
                 .memory_info
                 .default_maxmemory
                 .max(hv.memory_info.default_memory);
         }
 
+        if hugetlb_backed {
+            self.size_from_pod_reservation(hypervisor_name, hv, host)?;
+        }
+
         hv.cpu_info.default_maxvcpus = hv.cpu_info.default_vcpus.ceil() as u32;
 
         validate_non_zero_sandbox_memory(hypervisor_name, hv.memory_info.default_memory)?;
+        Ok(())
+    }
+
+    // Sizes a huge page backed VM from hugetlb.<size>.max on the pod's cgroup,
+    // or refuses the sandbox when that cannot be done.
+    fn size_from_pod_reservation(
+        &self,
+        hypervisor_name: &str,
+        hv: &mut Hypervisor,
+        host: &dyn HugetlbHost,
+    ) -> Result<()> {
+        // Dragonball always runs in the pod's cgroup, whatever sandbox_cgroup_only says.
+        ensure!(
+            hypervisor_name == HYPERVISOR_NAME_DRAGONBALL,
+            "enable_hugepages_pod_sizing needs the dragonball hypervisor in runtime-rs, and this sandbox uses {hypervisor_name}"
+        );
+        let cgroups_path = self
+            .pod_cgroup
+            .as_deref()
+            .filter(|p| !p.is_empty())
+            .context(
+            "enable_hugepages_pod_sizing needs the sandbox's cgroup path to find its pod's cgroup",
+        )?;
+        let pod_cgroup = pod_cgroup_path(cgroups_path).with_context(|| {
+            format!(
+                "enable_hugepages_pod_sizing cannot find the pod's cgroup from {cgroups_path:?}"
+            )
+        })?;
+        let page_size = host
+            .vm_huge_page_size()
+            .context("enable_hugepages_pod_sizing cannot tell the VM's huge page size")?;
+        let resource = hugepages_resource_name(page_size);
+        ensure!(
+            host.has_cgroup_v2(),
+            "enable_hugepages_pod_sizing needs cgroup v2: the pod's huge page reservation is read from the unified hierarchy"
+        );
+        let reserved = host.pod_hugetlb_limit(&pod_cgroup, page_size).with_context(|| {
+            format!("enable_hugepages_pod_sizing cannot read the pod's {resource} reservation (pod cgroup {pod_cgroup})")
+        })?;
+        // An unlimited cgroup can also read back as a byte count near 2^63.
+        let reserved = match reserved {
+            Some(r) if r >> 20 <= u32::MAX as u64 => r,
+            other => {
+                let value = other.map_or("max".to_string(), |r| r.to_string());
+                return Err(anyhow!(
+                    "the pod's cgroup {pod_cgroup} has no finite {resource} limit the VM can be sized from (it reads {value}): set a finite {resource} limit on the pod's cgroup, as the kubelet does"
+                ));
+            }
+        };
+        let reserved_mib = reserved >> 20;
+        ensure!(
+            reserved_mib != 0,
+            "the VM is backed by huge pages but its pod reserved none: request {resource} on a container of the pod, or give the runtime class a pod overhead of {resource} (pod cgroup {pod_cgroup})"
+        );
+        let max_mib = hv.memory_info.default_maxmemory as u64;
+        ensure!(
+            max_mib == 0 || reserved_mib <= max_mib,
+            "the pod reserved {reserved_mib} MiB of {resource}, more than the {max_mib} MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup {pod_cgroup})"
+        );
+        ensure!(
+            reserved_mib >= MIN_POD_SIZED_GUEST_MIB,
+            "the pod reserved {reserved_mib} MiB of {resource}, less than the {MIN_POD_SIZED_GUEST_MIB} MiB a guest needs: reserve more on a container of the pod or as the runtime class's pod overhead (pod cgroup {pod_cgroup})"
+        );
+        info!(
+            sl!(),
+            "sizing the huge page backed VM from the pod's huge page reservation";
+            "pod-cgroup" => &pod_cgroup,
+            "reserved-mb" => reserved_mib,
+            "default-memory-mb" => hv.memory_info.default_memory
+        );
+        hv.memory_info.default_memory = reserved_mib as u32;
         Ok(())
     }
 
@@ -462,6 +602,7 @@ mod tests {
                 mem_mb: 512,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
@@ -479,6 +620,7 @@ mod tests {
                 mem_mb: 512,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
@@ -496,6 +638,7 @@ mod tests {
                 mem_mb: 0,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
@@ -513,6 +656,7 @@ mod tests {
                 mem_mb: 0,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
@@ -530,12 +674,214 @@ mod tests {
                 mem_mb: 512,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
         let hv = config.hypervisor.get("qemu").unwrap();
         assert_eq!(hv.memory_info.default_memory, 640);
         assert_eq!(hv.memory_info.default_maxmemory, 640);
+    }
+
+    fn set_hugepages(config: &mut TomlConfig, hugepage_type: HugePageType) {
+        config.hypervisor.entry("qemu".to_owned()).and_modify(|hv| {
+            hv.memory_info.enable_hugepages = true;
+            hv.memory_info.enable_hugepages_pod_sizing = true;
+            hv.memory_info.hugepage_type = hugepage_type;
+        });
+    }
+
+    #[test]
+    fn test_setup_config_static_sizes_hugetlb_backed_memory_without_pod_sizing() {
+        let mut config = make_config(1.0, 0.5, 4, 256, 128, 4096, true);
+        set_hugepages(&mut config, HugePageType::Hugetlbfs);
+        config.hypervisor.entry("qemu".to_owned()).and_modify(|hv| {
+            hv.memory_info.enable_hugepages_pod_sizing = false;
+        });
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+            pod_cgroup: None,
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.memory_info.default_memory, 640);
+    }
+
+    struct StubHost {
+        page_size: Option<u64>,
+        cgroup_v2: bool,
+        limit: Option<Option<u64>>,
+    }
+
+    impl HugetlbHost for StubHost {
+        fn vm_huge_page_size(&self) -> Result<u64> {
+            self.page_size.ok_or_else(|| anyhow!("statfs failed"))
+        }
+        fn has_cgroup_v2(&self) -> bool {
+            self.cgroup_v2
+        }
+        fn pod_hugetlb_limit(&self, _pod_cgroup: &str, _page_size: u64) -> Result<Option<u64>> {
+            self.limit.ok_or_else(|| anyhow!("no such file"))
+        }
+    }
+
+    fn host_reserving(limit: u64) -> StubHost {
+        StubHost {
+            page_size: Some(1 << 30),
+            cgroup_v2: true,
+            limit: Some(Some(limit)),
+        }
+    }
+
+    fn dragonball_config(static_sandbox_resource_mgmt: bool) -> TomlConfig {
+        let mut config = make_config(1.0, 0.5, 4, 256, 128, 8192, static_sandbox_resource_mgmt);
+        set_hugepages(&mut config, HugePageType::Hugetlbfs);
+        let hv = config.hypervisor.remove("qemu").unwrap();
+        config
+            .hypervisor
+            .insert(HYPERVISOR_NAME_DRAGONBALL.to_owned(), hv);
+        config.runtime.hypervisor_name = HYPERVISOR_NAME_DRAGONBALL.to_owned();
+        config
+    }
+
+    fn pod_sized_manager(mem_mb: u32, pod_cgroup: Option<&str>) -> InitialSizeManager {
+        InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 1.2,
+                mem_mb,
+                orig_toml_default_mem: 0,
+            },
+            pod_cgroup: pod_cgroup.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn test_setup_config_sizes_a_pod_sized_guest_from_the_reservation() {
+        let mut config = dragonball_config(true);
+        let mut mgr = pod_sized_manager(512, Some("/kubepods/pod1/abc"));
+
+        mgr.setup_config_with(&mut config, &host_reserving(2 << 30))
+            .unwrap();
+        let hv = config.hypervisor.get(HYPERVISOR_NAME_DRAGONBALL).unwrap();
+        // The memory limit is charged against ordinary memory, which such a
+        // guest does not run on, so only the vCPU side follows the workload.
+        assert_eq!(hv.memory_info.default_memory, 2048);
+        assert_eq!(hv.cpu_info.default_vcpus, 1.7);
+    }
+
+    #[test]
+    fn test_setup_config_refuses_what_it_cannot_size() {
+        let cases: Vec<(&str, TomlConfig, Option<&str>, StubHost, &str)> = vec![
+            (
+                "not statically sized",
+                dragonball_config(false),
+                Some("/kubepods/pod1/abc"),
+                host_reserving(2 << 30),
+                "static_sandbox_resource_mgmt",
+            ),
+            (
+                "another hypervisor",
+                {
+                    let mut c = make_config(1.0, 0.5, 4, 256, 128, 4096, true);
+                    set_hugepages(&mut c, HugePageType::Hugetlbfs);
+                    c
+                },
+                Some("/kubepods/pod1/abc"),
+                host_reserving(2 << 30),
+                "dragonball",
+            ),
+            (
+                "no sandbox cgroup",
+                dragonball_config(true),
+                None,
+                host_reserving(2 << 30),
+                "cgroup path",
+            ),
+            (
+                "huge page size unknown",
+                dragonball_config(true),
+                Some("/kubepods/pod1/abc"),
+                StubHost {
+                    page_size: None,
+                    ..host_reserving(2 << 30)
+                },
+                "huge page size",
+            ),
+            (
+                "cgroup v1",
+                dragonball_config(true),
+                Some("/kubepods/pod1/abc"),
+                StubHost {
+                    cgroup_v2: false,
+                    ..host_reserving(2 << 30)
+                },
+                "cgroup v2",
+            ),
+            (
+                "no limit file",
+                dragonball_config(true),
+                Some("/kubepods/pod1/abc"),
+                StubHost {
+                    limit: None,
+                    ..host_reserving(2 << 30)
+                },
+                "cannot read the pod's hugepages-1Gi reservation",
+            ),
+            (
+                "unlimited",
+                dragonball_config(true),
+                Some("/kubepods/pod1/abc"),
+                StubHost {
+                    limit: Some(None),
+                    ..host_reserving(2 << 30)
+                },
+                "no finite hugepages-1Gi limit the VM can be sized from (it reads max)",
+            ),
+            (
+                "unlimited as a number",
+                dragonball_config(true),
+                Some("/kubepods/pod1/abc"),
+                StubHost {
+                    limit: Some(Some(i64::MAX as u64 & !4095)),
+                    ..host_reserving(2 << 30)
+                },
+                "no finite hugepages-1Gi limit the VM can be sized from (it reads 9223372036854771712)",
+            ),
+        ];
+        for (name, mut config, pod_cgroup, host, want) in cases {
+            let mut mgr = pod_sized_manager(512, pod_cgroup);
+            let err = mgr.setup_config_with(&mut config, &host).unwrap_err();
+            assert!(
+                format!("{err:#}").contains(want),
+                "{}: {:#} does not mention {:?}",
+                name,
+                err,
+                want
+            );
+        }
+    }
+
+    #[test]
+    fn test_setup_config_static_sizes_memory_with_transparent_huge_pages() {
+        let mut config = make_config(1.0, 0.5, 4, 256, 128, 4096, true);
+        set_hugepages(&mut config, HugePageType::THP);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+            pod_cgroup: None,
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.memory_info.default_memory, 640);
     }
 
     #[test]
@@ -547,6 +893,7 @@ mod tests {
                 mem_mb: 128,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
@@ -561,6 +908,7 @@ mod tests {
                 mem_mb: 0,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         let ann = HashMap::from([
@@ -658,6 +1006,7 @@ mod tests {
                 mem_mb: 0,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
@@ -675,6 +1024,7 @@ mod tests {
                 mem_mb: 0,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         let err = mgr.setup_config(&mut config).unwrap_err().to_string();
@@ -713,6 +1063,7 @@ mod tests {
                 mem_mb: requested_mem_mb,
                 orig_toml_default_mem: 0,
             },
+            pod_cgroup: None,
         };
 
         mgr.setup_config(&mut config).unwrap();
