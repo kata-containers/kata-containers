@@ -27,6 +27,12 @@ on:
         required: false
         type: string
         default: small
+      # Kubernetes e2e conformance. "no" skips it. "all" runs every hypervisor
+      # in run-k8s-conformance.yaml, and a comma-separated list runs that subset.
+      k8s-conformance:
+        required: false
+        type: string
+        default: "no"
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
@@ -355,6 +361,22 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+
+  run-k8s-conformance:
+    if: ${{ inputs.skip-test != 'yes' && inputs.k8s-conformance != '' && inputs.k8s-conformance != 'no' }}
+    needs: publish-kata-deploy-image-amd64
+    permissions:
+      contents: read
+    uses: ./.github/workflows/run-k8s-conformance.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+      hypervisors: ${{ inputs.k8s-conformance }}
 
   run-k8s-tests-crio:
     if: ${{ inputs.skip-test != 'yes' }}
