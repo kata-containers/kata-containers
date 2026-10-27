@@ -751,7 +751,7 @@ impl From<grpc::LinuxResources> for oci::LinuxResources {
         if resources.has_CPU() {
             oci_resources.set_cpu(Some(resources.CPU().clone().into()));
         }
-        if !resources.has_Pids() {
+        if resources.has_Pids() {
             oci_resources.set_pids(Some(resources.Pids().clone().into()));
         }
         if resources.has_BlockIO() {
@@ -1249,6 +1249,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::cap_vec2hashset;
+    use super::grpc;
     use super::oci;
 
     fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> Vec<T> {
@@ -1321,5 +1322,16 @@ mod tests {
     #[should_panic]
     fn test_cap_vec2hashset_bad() {
         cap_vec2hashset(vec!["CAP_DOES_NOT_EXIST".to_string()]);
+    }
+
+    #[test]
+    fn test_linux_resources_pids() {
+        let pids = oci::LinuxPidsBuilder::default().limit(128).build().unwrap();
+        for want in [None, Some(pids)] {
+            let mut from = oci::LinuxResources::default();
+            from.set_pids(want);
+            let to = oci::LinuxResources::from(grpc::LinuxResources::from(from));
+            assert_eq!(*to.pids(), want);
+        }
     }
 }
