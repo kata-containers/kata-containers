@@ -817,34 +817,48 @@ func bridgePciPath(bridge types.Bridge, devAddr string) (types.PciPath, error) {
 }
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {
-	if config.ImagePath != "" {
-		kernelRootParams, err := GetKernelRootParams(
+	imagePath, err := config.ImageAssetPath()
+	if err != nil {
+		return err
+	}
+	if imagePath == "" {
+		return nil
+	}
+
+	initrdPath, err := config.InitrdAssetPath()
+	if err != nil {
+		return err
+	}
+
+	// With an initrd the rootfs is mounted from virtio-blk, not pmem.
+	disableNvdimm := q.disableNvdimm || initrdPath != ""
+
+	kernelRootParams, err := GetKernelRootParams(
+		config.RootfsType,
+		disableNvdimm,
+		false,
+		config.KernelVerityParams,
+	)
+	if err != nil {
+		return err
+	}
+	if !disableNvdimm {
+		q.qemuMachine.Options = strings.Join([]string{
+			q.qemuMachine.Options, qemuNvdimmOption,
+		}, ",")
+		kernelRootParams, err = GetKernelRootParams(
 			config.RootfsType,
-			q.disableNvdimm,
-			false,
+			disableNvdimm,
+			q.dax,
 			config.KernelVerityParams,
 		)
 		if err != nil {
 			return err
 		}
-		if !q.disableNvdimm {
-			q.qemuMachine.Options = strings.Join([]string{
-				q.qemuMachine.Options, qemuNvdimmOption,
-			}, ",")
-			kernelRootParams, err = GetKernelRootParams(
-				config.RootfsType,
-				q.disableNvdimm,
-				q.dax,
-				config.KernelVerityParams,
-			)
-			if err != nil {
-				return err
-			}
-		}
-		q.kernelParams = append(q.kernelParams, kernelRootParams...)
-		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
-		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
+	q.kernelParams = append(q.kernelParams, kernelRootParams...)
+	q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
+	q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 
 	return nil
 }
