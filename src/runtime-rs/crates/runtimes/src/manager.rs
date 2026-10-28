@@ -751,13 +751,15 @@ impl RuntimeHandlerManager {
                 // starts.  The rescan uses a lightweight netlink probe during
                 // polling and only does the expensive endpoint setup once
                 // interfaces are detected.
+                // A rescan that finds no network is tolerated inside
+                // rescan_network(); an error out of it means the sandbox
+                // state could not be saved, and starting a workload on
+                // stale recovery state is worse than failing the start.
                 if process_id.process_type == ProcessType::Container {
-                    if let Err(e) = sandbox.rescan_network().await {
-                        error!(
-                            sl!(),
-                            "network rescan failed; container may lack networking: {:?}", e
-                        );
-                    }
+                    sandbox
+                        .rescan_network()
+                        .await
+                        .context("record the network rescan")?;
                 }
 
                 let shim_pid = cm
