@@ -205,10 +205,10 @@ impl DragonballInner {
 
         if self.config.boot_info.initrd.is_empty() {
             // When booting from the image, add rootfs and verity parameters here.
-            let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
-            let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
+            let mut rootfs_params = KernelParams::new_image_rootfs_kernel_params(
+                &self.config.boot_info.image,
                 &self.config.boot_info.kernel_verity_params,
-                &rootfs_driver,
+                &self.config.boot_info.vm_rootfs_driver,
                 &self.config.boot_info.rootfs_type,
                 true,
             )?;
@@ -654,6 +654,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_rootfs_partition_identity() {
+        let image = crate::kernel_param::tests::rootfs_image();
+        let (tx, _) = mpsc::channel(1);
+        let mut inner = DragonballInner::new(tx);
+        inner.config.boot_info.image = image.path().to_str().unwrap().into();
+        inner.config.boot_info.rootfs_type = "ext4".into();
+        // Match the VM rootfs driver even when container disks use a different
+        // transport. Both Dragonball rootfs transports need stable identities.
+        inner.config.blockdev_info.block_device_driver = "virtio-scsi".into();
+        for driver in [crate::VM_ROOTFS_DRIVER_BLK, crate::VM_ROOTFS_DRIVER_MMIO] {
+            inner.config.boot_info.vm_rootfs_driver = driver.into();
+            for verity in [
+                "",
+                "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+            ] {
+                inner.config.boot_info.kernel_verity_params = verity.into();
+                let params = inner.get_kernel_params().unwrap();
+                assert!(!params.contains("/dev/vda"));
+                if verity.is_empty() {
+                    assert!(params.contains("root=PARTUUID=603f58ab-01"));
+                    assert!(params.split_whitespace().any(|param| param == "rootwait"));
+                } else {
+                    assert!(params.contains("root=/dev/dm-0"));
+                    assert!(params.contains("verity 1 PARTUUID=603f58ab-01 PARTUUID=603f58ab-02 "));
+                    assert!(
+                        params.contains("dm-mod.waitfor=PARTUUID=603f58ab-01,PARTUUID=603f58ab-02")
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_initrd_skips_rootfs_partition_identity() {
+        let (tx, _) = mpsc::channel(1);
+        let mut inner = DragonballInner::new(tx);
+        inner.config.boot_info.initrd = "/initrd.img".into();
+        inner.config.boot_info.image = "/image-must-not-be-opened".into();
+        let params = inner.get_kernel_params().unwrap();
+        assert!(!params.contains("root="));
+        assert!(!params.contains("PARTUUID"));
+        assert!(!params.contains("dm-mod."));
+    }
+
+    #[test]
     fn test_guest_extension_kernel_params() {
         use kata_types::config::hypervisor::GuestExtensionImage;
 
@@ -678,7 +723,7 @@ mod tests {
         for initrd in ["/initrd.img", ""] {
             inner.config.boot_info.initrd = initrd.into();
             inner.config.boot_info.rootfs_type = "erofs".into();
-            inner.config.blockdev_info.block_device_driver = crate::VM_ROOTFS_DRIVER_BLK.into();
+            inner.config.boot_info.vm_rootfs_driver = crate::VM_ROOTFS_DRIVER_BLK.into();
             let params = inner.get_kernel_params().unwrap();
             let tokens: Vec<&str> = params.split_whitespace().collect();
             assert!(tokens.contains(
