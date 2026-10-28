@@ -2073,20 +2073,7 @@ impl Persist for VirtSandbox {
                 )),
             }?,
         };
-        // FIXME: properly handle jailed case
-        // eg: Determine if we are running jailed:
-        // let h = sandbox_state.hypervisor.clone().unwrap_or_default();
-        // Figure out the jailed path:
-        // jailed_path = h.<>
-        // and somehow store the sandbox state into the jail:
-        // persist::to_disk(&sandbox_state, &self.sid, jailed_path)?;
-        // Issue is, how to handle restore.
-        let h = sandbox_state.hypervisor.as_ref().unwrap();
-        let vmpath = match h.jailed {
-            true => h.vm_path.clone(),
-            false => "".to_string(),
-        };
-        persist::to_disk(&sandbox_state, &self.sid, vmpath.as_str())?;
+        persist::to_disk(&sandbox_state, &self.sid)?;
         Ok(sandbox_state)
     }
     /// Restore Sandbox
