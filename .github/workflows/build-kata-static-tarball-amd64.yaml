@@ -285,7 +285,8 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs.
+  # pause-image stays: the nvgpu bundle ships it (build-nvgpu-tarball runs after shim-v2, which runs after this).
   remove-rootfs-binary-artifacts:
     name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-24.04
@@ -297,7 +298,6 @@ jobs:
           - busybox
           - coco-guest-components
           - kernel-nvidia-gpu-modules
-          - pause-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -453,6 +453,58 @@ jobs:
           path: kata-go-static.tar.zst
           retention-days: 15
           if-no-files-found: error
+
+  # The nvgpu bundle (make nvgpu-tarball) is what the NVIDIA GPU runtime
+  # classes ship with, and nothing else assembles it, so its lists drift
+  # from what the kata-deploy image needs unnoticed (kata-ctl, #14147).
+  # Assemble it from the prebuilt components and build the deploy image
+  # from it, without pushing. Same needs as create-kata-tarball, so it
+  # runs alongside it and the workflow takes no longer.
+  build-nvgpu-tarball:
+    name: build-nvgpu-tarball
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2, build-tools-asset, build-kata-deploy-components]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+      - name: get-artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: kata-artifacts-amd64-*${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+          merge-multiple: true
+      - name: get-kata-ctl
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: kata-tools-artifacts-amd64-kata-ctl${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+          merge-multiple: true
+      - name: Build the nvgpu bundle from the prebuilt components
+        run: |
+          make install-prebuilt-artifacts
+          make nvgpu-tarball
+        env:
+          PREBUILT_ONLY: "yes"
+      - name: Build the kata-deploy image from the nvgpu bundle
+        run: |
+          bundle="$(mktemp -d)"
+          tar --zstd -xf kata-static.tar.zst -C "${bundle}"
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+            localhost/kata-deploy "" "${bundle}"
+        env:
+          PUSH_IMAGE: "false"
 
   build-tools-asset:
     name: build-tools-asset
