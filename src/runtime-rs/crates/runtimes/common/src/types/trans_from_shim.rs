@@ -103,6 +103,7 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
                 annotations: config.annotations,
             },
             shm_size: DEFAULT_SHM_SIZE,
+            config_path: None,
         })))
     }
 }
