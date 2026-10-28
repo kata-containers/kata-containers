@@ -54,9 +54,38 @@ impl FcInner {
         Ok(())
     }
 
+    // Firecracker does not support post-boot drive removal, so instead of
+    // detaching the drive we patch it back to the empty placeholder file it
+    // was created with at boot, which makes Firecracker close its handle on
+    // the real backing device so the host can destroy it. Without this, a
+    // terminated container's backing device (e.g. a devmapper snapshot)
+    // stays open in the VMM while the generic device manager recycles the
+    // drive index, and the next container reusing the slot fails.
+    pub(crate) async fn unplug_block_device(&mut self, id: u64) -> Result<()> {
+        if id > 0 {
+            self.patch_drive_to_placeholder(&id.to_string()).await?;
+        }
+        Ok(())
+    }
+
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl(), "Remove Device {} ", device);
-        Ok(())
+        if self.state != VmmState::VmRunning {
+            // Nothing was attached to a running VMM, so there is nothing to
+            // release; sandbox teardown unmounts any jailed resources.
+            return Ok(());
+        }
+        match device {
+            DeviceType::BlockModern(block_mod) => {
+                let block = block_mod.lock().await.clone();
+                self.unplug_block_device(block.config.index)
+                    .await
+                    .context("unplug block device")
+            }
+            // Firecracker cannot remove network or vsock devices from a
+            // running VMM and they hold no per-container host resources.
+            _ => Ok(()),
+        }
     }
 
     pub(crate) async fn update_device(&mut self, device: DeviceType) -> Result<()> {
