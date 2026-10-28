@@ -47,12 +47,8 @@ use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use std::{
     collections::HashMap,
     env,
-    ffi::OsString,
     ops::Deref,
-    os::unix::{
-        ffi::{OsStrExt, OsStringExt},
-        fs::chown,
-    },
+    os::unix::fs::chown,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -181,9 +177,7 @@ impl RuntimeHandlerManagerInner {
 
         let (mut config, config_path) =
             load_config_with_path(&sandbox_config.annotations, options).context("load config")?;
-        record_sandbox_config_path(&sandbox_config_path_file(&self.id), &config_path)
-            .await
-            .context("record sandbox config path")?;
+        sandbox_config.config_path = Some(config_path);
 
         let hypervisor_name = &config.runtime.hypervisor_name;
         let hypervisor = config
@@ -320,12 +314,11 @@ impl RuntimeHandlerManager {
         // the config plugins here before loading the sandbox configuration.
         init_runtime_handlers()?;
 
-        let config = if let Ok(spec) = load_oci_spec() {
-            let annotations = spec.annotations().clone().unwrap_or_default();
-            cleanup_config(&sandbox_config_path_file(&inner.id), &annotations).await
-        } else {
-            TomlConfig::default()
-        };
+        let annotations = load_oci_spec()
+            .ok()
+            .and_then(|spec| spec.annotations().clone())
+            .unwrap_or_default();
+        let config = cleanup_config(sandbox_state.config_path.as_deref(), &annotations);
 
         let sandbox_args = SandboxRestoreArgs {
             sid: inner.id.clone(),
@@ -474,6 +467,7 @@ impl RuntimeHandlerManager {
             hooks: spec.hooks().clone(),
             state: state.clone(),
             shm_size,
+            config_path: None,
         };
 
         inner.try_init(sandbox_config, Some(spec), options).await
@@ -859,59 +853,25 @@ fn init_runtime_handlers() -> Result<()> {
     Ok(())
 }
 
-/// File recording which configuration the sandbox was created with. The shim
-/// `delete` subcommand gets no shimv2 options, so without it cleanup would
-/// fall back to the default configuration, which may name another hypervisor.
-fn sandbox_config_path_file(sid: &str) -> PathBuf {
-    Path::new(KATA_PATH)
-        .join(sid)
-        .join(SANDBOX_CONFIG_PATH_FILE)
-}
-
-const SANDBOX_CONFIG_PATH_FILE: &str = "config_path";
-
+/// The shim `delete` subcommand gets no shimv2 options, so it reloads the
+/// configuration the sandbox was created with from its state. A state saved
+/// before the path was recorded falls back to the default configuration.
+///
 /// A config that no longer loads (removed file, missing hypervisor binary)
 /// fails the same way on every retry, while the persisted state alone is
 /// enough to stop the VMM and release resources.
-async fn cleanup_config(path_file: &Path, an: &HashMap<String, String>) -> TomlConfig {
-    load_sandbox_config(path_file, an)
-        .await
-        .unwrap_or_else(|e| {
-            warn!(
-                sl!(),
-                "failed to load the sandbox config, cleaning up with the default: {:#}", e
-            );
-            TomlConfig::default()
-        })
-}
-
-async fn load_sandbox_config(path_file: &Path, an: &HashMap<String, String>) -> Result<TomlConfig> {
-    match fs::read(path_file).await {
-        Ok(config_path) => {
-            let config_path = PathBuf::from(OsString::from_vec(config_path));
-            Ok(load_config_from(an, &config_path)
-                .context("load sandbox config")?
-                .0)
-        }
-        // Sandboxes created before the path was recorded.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            load_config(an, &None).context("load config")
-        }
-        Err(e) => Err(e).context("read sandbox config path"),
-    }
-}
-
-/// Cleanup of a sandbox whose config path is not recorded is known to use
-/// the wrong configuration, so failing to record it fails the sandbox start.
-async fn record_sandbox_config_path(path_file: &Path, config_path: &Path) -> Result<()> {
-    if let Some(dir) = path_file.parent() {
-        fs::create_dir_all(dir)
-            .await
-            .with_context(|| format!("create {}", dir.display()))?;
-    }
-    fs::write(path_file, config_path.as_os_str().as_bytes())
-        .await
-        .with_context(|| format!("write {}", path_file.display()))
+fn cleanup_config(config_path: Option<&Path>, an: &HashMap<String, String>) -> TomlConfig {
+    let loaded = match config_path {
+        Some(path) => load_config_from(an, path).map(|(config, _)| config),
+        None => load_config(an, &None),
+    };
+    loaded.unwrap_or_else(|e| {
+        warn!(
+            sl!(),
+            "failed to load the sandbox config, cleaning up with the default: {:#}", e
+        );
+        TomlConfig::default()
+    })
 }
 
 // this update the log_level of three component: agent, hypervisor, runtime
@@ -1393,7 +1353,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_config_reports_loaded_path() {
+    fn test_cleanup_uses_the_config_the_sandbox_was_created_with() {
         let tmpdir = tempfile::tempdir().unwrap();
         let path = tmpdir.path().join("configuration-qemu.toml");
         write_qemu_config(&path, "/bin/sh");
@@ -1407,90 +1367,26 @@ mod tests {
         let (_, loaded_path) = load_config_with_path(&HashMap::new(), &options).unwrap();
         assert_eq!(loaded_path, std::fs::canonicalize(&path).unwrap());
 
-        // The shim `delete` subcommand reloads the sandbox config from the
-        // recorded path, without the shimv2 options.
-        let (config, _) = load_config_from(&HashMap::new(), &loaded_path).unwrap();
+        // The shim `delete` subcommand gets no shimv2 options, only the path
+        // saved in the sandbox state.
+        let config = cleanup_config(Some(&loaded_path), &HashMap::new());
         assert_eq!(config.runtime.hypervisor_name, "qemu");
-    }
-
-    #[tokio::test]
-    async fn test_cleanup_uses_recorded_config() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let config_path = tmpdir.path().join("configuration-qemu.toml");
-        write_qemu_config(&config_path, "/bin/sh");
-        let path_file = tmpdir.path().join("sid").join(SANDBOX_CONFIG_PATH_FILE);
-
-        init_runtime_handlers().unwrap();
-        record_sandbox_config_path(&path_file, &config_path)
-            .await
-            .unwrap();
-
-        let config = cleanup_config(&path_file, &HashMap::new()).await;
-        assert_eq!(config.runtime.hypervisor_name, "qemu");
-    }
-
-    #[tokio::test]
-    async fn test_record_config_path_reports_failure() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let not_a_dir = tmpdir.path().join("sid");
-        std::fs::write(&not_a_dir, b"").unwrap();
-        let path_file = not_a_dir.join(SANDBOX_CONFIG_PATH_FILE);
-
-        let err = record_sandbox_config_path(&path_file, Path::new("/configuration.toml"))
-            .await
-            .unwrap_err();
-        assert!(
-            format!("{:#}", err).contains(&not_a_dir.display().to_string()),
-            "error does not name the path: {:#}",
-            err
-        );
-    }
-
-    #[derive(Debug)]
-    enum UnloadableConfig {
-        MissingHypervisorBinary,
-        RemovedConfigFile,
-        UnreadablePathFile,
     }
 
     #[rstest]
-    #[case::missing_hypervisor_binary(UnloadableConfig::MissingHypervisorBinary)]
-    #[case::removed_config_file(UnloadableConfig::RemovedConfigFile)]
-    #[case::unreadable_path_file(UnloadableConfig::UnreadablePathFile)]
-    #[tokio::test]
-    async fn test_cleanup_falls_back_to_default_config(#[case] case: UnloadableConfig) {
+    #[case::missing_hypervisor_binary(true)]
+    #[case::removed_config_file(false)]
+    fn test_cleanup_falls_back_to_default_config(#[case] config_file_exists: bool) {
         let tmpdir = tempfile::tempdir().unwrap();
-        let config_path = tmpdir.path().join("configuration-qemu.toml");
-        let path_file = tmpdir.path().join("sid").join(SANDBOX_CONFIG_PATH_FILE);
-
-        init_runtime_handlers().unwrap();
-        match case {
-            UnloadableConfig::MissingHypervisorBinary => {
-                write_qemu_config(&config_path, "/nonexistent/qemu-system");
-                record_sandbox_config_path(&path_file, &config_path)
-                    .await
-                    .unwrap();
-            }
-            UnloadableConfig::RemovedConfigFile => {
-                write_qemu_config(&config_path, "/bin/sh");
-                record_sandbox_config_path(&path_file, &config_path)
-                    .await
-                    .unwrap();
-                std::fs::remove_file(&config_path).unwrap();
-            }
-            // Reading a directory fails with an error other than NotFound.
-            UnloadableConfig::UnreadablePathFile => std::fs::create_dir_all(&path_file).unwrap(),
+        let path = tmpdir.path().join("configuration-qemu.toml");
+        if config_file_exists {
+            write_qemu_config(&path, "/nonexistent/qemu-system");
         }
 
-        assert!(
-            load_sandbox_config(&path_file, &HashMap::new())
-                .await
-                .is_err(),
-            "case {:?}: config unexpectedly loaded",
-            case
-        );
-        let config = cleanup_config(&path_file, &HashMap::new()).await;
-        assert!(config.runtime.hypervisor_name.is_empty(), "case {:?}", case);
-        assert!(!config.runtime.keep_abnormal, "case {:?}", case);
+        init_runtime_handlers().unwrap();
+        assert!(load_config_from(&HashMap::new(), &path).is_err());
+        let config = cleanup_config(Some(&path), &HashMap::new());
+        assert!(config.runtime.hypervisor_name.is_empty());
+        assert!(!config.runtime.keep_abnormal);
     }
 }
