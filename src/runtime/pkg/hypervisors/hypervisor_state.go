@@ -58,4 +58,11 @@ type HypervisorState struct {
 	ColdPlugVFIO      config.PCIePort
 	PCIeRootPort      uint32
 	PCIeSwitchPort    uint32
+
+	// Remote hypervisor specific fields
+
+	// AgentSocketPath is used by the remote hypervisor to persist the agent
+	// tunnel socket path returned by the remote service (e.g. cloud-api-adaptor)
+	// so that it can be restored on shim restart.
+	AgentSocketPath string
 }
