@@ -79,8 +79,8 @@ impl Rootfs for ShareFsRootfs {
         None
     }
 
-    async fn get_device_id(&self) -> Result<Option<String>> {
-        Ok(None)
+    async fn get_device_ids(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
     }
 
     async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {

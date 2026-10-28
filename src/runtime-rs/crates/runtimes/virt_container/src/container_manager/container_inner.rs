@@ -698,7 +698,7 @@ mod tests {
         async fn cleanup(&self, _: &RwLock<DeviceManager>) -> Result<()> {
             FakeResource::cleanup(self).await
         }
-        async fn get_device_id(&self) -> Result<Option<String>> {
+        async fn get_device_ids(&self) -> Result<Vec<String>> {
             unimplemented!()
         }
     }
