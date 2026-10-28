@@ -12,8 +12,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	podresourcesv1 "k8s.io/kubelet/pkg/apis/podresources/v1"
@@ -78,7 +81,14 @@ func kubeletPodResourceSocketAvailable(sock string) bool {
 
 func coldPlugWithAPI(ctx context.Context, s *service, ociSpec *specs.Spec) error {
 	ann := ociSpec.Annotations
-	devices, err := getDeviceSpec(ctx, s.config.PodResourceAPISock, ann)
+	sources := s.config.PodResourceDeviceSources
+	if len(sources) == 0 {
+		// Config loading defaults this to ["device-plugin"]; if it is empty
+		// anyway, fail closed rather than guess a source.
+		return fmt.Errorf("cold plug: pod_resource_device_sources is empty, refusing to guess a device source")
+	}
+
+	devices, err := getDeviceSpec(ctx, s.config.PodResourceAPISock, ann, sources)
 	if err != nil {
 		return err
 	}
@@ -100,7 +110,19 @@ func coldPlugWithAPI(ctx context.Context, s *service, ociSpec *specs.Spec) error
 // kubelet's pod resource api. This is necessary for cold plug because
 // the Kubelet does not pass the device information via CRI during
 // Sandbox creation.
-func getDeviceSpec(ctx context.Context, socket string, ann map[string]string) ([]string, error) {
+//
+// sources selects which PodResources fields are read: "device-plugin"
+// (container.Devices) and/or "dra" (DynamicResources CDI devices). List both
+// only for disjoint device sets: kubelet double-counts a device advertised via
+// both at scheduling; a same-device collision here is caught by the overlap check.
+// Fail closed: an unlisted source carrying CDI-resolvable data is an error,
+// so misconfiguration cannot silently boot the guest without its devices;
+// data that never resolves in the CDI registry is not cold-pluggable and
+// is exempt.
+func getDeviceSpec(ctx context.Context, socket string, ann map[string]string, sources []string) ([]string, error) {
+	wantDevicePlugin := contains(sources, oci.PodResourceDeviceSourceDevicePlugin)
+	wantDRA := contains(sources, oci.PodResourceDeviceSourceDRA)
+
 	podName, podNs := getPodIdentifiers(ann)
 
 	// create dialer for unix socket
@@ -141,17 +163,142 @@ func getDeviceSpec(ctx context.Context, socket string, ann map[string]string) ([
 	}
 
 	// Process results
-	var devices []string
+	var devices, allDevicePluginDevs, allDRADevs []string
 	for _, container := range podRes.Containers {
+		if container == nil {
+			// A nil entry would panic on the field accesses below.
+			continue
+		}
+		var devicePluginDevs []string
 		for _, d := range container.Devices {
 			shimLog.WithField("container", container.Name).Debugf("Pod Resources Device: %s = %v\n",
 				d.ResourceName, d.DeviceIds)
-			cdiDevs := formatCDIDevIDs(d.ResourceName, d.DeviceIds)
-			devices = append(devices, cdiDevs...)
+			devicePluginDevs = append(devicePluginDevs, formatCDIDevIDs(d.ResourceName, d.DeviceIds)...)
+		}
+
+		draDevs := collectPodResourceCDIDevices(container)
+
+		if !wantDevicePlugin && len(devicePluginDevs) > 0 {
+			if resolvable := cdiResolvableDevices(devicePluginDevs); len(resolvable) > 0 {
+				return nil, fmt.Errorf(
+					"cold plug: container %q has cold-pluggable (CDI-resolvable) device-plugin PodResources data (%v) but %q is not in pod_resource_device_sources=%v; "+
+						"add %q to the config option or this data will be silently dropped",
+					container.Name, resolvable, oci.PodResourceDeviceSourceDevicePlugin, sources, oci.PodResourceDeviceSourceDevicePlugin)
+			}
+			shimLog.WithField("container", container.Name).Debug(
+				"cold plug: container has device-plugin PodResources data but none of it is CDI-resolvable; ignoring (delivered via the regular OCI container path)")
+		}
+		if !wantDRA && len(draDevs) > 0 {
+			if resolvable := cdiResolvableDevices(draDevs); len(resolvable) > 0 {
+				return nil, fmt.Errorf(
+					"cold plug: container %q has cold-pluggable (CDI-resolvable) DRA PodResources data (%v) but %q is not in pod_resource_device_sources=%v; "+
+						"add %q to the config option or this data will be silently dropped",
+					container.Name, resolvable, oci.PodResourceDeviceSourceDRA, sources, oci.PodResourceDeviceSourceDRA)
+			}
+			shimLog.WithField("container", container.Name).Debug(
+				"cold plug: container has DRA PodResources data but none of it is CDI-resolvable; ignoring (delivered via the regular OCI container path)")
+		}
+
+		if wantDevicePlugin {
+			deduped := dedupStrings(devicePluginDevs)
+			devices = append(devices, deduped...)
+			allDevicePluginDevs = append(allDevicePluginDevs, deduped...)
+		}
+		if wantDRA {
+			deduped := dedupStrings(draDevs)
+			devices = append(devices, deduped...)
+			allDRADevs = append(allDRADevs, deduped...)
 		}
 	}
 
-	return devices, nil
+	if wantDevicePlugin && wantDRA {
+		if err := checkCrossSourcePhysicalOverlap(dedupStrings(allDevicePluginDevs), dedupStrings(allDRADevs)); err != nil {
+			return nil, err
+		}
+	}
+
+	return dedupStrings(devices), nil
+}
+
+// collectPodResourceCDIDevices returns the CDI device names in a container's
+// DynamicResources (KEP-3695): DRA allocations are reported only there, never
+// in the device-plugin Devices field.
+func collectPodResourceCDIDevices(container *podresourcesv1.ContainerResources) []string {
+	var devices []string
+	for _, dr := range container.GetDynamicResources() {
+		for _, cr := range dr.GetClaimResources() {
+			for _, cdiDev := range cr.GetCDIDevices() {
+				name := cdiDev.GetName()
+				if name == "" {
+					continue
+				}
+				shimLog.WithFields(logrus.Fields{
+					"container":      container.Name,
+					"claim":          dr.GetClaimName(),
+					"claimNamespace": dr.GetClaimNamespace(),
+				}).Debugf("Pod Resources DRA CDI Device: %s\n", name)
+				devices = append(devices, name)
+			}
+		}
+	}
+	return devices
+}
+
+// dedupStrings deduplicates preserving order: a ResourceClaim shared by
+// several containers reports the same CDI device once per container, and
+// plugging it twice would duplicate its OCI edits.
+func dedupStrings(in []string) []string {
+	if len(in) == 0 {
+		return in
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+// cdiResolvableDevices returns the names that resolve to at least one device
+// node in the CDI registry; only node-bearing devices are cold-plugged
+// (InjectCDIDevices acts on device nodes), so only those matter to the
+// fail-closed unlisted-source check. A CDI device with only env/mount edits
+// injects nothing here and must not trip the guard. A stale registry view can
+// only soften the check into a debug log: InjectCDIDevices re-checks after an
+// explicit Refresh.
+func cdiResolvableDevices(devs []string) []string {
+	if len(devs) == 0 {
+		return nil
+	}
+
+	var resolvable []string
+	registry := cdi.GetRegistry()
+	for _, name := range devs {
+		dev := registry.DeviceDB().GetDevice(name)
+		if dev == nil || dev.Device == nil {
+			continue
+		}
+		for _, node := range dev.ContainerEdits.DeviceNodes {
+			if node != nil && node.Path != "" {
+				resolvable = append(resolvable, name)
+				break
+			}
+		}
+	}
+	return resolvable
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // formatCDIDevIDs formats the way CDI package expects
