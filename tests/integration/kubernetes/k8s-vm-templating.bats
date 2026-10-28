@@ -136,8 +136,7 @@ DROPIN
 	ctr_name="test-container"
 
 	pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
-	# TODO: Use the shared template once CLH supports multi-layer images with EROFS.
-	cp "$pod_config_dir/busybox-vm-templating.yaml" "$pod_config"
+	cp "$pod_config_dir/busybox-template.yaml" "$pod_config"
 	yq -i ".spec.nodeName = \"${node}\"" "$pod_config"
 
 	sed -i "s/POD_NAME/$pod_name/" "$pod_config"

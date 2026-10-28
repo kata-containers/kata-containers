@@ -33,7 +33,9 @@ setup() {
 
 	# Print environment variables
 	grep_pod_exec_output "${pod_name}" "MY_POD_NAME=${pod_name}" "${exec_command[@]}"
-	grep_pod_exec_output "${pod_name}" "HOST_IP=\([0-9]\+\(\.\|$\)\)\{4\}" "${exec_command[@]}"
+	host_ip="$(kubectl get pod "${pod_name}" -o jsonpath='{.status.hostIP}')"
+	[[ -n "${host_ip}" ]]
+	grep_pod_exec_output "${pod_name}" "^HOST_IP=${host_ip//./\\.}$" "${exec_command[@]}"
 
 	# Requested 32Mi of memory
 	grep_pod_exec_output "${pod_name}" "MEMORY_REQUESTS=$((1024 * 1024 * 32))" "${exec_command[@]}"

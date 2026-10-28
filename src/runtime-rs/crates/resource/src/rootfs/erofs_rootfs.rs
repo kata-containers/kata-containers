@@ -918,8 +918,8 @@ impl Rootfs for ErofsMultiLayerRootfs {
         }
     }
 
-    async fn get_device_id(&self) -> Result<Option<String>> {
-        Ok(self.device_ids.first().cloned())
+    async fn get_device_ids(&self) -> Result<Vec<String>> {
+        Ok(self.device_ids.clone())
     }
 
     async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
