@@ -5255,9 +5255,11 @@ dependencies = [
  "async-trait",
  "kata-sys-util",
  "kata-types",
+ "rstest",
  "safe-path",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
