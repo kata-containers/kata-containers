@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cgroups::cgroup_persist::CgroupState;
 #[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct ResourceState {
     pub endpoint: Vec<EndpointState>,
     pub cgroup_state: Option<CgroupState>,
