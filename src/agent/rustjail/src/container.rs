@@ -43,7 +43,7 @@ use protocols::agent::StatsContainerResponse;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::fcntl::{FcntlArg, FdFlag};
-use nix::mount::MntFlags;
+use nix::mount::{MntFlags};
 use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
@@ -72,6 +72,14 @@ use tokio::sync::Mutex;
 
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::validate::valid_env;
+use kata_sys_util::mount::get_mount_type;
+use kata_sys_util::spec::get_bundle_path;
+use oci_spec::runtime::LinuxNamespaceType;
+use rust_criu::{criu_ns_to_key, Criu};
+use std::fs::{read_link, DirBuilder};
+use std::io::BufRead;
+use std::os::unix::fs::DirBuilderExt;
+
 
 pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
@@ -118,6 +126,10 @@ impl Default for ContainerStatus {
 // We might want to change this to thiserror in the future
 const MissingLinux: &str = "no linux config";
 const InvalidNamespace: &str = "invalid namespace type";
+pub const CRIU_VERSION_MINIMUM: u32 = 31500;
+const DESCRIPTORS_JSON: &str = "descriptors.json";
+const CRIU_CHECKPOINT_LOG_FILE: &str = "dump.log";
+pub const DEFAULT_CGROUP_ROOT: &str = "/sys/fs/cgroup";
 
 pub type Config = CreateOpts;
 type NamespaceType = String;
@@ -305,7 +317,138 @@ impl PidNs {
 pub trait Container: BaseContainer {
     fn pause(&mut self) -> Result<()>;
     fn resume(&mut self) -> Result<()>;
+     fn checkpoint(
+        &mut self,
+        work_dir: &str,
+        path: &str,
+        exited: bool,
+        allow_open_tcp: bool,
+        allow_external_unix_sockets: bool,
+        allow_terminal: bool,
+        file_locks: bool,
+        empty_namespaces: &[String],
+        parent_path: &str,
+    ) -> Result<()>;
 }
+
+
+pub fn check_criu_version(min_version: u32) -> Result<()> {
+    let mut criu = Criu::new().map_err(|e| anyhow!("failed to create CRIU instance: {}", e))?;
+
+    let version = criu
+        .get_criu_version()
+        .map_err(|e| anyhow!(format!("CRIU version check failed: {}", e)))?;
+
+    compare_criu_version(version, min_version)
+}
+
+fn compare_criu_version(version: u32, min_version: u32) -> Result<()> {
+    if version < min_version {
+        return Err(anyhow!(
+            "CRIU version {} is below minimum required version {}",
+            version,
+            min_version
+        ));
+    }
+    Ok(())
+}
+
+pub fn list_subsystem_mount_points() -> Result<Vec<PathBuf>> {
+    let file = std::fs::File::open("/proc/self/mountinfo")?;
+    let reader = std::io::BufReader::new(file);
+    let mut mount_points = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let parts: Vec<&str> = line.split_whitespace().collect();
+
+        let sep_idx = match parts.iter().position(|&p| p == "-") {
+            Some(i) => i,
+            None => continue,
+        };
+
+        if sep_idx + 2 >= parts.len() || parts.len() < 5 {
+            continue;
+        }
+
+        let fs_type = parts[sep_idx + 1];
+        let mount_dir = parts[4];
+        if fs_type == "cgroup" || fs_type == "cgroup2" {
+            mount_points.push(PathBuf::from(mount_dir));
+        }
+    }
+
+    Ok(mount_points)
+}
+
+
+fn get_namespace_path(spec: &Spec, ns_type: LinuxNamespaceType) -> Option<String> {
+    let linux = spec.linux().as_ref()?;
+    let namespaces = linux.namespaces().as_ref()?;
+    namespaces
+        .iter()
+        .find_map(|ns: &oci_spec::runtime::LinuxNamespace| {
+            if ns.typ() == ns_type {
+                ns.path().as_ref().map(|p| p.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        })
+}
+
+
+fn ns_name(ns_type: LinuxNamespaceType) -> &'static str {
+    match ns_type {
+        LinuxNamespaceType::Network => "net",
+        LinuxNamespaceType::Pid => "pid",
+        LinuxNamespaceType::Mount => "mnt",
+        LinuxNamespaceType::Ipc => "ipc",
+        LinuxNamespaceType::Uts => "uts",
+        LinuxNamespaceType::User => "user",
+        LinuxNamespaceType::Cgroup => "cgroup",
+        LinuxNamespaceType::Time => "time",
+    }
+}
+
+
+pub fn handle_checkpointing_external_namespaces(
+    criu: &mut Criu,
+    spec: &Spec,
+    ns_type: LinuxNamespaceType,
+) -> Result<(), anyhow::Error> {
+    let ns_path = match get_namespace_path(spec, ns_type) {
+        Some(path) => path,
+        None => return Ok(()),
+    };
+
+    let _ = std::fs::File::open(&ns_path).map_err(|err| {
+        return anyhow!("failed to open namespace for checkpoint: {}", err);
+    })?;
+    let stat = nix::sys::stat::stat(ns_path.as_str()).map_err(|err| {
+        return anyhow!("failed to stat namespace: {}", err);
+    })?;
+
+    let name = ns_name(ns_type);
+    let external = format!("{}[{}]:{}", name, stat.st_ino, criu_ns_to_key(name));
+    criu.add_external(external);
+    Ok(())
+}
+
+
+pub fn resolve_mount_dest_in_rootfs(rootfs: &std::path::Path, dest: &str) -> String {
+    let dest_path = std::path::Path::new(dest);
+    let full = rootfs.join(dest_path.strip_prefix("/").unwrap_or(dest_path));
+    match std::fs::read_link(&full) {
+        Ok(target) if target.is_absolute() => target.to_string_lossy().into_owned(),
+        Ok(target) => {
+            // Relative symlink: resolve relative to dest's parent directory.
+            let parent = dest_path.parent().unwrap_or(std::path::Path::new("/"));
+            parent.join(target).to_string_lossy().into_owned()
+        }
+        Err(_) => dest.to_owned(),
+    }
+}
+
 
 impl Container for LinuxContainer {
     fn pause(&mut self) -> Result<()> {
@@ -334,6 +477,130 @@ impl Container for LinuxContainer {
 
         self.status.transition(ContainerState::Running);
 
+        Ok(())
+    }
+    fn checkpoint(
+        &mut self,
+        work_dir: &str,
+        path: &str,
+        exited: bool,
+        allow_open_tcp: bool,
+        allow_external_unix_sockets: bool,
+        allow_terminal: bool,
+        file_locks: bool,
+        _empty_namespaces: &[String],
+        parent_path: &str,
+    ) -> Result<()> {
+        check_criu_version(CRIU_VERSION_MINIMUM)?;
+        let p = Path::new(path);
+        let base_name = p
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("invalid path, no file name: {}", path))?;
+
+        let checkpoint_path =
+            PathBuf::from("/run/kata-containers/shared/containers/passthrough/sandbox-mounts")
+                .join("tmp")
+                .join(base_name);
+        if let Err(err) = DirBuilder::new().mode(0o700).create(&checkpoint_path) {
+            if err.kind() != std::io::ErrorKind::AlreadyExists {
+                return Err(err.into());
+            }
+        }
+        let mut criu =
+            rust_criu::Criu::new().map_err(|e| anyhow!("error in creating criu struct: {}", e))?;
+        let spec_file = Path::new(&self.root).join("config.json");
+        let spec = oci::Spec::load(spec_file)?;
+        let mounts = spec.mounts().clone();
+        for m in mounts.unwrap_or_default() {
+            let mnt_type = get_mount_type(&m);
+            if mnt_type == "bind" {
+                let dest = m
+                    .destination()
+                    .clone()
+                    .into_os_string()
+                    .into_string()
+                    .expect("failed to convert mount destination");
+                criu.set_external_mount(dest.clone(), dest);
+            } else if mnt_type == "cgroup" {
+                if !cgroups::hierarchies::is_cgroup2_unified_mode() {
+                    let mounts = list_subsystem_mount_points()?;
+                    for mp in mounts {
+                        let cgroup_mount = mp
+                            .clone()
+                            .into_os_string()
+                            .into_string()
+                            .expect("failed to convert mount point");
+                        if cgroup_mount.starts_with(DEFAULT_CGROUP_ROOT) {
+                            criu.set_external_mount(cgroup_mount.clone(), cgroup_mount);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Err(err) = DirBuilder::new().mode(0o700).create(work_dir) {
+            if err.kind() != std::io::ErrorKind::AlreadyExists {
+                return Err(err.into());
+            }
+        };
+        let directory = std::fs::File::open(&checkpoint_path)
+            .map_err(|err| anyhow!("failed to open checkpoint directory: {}", err))?;
+        criu.set_images_dir_fd(directory.as_raw_fd());
+
+        let work_dir = std::fs::File::open(work_dir)
+            .map_err(|err| anyhow!("failed to open work_dir directory: {}", err))?;
+        criu.set_work_dir_fd(work_dir.as_raw_fd());
+        let pid = self.init_process_pid;
+        // Remember original stdin, stdout, stderr for container restore.
+        let mut descriptors = Vec::new();
+        for n in 0..3 {
+            let link_path = match read_link(format!("/proc/{pid}/fd/{n}")) {
+                Ok(lp) => lp.into_os_string().into_string().unwrap(),
+                Err(..) => "/dev/null".to_string(),
+            };
+            descriptors.push(link_path);
+        }
+
+        let descriptors_json_path = PathBuf::from(&checkpoint_path).join(DESCRIPTORS_JSON);
+        let mut descriptors_json =
+            std::fs::File::create(&descriptors_json_path).map_err(|err| {
+                anyhow!(
+                    "failed to create dir {:?}:{}",
+                    descriptors_json_path.display(),
+                    err
+                )
+            })?;
+
+        write!(
+            descriptors_json,
+            "{}",
+            serde_json::to_string(&descriptors).map_err(|err| { anyhow!("{}", err) })?
+        )
+        .map_err(|err| anyhow!("write failed:{}", err))?;
+        criu.set_log_file(CRIU_CHECKPOINT_LOG_FILE.to_string());
+        criu.set_log_level(4);
+        criu.set_pid(pid);
+        criu.set_ext_unix_sk(allow_external_unix_sockets);
+        criu.set_shell_job(allow_terminal);
+        criu.set_tcp_established(allow_open_tcp);
+        criu.set_file_locks(file_locks);
+        criu.set_orphan_pts_master(true);
+        criu.set_manage_cgroups(true);
+        criu.set_leave_running(exited);
+        let bundle_path = get_bundle_path()?;
+        criu.set_root(bundle_path.clone().into_os_string().into_string().unwrap());
+        criu.cgroups_mode(rust_criu::CgMode::SOFT);
+        criu.set_link_remap(false);
+        if !parent_path.trim().is_empty() {
+            criu.set_parent_img(parent_path.to_string());
+        };
+        handle_checkpointing_external_namespaces(&mut criu, &spec, LinuxNamespaceType::Network)?;
+        handle_checkpointing_external_namespaces(&mut criu, &spec, LinuxNamespaceType::Pid)?;
+        criu.dump()
+            .with_context(|| format!("checkpointing container failed"))
+            .map_err(|e| {
+                anyhow::anyhow!("{}, please check criu detailed log", e,)
+            })?;
         Ok(())
     }
 }
