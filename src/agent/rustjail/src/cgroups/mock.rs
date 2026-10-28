@@ -29,7 +29,7 @@ pub struct Manager {
 }
 
 impl CgroupManager for Manager {
-    fn apply(&self, _: pid_t) -> Result<()> {
+    fn apply(&self, _: pid_t, _: pid_t) -> Result<()> {
         Ok(())
     }
 
