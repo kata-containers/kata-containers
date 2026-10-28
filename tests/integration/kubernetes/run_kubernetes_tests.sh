@@ -113,6 +113,7 @@ else
 		"k8s-sandbox-cgroup.bats" \
 		"k8s-sandbox-cgroup-placement.bats" \
 		"k8s-seccomp.bats" \
+		"k8s-shim-kill-cleanup.bats" \
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
