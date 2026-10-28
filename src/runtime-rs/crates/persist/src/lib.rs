@@ -41,6 +41,24 @@ where
     from_disk_in(Path::new(KATA_PATH), sid)
 }
 
+pub fn remove_from_disk(sid: &str) -> Result<()> {
+    remove_from_disk_in(Path::new(KATA_PATH), sid)
+}
+
+pub fn remove_from_disk_in(root: &Path, sid: &str) -> Result<()> {
+    verify_id(sid).context("failed to verify sid")?;
+    if !root.join(sid).exists() {
+        return Ok(());
+    }
+    let path = state_dir_in(root, sid)?.join(PERSIST_FILE);
+    match std::fs::remove_file(&path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(e).with_context(|| format!("failed to remove {}", path.display()))
+        }
+        _ => Ok(()),
+    }
+}
+
 pub fn state_dir_in(root: &Path, sid: &str) -> Result<PathBuf> {
     verify_id(sid).context("failed to verify sid")?;
     Ok(scoped_join(root, sid)?)
@@ -140,6 +158,18 @@ mod tests {
         assert_eq!(from_disk_in::<Kata>(&root, "sid").unwrap(), kata(1));
     }
 
+    #[rstest]
+    #[case::sandbox_dir_removed(true)]
+    #[case::root_missing(false)]
+    fn removing_a_state_whose_directory_is_gone_succeeds(#[case] root_exists: bool) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("kata");
+        if root_exists {
+            std::fs::create_dir(&root).unwrap();
+        }
+        remove_from_disk_in(&root, "sid").unwrap();
+    }
+
     #[test]
     fn saving_again_replaces_the_state_and_leaves_no_temporary_file() {
         let root = tempfile::tempdir().unwrap();
@@ -170,6 +200,15 @@ mod tests {
         to_disk_in(root.path(), &kata(1), "sid").unwrap();
         assert!(to_disk_in(root.path(), &Broken, "sid").is_err());
         assert_eq!(from_disk_in::<Kata>(root.path(), "sid").unwrap(), kata(1));
+    }
+
+    #[test]
+    fn removing_the_state_twice_succeeds() {
+        let root = tempfile::tempdir().unwrap();
+        to_disk_in(root.path(), &kata(1), "sid").unwrap();
+        remove_from_disk_in(root.path(), "sid").unwrap();
+        remove_from_disk_in(root.path(), "sid").unwrap();
+        assert!(from_disk_in::<Kata>(root.path(), "sid").is_err());
     }
 
     #[test]
