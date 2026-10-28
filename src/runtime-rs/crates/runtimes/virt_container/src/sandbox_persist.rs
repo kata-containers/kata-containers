@@ -21,6 +21,9 @@ pub struct SandboxState {
     /// subcommand gets no shimv2 options to find it otherwise.
     #[serde(default)]
     pub config_path: Option<PathBuf>,
+    /// Network namespace the runtime created for the sandbox and has to remove.
+    #[serde(default)]
+    pub created_netns: Option<String>,
 }
 
 #[cfg(test)]
@@ -48,5 +51,6 @@ mod tests {
         );
         assert_eq!(r.endpoint.len(), 1);
         assert_eq!(state.config_path, None);
+        assert_eq!(state.created_netns, None);
     }
 }

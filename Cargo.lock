@@ -8728,6 +8728,7 @@ dependencies = [
  "pod-resources-rs",
  "protobuf",
  "resource",
+ "rstest",
  "runtime-spec",
  "sendfd",
  "serde",
