@@ -186,6 +186,9 @@ pub struct VirtSandbox {
     config_path: Option<PathBuf>,
     // Network namespace the runtime created for the sandbox and has to remove.
     created_netns: Option<String>,
+    // Held from the snapshot to the write, so an older snapshot cannot
+    // replace a newer one.
+    saving_state: Arc<Mutex<()>>,
 }
 
 #[derive(Default)]
@@ -374,6 +377,7 @@ impl VirtSandbox {
             shm_size: sandbox_config.shm_size,
             config_path: sandbox_config.config_path.clone(),
             created_netns: created_netns(&sandbox_config.network_env),
+            saving_state: Arc::new(Mutex::new(())),
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
@@ -1657,6 +1661,10 @@ impl Sandbox for VirtSandbox {
         })
     }
 
+    async fn save_state(&self) -> Result<()> {
+        self.save().await.map(|_| ())
+    }
+
     async fn wait(&self) -> Result<SandboxExitInfo> {
         info!(sl!(), "wait sandbox");
         {
@@ -2046,6 +2054,7 @@ impl Persist for VirtSandbox {
 
     /// Save a state of Sandbox
     async fn save(&self) -> Result<Self::State> {
+        let _saving = self.saving_state.lock().await;
         let hypervisor_state = self.hypervisor.save_state().await?;
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: VIRTCONTAINER.to_string(),
@@ -2174,6 +2183,7 @@ impl Persist for VirtSandbox {
             vmm_process: Arc::new(RwLock::new(None)),
             config_path: sandbox_state.config_path,
             created_netns: sandbox_state.created_netns,
+            saving_state: Arc::new(Mutex::new(())),
         })
     }
 }

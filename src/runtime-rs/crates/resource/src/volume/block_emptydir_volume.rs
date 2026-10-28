@@ -26,6 +26,7 @@ use kata_types::mount::{
 };
 use nix::sys::statfs::statfs;
 use oci_spec::runtime as oci;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::volume::utils::KATA_MOUNT_BIND_TYPE;
@@ -40,10 +41,25 @@ const DISCARD_MOUNT_OPTION: &str = "discard";
 
 /// Information about an ephemeral disk created on the host, needed for
 /// sandbox-level cleanup.
-#[derive(Debug, Clone)]
-pub(crate) struct EphemeralDiskInfo {
+/// A disk created for a block emptyDir, and its direct-volume record.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EphemeralDiskInfo {
     pub disk_path: PathBuf,
     pub source_path: String,
+}
+
+/// The disk BlockEmptyDirVolume::new() creates for the mount.
+pub(crate) fn disk_info(m: &oci::Mount) -> Result<EphemeralDiskInfo> {
+    let source = m
+        .source()
+        .as_ref()
+        .ok_or_else(|| anyhow!("block emptyDir mount has no source"))?
+        .display()
+        .to_string();
+    Ok(EphemeralDiskInfo {
+        disk_path: Path::new(&source).join(DISK_IMG),
+        source_path: source,
+    })
 }
 
 #[derive(Clone)]
@@ -51,7 +67,6 @@ pub(crate) struct BlockEmptyDirVolume {
     storage: Option<agent::Storage>,
     mount: oci::Mount,
     device_id: String,
-    pub(crate) disk_info: EphemeralDiskInfo,
 }
 
 impl BlockEmptyDirVolume {
@@ -65,15 +80,11 @@ impl BlockEmptyDirVolume {
         let encrypted = emptydir_mode == EMPTYDIR_MODE_BLOCK_ENCRYPTED;
         let discard_unmap =
             emptydir_mode == EMPTYDIR_MODE_BLOCK_PLAIN && block_device_discard_supported;
-        let source = m
-            .source()
-            .as_ref()
-            .ok_or_else(|| anyhow!("block emptyDir mount has no source"))?
-            .display()
-            .to_string();
-
+        let EphemeralDiskInfo {
+            disk_path,
+            source_path: source,
+        } = disk_info(m)?;
         let emptydir_path = Path::new(&source);
-        let disk_path = emptydir_path.join(DISK_IMG);
 
         // Stat the emptyDir now; kubelet sets its GID to the pod's fsGroup so
         // we need the value both for mountInfo.json metadata and for the agent
@@ -159,16 +170,10 @@ impl BlockEmptyDirVolume {
             });
         }
 
-        let disk_info = EphemeralDiskInfo {
-            disk_path,
-            source_path: source,
-        };
-
         Ok(Self {
             storage: Some(storage),
             mount,
             device_id,
-            disk_info,
         })
     }
 }

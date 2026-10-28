@@ -1209,6 +1209,7 @@ impl Persist for ResourceManagerInner {
         Ok(ResourceState {
             endpoint: endpoint_state,
             cgroup_state: Some(cgroup_state),
+            ephemeral_disks: self.volume_resource.ephemeral_disks().await,
         })
     }
 
@@ -1260,7 +1261,7 @@ impl Persist for ResourceManagerInner {
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
-            volume_resource: VolumeResource::new(),
+            volume_resource: VolumeResource::restore(resource_state.ephemeral_disks),
             cgroups_resource: CgroupsResource::restore(
                 args,
                 resource_state.cgroup_state.unwrap_or_default(),
