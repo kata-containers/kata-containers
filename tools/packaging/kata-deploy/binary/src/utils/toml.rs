@@ -77,7 +77,13 @@ fn write_toml_with_header(file_path: &Path, header: &str, doc: &DocumentMut) -> 
     };
     let body = doc.to_string();
     let body_trimmed = body.trim_start_matches('\n');
-    std::fs::write(file_path, format!("{}{}", normalized_header, body_trimmed))
+    let content = format!("{}{}", normalized_header, body_trimmed);
+    // CRI convergence uses the mtime to detect configuration not yet loaded by
+    // the daemon. An identical reapply must not make that configuration newer.
+    if std::fs::read(file_path).is_ok_and(|current| current == content.as_bytes()) {
+        return Ok(());
+    }
+    std::fs::write(file_path, content)
         .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
     Ok(())
 }
@@ -529,6 +535,10 @@ fn parse_toml_value(value: &str) -> Item {
     if value.starts_with('[') && value.ends_with(']') {
         let array_str = &value[1..value.len() - 1];
         let mut array = toml_edit::Array::new();
+        // Splitting an empty interior would manufacture one empty string.
+        if array_str.trim().is_empty() {
+            return Item::Value(Value::Array(array));
+        }
         for item in array_str.split(',') {
             let item = item.trim().trim_matches('"');
             array.push(Value::String(Formatted::new(item.to_string())));
@@ -551,6 +561,35 @@ mod tests {
     use super::*;
     use rstest::rstest;
     use tempfile::NamedTempFile;
+
+    #[rstest]
+    #[case("[]", vec![])]
+    #[case("[ ]", vec![])]
+    #[case("[\n\t]", vec![])]
+    #[case("[\"\"]", vec![""])]
+    #[case("[\"example.com/probe\"]", vec!["example.com/probe"])]
+    #[case("[\"\", \"example.com/probe\"]", vec!["", "example.com/probe"])]
+    fn set_array_value_preserves_entries(
+        #[case] input: &str,
+        #[case] expected: Vec<&str>,
+        #[values("", "{{ template \"base\" . }}\n")] header: &str,
+    ) {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), format!("{header}entries = [\"old\"]\n")).unwrap();
+
+        set_toml_value(file.path(), "entries", input).unwrap();
+
+        let content = std::fs::read_to_string(file.path()).unwrap();
+        let body = content.strip_prefix(header).unwrap();
+        let doc = body.parse::<DocumentMut>().unwrap();
+        let actual: Vec<&str> = doc["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap())
+            .collect();
+        assert_eq!(actual, expected);
+    }
 
     // --- split_non_toml_header ---
 
@@ -583,6 +622,28 @@ mod tests {
             input
         );
         assert_eq!(toml, expected_toml, "toml mismatch for input: {:?}", input);
+    }
+
+    #[rstest]
+    #[case("")]
+    #[case("{{ template \"base\" . }}\n")]
+    fn identical_toml_update_preserves_mtime(#[case] header: &str) {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), format!("{header}version = 3\n")).unwrap();
+        set_toml_value(file.path(), ".version", "3").unwrap();
+        let before = std::fs::read(file.path()).unwrap();
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        file.as_file().set_modified(old).unwrap();
+
+        for _ in 0..3 {
+            set_toml_value(file.path(), ".version", "3").unwrap();
+            assert_eq!(std::fs::read(file.path()).unwrap(), before);
+            assert_eq!(file.as_file().metadata().unwrap().modified().unwrap(), old);
+        }
+
+        set_toml_value(file.path(), ".version", "4").unwrap();
+        assert_eq!(get_toml_value(file.path(), ".version").unwrap(), "4");
+        assert!(file.as_file().metadata().unwrap().modified().unwrap() > old);
     }
 
     // --- TOML operations on files with K3s/RKE2 base template header ---

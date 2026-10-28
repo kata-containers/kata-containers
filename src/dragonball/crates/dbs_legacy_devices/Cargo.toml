@@ -13,11 +13,11 @@ version = "0.1.1"
 [dependencies]
 dbs-device = { workspace = true }
 dbs-utils = { workspace = true }
-libc = "0.2.39"
-log = "0.4.14"
-serde = { features = ["derive", "rc"], version = "1.0.27" }
+libc = { workspace = true }
+log = { workspace = true }
+serde = { features = ["derive", "rc"], workspace = true }
 vm-superio = { workspace = true }
 vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
-libc = "0.2.39"
+libc = { workspace = true }

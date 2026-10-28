@@ -232,6 +232,10 @@ also enables host debug logging. With `env.multiInstallSuffix`, the names are
 can change guest measurements, so account for them when testing attestation.
 Keep devkit disabled in production and confidential computing deployments.
 
+Enabling devkit also installs `kata-ctl` in the host installation's `bin`
+directory (normally `/opt/kata/bin/kata-ctl`) to connect to the guest console.
+Installation fails if the deploy image cannot supply that client.
+
 ## Enable and use the selected RuntimeClasses
 
 For configurations defined in the default values, `shims.disableAll: false`
