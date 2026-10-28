@@ -614,12 +614,8 @@ impl Persist for DragonballInner {
             vm_path: self.vm_path.clone(),
             jailed: self.jailed,
             jailer_root: self.jailer_root.clone(),
-            netns: self.netns.clone(),
             config: self.hypervisor_config(),
-            run_dir: self.run_dir.clone(),
             cached_block_devices: self.cached_block_devices.clone(),
-            passfd_listener_port: self.passfd_listener_port,
-            ..Default::default()
         })
     }
 
@@ -633,18 +629,18 @@ impl Persist for DragonballInner {
             vm_path: hypervisor_state.vm_path,
             jailed: hypervisor_state.jailed,
             jailer_root: hypervisor_state.jailer_root,
-            netns: hypervisor_state.netns,
+            netns: None,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
             vmm_instance: VmmInstance::new("", hypervisor_args),
-            run_dir: hypervisor_state.run_dir,
+            run_dir: String::new(),
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),
             guest_memory_block_size_mb: 0,
             mem_hotplug_size_mb: 0,
             balloon_size: 0,
-            passfd_listener_port: hypervisor_state.passfd_listener_port,
+            passfd_listener_port: None,
         })
     }
 }
