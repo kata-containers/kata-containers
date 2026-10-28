@@ -17,6 +17,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 REGISTRY="${1:-"quay.io/kata-containers/kata-deploy"}"
 TAG="${2:-}"
 ARTIFACTS_BUILD_DIR="${3:-${REPO_ROOT}/tools/packaging/kata-deploy/local-build/build}"
+# PUSH_IMAGE=false loads the image instead of pushing it.
+PUSH_IMAGE="${PUSH_IMAGE:-true}"
 
 KATA_DEPLOY_DIR="${REPO_ROOT}/tools/packaging/kata-deploy"
 ARTIFACTS_STAGE_DIR="${KATA_DEPLOY_DIR}/kata-artifacts"
@@ -53,18 +55,12 @@ IMAGE_TAG="${REGISTRY}:${COMMIT_TAG}"
 
 DOCKERFILE="${REPO_ROOT}/tools/packaging/kata-deploy/Dockerfile"
 
+OUTPUT="--push"
+[[ "${PUSH_IMAGE}" == "true" ]] || OUTPUT="--load"
+
 echo "Building the kata-deploy image"
 docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
 	-f "${DOCKERFILE}" \
-	--tag "${IMAGE_TAG}" --push .
-
-if [[ -n "${TAG}" ]]; then
-	ADDITIONAL_TAG="${REGISTRY}:${TAG}"
-
-	echo "Building the ${ADDITIONAL_TAG} image"
-	docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
-		-f "${DOCKERFILE}" \
-		--tag "${ADDITIONAL_TAG}" --push .
-fi
+	--tag "${IMAGE_TAG}" ${TAG:+--tag "${REGISTRY}:${TAG}"} "${OUTPUT}" .
 
 popd
