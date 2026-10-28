@@ -562,7 +562,18 @@ impl AgentService {
                 "signal" => sig,
             );
 
-            match p.signal(sig) {
+            // An exec's process leads a session, and with it a process group, of its
+            // own (setsid in rustjail). A SIGKILL for it is meant for the command:
+            // signalled alone, what it started -- the sleep of
+            // `sh -c 'echo started; sleep 125'` -- is handed to the container's init
+            // and runs to its end, after a timeout or a client that went away.
+            let signalled = if !p.init && sig == libc::SIGKILL && leads_own_group(p.pid) {
+                signal_group(p.pid, sig)
+            } else {
+                p.signal(sig)
+            };
+
+            match signalled {
                 Err(Errno::ESRCH) => {
                     info!(
                         sl(),
@@ -2236,6 +2247,18 @@ fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) -> Result<()> {
 
 // Check if the container process installed the
 // handler for specific signal.
+/// Whether `pid` leads the process group of its own id.
+fn leads_own_group(pid: libc::pid_t) -> bool {
+    let pid = Pid::from_raw(pid);
+    unistd::getpgid(Some(pid)) == Ok(pid)
+}
+
+/// Signal every process of the process group `pgid`.
+fn signal_group(pgid: libc::pid_t, sig: libc::c_int) -> nix::Result<()> {
+    let res = unsafe { libc::kill(-pgid, sig) };
+    Errno::result(res).map(drop)
+}
+
 fn is_signal_handled(proc_status_file: &str, signum: u32) -> bool {
     let shift_count: u64 = if signum == 0 {
         // signum 0 is used to check for process liveness.
@@ -3429,6 +3452,50 @@ mod tests {
 
             assert_result!(d.result, result, msg);
         }
+    }
+
+    #[test]
+    fn test_signal_group_kills_what_the_command_started() {
+        use std::os::unix::process::CommandExt;
+        use std::process::Command;
+
+        // A command leading a session of its own, as rustjail starts an exec,
+        // with a child that outlives the shell when only the shell is killed.
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 300 & echo $!; wait"])
+            .stdout(std::process::Stdio::piped());
+        unsafe {
+            cmd.pre_exec(|| unistd::setsid().map(drop).map_err(std::io::Error::from));
+        }
+        let mut leader = cmd.spawn().unwrap();
+        let mut line = String::new();
+        std::io::BufRead::read_line(
+            &mut std::io::BufReader::new(leader.stdout.take().unwrap()),
+            &mut line,
+        )
+        .unwrap();
+        let child = Pid::from_raw(line.trim().parse().unwrap());
+        let pid = leader.id() as libc::pid_t;
+
+        assert!(leads_own_group(pid));
+        assert!(!leads_own_group(child.as_raw()));
+
+        signal_group(pid, libc::SIGKILL).unwrap();
+        leader.wait().unwrap();
+
+        // The sleep was in the group: gone too, or a zombie for init to reap.
+        let mut gone = false;
+        for _ in 0..50 {
+            match std::fs::read_to_string(format!("/proc/{}/stat", child)) {
+                Err(_) => gone = true,
+                Ok(stat) => gone = stat.rsplit(')').next().unwrap().trim().starts_with('Z'),
+            }
+            if gone {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(gone, "the command's child survived the kill of its group");
     }
 
     #[tokio::test]
