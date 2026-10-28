@@ -190,6 +190,20 @@ impl ResourceManager {
             .await
     }
 
+    /// Record the host artifacts creating a container from `spec` will make,
+    /// before any of them exists. Returns the record generation a save would
+    /// cover, or 0 when nothing waits for one.
+    pub async fn register_container_intents(&self, spec: &oci::Spec) -> Result<u64> {
+        let inner = self.inner.read().await;
+        inner.register_container_intents(spec).await
+    }
+
+    /// Confirm that a save wrote the state out covering `generation`.
+    pub async fn container_intents_saved(&self, generation: u64) {
+        let inner = self.inner.read().await;
+        inner.container_intents_saved(generation).await
+    }
+
     pub async fn handler_volumes(
         &self,
         cid: &str,

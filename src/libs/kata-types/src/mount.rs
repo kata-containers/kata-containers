@@ -561,7 +561,17 @@ pub fn is_volume_mounted(volume_path: &str) -> bool {
 /// Removes the direct-volume metadata directory for the given `volume_path`.
 #[cfg(feature = "safe-path")]
 pub fn remove_volume_path(volume_path: &str) -> Result<()> {
-    let dir = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
+    let root = kata_direct_volume_root_path();
+    // join_path() fails on a missing root, which holds nothing to remove.
+    match std::fs::metadata(&root) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(e)
+                .with_context(|| format!("failed to inspect direct-volume root {:?}", root))
+        }
+    }
+    let dir = join_path(root.as_str(), volume_path)?;
     if dir.exists() {
         std::fs::remove_dir_all(&dir)
             .with_context(|| format!("failed to remove direct-volume dir {:?}", dir))?;

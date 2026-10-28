@@ -5,6 +5,7 @@
 //
 
 use crate::network::EndpointState;
+use crate::volume::EphemeralDiskInfo;
 use serde::{Deserialize, Serialize};
 
 use crate::cgroups::cgroup_persist::CgroupState;
@@ -13,4 +14,5 @@ use crate::cgroups::cgroup_persist::CgroupState;
 pub struct ResourceState {
     pub endpoint: Vec<EndpointState>,
     pub cgroup_state: Option<CgroupState>,
+    pub ephemeral_disks: Vec<EphemeralDiskInfo>,
 }
