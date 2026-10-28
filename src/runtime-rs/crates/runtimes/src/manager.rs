@@ -24,8 +24,9 @@ use hypervisor::utils::{
 use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
 use kata_types::{
     config::{
-        default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig,
-        KATA_PATH,
+        default::DEFAULT_GUEST_DNS_FILE,
+        hypervisor::{RootlessUser, SecurityInfo},
+        Hypervisor, TomlConfig, KATA_PATH,
     },
     mount::SHM_DEVICE,
     prefix_with_rootless_dir,
@@ -308,6 +309,16 @@ impl RuntimeHandlerManager {
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
+
+        // Only try_init() turns rootless mode on, and this process never runs
+        // it. Without it, every rootless path resolves to the rootful one, and
+        // the VMM user and its runtime directory are left behind.
+        if let Some(h) = sandbox_state.hypervisor.as_ref() {
+            if let Some(dir) = rootless_runtime_dir(&h.config.security_info)? {
+                env::set_var("XDG_RUNTIME_DIR", dir);
+                set_rootless(true);
+            }
+        }
 
         // After the shim disconnects, containerd invokes the shim binary's `delete`
         // subcommand in a separate process. This path bypasses try_init(), so register
@@ -986,6 +997,20 @@ impl Drop for RootlessSetupGuard {
     }
 }
 
+/// Runtime directory configure_non_root_hypervisor() gave the VMM user of a
+/// rootless sandbox. The user comes from the root-owned state.json, which
+/// the VMM user cannot replace.
+fn rootless_runtime_dir(security: &SecurityInfo) -> Result<Option<PathBuf>> {
+    if !security.rootless {
+        return Ok(None);
+    }
+    let user = security
+        .rootless_user
+        .as_ref()
+        .ok_or_else(|| anyhow!("rootless sandbox state has no VMM user"))?;
+    Ok(Some(vmm_user_runtime_dir(user.uid)))
+}
+
 fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
     let vmm_user_name = create_vmm_user().context("failed to create vmm user")?;
     let mut guard = RootlessSetupGuard::new(vmm_user_name.clone());
@@ -1388,5 +1413,38 @@ mod tests {
         let config = cleanup_config(Some(&path), &HashMap::new());
         assert!(config.runtime.hypervisor_name.is_empty());
         assert!(!config.runtime.keep_abnormal);
+    }
+
+    #[rstest]
+    #[case::rootful(false, None, Some(None))]
+    #[case::rootless(true, Some(1001), Some(Some("/run/user/1001")))]
+    #[case::rootless_without_user(true, None, None)]
+    fn test_rootless_runtime_dir_comes_from_the_saved_user(
+        #[case] rootless: bool,
+        #[case] uid: Option<u32>,
+        #[case] expected: Option<Option<&str>>,
+    ) {
+        let security = SecurityInfo {
+            rootless,
+            rootless_user: uid.map(|uid| RootlessUser {
+                uid,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let dir = rootless_runtime_dir(&security).ok();
+        assert_eq!(dir, expected.map(|d| d.map(PathBuf::from)));
+    }
+
+    #[test]
+    fn test_rootless_runtime_dir_from_a_state_saved_before_this_change() {
+        let state: SandboxState =
+            serde_json::from_str(include_str!("../virt_container/testdata/legacy-state.json"))
+                .unwrap();
+        let security = state.hypervisor.unwrap().config.security_info;
+        assert_eq!(
+            rootless_runtime_dir(&security).unwrap(),
+            Some(PathBuf::from("/run/user/1001"))
+        );
     }
 }
