@@ -547,11 +547,27 @@ impl RuntimeHandlerManager {
 
             let bundle = container_config.bundle.clone();
             let container_id = container_config.container_id.clone();
-            let shim_pid = instance
+            // Creating the container makes host artifacts (block emptyDir
+            // disks) that recovery only removes when the saved state names
+            // them, so the state must name them before they can exist.
+            instance
+                .sandbox
+                .save_container_intents(&spec)
+                .await
+                .context("save container intents")?;
+            let created = instance
                 .container_manager
                 .create_container(container_config, spec)
-                .await
-                .context("create container")?;
+                .await;
+            // Creating a container changes what the sandbox owns on the host,
+            // whether the create succeeded or not, and recovery only cleans up
+            // what the saved state records. Save it after every create.
+            let saved = instance.sandbox.save_state().await;
+            if let (Err(_), Err(e)) = (&created, &saved) {
+                warn!(sl!(), "failed to save the sandbox state: {:#}", e);
+            }
+            let shim_pid = created.context("create container")?;
+            saved.context("save the sandbox state")?;
 
             let container_manager = instance.container_manager.clone();
             let process_id =
@@ -1171,6 +1187,9 @@ mod tests {
         async fn wait(&self) -> Result<common::types::SandboxExitInfo> {
             unimplemented!()
         }
+        async fn save_state(&self) -> Result<()> {
+            unimplemented!()
+        }
         async fn set_iptables(&self, _is_ipv6: bool, _data: Vec<u8>) -> Result<Vec<u8>> {
             unimplemented!()
         }
@@ -1197,6 +1216,9 @@ mod tests {
         }
         async fn wait_exit_published(&self) {}
         async fn rescan_network(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn save_container_intents(&self, _spec: &oci::Spec) -> Result<()> {
             Ok(())
         }
         async fn agent_metrics(&self) -> Result<String> {

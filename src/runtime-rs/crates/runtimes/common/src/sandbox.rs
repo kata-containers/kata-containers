@@ -49,6 +49,12 @@ pub trait Sandbox: Send + Sync {
     async fn shutdown(&self) -> Result<()>;
     async fn status(&self) -> Result<SandboxStatus>;
     async fn wait(&self) -> Result<SandboxExitInfo>;
+    // Record what a later recovery has to clean up if this shim goes away.
+    async fn save_state(&self) -> Result<()>;
+    // Record the host artifacts creating a container from `spec` will make,
+    // before any of them exists, so a shim killed during the create leaves a
+    // state that already covers them.
+    async fn save_container_intents(&self, spec: &oci_spec::runtime::Spec) -> Result<()>;
 
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;

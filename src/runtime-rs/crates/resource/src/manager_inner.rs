@@ -508,6 +508,20 @@ impl ResourceManagerInner {
             .await
     }
 
+    /// Record the host artifacts creating a container from `spec` will make,
+    /// before any of them exists. Returns the record generation a save would
+    /// cover, or 0 when nothing waits for one.
+    pub async fn register_container_intents(&self, spec: &oci::Spec) -> Result<u64> {
+        self.volume_resource
+            .register_ephemeral_disks(&self.toml_config.runtime.emptydir_mode, spec)
+            .await
+    }
+
+    /// Confirm that a save wrote the state out covering `generation`.
+    pub async fn container_intents_saved(&self, generation: u64) {
+        self.volume_resource.ephemeral_disks_saved(generation).await
+    }
+
     pub async fn handler_volumes(
         &self,
         cid: &str,
@@ -1209,6 +1223,7 @@ impl Persist for ResourceManagerInner {
         Ok(ResourceState {
             endpoint: endpoint_state,
             cgroup_state: Some(cgroup_state),
+            ephemeral_disks: self.volume_resource.ephemeral_disks().await,
         })
     }
 
@@ -1260,7 +1275,7 @@ impl Persist for ResourceManagerInner {
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
-            volume_resource: VolumeResource::new(),
+            volume_resource: VolumeResource::restore(resource_state.ephemeral_disks),
             cgroups_resource: CgroupsResource::restore(
                 args,
                 resource_state.cgroup_state.unwrap_or_default(),
