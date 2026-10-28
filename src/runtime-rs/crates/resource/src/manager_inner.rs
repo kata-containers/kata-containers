@@ -1008,7 +1008,9 @@ impl ResourceManagerInner {
         // failed stages, but cannot run them while the first attempt is active.
         let mut steps = self.cleanup_steps.lock().await;
         let mut errors = Vec::new();
-        // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
+        // Detach the network endpoints. A live network detaches them from
+        // the VM and binds VFs from vfio-pci back to their host drivers; the
+        // network of a restored sandbox only has the latter left to do.
         if !steps.network {
             if let Some(network) = &self.network {
                 // remove() holds a per-thread NetnsGuard across awaits, run it on
@@ -1271,7 +1273,11 @@ impl Persist for ResourceManagerInner {
             agent: resource_args.agent,
             hypervisor: resource_args.hypervisor,
             device_manager,
-            network: None,
+            // The endpoints the state recorded, for cleanup to bind
+            // passed-through devices back to their host drivers.
+            network: Some(Arc::new(network::RestoredNetwork::new(
+                resource_state.endpoint,
+            ))),
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
