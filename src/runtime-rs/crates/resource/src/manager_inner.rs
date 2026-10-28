@@ -14,6 +14,7 @@ use hypervisor::{
         device_manager::{
             do_handle_device, find_cold_plugged_vfio_ap, get_block_device_info, DeviceManager,
         },
+        driver,
         util::{get_host_path, DEVICE_TYPE_BLOCK, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
@@ -69,6 +70,9 @@ pub(crate) struct ResourceManagerInner {
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
     cleanup_steps: Mutex<ResourceCleanupSteps>,
+    // Endpoints of a sandbox restored after its shim went away, which has no
+    // network to detach them with.
+    restored_endpoints: Vec<network::EndpointState>,
 }
 
 #[derive(Default)]
@@ -152,6 +156,7 @@ impl ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            restored_endpoints: Vec::new(),
         })
     }
 
@@ -1020,7 +1025,13 @@ impl ResourceManagerInner {
                     Err(e) => errors.push(e),
                 }
             } else {
-                steps.network = true;
+                match network::rebind_saved_physical_endpoints(
+                    &self.restored_endpoints,
+                    driver::bind_device_to_host,
+                ) {
+                    Ok(()) => steps.network = true,
+                    Err(e) => errors.push(e),
+                }
             }
         }
 
@@ -1199,7 +1210,7 @@ impl Persist for ResourceManagerInner {
 
     /// Save a state of ResourceManagerInner
     async fn save(&self) -> Result<Self::State> {
-        let mut endpoint_state = vec![];
+        let mut endpoint_state = self.restored_endpoints.clone();
         if let Some(network) = &self.network {
             if let Some(ens) = network.save().await {
                 endpoint_state = ens;
@@ -1272,6 +1283,7 @@ impl Persist for ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            restored_endpoints: resource_state.endpoint,
         })
     }
 }

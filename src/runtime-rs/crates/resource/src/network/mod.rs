@@ -10,6 +10,7 @@ mod dan;
 mod endpoint;
 pub use dan::{dan_config_path, Dan, DanNetworkConfig};
 pub use endpoint::endpoint_persist::EndpointState;
+pub(crate) use endpoint::rebind_saved_physical_endpoints;
 pub use endpoint::Endpoint;
 mod network_entity;
 mod network_info;
