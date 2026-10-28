@@ -532,6 +532,19 @@ pub fn remove_vmm_user_runtime_dir(uid: u32) -> Result<()> {
     remove_dir_all_if_exists(vmm_user_runtime_dir(uid))
 }
 
+/// Whether the recorded VMM user's runtime directory is still the recorded
+/// user's to remove. Once the user is gone its UID can be reassigned, and
+/// /run/user/<uid> with it: the directory may only be removed while the UID
+/// maps to nothing (the leftover is the record's) or still to the recorded
+/// account (a cleanup retry that has not removed the user yet).
+pub fn vmm_user_runtime_dir_is_recorded(uid: u32, user_name: &str) -> Result<bool> {
+    match nix::unistd::User::from_uid(nix::unistd::Uid::from_raw(uid)) {
+        Ok(None) | Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ESRCH) => Ok(true),
+        Ok(Some(found)) => Ok(found.name == user_name),
+        Err(e) => Err(e).with_context(|| format!("look up uid {uid}")),
+    }
+}
+
 pub fn create_vmm_user() -> Result<String> {
     let useradd_path =
         first_valid_executable_path(&["/usr/sbin/useradd", "/sbin/useradd", "/bin/useradd"])?;

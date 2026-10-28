@@ -54,6 +54,7 @@ use hypervisor::{
     utils::{
         authorize_rootless_device, authorize_rootless_socket, get_hvsock_path,
         remove_vmm_user_runtime_dir, uses_native_ccw_bus, vmm_user_runtime_dir,
+        vmm_user_runtime_dir_is_recorded,
     },
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
@@ -1816,13 +1817,13 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
-        let rootless_uid = self
+        let rootless_user = self
             .hypervisor
             .hypervisor_config()
             .await
             .security_info
             .rootless_user
-            .map(|user| user.uid);
+            .map(|user| (user.uid, user.user_name));
 
         let mut errors = Vec::new();
         info!(sl!(), "resource clean up");
@@ -1858,11 +1859,23 @@ impl Sandbox for VirtSandbox {
         }
 
         if steps.netns && !steps.rootless_runtime_dir {
-            if let Some(uid) = rootless_uid {
+            if let Some((uid, ref user_name)) = rootless_user {
                 let path = vmm_user_runtime_dir(uid);
-                match remove_vmm_user_runtime_dir(uid).with_context(|| {
-                    format!("remove rootless runtime directory {}", path.display())
-                }) {
+                // The hypervisor step removed the user, and a UID another
+                // account holds by now is not ours to clean behind; see
+                // vmm_user_runtime_dir_is_recorded().
+                match vmm_user_runtime_dir_is_recorded(uid, user_name)
+                    .and_then(|recorded| {
+                        if recorded {
+                            remove_vmm_user_runtime_dir(uid)
+                        } else {
+                            info!(sl!(), "uid {uid} was reassigned; {path:?} is not swept");
+                            Ok(())
+                        }
+                    })
+                    .with_context(|| {
+                        format!("remove rootless runtime directory {}", path.display())
+                    }) {
                     Ok(()) => steps.rootless_runtime_dir = true,
                     Err(e) => errors.push(e),
                 }
