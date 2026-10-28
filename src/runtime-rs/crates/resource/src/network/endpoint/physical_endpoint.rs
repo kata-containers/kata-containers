@@ -367,3 +367,83 @@ fn pf_netdev_name(pf_bdf: &str) -> Result<String> {
         }
     }
 }
+
+/// A shim that went away left its passed-through network devices bound to
+/// vfio-pci. Hand them back to their host drivers, as detach() would have.
+/// Every device is tried, so one failure does not strand the others.
+pub(crate) fn rebind_saved_physical_endpoints(
+    endpoints: &[EndpointState],
+    bind: impl Fn(&str, &str, &str) -> Result<()>,
+) -> Result<()> {
+    let mut failures = 0;
+    for p in endpoints
+        .iter()
+        .filter_map(|e| e.physical_endpoint.as_ref())
+    {
+        let bound = VendorDevice::new(&p.vendor_id, &p.device_id)
+            .and_then(|id| bind(&p.bdf, &p.driver, &id.vendor_device_id()));
+        if let Err(e) = bound {
+            failures += 1;
+            warn!(
+                sl!(),
+                "failed to bind physical endpoint {} back to {}: {:#}", p.bdf, p.driver, e
+            );
+        }
+    }
+    if failures == 0 {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "{failures} physical endpoint(s) not bound back to the host"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod rebind_tests {
+    use super::*;
+    use crate::network::endpoint::endpoint_persist::VethEndpointState;
+    use std::sync::Mutex;
+
+    fn physical(bdf: &str) -> EndpointState {
+        EndpointState {
+            physical_endpoint: Some(PhysicalEndpointState {
+                bdf: bdf.to_string(),
+                driver: "mlx5_core".to_string(),
+                vendor_id: "0x15b3".to_string(),
+                device_id: "0x101e".to_string(),
+                hard_addr: String::new(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn only_physical_endpoints_are_bound_back_and_all_are_tried() {
+        let endpoints = vec![
+            physical("0000:41:00.2"),
+            EndpointState {
+                veth_endpoint: Some(VethEndpointState::default()),
+                ..Default::default()
+            },
+            physical("0000:41:00.3"),
+        ];
+        let bound = Mutex::new(Vec::new());
+        let result = rebind_saved_physical_endpoints(&endpoints, |bdf, driver, id| {
+            bound.lock().unwrap().push(format!("{bdf} {driver} {id}"));
+            if bdf.ends_with(".2") {
+                return Err(anyhow!("busy"));
+            }
+            Ok(())
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            *bound.lock().unwrap(),
+            vec![
+                "0000:41:00.2 mlx5_core 0x15b3_0x101e",
+                "0000:41:00.3 mlx5_core 0x15b3_0x101e"
+            ]
+        );
+    }
+}
