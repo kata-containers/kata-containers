@@ -648,6 +648,10 @@ impl CloudHypervisorInner {
 
         self.config.set_selinux_label(selinux_label);
 
+        // The API and hybrid vsock sockets, the virtiofsd socket, and the shim
+        // management socket all live under vm_path.
+        selinux::apply_sandbox_mcs_level(&self.config, &[Path::new(&self.vm_path)])?;
+
         Ok(())
     }
 
