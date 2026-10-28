@@ -17,6 +17,7 @@ pub mod utils;
 pub mod direct_volume;
 use crate::volume::{direct_volume::is_direct_volume, share_fs_volume::VolumeManager};
 pub mod direct_volumes;
+pub use block_emptydir_volume::EphemeralDiskInfo;
 
 use std::{sync::Arc, vec::Vec};
 
@@ -53,7 +54,7 @@ pub trait Volume: Send + Sync {
 #[derive(Default)]
 pub struct VolumeResourceInner {
     volumes: Vec<Arc<dyn Volume>>,
-    ephemeral_disks: Vec<block_emptydir_volume::EphemeralDiskInfo>,
+    ephemeral_disks: Vec<EphemeralDiskInfo>,
 }
 
 #[derive(Default)]
@@ -121,20 +122,21 @@ impl VolumeResource {
                         .with_context(|| format!("new ephemeral volume {m:?}"))?,
                 )
             } else if block_emptydir_volume::is_block_emptydir_volume(m, emptydir_mode) {
-                let vol = block_emptydir_volume::BlockEmptyDirVolume::new(
-                    d,
-                    m,
-                    sid,
-                    emptydir_mode,
-                    ctx.block_device_discard_supported,
+                // Recorded before the disk exists: a failure part way through
+                // creating it leaves the cleanup to remove what was made.
+                self.record_ephemeral_disk(block_emptydir_volume::disk_info(m)?)
+                    .await;
+                Arc::new(
+                    block_emptydir_volume::BlockEmptyDirVolume::new(
+                        d,
+                        m,
+                        sid,
+                        emptydir_mode,
+                        ctx.block_device_discard_supported,
+                    )
+                    .await
+                    .with_context(|| format!("new block emptydir volume {m:?}"))?,
                 )
-                .await
-                .with_context(|| format!("new block emptydir volume {m:?}"))?;
-                let vol_arc: Arc<dyn Volume> = Arc::new(vol.clone());
-                let mut inner = self.inner.write().await;
-                inner.ephemeral_disks.push(vol.disk_info);
-                drop(inner);
-                vol_arc
             } else if need_local_volume(m, fs_sharing_supported, emptydir_mode) {
                 // This branch comes after is_block_emptydir_volume() so
                 // block-encrypted and block-plain emptyDirs are handled as
@@ -203,6 +205,30 @@ impl VolumeResource {
         }
 
         Ok(())
+    }
+
+    pub async fn ephemeral_disks(&self) -> Vec<EphemeralDiskInfo> {
+        self.inner.read().await.ephemeral_disks.clone()
+    }
+
+    // Containers that share an emptyDir share its disk.
+    async fn record_ephemeral_disk(&self, disk: EphemeralDiskInfo) {
+        let mut inner = self.inner.write().await;
+        if !inner.ephemeral_disks.contains(&disk) {
+            inner.ephemeral_disks.push(disk);
+        }
+    }
+
+    /// Restore the disks a sandbox created before its shim went away, so
+    /// that recovery removes them.
+    pub fn restore(ephemeral_disks: Vec<EphemeralDiskInfo>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(VolumeResourceInner {
+                volumes: Vec::new(),
+                ephemeral_disks,
+            })),
+            volume_manager: Arc::new(VolumeManager::new()),
+        }
     }
 
     pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
@@ -292,5 +318,54 @@ mod cleanup_tests {
         );
 
         assert!(resource.cleanup_ephemeral_disks().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn disks_in_the_saved_state_are_removed_by_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk = EphemeralDiskInfo {
+            disk_path: dir.path().join("disk.img"),
+            source_path: format!(
+                "ephemeral-test-{}",
+                dir.path().file_name().unwrap().to_string_lossy()
+            ),
+        };
+        std::fs::write(&disk.disk_path, b"").unwrap();
+
+        let resource = VolumeResource::new();
+        resource
+            .inner
+            .write()
+            .await
+            .ephemeral_disks
+            .push(disk.clone());
+        let state = crate::resource_persist::ResourceState {
+            ephemeral_disks: resource.ephemeral_disks().await,
+            ..Default::default()
+        };
+        let state: crate::resource_persist::ResourceState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(state.ephemeral_disks, vec![disk.clone()]);
+
+        let restored = VolumeResource::restore(state.ephemeral_disks);
+        restored.cleanup_ephemeral_disks().await.unwrap();
+        assert!(!disk.disk_path.exists());
+        // A retry after a partial cleanup finds nothing left to remove.
+        restored.cleanup_ephemeral_disks().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_disk_recorded_before_it_was_made_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut m = oci::Mount::default();
+        m.set_source(Some(dir.path().join("scratch")));
+        let disk = block_emptydir_volume::disk_info(&m).unwrap();
+        assert_eq!(disk.disk_path, dir.path().join("scratch/disk.img"));
+
+        let resource = VolumeResource::new();
+        resource.record_ephemeral_disk(disk.clone()).await;
+        resource.record_ephemeral_disk(disk.clone()).await;
+        assert_eq!(resource.ephemeral_disks().await, vec![disk]);
+        resource.cleanup_ephemeral_disks().await.unwrap();
     }
 }
