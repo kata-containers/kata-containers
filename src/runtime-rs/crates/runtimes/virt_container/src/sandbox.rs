@@ -183,6 +183,7 @@ pub struct VirtSandbox {
     // Resource cleanup waits for this confirmation after VM startup.
     vmm_exit_confirmed: CancellationToken,
     vmm_process: Arc<RwLock<Option<VmmProcessIdentity>>>,
+    config_path: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -361,6 +362,7 @@ impl VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             exit_notify_tx,
             shm_size: sandbox_config.shm_size,
+            config_path: sandbox_config.config_path.clone(),
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
@@ -2047,6 +2049,7 @@ impl Persist for VirtSandbox {
             sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
+            config_path: self.config_path.clone(),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -2166,6 +2169,7 @@ impl Persist for VirtSandbox {
             exit_pending: Arc::new(watch::channel(false).0),
             vmm_exit_confirmed,
             vmm_process: Arc::new(RwLock::new(None)),
+            config_path: sandbox_state.config_path,
         })
     }
 }

@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::path::PathBuf;
+
 use hypervisor::hypervisor_persist::HypervisorState;
 use resource::resource_persist::ResourceState;
 use serde::{Deserialize, Serialize};
@@ -15,6 +17,10 @@ pub struct SandboxState {
     pub hypervisor: Option<HypervisorState>,
     #[serde(default)]
     pub vmm_exit_confirmed: bool,
+    /// Configuration file the sandbox was created with. The shim `delete`
+    /// subcommand gets no shimv2 options to find it otherwise.
+    #[serde(default)]
+    pub config_path: Option<PathBuf>,
 }
 
 #[cfg(test)]
@@ -41,5 +47,6 @@ mod tests {
             Some("/kubepods/besteffort/pod1/0123456789abcdef")
         );
         assert_eq!(r.endpoint.len(), 1);
+        assert_eq!(state.config_path, None);
     }
 }

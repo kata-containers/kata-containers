@@ -13,6 +13,7 @@ pub mod utils;
 use std::{
     collections::{hash_map::RandomState, HashMap},
     fmt,
+    path::PathBuf,
 };
 
 use crate::SandboxNetworkEnv;
@@ -181,6 +182,8 @@ pub struct SandboxConfig {
     pub hooks: Option<oci::Hooks>,
     pub state: runtime_spec::State,
     pub shm_size: u64,
+    /// Configuration file the sandbox is created with, once it is loaded.
+    pub config_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
