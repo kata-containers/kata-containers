@@ -358,6 +358,86 @@ shim_pid_for_pod() {
 	echo "${pid}"
 }
 
+# Kill the shim of sandbox $2 on node $1 with SIGKILL, so none of its own
+# teardown runs, and wait until the container runtime has cleaned up after it
+# through the shim's delete command: no process names the sandbox any more and
+# its state under /run/kata is gone.
+#
+# Kubernetes starts a new sandbox for the pod afterwards; only what belonged to
+# the killed one is checked.
+kill_shim_and_wait_for_cleanup() {
+	local node_name="$1"
+	local sandbox_id="$2"
+	local timeout_seconds="${SHIM_KILL_CLEANUP_TIMEOUT_SECONDS:-90}"
+	local attempt
+	local leftovers
+	local query
+	local shim_pid
+	local vmm_procs
+	local state
+	local disk_paths=()
+	local disk
+	local src
+	local path
+	# The query must not hold the sandbox id in one piece, or pgrep matches
+	# the `bash -c` running it and the `kubectl exec` that started it. Bracket
+	# the first character of the pattern and split the id for the path.
+	local pattern="[${sandbox_id:0:1}]${sandbox_id:1}"
+	local split_id="${sandbox_id:0:1}'${sandbox_id:1}'"
+
+	shim_pid="$(exec_host "${node_name}" \
+		"pgrep -f '[c]ontainerd-shim-kata-v2 -id ${sandbox_id} ' || true")"
+	[[ "${shim_pid}" =~ ^[0-9]+$ ]] || \
+		die "No single shim found for sandbox ${sandbox_id}: '${shim_pid}'"
+
+	# Make sure there is something to clean up. Without these checks the
+	# polling below also succeeds when the sandbox never had a VMM process or
+	# a state.json, and the test would pass without testing anything.
+	# exec_host returns the status of its pipeline's last command, not of the
+	# command on the host, so check what the command prints.
+	[[ "$(exec_host "${node_name}" \
+		"test -s '/run/kata/${sandbox_id}/state.json' && echo present")" == "present" ]] || \
+		die "No state.json for sandbox ${sandbox_id} before the shim was killed"
+	if has_separate_vmm; then
+		# Processes that name the sandbox, other than the shim itself: the
+		# VMM and, with filesystem sharing, virtiofsd.
+		vmm_procs="$(exec_host "${node_name}" \
+			"pgrep -af '${pattern}' | grep -v 'containerd-shim-kata-v2' || true")"
+		[[ -n "${vmm_procs}" ]] || \
+			die "No VMM or helper process names sandbox ${sandbox_id} before the shim was killed"
+	fi
+
+	# A block emptyDir leaves a disk image and a direct-volume record that only
+	# the sandbox cleanup removes, keyed by the URL-safe base64 of its source.
+	state="$(exec_host "${node_name}" "cat '/run/kata/${sandbox_id}/state.json'")"
+	while IFS=$'\t' read -r disk src; do
+		[[ -n "${disk}" ]] || continue
+		disk_paths+=("${disk}")
+		disk_paths+=("/run/kata-containers/shared/direct-volumes/$(printf '%s' "${src}" | base64 -w0 | tr '+/' '-_')")
+	done < <(jq -r '.resource.ephemeral_disks[]? | [.disk_path, .source_path] | @tsv' <<<"${state}")
+	if [[ ${#disk_paths[@]} -gt 0 ]]; then
+		echo "Block emptyDir paths to be removed: ${disk_paths[*]}"
+	fi
+
+	exec_host "${node_name}" "kill -KILL ${shim_pid}"
+
+	query="id=${split_id}; pgrep -af '${pattern}' || true; "
+	query+="test ! -e \"/run/kata/\${id}\" || echo \"/run/kata/\${id}\""
+	for path in "${disk_paths[@]}"; do
+		query+="; test ! -e '${path}' || echo '${path}'"
+	done
+	for ((attempt = 0; attempt < timeout_seconds; attempt++)); do
+		leftovers="$(exec_host "${node_name}" "${query}")"
+		[[ -z "${leftovers}" ]] && return 0
+		sleep 1
+	done
+
+	echo "Left behind ${timeout_seconds}s after the shim of sandbox ${sandbox_id} was killed:"
+	echo "${leftovers}"
+	exec_host "${node_name}" "ls -la /run/kata/${sandbox_id} && cat /run/kata/${sandbox_id}/state.json" || true
+	return 1
+}
+
 # Copy the right combination of drop-ins from drop-in-examples/ into
 # genpolicy-settings.d/. Drop-ins are layered: 10-* for platform base,
 # 20-* for OCI version and other overlays.
