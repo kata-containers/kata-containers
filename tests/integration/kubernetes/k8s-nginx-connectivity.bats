@@ -18,6 +18,7 @@ setup() {
 	# Create test .yaml
 	yaml_file="${pod_config_dir}/test-${deployment}.yaml"
 	set_nginx_image "${pod_config_dir}/${deployment}.yaml" "${yaml_file}"
+	enable_nginx_ipv6_listener "${yaml_file}"
 
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }

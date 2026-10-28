@@ -25,7 +25,15 @@ setup() {
 
     server_pod_yaml="${pod_config_dir}/openvpn/openvpn-server-pod.yaml"
     server_service_yaml="${pod_config_dir}/openvpn/openvpn-server-service.yaml"
-    server_configmap_yaml="${pod_config_dir}/openvpn/openvpn-server-configmap.yaml"
+    server_configmap_yaml="${pod_config_dir}/openvpn/openvpn-server-configmap-instance.yaml"
+    # "proto udp" only binds IPv4. "proto udp6" binds [::], which also takes
+    # IPv4 clients through v4-mapped addresses.
+    if [[ "${K8S_IP_FAMILY:-ipv4}" == "ipv4" ]]; then
+        cp "${pod_config_dir}/openvpn/openvpn-server-configmap.yaml" "$server_configmap_yaml"
+    else
+        sed 's/^\([[:space:]]*\)proto udp$/\1proto udp6/' \
+            "${pod_config_dir}/openvpn/openvpn-server-configmap.yaml" > "$server_configmap_yaml"
+    fi
     server_secret_template_yaml="${pod_config_dir}/openvpn/openvpn-server-secret.yaml.in"
     server_secret_instance_yaml="${pod_config_dir}/openvpn/openvpn-server-secret-instance.yaml"
 
@@ -94,4 +102,5 @@ teardown() {
     kubectl delete -f "$server_secret_instance_yaml" --ignore-not-found=true
     kubectl delete -f "$server_configmap_yaml" --ignore-not-found=true
     kubectl delete -f "$server_service_yaml" --ignore-not-found=true
+    rm -f "$server_configmap_yaml"
 }

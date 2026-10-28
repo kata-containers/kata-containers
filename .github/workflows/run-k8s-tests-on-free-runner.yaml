@@ -54,7 +54,9 @@ jobs:
           { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: clh-runtime-rs, containerd_version: minimum },
           { vmm: qemu-nvidia-cpu, containerd_version: latest },
-          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity },
+          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity, ip_family: ipv4, cni: bridge },
+          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity, ip_family: ipv6, cni: bridge },
+          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity, ip_family: dual, cni: bridge },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
@@ -71,6 +73,8 @@ jobs:
       KATA_HOST_OS: ubuntu
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: vanilla
+      K8S_IP_FAMILY: ${{ matrix.environment.ip_family }}
+      K8S_CNI: ${{ matrix.environment.cni }}
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
