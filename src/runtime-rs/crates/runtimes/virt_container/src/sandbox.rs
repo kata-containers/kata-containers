@@ -184,6 +184,8 @@ pub struct VirtSandbox {
     vmm_exit_confirmed: CancellationToken,
     vmm_process: Arc<RwLock<Option<VmmProcessIdentity>>>,
     config_path: Option<PathBuf>,
+    // Network namespace the runtime created for the sandbox and has to remove.
+    created_netns: Option<String>,
 }
 
 #[derive(Default)]
@@ -308,6 +310,14 @@ where
         )))
 }
 
+fn created_netns(network_env: &SandboxNetworkEnv) -> Option<String> {
+    if network_env.network_created {
+        network_env.netns.clone()
+    } else {
+        None
+    }
+}
+
 async fn wait_for_exit_record(
     wait: impl std::future::Future<Output = Result<SandboxExitInfo>>,
     grace: Duration,
@@ -363,6 +373,7 @@ impl VirtSandbox {
             exit_notify_tx,
             shm_size: sandbox_config.shm_size,
             config_path: sandbox_config.config_path.clone(),
+            created_netns: created_netns(&sandbox_config.network_env),
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
@@ -1244,15 +1255,6 @@ impl VirtSandbox {
             .unwrap_or(false)
     }
 
-    fn created_netns(&self) -> Option<&str> {
-        let network_env = &self.sandbox_config.as_ref()?.network_env;
-        if network_env.network_created {
-            network_env.netns.as_deref()
-        } else {
-            None
-        }
-    }
-
     async fn should_defer_network(&self) -> Result<bool> {
         if !self.is_factory_enabled() {
             return Ok(false);
@@ -1826,7 +1828,7 @@ impl Sandbox for VirtSandbox {
 
         // A mounted rootless namespace prevents removal of the runtime directory.
         if steps.resources && steps.hypervisor && !steps.netns {
-            match self.created_netns() {
+            match self.created_netns.as_deref() {
                 Some(path) => match remove_netns(Path::new(path)) {
                     Ok(()) => steps.netns = true,
                     Err(e) => errors.push(e),
@@ -2050,6 +2052,7 @@ impl Persist for VirtSandbox {
             resource: Some(self.resource_manager.save().await?),
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
             config_path: self.config_path.clone(),
+            created_netns: self.created_netns.clone(),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -2170,6 +2173,7 @@ impl Persist for VirtSandbox {
             vmm_exit_confirmed,
             vmm_process: Arc::new(RwLock::new(None)),
             config_path: sandbox_state.config_path,
+            created_netns: sandbox_state.created_netns,
         })
     }
 }
@@ -2177,6 +2181,22 @@ impl Persist for VirtSandbox {
 #[cfg(test)]
 mod pending_exit_tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case::created(Some("/run/netns/cnitest"), true, Some("/run/netns/cnitest"))]
+    #[case::given_by_the_caller(Some("/var/run/netns/cni-1"), false, None)]
+    #[case::none(None, true, None)]
+    fn only_a_netns_the_runtime_created_is_recorded_for_removal(
+        #[case] netns: Option<&str>,
+        #[case] network_created: bool,
+        #[case] expected: Option<&str>,
+    ) {
+        let network_env = SandboxNetworkEnv {
+            netns: netns.map(String::from),
+            network_created,
+        };
+        assert_eq!(created_netns(&network_env).as_deref(), expected);
+    }
 
     #[tokio::test]
     async fn wait_does_not_block_without_a_watched_exit() {
