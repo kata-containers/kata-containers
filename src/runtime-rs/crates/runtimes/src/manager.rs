@@ -827,11 +827,9 @@ impl RuntimeHandlerManager {
 
 // Remove before replacing the path: no other owner can clean up the old namespace.
 fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
-    if network_env.network_created {
-        if let Some(path) = network_env.netns.as_deref() {
-            remove_netns(Path::new(path)).context("remove unused network namespace")?;
-            network_env.netns = None;
-        }
+    if let Some(path) = network_env.created_netns() {
+        remove_netns(Path::new(&path)).context("remove unused network namespace")?;
+        network_env.netns = None;
     }
     Ok(())
 }
