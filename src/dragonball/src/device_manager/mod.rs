@@ -130,6 +130,7 @@ use self::balloon_dev_mgr::BalloonDeviceMgr;
 pub mod rng_dev_mgr;
 #[cfg(feature = "virtio-rng")]
 use self::rng_dev_mgr::RngDeviceMgr;
+
 #[cfg(feature = "host-device")]
 /// Device manager for PCI/MMIO VFIO devices.
 pub mod vfio_dev_mgr;
@@ -655,6 +656,12 @@ impl DeviceOpContext {
     // TODO: We will implement this when we develop ACPI virtualization
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DeviceCreationMode {
+    ColdBoot,
+    SnapshotRestore,
+}
+
 /// Device manager for virtual machines, which manages all device for a virtual machine.
 pub struct DeviceManager {
     io_manager: Arc<ArcSwap<IoManager>>,
@@ -694,6 +701,7 @@ pub struct DeviceManager {
 
     #[cfg(feature = "virtio-rng")]
     pub(crate) rng_manager: RngDeviceMgr,
+
     #[cfg(feature = "host-device")]
     pub(crate) vfio_manager: Arc<Mutex<VfioDeviceMgr>>,
     #[cfg(feature = "host-device")]
@@ -905,6 +913,7 @@ impl DeviceManager {
     }
 
     /// Create all registered devices when booting the associated virtual machine.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_devices(
         &mut self,
         vm_as: GuestAddressSpaceImpl,
@@ -921,6 +930,7 @@ impl DeviceManager {
             dmesg_fifo,
             address_space,
             vm_config,
+            DeviceCreationMode::ColdBoot,
         )
     }
 
@@ -939,9 +949,11 @@ impl DeviceManager {
             dmesg_fifo,
             address_space,
             vm_config,
+            DeviceCreationMode::SnapshotRestore,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_devices_with_boot_args(
         &mut self,
         vm_as: GuestAddressSpaceImpl,
@@ -950,6 +962,7 @@ impl DeviceManager {
         dmesg_fifo: Option<Box<dyn io::Write + Send>>,
         address_space: Option<&AddressSpace>,
         vm_config: &VmConfigInfo,
+        #[allow(unused_variables)] creation_mode: DeviceCreationMode,
     ) -> std::result::Result<(), StartMicroVmError> {
         let mut ctx = DeviceOpContext::new(
             Some(epoll_mgr),
@@ -967,9 +980,15 @@ impl DeviceManager {
         self.init_legacy_devices(dmesg_fifo, com1_sock_path, &mut ctx)?;
 
         #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
-        self.block_manager
-            .attach_devices(&mut ctx)
-            .map_err(StartMicroVmError::BlockDeviceError)?;
+        if creation_mode == DeviceCreationMode::SnapshotRestore {
+            self.block_manager
+                .attach_boot_devices(&mut ctx)
+                .map_err(StartMicroVmError::BlockDeviceError)?;
+        } else {
+            self.block_manager
+                .attach_devices(&mut ctx)
+                .map_err(StartMicroVmError::BlockDeviceError)?;
+        }
 
         #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
         {
@@ -995,6 +1014,16 @@ impl DeviceManager {
         self.rng_manager
             .attach_devices(&mut ctx)
             .map_err(StartMicroVmError::RngDeviceError)?;
+
+        // Non-root writable workload devices were hotplugged after the source VM booted.
+        // Recreate them after the boot-time devices so restored MMIO addresses
+        // match the guest-visible layout captured in the snapshot.
+        #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
+        if creation_mode == DeviceCreationMode::SnapshotRestore {
+            self.block_manager
+                .attach_restored_devices(&mut ctx)
+                .map_err(StartMicroVmError::BlockDeviceError)?;
+        }
 
         #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
         let kernel_config = {

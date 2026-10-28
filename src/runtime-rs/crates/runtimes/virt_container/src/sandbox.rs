@@ -1392,9 +1392,13 @@ impl Sandbox for VirtSandbox {
 
         // start vm
         inner.vmm_start_attempted = true;
-        self.hypervisor.start_vm(10_000).await.context("start vm")?;
-        info!(sl!(), "start vm");
+        let started = self.hypervisor.start_vm(10_000).await.context("start vm");
+        // A start that fails after spawning the VMM gets no exit watcher.
+        // stop() then needs the identity to confirm the exit, or cleanup
+        // never runs.
         self.remember_vmm_process().await;
+        started?;
+        info!(sl!(), "start vm");
 
         let sandbox = self.clone();
         // wait for vm exit in background, and record the exit status and time when vm exited.
@@ -1616,12 +1620,14 @@ impl Sandbox for VirtSandbox {
             .context("set up device before start vm")?;
 
         inner.vmm_start_attempted = true;
-        self.hypervisor
+        let started = self
+            .hypervisor
             .start_vm(10_000)
             .await
-            .context("start template vm")?;
-        info!(sl!(), "vm started from template");
+            .context("start template vm");
         self.remember_vmm_process().await;
+        started?;
+        info!(sl!(), "vm started from template");
 
         let sandbox = self.clone();
         tokio::spawn(async move {
@@ -2417,6 +2423,35 @@ mod stop_vm_tests {
         assert!(
             stop_vm_with_confirmation(
                 async { Err(anyhow!("no child handle")) },
+                &confirmed,
+                Some(identity),
+                false,
+                Duration::from_secs(2),
+            )
+            .await
+        );
+        assert!(confirmed.is_cancelled());
+        child.wait().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn unreaped_vmm_from_failed_start_is_confirmed_through_identity() {
+        let mut child = tokio::process::Command::new("true").spawn().unwrap();
+        let pid = child.id().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !std::fs::read_to_string(format!("/proc/{pid}/stat"))
+            .unwrap()
+            .contains(") Z ")
+        {
+            assert!(std::time::Instant::now() < deadline, "VMM did not exit");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let identity = VmmProcessIdentity::capture(pid).unwrap();
+        let confirmed = CancellationToken::new();
+
+        assert!(
+            stop_vm_with_confirmation(
+                async { Ok(()) },
                 &confirmed,
                 Some(identity),
                 false,

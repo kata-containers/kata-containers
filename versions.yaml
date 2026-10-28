@@ -277,7 +277,7 @@ externals:
       url: "https://github.com/NVIDIA/DCGM"
       exporter:
         desc: "NVIDIA DCGM exporter, released independently of DCGM itself"
-        version: "4.8.3.002-1"
+        version: "4.8.4.3955-1"
         url: "https://github.com/NVIDIA/dcgm-exporter"
     nvat:
       desc: "NVIDIA Attestation SDK"
@@ -447,12 +447,12 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     # When updating this, also update in go.mod files.
-    version: "1.26.9"
+    version: "1.26.10"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.26.9"
+      newest-version: "1.26.10"
 
   rust:
     description: "Rust language"

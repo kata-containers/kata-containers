@@ -307,12 +307,20 @@ fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -
         })?;
     }
 
-    fs::copy(source_path, &user_drop_in_path).with_context(|| {
-        format!(
-            "Failed to copy user containerd drop-in from {:?} to {:?}",
-            source_path, user_drop_in_path
-        )
-    })?;
+    let source_content = fs::read(source_path)
+        .with_context(|| format!("Failed to read user containerd drop-in: {source_path:?}"))?;
+    if fs::read(&user_drop_in_path).is_ok_and(|current| current == source_content) {
+        // Keep fs::copy's permission behavior without bumping the mtime used
+        // to determine whether the running CRI has loaded this configuration.
+        fs::set_permissions(&user_drop_in_path, fs::metadata(source_path)?.permissions())?;
+    } else {
+        fs::copy(source_path, &user_drop_in_path).with_context(|| {
+            format!(
+                "Failed to copy user containerd drop-in from {:?} to {:?}",
+                source_path, user_drop_in_path
+            )
+        })?;
+    }
 
     if let Some(imports_file) = &paths.imports_file {
         toml_utils::append_to_toml_array(
@@ -943,7 +951,9 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             if let Some(parent) = drop_in_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::File::create(&drop_in_path)?;
+            if !drop_in_path.exists() {
+                fs::File::create(&drop_in_path)?;
+            }
         }
         "containerd" if !Path::new(&config.containerd_conf_file).exists() => {
             if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {
@@ -1278,6 +1288,52 @@ mod tests {
         assert!(
             !rendered.contains("io.katacontainers.*\""),
             "must not forward the unrestricted wildcard: {rendered}"
+        );
+    }
+
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
+    #[case(CONTAINERD_LEGACY_CRI_PLUGIN_ID)]
+    fn empty_derived_annotations_remain_empty_in_containerd(#[case] pluginid: &str) {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration-qemu.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"default_vcpus\"]\n",
+        )
+        .unwrap();
+        let drop_in_dir = dir.path().join("config.d");
+        std::fs::create_dir(&drop_in_dir).unwrap();
+        std::fs::write(
+            drop_in_dir.join("50-user.toml"),
+            "[hypervisor.qemu]\nenable_annotations = []\n",
+        )
+        .unwrap();
+        let containerd_file = dir.path().join("containerd.toml");
+        std::fs::write(&containerd_file, "").unwrap();
+        let params = ContainerdRuntimeParams {
+            runtime_name: "kata-qemu".to_string(),
+            runtime_path: "/opt/kata/bin/containerd-shim-kata-v2".to_string(),
+            config_path: config_file.to_str().unwrap().to_string(),
+            pod_annotations: pod_annotations_for_kata_config(&config_file, &[]).unwrap(),
+            container_annotations: DEFAULT_CONTAINER_ANNOTATIONS.to_string(),
+            snapshotter: None,
+        };
+
+        write_containerd_runtime_config(&containerd_file, pluginid, &params).unwrap();
+
+        let doc = std::fs::read_to_string(&containerd_file)
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        let annotations = doc["plugins"][pluginid.trim_matches('"')]["containerd"]["runtimes"]
+            ["kata-qemu"]["pod_annotations"]
+            .as_array()
+            .unwrap();
+        assert!(
+            annotations.is_empty(),
+            "unexpected entries: {annotations:?}"
         );
     }
 
@@ -1693,7 +1749,69 @@ mod tests {
         );
     }
 
+    #[rstest]
+    #[case(None)]
+    #[case(Some("beta"))]
+    fn identical_user_drop_in_preserves_mtime(#[case] suffix: Option<&str>) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.toml");
+        fs::write(&source, "[debug]\nformat = \"text\"\n").unwrap();
+        let mut config = test_config("qemu", "/opt/kata");
+        config.multi_install_suffix = suffix.map(str::to_string);
+        config.containerd_user_drop_in_source_file = Some(source.to_str().unwrap().to_string());
+        let paths = ContainerdPaths {
+            config_file: dir.path().join("config.toml").to_str().unwrap().to_string(),
+            backup_file: dir.path().join("config.bak").to_str().unwrap().to_string(),
+            drop_in_file: dir.path().join("kata.toml").to_str().unwrap().to_string(),
+            use_drop_in: true,
+            imports_file: None,
+            plugin_id: None,
+        };
+        configure_user_containerd_drop_in(&config, &paths).unwrap();
+        let (output, _) = get_user_containerd_drop_in_output_path(&paths, suffix).unwrap();
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        fs::File::open(&output).unwrap().set_modified(old).unwrap();
+
+        for _ in 0..3 {
+            configure_user_containerd_drop_in(&config, &paths).unwrap();
+            assert_eq!(fs::read(&output).unwrap(), fs::read(&source).unwrap());
+            assert_eq!(fs::metadata(&output).unwrap().modified().unwrap(), old);
+        }
+
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o640)).unwrap();
+        configure_user_containerd_drop_in(&config, &paths).unwrap();
+        assert_eq!(
+            fs::metadata(&output).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+        assert_eq!(fs::metadata(&output).unwrap().modified().unwrap(), old);
+
+        fs::write(&source, "[debug]\nformat = \"json\"\n").unwrap();
+        configure_user_containerd_drop_in(&config, &paths).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), fs::read(&source).unwrap());
+        assert!(fs::metadata(&output).unwrap().modified().unwrap() > old);
+    }
+
     const DEST_DIR: &str = "/opt/kata";
+
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
+    #[case(CONTAINERD_LEGACY_CRI_PLUGIN_ID)]
+    fn identical_runtime_config_preserves_mtime(#[case] pluginid: &str) {
+        let file = NamedTempFile::new().unwrap();
+        write_handler(file.path(), pluginid, "kata-qemu", DEST_DIR);
+        let before = fs::read(file.path()).unwrap();
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        file.as_file().set_modified(old).unwrap();
+
+        for _ in 0..3 {
+            write_handler(file.path(), pluginid, "kata-qemu", DEST_DIR);
+            assert_eq!(fs::read(file.path()).unwrap(), before);
+            assert_eq!(file.as_file().metadata().unwrap().modified().unwrap(), old);
+        }
+    }
 
     fn write_handler(path: &Path, pluginid: &str, handler: &str, dest_dir: &str) {
         let mut params = make_params(handler, Some("\"nydus\""));

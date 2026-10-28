@@ -18,7 +18,7 @@
 ; module is: it becomes the semodule priority, and the node keeps the highest.
 ; Bump it in the same commit as any change here, or an older image will happily
 ; overwrite this on a node a newer release already set up.
-; policy-revision: 2
+; policy-revision: 3
 
 ; Job mode runs each stage in a container of its own; daemonset mode runs them
 ; all in one, so kata_deploy_t is the union.
@@ -139,7 +139,7 @@
 (allow kata_deploy_cri_config_writer kata_deploy_cri_config_target
     (dir (search getattr open read write add_name remove_name create rmdir)))
 (allow kata_deploy_cri_config_writer kata_deploy_cri_config_target
-    (file (create open getattr setattr read write unlink rename)))
+    (file (create open getattr setattr read write append unlink rename)))
 
 ; /usr/local/bin (bin_t), for the binaries nodeBinaries takes out of images.
 ; Only writing needs granting: bin_t is a base_ro_file_type, which is what makes

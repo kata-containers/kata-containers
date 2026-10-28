@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::{
-    collections::{vec_deque, VecDeque},
+    collections::{vec_deque, HashSet, VecDeque},
     sync::mpsc,
 };
 
@@ -334,6 +334,8 @@ pub struct BlockDeviceMgr {
     read_only_root: bool,
     part_uuid: Option<String>,
     use_shared_irq: bool,
+    /// Drive IDs that were attached through the runtime hotplug path.
+    hotplug_drive_ids: HashSet<String>,
 }
 
 impl BlockDeviceMgr {
@@ -414,6 +416,7 @@ impl BlockDeviceMgr {
                 if !ctx.is_hotplug {
                     return Ok(());
                 }
+                self.hotplug_drive_ids.insert(config.drive_id.clone());
 
                 let mut slot = 0;
 
@@ -518,7 +521,39 @@ impl BlockDeviceMgr {
         &mut self,
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), BlockDeviceError> {
+        self.attach_devices_matching(ctx, |_| true)
+    }
+
+    /// Attach devices that exist at boot while preserving configured order.
+    pub fn attach_boot_devices(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        let hotplug_drive_ids = self.hotplug_drive_ids.clone();
+        self.attach_devices_matching(ctx, |config| !hotplug_drive_ids.contains(&config.drive_id))
+    }
+
+    /// Hotplug snapshot restored devices after the VM's boot-time devices.
+    pub fn attach_restored_devices(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        let hotplug_drive_ids = self.hotplug_drive_ids.clone();
+        self.attach_devices_matching(ctx, |config| hotplug_drive_ids.contains(&config.drive_id))
+    }
+
+    fn attach_devices_matching<F>(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+        matches: F,
+    ) -> std::result::Result<(), BlockDeviceError>
+    where
+        F: Fn(&BlockDeviceConfigInfo) -> bool,
+    {
         for info in self.info_list.iter_mut() {
+            if !matches(&info.config) {
+                continue;
+            }
             match info.config.device_type {
                 BlockDeviceType::RawBlock => {
                     info!(
@@ -591,6 +626,7 @@ impl BlockDeviceMgr {
     }
 
     fn remove(&mut self, drive_id: &str) -> Option<BlockDeviceInfo> {
+        self.hotplug_drive_ids.remove(drive_id);
         match self.get_index_of_drive_id(drive_id) {
             Some(index) => self.info_list.remove(index),
             None => None,
@@ -1029,10 +1065,11 @@ impl<'a> dbs_snapshot::Persist<'a> for BlockDeviceMgr {
             let (device_info, transport) =
                 persist::save_device_state::<Block<GuestAddressSpaceImpl>>(device, ())
                     .map_err(BlockDeviceError::Virtio)?;
-            devices.push(persist::VirtioDevState {
+            devices.push(BlockDevState {
                 config: info.config.clone(),
                 device_info: BlockDeviceState::RawBlock(device_info),
                 transport,
+                was_hotplugged: self.hotplug_drive_ids.contains(&info.config.drive_id),
             });
         }
         Ok(BlockDeviceMgrState { devices })
@@ -1049,29 +1086,8 @@ impl<'a> dbs_snapshot::Persist<'a> for BlockDeviceMgr {
         state: &Self::State,
         _args: (),
     ) -> std::result::Result<(), Self::Error> {
-        for (pos, dev_state) in state.devices.iter().enumerate() {
-            // Drive ids may be generated per-run (e.g. the VM rootfs drive
-            // id), so an id miss is expected across template create/restore
-            // boundaries. Fall back to positional matching, but only when the
-            // device sets align *and* the backing path at that position
-            // confirms it is the same device -- otherwise saved queue state
-            // could be applied to the wrong block device. A path mismatch is
-            // refused rather than guessed.
-            let index = match self.get_index_of_drive_id(&dev_state.config.drive_id) {
-                Some(index) => index,
-                None if self.info_list.len() == state.devices.len()
-                    && self.info_list[pos].config.path_on_host == dev_state.config.path_on_host =>
-                {
-                    log::warn!(
-                        "block device id '{}' not found, matched by position {} (backing path {:?})",
-                        dev_state.config.drive_id,
-                        pos,
-                        dev_state.config.path_on_host,
-                    );
-                    pos
-                }
-                None => return Err(InvalidDeviceId(dev_state.config.drive_id.clone())),
-            };
+        let indices = self.restore_device_indices(state)?;
+        for (dev_state, index) in state.devices.iter().zip(indices) {
             // The saved type must match the device that was re-created from
             // config, or the saved state belongs to a different device.
             if self.info_list[index].config.device_type != dev_state.config.device_type {
@@ -1097,6 +1113,73 @@ impl<'a> dbs_snapshot::Persist<'a> for BlockDeviceMgr {
     }
 }
 
+impl BlockDeviceMgr {
+    /// Apply the source attachment phase to the newly configured target
+    /// devices before they are created. The phase is snapshot state; it must
+    /// not be guessed from root or read-only properties.
+    pub fn prepare_restore_layout(
+        &mut self,
+        state: &BlockDeviceMgrState,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        let indices = self.restore_device_indices(state)?;
+        self.hotplug_drive_ids.clear();
+        for (dev_state, index) in state.devices.iter().zip(indices) {
+            if dev_state.was_hotplugged {
+                self.hotplug_drive_ids
+                    .insert(self.info_list[index].config.drive_id.clone());
+            }
+        }
+        Ok(())
+    }
+
+    fn restore_device_indices(
+        &self,
+        state: &BlockDeviceMgrState,
+    ) -> std::result::Result<Vec<usize>, BlockDeviceError> {
+        let exact_targets: HashSet<usize> = state
+            .devices
+            .iter()
+            .filter_map(|dev_state| self.get_index_of_drive_id(&dev_state.config.drive_id))
+            .collect();
+        let mut restored = vec![false; self.info_list.len()];
+        let mut indices = Vec::with_capacity(state.devices.len());
+
+        for dev_state in &state.devices {
+            let index = match self.get_index_of_drive_id(&dev_state.config.drive_id) {
+                Some(index) if !restored[index] => index,
+                _ if self.info_list.len() == state.devices.len() => self
+                    .info_list
+                    .iter()
+                    .enumerate()
+                    .find(|(index, info)| {
+                        !restored[*index]
+                            // A fallback must not consume a target reserved by
+                            // another snapshot entry's exact drive ID.
+                            && !exact_targets.contains(index)
+                            && info.config.device_type == dev_state.config.device_type
+                            && info.config.is_read_only == dev_state.config.is_read_only
+                            && info.config.is_root_device == dev_state.config.is_root_device
+                            && (!dev_state.config.is_read_only
+                                || info.config.path_on_host == dev_state.config.path_on_host)
+                    })
+                    .map(|(index, _)| index)
+                    .ok_or_else(|| InvalidDeviceId(dev_state.config.drive_id.clone()))?,
+                _ => return Err(InvalidDeviceId(dev_state.config.drive_id.clone())),
+            };
+            if dev_state.config.drive_id != self.info_list[index].config.drive_id {
+                log::warn!(
+                    "block device id '{}' not found, matched restored device at position {}",
+                    dev_state.config.drive_id,
+                    index,
+                );
+            }
+            restored[index] = true;
+            indices.push(index);
+        }
+        Ok(indices)
+    }
+}
+
 /// Snapshot state of one block device, tagged by the low-level device kind.
 ///
 /// Wired as an enum from the start so support for a further kind is an added
@@ -1110,9 +1193,20 @@ pub enum BlockDeviceState {
     RawBlock(virtio::persist::VirtioDeviceInfoState),
 }
 
-/// Snapshot state of one block device (config + device state + transport
-/// state); see [`persist::VirtioDevState`].
-pub type BlockDevState = persist::VirtioDevState<BlockDeviceConfigInfo, BlockDeviceState>;
+/// Snapshot state of one block device.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BlockDevState {
+    /// Static block-device configuration captured in the snapshot.
+    pub config: BlockDeviceConfigInfo,
+    /// Device-specific virtio state.
+    pub device_info: BlockDeviceState,
+    /// Guest-visible transport state.
+    pub transport: persist::VirtioTransportState,
+    /// Whether this device acquired guest-visible resources through hotplug.
+    /// Older snapshots default to the existing boot-device behavior.
+    #[serde(default)]
+    pub was_hotplugged: bool,
+}
 
 /// Snapshot state of the block device manager.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -1131,6 +1225,7 @@ impl Default for BlockDeviceMgr {
             read_only_root: false,
             part_uuid: None,
             use_shared_irq: USE_SHARED_IRQ,
+            hotplug_drive_ids: HashSet::new(),
         }
     }
 }
@@ -1828,5 +1923,63 @@ mod tests {
             .insert_device(ctx, root_block_device_new, sender.clone())
             .unwrap();
         assert!(vm.device_manager().block_manager.has_part_uuid_root);
+    }
+
+    fn snapshot_block_state(config: BlockDeviceConfigInfo, was_hotplugged: bool) -> BlockDevState {
+        BlockDevState {
+            config,
+            device_info: BlockDeviceState::RawBlock(Default::default()),
+            transport: persist::VirtioTransportState::Mmio(Default::default()),
+            was_hotplugged,
+        }
+    }
+
+    #[test]
+    fn test_restore_layout_reserves_exact_ids_and_preserves_attachment_phase() {
+        let exact = BlockDeviceConfigInfo {
+            drive_id: "exact".to_string(),
+            path_on_host: "/target/exact".into(),
+            ..Default::default()
+        };
+        let fallback_target = BlockDeviceConfigInfo {
+            drive_id: "target-new-id".to_string(),
+            path_on_host: "/target/fallback".into(),
+            ..Default::default()
+        };
+        let mut manager = BlockDeviceMgr::default();
+        manager
+            .info_list
+            .push_back(BlockDeviceInfo::new(exact.clone()));
+        manager
+            .info_list
+            .push_back(BlockDeviceInfo::new(fallback_target));
+
+        // The ID-miss entry is intentionally first. It must not consume the
+        // target reserved for the later exact-ID entry.
+        let state = BlockDeviceMgrState {
+            devices: vec![
+                snapshot_block_state(
+                    BlockDeviceConfigInfo {
+                        drive_id: "source-old-id".to_string(),
+                        path_on_host: "/source/old".into(),
+                        ..Default::default()
+                    },
+                    true,
+                ),
+                snapshot_block_state(exact, false),
+            ],
+        };
+
+        assert_eq!(manager.restore_device_indices(&state).unwrap(), vec![1, 0]);
+        manager.prepare_restore_layout(&state).unwrap();
+        assert!(manager.hotplug_drive_ids.contains("target-new-id"));
+        assert!(!manager.hotplug_drive_ids.contains("exact"));
+
+        // Snapshots predating phase tracking keep the prior boot-device
+        // behavior without adding a new compatibility policy.
+        let mut legacy = serde_json::to_value(&state.devices[0]).unwrap();
+        legacy.as_object_mut().unwrap().remove("was_hotplugged");
+        let legacy: BlockDevState = serde_json::from_value(legacy).unwrap();
+        assert!(!legacy.was_hotplugged);
     }
 }

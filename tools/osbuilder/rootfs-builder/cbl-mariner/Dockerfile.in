@@ -10,6 +10,7 @@ RUN tdnf -y install \
     build-essential \
     dnf \
     git \
+    openssl \
     tar \
     xz \
     zstd
