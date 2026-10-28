@@ -186,6 +186,8 @@ pub struct VirtSandbox {
     vmm_exit_confirmed: CancellationToken,
     vmm_process: Arc<RwLock<Option<VmmProcessIdentity>>>,
     config_path: Option<PathBuf>,
+    // Network namespace the runtime created for the sandbox and has to remove.
+    created_netns: Option<String>,
 }
 
 #[derive(Default)]
@@ -365,6 +367,7 @@ impl VirtSandbox {
             exit_notify_tx,
             shm_size: sandbox_config.shm_size,
             config_path: sandbox_config.config_path.clone(),
+            created_netns: sandbox_config.network_env.created_netns(),
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
@@ -1247,15 +1250,6 @@ impl VirtSandbox {
             .unwrap_or(false)
     }
 
-    fn created_netns(&self) -> Option<&str> {
-        let network_env = &self.sandbox_config.as_ref()?.network_env;
-        if network_env.network_created {
-            network_env.netns.as_deref()
-        } else {
-            None
-        }
-    }
-
     async fn should_defer_network(&self) -> Result<bool> {
         if !self.is_factory_enabled() {
             return Ok(false);
@@ -1849,7 +1843,7 @@ impl Sandbox for VirtSandbox {
 
         // A mounted rootless namespace prevents removal of the runtime directory.
         if steps.resources && steps.hypervisor && !steps.netns {
-            match self.created_netns() {
+            match self.created_netns.as_deref() {
                 Some(path) => match remove_netns(Path::new(path)) {
                     Ok(()) => steps.netns = true,
                     Err(e) => errors.push(e),
@@ -2084,6 +2078,7 @@ impl Persist for VirtSandbox {
             resource: Some(self.resource_manager.save().await?),
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
             config_path: self.config_path.clone(),
+            created_netns: self.created_netns.clone(),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -2204,6 +2199,7 @@ impl Persist for VirtSandbox {
             vmm_exit_confirmed,
             vmm_process: Arc::new(RwLock::new(None)),
             config_path: sandbox_state.config_path,
+            created_netns: sandbox_state.created_netns,
         })
     }
 }
