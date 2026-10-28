@@ -89,7 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['minimum', 'latest']
-        vmm: ['clh', 'clh-runtime-rs', 'dragonball', 'qemu', 'qemu-runtime-rs']
+        vmm: ['clh', 'clh-runtime-rs', 'dragonball', 'qemu', 'qemu-runtime-rs', 'fc-runtime-rs']
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-containerd-stability-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -264,6 +264,7 @@ jobs:
           - qemu-runtime-rs
           - qemu-nvidia-cpu
           - qemu-nvidia-cpu-runtime-rs
+          - fc-runtime-rs
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-nerdctl-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -311,6 +312,7 @@ jobs:
         continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.vmm }}
+        if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: nerdctl-tests-garm-${{ matrix.vmm }}

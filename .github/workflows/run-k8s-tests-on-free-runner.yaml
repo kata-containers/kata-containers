@@ -55,6 +55,8 @@ jobs:
           { vmm: clh-runtime-rs, containerd_version: minimum },
           { vmm: qemu-nvidia-cpu, containerd_version: latest },
           { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity },
+          { vmm: fc-runtime-rs, containerd_version: latest, snapshotter: devmapper },
+          { vmm: fc-runtime-rs, containerd_version: minimum, snapshotter: devmapper },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
@@ -121,6 +123,20 @@ jobs:
 
       - name: Deploy k8s (kubeadm)
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+
+      # kata-deploy sets up nydus and erofs itself; devmapper needs a thin-pool
+      # on the host, which only this harness can provide.
+      - name: Configure snapshotter
+        if: matrix.environment.snapshotter == 'devmapper'
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
+
+      - name: Pre-label node for kata-deploy scheduling
+        if: matrix.environment.snapshotter == 'devmapper'
+        run: bash tests/integration/kubernetes/gha-run.sh prelabel-node
+
+      - name: Pre-pull kata-deploy images for devmapper
+        if: matrix.environment.snapshotter == 'devmapper'
+        run: bash tests/integration/kubernetes/gha-run.sh prepull-kata-images
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
