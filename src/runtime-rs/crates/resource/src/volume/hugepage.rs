@@ -263,7 +263,7 @@ mod tests {
             return;
         }
         // Probe once before iterating: some CI runners (e.g. the
-        // ubuntu-24.04-s390x GHA runner) report supported huge-page sizes via
+        // ubuntu-26.04-s390x GHA runner) report supported huge-page sizes via
         // /sys but execute the test inside a user/mount namespace where
         // mount(2) of hugetlbfs is forbidden (EPERM) even when running as
         // root. There's no portable capability bit we can sniff for that, so

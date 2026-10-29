@@ -57,7 +57,7 @@ jobs:
             runner: ubuntu-24.04-arm
           - arch: s390x
             tag_suffix: -s390x
-            runner: ubuntu-24.04-s390x
+            runner: ubuntu-26.04-s390x
           - arch: ppc64le
             tag_suffix: -ppc64le
             runner: ubuntu-24.04-ppc64le
