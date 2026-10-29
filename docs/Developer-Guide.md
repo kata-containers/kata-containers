@@ -10,6 +10,9 @@ If you want to contribute changes that you have made, please read the [community
 
 # Initial setup
 
+To test Kata in a disposable Kubernetes VM on Linux or an Apple M3-or-later Mac,
+see the [Lima development lab guide](how-to/test-kata-with-lima.md).
+
 The recommended way to create a development environment is to first
 [install the packaged versions of the Kata Containers components](install/README.md)
 to create a working system.
