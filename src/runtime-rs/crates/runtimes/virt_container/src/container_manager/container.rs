@@ -19,9 +19,11 @@ use common::{
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{
     annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA},
+    config::default::DEFAULT_GUEST_DNS_FILE,
     config::TomlConfig,
     container::update_ocispec_annotations,
     k8s::{self, container_type},
+    mount::kata_guest_sandbox_dir,
 };
 use oci_spec::runtime as oci;
 
@@ -52,6 +54,36 @@ pub struct Container {
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
+}
+
+fn add_sandbox_dns_mount(spec: &mut oci::Spec) -> Result<()> {
+    if spec.mounts().as_ref().is_some_and(|mounts| {
+        mounts
+            .iter()
+            .any(|mount| mount.destination() == std::path::Path::new(DEFAULT_GUEST_DNS_FILE))
+    }) {
+        return Ok(());
+    }
+
+    // The shim sandbox controller delegates resolver setup to the runtime.
+    // Add this after volume handling: the source already exists in the guest
+    // and must not be interpreted as a host file to copy or share.
+    let readonly = spec
+        .root()
+        .as_ref()
+        .and_then(|root| root.readonly())
+        .unwrap_or(false);
+    let mount = oci::MountBuilder::default()
+        .destination(DEFAULT_GUEST_DNS_FILE)
+        .typ("bind")
+        .source(std::path::Path::new(&kata_guest_sandbox_dir()).join("resolv.conf"))
+        .options(vec![
+            "bind".to_string(),
+            if readonly { "ro" } else { "rw" }.to_string(),
+        ])
+        .build()?;
+    spec.mounts_mut().get_or_insert_with(Vec::new).push(mount);
+    Ok(())
 }
 
 fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) -> Result<bool> {
@@ -111,7 +143,7 @@ impl Container {
         })
     }
 
-    pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
+    pub async fn create(&self, mut spec: oci::Spec, sandbox_has_dns: bool) -> Result<()> {
         // process oci spec
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
@@ -198,6 +230,9 @@ impl Container {
             inner.volumes.push(v);
         }
         spec.set_mounts(Some(oci_mounts));
+        if sandbox_has_dns {
+            add_sandbox_dns_mount(&mut spec)?;
+        }
 
         let linux = spec
             .linux()
@@ -949,6 +984,51 @@ mod tests {
     use super::*;
     use oci_spec::runtime::LinuxNamespaceType;
     use oci_spec::runtime::{LinuxBuilder, LinuxNamespaceBuilder};
+
+    #[test]
+    fn sandbox_dns_mount_respects_explicit_resolver() {
+        let resolver = oci::MountBuilder::default()
+            .destination(DEFAULT_GUEST_DNS_FILE)
+            .source("/custom/resolv.conf")
+            .typ("bind")
+            .build()
+            .unwrap();
+        let mut spec = oci::Spec::default();
+        spec.set_mounts(Some(vec![resolver.clone()]));
+        add_sandbox_dns_mount(&mut spec).unwrap();
+        assert_eq!(spec.mounts().as_ref().unwrap(), &vec![resolver]);
+    }
+
+    #[test]
+    fn sandbox_dns_mount_uses_guest_resolver_and_rootfs_permissions() {
+        for readonly in [false, true] {
+            let mut spec = oci::Spec::default();
+            spec.set_mounts(None);
+            spec.set_root(Some(
+                oci::RootBuilder::default()
+                    .path("rootfs")
+                    .readonly(readonly)
+                    .build()
+                    .unwrap(),
+            ));
+            add_sandbox_dns_mount(&mut spec).unwrap();
+            add_sandbox_dns_mount(&mut spec).unwrap();
+            let mounts = spec.mounts().as_ref().unwrap();
+            assert_eq!(mounts.len(), 1);
+            assert_eq!(
+                mounts[0].destination(),
+                std::path::Path::new(DEFAULT_GUEST_DNS_FILE)
+            );
+            assert_eq!(
+                mounts[0].source().as_ref().unwrap(),
+                &std::path::Path::new(&kata_guest_sandbox_dir()).join("resolv.conf")
+            );
+            assert_eq!(
+                mounts[0].options().as_ref().unwrap(),
+                &vec!["bind", if readonly { "ro" } else { "rw" }]
+            );
+        }
+    }
 
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {
