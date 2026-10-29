@@ -93,13 +93,18 @@ setup() {
 	read -r -a pod_ips <<< "$(kubectl get pod "${server_pod}" -o jsonpath='{.status.podIPs[*].ip}')"
 	read -r -a service_ips <<< "$(kubectl get service "${service}" -o jsonpath='{.spec.clusterIPs[*]}')"
 
-	local ip
-	for ip in "${pod_ips[@]}" "${service_ips[@]}"; do
+	local ip host
+	for ip in "${pod_ips[@]}"; do
 		info "Fetching from ${ip}"
 		client_fetch "${ip}"
 	done
 
-	client_fetch "${service}"
+	# kube-proxy refuses connections to a Service until it has programmed
+	# the endpoints of a pod that only just became Ready.
+	for host in "${service_ips[@]}" "${service}"; do
+		info "Fetching from ${host}"
+		waitForProcess 30 1 "client_fetch '${host}'"
+	done
 
 	if [[ "${K8S_IP_FAMILY}" == "ipv6" ]]; then
 		# Expect the missing route rather than a timeout, so this cannot pass
