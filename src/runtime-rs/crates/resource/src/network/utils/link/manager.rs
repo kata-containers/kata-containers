@@ -100,6 +100,11 @@ fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
                         link = Some(Box::new(Veth::default()));
                     }
                 }
+                InfoKind::Netkit => {
+                    if link.is_none() {
+                        link = Some(Box::new(Netkit::default()));
+                    }
+                }
                 InfoKind::IpVlan => {
                     if link.is_none() {
                         link = Some(Box::new(IpVlan::default()));
@@ -132,6 +137,9 @@ fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
                 }
                 InfoData::Veth(_) => {
                     link = Some(Box::new(Veth::default()));
+                }
+                InfoData::Netkit(_) => {
+                    link = Some(Box::new(Netkit::default()));
                 }
                 InfoData::IpVlan(_) => {
                     link = Some(Box::new(IpVlan::default()));
@@ -214,6 +222,7 @@ macro_rules! define_and_impl_network_dev {
 define_and_impl_network_dev!("device", Device);
 define_and_impl_network_dev!("tuntap", Tuntap);
 define_and_impl_network_dev!("veth", Veth);
+define_and_impl_network_dev!("netkit", Netkit);
 define_and_impl_network_dev!("ipvlan", IpVlan);
 define_and_impl_network_dev!("macvlan", MacVlan);
 define_and_impl_network_dev!("vlan", Vlan);
