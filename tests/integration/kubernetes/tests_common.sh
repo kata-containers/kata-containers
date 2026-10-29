@@ -365,17 +365,33 @@ has_separate_vmm() {
 	[[ "${KATA_HYPERVISOR}" != *dragonball* ]]
 }
 
-# Echo the PID of the Kata shim for the pod with UID $2, on node $1.
+# Echo the PID of the Kata shim for pod $2 in the current namespace, on node $1.
 # Returns non-zero if no matching shim is found.
 #
-# The UID is matched in both cgroup-path forms (dashed for cgroupfs,
-# underscored for systemd) so a shim from another namespace is not selected.
-# The pgrep pattern is bracketed ("[c]ontainerd") so it doesn't also match the
-# `bash -c` wrapper exec_host runs, whose command line contains the pattern.
+# Match the sandbox ID argument rather than the executable's filename or
+# cgroup. This also works with custom runtime_path binaries and lets callers
+# diagnose incorrect cgroup placement without assuming it is correct. The
+# -namespace argument is not matched, as it differs between containerd and
+# CRI-O while the sandbox ID is already unique.
 shim_pid_for_pod() {
-	local node_name="$1" uid_dashed="$2" uid_underscored pid
-	uid_underscored="${uid_dashed//-/_}"
-	pid="$(exec_host "${node_name}" "for p in \$(pgrep -f '[c]ontainerd-shim-kata-v2'); do grep -qE 'pod(${uid_dashed}|${uid_underscored})' /proc/\$p/cgroup 2>/dev/null && echo \$p && break; done; true")"
+	local node_name="$1" pod_name="$2" sandbox_id quoted_sandbox_id query pid
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")" || return 1
+	[[ -n "${sandbox_id}" ]] || return 1
+	printf -v quoted_sandbox_id '%q' "${sandbox_id}"
+	read -r -d '' query <<'EOF' || true
+for proc in /proc/[0-9]*; do
+    args=()
+    mapfile -d '' -t args 2>/dev/null < "${proc}/cmdline" || continue
+    for ((i = 1; i < ${#args[@]}; i++)); do
+        if [[ "${args[i - 1]}" == -id && "${args[i]}" == "${sandbox_id}" ]]; then
+            echo "${proc##*/}"
+            break 2
+        fi
+    done
+done
+true
+EOF
+	pid="$(exec_host "${node_name}" "sandbox_id=${quoted_sandbox_id}; ${query}")"
 	[[ -n "${pid}" ]] || return 1
 	echo "${pid}"
 }

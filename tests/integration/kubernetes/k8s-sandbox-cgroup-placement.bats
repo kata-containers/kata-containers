@@ -57,23 +57,23 @@ setup() {
 	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Ready --timeout="$timeout" pod "$pod_name"
 
-	# Select the shim by pod's UID
-	local pod_uid
-	pod_uid="$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.uid}')"
-
 	local shim_pid vmm_pid vfsd_pid
-	shim_pid="$(shim_pid_for_pod "${node}" "${pod_uid}")"
+	shim_pid="$(shim_pid_for_pod "${node}" "${pod_name}")"
 
 	vmm_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} -f 'cloud-hypervisor|qemu-system|firecracker|stratovirt|openvmm'")"
 
 	vfsd_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} virtiofsd || true")"
 
-	info "pod uid: ${pod_uid}, shim pid: ${shim_pid}, VMM pid: ${vmm_pid}, virtiofsd pid: ${vfsd_pid:-<none>}"
+	info "shim pid: ${shim_pid}, VMM pid: ${vmm_pid}, virtiofsd pid: ${vfsd_pid:-<none>}"
 
 	local shim_cgroup
 	shim_cgroup="$(host_cgroup_v2_path "${shim_pid}")"
 	info "shim cgroup: ${shim_cgroup}"
 	echo "${shim_cgroup}" | grep -q "kubepods" || die "shim is not in a kubepods cgroup: ${shim_cgroup}"
+
+	local pod_uid
+	pod_uid="$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.uid}')"
+	echo "${shim_cgroup}" | grep -qE "pod(${pod_uid}|${pod_uid//-/_})" || die "shim is not in the cgroup of pod ${pod_uid}: ${shim_cgroup}"
 
 	# The VMM must be co-located with the shim, not left in the spawn cgroup.
 	local vmm_cgroup
