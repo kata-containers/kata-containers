@@ -34,6 +34,8 @@ impl ShimExecutor {
 
     fn do_start(&mut self) -> Result<PathBuf> {
         let bundle_path = get_bundle_path().context("get bundle path")?;
+        common::config::persist_startup_options(&bundle_path, std::io::stdin().lock())
+            .context("read shim startup runtime options")?;
 
         let mut container_type = ContainerType::PodSandbox;
         let mut id = None;

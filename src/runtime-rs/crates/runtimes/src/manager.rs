@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use common::{
-    config::{load_config, load_config_from, load_config_with_path},
+    config::{load_config, load_config_from, load_config_with_path, load_startup_options},
     message::{Action, Message},
     types::{
         ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
@@ -508,7 +508,9 @@ impl RuntimeHandlerManager {
         if inner.runtime_instance.is_some() {
             return Ok(());
         }
-        inner.try_init(sandbox_config, None, &None).await
+        let options = load_startup_options(&kata_sys_util::spec::get_bundle_path()?)
+            .context("load shim startup runtime options")?;
+        inner.try_init(sandbox_config, None, &options).await
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
@@ -1446,6 +1448,13 @@ mod tests {
         let tmpdir = tempfile::tempdir().unwrap();
         let path = tmpdir.path().join("configuration-qemu.toml");
         write_qemu_config(&path, "/bin/sh");
+        let bind_mount = format!("{}:ro", tmpdir.path().display());
+        let contents = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            format!("{contents}sandbox_bind_mounts = [{bind_mount:?}]\n"),
+        )
+        .unwrap();
         let options = protocols::runtimeoptions::Options {
             config_path: path.to_string_lossy().to_string(),
             ..Default::default()
@@ -1460,6 +1469,7 @@ mod tests {
         // saved in the sandbox state.
         let config = cleanup_config(Some(&loaded_path), &HashMap::new());
         assert_eq!(config.runtime.hypervisor_name, "qemu");
+        assert_eq!(config.runtime.sandbox_bind_mounts, vec![bind_mount]);
     }
 
     #[rstest]
