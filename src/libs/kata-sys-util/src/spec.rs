@@ -8,6 +8,8 @@ use kata_types::container::ContainerType;
 use oci_spec::{runtime as oci, OciSpecError};
 use std::path::PathBuf;
 
+pub const SHIM_RUNTIME_OPTIONS_FILE: &str = "kata-runtime-options";
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     /// unknown container type

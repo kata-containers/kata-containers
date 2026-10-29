@@ -10,6 +10,7 @@ pub mod agent_ttrpc;
 #[cfg(feature = "async")]
 pub mod agent_ttrpc_async;
 pub mod api;
+pub mod bootstrap;
 pub mod csi;
 pub mod empty;
 mod gogo;
