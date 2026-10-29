@@ -34,6 +34,7 @@ readonly openvmm_builder="${static_build_dir}/openvmm/build.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
+readonly tdshim_builder="${static_build_dir}/td-shim/build.sh"
 readonly pause_image_builder="${static_build_dir}/pause-image/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_flavour_builder="${static_build_dir}/qemu/build-static-qemu-flavour.sh"
@@ -152,6 +153,7 @@ options:
 	qemu-snp-experimental
 	qemu-tdx-experimental
 	stratovirt
+	td-shim
 	rootfs-image
 	rootfs-image-confidential
 	rootfs-image-coco-extension
@@ -1766,6 +1768,27 @@ install_ovmf_tdx() {
 	install_ovmf "tdx" "edk2-tdx.tar.gz"
 }
 
+# Install the td-shim TDX firmware asset.
+#
+# td-shim publishes no released binaries, so it is always built from source
+# (see static-build/td-shim/build.sh); repeat builds are short-circuited by
+# the cached-artefact tarball via install_cached_tarball_component.
+install_td_shim() {
+	latest_artefact="$(get_from_kata_deps ".externals.td-shim.version")"
+	latest_builder_image="$(get_td_shim_image_name)"
+
+	install_cached_tarball_component \
+		"td-shim" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static td-shim"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${tdshim_builder}"
+}
+
 install_busybox() {
 	latest_artefact="$(get_from_kata_deps ".externals.busybox.version")"
 	latest_builder_image="$(get_busybox_image_name)"
@@ -2032,6 +2055,7 @@ handle_build() {
 		install_stratovirt
 		install_shim_v2_go
 		install_shim_v2_rust
+		install_td_shim
 		install_trace_forwarder
 		install_virtiofsd
 		;;
@@ -2089,6 +2113,8 @@ handle_build() {
 	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 
 	stratovirt) install_stratovirt ;;
+
+	td-shim) install_td_shim ;;
 
 	rootfs-image) install_image_base ;;
 
