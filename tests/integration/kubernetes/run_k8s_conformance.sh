@@ -109,6 +109,21 @@ declare -A no_shared_fs_skips=(
 	["should succeed in writing subpaths in container"]="subPath of a block emptyDir is not supported"
 )
 
+# Conformance tests that fail intermittently on OpenVMM only:
+#   - Three Projected PodCertificate tests start a container that cats its
+#     credential bundle, and read the pod logs once as soon as the pod is
+#     Running. On OpenVMM the output can reach the log file after that read,
+#     and the test fails with "data does not contain any valid RSA or ECDSA
+#     certificates". The mTLS test of the same suite retries and passes.
+#   - The HostPort no conflict test needs its third pod admitted, and kubelet
+#     rejected it with OutOfcpu while the parallel tests still held the CPU.
+declare -A openvmm_skips=(
+	["should honor UserAnnotations for SPIFFE URI path"]="pod logs are read before the output arrives"
+	["should issue certificate with default life time \\(24h\\) when MaxExpirationSeconds is not set"]="pod logs are read before the output arrives"
+	["should issue certificate with specified duration \\(1h\\) when MaxExpirationSeconds is set"]="pod logs are read before the output arrives"
+	["same hostPort but different hostIP and protocol"]="a pod is rejected with OutOfcpu"
+)
+
 # Conformance tests that do not fit on a node with fewer than
 # small_node_cpu_threshold allocatable CPUs. The GitHub-hosted runners have 4,
 # and every Kata pod also requests the RuntimeClass CPU overhead (250m), so
@@ -167,6 +182,11 @@ kata_skip_regex() {
 	done
 	if [[ "${KATA_HYPERVISOR}" == *nvidia* ]]; then
 		for test_name in "${!no_shared_fs_skips[@]}"; do
+			regex+="${regex:+|}${test_name}"
+		done
+	fi
+	if [[ "${KATA_HYPERVISOR}" == openvmm* ]]; then
+		for test_name in "${!openvmm_skips[@]}"; do
 			regex+="${regex:+|}${test_name}"
 		done
 	fi
