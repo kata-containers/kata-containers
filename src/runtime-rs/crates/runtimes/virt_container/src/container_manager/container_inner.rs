@@ -200,7 +200,6 @@ impl ContainerInner {
         if !self.removed_from_agent {
             let remove_request = agent::RemoveContainerRequest {
                 container_id: cid.to_string(),
-                ..Default::default()
             };
             match self.agent.remove_container(remove_request).await {
                 Ok(_) => self.removed_from_agent = true,
