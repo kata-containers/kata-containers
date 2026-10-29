@@ -40,7 +40,7 @@ use tracing::instrument;
 
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, TYPE_ROOTFS};
-use crate::namespace::Namespace;
+use crate::namespace::{Namespace, PidNamespaceKeeper};
 use crate::netlink::Handle;
 use crate::network::Network;
 use crate::pci;
@@ -127,6 +127,7 @@ pub struct Sandbox {
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
+    pidns_keeper: Option<PidNamespaceKeeper>,
     pub storages: HashMap<String, StorageState>,
     pub running: bool,
     pub no_pivot_root: bool,
@@ -162,6 +163,7 @@ impl Sandbox {
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
             sandbox_pidns: None,
+            pidns_keeper: None,
             storages: HashMap::new(),
             running: false,
             no_pivot_root: fs_type.eq(TYPE_ROOTFS),
@@ -266,6 +268,22 @@ impl Sandbox {
     }
 
     #[instrument]
+    pub fn ensure_shared_pidns(&mut self) -> Result<()> {
+        // The task API supplies an infra container. Sandbox API does not, so
+        // its first shared-PID workload must not become the namespace owner:
+        // that workload may be a short-lived init container.
+        if self.sandbox_pidns.is_none() && self.containers.is_empty() {
+            let keeper =
+                PidNamespaceKeeper::start().context("start shared PID namespace keeper")?;
+            let mut namespace = Namespace::new(&self.logger).get_pid();
+            namespace.path = keeper.path();
+            self.sandbox_pidns = Some(namespace);
+            self.pidns_keeper = Some(keeper);
+        }
+        Ok(())
+    }
+
+    #[instrument]
     pub fn update_shared_pidns(&mut self, c: &LinuxContainer) -> Result<()> {
         // Populate the shared pid path only if this is an infra container and
         // sandbox_pidns has not been passed in the create_sandbox request.
@@ -341,6 +359,10 @@ impl Sandbox {
     pub async fn destroy(&mut self) -> Result<()> {
         for ctr in self.containers.values_mut() {
             ctr.destroy().await?;
+        }
+        if let Some(mut keeper) = self.pidns_keeper.take() {
+            keeper.stop().context("stop shared PID namespace keeper")?;
+            self.sandbox_pidns = None;
         }
         Ok(())
     }
