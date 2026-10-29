@@ -113,13 +113,6 @@ impl CloudHypervisorInner {
         #[cfg(target_arch = "aarch64")]
         let console_param_debug = KernelParams::from_string("console=ttyAMA0,115200n8");
 
-        let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
-            &cfg.boot_info.kernel_verity_params,
-            rootfs_driver,
-            rootfs_type,
-            true,
-        )?;
-
         let mut console_params = if enable_debug {
             console_param_debug
         } else {
@@ -128,7 +121,16 @@ impl CloudHypervisorInner {
 
         params.append(&mut console_params);
 
-        params.append(&mut rootfs_params);
+        if cfg.boot_info.initrd.is_empty() {
+            let mut rootfs_params = KernelParams::new_image_rootfs_kernel_params(
+                &cfg.boot_info.image,
+                &cfg.boot_info.kernel_verity_params,
+                rootfs_driver,
+                rootfs_type,
+                true,
+            )?;
+            params.append(&mut rootfs_params);
+        }
 
         // Now add some additional options required for CH
         let extra_options = [
@@ -1155,6 +1157,45 @@ mod tests {
         ch.config.guest_extension_images.clear();
         let params = ch.get_kernel_params().await.unwrap();
         assert!(!params.contains("kata.extension."));
+    }
+
+    #[actix_rt::test]
+    async fn test_rootfs_partition_identity() {
+        let image = crate::kernel_param::tests::rootfs_image();
+        let mut ch = CloudHypervisorInner::default();
+        ch.config.boot_info.image = image.path().to_str().unwrap().into();
+        // CLH always attaches the root image as virtio-blk, regardless of the
+        // configured container block driver or a requested pmem rootfs driver.
+        ch.config.boot_info.vm_rootfs_driver = crate::VM_ROOTFS_DRIVER_PMEM.into();
+        ch.config.blockdev_info.block_device_driver = "virtio-scsi".into();
+
+        for verity in [
+            "",
+            "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+        ] {
+            ch.config.boot_info.kernel_verity_params = verity.into();
+            let params = ch.get_kernel_params().await.unwrap();
+            assert!(!params.contains("/dev/vda"));
+            if verity.is_empty() {
+                assert!(params.contains("root=PARTUUID=603f58ab-01"));
+                assert!(params.split_whitespace().any(|param| param == "rootwait"));
+            } else {
+                assert!(params.contains("root=/dev/dm-0"));
+                assert!(params.contains("verity 1 PARTUUID=603f58ab-01 PARTUUID=603f58ab-02 "));
+                assert!(params.contains("dm-mod.waitfor=PARTUUID=603f58ab-01,PARTUUID=603f58ab-02"));
+            }
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_initrd_skips_rootfs_partition_identity() {
+        let mut ch = CloudHypervisorInner::default();
+        ch.config.boot_info.initrd = "/initrd.img".into();
+        ch.config.boot_info.image = "/image-must-not-be-opened".into();
+        let params = ch.get_kernel_params().await.unwrap();
+        assert!(!params.contains("root="));
+        assert!(!params.contains("PARTUUID"));
+        assert!(!params.contains("dm-mod."));
     }
 
     #[actix_rt::test]
