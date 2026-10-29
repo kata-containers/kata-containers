@@ -36,8 +36,11 @@ pub(crate) struct OpenVmmHotplugPort {
 impl OpenVmmHotplugPort {
     fn new(index: u8) -> Self {
         let device = OPENVMM_BLOCK_HOTPLUG_FIRST_DEVICE + index;
-        let pci_path = PciPath::new(vec![PciSlot::new(device), PciSlot::new(0)])
-            .expect("openvmm hotplug port PCI path is non-empty");
+        let pci_path = PciPath::new(vec![
+            PciSlot::new(device, 0).expect("openvmm hotplug port device number is valid"),
+            PciSlot::default(),
+        ])
+        .expect("openvmm hotplug port PCI path is non-empty");
         Self {
             name: format!("{}{}", OPENVMM_BLOCK_HOTPLUG_PORT_PREFIX, index),
             pci_path,
