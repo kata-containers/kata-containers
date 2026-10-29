@@ -3,6 +3,13 @@
 This document explains how `overhead_vcpus` and `overhead_memory` are expected
 to be used in runtime-rs.
 
+The Go shim implements the same sizing model and reads the same two keys, so
+everything below applies to it as well. Two details differ: the Go shim enables
+`static_sandbox_resource_mgmt` only in the profiles that need it (the TEE and
+NVIDIA GPU profiles, plus any hypervisor without CPU and memory hotplug), and
+the firecracker, stratovirt, and remote profiles ship no `overhead_*` keys, so
+their overhead is `0` until an operator sets it.
+
 > [!WARNING]
 > For runtime-rs, using `static_sandbox_resource_mgmt` is the recommended mode.
 > Disabling it is not recommended for production sandbox sizing.
