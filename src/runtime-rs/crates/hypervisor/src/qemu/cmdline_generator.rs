@@ -194,10 +194,12 @@ impl Kernel {
             #[cfg(not(target_arch = "aarch64"))]
             let use_dax = true;
 
-            let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
-                &config.boot_info.kernel_verity_params,
-                &config.boot_info.vm_rootfs_driver,
-                &config.boot_info.rootfs_type,
+            let boot = &config.boot_info;
+            let mut rootfs_params = KernelParams::new_image_rootfs_kernel_params(
+                &boot.image,
+                &boot.kernel_verity_params,
+                &boot.vm_rootfs_driver,
+                &boot.rootfs_type,
                 use_dax,
             )
             .context("adding rootfs/verity params failed")?;
@@ -4076,6 +4078,58 @@ mod tests {
     use rstest::rstest;
     use serial_test::serial;
     use tempfile::tempdir;
+
+    use crate::kernel_param::tests::rootfs_image;
+
+    #[rstest]
+    #[case(crate::VM_ROOTFS_DRIVER_BLK)]
+    #[case(crate::VM_ROOTFS_DRIVER_BLK_CCW)]
+    #[case(crate::VM_ROOTFS_DRIVER_MMIO)]
+    fn test_rootfs_uses_partition_identity(#[case] driver: &str) {
+        let image = rootfs_image();
+        let mut config = test_qemu_config(None, false);
+        config.boot_info.image = image.path().to_str().unwrap().to_owned();
+        config.boot_info.vm_rootfs_driver = driver.to_owned();
+        let kernel = Kernel::new(&config).unwrap();
+        let params = kernel.params.to_string().unwrap();
+        assert!(params.contains("root=PARTUUID=603f58ab-01"));
+        assert!(params.split_whitespace().any(|param| param == "rootwait"));
+        assert!(!params.contains("/dev/vda"));
+    }
+
+    #[test]
+    fn test_verity_uses_partition_identity() {
+        let image = rootfs_image();
+        let mut config = test_qemu_config(None, false);
+        config.boot_info.image = image.path().to_str().unwrap().to_owned();
+        config.boot_info.kernel_verity_params =
+            "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096"
+                .to_owned();
+        let params = Kernel::new(&config).unwrap().params.to_string().unwrap();
+        assert!(params.contains("root=/dev/dm-0"));
+        assert!(params.contains("verity 1 PARTUUID=603f58ab-01 PARTUUID=603f58ab-02 4096 4096"));
+        assert!(params.contains("dm-mod.waitfor=PARTUUID=603f58ab-01,PARTUUID=603f58ab-02"));
+        assert!(!params.contains("/dev/vda"));
+    }
+
+    #[test]
+    fn test_initrd_does_not_read_rootfs_image() {
+        let mut config = test_qemu_config(None, false);
+        config.boot_info.image = "/nonexistent/image".to_owned();
+        config.boot_info.initrd = "/initrd".to_owned();
+        let params = Kernel::new(&config).unwrap().params.to_string().unwrap();
+        assert!(!params.contains("root="));
+        assert!(!params.contains("PARTUUID"));
+    }
+
+    #[test]
+    fn test_pmem_keeps_its_root_device() {
+        let mut config = test_qemu_config(None, false);
+        config.boot_info.image = "/nonexistent/image".to_owned();
+        config.boot_info.vm_rootfs_driver = crate::VM_ROOTFS_DRIVER_PMEM.to_owned();
+        let params = Kernel::new(&config).unwrap().params.to_string().unwrap();
+        assert!(params.contains("root=/dev/pmem0p1"));
+    }
 
     fn contains_param(params: &[String], expected: &str) -> bool {
         params
