@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+edition = "2021"
+license.workspace = true
+name = "ovs"
+publish = false
+rust-version.workspace = true
+version = "0.1.0"
+
+[dependencies]
+dan-core = { path = "../dan-core" }
+serde_json.workspace = true
+socket2.workspace = true
+
+[lints]
+workspace = true

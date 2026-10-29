@@ -1,0 +1,34 @@
+{
+  "cniVersion": "0.3.1",
+  "name": "kata-dan",
+  "plugins": [
+    {
+      "type": "kata-dan-cni",
+      "capabilities": {
+        "io.kubernetes.cri.pod-annotations": true
+      },
+      "danRuntimeClass": "REPLACE_WITH_RUNTIME_CLASS_NAME",
+      "backend": {
+        "type": "host-tap"
+      },
+      "danConfDir": "REPLACE_WITH_KATA_RUNTIME_DAN_CONF_DIRECTORY",
+      "kubeconfig": "/etc/kata-dan-cni/kubeconfig",
+      "nodeName": "REPLACE_WITH_THIS_KUBERNETES_NODE_NAME",
+      "delegate": {
+        "name": "kube-ovn",
+        "plugins": [
+          {
+            "type": "kube-ovn",
+            "server_socket": "/run/openvswitch/kube-ovn-daemon.sock"
+          }
+        ]
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {
+        "portMappings": true
+      }
+    }
+  ]
+}
