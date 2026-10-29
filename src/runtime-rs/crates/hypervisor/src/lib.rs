@@ -102,9 +102,12 @@ pub const HYPERVISOR_REMOTE: &str = "remote";
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
 
-/// default hotplug timeout
+/// default hotplug timeout: the longest Dragonball waits for the guest to
+/// confirm a hotplug. The wait ends at the confirmation; 250 ms failed the
+/// insert of a sandbox's root block device while its guest was still
+/// booting on a loaded host.
 #[allow(dead_code)]
-const DEFAULT_HOTPLUG_TIMEOUT: u64 = 250;
+const DEFAULT_HOTPLUG_TIMEOUT: u64 = 10_000;
 
 // Used only by the dragonball, cloud-hypervisor and firecracker drivers, all
 // of which are gated to `target_arch = "x86_64"|"aarch64"`. Without the gate
