@@ -154,10 +154,6 @@ setup() {
 }
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
-    if [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev-runtime-rs" ]] && [[ "$(uname -m)" == "s390x" ]]; then
-        skip "qemu-coco-dev-runtime-rs on s390x due to https://github.com/kata-containers/kata-containers/issues/14154"
-    fi
-
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXXXXX.yaml")
     local_device=$(create_loop_device)
     PV_NAME=trusted-block-pv PVC_NAME=trusted-pvc \
