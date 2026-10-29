@@ -15,7 +15,7 @@ use nix::sys::{signal, wait};
 use nix::unistd::{self, close, dup2, fork, setsid, ForkResult, Pid};
 use rustjail::pipestream::PipeStream;
 use slog::Logger;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -140,7 +140,9 @@ pub async fn debug_console_handler(
     Ok(())
 }
 
-fn run_in_child(slave_fd: libc::c_int, shell: String) -> Result<()> {
+// Runs between fork and exec in a copy of a multi-threaded process, so it must
+// not allocate, nor return into the runtime that copy inherited.
+fn run_in_child(slave_fd: libc::c_int, shell: &CStr) -> Result<()> {
     // create new session with child as session leader
     setsid()?;
 
@@ -162,16 +164,16 @@ fn run_in_child(slave_fd: libc::c_int, shell: String) -> Result<()> {
         libc::ioctl(0, libc::TIOCSCTTY);
     }
 
-    let cmd = CString::new(shell).unwrap();
-    let args: Vec<CString> = Vec::new();
+    let args: [&CStr; 0] = [];
 
     // run shell
-    let _ = unistd::execvp(cmd.as_c_str(), &args).map_err(|e| match e {
-        nix::Error::UnknownErrno => std::process::exit(-2),
-        _ => std::process::exit(e as i32),
-    });
+    let e = match unistd::execvp(shell, &args) {
+        Err(nix::Error::UnknownErrno) => -2,
+        Err(e) => e as i32,
+        Ok(never) => match never {},
+    };
 
-    Ok(())
+    unsafe { libc::_exit(e) }
 }
 
 async fn run_in_parent<T: AsyncRead + AsyncWrite>(
@@ -197,13 +199,6 @@ async fn run_in_parent<T: AsyncRead + AsyncWrite>(
             );
         }
         res = tokio::io::copy(&mut socket_reader, &mut master_writer) => {
-            // the shell run in child may not be exited, in some scenes
-            // eg. directly Ctrl-C in the host to terminate the kata-runtime process
-            // that will block this task，while waiting for the child to exit.
-            //
-            let _ = signal::kill(child_pid, Some(signal::Signal::SIGKILL))
-                .map_err(|e| warn!(logger, "kill child shell process {:?}", e));
-
             info!(
                 logger,
                 "socket closed: {:?}", res
@@ -211,7 +206,19 @@ async fn run_in_parent<T: AsyncRead + AsyncWrite>(
         }
     }
 
-    let wait_status = wait::waitpid(child_pid, None);
+    // Either way the session is over, but the shell may well still be running:
+    // the master side also "closes" when relaying its output fails because the
+    // client went away, and the input the client sent last (say, "exit") can
+    // be left unread on the socket when that branch wins.
+    if let Err(e) = signal::kill(child_pid, Some(signal::Signal::SIGKILL)) {
+        if e != nix::errno::Errno::ESRCH {
+            warn!(logger, "kill child shell process {:?}", e);
+        }
+    }
+
+    // waitpid blocks, and a runtime worker stuck in it stalls every task that
+    // worker serves - on a single vCPU guest, the whole agent.
+    let wait_status = tokio::task::spawn_blocking(move || wait::waitpid(child_pid, None)).await;
     info!(logger, "debug console process exit code: {:?}", wait_status);
 
     Ok(())
@@ -224,6 +231,7 @@ async fn run_debug_console_vsock<T: AsyncRead + AsyncWrite>(
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "debug-console-shell"));
 
+    let shell = CString::new(shell)?;
     let pseudo = openpty(None, None)?;
     let slave_fd = pseudo.slave.as_fd().as_raw_fd();
 
@@ -231,7 +239,10 @@ async fn run_debug_console_vsock<T: AsyncRead + AsyncWrite>(
     let _ = fcntl::fcntl(pseudo.slave.as_fd(), FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
     match unsafe { fork() } {
-        Ok(ForkResult::Child) => run_in_child(slave_fd, shell),
+        Ok(ForkResult::Child) => {
+            let _ = run_in_child(slave_fd, &shell);
+            unsafe { libc::_exit(127) }
+        }
         Ok(ForkResult::Parent { child: child_pid }) => {
             run_in_parent(logger.clone(), stream, pseudo, child_pid).await
         }
@@ -262,6 +273,64 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use tokio::sync::watch;
+
+    /// A client that stops reading ends the session through the master side,
+    /// with the shell still alive. That must neither leave the shell behind
+    /// nor block the runtime waiting for it, which on a single worker stalls
+    /// the whole agent.
+    #[test]
+    fn test_session_ends_when_the_client_stops_reading() {
+        use std::os::unix::process::CommandExt;
+        use std::process::Command;
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let pseudo = openpty(None, None).unwrap();
+        let slave = pseudo.slave.try_clone().unwrap();
+        let mut shell = unsafe {
+            Command::new("sh")
+                .args(["-c", "echo ready; exec sleep 600"])
+                .stdin(Stdio::from(slave.try_clone().unwrap()))
+                .stdout(Stdio::from(slave.try_clone().unwrap()))
+                .stderr(Stdio::from(slave))
+                .pre_exec(|| {
+                    setsid()?;
+                    libc::ioctl(0, libc::TIOCSCTTY, 0);
+                    Ok(())
+                })
+                .spawn()
+                .unwrap()
+        };
+        let child_pid = Pid::from_raw(shell.id() as i32);
+
+        let (ours, theirs) = std::os::unix::net::UnixStream::pair().unwrap();
+        theirs.shutdown(std::net::Shutdown::Read).unwrap();
+        ours.set_nonblocking(true).unwrap();
+
+        let (done_tx, done_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let res = rt.block_on(async {
+                let stream = tokio::net::UnixStream::from_std(ours).unwrap();
+                run_in_parent(slog_scope::logger(), stream, pseudo, child_pid).await
+            });
+            let _ = done_tx.send(res.is_ok());
+        });
+
+        let finished = done_rx.recv_timeout(Duration::from_secs(30));
+        let reaped = signal::kill(child_pid, None).is_err();
+        if !reaped {
+            let _ = shell.kill();
+            let _ = shell.wait();
+        }
+        drop(theirs);
+
+        assert_eq!(finished, Ok(true), "the debug console session never ended");
+        assert!(reaped, "the debug console shell outlived its session");
+    }
 
     #[tokio::test]
     async fn test_setup_debug_console_no_shells() {
