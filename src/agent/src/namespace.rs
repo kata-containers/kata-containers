@@ -3,15 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
-use nix::mount::MsFlags;
+use anyhow::{anyhow, bail, Context, Result};
+use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{unshare, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use slog::Logger;
 use std::fmt;
 use std::fs;
 use std::fs::File;
+use std::io::Read;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 use tracing::instrument;
 
 use crate::mount::baremount;
@@ -20,6 +24,276 @@ const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
 pub const NSTYPEIPC: &str = "ipc";
 pub const NSTYPEUTS: &str = "uts";
 pub const NSTYPEPID: &str = "pid";
+const PIDNS_KEEPER_READY: u8 = 1;
+const PIDNS_KEEPER_START_TIMEOUT: Duration = Duration::from_secs(5);
+const PIDNS_KEEPER_ROOT: &str = "/run/kata-containers/sandbox/pidns-keeper";
+
+/// A namespace whose PID 1 was an init container cannot be reused after that
+/// container exits, even if its namespace file was pinned, so the sandbox
+/// keeps a PID 1 of its own there.
+#[derive(Debug)]
+pub struct PidNamespaceKeeper {
+    child: Child,
+    pidfd: OwnedFd,
+    namespace: File,
+    stopped: bool,
+}
+
+impl PidNamespaceKeeper {
+    pub async fn start() -> Result<Self> {
+        let mut command = Command::new("/proc/self/exe");
+        command.arg("pause");
+        tokio::task::spawn_blocking(move || Self::spawn(command))
+            .await
+            .context("PID namespace keeper startup task")?
+    }
+
+    fn spawn(mut command: Command) -> Result<Self> {
+        // CLONE_NEWPID applies to future children of the calling thread. Do
+        // this on a disposable thread so the agent's other children retain
+        // their normal namespace, and let Command perform the fork/exec.
+        let (child, pidfd, namespace) = std::thread::spawn(move || -> Result<_> {
+            unshare(CloneFlags::CLONE_NEWPID)?;
+            // Keep the SIGCHLD reaper from releasing the PID before both
+            // handles are open, including when the child exits immediately.
+            let _reaper = rustjail::container::WAIT_PID_LOCKER.blocking_lock();
+            let mut child = command
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()?;
+            let handles = (|| -> Result<_> {
+                // SAFETY: pidfd_open takes a PID and flags, with no pointers.
+                let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, child.id(), 0u32) };
+                if fd < 0 {
+                    return Err(std::io::Error::last_os_error().into());
+                }
+                // SAFETY: the successful syscall returned a new owned fd.
+                let pidfd = unsafe { OwnedFd::from_raw_fd(fd as i32) };
+                let namespace = File::open(format!("/proc/{}/ns/pid", child.id()))?;
+                Ok((pidfd, namespace))
+            })();
+            match handles {
+                Ok((pidfd, namespace)) => Ok((child, pidfd, namespace)),
+                Err(error) => {
+                    // The reaper is excluded and no workloads have joined yet.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    Err(error)
+                }
+            }
+        })
+        .join()
+        .map_err(|_| anyhow!("PID namespace keeper thread panicked"))??;
+        let mut keeper = Self {
+            child,
+            pidfd,
+            namespace,
+            stopped: false,
+        };
+        keeper
+            .wait_for_ready()
+            .context("PID namespace keeper startup")?;
+        Ok(keeper)
+    }
+
+    fn wait_for_ready(&mut self) -> Result<()> {
+        let mut output = self
+            .child
+            .stdout
+            .take()
+            .context("missing keeper ready pipe")?;
+        let started = Instant::now();
+        loop {
+            let remaining = PIDNS_KEEPER_START_TIMEOUT.saturating_sub(started.elapsed());
+            let mut descriptor = libc::pollfd {
+                fd: output.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // output owns this descriptor and remains alive until poll returns.
+            let result = unsafe { libc::poll(&mut descriptor, 1, remaining.as_millis() as i32) };
+            if result == 0 {
+                bail!("timed out waiting for PID namespace keeper readiness");
+            }
+            if result < 0 {
+                let error = std::io::Error::last_os_error();
+                if error.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(error.into());
+            }
+            let mut ready = [0];
+            output
+                .read_exact(&mut ready)
+                .context("keeper exited before becoming ready")?;
+            if ready[0] != PIDNS_KEEPER_READY {
+                bail!("invalid PID namespace keeper readiness message");
+            }
+            return Ok(());
+        }
+    }
+
+    pub fn path(&self) -> String {
+        // rustjail reexecs before joining, so refer to the agent's fd table.
+        format!("/proc/{}/fd/{}", getpid(), self.namespace.as_raw_fd())
+    }
+
+    pub fn stop(&mut self) -> Result<()> {
+        if self.stopped {
+            return Ok(());
+        }
+        // A pidfd cannot signal a reused PID, even if the SIGCHLD handler
+        // has already reaped the keeper. Do not wait here: the reaper needs
+        // the sandbox lock held by our caller to finish namespace teardown.
+        // SAFETY: pidfd is owned by self; a null siginfo requests kill semantics.
+        let result = unsafe {
+            libc::syscall(
+                libc::SYS_pidfd_send_signal,
+                self.pidfd.as_raw_fd(),
+                libc::SIGKILL,
+                std::ptr::null::<libc::siginfo_t>(),
+                0u32,
+            )
+        };
+        if result < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() != Some(libc::ESRCH) {
+                return Err(error.into());
+            }
+        }
+        self.stopped = true;
+        Ok(())
+    }
+}
+
+impl Drop for PidNamespaceKeeper {
+    fn drop(&mut self) {
+        if let Err(error) = self.stop() {
+            warn!(slog_scope::logger(), "failed to stop PID namespace keeper"; "error" => %error);
+        }
+    }
+}
+
+// Workloads see the keeper as PID 1, and it starts out as the agent: with the
+// guest's root directory and every capability. Unlike a pause container it
+// would let a workload reach the guest through /proc/1/root, or by attaching
+// to it with CAP_SYS_PTRACE and running code as the keeper. So leave it with
+// an empty root, no capabilities to get back out, and no readable memory.
+fn confine_pidns_keeper(root: &Path) -> Result<()> {
+    fs::create_dir_all(root).context("create the PID namespace keeper root")?;
+    unshare(CloneFlags::CLONE_NEWNS).context("unshare the PID namespace keeper mounts")?;
+    mount(
+        None::<&str>,
+        "/",
+        None::<&str>,
+        MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+        None::<&str>,
+    )?;
+    // Read before /proc itself is dropped below.
+    let inherited = inherited_mount_points(&fs::read_to_string("/proc/self/mountinfo")?);
+    mount(
+        Some("tmpfs"),
+        root,
+        Some("tmpfs"),
+        MsFlags::MS_RDONLY | MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOEXEC,
+        Some("size=4096,mode=0555"),
+    )
+    .context("mount the PID namespace keeper root")?;
+    nix::unistd::chdir(root)?;
+    // Keep cwd on the tmpfs while detaching it from the guest filesystem.
+    // Unlike chroot alone, /proc/<pid>/root/.. cannot walk out of this mount.
+    // This also works on initrd rootfs, where pivot_root is unavailable.
+    umount2(root, MntFlags::MNT_DETACH).context("detach the PID namespace keeper root")?;
+    // The new mount namespace holds a copy of every guest mount, and would
+    // keep volumes the agent unmounts later busy for as long as the sandbox
+    // lives. The guest root cannot be unmounted, and is always there anyway.
+    for mount_point in inherited.iter().rev().filter(|path| path.as_str() != "/") {
+        match umount2(mount_point.as_str(), MntFlags::MNT_DETACH) {
+            // Already gone along with a parent mount.
+            Ok(()) | Err(nix::errno::Errno::EINVAL) | Err(nix::errno::Errno::ENOENT) => (),
+            Err(error) => {
+                return Err(error).with_context(|| format!("release inherited mount {mount_point}"))
+            }
+        }
+    }
+    nix::unistd::chroot(".").context("chroot the PID namespace keeper")?;
+    nix::unistd::chdir("/").context("enter the PID namespace keeper root")?;
+
+    capctl::prctl::set_no_new_privs()
+        .map_err(|e| anyhow!("set no new privileges for the PID namespace keeper: {e}"))?;
+    capctl::ambient::clear()
+        .and_then(|_| capctl::bounding::clear())
+        .and_then(|_| capctl::CapState::empty().set_current())
+        .map_err(|e| anyhow!("drop the PID namespace keeper capabilities: {e}"))?;
+    capctl::prctl::set_dumpable(false)
+        .map_err(|e| anyhow!("make the PID namespace keeper non-dumpable: {e}"))?;
+    Ok(())
+}
+
+fn inherited_mount_points(mountinfo: &str) -> Vec<String> {
+    mountinfo
+        .lines()
+        .filter_map(|line| line.split(' ').nth(4))
+        .map(|path| {
+            // The kernel writes space, tab, newline and backslash as octal.
+            let mut bytes = Vec::with_capacity(path.len());
+            let mut rest = path.as_bytes();
+            while let Some((&byte, tail)) = rest.split_first() {
+                let escaped = (byte == b'\\' && tail.len() >= 3)
+                    .then(|| std::str::from_utf8(&tail[..3]).ok())
+                    .flatten()
+                    .and_then(|digits| u8::from_str_radix(digits, 8).ok());
+                match escaped {
+                    Some(value) => {
+                        bytes.push(value);
+                        rest = &tail[3..];
+                    }
+                    None => {
+                        bytes.push(byte);
+                        rest = tail;
+                    }
+                }
+            }
+            String::from_utf8_lossy(&bytes).into_owned()
+        })
+        .collect()
+}
+
+pub fn run_pidns_keeper() -> Result<()> {
+    if getpid().as_raw() != 1 {
+        bail!("PID namespace keeper must run as PID 1");
+    }
+    let signals = pidns_keeper_signals()?;
+    confine_pidns_keeper(Path::new(PIDNS_KEEPER_ROOT))?;
+    nix::unistd::write(std::io::stdout(), &[PIDNS_KEEPER_READY])?;
+    reap_pidns_keeper(signals)
+}
+
+fn pidns_keeper_signals() -> Result<nix::sys::signal::SigSet> {
+    use nix::sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal};
+    let mut signals = SigSet::empty();
+    // Blocked SIGCHLD remains pending for sigwait even without a handler.
+    // Leave TERM/INT at their defaults so namespace PID 1 ignores them.
+    signals.add(Signal::SIGCHLD);
+    pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&signals), None)?;
+    Ok(signals)
+}
+
+fn reap_pidns_keeper(signals: nix::sys::signal::SigSet) -> Result<()> {
+    use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
+    loop {
+        loop {
+            match waitpid(None, Some(WaitPidFlag::WNOHANG)) {
+                Ok(WaitStatus::StillAlive) | Err(nix::errno::Errno::ECHILD) => break,
+                Ok(_) => (),
+                Err(nix::errno::Errno::EINTR) => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        signals.wait()?;
+    }
+}
 
 #[instrument]
 pub fn get_current_thread_ns_path(ns_type: &str) -> String {
@@ -181,12 +455,311 @@ impl fmt::Debug for NamespaceType {
 
 #[cfg(test)]
 mod tests {
-    use super::{Namespace, NamespaceType};
+    use super::{confine_pidns_keeper, Namespace, NamespaceType, PidNamespaceKeeper};
     use crate::mount::remove_mounts;
     use nix::sched::CloneFlags;
     use rstest::rstest;
+    use std::fs::File;
     use tempfile::Builder;
     use test_utils::skip_if_not_root;
+
+    fn process_in_namespace(path: &str) -> std::process::Output {
+        let path = path.to_string();
+        std::thread::spawn(move || {
+            let namespace = std::fs::File::open(path).unwrap();
+            nix::sched::setns(namespace, CloneFlags::CLONE_NEWPID).unwrap();
+            std::process::Command::new("readlink")
+                .arg("/proc/self/ns/pid")
+                .output()
+                .unwrap()
+        })
+        .join()
+        .unwrap()
+    }
+
+    fn test_keeper() -> PidNamespaceKeeper {
+        let mut command = std::process::Command::new("sh");
+        command.args(["-c", "printf '\\001'; exec sleep 60"]);
+        PidNamespaceKeeper::spawn(command).unwrap()
+    }
+
+    impl PidNamespaceKeeper {
+        pub(crate) fn test_keeper_with_pid() -> (Self, nix::unistd::Pid) {
+            let keeper = test_keeper();
+            let pid = nix::unistd::Pid::from_raw(keeper.child.id() as i32);
+            (keeper, pid)
+        }
+    }
+
+    const KEEPER_ROOT_ENV: &str = "KATA_TEST_PIDNS_KEEPER_ROOT";
+
+    // Only does something when pidns_keeper_is_confined() runs it in a
+    // process of its own, which it can then inspect from outside.
+    #[test]
+    #[ignore]
+    fn confined_pidns_keeper_process() {
+        let Ok(root) = std::env::var(KEEPER_ROOT_ENV) else {
+            return;
+        };
+        let signals = super::pidns_keeper_signals().unwrap();
+        confine_pidns_keeper(std::path::Path::new(&root)).unwrap();
+        println!("keeper-tid={}", nix::unistd::gettid());
+        super::reap_pidns_keeper(signals).unwrap();
+    }
+
+    fn confined_keeper(new_pidns: bool) -> (std::process::Child, String, tempfile::TempDir) {
+        use std::io::BufRead;
+
+        let root = tempfile::tempdir().unwrap();
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "namespace::tests::confined_pidns_keeper_process",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env(KEEPER_ROOT_ENV, root.path())
+            .stdout(std::process::Stdio::piped());
+        let mut child = std::thread::spawn(move || {
+            if new_pidns {
+                nix::sched::unshare(CloneFlags::CLONE_NEWPID).unwrap();
+            }
+            command.spawn().unwrap()
+        })
+        .join()
+        .unwrap();
+        let tid = std::io::BufReader::new(child.stdout.take().unwrap())
+            .lines()
+            .map_while(Result::ok)
+            .find_map(|line| {
+                line.split_once("keeper-tid=")
+                    .map(|(_, tid)| tid.to_string())
+            })
+            .expect("the keeper process should report that it is confined");
+        (child, tid, root)
+    }
+
+    #[test]
+    fn pidns_keeper_is_confined() {
+        use std::os::unix::fs::MetadataExt;
+
+        skip_if_not_root!();
+        let (child, tid, _root) = confined_keeper(false);
+        let child = scopeguard::guard(child, |mut child| {
+            let _ = child.kill();
+            let _ = child.wait();
+        });
+        let pid = child.id();
+        // unshare also separates this thread's filesystem state from the
+        // test harness, so inspect the thread that performed confinement.
+        let task = format!("/proc/{pid}/task/{tid}");
+        let root = format!("{task}/root");
+        let identity = |path: &str| {
+            let metadata = std::fs::metadata(path).unwrap();
+            (metadata.dev(), metadata.ino())
+        };
+        let expected = identity(&root);
+        for path in [
+            format!("{task}/cwd"),
+            format!("{root}/.."),
+            format!("{root}/../../.."),
+        ] {
+            assert_eq!(identity(&path), expected, "{path} escapes the keeper root");
+        }
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        assert_eq!(
+            std::fs::write(format!("{root}/file"), b"test")
+                .unwrap_err()
+                .raw_os_error(),
+            Some(libc::EROFS)
+        );
+        assert_ne!(
+            std::fs::read_link(format!("{task}/ns/mnt")).unwrap(),
+            std::fs::read_link("/proc/self/ns/mnt").unwrap()
+        );
+        // Capabilities are per thread, and the test harness runs the test in
+        // one of its own.
+        let status = std::fs::read_to_string(format!("/proc/{pid}/task/{tid}/status")).unwrap();
+        let field = |name: &str| {
+            status
+                .lines()
+                .find_map(|line| line.strip_prefix(name))
+                .map(|value| value.trim().to_string())
+                .unwrap_or_else(|| panic!("no {} in the keeper status", name))
+        };
+        for set in ["CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:"] {
+            assert_eq!(u64::from_str_radix(&field(set), 16).unwrap(), 0, "{set}");
+        }
+        assert_eq!(field("NoNewPrivs:"), "1");
+    }
+
+    #[test]
+    fn inherited_mount_points_are_unescaped() {
+        let mountinfo = "22 1 0:21 / / rw - ext4 /dev/vda1 rw\n\
+                         23 22 0:22 / /run rw shared:2 - tmpfs tmpfs rw\n\
+                         24 23 0:23 / /run/a\\040b\\134c rw - tmpfs tmpfs rw\n";
+        assert_eq!(
+            super::inherited_mount_points(mountinfo),
+            ["/", "/run", "/run/a b\\c"]
+        );
+    }
+
+    #[test]
+    fn pidns_keeper_releases_inherited_mounts() {
+        skip_if_not_root!();
+        let volume = tempfile::tempdir().unwrap();
+        nix::mount::mount(
+            Some("tmpfs"),
+            volume.path(),
+            Some("tmpfs"),
+            nix::mount::MsFlags::empty(),
+            None::<&str>,
+        )
+        .unwrap();
+        let volume = scopeguard::guard(volume, |volume| {
+            let _ = nix::mount::umount(volume.path());
+        });
+        let marker = volume.path().join("marker");
+        File::create(&marker).unwrap();
+
+        let (child, tid, _root) = confined_keeper(false);
+        let child = scopeguard::guard(child, |mut child| {
+            let _ = child.kill();
+            let _ = child.wait();
+        });
+        let namespace = File::open(format!("/proc/{}/task/{tid}/ns/mnt", child.id())).unwrap();
+        let pinned = std::thread::spawn(move || {
+            // A mount namespace cannot be joined while sharing filesystem
+            // state with the other test threads.
+            nix::sched::unshare(CloneFlags::CLONE_FS).unwrap();
+            nix::sched::setns(namespace, CloneFlags::CLONE_NEWNS).unwrap();
+            marker.exists()
+        })
+        .join()
+        .unwrap();
+        assert!(!pinned, "the keeper still holds a mount it inherited");
+    }
+
+    #[test]
+    fn shared_pidns_ignores_workload_termination_signals() {
+        skip_if_not_root!();
+        let (child, _tid, _root) = confined_keeper(true);
+        let mut child = scopeguard::guard(child, |mut child| {
+            let _ = child.kill();
+            let _ = child.wait();
+        });
+        let path = format!("/proc/{}/ns/pid", child.id());
+        for _ in 0..2 {
+            let namespace = File::open(&path).unwrap();
+            let status = std::thread::spawn(move || {
+                nix::sched::setns(namespace, CloneFlags::CLONE_NEWPID).unwrap();
+                capctl::prctl::set_no_new_privs().unwrap();
+                capctl::CapState::empty().set_current().unwrap();
+                std::process::Command::new("sh")
+                    .args(["-c", "kill -TERM 1 && kill -INT 1"])
+                    .status()
+                    .unwrap()
+            })
+            .join()
+            .unwrap();
+            assert!(status.success());
+            assert!(child.try_wait().unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn shared_pidns_rejects_keeper_early_exit() {
+        skip_if_not_root!();
+        assert!(PidNamespaceKeeper::spawn(std::process::Command::new("true")).is_err());
+    }
+
+    #[test]
+    fn shared_pidns_cleanup_tolerates_signal_reaper() {
+        skip_if_not_root!();
+        let mut keeper = test_keeper();
+        let path = keeper.path();
+        let namespace = std::fs::read_link(&path).unwrap();
+        let pid = nix::unistd::Pid::from_raw(keeper.child.id() as i32);
+        // Model the agent SIGCHLD handler reaping a child before Child::wait.
+        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGKILL).unwrap();
+        nix::sys::wait::waitpid(pid, None).unwrap();
+        assert_eq!(std::fs::read_link(&path).unwrap(), namespace);
+        keeper.stop().unwrap();
+    }
+
+    #[test]
+    fn shared_pidns_survives_workload_exit_and_is_cleaned_up() {
+        skip_if_not_root!();
+        let mut keeper = test_keeper();
+        let path = keeper.path();
+        let expected = std::fs::read_link(&path).unwrap();
+        assert_ne!(expected, std::fs::read_link("/proc/self/ns/pid").unwrap());
+
+        // Each command is a separate workload and exits before the next joins.
+        for _ in 0..2 {
+            let output = process_in_namespace(&path);
+            assert!(output.status.success());
+            assert_eq!(
+                String::from_utf8(output.stdout).unwrap().trim(),
+                expected.to_str().unwrap()
+            );
+        }
+        keeper.stop().unwrap();
+        keeper.child.wait().unwrap();
+        drop(keeper);
+        assert!(!std::path::Path::new(&path).exists());
+    }
+
+    #[test]
+    fn shared_pidns_keepers_are_isolated() {
+        skip_if_not_root!();
+        let mut first = test_keeper();
+        let mut second = test_keeper();
+        assert_ne!(
+            std::fs::read_link(first.path()).unwrap(),
+            std::fs::read_link(second.path()).unwrap()
+        );
+        first.stop().unwrap();
+        second.stop().unwrap();
+        first.child.wait().unwrap();
+        second.child.wait().unwrap();
+    }
+
+    #[test]
+    fn shared_pidns_stop_does_not_wait_for_unreaped_workload() {
+        skip_if_not_root!();
+        let mut keeper = test_keeper();
+        let namespace = File::open(keeper.path()).unwrap();
+        let mut workload = std::thread::spawn(move || {
+            nix::sched::setns(namespace, CloneFlags::CLONE_NEWPID).unwrap();
+            std::process::Command::new("sleep")
+                .arg("60")
+                .spawn()
+                .unwrap()
+        })
+        .join()
+        .unwrap();
+        let (stopped_tx, stopped_rx) = std::sync::mpsc::channel();
+        let reaper = std::thread::spawn(move || {
+            // Unblock a broken stop implementation after a deadline, so a
+            // regression fails the test instead of hanging the test suite.
+            let stopped = stopped_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .is_ok();
+            workload.wait().unwrap();
+            stopped
+        });
+        keeper.stop().unwrap();
+        // Namespace PID 1 cannot finish exiting until this agent-parented
+        // workload is reaped. stop must return so the reaper can do that.
+        let _ = stopped_tx.send(());
+        assert!(
+            reaper.join().unwrap(),
+            "stop waited for the workload reaper"
+        );
+        keeper.child.wait().unwrap();
+    }
 
     #[tokio::test]
     async fn test_setup_persistent_ns() {

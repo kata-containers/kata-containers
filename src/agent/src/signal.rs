@@ -42,12 +42,15 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
     loop {
         // Avoid reaping the undesirable child's signal, e.g., execute_hook's
-        // The lock should be released immediately.
-        let _locker = rustjail::container::WAIT_PID_LOCKER.lock().await;
-        let result = wait::waitpid(
-            Some(Pid::from_raw(-1)),
-            Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
-        );
+        // Release this lock before taking the sandbox lock: keeper startup
+        // holds the sandbox lock while opening handles under WAIT_PID_LOCKER.
+        let result = {
+            let _locker = rustjail::container::WAIT_PID_LOCKER.lock().await;
+            wait::waitpid(
+                Some(Pid::from_raw(-1)),
+                Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
+            )
+        };
 
         let wait_status = match result {
             Ok(s) => {
@@ -183,6 +186,64 @@ mod tests {
             None
         );
         assert_eq!(exit_code_from_wait_status(WaitStatus::StillAlive), None);
+    }
+
+    // Run the reaper in a separate process so waitpid(-1) cannot consume
+    // children belonging to other tests in this harness.
+    #[test]
+    fn test_reaper_lock_order() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "signal::tests::reaper_lock_order_process",
+                "--ignored",
+                "--nocapture",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn reaper_lock_order_process() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let sandbox_guard = sandbox.lock().await;
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let path = format!("/proc/{}/stat", child.id());
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !std::fs::read_to_string(&path).unwrap().contains(") Z ") {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let reaper = tokio::spawn(handle_sigchild(logger, sandbox.clone()));
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while std::path::Path::new(&path).exists() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        // The reaper has consumed the exit and is waiting for sandbox_guard.
+        // Startup must still be able to acquire the wait lock at this point.
+        let wait_guard = tokio::time::timeout(
+            Duration::from_secs(5),
+            rustjail::container::WAIT_PID_LOCKER.lock(),
+        )
+        .await
+        .unwrap();
+        drop(wait_guard);
+        drop(sandbox_guard);
+        let _ = reaper.await.unwrap();
+        assert_eq!(child.wait().unwrap_err().raw_os_error(), Some(libc::ECHILD));
     }
 
     #[tokio::test]
