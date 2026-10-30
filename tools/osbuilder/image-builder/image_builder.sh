@@ -612,7 +612,9 @@ create_erofs_rootfs_image() {
 		die "Could not setup loop device"
 	fi
 
-	dd if="${fsimage}" of="${device}p1"
+	# losetup -d does not flush the partition's page cache, so without fsync
+	# the erofs data can be lost while the verity hash written next survives.
+	dd if="${fsimage}" of="${device}p1" conv=fsync
 	rm -f "${fsimage}"
 
 	setup_verity "${device}" "${image}"
