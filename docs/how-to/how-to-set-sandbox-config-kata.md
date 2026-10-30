@@ -25,6 +25,7 @@ There are several kinds of Kata configurations and they are listed below.
 |-------| ----- | ----- |
 | `io.katacontainers.config.runtime.experimental` | `boolean` | determines if experimental features enabled |
 | `io.katacontainers.config.runtime.disable_guest_seccomp`| `boolean` | determines if `seccomp` should be applied inside guest |
+| `io.katacontainers.config.runtime.envd` | JSON object | starts envd in the first non-pause container using required `port` and `args` fields and optional `guest_path` (runtime-rs only); see [Run envd inside a container](envd.md) |
 | `io.katacontainers.config.runtime.disable_new_netns` | `boolean` | determines if a new netns is created for the hypervisor process |
 | `io.katacontainers.config.runtime.internetworking_model` | string| determines how the VM should be connected to the container network interface. Valid values are `macvtap`, `tcfilter`, `l3forwarding` (runtime-rs only, experimental) and `none` |
 | `io.katacontainers.config.runtime.sandbox_cgroup_only`| `boolean` | determines if Kata processes are managed only in sandbox cgroup |
