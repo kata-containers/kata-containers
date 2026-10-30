@@ -6,8 +6,9 @@ use crate::NamedHypervisorConfig;
 use crate::ProtectionDevConfig;
 use crate::VmConfig;
 use crate::{
-    ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DiskConfig, ImageType,
-    MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig, VsockConfig,
+    ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DeviceConfig,
+    DiskConfig, ImageType, LandlockConfig, MemoryConfig, MemoryZoneConfig, PayloadConfig,
+    PmemConfig, RngConfig, VsockConfig,
 };
 use anyhow::Result;
 use kata_types::config::default::DEFAULT_CH_ENTROPY_SOURCE;
@@ -47,6 +48,8 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let cfg = n.cfg;
 
         let debug = cfg.debug_info.enable_debug;
+
+        let landlock_enable = cfg.security_info.enable_landlock;
 
         let vsock_socket_path = n.vsock_socket_path;
 
@@ -119,6 +122,8 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             None => MemoryConfig::try_from(cfg.memory_info).map_err(VmConfigError::MemoryError)?,
         };
 
+        let landlock_rules = landlock_enable.then(|| landlock_disk_rules(&sandbox_path));
+
         std::fs::create_dir_all(sandbox_path.clone())
             .map_err(|e| VmConfigError::SandboxError(sandbox_path, e.to_string()))?;
 
@@ -142,16 +147,44 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             payload,
             fs,
             net,
-            devices: host_devices,
+            devices: landlock_devices(landlock_enable, host_devices),
             disks,
             vsock: Some(vsock),
             rng,
             balloon,
+            landlock_enable,
+            landlock_rules,
 
             ..Default::default()
         };
 
         Ok(cfg)
+    }
+}
+
+/// The Landlock rules for the directories a confined VMM's disks are staged
+/// in. Cloud Hypervisor adds the kernel, the boot image, the vsock socket
+/// directory and the entropy source itself.
+fn landlock_disk_rules(sandbox_path: &str) -> Vec<LandlockConfig> {
+    [(true, "r"), (false, "rw")]
+        .iter()
+        .map(|(readonly, access)| LandlockConfig {
+            path: crate::landlock_stage_dir(sandbox_path, *readonly),
+            access: access.to_string(),
+        })
+        .collect()
+}
+
+/// Cloud Hypervisor grants /dev/vfio/vfio to a Landlock-confined VMM whenever
+/// `devices` is set, so a confined VMM is not sent an empty list.
+fn landlock_devices(
+    landlock_enable: bool,
+    devices: Option<Vec<DeviceConfig>>,
+) -> Option<Vec<DeviceConfig>> {
+    if landlock_enable {
+        devices.filter(|d| !d.is_empty())
+    } else {
+        devices
     }
 }
 
@@ -1787,5 +1820,31 @@ mod tests {
 
             assert_eq!(result, d.result, "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_landlock_disk_rules_name_both_staging_directories() {
+        let rules = landlock_disk_rules("/run/kata/sb");
+        assert_eq!(
+            rules,
+            vec![
+                LandlockConfig {
+                    path: PathBuf::from("/run/kata/sb/disks-ro"),
+                    access: "r".to_string(),
+                },
+                LandlockConfig {
+                    path: PathBuf::from("/run/kata/sb/disks-rw"),
+                    access: "rw".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_landlock_devices_drops_an_empty_list_only_when_confined() {
+        assert_eq!(landlock_devices(true, Some(vec![])), None);
+        assert_eq!(landlock_devices(false, Some(vec![])), Some(vec![]));
+        let one = Some(vec![DeviceConfig::default()]);
+        assert_eq!(landlock_devices(true, one.clone()), one);
     }
 }
