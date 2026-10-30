@@ -101,7 +101,6 @@ impl ResourceManagerInner {
             .context("failed to create device manager")?;
         let device_manager = Arc::new(RwLock::new(dev_manager));
 
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
         let mem_resource = MemResource::new(init_size_manager)?;
         let swap_resource = if hypervisor
@@ -140,6 +139,9 @@ impl ResourceManagerInner {
         } else {
             None
         };
+        // Created last: nothing removes the cgroups of a resource manager that
+        // failed to come up, nor records them until the sandbox saves its state.
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,

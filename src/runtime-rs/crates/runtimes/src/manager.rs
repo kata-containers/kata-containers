@@ -18,7 +18,7 @@ use common::{
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::utils::{
-    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user,
+    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user, find_user,
     remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
 };
 use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
@@ -213,6 +213,13 @@ impl RuntimeHandlerManagerInner {
                 sandbox_config.network_env.netns = path;
             }
         }
+        #[cfg(feature = "virt")]
+        save_bootstrap_state(
+            &self.id,
+            &sandbox_config.network_env,
+            sandbox_config.config_path.as_deref(),
+            Some((hypervisor_name, hypervisor)),
+        )?;
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -353,6 +360,10 @@ impl RuntimeHandlerManager {
                     info!(sl!(), "skip cleanup for keep_abnormal");
                     return Ok(());
                 }
+                if sandbox_state.is_bootstrap() {
+                    return cleanup_bootstrap(&sandbox_state)
+                        .context("failed to clean up the sandbox setup");
+                }
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
                     .context("failed to restore the sandbox")?;
@@ -466,6 +477,10 @@ impl RuntimeHandlerManager {
             netns,
             network_created,
         };
+        #[cfg(feature = "virt")]
+        if network_env.network_created {
+            save_bootstrap_state(&inner.id, &network_env, None, None)?;
+        }
 
         let shm_size = get_shm_size(spec)?;
 
@@ -1004,6 +1019,44 @@ impl Drop for RootlessSetupGuard {
     }
 }
 
+/// Until the sandbox saves its state, this is the only record of what the
+/// shim made on the host for it.
+#[cfg(feature = "virt")]
+fn save_bootstrap_state(
+    sid: &str,
+    network_env: &SandboxNetworkEnv,
+    config_path: Option<&Path>,
+    hypervisor: Option<(&str, &Hypervisor)>,
+) -> Result<()> {
+    let state = SandboxState::bootstrap(network_env, config_path, hypervisor);
+    persist::to_disk(&state, sid).context("save the sandbox setup state")
+}
+
+/// Remove what the shim made on the host before the sandbox existed.
+#[cfg(feature = "virt")]
+fn cleanup_bootstrap(state: &SandboxState) -> Result<()> {
+    if let Some(path) = state.created_netns.as_deref() {
+        remove_netns(Path::new(path)).context("remove the network namespace")?;
+    }
+    let Some(user) = state
+        .hypervisor
+        .as_ref()
+        .and_then(|h| h.config.security_info.rootless_user.as_ref())
+    else {
+        return Ok(());
+    };
+    // Once the user is gone its UID can belong to another sandbox's, and so
+    // can the runtime directory named after it.
+    match find_user(&user.user_name)? {
+        Some(found) if found.uid.as_raw() == user.uid => {
+            remove_dir_all_if_exists(vmm_user_runtime_dir(user.uid))
+                .context("remove the rootless runtime directory")?;
+            remove_vmm_user(&user.user_name).context("remove the VMM user")
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Runtime directory configure_non_root_hypervisor() gave the VMM user of a
 /// rootless sandbox. The user comes from the root-owned state.json, which
 /// the VMM user cannot replace.
@@ -1456,5 +1509,18 @@ mod tests {
             rootless_runtime_dir(&security).unwrap(),
             Some(PathBuf::from("/run/user/1001"))
         );
+    }
+
+    #[test]
+    fn a_setup_whose_vmm_user_is_gone_cleans_up_without_touching_its_uid() {
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: 0,
+            user_name: "kata-no-such-user".to_string(),
+            ..Default::default()
+        });
+        let state =
+            SandboxState::bootstrap(&SandboxNetworkEnv::default(), None, Some(("qemu", &config)));
+        cleanup_bootstrap(&state).unwrap();
     }
 }

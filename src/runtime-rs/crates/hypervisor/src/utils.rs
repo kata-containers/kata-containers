@@ -606,6 +606,15 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
     Err(anyhow!("failed to remove VMM user"))
 }
 
+/// getpwnam_r() may report a missing user as an error rather than no entry.
+pub fn find_user(name: &str) -> Result<Option<nix::unistd::User>> {
+    match nix::unistd::User::from_name(name) {
+        Ok(user) => Ok(user),
+        Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ESRCH) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("look up user {name}")),
+    }
+}
+
 pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
     let path_result = remove_vm_dir(sid, vm_path);
     if kata_types::rootless::is_rootless() {
@@ -616,7 +625,7 @@ pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
             .as_ref()
             .ok_or_else(|| anyhow!("rootless user not specified in security_info"))?
             .user_name;
-        match nix::unistd::User::from_name(user)? {
+        match find_user(user)? {
             Some(_) => {
                 remove_vmm_user(user)?;
             }

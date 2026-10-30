@@ -324,7 +324,7 @@ fn restored_hypervisor_id(sid: &str, saved: &str) -> Result<String> {
     }
 }
 
-fn created_netns(network_env: &SandboxNetworkEnv) -> Option<String> {
+pub(crate) fn created_netns(network_env: &SandboxNetworkEnv) -> Option<String> {
     if network_env.network_created {
         network_env.netns.clone()
     } else {
