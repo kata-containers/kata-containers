@@ -781,7 +781,7 @@ impl ResourceManagerInner {
                             "vfio" => "vfio-pci".to_string(),
                             _ => "vfio-pci-gk".to_string(),
                         };
-                        let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
+                        let device_options = vfio_device.agent_options()?;
                         // The Go runtime sets the device Id to
                         // filepath.Base(dev.ContainerPath), e.g. "vfio0".
                         // The agent policy validates this with:
