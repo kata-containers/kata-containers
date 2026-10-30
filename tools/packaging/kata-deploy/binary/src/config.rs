@@ -159,6 +159,8 @@ pub struct CustomRuntime {
     pub drop_in_file: Option<String>,
     /// Containerd snapshotter to use (e.g., "nydus", "erofs")
     pub containerd_snapshotter: Option<String>,
+    /// Optional sandbox controller; otherwise inherit the base shim mapping.
+    pub containerd_sandboxer: Option<String>,
     /// CRI-O pull type (e.g., "guest-pull")
     pub crio_pull_type: Option<String>,
     /// True for kata-deploy-synthesized debug variant runtimes (kata-<shim>-debug
@@ -178,6 +180,7 @@ pub struct Config {
     pub default_shim_for_arch: String,
     pub allowed_hypervisor_annotations_for_arch: Vec<String>,
     pub snapshotter_handler_mapping_for_arch: Option<String>,
+    pub sandboxer_handler_mapping_for_arch: Option<String>,
     pub agent_https_proxy: Option<String>,
     pub agent_no_proxy: Option<String>,
     /// Shims whose guests run the NVIDIA DCGM stack (nv-hostengine and
@@ -299,6 +302,9 @@ impl Config {
         // Only use arch-specific variable for snapshotter handler mapping
         let snapshotter_handler_mapping_for_arch =
             get_arch_var_or_base("SNAPSHOTTER_HANDLER_MAPPING", &arch);
+
+        let sandboxer_handler_mapping_for_arch =
+            get_arch_var_or_base("SANDBOXER_HANDLER_MAPPING", &arch);
 
         // Normalize empty strings to None at the boundary
         let agent_https_proxy = env::var("AGENT_HTTPS_PROXY").ok().filter(|s| !s.is_empty());
@@ -499,6 +505,7 @@ impl Config {
             default_shim_for_arch,
             allowed_hypervisor_annotations_for_arch,
             snapshotter_handler_mapping_for_arch,
+            sandboxer_handler_mapping_for_arch,
             agent_https_proxy,
             agent_no_proxy,
             nvrc_enable_dcgm,
@@ -689,6 +696,31 @@ impl Config {
                 }
             }
             _ => {}
+        }
+
+        if let Some(mapping) = &self.sandboxer_handler_mapping_for_arch {
+            for entry in mapping.split(',') {
+                let (base, value) = entry.split_once(':').ok_or_else(|| {
+                    anyhow::anyhow!(
+                    "Invalid SANDBOXER_HANDLER_MAPPING entry {entry:?}; expected shim:sandboxer")
+                })?;
+                let base = base.trim();
+                if !self.shims_for_arch.iter().any(|shim| shim == base)
+                    && !self
+                        .custom_runtimes
+                        .iter()
+                        .any(|runtime| runtime.base_config == base)
+                {
+                    anyhow::bail!("SANDBOXER_HANDLER_MAPPING references unknown shim {base:?}");
+                }
+                self.containerd_sandboxer_for(base, Some(value.trim()))?;
+            }
+        }
+        for runtime in &self.custom_runtimes {
+            self.containerd_sandboxer_for(
+                &runtime.base_config,
+                runtime.containerd_sandboxer.as_deref(),
+            )?;
         }
 
         // Validate PULL_TYPE_MAPPING_FOR_ARCH
@@ -884,6 +916,22 @@ impl Config {
         log::debug!("Resolved kata-deploy configuration:\n{:#?}", self);
     }
 
+    pub fn containerd_sandboxer_for(&self, base: &str, custom: Option<&str>) -> Result<String> {
+        let selected = custom
+            .map(str::to_string)
+            .or_else(|| {
+                self.sandboxer_handler_mapping_for_arch
+                    .as_deref()
+                    .and_then(|mapping| lookup_mapping_value(mapping, base))
+            })
+            .unwrap_or_else(|| "podsandbox".into());
+        match selected.as_str() {
+            "" => Ok("podsandbox".into()),
+            "podsandbox" | "shim" => Ok(selected),
+            _ => anyhow::bail!("Unsupported containerd sandboxer {selected:?} for {base}; expected podsandbox or shim"),
+        }
+    }
+
     /// This node's container runtime version, e.g. `containerd://2.1.5-k3s1`.
     ///
     /// Every caller goes through here so there is a single place where the value
@@ -1068,7 +1116,7 @@ fn parse_custom_runtimes(arch: &str) -> Result<Vec<CustomRuntime>> {
             continue;
         }
 
-        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype:supported_arches
+        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype:supported_arches:containerd_sandboxer
         let parts: Vec<&str> = line.split(':').collect();
         let handler = parts.first().map(|s| s.trim()).unwrap_or("");
         if handler.is_empty() {
@@ -1128,6 +1176,11 @@ fn parse_custom_runtimes(arch: &str) -> Result<Vec<CustomRuntime>> {
             base_config: base_config.to_string(),
             drop_in_file,
             containerd_snapshotter,
+            containerd_sandboxer: parts
+                .get(5)
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
             crio_pull_type,
             debug_variant: false,
             devkit: false,
@@ -1269,6 +1322,7 @@ fn synthesize_variant_runtimes(
             base_config: shim.clone(),
             drop_in_file: None,
             containerd_snapshotter,
+            containerd_sandboxer: None,
             crio_pull_type,
             debug_variant: true,
             devkit: variant == Variant::Devkit,
@@ -1336,6 +1390,58 @@ mod tests {
     use rstest::rstest;
     use serial_test::serial;
 
+    #[test]
+    fn sandboxer_mapping_defaults_overrides_and_variant_inheritance() {
+        let base = "qemu-nvidia-cpu-runtime-rs";
+        let mut config = test_config(base, "/opt/kata");
+        assert_eq!(
+            config.containerd_sandboxer_for(base, None).unwrap(),
+            "podsandbox"
+        );
+        assert_eq!(
+            config.containerd_sandboxer_for(base, Some("")).unwrap(),
+            "podsandbox"
+        );
+        config.sandboxer_handler_mapping_for_arch = Some(format!("{base}:shim"));
+        assert_eq!(config.containerd_sandboxer_for(base, None).unwrap(), "shim");
+        assert_eq!(
+            config
+                .containerd_sandboxer_for(base, Some("podsandbox"))
+                .unwrap(),
+            "podsandbox"
+        );
+        assert!(config.containerd_sandboxer_for(base, Some("typo")).is_err());
+        let mut variants = Vec::new();
+        for variant in [Variant::Debug, Variant::Devkit] {
+            synthesize_variant_runtimes(
+                variant,
+                &[base.into()],
+                Some("beta"),
+                None,
+                None,
+                &mut variants,
+            );
+        }
+        for variant in variants {
+            assert_eq!(
+                config
+                    .containerd_sandboxer_for(
+                        &variant.base_config,
+                        variant.containerd_sandboxer.as_deref()
+                    )
+                    .unwrap(),
+                "shim"
+            );
+        }
+        // Capability fallback is decided later; the request remains valid.
+        assert_eq!(
+            config
+                .containerd_sandboxer_for("qemu", Some("shim"))
+                .unwrap(),
+            "shim"
+        );
+    }
+
     /// k0s and K3s name the drop-in themselves, so the suffix has to reach
     /// those names too: uninstall removes the file, not the stanzas in it.
     #[rstest]
@@ -1381,6 +1487,11 @@ mod tests {
             "AGENT_HTTPS_PROXY",
             "AGENT_NO_PROXY",
             "NVRC_ENABLE_DCGM",
+            "SANDBOXER_HANDLER_MAPPING",
+            "SANDBOXER_HANDLER_MAPPING_X86_64",
+            "SANDBOXER_HANDLER_MAPPING_AARCH64",
+            "SANDBOXER_HANDLER_MAPPING_S390X",
+            "SANDBOXER_HANDLER_MAPPING_PPC64LE",
             "SNAPSHOTTER_HANDLER_MAPPING",
             "SNAPSHOTTER_HANDLER_MAPPING_X86_64",
             "SNAPSHOTTER_HANDLER_MAPPING_AARCH64",
