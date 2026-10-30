@@ -99,6 +99,7 @@
             {
                 "destination": "/etc/resolv.conf",
                 "type_": "bind",
+                "source": "$(sfprefix)resolv.conf$|^/run/kata-containers/sandbox/resolv\\.conf$",
                 "options": [
                     "rbind",
                     "rprivate"
