@@ -59,6 +59,10 @@ pub(crate) struct ResourceManagerInner {
     hypervisor: Arc<dyn Hypervisor>,
     device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
+    /// Whether the registered network's endpoints were attached. A created
+    /// network is registered before its attach so a save can record it, and
+    /// the network rescan must not take such a network for a configured one.
+    network_applied: bool,
     share_fs: Option<Arc<dyn ShareFs>>,
     nydus_share_fs: Option<Arc<dyn NydusShareFs>>,
 
@@ -143,6 +147,7 @@ impl ResourceManagerInner {
             hypervisor,
             device_manager,
             network: None,
+            network_applied: false,
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -195,10 +200,14 @@ impl ResourceManagerInner {
                         self.nydus_share_fs = instance.nydus_share_fs;
                     };
                 }
-                ResourceConfig::Network(c) => {
-                    self.handle_network(c)
-                        .await
-                        .context("failed to handle network")?;
+                ResourceConfig::Network(_) => {
+                    // Nothing sends the network through this batch: the
+                    // sandbox creates it, saves the state and only then
+                    // attaches, via create_network() and attach_network().
+                    // Handling it here would skip the save in between.
+                    return Err(anyhow!(
+                        "the network is set up through create_network and attach_network"
+                    ));
                 }
                 ResourceConfig::VmRootfs(r) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
@@ -249,7 +258,41 @@ impl ResourceManagerInner {
         Ok(())
     }
 
-    pub async fn handle_network(&mut self, network_config: NetworkConfig) -> Result<()> {
+    /// Create the network and register it as the sandbox's, without
+    /// attaching anything. Construction already makes host artifacts, the
+    /// TAP of every pair-based endpoint among them, so the caller must put
+    /// the created network in the saved state before attach_network() acts
+    /// on the host and the VM. A construction that failed part way is
+    /// registered too, with the endpoints it got to build: its error is
+    /// surfaced by the attach, after those made it into a save.
+    pub async fn create_network(&mut self, network_config: NetworkConfig) -> Result<()> {
+        // A created network whose attach did not finish holds the only
+        // record of endpoints that may already have acted on the host, a
+        // NIC moved to vfio-pci among them. Replacing it would drop them
+        // from the next save, and a fresh scan cannot rediscover a device
+        // that no longer shows up as a netdev; only the sandbox cleanup
+        // releases them. A retried rescan fails here instead.
+        if let Some(network) = self.network.as_ref() {
+            if !self.network_applied {
+                return Err(anyhow!(
+                    "a created network with unattached endpoints is already registered"
+                ));
+            }
+            // An applied network is replaced by the rescans, which build a
+            // fresh scan of the same namespace. The same argument holds for
+            // what it recorded: a passed-through NIC sits on vfio-pci and
+            // no rescan finds it again, so the network holding such a
+            // record stays.
+            if network
+                .save()
+                .await
+                .is_some_and(|states| !states.is_empty())
+            {
+                return Err(anyhow!(
+                    "the registered network records passed-through devices; it cannot be replaced"
+                ));
+            }
+        }
         // 1. When using Rust asynchronous programming, we use .await to
         //    allow other task to run instead of waiting for the completion of the current task.
         // 2. Also, when handling the pod network, we need to set the shim threads
@@ -264,19 +307,40 @@ impl ResourceManagerInner {
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
         // tokio runtime, and block the task on it.
         let device_manager = self.device_manager.clone();
-        let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
+        let network = thread::spawn(move || -> Result<_> {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
-            let d = rt
-                .block_on(network::new(&network_config, device_manager))
-                .context("new network")?;
-            rt.block_on(d.setup()).context("setup network")?;
-            Ok(d)
+            rt.block_on(network::new(&network_config, device_manager))
+                .context("new network")
+        })
+        .join()
+        .map_err(|e| anyhow!("{:?}", e))
+        .context("Couldn't join on the associated thread")??;
+        self.network = Some(network);
+        self.network_applied = false;
+        Ok(())
+    }
+
+    /// Attach the created network's endpoints. The network stays registered
+    /// when attaching fails: the state records how far the attaching got and
+    /// the cleanup detaches that much. Runs on its own thread for the netns
+    /// reasons create_network() explains. One shot per created network: a
+    /// construction error is handed out once, and endpoints do not expect a
+    /// second attach.
+    pub async fn attach_network(&mut self) -> Result<()> {
+        let network = self
+            .network
+            .as_ref()
+            .ok_or_else(|| anyhow!("no network was created"))?
+            .clone();
+        thread::spawn(move || -> Result<()> {
+            let rt = runtime::Builder::new_current_thread().enable_io().build()?;
+            rt.block_on(network.setup()).context("setup network")
         })
         .join()
         .map_err(|e| anyhow!("{:?}", e))
         .context("Couldn't join on the associated thread")?
         .context("failed to set up network")?;
-        self.network = Some(network);
+        self.network_applied = true;
         Ok(())
     }
 
@@ -408,8 +472,14 @@ impl ResourceManagerInner {
             || dan_config_path(&self.toml_config, &self.sid).exists()
     }
 
-    /// Check whether the network already has interfaces configured.
+    /// Check whether the network already has interfaces configured. A
+    /// created network whose attach never finished does not count, whatever
+    /// its construction scanned: taking it for a configured one would skip
+    /// every later rescan and leave the guest without its interfaces.
     pub async fn network_has_interfaces(&self) -> Result<bool> {
+        if !self.network_applied {
+            return Ok(false);
+        }
         match self.network.as_ref() {
             Some(n) => Ok(!n
                 .interfaces()
@@ -420,28 +490,14 @@ impl ResourceManagerInner {
         }
     }
 
-    /// Perform a single network scan attempt.  Returns `Some(network)` when
-    /// new interfaces were found and need to be applied to the guest agent,
-    /// `None` when no interfaces were found yet (caller should retry).
-    /// The caller is responsible for calling `apply_network_to_agent` on
-    /// the returned network **after** releasing the write lock.
-    pub async fn rescan_network_once(
-        &mut self,
-        net_cfg: NetworkWithNetNsConfig,
-    ) -> Result<Option<Arc<dyn Network>>> {
-        self.handle_network(NetworkConfig::NetNs(net_cfg))
-            .await
-            .context("rescan handle network")?;
+    /// The sandbox's network, when one was created or restored.
+    pub fn network(&self) -> Option<Arc<dyn Network>> {
+        self.network.clone()
+    }
 
-        let n = self
-            .network
-            .as_ref()
-            .ok_or_else(|| anyhow!("network missing after rescan setup"))?;
-        let ifs = n.interfaces().await.context("rescan get interfaces")?;
-        if !ifs.is_empty() {
-            return Ok(Some(Arc::clone(n)));
-        }
-        Ok(None)
+    /// Whether a created network is still waiting for its attach.
+    pub fn network_pending_attach(&self) -> bool {
+        self.network.is_some() && !self.network_applied
     }
 
     pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
@@ -1216,14 +1272,17 @@ impl Persist for ResourceManagerInner {
     /// Save a state of ResourceManagerInner
     async fn save(&self) -> Result<Self::State> {
         let mut endpoint_state = vec![];
+        let mut netns_path = None;
         if let Some(network) = &self.network {
             if let Some(ens) = network.save().await {
                 endpoint_state = ens;
             }
+            netns_path = network.netns_path().await;
         }
         let cgroup_state = self.cgroups_resource.save().await?;
         Ok(ResourceState {
             endpoint: endpoint_state,
+            netns_path,
             cgroup_state: Some(cgroup_state),
             ephemeral_disks: self.volume_resource.ephemeral_disks().await,
         })
@@ -1274,10 +1333,13 @@ impl Persist for ResourceManagerInner {
             hypervisor: resource_args.hypervisor,
             device_manager,
             // The endpoints the state recorded, for cleanup to bind
-            // passed-through devices back to their host drivers.
+            // passed-through devices back to their host drivers and remove
+            // the TAPs of endpoints that were never attached.
             network: Some(Arc::new(network::RestoredNetwork::new(
                 resource_state.endpoint,
+                resource_state.netns_path,
             ))),
+            network_applied: true,
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),

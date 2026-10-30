@@ -33,6 +33,40 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
+/// How far a network got attaching its endpoints.
+///
+/// `setup()` attaches the endpoints of `entity_list` in order and returns on
+/// the first failure. An attach that failed can still have changed the host:
+/// a physical endpoint binds its VF to vfio-pci before the later, fallible
+/// steps of its attach, and nothing rolls that back. The endpoints after it
+/// were never touched.
+///
+/// So the network keeps the index past the last endpoint whose attach
+/// started. `save()` records exactly those endpoints in state.json, and
+/// `remove()` detaches exactly those, whether the setup succeeded, failed
+/// half way, or the shim died before it got to the rest. Without this, a
+/// failed setup either dropped the network (and the VF stayed on vfio-pci),
+/// or detached endpoints that were never attached.
+///
+/// An atomic rather than a lock: `setup()` holds the inner read lock while
+/// it runs, and `save()` can be called concurrently by a sandbox state save.
+#[derive(Default)]
+pub(crate) struct AttachStarted(std::sync::atomic::AtomicUsize);
+
+impl AttachStarted {
+    /// Record that the attach of the endpoint at `index` is starting. Called
+    /// before the attach, so an attach that fails part way is still recorded.
+    pub(crate) fn begin(&self, index: usize) {
+        self.0
+            .fetch_max(index + 1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Whether the attach of the endpoint at `index` has started.
+    pub(crate) fn includes(&self, index: usize) -> bool {
+        index < self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 #[derive(Debug)]
 pub enum NetworkConfig {
     NetNs(NetworkWithNetNsConfig),
@@ -47,6 +81,12 @@ pub trait Network: Send + Sync {
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()>;
+    /// The network namespace the endpoints live in, for the saved state:
+    /// a recovery can only remove what is left in the namespace when it
+    /// knows which one it was.
+    async fn netns_path(&self) -> Option<String> {
+        None
+    }
     /// Returns the list of network endpoints. Used to resolve PCI paths
     /// via QMP before sending update_interface to the agent.
     async fn endpoints(&self) -> Vec<std::sync::Arc<dyn endpoint::Endpoint>> {

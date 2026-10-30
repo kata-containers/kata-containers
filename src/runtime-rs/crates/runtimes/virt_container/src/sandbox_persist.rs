@@ -73,6 +73,10 @@ mod tests {
     ];
     const RESOURCE_FIELDS: &[(&str, &str)] = &[
         ("endpoint", "RestoredNetwork::remove() rebinds the VFs"),
+        (
+            "netns_path",
+            "RestoredNetwork::remove() reaches unattached TAPs through it",
+        ),
         ("cgroup_state", "CgroupsResource::restore(), then deleted"),
         ("ephemeral_disks", "cleanup_ephemeral_disks()"),
     ];
