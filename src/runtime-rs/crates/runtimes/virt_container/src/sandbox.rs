@@ -1903,8 +1903,7 @@ impl Sandbox for VirtSandbox {
             for error in &errors {
                 error!(sl!(), "sandbox cleanup step failed: {error:#}");
             }
-            // The hypervisor cleanup can remove the directory holding the
-            // state, and a later recovery needs it to retry the rest.
+            // A later recovery retries from what the state records.
             if let Err(e) = self.save().await {
                 warn!(sl!(), "failed to keep the sandbox state for a retry: {e:#}");
             }

@@ -267,7 +267,7 @@ impl DragonballInner {
             }
         }
 
-        std::fs::remove_dir_all(&self.vm_path)
+        crate::utils::remove_vm_dir(&self.id, &self.vm_path)
             .inspect_err(|_| error!(sl!(), "failed to remove dir all for {}", &self.vm_path))
             .ok();
     }
