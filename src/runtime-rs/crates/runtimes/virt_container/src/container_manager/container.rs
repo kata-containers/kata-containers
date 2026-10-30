@@ -78,7 +78,8 @@ fn add_sandbox_dns_mount(spec: &mut oci::Spec) -> Result<()> {
         .typ("bind")
         .source(std::path::Path::new(&kata_guest_sandbox_dir()).join("resolv.conf"))
         .options(vec![
-            "bind".to_string(),
+            "rbind".to_string(),
+            "rprivate".to_string(),
             if readonly { "ro" } else { "rw" }.to_string(),
         ])
         .build()?;
@@ -1025,7 +1026,7 @@ mod tests {
             );
             assert_eq!(
                 mounts[0].options().as_ref().unwrap(),
-                &vec!["bind", if readonly { "ro" } else { "rw" }]
+                &vec!["rbind", "rprivate", if readonly { "ro" } else { "rw" }]
             );
         }
     }
