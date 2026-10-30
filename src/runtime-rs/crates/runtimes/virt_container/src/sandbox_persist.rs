@@ -4,11 +4,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use common::SandboxNetworkEnv;
 use hypervisor::hypervisor_persist::HypervisorState;
+use kata_types::config::Hypervisor as HypervisorConfig;
 use resource::resource_persist::ResourceState;
 use serde::{Deserialize, Serialize};
+
+use crate::VIRTCONTAINER;
 
 #[derive(Serialize, Deserialize)]
 pub struct SandboxState {
@@ -24,6 +28,36 @@ pub struct SandboxState {
     /// Network namespace the runtime created for the sandbox and has to remove.
     #[serde(default)]
     pub created_netns: Option<String>,
+}
+
+impl SandboxState {
+    /// The state saved before the sandbox exists, for what the shim makes on
+    /// the host while setting it up: the network namespace and the rootless
+    /// VMM user.
+    pub fn bootstrap(
+        network_env: &SandboxNetworkEnv,
+        config_path: Option<&Path>,
+        hypervisor: Option<(&str, &HypervisorConfig)>,
+    ) -> Self {
+        Self {
+            sandbox_type: VIRTCONTAINER.to_string(),
+            resource: None,
+            hypervisor: hypervisor.map(|(name, config)| HypervisorState {
+                hypervisor_type: name.to_string(),
+                config: config.clone(),
+                ..Default::default()
+            }),
+            vmm_exit_confirmed: false,
+            config_path: config_path.map(Path::to_path_buf),
+            created_netns: crate::sandbox::created_netns(network_env),
+        }
+    }
+
+    /// Every state the sandbox saves has its resources, so one without them
+    /// was saved before the sandbox existed.
+    pub fn is_bootstrap(&self) -> bool {
+        self.resource.is_none()
+    }
 }
 
 #[cfg(test)]
@@ -134,9 +168,44 @@ mod tests {
             r#"{"sandbox_type": "virt_container", "hypervisor": {"hypervisor_type": "qemu"}}"#,
         )
         .unwrap();
-        assert!(state.resource.is_none());
+        assert!(state.is_bootstrap());
         let h = state.hypervisor.unwrap();
         assert!(h.id.is_empty());
         assert!(h.config.security_info.rootless_user.is_none());
+    }
+
+    #[test]
+    fn the_setup_state_records_what_the_shim_made() {
+        let network_env = SandboxNetworkEnv {
+            netns: Some("/run/netns/cni-1".to_string()),
+            network_created: true,
+        };
+        let mut config = HypervisorConfig::default();
+        config.security_info.rootless_user = Some(kata_types::config::hypervisor::RootlessUser {
+            uid: 1001,
+            user_name: "kata-6461".to_string(),
+            ..Default::default()
+        });
+        let path = Path::new("/opt/kata/configuration.toml");
+
+        let state = SandboxState::bootstrap(&network_env, Some(path), Some(("qemu", &config)));
+        let state: SandboxState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert!(state.is_bootstrap());
+        assert_eq!(state.created_netns.as_deref(), Some("/run/netns/cni-1"));
+        assert_eq!(state.config_path.as_deref(), Some(path));
+        let h = state.hypervisor.unwrap();
+        assert_eq!(h.hypervisor_type, "qemu");
+        let user = h.config.security_info.rootless_user.unwrap();
+        assert_eq!((user.uid, user.user_name.as_str()), (1001, "kata-6461"));
+
+        let given = SandboxNetworkEnv {
+            network_created: false,
+            ..network_env
+        };
+        assert_eq!(
+            SandboxState::bootstrap(&given, None, None).created_netns,
+            None
+        );
     }
 }
