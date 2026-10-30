@@ -11,7 +11,7 @@ CHART_PATH="${BATS_TEST_DIRNAME}/../../../tools/packaging/kata-deploy/helm-chart
     ! [[ "$output" == *SANDBOXER_HANDLER_MAPPING* ]]
 }
 
-@test "Helm NVIDIA profiles request SandboxAPI only for non-TEE Rust runtimes" {
+@test "Helm NVIDIA profiles request SandboxAPI only for Rust runtimes, including GPU TEE" {
     for profile in cpu gpu; do
         run helm template kata-deploy "${CHART_PATH}" -f "${CHART_PATH}/try-kata-nvidia-${profile}.values.yaml"
         [ "$status" -eq 0 ]
@@ -19,8 +19,8 @@ CHART_PATH="${BATS_TEST_DIRNAME}/../../../tools/packaging/kata-deploy/helm-chart
         ! [[ "$output" == *"qemu-nvidia-${profile}:shim"* ]]
         if [ "$profile" = gpu ]; then
             for tee in snp tdx; do
-                [[ "$output" == *"qemu-nvidia-gpu-${tee}-runtime-rs:podsandbox"* ]]
-                ! [[ "$output" == *"qemu-nvidia-gpu-${tee}-runtime-rs:shim"* ]]
+                [[ "$output" == *"qemu-nvidia-gpu-${tee}-runtime-rs:shim"* ]]
+                ! [[ "$output" == *"qemu-nvidia-gpu-${tee}:shim"* ]]
             done
         fi
     done
