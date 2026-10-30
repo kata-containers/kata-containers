@@ -103,6 +103,30 @@ default (non-custom) runtime. kata-deploy writes it as
     profile that carries the shim, or copy its whole block out of that profile,
     which is also where its snapshotter and guest-pull settings live.
 
+### Containerd sandbox controller
+
+Set `shims.<shim>.containerd.sandboxer` to request a containerd sandbox
+controller. An unset or empty value defaults to `podsandbox`.
+
+```yaml
+shims:
+  qemu-runtime-rs:
+    containerd:
+      sandboxer: shim
+```
+
+`shim` requests Sandbox API for Rust runtimes. kata-deploy checks containerd's
+version and queries its running shim sandbox controller before selecting it.
+If support is unavailable or cannot be determined, it logs the reason and uses
+`podsandbox`. Connection and version checks are bounded; missing sockets do not
+prevent the install pod from starting. A later workload failure does not change
+the controller or trigger a fallback retry.
+
+Custom runtimes inherit their base shim's setting unless
+`customRuntimes.runtimes.<name>.containerd.sandboxer` is specified. An explicit
+empty custom value selects `podsandbox`. Generated debug and devkit runtimes
+inherit their base setting.
+
 ### Containerd pod annotations
 
 kata-deploy builds each containerd runtime's `pod_annotations` allowlist from

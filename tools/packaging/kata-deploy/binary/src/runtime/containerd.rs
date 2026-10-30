@@ -26,9 +26,78 @@ struct ContainerdRuntimeParams {
     container_annotations: String,
     /// Optional snapshotter to configure
     snapshotter: Option<String>,
+    /// Effective SandboxAPI selection after capability probing.
+    sandbox_api: bool,
 }
 
 const DEFAULT_CONTAINER_ANNOTATIONS: &str = "[\"io.kubernetes.container.terminationMessage*\"]";
+
+fn runtime_supports_sandbox_api(base: &str, version: Option<&str>) -> bool {
+    let reason = if !utils::is_rust_shim(base) {
+        Some("the selected Go runtime does not implement SandboxAPI")
+    } else if !version.is_some_and(super::manager::containerd_version_is_2_or_newer) {
+        Some("containerd 2 or newer could not be established")
+    } else {
+        None
+    };
+    if let Some(reason) = reason {
+        log::warn!("Using sandboxer=podsandbox for {base}: {reason}");
+        false
+    } else {
+        true
+    }
+}
+
+fn sandboxer_socket_path(value: &str) -> Option<PathBuf> {
+    let path = Path::new(value.strip_prefix("unix://").unwrap_or(value));
+    path.is_absolute().then(|| path.to_path_buf())
+}
+
+async fn effective_sandbox_api(config: &Config, base: &str, custom: Option<&str>) -> Result<bool> {
+    if config.containerd_sandboxer_for(base, custom)? != "shim" {
+        log::info!("Using sandboxer=podsandbox for {base}: SandboxAPI was not requested");
+        return Ok(false);
+    }
+    // Node metadata is not always reachable in credential-free install jobs.
+    // Bound that lookup too, so an unknown capability becomes a prompt fallback.
+    let version = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        config.resolve_container_runtime_version(),
+    )
+    .await;
+    let version = match &version {
+        Ok(Ok(version)) => Some(version.as_str()),
+        Ok(Err(error)) => {
+            log::warn!("Cannot determine containerd SandboxAPI support: {error:#}");
+            None
+        }
+        Err(_) => {
+            log::warn!("Timed out determining containerd SandboxAPI support");
+            None
+        }
+    };
+    if !runtime_supports_sandbox_api(base, version) {
+        return Ok(false);
+    }
+    let socket = std::env::var("CONTAINERD_SANDBOXER_SOCKET")
+        .ok()
+        .and_then(|value| sandboxer_socket_path(&value));
+    let Some(socket) = socket else {
+        log::warn!("Using sandboxer=podsandbox for {base}: no local containerd availability socket was provided");
+        return Ok(false);
+    };
+    match utils::containerd::sandbox_api_available(&socket).await {
+        Ok(true) => Ok(true),
+        Ok(false) => {
+            log::warn!("Using sandboxer=podsandbox for {base}: the shim sandbox controller is missing, disabled, or failed initialization");
+            Ok(false)
+        }
+        Err(error) => {
+            log::warn!("Using sandboxer=podsandbox for {base}: containerd availability probe failed: {error:#}");
+            Ok(false)
+        }
+    }
+}
 
 fn format_toml_string_array(values: &[String]) -> String {
     let quoted: Vec<String> = values.iter().map(|v| format!("\"{v}\"")).collect();
@@ -357,7 +426,23 @@ fn write_containerd_runtime_config(
         params.runtime_name
     );
     let runtime_options_table = format!("{runtime_table}.options");
-    let runtime_type = format!("\"io.containerd.{}.v2\"", params.runtime_name);
+    log::info!(
+        "Configuring containerd handler {} with sandboxer={}",
+        params.runtime_name,
+        if params.sandbox_api {
+            "shim"
+        } else {
+            "podsandbox"
+        }
+    );
+    // SandboxAPI resolves the shim from Runtime.Name (runtime_type), not the
+    // CRI-only runtime_path override. Absolute runtime names are supported by
+    // containerd and avoid handler-specific shim aliases on containerd's PATH.
+    let runtime_type = if params.sandbox_api {
+        params.runtime_path.clone()
+    } else {
+        format!("\"io.containerd.{}.v2\"", params.runtime_name)
+    };
 
     toml_utils::set_toml_value(
         config_file,
@@ -368,6 +453,15 @@ fn write_containerd_runtime_config(
         config_file,
         &format!("{runtime_table}.runtime_path"),
         &params.runtime_path,
+    )?;
+    toml_utils::set_toml_value(
+        config_file,
+        &format!("{runtime_table}.sandboxer"),
+        if params.sandbox_api {
+            "\"shim\""
+        } else {
+            "\"podsandbox\""
+        },
     )?;
     toml_utils::set_toml_value(
         config_file,
@@ -431,6 +525,7 @@ pub async fn configure_containerd_runtime(
     let configuration = format!("configuration-{shim}");
 
     let paths = config.get_containerd_paths(runtime).await?;
+    let sandbox_api = effective_sandbox_api(config, shim, None).await?;
     let configuration_file = get_containerd_output_path(&paths);
     let pluginid = match paths.plugin_id.as_deref() {
         Some(plugin_id) => plugin_id,
@@ -490,6 +585,7 @@ pub async fn configure_containerd_runtime(
         pod_annotations,
         container_annotations,
         snapshotter,
+        sandbox_api,
     };
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
@@ -515,7 +611,10 @@ pub async fn configure_custom_containerd_runtime(
         custom_runtime.handler
     );
 
+    let base = &custom_runtime.base_config;
     let paths = config.get_containerd_paths(runtime).await?;
+    let sandbox_api =
+        effective_sandbox_api(config, base, custom_runtime.containerd_sandboxer.as_deref()).await?;
     let configuration_file = get_containerd_output_path(&paths);
     let pluginid = match paths.plugin_id.as_deref() {
         Some(plugin_id) => plugin_id,
@@ -566,6 +665,7 @@ pub async fn configure_custom_containerd_runtime(
         pod_annotations,
         container_annotations,
         snapshotter,
+        sandbox_api,
     };
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
@@ -1133,6 +1233,121 @@ pub fn snapshotter_handler_mapping_validation_check(config: &Config) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn sandbox_api_effective_selection_falls_back_on_unreachable_probe() {
+        let base = "qemu-runtime-rs";
+        let mut config = test_config(base, "/opt/kata");
+        config.sandboxer_handler_mapping_for_arch = Some(format!("{base}:shim"));
+        config.container_runtime_version = Some("containerd://2.3.3".into());
+        let original_socket = std::env::var_os("CONTAINERD_SANDBOXER_SOCKET");
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var(
+            "CONTAINERD_SANDBOXER_SOCKET",
+            dir.path().join("missing.sock"),
+        );
+        let unavailable = effective_sandbox_api(&config, base, None).await.unwrap();
+        if let Some(original) = original_socket {
+            std::env::set_var("CONTAINERD_SANDBOXER_SOCKET", original);
+        } else {
+            std::env::remove_var("CONTAINERD_SANDBOXER_SOCKET");
+        }
+        assert!(!unavailable);
+        assert!(!effective_sandbox_api(&config, base, Some("podsandbox"))
+            .await
+            .unwrap());
+        config.container_runtime_version = Some("unknown".into());
+        assert!(!effective_sandbox_api(&config, base, None).await.unwrap());
+        config.container_runtime_version = Some("containerd://1.7.30".into());
+        assert!(!effective_sandbox_api(&config, base, None).await.unwrap());
+        config.container_runtime_version = Some("containerd://2.3.3".into());
+        assert!(!effective_sandbox_api(&config, "qemu", Some("shim"))
+            .await
+            .unwrap());
+    }
+
+    #[test]
+    fn sandboxer_socket_accepts_only_absolute_local_paths() {
+        assert_eq!(
+            sandboxer_socket_path("unix:///custom/run/runtime.sock"),
+            Some(PathBuf::from("/custom/run/runtime.sock"))
+        );
+        assert_eq!(
+            sandboxer_socket_path("/run/containerd/containerd.sock"),
+            Some(PathBuf::from("/run/containerd/containerd.sock"))
+        );
+        assert!(sandboxer_socket_path("tcp://localhost:1234").is_none());
+        assert!(sandboxer_socket_path("").is_none());
+    }
+
+    #[test]
+    fn sandbox_api_falls_back_when_unavailable() {
+        assert!(runtime_supports_sandbox_api(
+            "qemu-runtime-rs",
+            Some("containerd://2.0.0")
+        ));
+        assert!(!runtime_supports_sandbox_api(
+            "qemu-runtime-rs",
+            Some("containerd://1.7.30")
+        ));
+        assert!(!runtime_supports_sandbox_api("qemu-runtime-rs", None));
+        assert!(!runtime_supports_sandbox_api(
+            "qemu-runtime-rs",
+            Some("unknown")
+        ));
+        assert!(!runtime_supports_sandbox_api(
+            "qemu",
+            Some("containerd://2.3.3")
+        ));
+    }
+
+    #[test]
+    fn sandbox_api_handlers_use_absolute_shim_path_for_all_schemas_and_aliases() {
+        // Config schema 2 can be used by containerd 2; schema alone is not a
+        // SandboxAPI capability check. Custom/debug names inherit their base.
+        for plugin in [CONTAINERD_V2_CRI_PLUGIN_ID, CONTAINERD_V3_RUNTIME_PLUGIN_ID] {
+            for handler in [
+                "kata-qemu-nvidia-cpu-runtime-rs",
+                "kata-custom",
+                "kata-nvidia-debug-beta",
+            ] {
+                let dir = tempfile::tempdir().unwrap();
+                let file = dir.path().join("containerd.toml");
+                fs::write(&file, "").unwrap();
+                let mut params = make_params(handler, None);
+                params.runtime_path =
+                    "\"/opt/kata-beta/runtime-rs/bin/containerd-shim-kata-v2\"".into();
+                params.config_path = format!("\"/opt/kata-beta/share/defaults/kata-containers/custom-runtimes/{handler}/configuration-qemu-nvidia-cpu-runtime-rs.toml\"");
+                params.sandbox_api = true;
+                write_containerd_runtime_config(&file, plugin, &params).unwrap();
+                let table = format!("{}.{}", containerd_runtimes_table(plugin), handler);
+                assert_eq!(
+                    toml_utils::get_toml_value(&file, &format!("{table}.sandboxer")).unwrap(),
+                    "shim"
+                );
+                assert_eq!(
+                    toml_utils::get_toml_value(&file, &format!("{table}.runtime_type")).unwrap(),
+                    "/opt/kata-beta/runtime-rs/bin/containerd-shim-kata-v2"
+                );
+                assert_eq!(
+                    toml_utils::get_toml_value(&file, &format!("{table}.options.ConfigPath"))
+                        .unwrap(),
+                    params.config_path.trim_matches('"')
+                );
+                params.sandbox_api = false;
+                write_containerd_runtime_config(&file, plugin, &params).unwrap();
+                assert_eq!(
+                    toml_utils::get_toml_value(&file, &format!("{table}.sandboxer")).unwrap(),
+                    "podsandbox"
+                );
+                assert_eq!(
+                    toml_utils::get_toml_value(&file, &format!("{table}.runtime_type")).unwrap(),
+                    format!("io.containerd.{handler}.v2")
+                );
+            }
+        }
+    }
     use crate::artifacts::install::tests::test_config;
     use crate::config::CustomRuntime;
     use crate::utils::toml as toml_utils;
@@ -1152,6 +1367,7 @@ mod tests {
             base_config: "qemu".to_string(),
             drop_in_file: None,
             containerd_snapshotter: None,
+            containerd_sandboxer: None,
             crio_pull_type: None,
             debug_variant: false,
             devkit: false,
@@ -1196,6 +1412,7 @@ mod tests {
             pod_annotations: "[\"io.katacontainers.config.agent.*\"]".to_string(),
             container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]".to_string(),
             snapshotter: snapshotter.map(|s| s.to_string()),
+            sandbox_api: false,
         }
     }
 
@@ -1319,6 +1536,7 @@ mod tests {
             pod_annotations: pod_annotations_for_kata_config(&config_file, &[]).unwrap(),
             container_annotations: DEFAULT_CONTAINER_ANNOTATIONS.to_string(),
             snapshotter: None,
+            sandbox_api: false,
         };
 
         write_containerd_runtime_config(&containerd_file, pluginid, &params).unwrap();
