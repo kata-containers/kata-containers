@@ -281,15 +281,8 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 		}
 	}
 
-	if deviceUpperPath, err := utils.GetStoragePath(dv.config.StoragePath, volumeID); err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("get device UpperPath %s failed: %v", deviceUpperPath, err))
-	} else {
-		if err = os.RemoveAll(deviceUpperPath); err != nil {
-			return nil, status.Error(codes.Internal, fmt.Sprintf("remove device upper path: %s failed %v", deviceUpperPath, err.Error()))
-		}
-		klog.Infof("direct volume %s has been removed.", deviceUpperPath)
-	}
-
+	// The raw disk is allocated by CreateVolume and released by
+	// DeleteVolume; unstaging only undoes the node-local staging.
 	if err := os.RemoveAll(stagingTargetPath); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("remove staging target path: %v", err))
 	}
@@ -425,11 +418,9 @@ func (dv *directVolume) stageSPDKVolume(req *csi.NodeStageVolumeRequest, volumeI
 }
 
 func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volumeID string) (*csi.NodeStageVolumeResponse, error) {
-	capacityInBytes := req.VolumeContext[utils.CapabilityInBytes]
-	devicePath, err := utils.CreateDirectBlockDevice(volumeID, capacityInBytes, dv.config.StoragePath)
+	devicePath, err := dv.directBackingDevice(req, volumeID)
 	if err != nil {
-		errMsg := status.Errorf(codes.Internal, "setup storage for volume '%s' failed", volumeID)
-		return &csi.NodeStageVolumeResponse{}, errMsg
+		return nil, err
 	}
 
 	// /full_path_on_host/VolumeId/
@@ -492,6 +483,30 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 	}
 
 	return &csi.NodeStageVolumeResponse{}, nil
+}
+
+// directBackingDevice returns the raw disk that CreateVolume allocated for the
+// volume. A recorded raw disk that is missing is an error: recreating it would
+// hand the workload an empty filesystem in place of its data.
+func (dv *directVolume) directBackingDevice(req *csi.NodeStageVolumeRequest, volumeID string) (*string, error) {
+	if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
+		if backingFile := vol.Metadata["backingFile"]; backingFile != "" {
+			if _, err := os.Stat(backingFile); err != nil {
+				return nil, status.Errorf(codes.FailedPrecondition, "backing device %s of volume %s is not available: %v", backingFile, volumeID, err)
+			}
+			return &backingFile, nil
+		}
+	}
+
+	// Volumes provisioned by older driver versions have no recorded raw
+	// disk, as it was allocated here on every stage.
+	klog.Warningf("volume %s has no recorded backing device, allocating it on stage", volumeID)
+	devicePath, err := utils.CreateDirectBlockDevice(volumeID, req.VolumeContext[utils.CapabilityInBytes], dv.config.StoragePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "setup storage for volume '%s' failed: %v", volumeID, err)
+	}
+
+	return devicePath, nil
 }
 
 func controllerExists(name string, resp interface{}) bool {

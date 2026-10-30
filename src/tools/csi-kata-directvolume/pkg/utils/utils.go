@@ -171,9 +171,23 @@ func doSafeCommand(rawCmd string, args ...string) ([]byte, error) {
 
 // storagePath/VolID/directvol.rawdisk
 func GetStoragePath(storagePath, volID string) (string, error) {
+	if volID == "" || volID == "." || volID == ".." || filepath.Base(volID) != volID {
+		return "", fmt.Errorf("invalid volume id %q", volID)
+	}
 	upperPath := filepath.Join(storagePath, volID)
 
 	return upperPath, nil
+}
+
+// RemoveDirectBlockDevice removes the storage directory holding the raw disk
+// of the volume. It is idempotent: a missing directory is not an error.
+func RemoveDirectBlockDevice(volID, storagePath string) error {
+	upperPath, err := GetStoragePath(storagePath, volID)
+	if err != nil {
+		return err
+	}
+
+	return os.RemoveAll(upperPath)
 }
 
 // createVolume create the directory for the direct volume.
@@ -187,6 +201,9 @@ func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*st
 	}
 
 	diskSize := fmt.Sprintf("%dM", capacityInBytes/MiB)
+	if _, err := GetStoragePath(storagePath, volID); err != nil {
+		return nil, err
+	}
 	upperDir, err := SetupStoragePath(storagePath, volID)
 	if err != nil {
 		klog.Errorf("setup storage path failed with error: %v", err)
