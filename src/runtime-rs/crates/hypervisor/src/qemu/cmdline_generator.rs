@@ -187,7 +187,10 @@ impl Kernel {
         // get kernel params
         let mut kernel_params = KernelParams::new(config.debug_info.enable_debug);
 
-        if config.boot_info.initrd.is_empty() {
+        // The rootfs parameters describe the image-backed root, so they are
+        // emitted whenever an image is configured -- including when a bootstrap
+        // initrd is present and mounts that image.
+        if !config.boot_info.image.is_empty() {
             // DAX is disabled on ARM due to a kernel panic in caches_clean_inval_pou.
             #[cfg(target_arch = "aarch64")]
             let use_dax = false;
@@ -4598,6 +4601,70 @@ mod tests {
             machine_value.contains("kernel_irqchip=on"),
             "kernel_irqchip=on must be present on this arch, got: {}",
             machine_value
+        );
+    }
+
+    // A bootstrap initrd and an image-backed rootfs can be configured together:
+    // the initrd is passed to the guest and the rootfs parameters still describe
+    // the image root, so the initrd knows what to mount.
+    #[actix_rt::test]
+    #[serial]
+    async fn test_kernel_params_with_image_and_initrd() {
+        let mut config = test_qemu_config(None, false);
+        config.boot_info.image = "/tmp/kata-rootfs.img".to_owned();
+        config.boot_info.initrd = "/tmp/kata-initrd.img".to_owned();
+        config.boot_info.rootfs_type = "erofs".to_owned();
+
+        let params = build_test_cmdline("image-and-initrd", &config).await;
+
+        assert!(
+            has_qemu_arg(&params, "-initrd", "/tmp/kata-initrd.img"),
+            "-initrd must be passed to the guest, got: {:?}",
+            params
+        );
+
+        let append = params
+            .windows(2)
+            .find_map(|args| (args[0] == "-append").then_some(args[1].as_str()))
+            .expect("-append argument must be present");
+
+        assert!(
+            append.contains("root=/dev/vda1"),
+            "rootfs params must describe the virtio-blk root, got: {}",
+            append
+        );
+        assert!(
+            append.contains("rootfstype=erofs"),
+            "rootfstype must be emitted for the image root, got: {}",
+            append
+        );
+    }
+
+    // Without an image there is no image-backed root to describe, so no rootfs
+    // parameters are emitted (the initrd is the rootfs).
+    #[actix_rt::test]
+    #[serial]
+    async fn test_kernel_params_initrd_only_has_no_rootfs_params() {
+        let mut config = test_qemu_config(None, false);
+        config.boot_info.initrd = "/tmp/kata-initrd.img".to_owned();
+
+        let params = build_test_cmdline("initrd-only", &config).await;
+
+        assert!(
+            has_qemu_arg(&params, "-initrd", "/tmp/kata-initrd.img"),
+            "-initrd must be passed to the guest, got: {:?}",
+            params
+        );
+
+        let append = params
+            .windows(2)
+            .find_map(|args| (args[0] == "-append").then_some(args[1].as_str()))
+            .expect("-append argument must be present");
+
+        assert!(
+            !append.contains("root="),
+            "initrd-only boot must not get an image root, got: {}",
+            append
         );
     }
 }
