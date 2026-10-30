@@ -66,6 +66,24 @@ fn dns_config_to_resolv_conf(dns_config: cri_api_v1::DNSConfig) -> Vec<String> {
     dns
 }
 
+fn update_metadata_annotations(config: &mut cri_api_v1::PodSandboxConfig) {
+    if let Some(metadata) = config.metadata.as_ref() {
+        // Pod Resources and remote hypervisors consume the same identity
+        // annotations that the task API receives in its OCI spec.
+        for (key, value) in [
+            (cri_containerd::SANDBOX_NAME_LABEL_KEY, &metadata.name),
+            (
+                cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY,
+                &metadata.namespace,
+            ),
+        ] {
+            if !value.is_empty() {
+                config.annotations.insert(key.to_string(), value.clone());
+            }
+        }
+    }
+}
+
 fn update_resource_annotation(config: &mut cri_api_v1::PodSandboxConfig) {
     if let Some(resources) = config
         .linux
@@ -107,6 +125,7 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
         };
 
         let mut config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.options.value)?;
+        update_metadata_annotations(&mut config);
         update_resource_annotation(&mut config);
         let cgroup_parent = get_cgroup_parent(&config);
 
@@ -425,6 +444,86 @@ mod tests {
         match SandboxRequest::try_from(request).unwrap() {
             SandboxRequest::CreateSandbox(config) => *config,
             _ => panic!("expected create sandbox request"),
+        }
+    }
+
+    #[test]
+    fn test_sandbox_metadata_populates_identity_annotations() {
+        let sandbox = convert_sandbox_config(cri_api_v1::PodSandboxConfig {
+            metadata: protobuf::MessageField::some(cri_api_v1::PodSandboxMetadata {
+                name: "gpu-workload".to_string(),
+                namespace: "gpu-tests".to_string(),
+                ..Default::default()
+            }),
+            annotations: HashMap::from([("custom".to_string(), "preserved".to_string())]),
+            ..Default::default()
+        });
+
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_NAME_LABEL_KEY],
+            "gpu-workload"
+        );
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY],
+            "gpu-tests"
+        );
+        assert_eq!(sandbox.annotations["custom"], "preserved");
+        assert_eq!(sandbox.state.annotations, sandbox.annotations);
+    }
+
+    #[test]
+    fn test_sandbox_metadata_overrides_identity_annotations() {
+        let sandbox = convert_sandbox_config(cri_api_v1::PodSandboxConfig {
+            metadata: protobuf::MessageField::some(cri_api_v1::PodSandboxMetadata {
+                name: "actual-pod".to_string(),
+                namespace: "actual-namespace".to_string(),
+                ..Default::default()
+            }),
+            annotations: HashMap::from([
+                (
+                    cri_containerd::SANDBOX_NAME_LABEL_KEY.to_string(),
+                    "wrong-pod".to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+                    "wrong-namespace".to_string(),
+                ),
+            ]),
+            ..Default::default()
+        });
+
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_NAME_LABEL_KEY],
+            "actual-pod"
+        );
+        assert_eq!(
+            sandbox.annotations[cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY],
+            "actual-namespace"
+        );
+        assert_eq!(sandbox.state.annotations, sandbox.annotations);
+    }
+
+    #[test]
+    fn test_sandbox_missing_metadata_preserves_identity_annotations() {
+        for metadata in [None, Some(cri_api_v1::PodSandboxMetadata::default())] {
+            let annotations = HashMap::from([
+                (
+                    cri_containerd::SANDBOX_NAME_LABEL_KEY.to_string(),
+                    "existing-pod".to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+                    "existing-namespace".to_string(),
+                ),
+            ]);
+            let sandbox = convert_sandbox_config(cri_api_v1::PodSandboxConfig {
+                metadata: metadata.into(),
+                annotations: annotations.clone(),
+                ..Default::default()
+            });
+
+            assert_eq!(sandbox.annotations, annotations);
+            assert_eq!(sandbox.state.annotations, annotations);
         }
     }
 
