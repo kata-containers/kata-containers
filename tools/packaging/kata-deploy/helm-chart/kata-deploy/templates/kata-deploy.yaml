@@ -150,6 +150,7 @@ spec:
 {{- end }}
         volumeMounts:
 {{- include "kata-deploy.commonVolumeMounts" . | nindent 8 }}
+{{- include "kata-deploy.sandboxerSocketMount" . | nindent 8 }}
       volumes:
 {{- include "kata-deploy.commonVolumes" . | nindent 6 }}
 {{- if include "kata-deploy.selinuxEnabled" . | trim }}
