@@ -11,7 +11,10 @@ Select containerd's sandbox controller with
 `shims.<name>.containerd.sandboxer`: `podsandbox` is the default; `shim` selects
 SandboxAPI when supported by the runtime and containerd 2 or newer. If unset,
 empty, or unavailable, kata-deploy uses `podsandbox` and logs a fallback reason
-for an unavailable request. Override a custom runtime with
+for an unavailable request. The NVIDIA
+CPU/GPU Helm profiles select `shim` for non-TEE Rust runtimes. GPU TEE
+Rust runtimes retain `podsandbox` pending generated policy parity checks,
+as do Go runtimes. Override a custom runtime with
 `customRuntimes.runtimes.<name>.containerd.sandboxer`; omission inherits its base
 shim's setting. Debug and devkit variants inherit their base setting too.
 

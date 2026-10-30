@@ -122,6 +122,10 @@ If support is unavailable or cannot be determined, it logs the reason and uses
 prevent the install pod from starting. A later workload failure does not change
 the controller or trigger a fallback retry.
 
+The NVIDIA CPU and GPU profiles request `shim` for their Rust runtimes. Their
+Go runtimes retain `podsandbox`. Override the profile setting with
+`--set shims.<shim>.containerd.sandboxer=podsandbox`.
+
 Custom runtimes inherit their base shim's setting unless
 `customRuntimes.runtimes.<name>.containerd.sandboxer` is specified. An explicit
 empty custom value selects `podsandbox`. Generated debug and devkit runtimes
