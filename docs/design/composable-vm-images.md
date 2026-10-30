@@ -67,8 +67,8 @@ Host                                          Guest VM
 │  └─────────────────────────┘  │      │    attestation-agent                │
 │                               │      │    confidential-data-hub            │
 │  QEMU                         │      │    api-server-rest                  │
-│    -drive base.img            │      │    ocicrypt_config.json             │
-│    -drive coco.img            │      │    pause_bundle/                    │
+│    -drive base.img            │      │    pause_bundle/                    │
+│    -drive coco.img            │      │                                     │
 │    serial=extension-coco      │      │                                     │
 └───────────────────────────────┘      │  dm-verity protects both the        │
                                        │  base rootfs and the extension.     │
@@ -349,8 +349,7 @@ shaped the way they are):
 schema_version = 1
 
 [paths]
-"ocicrypt-config" = "etc/ocicrypt_config.json"
-"pause-bundle"    = "pause_bundle"
+"pause-bundle" = "pause_bundle"
 
 [[process]]
 id          = "attestation-agent"
@@ -372,7 +371,7 @@ id          = "confidential-data-hub"
 level       = 2
 path        = "usr/local/bin/confidential-data-hub"
 config      = "${cdh_config_path}"
-env         = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
+env         = { PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket = "${cdh_socket}"
 
 [[process]]
@@ -393,8 +392,16 @@ inside the extension first and falls back to the legacy location otherwise:
 | attestation-agent(-nv) | `/run/kata-extensions/coco/usr/local/bin/attestation-agent[-nv]` | `/usr/local/bin/attestation-agent` |
 | confidential-data-hub  | `/run/kata-extensions/coco/usr/local/bin/confidential-data-hub` | `/usr/local/bin/confidential-data-hub` |
 | api-server-rest        | `/run/kata-extensions/coco/usr/local/bin/api-server-rest`   | `/usr/local/bin/api-server-rest` |
-| ocicrypt_config.json   | `/run/kata-extensions/coco/etc/ocicrypt_config.json`        | `/etc/ocicrypt_config.json`     |
 | pause_bundle           | `/run/kata-extensions/coco/pause_bundle`                    | `/pause_bundle`                 |
+
+`ocicrypt_config.json` is not part of this table: it is shipped neither in the
+extension nor in the confidential rootfs, and neither the extension's manifest
+nor kata-agent's built-in launch plan set `OCICRYPT_KEYPROVIDER_CONFIG`
+anymore. CDH generates the file itself, under its own `/run` tmpfs directory,
+whenever the variable is left unset, so encrypted-image support keeps working
+out of the box without either launch path needing to set it. An operator can
+still pre-set `OCICRYPT_KEYPROVIDER_CONFIG` to point CDH at a different,
+pre-existing keyprovider config, in which case CDH leaves it unmodified.
 
 This approach:
 
@@ -439,8 +446,8 @@ otherwise meant to *eliminate* duplication.
 - A single CoCo extension serves **both** plain confidential guests (TEE evidence
   only) and confidential GPU guests (TEE + GPU evidence). The only thing that
   differs between them is which attestation-agent binary runs; everything else
-  in the extension (confidential-data-hub, api-server-rest, ocicrypt config, pause
-  bundle, `cryptsetup`) is shared verbatim. Splitting the NVIDIA attester into
+  in the extension (confidential-data-hub, api-server-rest, pause bundle,
+  `cryptsetup`) is shared verbatim. Splitting the NVIDIA attester into
   its own extension would duplicate that shared payload and force every confidential
   GPU guest to compose two CoCo-flavoured extensions instead of one.
 - The **cost** of keeping both builds together is precisely the manifest's
@@ -563,7 +570,7 @@ because of the flavour, not because the NVIDIA image is a special case.
 
 The full-distro `kata-containers.img` is built as before, but **without** CoCo
 guest components (attestation-agent, confidential-data-hub, api-server-rest,
-ocicrypt config, pause bundle). It includes:
+pause bundle). It includes:
 
 - The kata-agent
 - systemd and the `kata-extension-mount@.service` template unit
@@ -596,9 +603,11 @@ scratch OCI **container** image guest-components publishes in the
 and exports the filesystem into `kata-static-coco-guest-components.tar.zst`.
 This is distinct from the EROFS disk image (`extension_image`) used by the
 runtime-rs composable extension path. The container payload includes the
-guest-component binaries, `cryptsetup`, the pause bundle, and
-`etc/ocicrypt_config.json`, so confidential rootfs builds no longer need a
-separate `pause-image` tarball or a local guest-components compile.
+guest-component binaries, `cryptsetup`, and the pause bundle, so confidential
+rootfs builds no longer need a separate `pause-image` tarball or a local
+guest-components compile. (`ocicrypt_config.json` is not part of this payload;
+CDH generates it itself under `/run` on first launch unless an operator has
+already set `OCICRYPT_KEYPROVIDER_CONFIG` to something else.)
 
 #### CoCo guest extension image
 
@@ -706,9 +715,9 @@ However, several gaps make it unsuitable as a direct replacement for the
 custom mounting approach described here:
 
 - **Hierarchy coverage** — sysext only merges into `/usr/` and `/opt/`.
-  Files under `/etc/` (e.g. `ocicrypt_config.json`) require the separate
-  `confext` mechanism, and files outside these three hierarchies (e.g.
-  `/pause_bundle/`) cannot be delivered via sysext or confext at all.
+  Files under `/etc/` require the separate `confext` mechanism, and files
+  outside these three hierarchies (e.g. `/pause_bundle/`) cannot be delivered
+  via sysext or confext at all.
 
 - **Block device bridging** — sysext discovers images from well-known
   directories (`/var/lib/extensions/`, `/run/extensions/`), not from raw

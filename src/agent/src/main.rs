@@ -111,8 +111,6 @@ const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
-const OCICRYPT_CONFIG_PATH: &str = "/etc/ocicrypt_config.json";
-
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
         // Note: We can't do AgentOpts.parse() here to send through the processed arguments to AgentConfig
@@ -485,12 +483,6 @@ fn build_substitution_ctx(
     config: &AgentConfig,
     initdata_return_value: &Option<InitdataReturnValue>,
 ) -> Result<std::collections::HashMap<String, String>> {
-    let ocicrypt_config_path = guest_extension_image::resolve_component_path(
-        guest_extension_image::COCO_EXTENSION_NAME,
-        guest_extension_image::COCO_COMPONENT_OCICRYPT_CONFIG,
-        OCICRYPT_CONFIG_PATH,
-    )?;
-
     let initdata_toml_path = if initdata_return_value.is_some() {
         initdata::INITDATA_TOML_PATH.to_string()
     } else {
@@ -512,10 +504,6 @@ fn build_substitution_ctx(
     ctx.insert("aa_config_path".to_string(), AA_CONFIG_PATH.to_string());
     ctx.insert("cdh_config_path".to_string(), CDH_CONFIG_PATH.to_string());
     ctx.insert("cdh_socket".to_string(), CDH_SOCKET.to_string());
-    ctx.insert(
-        "ocicrypt_config_path".to_string(),
-        ocicrypt_config_path.to_string_lossy().into_owned(),
-    );
     ctx.insert(
         "rest_api_features".to_string(),
         config.guest_components_rest_api.to_string(),
@@ -582,10 +570,7 @@ fn builtin_coco_plan(
             path: Path::new(CDH_PATH).to_path_buf(),
             args: vec![],
             config: Some(CDH_CONFIG_PATH.to_string()),
-            env: vec![(
-                "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
-                OCICRYPT_CONFIG_PATH.to_string(),
-            )],
+            env: vec![],
             wait_socket: Some(CDH_SOCKET.to_string()),
             timeout_secs: config.launch_process_timeout.as_secs(),
         });

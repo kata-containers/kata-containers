@@ -30,7 +30,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-pub const COCO_COMPONENT_OCICRYPT_CONFIG: &str = "ocicrypt-config";
 pub const COCO_COMPONENT_PAUSE_BUNDLE: &str = "pause-bundle";
 pub const COCO_EXTENSION_NAME: &str = "coco";
 
@@ -470,10 +469,6 @@ mod tests {
         c.insert("aa_config_path".into(), "/run/initdata/aa.toml".into());
         c.insert("cdh_config_path".into(), "/run/initdata/cdh.toml".into());
         c.insert("cdh_socket".into(), "/run/cdh.sock".into());
-        c.insert(
-            "ocicrypt_config_path".into(),
-            "/run/kata-extensions/coco/etc/ocicrypt_config.json".into(),
-        );
         c.insert("rest_api_features".into(), "all".into());
         c.insert("launch_process_timeout".into(), "6".into());
         c.insert("initdata_toml_path".into(), "".into());
@@ -486,8 +481,7 @@ mod tests {
 schema_version = 1
 
 [paths]
-"ocicrypt-config" = "etc/ocicrypt_config.json"
-"pause-bundle"    = "pause_bundle"
+"pause-bundle" = "pause_bundle"
 
 [[process]]
 id            = "attestation-agent"
@@ -511,7 +505,7 @@ id           = "confidential-data-hub"
 level        = 2
 path         = "usr/local/bin/confidential-data-hub"
 config       = "${cdh_config_path}"
-env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
+env          = { PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket  = "${cdh_socket}"
 timeout_secs = "${launch_process_timeout}"
 
@@ -530,7 +524,7 @@ timeout_secs = "0"
         let got = resolve_component_path_in_root(
             dir.path(),
             COCO_EXTENSION_NAME,
-            COCO_COMPONENT_OCICRYPT_CONFIG,
+            COCO_COMPONENT_PAUSE_BUNDLE,
             legacy,
         )
         .unwrap();
@@ -585,7 +579,7 @@ schema_version = 1
         let err = resolve_component_path_in_root(
             dir.path(),
             COCO_EXTENSION_NAME,
-            COCO_COMPONENT_OCICRYPT_CONFIG,
+            "some-other-component",
             "/legacy",
         )
         .unwrap_err();
@@ -601,13 +595,13 @@ schema_version = 1
             r#"
 schema_version = 1
 [paths]
-"ocicrypt-config" = "../outside"
+"pause-bundle" = "../outside"
 "#,
         );
         let err = resolve_component_path_in_root(
             dir.path(),
             COCO_EXTENSION_NAME,
-            COCO_COMPONENT_OCICRYPT_CONFIG,
+            COCO_COMPONENT_PAUSE_BUNDLE,
             "/legacy",
         )
         .unwrap_err();
@@ -635,21 +629,14 @@ schema_version = 1
 
         let cdh = &specs[1];
         assert_eq!(cdh.id, "confidential-data-hub");
-        // env is sorted by key, so OCICRYPT_KEYPROVIDER_CONFIG precedes PATH.
         // PATH puts the extension's cryptsetup (usr/sbin) ahead of the base dirs
         // that carry mke2fs/mkfs.ext4/dd, which CDH's secure_mount shells out to.
         assert_eq!(
             cdh.env,
-            vec![
-                (
-                    "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
-                    "/run/kata-extensions/coco/etc/ocicrypt_config.json".to_string()
-                ),
-                (
-                    "PATH".to_string(),
-                    "/run/kata-extensions/coco/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin".to_string()
-                )
-            ]
+            vec![(
+                "PATH".to_string(),
+                "/run/kata-extensions/coco/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin".to_string()
+            )]
         );
 
         let api = &specs[2];
