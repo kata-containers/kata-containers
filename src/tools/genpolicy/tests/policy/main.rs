@@ -100,6 +100,11 @@ mod tests {
     /// An optional `settings-patch.json` file in the test case directory customizes
     /// the genpolicy settings used by that test.
     async fn runtests(test_case_dir: &str) {
+        let empty = Patch(Vec::new());
+        runtests_with_patches(test_case_dir, &empty, &empty).await;
+    }
+
+    async fn runtests_with_patches(test_case_dir: &str, pod_patch: &Patch, request_patch: &Patch) {
         // Check if config_map.yaml exists.
         // If it does, we need to copy it to the workdir.
         let is_config_map_file_present = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -116,6 +121,14 @@ mod tests {
 
         // Prepare temp dir for running genpolicy.
         let (workdir, testdata_dir) = prepare_workdir(test_case_dir, &files_to_copy);
+
+        if !pod_patch.0.is_empty() {
+            let pod_path = workdir.join("pod.yaml");
+            let mut pod: serde_json::Value =
+                serde_yaml::from_str(&fs::read_to_string(&pod_path).unwrap()).unwrap();
+            patch(&mut pod, pod_patch).unwrap();
+            fs::write(&pod_path, serde_yaml::to_string(&pod).unwrap()).unwrap();
+        }
 
         let settings = prepare_settings(&workdir, &testdata_dir);
 
@@ -199,6 +212,7 @@ mod tests {
                 .get(&test_case.base)
                 .unwrap_or_else(|| panic!("Unknown test case base: {}", test_case.base));
             let mut request = serialize_request_only(base).unwrap();
+            patch(&mut request, request_patch).unwrap();
             patch(&mut request, &test_case.patch).unwrap_or_else(|e| {
                 panic!(
                     "Failed to apply patch for test case {}: {}",
@@ -376,6 +390,28 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_cgroup_mount_extras() {
         runtests("createcontainer/cgroup_mount_extras").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_sandboxapi_resolver() {
+        runtests("createcontainer/sandboxapi_resolver").await;
+        // Reuse the fixture sequentially: prepare_workdir owns one directory
+        // per fixture, so concurrent variants would overwrite each other.
+        let pod_patch = serde_json::from_value(serde_json::json!([
+            {"op": "add", "path": "/spec/containers/0/securityContext/readOnlyRootFilesystem", "value": true}
+        ])).unwrap();
+        let request_patch = serde_json::from_value(serde_json::json!([
+            {"op": "replace", "path": "/OCI/Root/Readonly", "value": true},
+            {"op": "replace", "path": "/OCI/Mounts/8/options/2", "value": "ro"},
+            {"op": "replace", "path": "/OCI/Mounts/9/options/2", "value": "ro"}
+        ]))
+        .unwrap();
+        runtests_with_patches(
+            "createcontainer/sandboxapi_resolver",
+            &pod_patch,
+            &request_patch,
+        )
+        .await;
     }
 
     #[tokio::test]
