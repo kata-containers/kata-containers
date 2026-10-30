@@ -20,6 +20,9 @@ spec:
   containers:
   - image: quay.io/prometheus/busybox:latest
     name: container
+    securityContext:
+      capabilities:
+        add: ["SYSLOG"]
     volumeMounts:
     - name: dev-kmsg
       mountPath: /dev/kmsg
