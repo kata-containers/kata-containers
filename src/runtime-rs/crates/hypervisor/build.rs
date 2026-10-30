@@ -54,16 +54,9 @@ fn main() {
     use ttrpc_codegen::{Codegen, Customize, ProtobufCustomize};
 
     let protos = ["src/openvmm/protos/vmservice.proto"];
-    let proto_dependencies = [
-        "src/openvmm/protos/google/protobuf/empty.proto",
-        "src/openvmm/protos/google/protobuf/struct.proto",
-    ];
-
     // Only regenerate when a vendored proto input (or this script) changes.
     println!("cargo:rerun-if-changed=build.rs");
-    for proto in protos.iter().chain(&proto_dependencies) {
-        println!("cargo:rerun-if-changed={proto}");
-    }
+    println!("cargo:rerun-if-changed=src/openvmm/protos");
 
     Codegen::new()
         .out_dir("src/openvmm")
