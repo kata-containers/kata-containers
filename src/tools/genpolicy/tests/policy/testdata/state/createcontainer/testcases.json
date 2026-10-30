@@ -283,6 +283,27 @@
       "patch": []
     },
     {
+      "description": "reject an unexpected hostname mount on the Task API pause container",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/OCI/Mounts/-",
+          "value": {
+            "destination": "/etc/hostname",
+            "source": "/run/kata-containers/sandbox/hostname",
+            "type_": "bind",
+            "options": [
+              "rbind",
+              "rprivate",
+              "ro"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "description": "reject matching policy container with a different container_id",
       "base": "create-container",
       "allowed": false,

@@ -43,7 +43,7 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
-    sandbox_has_dns: bool,
+    sandbox_files: Vec<&'static str>,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -70,7 +70,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
-        sandbox_has_dns: bool,
+        sandbox_files: Vec<&'static str>,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -81,7 +81,7 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
-            sandbox_has_dns,
+            sandbox_files,
         }
     }
 
@@ -140,7 +140,7 @@ impl ContainerManager for VirtContainerManager {
             .await;
 
         let mut containers = self.containers.write().await;
-        if let Err(e) = container.create(spec, self.sandbox_has_dns).await {
+        if let Err(e) = container.create(spec, &self.sandbox_files).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }
