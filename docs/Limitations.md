@@ -177,15 +177,43 @@ has been exceeded and evicts the pod.
 
 At the time of writing, the filesystem metadata allocation with the current
 `block-plain` ext4 formatting options is expected to be approximately 0.08% of
-the logical filesystem size. The exact value depends on the ext4 formatting
-options and `e2fsprogs` version. The `block-encrypted` variant can incur
-additional encryption and integrity metadata overhead. In testing with a
-2.9 TB logical filesystem, this additional overhead was approximately 50 MB,
-compared with approximately 2.5 GB of total metadata allocation.
+the logical filesystem size. Most of it is the guest kernel zeroing every ext4
+inode table in the background after the first mount (`mkfs.ext4` leaves
+`lazy_itable_init` enabled and cannot mark the block groups of a block device
+as already zeroed). The exact value depends on the ext4 formatting options and
+`e2fsprogs` version. The `block-encrypted` variant can incur additional
+encryption and integrity metadata overhead. In testing with a 2.9 TB logical
+filesystem, this additional overhead was approximately 50 MB, compared with
+approximately 2.5 GB of total metadata allocation.
 
-Current operational mitigations are to provide enough `sizeLimit` headroom for
-filesystem metadata  (i.e. such that `sizeLimit` is greater than 0.08% of the
-host filesystem size) or place kubelet's volume data on a smaller dedicated
+For `block-plain`, the `emptydir_noinit_itable` key in the `[runtime]` section
+of the configuration file (off by default) makes the shim mount the guest
+filesystem with the ext4 `noinit_itable` option after `discard`. The guest then
+skips the background zeroing; inode table blocks are written only when inodes
+in them are allocated and dirtied, 4 KiB for every 32 inodes. With the option
+enabled, an `emptyDir` that the workload never writes to costs what `mkfs.ext4`
+itself writes (the superblock, group descriptors and bitmaps, plus the few
+inode table blocks that hold the root directory and `lost+found`): about 13 MB
+on a 790 GB host filesystem and about 20 MB on a 1.4 TB one, compared with
+about 641 MB and 1.1 GB respectively without it. A workload that creates many
+files or directories still grows the image by the inode table blocks it
+touches. The option has no effect on `block-encrypted`, whose image is
+formatted and mounted by the guest's confidential data hub without mount
+options from the shim.
+
+When `emptydir_noinit_itable` is enabled on a cluster that uses the agent
+policy, `emptyDir_plain.options` in `genpolicy-settings.json` must be set to
+exactly `["discard", "noinit_itable"]`, in that order, before pods are created
+with the new configuration. The policy compares a block-plain `emptyDir`'s
+storage options with that list exactly and in order, so with the default
+settings (`["discard"]`) block-plain `emptyDir` mounts are denied once the
+option is on, and with the updated settings they are denied while it is off.
+
+Current operational mitigations are to enable `emptydir_noinit_itable` for
+`block-plain` (and update the policy settings as described above), to provide
+enough `sizeLimit` headroom for filesystem metadata (i.e. such that `sizeLimit`
+is greater than 0.08% of the host filesystem size when the option is off or for
+`block-encrypted`), or to place kubelet's volume data on a smaller dedicated
 filesystem. There is currently no Kata configuration option that caps the
 block-backed `emptyDir` image size.
 

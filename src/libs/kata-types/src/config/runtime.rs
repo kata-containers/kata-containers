@@ -157,6 +157,16 @@ pub struct Runtime {
     #[serde(default)]
     pub emptydir_mode: String,
 
+    /// If enabled, a block-plain emptyDir is mounted in the guest with the ext4
+    /// `noinit_itable` option after `discard`, so the guest kernel does not zero
+    /// every inode table of the sparse, host-sized image in the background after
+    /// the first mount. Off by default because the agent policy pins the exact
+    /// option list (`emptyDir_plain.options` in genpolicy-settings.json), which
+    /// must then be set to `["discard", "noinit_itable"]`. It has no effect with
+    /// other `emptydir_mode` values.
+    #[serde(default)]
+    pub emptydir_noinit_itable: bool,
+
     /// Determines how VFIO devices should be be presented to the container.
     ///
     /// Options:
@@ -433,6 +443,28 @@ emptydir_mode = "block-plain"
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
         assert_eq!(&config.runtime.emptydir_mode, "shared-fs");
+    }
+
+    #[test]
+    fn test_emptydir_noinit_itable() {
+        // Off by default, so the option list pinned in genpolicy-settings.json
+        // keeps matching what the runtime sends.
+        let content = r#"
+[runtime]
+emptydir_mode = "block-plain"
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert!(!config.runtime.emptydir_noinit_itable);
+
+        let content = r#"
+[runtime]
+emptydir_mode = "block-plain"
+emptydir_noinit_itable = true
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert!(config.runtime.emptydir_noinit_itable);
     }
 
     #[test]
