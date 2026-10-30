@@ -42,7 +42,10 @@ setup_config_file() {
     if [[ "${action}" == "comment_out" ]]; then
         sudo sed -i -e 's/.*\('"${target_item}"'.*\)/#\1/g' "${kata_config_file}"
     else
-        sudo sed -i -e 's/.*\('"${target_item}"'\s*=\).*/\1 "'"${replacement}"'"/g' "${kata_config_file}"
+        # Booleans must stay unquoted to remain valid TOML
+        local quote='"'
+        [[ "${replacement}" =~ ^(true|false)$ ]] && quote=''
+        sudo sed -i -e 's/.*\('"${target_item}"'\s*=\).*/\1 '"${quote}${replacement}${quote}"'/g' "${kata_config_file}"
     fi
 }
 
@@ -55,6 +58,7 @@ show_config_file() {
 
 setup_hotplug() {
     local runtime=$1
+    local rootless=${2:-}
     echo "Set up the configuration file for Hotplug for ${runtime}"
     if [[ "${runtime}" == "runtime" ]]; then
         setup_config_file "vfio_mode" "replace" "vfio"
@@ -64,6 +68,11 @@ setup_hotplug() {
     elif [[ "${runtime}" == "runtime-rs" ]]; then
         setup_config_file "vfio_mode" "replace" "vfio" "runtime-rs"
         setup_config_file "cold_plug_vfio" "replace" "no-port" "runtime-rs"
+        if [[ "${rootless}" == "rootless" ]]; then
+            setup_config_file "rootless" "replace" "true" "runtime-rs"
+        else
+            setup_config_file "rootless" "replace" "false" "runtime-rs"
+        fi
         show_config_file "runtime-rs"
     else
         echo "Invalid runtime: ${runtime}" >&2
@@ -73,6 +82,7 @@ setup_hotplug() {
 
 setup_coldplug() {
     local runtime=$1
+    local rootless=${2:-}
     echo "Set up the configuration file for Coldplug for ${runtime}"
     if [[ "${runtime}" == "runtime" ]]; then
         setup_config_file "vfio_mode" "replace" "vfio"
@@ -82,6 +92,11 @@ setup_coldplug() {
     elif [[ "${runtime}" == "runtime-rs" ]]; then
         setup_config_file "vfio_mode" "replace" "vfio" "runtime-rs"
         setup_config_file "cold_plug_vfio" "replace" "root-port" "runtime-rs"
+        if [[ "${rootless}" == "rootless" ]]; then
+            setup_config_file "rootless" "replace" "true" "runtime-rs"
+        else
+            setup_config_file "rootless" "replace" "false" "runtime-rs"
+        fi
         show_config_file "runtime-rs"
     else
         echo "Invalid runtime: ${runtime}" >&2
@@ -207,6 +222,15 @@ run_test() {
     start_time=$(date +"%Y-%m-%d %H:%M:%S")
     [[ -n "${dev_index}" ]] || { echo "No dev_index" >&2; exit 1; }
 
+    local device_path="${dev_base}/${dev_index}"
+    if [[ "${test_message}" == *cdev* ]]; then
+        # Rootless uses the iommufd cdev, e.g. /dev/vfio/devices/vfio0
+        local vfio_dev
+        vfio_dev=$(find "${sys_device_base}/${mdev_uuid}/vfio-dev" -mindepth 1 -maxdepth 1 -name 'vfio*' -printf '%f\n' | head -n1)
+        [[ -n "${vfio_dev}" ]] || { echo "No vfio-dev under ${sys_device_base}/${mdev_uuid}/vfio-dev" >&2; exit 1; }
+        device_path="${dev_base}/devices/${vfio_dev}"
+    fi
+
     if [[ "${runtime}" == "runtime" ]]; then
         local runtime_type="io.containerd.run.kata.v2"
     elif [[ "${runtime}" == "runtime-rs" ]]; then
@@ -223,7 +247,7 @@ run_test() {
     # Create a container and run the test
     if sudo ctr run --runtime "${runtime_type}" --rm \
         --privileged --privileged-without-host-devices \
-        --device "${dev_base}/${dev_index}" "${test_image_name}" "test-${run_index}" \
+        --device "${device_path}" "${test_image_name}" "test-${run_index}" \
         -- bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"; then
         result=0
     else
@@ -301,6 +325,12 @@ run_tests() {
 
     setup_coldplug "runtime-rs"
     run_test "4" "runtime-rs" "Test can assign a CEX device inside the guest via VFIO-AP Coldplug" "&& zcrypttest -a -v"
+
+    setup_hotplug "runtime-rs"
+    run_test "5" "runtime-rs" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug (cdev)" "&& zcrypttest -a -v"
+
+    setup_coldplug "runtime-rs" "rootless"
+    run_test "6" "runtime-rs" "Test can assign a CEX device inside rootless guest via VFIO-AP Coldplug (iommufd+cdev)" "&& zcrypttest -a -v"
 }
 
 main() {

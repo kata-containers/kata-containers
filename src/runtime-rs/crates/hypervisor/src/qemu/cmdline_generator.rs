@@ -2646,18 +2646,35 @@ impl PCIeVfioDevice {
     }
 }
 
-/// s390x VFIO-AP device: `-device vfio-ap,sysfsdev=<path>`
+/// s390x VFIO-AP device.
+///
+/// - Legacy group: `-device vfio-ap,sysfsdev=<path>`
+/// - IOMMUFD with an inherited cdev fd (mirrors `vfio-pci`, which drops `host=`
+///   when `fd=` is used): `-device vfio-ap,id=<id>,iommufd=<obj>,fd=<fd>`
 struct VfioApDevice {
     sysfs_path: String,
+    id: Option<String>,
+    iommufd: Option<String>,
+    fd: Option<File>,
 }
 
 #[async_trait]
 impl ToQemuParams for VfioApDevice {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        Ok(vec![
-            "-device".to_string(),
-            format!("vfio-ap,sysfsdev={}", self.sysfs_path),
-        ])
+        let mut params = String::from("vfio-ap");
+        if self.fd.is_none() {
+            write!(params, ",sysfsdev={}", self.sysfs_path).unwrap();
+        }
+        if let Some(id) = &self.id {
+            write!(params, ",id={}", id).unwrap();
+        }
+        if let Some(iommufd) = &self.iommufd {
+            write!(params, ",iommufd={}", iommufd).unwrap();
+        }
+        if let Some(fd) = &self.fd {
+            write!(params, ",fd={}", fd.as_raw_fd()).unwrap();
+        }
+        Ok(vec!["-device".to_string(), params])
     }
 }
 
@@ -3718,11 +3735,34 @@ impl<'a> QemuCmdLine<'a> {
 
     /// Adds an s390x VFIO-AP device to the QEMU command line.
     ///
-    /// Generates: `-device vfio-ap,sysfsdev=<sysfs_path>`
-    pub fn add_vfio_ap_device(&mut self, sysfs_path: &str) -> Result<()> {
-        self.devices.push(Box::new(VfioApDevice {
+    /// Without `fd_config` (legacy group) generates:
+    /// `-device vfio-ap,sysfsdev=<sysfs_path>`
+    ///
+    /// With `fd_config` (IOMMUFD cdev) the shared IOMMUFD object is emitted and the
+    /// opened cdev fd is passed, generating:
+    /// `-object iommufd,id=iommufd0,fd=<fd>` and
+    /// `-device vfio-ap,id=<id>,iommufd=iommufd0,fd=<fd>`
+    pub fn add_vfio_ap_device(
+        &mut self,
+        sysfs_path: &str,
+        fd_config: Option<&VfioDeviceFdConfig>,
+    ) -> Result<()> {
+        let mut ap_device = VfioApDevice {
             sysfs_path: sysfs_path.to_string(),
-        }));
+            id: None,
+            iommufd: None,
+            fd: None,
+        };
+
+        if let Some(fd_config) = fd_config {
+            self.add_iommufd_object(VFIO_IOMMUFD_ID, Some(fd_config.iommufd_dev.as_path()))?;
+            ap_device.id = Some(fd_config.qemu_device_id.clone());
+            ap_device.iommufd = Some(VFIO_IOMMUFD_ID.to_string());
+            ap_device.fd = Some(open_qemu_device_fd(&fd_config.vfio_cdev)?);
+            self.requires_memlock = true;
+        }
+
+        self.devices.push(Box::new(ap_device));
         Ok(())
     }
 
@@ -4358,6 +4398,96 @@ mod tests {
         // One IOMMUFD fd plus one VFIO cdev fd per device.
         assert_eq!(inherited_fds.len(), 3);
         assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_ap_legacy_uses_sysfsdev_only() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-ap-legacy", &config).unwrap();
+
+        cmdline
+            .add_vfio_ap_device("/sys/devices/vfio_ap/matrix/uuid", None)
+            .unwrap();
+        let params = cmdline.build().await.unwrap();
+
+        assert!(has_qemu_arg(
+            &params,
+            "-device",
+            "vfio-ap,sysfsdev=/sys/devices/vfio_ap/matrix/uuid"
+        ));
+        assert!(!params.iter().any(|arg| arg.starts_with("iommufd,")));
+        assert!(!cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_ap_uses_inherited_device_fds() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-ap-fds", &config).unwrap();
+        let fd_config = VfioDeviceFdConfig {
+            iommufd_dev: PathBuf::from("/dev/null"),
+            vfio_cdev: PathBuf::from("/dev/null"),
+            qemu_device_id: "vfio-vfio-ap-vfio0-0".to_string(),
+        };
+
+        cmdline
+            .add_vfio_ap_device("/sys/devices/vfio_ap/matrix/uuid", Some(&fd_config))
+            .unwrap();
+        let params = cmdline.build().await.unwrap();
+
+        let iommufd = params
+            .windows(2)
+            .find(|args| args[0] == "-object" && args[1].starts_with("iommufd,"))
+            .expect("missing IOMMUFD object");
+        assert!(contains_param(&iommufd[1..2], "id=iommufd0"));
+        assert!(iommufd[1].split(',').any(|param| param.starts_with("fd=")));
+
+        let ap = params
+            .windows(2)
+            .find(|args| args[0] == "-device" && args[1].starts_with("vfio-ap,"))
+            .expect("missing vfio-ap device");
+        assert!(contains_param(&ap[1..2], "id=vfio-vfio-ap-vfio0-0"));
+        assert!(contains_param(&ap[1..2], "iommufd=iommufd0"));
+        assert!(ap[1].split(',').any(|param| param.starts_with("fd=")));
+        assert!(!ap[1].split(',').any(|param| param.starts_with("sysfsdev=")));
+        assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_ap_and_pci_share_iommufd() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-ap-pci-shared", &config).unwrap();
+        let fd_config = VfioDeviceFdConfig {
+            iommufd_dev: PathBuf::from("/dev/null"),
+            vfio_cdev: PathBuf::from("/dev/null"),
+            qemu_device_id: "vfio-ap-0".to_string(),
+        };
+
+        cmdline
+            .add_vfio_ap_device("/sys/devices/vfio_ap/matrix/uuid", Some(&fd_config))
+            .unwrap();
+        cmdline
+            .add_pcie_vfio_device(
+                VfioDeviceConfig::new("0000:21:00.0", 9, 10)
+                    .with_vfio_bus("rp0")
+                    .with_device_fds("/dev/null", "/dev/null", "vfio-pci-0"),
+            )
+            .unwrap();
+        let params = cmdline.build().await.unwrap();
+
+        let iommufds = params
+            .windows(2)
+            .filter(|args| args[0] == "-object" && args[1].starts_with("iommufd,"))
+            .count();
+        assert_eq!(iommufds, 1);
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 

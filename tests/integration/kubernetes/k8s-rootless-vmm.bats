@@ -107,6 +107,9 @@ qemu_rootless_skip_reason() {
 	# - the NVIDIA GPU TEE (SNP, TDX) runtime-rs handlers: for NVIDIA's TEE
 	# CI machine path, we will make use of kata-deploy to configure for rootless
 	# execution. For the time being, The SNP machine was configured by hand.
+	# - the IBM Secure Execution for Linux (SEL) runtime-rs handler
+	# (qemu-se-runtime-rs): kata-deploy provisions /dev/uv for the rootless
+	# VMM user when rootless is configured.
 	# - the non-TEE qemu-coco-dev handlers: these do not need device/socket access
 	# provisioning.
 	# Exclusions: as documented below.
@@ -129,12 +132,6 @@ qemu_rootless_skip_reason() {
 			# rootless VMM can join. Enable after the TDX runner setup is in place.
 			qemu-tdx-runtime-rs)
 				echo "rootless TDX QGS socket provisioning is pending"
-				return 0
-				;;
-			# IBM Secure Execution runners need /dev/uv to have scoped non-root
-			# access. Enable after the runner setup is in place.
-			qemu-se-runtime-rs)
-				echo "rootless IBM Secure Execution host access provisioning is pending"
 				return 0
 				;;
 		esac

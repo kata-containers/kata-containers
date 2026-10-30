@@ -93,6 +93,8 @@ shims:
     supportedArches:
       - s390x
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: true
     containerd:
       snapshotter: nydus
       forceGuestPull: false

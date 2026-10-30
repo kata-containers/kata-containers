@@ -7,7 +7,7 @@ use super::cmdline_generator::{get_network_device, QemuCmdLine};
 use super::qmp::Qmp;
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIePort;
-use crate::qemu::cmdline_generator::VfioDeviceConfig;
+use crate::qemu::cmdline_generator::{VfioDeviceConfig, VfioDeviceFdConfig};
 use crate::qemu::qmp::get_qmp_socket_path;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, selinux,
@@ -307,7 +307,17 @@ impl QemuInner {
                     if device_type == VfioDeviceType::MediatedAp {
                         // s390x VFIO-AP: -device vfio-ap,sysfsdev=<path>
                         // No PCIe root port, no guest_pci_path.
-                        cmdline.add_vfio_ap_device(&ap_sysfs_path)?;
+                        // IOMMUFD cdev: pass /dev/iommu and the cdev as inherited fds,
+                        // like vfio-pci.
+                        let ap_fd_config = iommufd
+                            .as_ref()
+                            .zip(devices.first().and_then(|d| d.vfio_cdev.as_ref()))
+                            .map(|(iommufd, cdev)| VfioDeviceFdConfig {
+                                iommufd_dev: iommufd.iommufd_dev.clone(),
+                                vfio_cdev: cdev.devnode.clone(),
+                                qemu_device_id: format!("vfio-{vfio_device_id}-0"),
+                            });
+                        cmdline.add_vfio_ap_device(&ap_sysfs_path, ap_fd_config.as_ref())?;
                         info!(
                             sl!(),
                             "Completed VFIOModern AP coldplug for sysfsdev: {}", ap_sysfs_path

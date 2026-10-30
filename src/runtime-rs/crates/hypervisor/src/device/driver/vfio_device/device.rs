@@ -25,7 +25,7 @@ pub type BusPortId = (String, u32, u32);
 
 #[derive(Debug, Default, Clone)]
 pub struct VfioDeviceBase {
-    /// Host device path, typically /dev/vfio/N (legacy)
+    /// Host device path: /dev/vfio/N (legacy) or /dev/vfio/devices/vfioN (IOMMUFD cdev)
     pub host_path: String,
 
     /// Primary PCI Bus-Device-Function (BDF) address
@@ -40,7 +40,8 @@ pub struct VfioDeviceBase {
     /// Specifies the PCIe port type (e.g., Root Port, Downstream Port)
     pub port: PCIePort,
 
-    /// Character device node for the IOMMU group (/dev/vfio/X)
+    /// Character device node for the IOMMU group (/dev/vfio/X); for IOMMUFD-only
+    /// devices (including VFIO-AP) this is the cdev (/dev/vfio/devices/vfioX)
     pub iommu_group_devnode: PathBuf,
 
     /// Character device node for the specific VFIO device (/dev/vfio/devices/vfioX)
@@ -106,8 +107,15 @@ impl VfioDeviceModern {
         let group_path = vfio_modern_group_discovery_path(base);
 
         // s390x VFIO-AP: mediated AP devices have no PCI BDF; discover them separately.
-        if is_vfio_ap_device(&group_path) {
-            let device = discover_vfio_ap_device(&group_path)?;
+        // The AP node is either the legacy group (`/dev/vfio/N`) or an IOMMUFD cdev
+        // (`/dev/vfio/devices/vfioN`), which may come from `iommu_device_node`.
+        let ap_path = base
+            .iommu_device_node
+            .iter()
+            .chain(std::iter::once(&group_path))
+            .find(|p| is_vfio_ap_device(p));
+        if let Some(ap_path) = ap_path {
+            let device = discover_vfio_ap_device(ap_path)?;
             let mut config = base.clone();
             config.ap_devices = device.ap_devices.clone();
             return Ok(Self {
