@@ -2,6 +2,10 @@
 
 * [Code of Conduct](#code-of-conduct)
 * [AI generated code](#ai-generated-code)
+* [Contribution process](#contribution-process)
+    * [Adding new features](#adding-new-features)
+    * [Reporting bugs](#reporting-bugs)
+    * [Fixing bugs](#fixing-bugs)
 * [Pull requests](#pull-requests)
 * [GitHub basic setup](#github-basic-setup)
     * [Prerequisites](#prerequisites)
@@ -10,7 +14,6 @@
     * [Certificate of Origin](#certificate-of-origin)
 * [GitHub best practices](#github-best-practices)
     * [Submit issues before PRs](#submit-issues-before-prs)
-    * [Issue tracking](#issue-tracking)
     * [Closing issues](#closing-issues)
 * [GitHub workflow](#github-workflow)
     * [Configure your environment](#configure-your-environment)
@@ -89,6 +92,48 @@ understand the trust model and the implications yourself, and ensure that the fi
 that breaks the trust model and not just a bug (in which case an issue is welcomed), then write your own focused
 description rather than submitting whatever the AI produced.
 
+## Contribution process
+
+Contributing to Kata Containers is a simple workflow, which mostly relies on GitHub and some lightweight
+processes, all of which is described in this document.
+
+### Adding new features
+
+Smaller changes don’t require a detailed design document. However, when you are adding new functionality
+that changes the behavior of any existing component of the runtime, introducing a new interface or making changes
+that affect the architecture of the project, you need to create a GitHub Issue with a description of what
+you are planning to do.
+
+Please make sure to describe:
+- The use case for the feature you are adding
+- The changes you are planning to introduce, including
+  - New interfaces or changes to existing ones
+  - Architectural changes
+  - Components impacted, ie: kata agent, kata-deploy, etc
+- Impact on the CI system, if any
+
+Before submitting any bigger change for review, please make sure you get feedback from the community on
+your plans and design.
+
+### Reporting bugs
+
+If you stumble on any unexpected behavior that seems like a bug, please check the existing GitHub Issues
+to see if someone has already reported the problem. If your quick search comes up empty, please open a new
+Issue to describe the bug you came across.
+
+If the bug you discovered appears to be a security vulnerability, please report it as a private issue
+first as described in [SECURITY.md](https://github.com/kata-containers/kata-containers/blob/main/SECURITY.md)
+in this repo.
+
+### Fixing bugs
+
+If you already created a GitHub Issue, or found one that you would like to fix, you can go ahead with
+implementing your fix. While working on the code, don’t forget to add test coverage for the changes that
+you make.
+
+Please refer to the Issue number by using the ‘Fixes’ tag in at least one of the commits in your PR, this
+will make sure the Issue is closed if your fix gets accepted and merged.
+
 ## Pull requests
 
 All the repositories accept contributions via [GitHub Pull requests (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests). Submit PRs by following the [GitHub workflow](#github-workflow).
@@ -135,14 +180,10 @@ used by the Linux kernel project.
 
 ## GitHub best practices
 
-### Submit issues before PRs
+### Submit Issues before PRs
 
-It can be helpful to raise a GitHub issue before starting work on a PR for a new feature/bug to let the community
-know that you are planning to work on an item.
-
-### Issue tracking
-
-To report a bug that is not already documented, please open a GitHub issue for the kata-containers repo.
+Even if your work doesn’t require a design document, please raise a GitHub Issue before starting
+work on a PR for a new feature/bug to let the community know that you are planning to work on an item.
 
 ### Closing issues
 
