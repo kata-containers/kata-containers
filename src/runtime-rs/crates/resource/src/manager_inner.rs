@@ -1217,6 +1217,8 @@ impl Persist for ResourceManagerInner {
         resource_args: Self::ConstructorArgs,
         resource_state: Self::State,
     ) -> Result<Self> {
+        // Cleanup reads it, for the sandbox bind mounts to unmount for one.
+        let toml_config = Arc::new(resource_args.config.clone());
         let args = CgroupArgs {
             sid: resource_args.sid.clone(),
             config: resource_args.config,
@@ -1264,7 +1266,7 @@ impl Persist for ResourceManagerInner {
                 resource_state.cgroup_state.unwrap_or_default(),
             )
             .await?,
-            toml_config: Arc::new(TomlConfig::default()),
+            toml_config,
             cpu_resource: CpuResource::default(),
             mem_resource,
             swap_resource,
