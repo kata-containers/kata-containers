@@ -49,6 +49,16 @@ ifeq ($(INIT_DATA),yes)
     override EXTRA_RUSTFEATURES += init-data
 endif
 
+##VAR CC_OP=yes|no define if agent enables the cc-op feature
+CC_OP ?= yes
+
+# Enable the init data fature of rust build
+ifeq ($(CC_OP),yes)
+    override EXTRA_RUSTFEATURES += cc-op
+endif
+
+include ../../utils.mk
+
 ##VAR USE_DEVMAPPER=yes|no define if agent enables dm-verity (devicemapper) support
 USE_DEVMAPPER ?= no
 

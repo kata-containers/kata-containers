@@ -120,6 +120,13 @@ use std::path::PathBuf;
 
 use kata_types::k8s;
 
+#[cfg(feature = "cc-op")]
+use kata_agent_cc_op::{
+    get_init_crypto, is_agent_private_key_set, is_ccop_set, set_agent_private_key,
+    set_random_bytes, verify_ccop_args, CryptoRunData as OtherCryptoRunData,
+};
+use rustjail::process::CryptoRunData;
+
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
@@ -409,8 +416,130 @@ impl AgentService {
             return Err(anyhow!(nix::Error::EINVAL));
         };
 
+        #[cfg(not(feature = "cc-op"))]
+        let _create_crypto_params: Option<CryptoRunData> = None;
+
+        #[cfg(feature = "cc-op")]
+        let mut create_crypto_params = None;
+
+        #[cfg(feature = "cc-op")]
+        if is_ccop_set() {
+            let annotations = oci.annotations().as_ref();
+
+            let sandbox_id = &annotations
+                .and_then(|a| a.get("io.kubernetes.cri.sandbox-id"))
+                .expect("unable_to_sandbox_id");
+
+            let mut flag = false;
+            if *sandbox_id == &cid {
+                flag = true
+            }
+
+            // Provision the kata-agent private key from trustee on the sandbox
+            // (pause) container — flag == true means this container's exec-id
+            // matches the sandbox-id, i.e. it is the sandbox container, not a
+            // workload container. We do this exactly once: if the key is already
+            // set (e.g. due to a retry) we skip the fetch.
+            if flag && !is_agent_private_key_set() {
+                let pod_name = annotations
+                    .and_then(|a| a.get("io.kubernetes.cri.sandbox-name"))
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                let pod_namespace = annotations
+                    .and_then(|a| a.get("io.kubernetes.cri.sandbox-namespace"))
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                let resource_path = format!(
+                    "kbs+credgen:///credentials?name={pod_name}&ns={pod_namespace}&secret_name=ccop_p256&secret_type=cert&kind=self_signed_ca&algorithm=ec_p256"
+                );
+
+                // Fetch the ServerSecret JSON from trustee. For a cert/ec_p256 secret
+                // the response is a flat object:
+                //   {
+                //     "secret_name":   "ccop_p256",
+                //     "secret_type":   "cert",
+                //     "kind":          "self_signed_ca",
+                //     "algorithm":     "ec_p256",
+                //     "material_type": "Cert",
+                //     "private_key":   [45, 45, ...]   ← PKCS#8 PEM bytes
+                //     "cert":          [45, 45, ...]
+                //   }
+                // ServerMaterial is serialised with #[serde(tag = "material_type")]
+                // and #[serde(flatten)], so all fields are at the top level.
+                let raw = confidential_data_hub::get_cdh_resource(&resource_path)
+                    .await
+                    .context(anyhow!(
+                        "Failed to fetch kata-agent private key from trustee at {resource_path}. \
+                        Ensure the key broker service is reachable and the resource path is correct."
+                    ))?;
+
+                // Minimal deserialisation struct matching the ServerSecret shape.
+                // Only the field we need is declared; serde ignores the rest.
+                #[derive(serde::Deserialize)]
+                struct ServerSecret {
+                    private_key: Vec<u8>,
+                }
+
+                let server_secret: ServerSecret = serde_json::from_slice(&raw)
+                    .context("Failed to deserialise ServerSecret from trustee response")?;
+
+                // private_key holds the raw bytes of a PKCS#8 PEM string.
+                let pem_str = std::str::from_utf8(&server_secret.private_key)
+                    .context("private_key returned by trustee is not valid UTF-8")?;
+
+                set_agent_private_key(pem_str).context("Failed to store kata-agent private key")?;
+
+                // Fetch the symmetric key from trustee. For secret_type=symmetric
+                // the response is a flat object:
+                //   {
+                //     "secret_name":   "ccop_symmetric",
+                //     "secret_type":   "symmetric",
+                //     "material_type": "Symmetric",
+                //     "key":           [12, 34, ...]   ← raw key bytes
+                //   }
+                let sym_resource_path = format!(
+                    "kbs+credgen:///credentials?name={pod_name}&ns={pod_namespace}&secret_name=ccop_symmetric&secret_type=symmetric"
+                );
+                let raw_sym = confidential_data_hub::get_cdh_resource(&sym_resource_path)
+                    .await
+                    .context(anyhow!(
+                        "Failed to fetch symmetric key from trustee at {sym_resource_path}. \
+                        Ensure the key broker service is reachable and the resource path is correct."
+                    ))?;
+
+                // Minimal deserialisation struct matching the Symmetric ServerSecret shape.
+                // Only the field we need is declared; serde ignores the rest.
+                #[derive(serde::Deserialize)]
+                struct SymmetricSecret {
+                    key: Vec<u8>,
+                }
+
+                let sym_secret: SymmetricSecret = serde_json::from_slice(&raw_sym).context(
+                    "Failed to deserialise symmetric ServerSecret from trustee response",
+                )?;
+
+                set_random_bytes(sym_secret.key)
+                    .context("Failed to store symmetric key from trustee")?;
+            }
+
+            let crypto_param: OtherCryptoRunData = get_init_crypto()?;
+            let mut create_crypto = CryptoRunData::from(&crypto_param);
+            create_crypto.set_has_sandbox_id(flag);
+            create_crypto_params = Some(create_crypto);
+        }
+
         let new_p = confidential_data_hub::image::get_process(p, is_pod_sandbox, &req.storages)?;
+
+        #[cfg(not(feature = "cc-op"))]
         let p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
+
+        #[cfg(feature = "cc-op")]
+        let mut p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
+
+        #[cfg(feature = "cc-op")]
+        if is_ccop_set() {
+            p.crypto_run_data = create_crypto_params;
+        }
 
         // if starting container failed, we will do some rollback work
         // to ensure no resources are leaked.
@@ -500,6 +629,24 @@ impl AgentService {
             .into_option()
             .ok_or_else(|| anyhow!("Unable to parse process from ExecProcessRequest"))?;
 
+        #[cfg(not(feature = "cc-op"))]
+        let _exec_crypto_params: Option<CryptoRunData> = None;
+
+        #[cfg(feature = "cc-op")]
+        let mut exec_crypto_params = None;
+
+        #[cfg(feature = "cc-op")]
+        if is_ccop_set() {
+            let crypto_param: OtherCryptoRunData = verify_ccop_args(process.Args.clone())?;
+
+            let exec_crypto = CryptoRunData::from(&crypto_param);
+
+            if let Some((args, _, _, _)) = exec_crypto.as_exec_mode() {
+                process.Args = args.clone();
+            }
+            exec_crypto_params = Some(exec_crypto);
+        }
+
         // Apply any necessary corrections for PCI addresses
         update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
@@ -509,7 +656,17 @@ impl AgentService {
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = process.into();
+
+        #[cfg(not(feature = "cc-op"))]
         let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
+
+        #[cfg(feature = "cc-op")]
+        let mut p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
+
+        #[cfg(feature = "cc-op")]
+        if is_ccop_set() {
+            p.crypto_run_data = exec_crypto_params;
+        }
 
         let ctr = sandbox
             .get_container(&cid)
@@ -804,7 +961,54 @@ impl AgentService {
             };
 
             let writer = writer.ok_or_else(|| anyhow!(ERR_CANNOT_GET_WRITER))?;
-            writer.lock().await.write_all(req.data.as_slice()).await?;
+
+            let data = req.data.as_slice();
+
+            #[cfg(feature = "cc-op")]
+            if is_ccop_set() {
+                // Attach/logs mode does not support en/decryption in this release;
+                // skip the cc-op processing path and fall through to the plain write.
+                let is_exec_mode = {
+                    let mut sandbox = self.sandbox.lock().await;
+                    let p = sandbox
+                        .find_container_process(cid.as_str(), eid.as_str())
+                        .map_err(sandbox_err_to_ttrpc)?;
+                    matches!(p.crypto_run_data, Some(CryptoRunData::ExecMode { .. }))
+                };
+
+                if is_exec_mode {
+                    // Encrypt the data while holding the sandbox lock, then drop the
+                    // lock before writing.  Holding the lock across write_all() would
+                    // block the signal handler (which also needs the sandbox lock)
+                    // if the container's stdin pipe buffer is full, causing WaitProcess
+                    // to never return and the pod to hang on deletion.
+                    let processed: Option<Vec<u8>> = {
+                        let mut sandbox = self.sandbox.lock().await;
+                        let p = sandbox
+                            .find_container_process(cid.as_str(), eid.as_str())
+                            .map_err(sandbox_err_to_ttrpc)?;
+
+                        if let Some(proc) = &p.stream_processor {
+                            let mut guard = proc.lock().await;
+                            Some(guard.process_input(data)?)
+                        } else {
+                            None
+                        }
+                        // sandbox lock dropped here
+                    };
+
+                    if let Some(ref encrypted) = processed {
+                        writer.lock().await.write_all(encrypted).await?;
+                    }
+                } else {
+                    writer.lock().await.write_all(data).await?;
+                }
+            } else {
+                writer.lock().await.write_all(data).await?;
+            }
+
+            #[cfg(not(feature = "cc-op"))]
+            writer.lock().await.write_all(data).await?;
         }
 
         Ok(resp)
@@ -819,11 +1023,49 @@ impl AgentService {
         let eid = &req.exec_id;
 
         let term_exit_notifier;
+        let adjusted_len;
+        #[cfg(feature = "cc-op")]
+        #[allow(unused_assignments)]
+        // initialised as default; overwritten inside the sandbox lock below
+        let mut attach_logs_mode = false;
         let reader = {
             let mut sandbox = self.sandbox.lock().await;
             let p = sandbox
                 .find_container_process(cid.as_str(), eid.as_str())
                 .map_err(sandbox_err_to_ttrpc)?;
+
+            #[cfg(feature = "cc-op")]
+            {
+                // Track whether this stream belongs to an attach/logs session.
+                // Attach/logs mode does not support en/decryption in this release,
+                // so the output processing step must be skipped for such processes.
+                attach_logs_mode = matches!(
+                    p.crypto_run_data,
+                    Some(CryptoRunData::AttachLogsMode { .. })
+                );
+
+                adjusted_len = if is_ccop_set() {
+                    match &p.crypto_run_data {
+                        // Keep original length since AttachLogsMode is not supported.
+                        Some(CryptoRunData::AttachLogsMode { .. }) => req.len as usize,
+                        // ExecMode uses AEAD only; overhead is at most 40 bytes
+                        // magic + length|counter + nonce|counter + tag ).
+                        Some(CryptoRunData::ExecMode { .. }) => {
+                            (req.len as usize).saturating_sub(40)
+                        }
+                        // cc-op globally set but no crypto data on this process —
+                        // pass the length through unchanged.
+                        None => req.len as usize,
+                    }
+                } else {
+                    req.len as usize
+                };
+            }
+
+            #[cfg(not(feature = "cc-op"))]
+            {
+                adjusted_len = req.len as usize;
+            }
 
             term_exit_notifier = p.term_exit_notifier.clone();
 
@@ -839,11 +1081,10 @@ impl AgentService {
                 p.get_reader(StreamType::ParentStderr)
             }
         };
-
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
         // Create one in-flight read future and reuse it in both branches.
-        let read_fut = read_stream(&reader, req.len as usize);
+        let read_fut = read_stream(&reader, adjusted_len);
         tokio::pin!(read_fut);
 
         // Cancellation and polling model: Rust async is polled, not preempted.
@@ -858,6 +1099,7 @@ impl AgentService {
         // - Future::poll: https://doc.rust-lang.org/std/future/trait.Future.html
         // - Waker: https://doc.rust-lang.org/std/task/struct.Waker.html
         // - Tokio select!: https://docs.rs/tokio/latest/tokio/macro.select.html
+        // let mut data = tokio::select! {
         let data = tokio::select! {
             // Use `biased` to make the polling order deterministic (top-to-bottom).
             // This ensures that *when multiple branches are ready at the same time*,
@@ -873,6 +1115,7 @@ impl AgentService {
             biased;
 
             v = &mut read_fut => v?,
+
             _ = term_exit_notifier.notified() => {
                 // Drain-after-exit rationale:
                 // The process has exited, but the data may still be buffered in the pipe/pty.
@@ -896,6 +1139,28 @@ impl AgentService {
                     }
                 }
             }
+        };
+
+        #[cfg(feature = "cc-op")]
+        let data = if is_ccop_set() && !attach_logs_mode && !data.is_empty() {
+            // Only encrypt non-empty data.  An empty vector is the EOF sentinel
+            // used to signal stream end to the shim.  Passing it through
+            // process_output() would encrypt zero bytes into a non-empty
+            // ciphertext, which the shim would treat as real data and loop
+            // forever calling ReadStdout/ReadStderr without ever seeing EOF.
+            let mut sandbox = self.sandbox.lock().await;
+            let p = sandbox
+                .find_container_process(cid.as_str(), eid.as_str())
+                .map_err(sandbox_err_to_ttrpc)?;
+
+            if let Some(proc) = &p.stream_processor {
+                let mut guard = proc.lock().await;
+                guard.process_output(&data)?
+            } else {
+                data
+            }
+        } else {
+            data
         };
 
         let mut resp = ReadStreamResponse::new();
@@ -981,9 +1246,22 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        let policy_state = is_allowed_stateful(&req).await?;
-        self.do_exec_process(req).await.map_ttrpc_err(same)?;
-        policy_state.commit().await?;
+
+        #[cfg(feature = "cc-op")]
+        {
+            if !is_ccop_set() {
+                is_allowed(&req).await?;
+            }
+            self.do_exec_process(req).await.map_ttrpc_err(same)?;
+        }
+
+        #[cfg(not(feature = "cc-op"))]
+        {
+            let policy_state = is_allowed_stateful(&req).await?;
+            self.do_exec_process(req).await.map_ttrpc_err(same)?;
+            policy_state.commit().await?;
+        }
+
         Ok(Empty::new())
     }
 

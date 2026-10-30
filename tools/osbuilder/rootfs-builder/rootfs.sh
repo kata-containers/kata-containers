@@ -37,6 +37,7 @@ PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
 DNF_CONF=${DNF_CONF:-""}
 DISTRO_REPO=${DISTRO_REPO:-""}
 PKG_MANAGER=${PKG_MANAGER:-""}
+CC_OP=${CC_OP:-no}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 # shellcheck source=../scripts/lib.sh
@@ -205,6 +206,9 @@ COCO_GUEST_COMPONENTS_TARBALL       Path to the kata-coco-guest-components.tar.z
                                     If set, the tarball will be unpacked onto the rootfs.
                                     Default value: <not set>
 
+CC_OP               When set to "yes", enable confidential containers ops in the kata-agent.
+
+                    Default value: no
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
 
@@ -667,6 +671,7 @@ build_rootfs_distro()
 			--env ROOTFS_ONLY="${ROOTFS_ONLY}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
+			--env CC_OP="${CC_OP}" \
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
@@ -839,7 +844,7 @@ EOF
 			fi
 		fi
 		make clean
-		make LIBC="${LIBC}" INIT="${AGENT_INIT}" SECCOMP="${SECCOMP}" AGENT_POLICY="${AGENT_POLICY}"
+		make LIBC="${LIBC}" INIT="${AGENT_INIT}" SECCOMP="${SECCOMP}" CC_OP="${CC_OP}" AGENT_POLICY="${AGENT_POLICY}"
 		make install DESTDIR="${ROOTFS_DIR}" LIBC="${LIBC}" INIT="${AGENT_INIT}"
 		if [[ "${SECCOMP}" == "yes" ]]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
