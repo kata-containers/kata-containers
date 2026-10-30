@@ -122,16 +122,29 @@ impl ServiceManager {
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
         let state_dir = persist::state_dir(sid).context("sandbox state directory")?;
+        // Whether there was a state to clean up from is decided before the
+        // attempt: a failed cleanup keeps the state for a retry, but if it
+        // could not, a missing state after the failure is not a reason to
+        // remove the directory as well. Without a state to begin with there
+        // is nothing to retry from, so the directory goes either way.
+        let had_state = state_dir.join(persist::PERSIST_FILE).exists();
         if let Err(e) = handler.cleanup().await {
-            // The state is the only record of what is left on the host, so a
-            // later delete can still retry.
-            if state_dir.join(persist::PERSIST_FILE).exists() {
+            if had_state {
+                // The state is the only record of what is left on the host, so a
+                // later delete can still retry.
                 error!(
                     sl!(),
                     "failed to clean up runtime state, keeping {} for a retry: {:#}",
                     state_dir.display(),
                     e
                 );
+                if !state_dir.join(persist::PERSIST_FILE).exists() {
+                    error!(
+                        sl!(),
+                        "the sandbox state of {} is gone, a retry cannot recover what is left",
+                        state_dir.display()
+                    );
+                }
                 return Ok(());
             }
             warn!(sl!(), "failed to clean up runtime state, {}", e);
