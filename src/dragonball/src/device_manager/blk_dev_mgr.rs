@@ -9,8 +9,6 @@
 //! Device manager for virtio-blk and vhost-user-blk devices.
 use std::convert::TryInto;
 use std::fs::OpenOptions;
-use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
@@ -23,7 +21,13 @@ use dbs_device::DeviceIo;
 use dbs_pci::VirtioPciDevice;
 use dbs_upcall::{DevMgrResponse, UpcallClientResponse};
 use dbs_virtio_devices as virtio;
-use dbs_virtio_devices::block::{aio::Aio, io_uring::IoUring, Block, LocalFile, Ufile};
+use dbs_virtio_devices::block::{
+    build_backend, detect_disk_format, BackendOpenParams, Block, DiskImageFormat, Ufile,
+};
+// Re-export `DiskImageFormat` so callers (e.g. runtime-rs) can populate
+// `BlockDeviceConfigInfo::format` without depending on `dbs_virtio_devices`
+// directly.
+pub use dbs_virtio_devices::block::DiskImageFormat as ImageFormat;
 #[cfg(feature = "vhost-user-blk")]
 use dbs_virtio_devices::vhost::vhost_user::block::VhostUserBlock;
 use serde_derive::{Deserialize, Serialize};
@@ -49,6 +53,12 @@ const USE_GENERIC_IRQ: bool = true;
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "block_manager"))
+    };
+);
+
+macro_rules! warn(
+    ($l:expr, $($args:tt)+) => {
+        slog::warn!($l, $($args)+; slog::o!("subsystem" => "block_manager"))
     };
 );
 
@@ -221,6 +231,17 @@ pub struct BlockDeviceConfigInfo {
     pub use_generic_irq: Option<bool>,
     /// Use pci bus
     pub use_pci_bus: Option<bool>,
+    /// Explicit on-disk image format.
+    ///
+    /// When `Some`, the manager trusts the caller's classification and skips
+    /// the file probe in `apply_image_format_overrides` / `create_blk_device`.
+    /// When `None`, the format is auto-detected from the file's first 512
+    /// bytes (legacy behavior). Upper layers (e.g. runtime-rs) that have
+    /// already classified the image — for instance because they assembled a
+    /// VMDK descriptor themselves — should fill this in to avoid relying on
+    /// the implicit probe contract.
+    #[serde(default)]
+    pub format: Option<DiskImageFormat>,
 }
 
 impl std::default::Default for BlockDeviceConfigInfo {
@@ -242,6 +263,7 @@ impl std::default::Default for BlockDeviceConfigInfo {
             use_shared_irq: None,
             use_generic_irq: None,
             use_pci_bus: None,
+            format: None,
         }
     }
 }
@@ -384,12 +406,20 @@ impl BlockDeviceMgr {
     pub fn insert_device(
         &mut self,
         mut ctx: DeviceOpContext,
-        config: BlockDeviceConfigInfo,
+        mut config: BlockDeviceConfigInfo,
         sender: mpsc::Sender<Option<i32>>,
     ) -> std::result::Result<(), BlockDeviceError> {
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
             return Err(BlockDeviceError::UpdateNotAllowedPostBoot);
         }
+
+        // Detect VMDK *before* recording the config so the policy rewrites
+        // below (force RO, drop O_DIRECT, collapse num_queues) are observed
+        // by `self.create()` / `self.update()`. Without this, a VMDK rootfs
+        // would advertise VIRTIO_BLK_F_RO to the guest while the generated
+        // kernel cmdline still omitted `ro`, causing the guest init to fail
+        // when remounting / read-write.
+        Self::apply_image_format_overrides(&mut config, &ctx)?;
 
         // If the id of the drive already exists in the list, the operation is update.
         match self.get_index_of_drive_id(config.id()) {
@@ -713,6 +743,78 @@ impl BlockDeviceMgr {
         Ok(())
     }
 
+    /// Probe the on-disk image format and, when a VMDK is recognized, rewrite
+    /// the user-provided config so the rest of the stack stays coherent:
+    ///   * force .is_read_only = true. (read-only backend),
+    ///   * drop `is_direct` (sparse extents may not satisfy O_DIRECT alignment),
+    ///   * collapse .num_queues. to 1 (each queue would own a separate VMDK
+    ///     instance with its own tokio runtime — wasteful and semantically
+    ///     unclear).
+    ///
+    /// Called from `insert_device` *before* `self.create()`/`self.update()`
+    /// so `read_only_root` and the kernel cmdline reflect the override.
+    fn apply_image_format_overrides(
+        config: &mut BlockDeviceConfigInfo,
+        ctx: &DeviceOpContext,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        if !matches!(config.device_type, BlockDeviceType::RawBlock) {
+            return Ok(());
+        }
+
+        // Trust an explicit `config.format` from the caller and skip the
+        // file probe. Upper layers (e.g. runtime-rs' erofs_rootfs) classify
+        // the image when they write it; re-probing would only add latency
+        // and risk drift between caller and detector.
+        let format = match config.format {
+            Some(f) => f,
+            None => {
+                let probe = OpenOptions::new()
+                    .read(true)
+                    .open(&config.path_on_host)
+                    .map_err(BlockDeviceError::OpenBlockDevice)?;
+                let detected =
+                    detect_disk_format(&probe).map_err(BlockDeviceError::OpenBlockDevice)?;
+                drop(probe);
+                // Remember the detected format on the config so downstream
+                // `create_blk_device` doesn't probe again.
+                config.format = Some(detected);
+                detected
+            }
+        };
+
+        if !matches!(format, DiskImageFormat::Vmdk) {
+            return Ok(());
+        }
+
+        if !config.is_read_only {
+            warn!(
+                ctx.logger(),
+                "VMDK image detected at \"{}\"; forcing read-only.",
+                config.path_on_host.display()
+            );
+            config.is_read_only = true;
+        }
+        if config.is_direct {
+            info!(
+                ctx.logger(),
+                "VMDK image detected at \"{}\"; disabling O_DIRECT.",
+                config.path_on_host.display()
+            );
+            config.is_direct = false;
+        }
+        if config.num_queues > 1 {
+            warn!(
+                ctx.logger(),
+                "VMDK image at \"{}\": collapsing num_queues from {} to 1 \
+                 (one VMDK instance per device).",
+                config.path_on_host.display(),
+                config.num_queues
+            );
+            config.num_queues = 1;
+        }
+        Ok(())
+    }
+
     fn create_blk_device(
         cfg: &BlockDeviceConfigInfo,
         ctx: &mut DeviceOpContext,
@@ -723,46 +825,47 @@ impl BlockDeviceMgr {
 
         match cfg.device_type {
             BlockDeviceType::RawBlock => {
-                let custom_flags = if cfg.is_direct() {
-                    info!(
-                        ctx.logger(),
-                        "Open block device \"{}\" in direct mode.",
-                        cfg.path_on_host().display()
-                    );
-                    libc::O_DIRECT
-                } else {
-                    info!(
-                        ctx.logger(),
-                        "Open block device \"{}\" in buffer mode.",
-                        cfg.path_on_host().display(),
-                    );
-                    0
+                // `apply_image_format_overrides` (in `insert_device`) is
+                // responsible for populating `cfg.format` — either from the
+                // caller's explicit value or from a one-shot file probe —
+                // and applying the VMDK RO/direct/num_queues overrides. By
+                // the time we get here `cfg.format` should be Some, but
+                // fall back to probing for callers that bypass insert_device
+                // (e.g. tests that craft a config and call this directly).
+                let format = match cfg.format {
+                    Some(f) => f,
+                    None => {
+                        let probe = OpenOptions::new().read(true).open(cfg.path_on_host())?;
+                        let detected = detect_disk_format(&probe)?;
+                        drop(probe);
+                        detected
+                    }
                 };
-                let io_uring_supported = IoUring::is_supported();
+
+                info!(
+                    ctx.logger(),
+                    "Open block device \"{}\" (format={:?}, direct={}, ro={}, num_queues={}).",
+                    cfg.path_on_host().display(),
+                    format,
+                    cfg.is_direct(),
+                    cfg.is_read_only(),
+                    cfg.num_queues
+                );
+
                 for i in 0..cfg.num_queues {
                     let queue_size = cfg.queue_sizes()[i] as u32;
-                    let file = OpenOptions::new()
-                        .read(true)
-                        .custom_flags(custom_flags)
-                        .write(!cfg.is_read_only())
-                        .open(cfg.path_on_host())?;
-                    info!(ctx.logger(), "Queue {}: block file opened", i);
-
-                    if io_uring_supported {
-                        info!(
-                            ctx.logger(),
-                            "Queue {}: Using io_uring Raw disk file, queue size {}.", i, queue_size
-                        );
-                        let io_engine = IoUring::new(file.as_raw_fd(), queue_size)?;
-                        block_files.push(Box::new(LocalFile::new(file, cfg.no_drop, io_engine)?));
-                    } else {
-                        info!(
-                            ctx.logger(),
-                            "Queue {}: Since io_uring_supported is not enabled, change to default support of Aio Raw disk file, queue size {}", i, queue_size
-                        );
-                        let io_engine = Aio::new(file.as_raw_fd(), queue_size)?;
-                        block_files.push(Box::new(LocalFile::new(file, cfg.no_drop, io_engine)?));
-                    }
+                    let params = BackendOpenParams {
+                        path: cfg.path_on_host(),
+                        read_only: cfg.is_read_only(),
+                        direct: cfg.is_direct(),
+                        no_drop: cfg.no_drop,
+                        queue_size,
+                    };
+                    block_files.push(build_backend(format, params)?);
+                    info!(
+                        ctx.logger(),
+                        "Queue {}: backend built for format {:?}.", i, format
+                    );
                 }
             }
             _ => {
@@ -1299,6 +1402,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1377,6 +1481,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
         let (sender, _receiver) = channel();
         vm.device_manager_mut()
@@ -1457,6 +1562,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1501,6 +1607,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1522,6 +1629,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1562,6 +1670,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1583,6 +1692,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let dummy_file_3 = TempFile::new().unwrap();
@@ -1604,6 +1714,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1667,6 +1778,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1688,6 +1800,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let dummy_file_3 = TempFile::new().unwrap();
@@ -1709,6 +1822,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1773,6 +1887,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1794,6 +1909,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1893,6 +2009,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
         let root_block_device_new = BlockDeviceConfigInfo {
             path_on_host: dummy_path_2,
@@ -1911,6 +2028,7 @@ mod tests {
             use_generic_irq: None,
             use_pci_bus: Some(true),
             serial: None,
+            format: None,
         };
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()

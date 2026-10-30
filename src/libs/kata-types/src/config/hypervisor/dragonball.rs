@@ -10,6 +10,7 @@ use std::sync::Arc;
 use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DRAGONBALL_VCPUS;
 use crate::config::default::MIN_DRAGONBALL_MEMORY_SIZE_MB;
+use crate::config::hypervisor::NO_VIRTIO_FS;
 use crate::config::hypervisor::{
     VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
@@ -186,7 +187,7 @@ impl ConfigPlugin for DragonballConfig {
             }
 
             if let Some(v) = db.shared_fs.shared_fs.as_ref() {
-                if v != VIRTIO_FS && v != VIRTIO_FS_INLINE {
+                if v != VIRTIO_FS && v != VIRTIO_FS_INLINE && v != NO_VIRTIO_FS {
                     return Err(std::io::Error::other(format!(
                         "dragonball hypervisor doesn't support {v}",
                     )));
