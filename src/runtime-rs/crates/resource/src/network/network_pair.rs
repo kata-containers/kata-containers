@@ -59,13 +59,23 @@ impl NetworkPair {
         } else {
             String::from(name)
         };
-        let tap_link = create_link(handle, &tap_iface_name, queues)
-            .await
-            .context("create link")?;
-
         let virt_link = get_link_by_name(handle, virt_iface_name.as_str())
             .await
             .context("get link by name")?;
+        // Checked before the TAP is created, so that nothing is left behind.
+        if virt_link.attrs().hardware_addr.iter().all(|b| *b == 0) {
+            // L3 devices (e.g. netkit in L3 mode) have no MAC address: the
+            // kernel reports none, or all zeros. They need IP routing instead
+            // of L2 bridging, which is not implemented.
+            return Err(anyhow!(
+                "Device {} has no MAC address (netkit L3 mode is not supported - use netkit L2 mode or veth devices)",
+                virt_iface_name
+            ));
+        }
+
+        let tap_link = create_link(handle, &tap_iface_name, queues)
+            .await
+            .context("create link")?;
 
         let mut virt_addr_msg_list = handle
             .address()
@@ -271,5 +281,111 @@ mod tests {
                 assert!(delete_link(&handle, tap_name.as_str()).await.is_ok());
             }
         }
+    }
+
+    // Creates a netkit pair whose primary end is `name`. Returns false when
+    // the kernel cannot create netkit devices, so that the caller can skip.
+    async fn add_netkit(
+        handle: &rtnetlink::Handle,
+        name: &str,
+        peer: &str,
+        mode: netlink_packet_route::link::NetkitMode,
+    ) -> bool {
+        let link = rtnetlink::LinkNetkit::new(name, peer, mode).build();
+        match handle.link().add(link).execute().await {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("skipped: cannot create a netkit device: {e}");
+                false
+            }
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_netkit_l2_network_pair() {
+        let idx = 123457;
+        let virt_iface_name = format!("eth{}", idx);
+        let peer_name = format!("nk{}", idx);
+        let tap_name = format!("tap{}{}", idx, TAP_SUFFIX);
+
+        skip_if_not_root!();
+
+        let (conn, handle, _) = rtnetlink::new_connection().unwrap();
+        let thread_handler = tokio::spawn(conn);
+        defer!({
+            thread_handler.abort();
+        });
+
+        if !add_netkit(
+            &handle,
+            &virt_iface_name,
+            &peer_name,
+            netlink_packet_route::link::NetkitMode::L2,
+        )
+        .await
+        {
+            return;
+        }
+
+        let virt_link = get_link_by_name(&handle, &virt_iface_name).await.unwrap();
+        assert_eq!(virt_link.r#type(), "netkit");
+        let virt_mac = utils::get_mac_addr(&virt_link.attrs().hardware_addr).unwrap();
+
+        let pair = NetworkPair::new(&handle, idx, "", TC_FILTER_NET_MODEL_STR, 1).await;
+
+        let tap_found = get_link_by_name(&handle, &tap_name).await.is_ok();
+        if tap_found {
+            assert!(delete_link(&handle, &tap_name).await.is_ok());
+        }
+        assert!(delete_link(&handle, &virt_iface_name).await.is_ok());
+
+        let pair = pair.unwrap();
+        assert!(tap_found);
+        // The VM takes the MAC address of the netkit device.
+        assert_eq!(pair.tap.tap_iface.hard_addr, virt_mac);
+    }
+
+    #[actix_rt::test]
+    async fn test_netkit_l3_network_pair_is_rejected() {
+        let idx = 123458;
+        let virt_iface_name = format!("eth{}", idx);
+        let peer_name = format!("nk{}", idx);
+        let tap_name = format!("tap{}{}", idx, TAP_SUFFIX);
+
+        skip_if_not_root!();
+
+        let (conn, handle, _) = rtnetlink::new_connection().unwrap();
+        let thread_handler = tokio::spawn(conn);
+        defer!({
+            thread_handler.abort();
+        });
+
+        if !add_netkit(
+            &handle,
+            &virt_iface_name,
+            &peer_name,
+            netlink_packet_route::link::NetkitMode::L3,
+        )
+        .await
+        {
+            return;
+        }
+
+        let pair = NetworkPair::new(&handle, idx, "", TC_FILTER_NET_MODEL_STR, 1).await;
+
+        let tap_found = get_link_by_name(&handle, &tap_name).await.is_ok();
+        if tap_found {
+            assert!(delete_link(&handle, &tap_name).await.is_ok());
+        }
+        assert!(delete_link(&handle, &virt_iface_name).await.is_ok());
+
+        let err = pair.unwrap_err().to_string();
+        assert!(
+            err.contains("has no MAC address"),
+            "unexpected error: {}",
+            err
+        );
+        // Nothing is left behind.
+        assert!(!tap_found);
     }
 }
