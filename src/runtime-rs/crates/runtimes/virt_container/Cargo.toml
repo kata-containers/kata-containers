@@ -39,6 +39,7 @@ resource = { workspace = true }
 runtime-spec = { workspace = true }
 
 [dev-dependencies]
+rstest = { workspace = true }
 tempfile = { workspace = true }
 
 [features]

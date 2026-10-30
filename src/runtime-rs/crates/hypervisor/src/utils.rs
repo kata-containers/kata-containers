@@ -47,6 +47,43 @@ pub fn remove_dir_all_if_exists(path: impl AsRef<Path>) -> Result<()> {
     }
 }
 
+/// Remove the VM directory of a sandbox. A rootful VMM shares it with the
+/// sandbox state, which has to outlive the rest of the cleanup for a failure
+/// to be retried; the sandbox removes it last.
+pub fn remove_vm_dir(sid: &str, vm_path: &str) -> Result<()> {
+    remove_vm_dir_in(Path::new(KATA_PATH), sid, Path::new(vm_path))
+}
+
+fn remove_vm_dir_in(state_root: &Path, sid: &str, vm_path: &Path) -> Result<()> {
+    if vm_path != state_root.join(sid) {
+        return remove_dir_all_if_exists(vm_path);
+    }
+    let entries = match std::fs::read_dir(vm_path) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if entry.file_name() == persist::PERSIST_FILE {
+            continue;
+        }
+        let path = entry.path();
+        let removed = if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match removed {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => {
+                return Err(err).with_context(|| format!("remove {}", path.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn get_child_threads(pid: u32) -> HashSet<u32> {
     let mut result = HashSet::new();
     let path_name = format!("/proc/{pid}/task");
@@ -569,8 +606,17 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
     Err(anyhow!("failed to remove VMM user"))
 }
 
+/// getpwnam_r() may report a missing user as an error rather than no entry.
+pub fn find_user(name: &str) -> Result<Option<nix::unistd::User>> {
+    match nix::unistd::User::from_name(name) {
+        Ok(user) => Ok(user),
+        Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ESRCH) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("look up user {name}")),
+    }
+}
+
 pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
-    let path_result = remove_dir_all_if_exists(vm_path);
+    let path_result = remove_vm_dir(sid, vm_path);
     if kata_types::rootless::is_rootless() {
         let symlink_result = remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(sid));
         let user = &config
@@ -579,7 +625,7 @@ pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
             .as_ref()
             .ok_or_else(|| anyhow!("rootless user not specified in security_info"))?
             .user_name;
-        match nix::unistd::User::from_name(user)? {
+        match find_user(user)? {
             Some(_) => {
                 remove_vmm_user(user)?;
             }
@@ -1131,6 +1177,28 @@ mod tests {
         assert!(!runtime_dir.exists());
 
         remove_dir_all_if_exists(&runtime_dir).unwrap();
+    }
+
+    #[rstest]
+    #[case::shared_with_the_state("sid", true)]
+    #[case::of_its_own("other", false)]
+    fn the_vm_dir_goes_but_the_state_stays(#[case] dir: &str, #[case] state_stays: bool) {
+        let root = TempDir::new().unwrap();
+        let vm_path = root.path().join(dir);
+        fs::create_dir_all(vm_path.join("vhost-fs")).unwrap();
+        fs::write(vm_path.join("qmp.sock"), b"").unwrap();
+        fs::write(vm_path.join(persist::PERSIST_FILE), b"{}").unwrap();
+
+        super::remove_vm_dir_in(root.path(), "sid", &vm_path).unwrap();
+        let left: Vec<_> = fs::read_dir(&vm_path)
+            .map(|d| d.map(|e| e.unwrap().file_name()).collect())
+            .unwrap_or_default();
+        if state_stays {
+            assert_eq!(left, vec![persist::PERSIST_FILE]);
+        } else {
+            assert!(!vm_path.exists());
+        }
+        super::remove_vm_dir_in(root.path(), "sid", &vm_path).unwrap();
     }
 
     #[test]

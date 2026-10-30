@@ -327,6 +327,35 @@ EOF
 	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
 }
 
+@test "Nothing of a rootless sandbox is left once its shim was killed" {
+	local sandbox_id
+	local vmm_pid
+	local vmm_uid
+	local vmm_user
+
+	is_runtime_rs || skip "cleanup after a killed shim is tested for runtime-rs only"
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "CRI-O does not run the shim's delete command after a shim died"
+
+	# A replacement sandbox could get the UID about to be freed and either
+	# leave its own resources under it or remove a leak along with them.
+	yq -i '.spec.restartPolicy = "Never"' "${pod_config}"
+	retry_kubectl_apply "${pod_config}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
+
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
+	vmm_pid="$(get_vmm_pid_for_pod "${pod_name}")"
+	vmm_uid="$(exec_host "${node}" "awk '/^Uid:/ {print \$2}' /proc/${vmm_pid}/status")"
+	[[ "${vmm_uid}" =~ ^[0-9]+$ ]]
+	(( vmm_uid != 0 ))
+	vmm_user="$(exec_host "${node}" "getent passwd ${vmm_uid} | cut -d: -f1")"
+	[[ "${vmm_user}" =~ ^kata-[0-9]+$ ]]
+
+	kill_shim_and_wait_for_cleanup "${node}" "${sandbox_id}"
+	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
+	kubectl delete -f "${pod_config}" --ignore-not-found=true --wait=true
+}
+
 @test "VMM propagates ConfigMap updates while rootless" {
 	local arch
 	local pod_termination_wait_time=180

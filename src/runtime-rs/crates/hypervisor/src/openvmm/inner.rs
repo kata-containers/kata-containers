@@ -129,9 +129,7 @@ impl OpenVmmInner {
             hypervisor_type: "openvmm".to_string(),
             id: self.id.clone(),
             vm_path: self.vm_path.clone(),
-            netns: self.netns.clone(),
             config: self.config.clone(),
-            run_dir: self.run_dir.clone(),
             cached_block_devices: self.cached_block_devices.clone(),
             ..Default::default()
         })
@@ -144,9 +142,7 @@ impl OpenVmmInner {
         let mut inner = OpenVmmInner::new(exit_notify);
         inner.id = state.id;
         inner.vm_path = state.vm_path;
-        inner.netns = state.netns;
         inner.config = state.config;
-        inner.run_dir = state.run_dir;
         inner.cached_block_devices = state.cached_block_devices;
         inner.reset_block_hotplug_ports();
         Ok(inner)

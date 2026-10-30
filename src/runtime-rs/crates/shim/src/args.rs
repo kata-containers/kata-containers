@@ -36,7 +36,8 @@ impl Args {
     /// Check the shim argument object is vaild or not.
     ///
     /// The id, namespace, address and publish_binary are mandatory for START, RUN and DELETE.
-    /// And bundle is mandatory for DELETE, though it may already have been removed.
+    /// And bundle is mandatory for DELETE, though it may already have been removed. Without
+    /// -bundle, it is the working directory, as for shims built on containerd's shim library.
     pub fn validate(&mut self, should_check_bundle: bool) -> Result<()> {
         if self.id.is_empty() || self.namespace.is_empty() || self.publish_binary.is_empty() {
             return Err(anyhow!(Error::ArgumentIsEmpty(format!(
@@ -51,7 +52,12 @@ impl Args {
         // Ensure `bundle` is a valid path.
         if should_check_bundle {
             if self.bundle.is_empty() {
-                return Err(anyhow!(Error::ArgumentIsEmpty("bundle".to_string())));
+                self.bundle = std::env::current_dir()
+                    .context("get working directory as bundle")?
+                    .to_str()
+                    .ok_or(Error::InvalidArgument)
+                    .context("working directory to string")?
+                    .to_owned();
             }
 
             let path = match PathBuf::from(self.bundle.clone()).canonicalize() {
@@ -89,10 +95,14 @@ mod tests {
 
     use anyhow::anyhow;
     use kata_sys_util::validate;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_args_is_valid() {
         let dir = tempfile::tempdir().unwrap();
+        // Other tests leave the working directory removed, which an empty bundle defaults to.
+        std::env::set_current_dir(dir.path()).unwrap();
         let path = dir.path().to_path_buf();
         let path = path.to_str().unwrap();
         let bind_address = &format!("{}/socket1", path);
@@ -210,7 +220,7 @@ mod tests {
             TestData {
                 arg: arg.clone(),
                 should_check_bundle: true,
-                result: Err(anyhow!(Error::ArgumentIsEmpty("bundle".to_string()))),
+                result: Ok(()),
             },
             TestData {
                 arg: {
@@ -310,5 +320,22 @@ mod tests {
         std::fs::write(&file, "").unwrap();
         arg.bundle = file.to_str().unwrap().to_string();
         arg.validate(true).unwrap_err();
+    }
+
+    #[test]
+    #[serial]
+    fn test_args_bundle_defaults_to_workdir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        let mut arg = Args {
+            id: "default_id".to_string(),
+            namespace: "default_namespace".to_string(),
+            publish_binary: "containerd".to_string(),
+            ..Default::default()
+        };
+
+        arg.validate(true).unwrap();
+        let workdir = dir.path().canonicalize().unwrap();
+        assert_eq!(arg.bundle, workdir.to_str().unwrap());
     }
 }
