@@ -84,6 +84,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
+      sandboxer: "shim"
       snapshotter: "erofs"
     nvrc:
       enableDCGM: false
@@ -121,6 +122,8 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
+      # Keep TEE on podsandbox until generated policy parity is verified.
+      sandboxer: "podsandbox"
       snapshotter: "nydus"
       forceGuestPull: false
     crio:
@@ -165,6 +168,8 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
+      # Keep TEE on podsandbox until generated policy parity is verified.
+      sandboxer: "podsandbox"
       snapshotter: "nydus"
       forceGuestPull: false
     crio:
