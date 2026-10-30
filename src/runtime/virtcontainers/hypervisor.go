@@ -499,7 +499,8 @@ type HypervisorConfig struct {
 	ImagePath string
 
 	// InitrdPath is the guest initrd image host path.
-	// ImagePath and InitrdPath cannot be set at the same time.
+	// When ImagePath is also set, the initrd boots into the image rootfs
+	// (qemu only).
 	InitrdPath string
 
 	// GuestExtensionImages lists additional block device images to attach to the VM.
@@ -1006,6 +1007,32 @@ func (conf *HypervisorConfig) ImageOrInitrdAssetPath() (string, types.AssetType,
 	}
 
 	return checkAndReturn(conf.ImagePath, conf.InitrdPath)
+}
+
+// ImageAndInitrdAssetPaths returns both the image and initrd paths, allowing
+// them to be set together (initrd bootstrap booting into an image rootfs).
+// Annotation paths are preferred to config paths.
+func (conf *HypervisorConfig) ImageAndInitrdAssetPaths() (string, string, error) {
+	image := conf.ImagePath
+	initrd := conf.InitrdPath
+
+	if a, ok := conf.customAssets[types.ImageAsset]; ok {
+		image = a.Path()
+	}
+
+	if a, ok := conf.customAssets[types.InitrdAsset]; ok {
+		initrd = a.Path()
+	}
+
+	if image == "" && initrd == "" {
+		// IBM Z Secure Execution boots with neither asset.
+		if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
+			return "", "", nil
+		}
+		return "", "", fmt.Errorf("one of image and initrd must be set")
+	}
+
+	return image, initrd, nil
 }
 
 func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {

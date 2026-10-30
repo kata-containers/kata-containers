@@ -700,3 +700,29 @@ func TestKernelParamFields(t *testing.T) {
 		assert.Equal(params, t.expectedKernelParamFieldsResult, "Unexpected KernelParamFields behavior")
 	}
 }
+
+func TestImageAndInitrdAssetPaths(t *testing.T) {
+	assert := assert.New(t)
+
+	empty := HypervisorConfig{}
+	_, _, err := empty.ImageAndInitrdAssetPaths()
+	assert.Error(err)
+
+	conf := HypervisorConfig{ImagePath: "/img", InitrdPath: "/initrd"}
+	image, initrd, err := conf.ImageAndInitrdAssetPaths()
+	assert.NoError(err)
+	assert.Equal("/img", image)
+	assert.Equal("/initrd", initrd)
+
+	// Annotation paths win per asset; the other configured path is kept.
+	pathAnnotation, _, err := types.InitrdAsset.Annotations()
+	assert.NoError(err)
+	a, err := types.NewAsset(map[string]string{pathAnnotation: "/annotation/initrd"}, types.InitrdAsset)
+	assert.NoError(err)
+	assert.NoError(conf.AddCustomAsset(a))
+
+	image, initrd, err = conf.ImageAndInitrdAssetPaths()
+	assert.NoError(err)
+	assert.Equal("/img", image)
+	assert.Equal("/annotation/initrd", initrd)
+}

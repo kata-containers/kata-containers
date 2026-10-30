@@ -921,11 +921,12 @@ impl VirtSandbox {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
         let security_info = self.hypervisor.hypervisor_config().await.security_info;
 
-        if !boot_info.initrd.is_empty() {
-            return Ok(None);
-        }
-
         if boot_info.image.is_empty() {
+            // An initrd on its own is the guest rootfs: nothing to attach.
+            if !boot_info.initrd.is_empty() {
+                return Ok(None);
+            }
+
             let is_remote_hypervisor = Arc::clone(&self.resource_manager.config().await)
                 .runtime
                 .hypervisor_name
@@ -936,6 +937,9 @@ impl VirtSandbox {
                 return Err(anyhow!("both of image and initrd isn't set"));
             }
         }
+
+        // When an initrd is also configured it is a bootstrap stage that mounts
+        // this image, so the image still has to be attached as a block device.
 
         Ok(Some(BlockConfigModern {
             path_on_host: boot_info.image.clone(),

@@ -88,3 +88,39 @@ $ popd
 ```shell
 $ sudo sed -i -e 's/^# *\(rootfs_type\).*=.*$/\1 = erofs/g' /etc/kata-containers/configuration.toml
 ```
+
+### Boot the image with an initrd
+
+With `image` alone, the image is attached as a memory-backed device
+(`root=/dev/pmem0p1`). A guest that has to bring up its own devices before it can mount the
+rootfs needs the image on a virtual disk instead, together with an initrd. Setting both
+`image` and `initrd` gives you that layout:
+
+```toml
+[hypervisor.qemu]
+image = "/usr/share/kata-containers/kata-containers.img"
+initrd = "/usr/share/kata-containers/kata-containers-initrd.img"
+```
+
+With an initrd configured, the runtime stops using the memory device and attaches the image
+over virtio-blk, so the guest gets `root=/dev/vda1 rootfstype=erofs` on its kernel command line
+and the initrd is passed to the VMM as well. `rootfs_type` still comes from the configuration
+and has to match the filesystem inside the image; it becomes the `rootfstype=` parameter.
+The `qemu-runtime-rs` shim behaves the same way.
+
+> Note:
+> - Only QEMU supports this combination. Cloud Hypervisor, Dragonball, Firecracker, OpenVMM
+>   and `remote` reject `image` and `initrd` set at the same time.
+> - The initrd has to mount the image and switch to it. The initrd built by
+>   [initrd-builder](../../tools/osbuilder/initrd-builder) does not do that: it boots from the
+>   initramfs, leaving the image attached but unused.
+> - The guest kernel needs EROFS and virtio-blk. Both are built in by the kernel configuration
+>   in `tools/packaging/kernel/configs/fragments/` (`CONFIG_EROFS_FS=y` and
+>   `CONFIG_VIRTIO_BLK=y`).
+
+To check which rootfs the guest ended up on:
+
+```shell
+$ mount | grep ' / '
+$ cat /proc/cmdline
+```

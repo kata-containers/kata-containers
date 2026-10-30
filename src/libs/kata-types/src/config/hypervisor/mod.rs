@@ -512,11 +512,12 @@ impl BootInfo {
         validate_path!(self.image, "guest boot image file {} is invalid: {}")?;
         validate_path!(self.initrd, "guest initrd image file {} is invalid: {}")?;
         validate_path!(self.firmware, "firmware image file {} is invalid: {}")?;
-        if !self.image.is_empty() && !self.initrd.is_empty() {
-            return Err(std::io::Error::other(
-                "Can not configure both initrd and image for boot",
-            ));
-        }
+
+        // Whether `image` and `initrd` may be set at the same time is decided by
+        // the hypervisor, not here: QEMU can boot a bootstrap initrd that then
+        // mounts an image-backed rootfs, while CH, dragonball, firecracker,
+        // OpenVMM and remote reject the combination in their own `validate()`
+        // implementations.
 
         let l = [
             VIRTIO_BLK_PCI,
@@ -2331,5 +2332,26 @@ mod tests {
             blockdev_info_with_sectors(65536, 512).validate().is_err(),
             "logical > physical should be rejected"
         );
+    }
+
+    // Whether `image` and `initrd` may be configured together is a per-hypervisor
+    // decision (QEMU allows it, CH/dragonball/remote reject it in their own
+    // `validate()`), so the shared BootInfo validation must not reject it.
+    #[test]
+    fn test_boot_info_allows_image_and_initrd_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("rootfs.img");
+        let initrd = dir.path().join("initrd.img");
+        std::fs::write(&image, b"image").unwrap();
+        std::fs::write(&initrd, b"initrd").unwrap();
+
+        let boot_info = BootInfo {
+            image: image.to_string_lossy().into_owned(),
+            initrd: initrd.to_string_lossy().into_owned(),
+            vm_rootfs_driver: VIRTIO_BLK_PCI.to_string(),
+            ..Default::default()
+        };
+
+        assert!(boot_info.validate().is_ok());
     }
 }

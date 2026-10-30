@@ -95,6 +95,15 @@ impl ConfigPlugin for FirecrackerConfig {
                 ));
             }
 
+            // Only QEMU boots a bootstrap initrd that then mounts an
+            // image-backed rootfs; every other hypervisor keeps rejecting the
+            // pair, as the shared `BootInfo::validate()` used to.
+            if !firecracker.boot_info.initrd.is_empty() {
+                return Err(std::io::Error::other(
+                    "Cannot configure both initrd and image for boot on firecracker",
+                ));
+            }
+
             if (firecracker.cpu_info.default_vcpus > 0.0
                 && firecracker.cpu_info.default_vcpus as u32 > default::MAX_FIRECRACKER_VCPUS)
                 || firecracker.cpu_info.default_maxvcpus > default::MAX_FIRECRACKER_VCPUS

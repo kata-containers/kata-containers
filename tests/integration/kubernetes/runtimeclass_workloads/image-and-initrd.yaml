@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2026 Kata Containers
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: image-and-initrd
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: image-and-initrd-container
+    image: quay.io/prometheus/busybox:latest
+    command:
+      - sleep
+      - "86400"
