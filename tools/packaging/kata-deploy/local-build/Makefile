@@ -190,16 +190,20 @@ KATA_STATIC_FINAL_TARBALL_INPUTS := $(shell $(MK_DIR)/kata-release-tarball-input
 KATA_GO_STATIC_FINAL_TARBALL_INPUTS := $(shell $(MK_DIR)/kata-release-tarball-inputs.sh kata-go-static $(ARCH) | tr '\n' ' ')
 endif
 
+# PREBUILT_ONLY=yes merges what is in build/ (make install-prebuilt-artifacts)
+# and builds nothing; a listed tarball that is missing fails the merge.
+BUILD_PREREQS := $(if $(filter yes,$(PREBUILT_ONLY)),,all-parallel)
+
 ifneq ($(KATA_STATIC_FINAL_TARBALL_INPUTS),)
 kata-tarball: FINAL_TARBALL_INPUTS=$(KATA_STATIC_FINAL_TARBALL_INPUTS)
 kata-tarball: FINAL_TARBALL_NAME=kata-static.tar.zst
-kata-tarball: | all-parallel
+kata-tarball: | $(BUILD_PREREQS)
 	$(MAKE) -f $(MK_PATH) merge-builds \
 		FINAL_TARBALL_NAME="$(FINAL_TARBALL_NAME)" \
 		FINAL_TARBALL_INPUTS="$(FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE="$(FINAL_TARBALL_MERGE_MODE)"
 else
-kata-tarball: | all-parallel merge-builds
+kata-tarball: | $(BUILD_PREREQS) merge-builds
 endif
 
 ifneq ($(KATA_GO_STATIC_FINAL_TARBALL_INPUTS),)
