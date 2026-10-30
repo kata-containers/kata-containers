@@ -543,13 +543,9 @@ impl VirtSandbox {
             .context("failed to prepare vm socket config")?;
         resource_configs.push(vm_socket_config);
 
-        let network_env: SandboxNetworkEnv = sandbox_config.network_env.clone();
-        // prepare network config
-        if !network_env.network_created && !self.should_defer_network().await? {
-            if let Some(network_resource) = self.prepare_network_resource(&network_env).await {
-                resource_configs.push(network_resource);
-            }
-        }
+        // The network is not part of this batch: setup_network_before_start_vm()
+        // creates it, saves the state and only then attaches, so recovery
+        // knows the endpoints before the attaching acts on the host.
 
         // prepare sharefs device config
         let shared_fs = self.hypervisor.hypervisor_config().await.shared_fs;
@@ -847,6 +843,33 @@ impl VirtSandbox {
             .into_iter()
             .map(ResourceConfig::VfioDeviceModern)
             .collect())
+    }
+
+    /// Set up the network that must exist before the VM starts: create it,
+    /// save the state so everything construction made is recorded, then
+    /// attach, which acts on the host and primes the cold-plugged devices.
+    async fn setup_network_before_start_vm(&self, sandbox_config: &SandboxConfig) -> Result<()> {
+        let network_env = sandbox_config.network_env.clone();
+        if network_env.network_created || self.should_defer_network().await? {
+            return Ok(());
+        }
+        let Some(ResourceConfig::Network(network_resource)) =
+            self.prepare_network_resource(&network_env).await
+        else {
+            return Ok(());
+        };
+        let created = self
+            .resource_manager
+            .create_network(network_resource)
+            .await
+            .context("create the network");
+        self.save_after(created).await?;
+        let attached = self
+            .resource_manager
+            .attach_network()
+            .await
+            .context("set up the network before start vm");
+        self.save_after(attached).await
     }
 
     async fn prepare_network_resource(
@@ -1300,8 +1323,16 @@ impl VirtSandbox {
             .prepare_network_resource(&sandbox_config.network_env)
             .await
         {
+            // As on the ordinary path: what creating the network made must
+            // reach the saved state before attaching acts on it.
+            let created = self
+                .resource_manager
+                .create_network(network_resource)
+                .await
+                .context("create the factory network after start vm");
+            self.save_after(created).await?;
             self.resource_manager
-                .handle_network(network_resource)
+                .attach_network()
                 .await
                 .context("set up factory network after start vm")?;
         }
@@ -1414,6 +1445,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
+        self.setup_network_before_start_vm(sandbox_config).await?;
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
         let set_up = self
@@ -1484,9 +1516,21 @@ impl Sandbox for VirtSandbox {
                         .network_queues as usize,
                     network_created: sandbox_config.network_env.network_created,
                 });
+                // Creating the network already makes host artifacts (the
+                // TAPs of pair-based endpoints), and attaching acts on the
+                // host and the VM endpoint by endpoint, so the created
+                // endpoints must reach the saved state before the attaching
+                // starts: recovery undoes a recorded endpoint however far it
+                // got, but cannot undo one it never heard of.
+                let created = self
+                    .resource_manager
+                    .create_network(network_resource)
+                    .await
+                    .context("create the network");
+                self.save_after(created).await?;
                 let set_up = self
                     .resource_manager
-                    .handle_network(network_resource)
+                    .attach_network()
                     .await
                     .context("set up device after start vm");
                 self.save_after(set_up).await?;
@@ -1658,6 +1702,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
+        self.setup_network_before_start_vm(sandbox_config).await?;
         let resources = self
             .prepare_for_start_sandbox(id, sandbox_config)
             .await
@@ -1960,27 +2005,75 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn rescan_network(&self) -> Result<()> {
-        if let Some(net_cfg) = self.netns_rescan_config().await {
-            info!(
-                sl!(),
-                "rescan_network: scanning netns={}", net_cfg.netns_path
-            );
-            let rescanned = self
+        let Some(net_cfg) = self.netns_rescan_config().await else {
+            return Ok(());
+        };
+
+        // A failed rescan step leaves the container without networking,
+        // which the caller tolerates. The saves are another matter: what
+        // creating the network made must reach the saved state before
+        // attaching acts on the host, nothing is attached without that, and
+        // a save that fails fails the start, since recovery would otherwise
+        // be blind to what the rescan did.
+        let mut rescan: Result<()> = Ok(());
+        let mut created = false;
+        if self.resource_manager.network_pending_attach().await {
+            // An earlier rescan created this network and then could not save
+            // or attach it. It is not replaced, since it holds the only
+            // record of endpoints that may already have acted on the host;
+            // resume it instead, retrying the save and the attach, so a
+            // tolerated failure does not end with a running workload that
+            // silently never gets its network.
+            info!(sl!(), "rescan_network: resuming the created network");
+            created = true;
+        } else {
+            match self
                 .resource_manager
-                .rescan_network_if_unconfigured(net_cfg)
+                .rescan_found_interfaces(&net_cfg)
                 .await
-                .context("network rescan during start");
-            // A failed rescan leaves the container without networking, which
-            // the caller tolerates. A failed save leaves recovery blind to
-            // what the rescan attached, so it fails the start instead.
-            let saved = self.save().await.context("save sandbox state");
-            if let Err(e) = rescanned {
-                error!(
-                    sl!(),
-                    "network rescan failed; container may lack networking: {:?}", e
-                );
+            {
+                Ok(false) => {}
+                Err(e) => rescan = Err(e.context("network rescan poll")),
+                Ok(true) => {
+                    info!(
+                        sl!(),
+                        "rescan_network: scanning netns={}", net_cfg.netns_path
+                    );
+                    rescan = self
+                        .resource_manager
+                        .create_network(NetworkConfig::NetNs(net_cfg))
+                        .await
+                        .context("create the rescanned network");
+                    created = rescan.is_ok();
+                }
             }
-            saved?;
+        }
+
+        self.save().await.context("save sandbox state")?;
+
+        if created {
+            rescan = async {
+                self.resource_manager
+                    .attach_network()
+                    .await
+                    .context("attach the rescanned network")?;
+                self.resource_manager
+                    .apply_rescanned_network()
+                    .await
+                    .context("apply the rescanned network to the agent")
+            }
+            .await;
+        }
+        if let Err(e) = rescan {
+            error!(
+                sl!(),
+                "network rescan failed; container may lack networking: {:?}", e
+            );
+        }
+        if created {
+            // The attach moved the recorded endpoints past construction;
+            // the state must say so, however the attach went.
+            self.save().await.context("save sandbox state")?;
         }
         Ok(())
     }

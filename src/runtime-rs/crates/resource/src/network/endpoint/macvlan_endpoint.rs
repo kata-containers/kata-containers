@@ -103,12 +103,20 @@ impl Endpoint for MacVlanEndpoint {
         Ok(())
     }
 
+    async fn undo_construction(&self) -> Result<()> {
+        self.net_pair
+            .remove_created_tap()
+            .await
+            .context("remove the created tap")
+    }
+
     async fn save(&self) -> Option<EndpointState> {
         Some(EndpointState {
             macvlan_endpoint: Some(MacvlanEndpointState {
                 if_name: self.net_pair.virt_iface.name.clone(),
                 network_qos: self.net_pair.network_qos,
             }),
+            tap_iface_name: Some(self.net_pair.tap.tap_iface.name.clone()),
             ..Default::default()
         })
     }

@@ -378,6 +378,10 @@ pub(crate) fn rebind_saved_physical_endpoints(
     let mut failures = 0;
     for p in endpoints
         .iter()
+        // Even an endpoint the state flags as never attached is tried: the
+        // record is written before the attach, so a shim that died between
+        // attaching and the next save leaves the flag stale. Binding back a
+        // device that never left its host driver is a no-op.
         .filter_map(|e| e.physical_endpoint.as_ref())
     {
         let bound = VendorDevice::new(&p.vendor_id, &p.device_id)
@@ -427,6 +431,13 @@ mod rebind_tests {
                 ..Default::default()
             },
             physical("0000:41:00.3"),
+            // The flag is written before the attach, so it can be stale:
+            // this endpoint may have been attached by a shim that died
+            // before the following save, and is bound back too.
+            EndpointState {
+                construction_only: true,
+                ..physical("0000:41:00.4")
+            },
         ];
         let bound = Mutex::new(Vec::new());
         let result = rebind_saved_physical_endpoints(&endpoints, |bdf, driver, id| {
@@ -442,7 +453,8 @@ mod rebind_tests {
             *bound.lock().unwrap(),
             vec![
                 "0000:41:00.2 mlx5_core 0x15b3_0x101e",
-                "0000:41:00.3 mlx5_core 0x15b3_0x101e"
+                "0000:41:00.3 mlx5_core 0x15b3_0x101e",
+                "0000:41:00.4 mlx5_core 0x15b3_0x101e"
             ]
         );
     }

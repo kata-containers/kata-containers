@@ -63,57 +63,80 @@ impl NetworkPair {
             .await
             .context("create link")?;
 
-        let virt_link = get_link_by_name(handle, virt_iface_name.as_str())
-            .await
-            .context("get link by name")?;
+        // The TAP exists from here on and nothing records it yet, so a step
+        // that fails must take it back out rather than leak it to the
+        // namespace with no object naming it.
+        let built = async {
+            let virt_link = get_link_by_name(handle, virt_iface_name.as_str())
+                .await
+                .context("get link by name")?;
 
-        let mut virt_addr_msg_list = handle
-            .address()
-            .get()
-            .set_link_index_filter(virt_link.attrs().index)
-            .execute();
+            let mut virt_addr_msg_list = handle
+                .address()
+                .get()
+                .set_link_index_filter(virt_link.attrs().index)
+                .execute();
 
-        let mut virt_address = vec![];
-        while let Some(addr_msg) = virt_addr_msg_list.try_next().await? {
-            let addr = Address::try_from(addr_msg).context("get address from msg")?;
-            virt_address.push(addr);
+            let mut virt_address = vec![];
+            while let Some(addr_msg) = virt_addr_msg_list.try_next().await? {
+                let addr = Address::try_from(addr_msg).context("get address from msg")?;
+                virt_address.push(addr);
+            }
+
+            // Save the veth MAC address to the TAP so that it can later be used
+            // to build the hypervisor command line. This MAC address has to be
+            // the one inside the VM in order to avoid any firewall issues. The
+            // bridge created by the network plugin on the host actually expects
+            // to see traffic from this MAC address and not another one.
+            let tap_hard_addr =
+                utils::get_mac_addr(&virt_link.attrs().hardware_addr).context("get mac addr")?;
+
+            // Save the TAP Mac address to the virt_iface so that it can later updated
+            // the guest's gateway IP's mac as this TAP device. This MAC address has
+            // to be inside the VM in order to the network reach to the gateway.
+            let virt_hard_addr =
+                utils::get_mac_addr(&tap_link.attrs().hardware_addr).context("get mac addr")?;
+
+            handle
+                .link()
+                .set(
+                    LinkUnspec::new_with_index(tap_link.attrs().index)
+                        .mtu(virt_link.attrs().mtu)
+                        .build(),
+                )
+                .execute()
+                .await
+                .context("set link mtu")?;
+
+            handle
+                .link()
+                .set(
+                    LinkUnspec::new_with_index(tap_link.attrs().index)
+                        .up()
+                        .build(),
+                )
+                .execute()
+                .await
+                .context("set link up")?;
+
+            Ok::<_, anyhow::Error>((virt_address, tap_hard_addr, virt_hard_addr))
         }
+        .await;
 
-        // Save the veth MAC address to the TAP so that it can later be used
-        // to build the hypervisor command line. This MAC address has to be
-        // the one inside the VM in order to avoid any firewall issues. The
-        // bridge created by the network plugin on the host actually expects
-        // to see traffic from this MAC address and not another one.
-        let tap_hard_addr =
-            utils::get_mac_addr(&virt_link.attrs().hardware_addr).context("get mac addr")?;
-
-        // Save the TAP Mac address to the virt_iface so that it can later updated
-        // the guest's gateway IP's mac as this TAP device. This MAC address has
-        // to be inside the VM in order to the network reach to the gateway.
-        let virt_hard_addr =
-            utils::get_mac_addr(&tap_link.attrs().hardware_addr).context("get mac addr")?;
-
-        handle
-            .link()
-            .set(
-                LinkUnspec::new_with_index(tap_link.attrs().index)
-                    .mtu(virt_link.attrs().mtu)
-                    .build(),
-            )
-            .execute()
-            .await
-            .context("set link mtu")?;
-
-        handle
-            .link()
-            .set(
-                LinkUnspec::new_with_index(tap_link.attrs().index)
-                    .up()
-                    .build(),
-            )
-            .execute()
-            .await
-            .context("set link up")?;
+        let (virt_address, tap_hard_addr, virt_hard_addr) = match built {
+            Ok(built) => built,
+            Err(e) => {
+                if let Err(del_err) = delete_link_by_name(handle, &tap_iface_name).await {
+                    warn!(
+                        sl!(),
+                        "failed to remove the tap {} of a failed pair: {:#}",
+                        tap_iface_name,
+                        del_err
+                    );
+                }
+                return Err(e);
+            }
+        };
 
         let net_pair = NetworkPair {
             tap: TapInterface {
@@ -149,6 +172,45 @@ impl NetworkPair {
         model.del(self).await.context("del")?;
         Ok(())
     }
+
+    /// Delete the persistent TAP new() created. The caller must be inside
+    /// the network namespace the TAP was made in. A TAP that is already
+    /// gone is fine, so a retry succeeds.
+    pub(crate) async fn remove_created_tap(&self) -> Result<()> {
+        let (connection, handle, _) =
+            rtnetlink::new_connection().context("new netlink connection")?;
+        let thread_handler = tokio::spawn(connection);
+        scopeguard::defer!({
+            thread_handler.abort();
+        });
+        delete_link_by_name(&handle, &self.tap.tap_iface.name).await
+    }
+}
+
+/// Delete a link by name, treating an absent link as already deleted.
+pub(crate) async fn delete_link_by_name(handle: &rtnetlink::Handle, name: &str) -> Result<()> {
+    let mut links = handle.link().get().match_name(name.to_string()).execute();
+    let link = match links.try_next().await {
+        Ok(Some(msg)) => link::get_link_from_message(msg),
+        // rtnetlink reports a name that matches nothing as a netlink error,
+        // not as an empty stream. Any other error says nothing about the
+        // link, so it must not count as the link being gone.
+        Ok(None) => return Ok(()),
+        Err(rtnetlink::Error::NetlinkError(msg))
+            if msg
+                .code
+                .is_some_and(|c| c.get() == -libc::ENODEV || c.get() == -libc::ENOENT) =>
+        {
+            return Ok(())
+        }
+        Err(e) => return Err(e).with_context(|| format!("look up link {name}")),
+    };
+    handle
+        .link()
+        .del(link.attrs().index)
+        .execute()
+        .await
+        .with_context(|| format!("delete link {name}"))
 }
 
 pub async fn create_link(
@@ -200,6 +262,17 @@ mod tests {
     use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
     use test_utils::skip_if_not_root;
     use utils::link::net_test_utils::delete_link;
+
+    #[actix_rt::test]
+    async fn a_failed_lookup_is_not_a_deleted_link() {
+        let (connection, handle, _) = rtnetlink::new_connection().unwrap();
+        // With the IO task never spawned, every request fails without saying
+        // anything about the link. That must not count as a deletion.
+        drop(connection);
+        assert!(delete_link_by_name(&handle, "kata-test-absent")
+            .await
+            .is_err());
+    }
 
     // this ut tests create_link() and get_link_by_name()
     #[actix_rt::test]

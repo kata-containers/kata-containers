@@ -31,7 +31,7 @@ use super::{
     utils::link,
     Network,
 };
-use crate::network::NetworkInfo;
+use crate::network::{AttachStarted, NetworkInfo};
 
 #[derive(Clone, Debug)]
 pub struct NetworkWithNetNsConfig {
@@ -48,33 +48,47 @@ struct NetworkWithNetnsInner {
 }
 
 impl NetworkWithNetnsInner {
-    async fn new(config: &NetworkWithNetNsConfig, d: Arc<RwLock<DeviceManager>>) -> Result<Self> {
-        let entity_list = if config.netns_path.is_empty() {
+    async fn new(
+        config: &NetworkWithNetNsConfig,
+        d: Arc<RwLock<DeviceManager>>,
+    ) -> Result<(Self, Option<anyhow::Error>)> {
+        let (entity_list, construction_error) = if config.netns_path.is_empty() {
             warn!(sl!(), "Skip to scan network for empty netns");
-            vec![]
+            (vec![], None)
         } else if config.network_model.as_str() == "none" {
             warn!(
                 sl!(),
                 "Skip to scan network from netns due to the none network model"
             );
-            vec![]
+            (vec![], None)
         } else {
             // get endpoint
             get_entity_from_netns(config, d)
                 .await
                 .context("get entity from netns")?
         };
-        Ok(Self {
-            netns_path: config.netns_path.to_string(),
-            entity_list,
-            network_created: config.network_created,
-        })
+        Ok((
+            Self {
+                netns_path: config.netns_path.to_string(),
+                entity_list,
+                network_created: config.network_created,
+            },
+            construction_error,
+        ))
     }
 }
 
 pub(crate) struct NetworkWithNetns {
     inner: Arc<RwLock<NetworkWithNetnsInner>>,
+    /// The endpoints setup() got to attaching; see `AttachStarted`.
+    attach_started: AttachStarted,
     cleanup: Mutex<NetworkCleanup>,
+    /// Why construction stopped early, when it did. The endpoints built
+    /// before the failure are kept, so what they created reaches the saved
+    /// state and the cleanup; setup() reports the failure instead of
+    /// attaching anything, every time: a partially constructed network can
+    /// never be attached whole, a resumed setup included.
+    construction_error: Option<String>,
 }
 
 #[derive(Default)]
@@ -89,9 +103,12 @@ impl NetworkWithNetns {
         config: &NetworkWithNetNsConfig,
         d: Arc<RwLock<DeviceManager>>,
     ) -> Result<Self> {
+        let (inner, construction_error) = NetworkWithNetnsInner::new(config, d).await?;
         Ok(Self {
-            inner: Arc::new(RwLock::new(NetworkWithNetnsInner::new(config, d).await?)),
+            inner: Arc::new(RwLock::new(inner)),
+            attach_started: AttachStarted::default(),
             cleanup: Mutex::new(NetworkCleanup::default()),
+            construction_error: construction_error.map(|e| format!("{e:#}")),
         })
     }
 }
@@ -99,9 +116,16 @@ impl NetworkWithNetns {
 #[async_trait]
 impl Network for NetworkWithNetns {
     async fn setup(&self) -> Result<()> {
+        // A failed construction has nothing to attach: it kept the endpoints
+        // it built so the caller could record them, and this is where their
+        // builder's error surfaces.
+        if let Some(msg) = self.construction_error.as_deref() {
+            return Err(anyhow!("network construction: {msg}"));
+        }
         let inner = self.inner.read().await;
         let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
-        for e in &inner.entity_list {
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            self.attach_started.begin(index);
             if let Some(device_path) = e.endpoint.attach().await.context("attach")? {
                 e.network_info
                     .set_device_path(device_path)
@@ -155,18 +179,41 @@ impl Network for NetworkWithNetns {
     async fn save(&self) -> Option<Vec<EndpointState>> {
         let inner = self.inner.read().await;
         let mut endpoint = vec![];
-        for e in &inner.entity_list {
-            if let Some(state) = e.endpoint.save().await {
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if let Some(mut state) = e.endpoint.save().await {
+                // An endpoint whose attach never started still made its TAP
+                // at construction, so it is recorded too, flagged so cleanup
+                // undoes the construction and nothing else.
+                state.construction_only = !self.attach_started.includes(index);
                 endpoint.push(state);
             }
         }
         Some(endpoint)
     }
 
+    async fn netns_path(&self) -> Option<String> {
+        let inner = self.inner.read().await;
+        Some(inner.netns_path.clone())
+    }
+
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let mut cleanup = self.cleanup.lock().await;
         let inner = self.inner.read().await;
         let mut errors = Vec::new();
+        // An endpoint whose attach never started has nothing to detach, but
+        // a pair-based one still made its TAP at construction, and the TAP
+        // outlives the sandbox when the namespace belongs to the caller. A
+        // physical endpoint's constructor changes nothing on the host.
+        let mut unattempted = HashSet::new();
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if self.attach_started.includes(index) {
+                continue;
+            }
+            unattempted.insert(index);
+            if e.endpoint.host_bdf().await.is_some() {
+                cleanup.detached.insert(index);
+            }
+        }
 
         // Always detach endpoints regardless of whether kata created the netns.
         // Physical endpoints rebind their VF from vfio-pci back to the original
@@ -208,7 +255,12 @@ impl Network for NetworkWithNetns {
                         if e.endpoint.host_bdf().await.is_some() {
                             continue;
                         }
-                        match e.endpoint.detach(h).await {
+                        let removed = if unattempted.contains(&index) {
+                            e.endpoint.undo_construction().await
+                        } else {
+                            e.endpoint.detach(h).await
+                        };
+                        match removed {
                             Ok(()) => {
                                 cleanup.detached.insert(index);
                             }
@@ -303,10 +355,15 @@ pub(crate) async fn netns_has_interfaces(netns_path: &str) -> Result<bool> {
     Ok(false)
 }
 
+/// Build the endpoints of the namespace's interfaces. An endpoint that could
+/// not be built does not take the already built ones with it: building a
+/// pair-based endpoint creates its TAP, and discarding the endpoint object
+/// would leave the TAP with no record naming it. The error comes back next
+/// to whatever was built before it.
 async fn get_entity_from_netns(
     config: &NetworkWithNetNsConfig,
     d: Arc<RwLock<DeviceManager>>,
-) -> Result<Vec<NetworkEntity>> {
+) -> Result<(Vec<NetworkEntity>, Option<anyhow::Error>)> {
     info!(
         sl!(),
         "get network entity from config {:?} tid {:?}",
@@ -326,7 +383,16 @@ async fn get_entity_from_netns(
     let mut links = handle.link().get().execute();
 
     let idx = AtomicU32::new(0);
-    while let Some(link) = links.try_next().await? {
+    let mut failure: Option<anyhow::Error> = None;
+    loop {
+        let link = match links.try_next().await {
+            Ok(Some(link)) => link,
+            Ok(None) => break,
+            Err(e) => {
+                failure = Some(anyhow!(e).context("list links"));
+                break;
+            }
+        };
         let link = link::get_link_from_message(link);
         let attrs = link.attrs();
 
@@ -334,9 +400,16 @@ async fn get_entity_from_netns(
             continue;
         }
 
-        let ip_addresses = handle_addresses(&handle, attrs)
+        let ip_addresses = match handle_addresses(&handle, attrs)
             .await
-            .context("handle addresses")?;
+            .context("handle addresses")
+        {
+            Ok(addresses) => addresses,
+            Err(e) => {
+                failure = Some(e);
+                break;
+            }
+        };
         // Ignore unconfigured network interfaces. These are either base tunnel devices that are not namespaced
         // like gre0, gretap0, sit0, ipip0, tunl0 or incorrectly setup interfaces.
         if ip_addresses.is_empty() {
@@ -344,25 +417,32 @@ async fn get_entity_from_netns(
         }
 
         let idx = idx.fetch_add(1, Ordering::Relaxed);
-        let (endpoint, network_info) =
-            create_endpoint(&handle, link.as_ref(), ip_addresses, idx, config, d.clone())
-                .await
-                .context("create endpoint")?;
-
-        entity_list.push(NetworkEntity::new(endpoint, network_info));
+        match create_endpoint(&handle, link.as_ref(), ip_addresses, idx, config, d.clone())
+            .await
+            .context("create endpoint")
+        {
+            Ok((endpoint, network_info)) => {
+                entity_list.push(NetworkEntity::new(endpoint, network_info));
+            }
+            Err(e) => {
+                failure = Some(e);
+                break;
+            }
+        }
     }
 
     // Currently, l3forwarding configures the host netns for a single pod interface.
-    if config.network_model == crate::network::network_model::L3_FORWARDING_NET_MODEL_STR
+    if failure.is_none()
+        && config.network_model == crate::network::network_model::L3_FORWARDING_NET_MODEL_STR
         && entity_list.len() > 1
     {
-        return Err(anyhow!(
+        failure = Some(anyhow!(
             "l3forwarding supports only a single interface per network namespace, found {}",
             entity_list.len()
         ));
     }
 
-    Ok(entity_list)
+    Ok((entity_list, failure))
 }
 
 async fn create_endpoint(
@@ -466,10 +546,15 @@ mod cleanup_tests {
     use hypervisor::qemu::Qemu;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     struct TestEndpoint {
         calls: AtomicUsize,
+        undone: AtomicUsize,
         fail_once: bool,
+        attach_fails: bool,
+        /// A pair-based endpoint: no host BDF, and a TAP made at
+        /// construction for undo_construction() to remove.
+        pair_based: bool,
     }
 
     #[async_trait]
@@ -481,7 +566,11 @@ mod cleanup_tests {
             String::new()
         }
         async fn attach(&self) -> Result<Option<String>> {
-            Ok(None)
+            if self.attach_fails {
+                Err(anyhow!("no room for the device"))
+            } else {
+                Ok(None)
+            }
         }
         async fn detach(&self, _: &dyn Hypervisor) -> Result<()> {
             let call = self.calls.fetch_add(1, Ordering::SeqCst);
@@ -491,11 +580,19 @@ mod cleanup_tests {
                 Ok(())
             }
         }
+        async fn undo_construction(&self) -> Result<()> {
+            self.undone.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
         async fn save(&self) -> Option<EndpointState> {
-            None
+            Some(EndpointState::default())
         }
         async fn host_bdf(&self) -> Option<String> {
-            Some("0000:00:00.1".into())
+            if self.pair_based {
+                None
+            } else {
+                Some("0000:00:00.1".into())
+            }
         }
     }
 
@@ -515,26 +612,58 @@ mod cleanup_tests {
         }
     }
 
-    #[tokio::test]
-    async fn failed_detach_retries_without_repeating_successful_detach() {
-        let done = Arc::new(TestEndpoint {
-            calls: AtomicUsize::new(0),
-            fail_once: false,
-        });
-        let retry = Arc::new(TestEndpoint {
-            calls: AtomicUsize::new(0),
-            fail_once: true,
-        });
-        let entity =
-            |endpoint: Arc<TestEndpoint>| NetworkEntity::new(endpoint, Arc::new(TestNetworkInfo));
-        let network = NetworkWithNetns {
+    fn network(endpoints: &[Arc<TestEndpoint>]) -> NetworkWithNetns {
+        NetworkWithNetns {
             inner: Arc::new(RwLock::new(NetworkWithNetnsInner {
                 netns_path: String::new(),
-                entity_list: vec![entity(done.clone()), entity(retry.clone())],
+                entity_list: endpoints
+                    .iter()
+                    .map(|e| NetworkEntity::new(e.clone(), Arc::new(TestNetworkInfo)))
+                    .collect(),
                 network_created: false,
             })),
+            attach_started: AttachStarted::default(),
             cleanup: Mutex::new(NetworkCleanup::default()),
-        };
+            construction_error: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_construction_keeps_its_endpoints_and_attaches_nothing() {
+        let built = Arc::new(TestEndpoint {
+            pair_based: true,
+            ..Default::default()
+        });
+        let mut network = network(std::slice::from_ref(&built));
+        network.construction_error = Some("one endpoint could not be built".to_string());
+
+        // The builder's error surfaces here, and no attach was tried; a
+        // retried setup gets it again, so a resume cannot silently attach a
+        // partial network.
+        let err = network.setup().await.unwrap_err();
+        assert!(err.to_string().contains("could not be built"));
+        let err = network.setup().await.unwrap_err();
+        assert!(err.to_string().contains("could not be built"));
+
+        // What construction made is still recorded, flagged for the cleanup
+        // to undo the construction and nothing else.
+        let saved = network.save().await.unwrap();
+        assert_eq!(saved.len(), 1);
+        assert!(saved[0].construction_only);
+        network.remove(&Qemu::new()).await.unwrap();
+        assert_eq!(built.undone.load(Ordering::SeqCst), 1);
+        assert_eq!(built.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn failed_detach_retries_without_repeating_successful_detach() {
+        let done = Arc::new(TestEndpoint::default());
+        let retry = Arc::new(TestEndpoint {
+            fail_once: true,
+            ..Default::default()
+        });
+        let network = network(&[done.clone(), retry.clone()]);
+        network.setup().await.unwrap();
         let hypervisor = Qemu::new();
 
         assert!(network.remove(&hypervisor).await.is_err());
@@ -542,5 +671,62 @@ mod cleanup_tests {
         network.remove(&hypervisor).await.unwrap();
         assert_eq!(done.calls.load(Ordering::SeqCst), 1);
         assert_eq!(retry.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn a_failed_setup_records_and_detaches_what_it_attached() {
+        let attached = Arc::new(TestEndpoint::default());
+        let failed = Arc::new(TestEndpoint {
+            attach_fails: true,
+            ..Default::default()
+        });
+        let untouched = Arc::new(TestEndpoint::default());
+        let network = network(&[attached.clone(), failed.clone(), untouched.clone()]);
+
+        assert!(network.setup().await.is_err());
+        // Every constructed endpoint is recorded; the one whose attach never
+        // started is flagged so cleanup only undoes its construction.
+        let saved = network.save().await.unwrap();
+        assert_eq!(
+            saved
+                .iter()
+                .map(|e| e.construction_only)
+                .collect::<Vec<_>>(),
+            vec![false, false, true]
+        );
+        network.remove(&Qemu::new()).await.unwrap();
+        assert_eq!(attached.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(failed.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(untouched.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn an_unattempted_pair_endpoint_loses_its_tap_and_keeps_its_driver() {
+        let attached = Arc::new(TestEndpoint {
+            pair_based: true,
+            ..Default::default()
+        });
+        let failed = Arc::new(TestEndpoint {
+            attach_fails: true,
+            ..Default::default()
+        });
+        let unattempted = Arc::new(TestEndpoint {
+            pair_based: true,
+            ..Default::default()
+        });
+        let network = network(&[attached.clone(), failed.clone(), unattempted.clone()]);
+
+        assert!(network.setup().await.is_err());
+        network.remove(&Qemu::new()).await.unwrap();
+        // The attached endpoints detach; the unattempted one only has its
+        // construction undone, never a detach.
+        assert_eq!(attached.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(attached.undone.load(Ordering::SeqCst), 0);
+        assert_eq!(failed.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(unattempted.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(unattempted.undone.load(Ordering::SeqCst), 1);
+        // A retry does not undo the construction twice.
+        network.remove(&Qemu::new()).await.unwrap();
+        assert_eq!(unattempted.undone.load(Ordering::SeqCst), 1);
     }
 }
