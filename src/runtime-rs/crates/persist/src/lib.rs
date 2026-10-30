@@ -45,15 +45,16 @@ pub fn remove_from_disk(sid: &str) -> Result<()> {
     remove_from_disk_in(Path::new(KATA_PATH), sid)
 }
 
+/// The last step of a sandbox cleanup: remove its directory, the state with it.
 pub fn remove_from_disk_in(root: &Path, sid: &str) -> Result<()> {
     verify_id(sid).context("failed to verify sid")?;
     if !root.join(sid).exists() {
         return Ok(());
     }
-    let path = state_dir_in(root, sid)?.join(PERSIST_FILE);
-    match std::fs::remove_file(&path) {
+    let dir = state_dir_in(root, sid)?;
+    match std::fs::remove_dir_all(&dir) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            Err(e).with_context(|| format!("failed to remove {}", path.display()))
+            Err(e).with_context(|| format!("failed to remove {}", dir.display()))
         }
         _ => Ok(()),
     }
@@ -209,6 +210,7 @@ mod tests {
         remove_from_disk_in(root.path(), "sid").unwrap();
         remove_from_disk_in(root.path(), "sid").unwrap();
         assert!(from_disk_in::<Kata>(root.path(), "sid").is_err());
+        assert!(!root.path().join("sid").exists());
     }
 
     #[test]
