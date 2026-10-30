@@ -269,20 +269,22 @@ impl ResourceManagerInner {
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
         // tokio runtime, and block the task on it.
         let device_manager = self.device_manager.clone();
-        let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
+        let (network, set_up) = thread::spawn(move || -> Result<_> {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
             let d = rt
                 .block_on(network::new(&network_config, device_manager))
                 .context("new network")?;
-            rt.block_on(d.setup()).context("setup network")?;
-            Ok(d)
+            let set_up = rt.block_on(d.setup()).context("setup network");
+            Ok((d, set_up))
         })
         .join()
         .map_err(|e| anyhow!("{:?}", e))
         .context("Couldn't join on the associated thread")?
         .context("failed to set up network")?;
+        // Kept when the setup fails too: the endpoints it attached are left
+        // for the state to record and the cleanup to detach.
         self.network = Some(network);
-        Ok(())
+        set_up.context("failed to set up network")
     }
 
     async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
