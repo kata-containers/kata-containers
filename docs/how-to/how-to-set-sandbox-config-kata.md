@@ -62,7 +62,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.block_device_driver` | string | the driver to be used for block device, valid values are `virtio-blk`, `virtio-scsi`, `nvdimm`|
 | `io.katacontainers.config.hypervisor.blk_logical_sector_size` | uint32 | logical sector size in bytes reported by block devices to the guest (0 = hypervisor default, must be a power of 2 between 512 and 65536) |
 | `io.katacontainers.config.hypervisor.blk_physical_sector_size` | uint32 | physical sector size in bytes reported by block devices to the guest (0 = hypervisor default, must be a power of 2 between 512 and 65536) |
-| `io.katacontainers.config.hypervisor.cpu_features` | `string` | Comma-separated list of CPU features to pass to the CPU (QEMU) |
+| `io.katacontainers.config.hypervisor.cpu_features` | `string` | For QEMU, comma-separated list of CPU features appended to the `-cpu` option. |
 | `io.katacontainers.config.hypervisor.default_max_vcpus` | uint32| the maximum number of vCPUs allocated for the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.default_memory` | uint32| the memory assigned for a VM by the hypervisor in `MiB` |
 | `io.katacontainers.config.hypervisor.default_vcpus` | float32| the default vCPUs assigned for a VM by the hypervisor |
@@ -95,7 +95,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.kernel_hash` | string | container kernel image SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.kernel_params` | string | additional guest kernel parameters |
 | `io.katacontainers.config.hypervisor.kernel` | string | the kernel used to boot the container VM |
-| `io.katacontainers.config.hypervisor.machine_accelerators` | string | machine specific accelerators for the hypervisor |
+| `io.katacontainers.config.hypervisor.machine_accelerators` | string | Comma-separated list of arbitrary machine properties appended to QEMU's `-machine` option; not limited to accelerators (QEMU-specific). |
 | `io.katacontainers.config.hypervisor.machine_type` | string | the type of machine being emulated by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_offset` | uint64| the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_slots` | uint32| the memory slots assigned to the VM by the hypervisor |
