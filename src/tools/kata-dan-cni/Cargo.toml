@@ -1,0 +1,33 @@
+[package]
+authors.workspace = true
+edition = "2021"
+license.workspace = true
+name = "kata-dan-cni"
+publish = false
+rust-version.workspace = true
+version = "0.1.0"
+
+[[bin]]
+name = "kata-dan-cni"
+path = "src/main.rs"
+
+[[bin]]
+name = "render-cni-config"
+path = "deploy/image/render-cni-config.rs"
+
+[dependencies]
+backend-host-tap = { path = "crates/backends/host-tap" }
+cni-protocol = { path = "crates/cni-protocol" }
+dan-core = { path = "crates/dan-core" }
+k8s-openapi.workspace = true
+kube.workspace = true
+provider-kube-ovn = { path = "crates/providers/kube-ovn" }
+serde.workspace = true
+serde_json.workspace = true
+tokio = { features = ["macros", "rt", "time"], workspace = true }
+
+[dev-dependencies]
+provider-fake = { path = "crates/providers/fake" }
+
+[lints]
+workspace = true
