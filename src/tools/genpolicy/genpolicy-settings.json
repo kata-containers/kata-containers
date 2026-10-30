@@ -91,6 +91,7 @@
             {
                 "destination": "/etc/hostname",
                 "type_": "bind",
+                "source": "$(sfprefix)hostname$|^/run/kata-containers/sandbox/hostname$",
                 "options": [
                     "rbind",
                     "rprivate"

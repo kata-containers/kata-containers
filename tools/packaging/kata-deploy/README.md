@@ -36,3 +36,20 @@ Missing sockets do not prevent the install pod from starting. SELinux denial
 of the probe also logs a fallback; this change does not broaden SELinux policy.
 Explicitly empty custom-runtime settings select `podsandbox`; omission inherits
 the base setting.
+
+When switching an existing deployment to SandboxAPI with agent policy
+enforcement, regenerate its policies with the matching genpolicy version before
+starting new pods. Older policies reject the guest-local resolver and hostname
+sources under `/run/kata-containers/sandbox/`. The agent copies these files into
+each container's bundle before mounting them, so writable mounts cannot change
+the sandbox templates or sibling containers' files. Explicit workload mounts
+take precedence.
+
+Genpolicy currently produces policies compatible with both Task API and
+SandboxAPI. They permit both system-file source patterns and retain the pause
+container entry even when SandboxAPI does not create a pause container. This is
+compatibility behavior, rather than a policy restricted to a single API.
+The `CreateSandboxRequest` policy does not constrain DNS or hostname values;
+validating mount paths does not authenticate the contents supplied by the host.
+Confidential deployments must account for this existing limitation when
+deciding which host-provided network configuration to trust.

@@ -184,7 +184,7 @@
                 "rprivate",
                 "rw"
               ],
-              "source": "/run/kata-containers/shared/containers/gid-89f0faae823d569c-hostname",
+              "source": "/run/kata-containers/sandbox/hostname",
               "type_": "bind"
             },
             {
@@ -340,7 +340,7 @@
       "patch": []
     },
     {
-      "description": "Legacy sharedfs resolver remains allowed",
+      "description": "Legacy sharedfs system files remain allowed",
       "base": "sandbox-rw",
       "allowed": true,
       "patch": [
@@ -348,6 +348,11 @@
           "op": "replace",
           "path": "/OCI/Mounts/9/source",
           "value": "/run/kata-containers/shared/containers/gid-8c0d97703dbbb30e-resolv.conf"
+        },
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/8/source",
+          "value": "/run/kata-containers/shared/containers/gid-89f0faae823d569c-hostname"
         }
       ]
     },
@@ -529,6 +534,30 @@
             "source": "/run/kata-containers/sandbox/resolv.conf",
             "type_": "bind"
           }
+        }
+      ]
+    },
+    {
+      "description": "Sandbox hostname rejects .backup",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/8/source",
+          "value": "/run/kata-containers/sandbox/hostname.backup"
+        }
+      ]
+    },
+    {
+      "description": "Sandbox hostname rejects /extra",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/8/source",
+          "value": "/run/kata-containers/sandbox/hostname/extra"
         }
       ]
     }
