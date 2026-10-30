@@ -5,7 +5,7 @@
 //
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct CgroupState {
     pub path: Option<String>,

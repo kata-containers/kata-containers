@@ -2235,6 +2235,7 @@ impl Persist for VirtSandbox {
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
             config_path: self.config_path.clone(),
             created_netns: self.created_netns.clone(),
+            bootstrap: false,
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",

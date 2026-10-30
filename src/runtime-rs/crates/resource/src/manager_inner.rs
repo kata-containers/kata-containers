@@ -101,7 +101,6 @@ impl ResourceManagerInner {
             .context("failed to create device manager")?;
         let device_manager = Arc::new(RwLock::new(dev_manager));
 
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
         let mem_resource = MemResource::new(init_size_manager)?;
         let swap_resource = if hypervisor
@@ -139,6 +138,27 @@ impl ResourceManagerInner {
             )
         } else {
             None
+        };
+        // Of everything created here, only the swap resource and the cgroups
+        // touch the host: the swap resource makes its runtime directory, the
+        // cgroups are created and the shim is moved into them. Neither is
+        // recorded until the sandbox exists and saves its state, so a failure
+        // after either leaves it behind. Create the cgroups last, when nothing
+        // else can fail, and remove the swap directory if they fail.
+        let cgroups_resource = match CgroupsResource::new(sid, &toml_config) {
+            Ok(cgroups_resource) => cgroups_resource,
+            Err(e) => {
+                if let Some(swap) = &swap_resource {
+                    if let Err(clean_err) = swap.clean().await {
+                        warn!(
+                            sl!(),
+                            "failed to remove the swap directory after the cgroups failed: {:#}",
+                            clean_err
+                        );
+                    }
+                }
+                return Err(e);
+            }
         };
         Ok(Self {
             sid: sid.to_string(),
