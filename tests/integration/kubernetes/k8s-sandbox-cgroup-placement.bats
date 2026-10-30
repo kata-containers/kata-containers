@@ -57,12 +57,12 @@ setup() {
 	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Ready --timeout="$timeout" pod "$pod_name"
 
-	# Select the shim by pod's UID
+	# Select the shim by its CRI sandbox identity, independently of cgroup placement.
 	local pod_uid
 	pod_uid="$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.uid}')"
 
 	local shim_pid vmm_pid vfsd_pid
-	shim_pid="$(shim_pid_for_pod "${node}" "${pod_uid}")"
+	shim_pid="$(shim_pid_for_pod "${node}" "${pod_name}")"
 
 	vmm_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} -f 'cloud-hypervisor|qemu-system|firecracker|stratovirt|openvmm'")"
 

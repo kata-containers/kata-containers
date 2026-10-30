@@ -82,7 +82,7 @@ use crate::features::get_build_features;
 use crate::metrics::{get_metrics, is_collection_in_progress};
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
-use crate::network::setup_guest_dns;
+use crate::network::{copy_sandbox_files, setup_guest_dns, setup_guest_hostname};
 use crate::passfd_io;
 use crate::pci;
 use crate::random;
@@ -355,6 +355,9 @@ impl AgentService {
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
 
+        if use_sandbox_pidns {
+            s.ensure_shared_pidns()?;
+        }
         update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
 
         // Append guest hooks
@@ -1574,6 +1577,7 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        setup_guest_hostname(&req.hostname).map_ttrpc_err(same)?;
         setup_guest_dns(sl(), &req.dns).map_ttrpc_err(same)?;
         {
             let mut s = self.sandbox.lock().await;
@@ -2555,6 +2559,8 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     oci_root.set_path(rootfs_path);
     oci_root.set_readonly(spec_root.readonly());
     spec.set_root(Some(oci_root));
+
+    copy_sandbox_files(spec, &bundle_path)?;
 
     let _ = spec.save(
         config_path

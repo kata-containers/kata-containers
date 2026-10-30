@@ -708,6 +708,7 @@ nodeBinaries: {}
 #       hypervisor:
 #         rootless: false             # run the VMM as an unprivileged user (see below)
 #       containerd:
+#         sandboxer: "podsandbox"     # podsandbox (default), or shim (Rust only; containerd 2+)
 #         snapshotter: ""             # e.g. nydus, erofs, devmapper, or "" for default
 #         forceGuestPull: false       # force guest-side image pull in containerd
 #         extraPodAnnotations: []     # extra containerd pod annotations for this shim
@@ -991,6 +992,7 @@ customRuntimes:
   #       <full RuntimeClass YAML>
   #     inheritBaseOverhead: true       # Optional: set false to avoid baseConfig overhead inheritance
   #     containerd:
+  #       sandboxer: ""    # Optional: shim or podsandbox; inherits base when omitted
   #       snapshotter: ""  # Optional: nydus, erofs, or empty for default
   #     crio:
   #       pullType: ""  # Optional: guest-pull or empty for default

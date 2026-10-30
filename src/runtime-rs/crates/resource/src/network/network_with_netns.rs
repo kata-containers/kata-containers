@@ -31,7 +31,7 @@ use super::{
     utils::link,
     Network,
 };
-use crate::network::NetworkInfo;
+use crate::network::{AttachStarted, NetworkInfo};
 
 #[derive(Clone, Debug)]
 pub struct NetworkWithNetNsConfig {
@@ -74,6 +74,7 @@ impl NetworkWithNetnsInner {
 
 pub(crate) struct NetworkWithNetns {
     inner: Arc<RwLock<NetworkWithNetnsInner>>,
+    attach_started: AttachStarted,
     cleanup: Mutex<NetworkCleanup>,
 }
 
@@ -91,6 +92,7 @@ impl NetworkWithNetns {
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(NetworkWithNetnsInner::new(config, d).await?)),
+            attach_started: AttachStarted::default(),
             cleanup: Mutex::new(NetworkCleanup::default()),
         })
     }
@@ -101,7 +103,8 @@ impl Network for NetworkWithNetns {
     async fn setup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
-        for e in &inner.entity_list {
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            self.attach_started.begin(index);
             if let Some(device_path) = e.endpoint.attach().await.context("attach")? {
                 e.network_info
                     .set_device_path(device_path)
@@ -155,7 +158,10 @@ impl Network for NetworkWithNetns {
     async fn save(&self) -> Option<Vec<EndpointState>> {
         let inner = self.inner.read().await;
         let mut endpoint = vec![];
-        for e in &inner.entity_list {
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if !self.attach_started.includes(index) {
+                break;
+            }
             if let Some(state) = e.endpoint.save().await {
                 endpoint.push(state);
             }
@@ -167,6 +173,11 @@ impl Network for NetworkWithNetns {
         let mut cleanup = self.cleanup.lock().await;
         let inner = self.inner.read().await;
         let mut errors = Vec::new();
+        for index in 0..inner.entity_list.len() {
+            if !self.attach_started.includes(index) {
+                cleanup.detached.insert(index);
+            }
+        }
 
         // Always detach endpoints regardless of whether kata created the netns.
         // Physical endpoints rebind their VF from vfio-pci back to the original
@@ -466,10 +477,11 @@ mod cleanup_tests {
     use hypervisor::qemu::Qemu;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     struct TestEndpoint {
         calls: AtomicUsize,
         fail_once: bool,
+        attach_fails: bool,
     }
 
     #[async_trait]
@@ -481,7 +493,11 @@ mod cleanup_tests {
             String::new()
         }
         async fn attach(&self) -> Result<Option<String>> {
-            Ok(None)
+            if self.attach_fails {
+                Err(anyhow!("no room for the device"))
+            } else {
+                Ok(None)
+            }
         }
         async fn detach(&self, _: &dyn Hypervisor) -> Result<()> {
             let call = self.calls.fetch_add(1, Ordering::SeqCst);
@@ -492,7 +508,7 @@ mod cleanup_tests {
             }
         }
         async fn save(&self) -> Option<EndpointState> {
-            None
+            Some(EndpointState::default())
         }
         async fn host_bdf(&self) -> Option<String> {
             Some("0000:00:00.1".into())
@@ -515,26 +531,30 @@ mod cleanup_tests {
         }
     }
 
-    #[tokio::test]
-    async fn failed_detach_retries_without_repeating_successful_detach() {
-        let done = Arc::new(TestEndpoint {
-            calls: AtomicUsize::new(0),
-            fail_once: false,
-        });
-        let retry = Arc::new(TestEndpoint {
-            calls: AtomicUsize::new(0),
-            fail_once: true,
-        });
-        let entity =
-            |endpoint: Arc<TestEndpoint>| NetworkEntity::new(endpoint, Arc::new(TestNetworkInfo));
-        let network = NetworkWithNetns {
+    fn network(endpoints: &[Arc<TestEndpoint>]) -> NetworkWithNetns {
+        NetworkWithNetns {
             inner: Arc::new(RwLock::new(NetworkWithNetnsInner {
                 netns_path: String::new(),
-                entity_list: vec![entity(done.clone()), entity(retry.clone())],
+                entity_list: endpoints
+                    .iter()
+                    .map(|e| NetworkEntity::new(e.clone(), Arc::new(TestNetworkInfo)))
+                    .collect(),
                 network_created: false,
             })),
+            attach_started: AttachStarted::default(),
             cleanup: Mutex::new(NetworkCleanup::default()),
-        };
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_detach_retries_without_repeating_successful_detach() {
+        let done = Arc::new(TestEndpoint::default());
+        let retry = Arc::new(TestEndpoint {
+            fail_once: true,
+            ..Default::default()
+        });
+        let network = network(&[done.clone(), retry.clone()]);
+        network.setup().await.unwrap();
         let hypervisor = Qemu::new();
 
         assert!(network.remove(&hypervisor).await.is_err());
@@ -542,5 +562,23 @@ mod cleanup_tests {
         network.remove(&hypervisor).await.unwrap();
         assert_eq!(done.calls.load(Ordering::SeqCst), 1);
         assert_eq!(retry.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn a_failed_setup_records_and_detaches_what_it_attached() {
+        let attached = Arc::new(TestEndpoint::default());
+        let failed = Arc::new(TestEndpoint {
+            attach_fails: true,
+            ..Default::default()
+        });
+        let untouched = Arc::new(TestEndpoint::default());
+        let network = network(&[attached.clone(), failed.clone(), untouched.clone()]);
+
+        assert!(network.setup().await.is_err());
+        assert_eq!(network.save().await.unwrap().len(), 2);
+        network.remove(&Qemu::new()).await.unwrap();
+        assert_eq!(attached.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(failed.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(untouched.calls.load(Ordering::SeqCst), 0);
     }
 }

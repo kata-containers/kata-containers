@@ -234,8 +234,6 @@ impl Persist for FcInner {
             config: self.hypervisor_config(),
             jailed: self.jailed,
             jailer_root: self.jailer_root.clone(),
-            run_dir: self.run_dir.clone(),
-            netns: self.netns.clone(),
             ..Default::default()
         })
     }
@@ -246,13 +244,13 @@ impl Persist for FcInner {
             state: VmmState::NotReady,
             vm_path: hypervisor_state.vm_path,
             config: hypervisor_state.config,
-            netns: hypervisor_state.netns,
+            netns: None,
             pid: None,
             jailed: hypervisor_state.jailed,
             jailer_root: hypervisor_state.jailer_root,
             client: Client::unix(),
             pending_devices: vec![],
-            run_dir: hypervisor_state.run_dir,
+            run_dir: String::new(),
             capabilities: Capabilities::new(),
             fc_process: Mutex::new(None),
             exit_notify: Some(exit_notify),

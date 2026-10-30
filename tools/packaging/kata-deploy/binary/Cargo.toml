@@ -13,9 +13,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+containerd-client = "0.4.0"
 env_logger = "0.10"
 flate2 = "1"
 humantime = "2.1.0"
+json-patch = "4"
 k8s-openapi = { default-features = false, features = [
   "v1_33",
 ], version = "0.26" }
@@ -26,7 +28,6 @@ k8s-openapi = { default-features = false, features = [
 # `ring` matches kube's own default crypto provider for rustls 0.23+ and
 # must stay enabled — without it, rustls panics at runtime with
 # "Could not automatically determine the process-level CryptoProvider".
-json-patch = "4"
 kube = { default-features = false, features = [
   "client",
   "jsonpatch",
@@ -50,6 +51,7 @@ tokio = { features = [
   "time",
 ], workspace = true }
 toml_edit = "0.22"
+tonic = "0.9.2"
 walkdir = "2"
 zstd = "0.13.3"
 # We speak D-Bus to systemd ourselves (see src/utils/dbus.rs) and only need the

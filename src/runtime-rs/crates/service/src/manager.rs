@@ -6,13 +6,11 @@
 
 use std::fs;
 use std::os::unix::io::RawFd;
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use common::message::{Action, Message};
 use containerd_shim_protos::shim_async;
-use kata_types::config::KATA_PATH;
 use runtimes::RuntimeHandlerManager;
 use tokio::sync::mpsc::{channel, Receiver};
 use ttrpc::asynchronous::Server;
@@ -123,23 +121,25 @@ impl ServiceManager {
     pub async fn cleanup(sid: &str) -> Result<()> {
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
-        let temp_dir = [KATA_PATH, sid].join("/");
+        let state_dir = persist::state_dir(sid).context("sandbox state directory")?;
         if let Err(e) = handler.cleanup().await {
             // The state is the only record of what is left on the host, so a
             // later delete can still retry.
-            if Path::new(&temp_dir).join(persist::PERSIST_FILE).exists() {
+            if state_dir.join(persist::PERSIST_FILE).exists() {
                 error!(
                     sl!(),
-                    "failed to clean up runtime state, keeping {} for a retry: {:#}", temp_dir, e
+                    "failed to clean up runtime state, keeping {} for a retry: {:#}",
+                    state_dir.display(),
+                    e
                 );
                 return Ok(());
             }
             warn!(sl!(), "failed to clean up runtime state, {}", e);
         }
 
-        if fs::metadata(temp_dir.as_str()).is_ok() {
+        if fs::metadata(&state_dir).is_ok() {
             // try to remove dir and skip the result
-            if let Err(e) = fs::remove_dir_all(temp_dir) {
+            if let Err(e) = fs::remove_dir_all(&state_dir) {
                 warn!(sl!(), "failed to clean up sandbox tmp dir, {}", e);
             }
         }

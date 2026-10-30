@@ -1,0 +1,39 @@
+// Copyright (c) The containerd Authors.
+// SPDX-License-Identifier: Apache-2.0
+// Startup request schema from:
+// https://github.com/containerd/containerd/blob/v2.3.3/api/runtime/bootstrap/v1/bootstrap.proto
+syntax = "proto3";
+package containerd.runtime.bootstrap.v1;
+
+message BootstrapParams {
+  string instance_id = 1;
+  string namespace = 2;
+  LogLevel log_level = 3;
+  string containerd_version = 4;
+  string containerd_ttrpc_address = 5;
+  string containerd_grpc_address = 6;
+  string containerd_binary = 7;
+  repeated Extension extensions = 8;
+  optional string socket_dir = 9;
+}
+
+message Extension {
+  BootstrapAny value = 1;
+}
+
+// Wire-compatible with google.protobuf.Any. A local message retains the
+// protocols crate's optional serde support, which the builtin Any lacks.
+message BootstrapAny {
+  string type_url = 1;
+  bytes value = 2;
+}
+
+enum LogLevel {
+  LOG_LEVEL_INFO = 0;
+  LOG_LEVEL_TRACE = -8;
+  LOG_LEVEL_DEBUG = -4;
+  LOG_LEVEL_WARN = 4;
+  LOG_LEVEL_ERROR = 8;
+  LOG_LEVEL_FATAL = 10;
+  LOG_LEVEL_PANIC = 12;
+}
