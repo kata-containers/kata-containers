@@ -306,7 +306,7 @@ EOF
 	(( vmm_uid != 0 ))
 	(( vmm_gid != 0 ))
 	vmm_user="$(exec_host "${node}" "getent passwd ${vmm_uid} | cut -d: -f1")"
-	[[ "${vmm_user}" =~ ^kata-[0-9]+$ ]]
+	[[ "${vmm_user}" =~ ^kata-[a-f0-9]{8}-[0-9]+$ ]]
 
 	if [[ "${KATA_HYPERVISOR}" == qemu* ]]; then
 		cmdline="$(exec_host "${node}" "tr '\\0' ' ' < /proc/${vmm_pid}/cmdline")"

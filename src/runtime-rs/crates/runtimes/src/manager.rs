@@ -18,8 +18,9 @@ use common::{
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::utils::{
-    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user,
-    remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
+    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user, find_user,
+    is_recorded_vmm_user, remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
+    VMM_USER_UID_UNKNOWN,
 };
 use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
 use kata_types::{
@@ -35,7 +36,7 @@ use kata_types::{
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
-use netns_rs::{Env, NetNs};
+use netns_rs::{DefaultEnv, Env, NetNs};
 use nix::{sys::statfs, unistd::User};
 use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
@@ -180,6 +181,12 @@ impl RuntimeHandlerManagerInner {
             load_config_with_path(&sandbox_config.annotations, options).context("load config")?;
         sandbox_config.config_path = Some(config_path);
 
+        // Computed before the hypervisor config is borrowed: it only reads
+        // the runtime section and the OCI spec.
+        #[cfg(feature = "virt")]
+        let cgroup_state = resource::cgroups::preview_cgroup_state(&self.id, &config)
+            .context("preview the cgroup state")?;
+
         let hypervisor_name = &config.runtime.hypervisor_name;
         let hypervisor = config
             .hypervisor
@@ -188,9 +195,27 @@ impl RuntimeHandlerManagerInner {
 
         set_rootless(hypervisor.security_info.rootless);
         let mut rootless_setup_guard = if is_rootless() {
+            // Record each candidate user before useradd may create it: a
+            // crash in between leaves a user only that record names.
+            let sid = self.id.clone();
+            let network_env = sandbox_config.network_env.clone();
+            let cfg_path = sandbox_config.config_path.clone();
+            let hv_name = hypervisor_name.clone();
             Some(
-                configure_non_root_hypervisor(hypervisor)
-                    .context("configure non-root hypervisor")?,
+                configure_non_root_hypervisor(&self.id, hypervisor, &mut |candidate| {
+                    #[cfg(feature = "virt")]
+                    save_bootstrap_state(
+                        &sid,
+                        &network_env,
+                        cfg_path.as_deref(),
+                        Some((&hv_name, candidate)),
+                        None,
+                    )?;
+                    #[cfg(not(feature = "virt"))]
+                    let _ = candidate;
+                    Ok(())
+                })
+                .context("configure non-root hypervisor")?,
             )
         } else {
             None
@@ -204,15 +229,33 @@ impl RuntimeHandlerManagerInner {
             if sandbox_config.network_env.network_created {
                 discard_created_netns(&mut sandbox_config.network_env)?;
                 let ns_name = generate_netns_name();
-                let rootless_raw_netns = NetNs::new_with_env(ns_name, RootlessEnv)?;
-                let path = Some(
-                    PathBuf::from(rootless_raw_netns.path())
-                        .display()
-                        .to_string(),
-                );
-                sandbox_config.network_env.netns = path;
+                let path = RootlessEnv.persist_dir().join(&ns_name);
+                sandbox_config.network_env.netns = Some(path.display().to_string());
+                // Record the namespace before making it: removing one that
+                // never came to exist is tolerated, while one no record
+                // names is never removed.
+                #[cfg(feature = "virt")]
+                save_bootstrap_state(
+                    &self.id,
+                    &sandbox_config.network_env,
+                    sandbox_config.config_path.as_deref(),
+                    Some((hypervisor_name, hypervisor)),
+                    None,
+                )?;
+                NetNs::new_with_env(ns_name, RootlessEnv)?;
             }
         }
+        // The full record: the resource manager will create the cgroups and
+        // the swap directory before the sandbox first saves for itself, so
+        // they have to be named here already.
+        #[cfg(feature = "virt")]
+        save_bootstrap_state(
+            &self.id,
+            &sandbox_config.network_env,
+            sandbox_config.config_path.as_deref(),
+            Some((hypervisor_name, hypervisor)),
+            Some(cgroup_state),
+        )?;
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -353,6 +396,11 @@ impl RuntimeHandlerManager {
                     info!(sl!(), "skip cleanup for keep_abnormal");
                     return Ok(());
                 }
+                if sandbox_state.is_bootstrap() {
+                    return cleanup_bootstrap(&inner.id, &sandbox_state, sandbox_args.toml_config)
+                        .await
+                        .context("failed to clean up the sandbox setup");
+                }
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
                     .context("failed to restore the sandbox")?;
@@ -426,10 +474,24 @@ impl RuntimeHandlerManager {
                 // if we get empty netns from oci spec, we need to create netns for the VM
                 else {
                     let ns_name = generate_netns_name();
-                    let raw_netns = NetNs::new(ns_name)?;
-                    let path = Some(PathBuf::from(raw_netns.path()).display().to_string());
-                    netns = path;
+                    let path = DefaultEnv.persist_dir().join(&ns_name);
+                    netns = Some(path.display().to_string());
                     network_created = true;
+                    // Record the namespace before making it: removing one
+                    // that never came to exist is tolerated, while one no
+                    // record names is never removed.
+                    #[cfg(feature = "virt")]
+                    save_bootstrap_state(
+                        &inner.id,
+                        &SandboxNetworkEnv {
+                            netns: netns.clone(),
+                            network_created,
+                        },
+                        None,
+                        None,
+                        None,
+                    )?;
+                    NetNs::new(ns_name)?;
                 }
                 break;
             }
@@ -1013,6 +1075,64 @@ impl Drop for RootlessSetupGuard {
     }
 }
 
+/// Until the sandbox saves its state, this is the only record of what the
+/// shim made on the host for it.
+#[cfg(feature = "virt")]
+fn save_bootstrap_state(
+    sid: &str,
+    network_env: &SandboxNetworkEnv,
+    config_path: Option<&Path>,
+    hypervisor: Option<(&str, &Hypervisor)>,
+    cgroup_state: Option<resource::cgroups::cgroup_persist::CgroupState>,
+) -> Result<()> {
+    let state = SandboxState::bootstrap(network_env, config_path, hypervisor, cgroup_state);
+    persist::to_disk(&state, sid).context("save the sandbox setup state")
+}
+
+/// Remove what the shim made on the host before the sandbox existed.
+#[cfg(feature = "virt")]
+async fn cleanup_bootstrap(sid: &str, state: &SandboxState, toml_config: TomlConfig) -> Result<()> {
+    if let Some(path) = state.created_netns.as_deref() {
+        remove_netns(Path::new(path)).context("remove the network namespace")?;
+    }
+    // What the resource manager created before the sandbox could save for
+    // itself: the cgroups the record named ahead of time, and the swap
+    // directory, whose path the recorded hypervisor config determines.
+    if let Some(cgroup_state) = state
+        .resource
+        .as_ref()
+        .and_then(|r| r.cgroup_state.as_ref())
+    {
+        resource::cgroups::delete_cgroups_from_state(sid, toml_config, cgroup_state.clone())
+            .await
+            .context("remove the cgroups")?;
+    }
+    if let Some(h) = state.hypervisor.as_ref() {
+        if h.config.memory_info.enable_guest_swap {
+            let mut path = PathBuf::from(&h.config.memory_info.guest_swap_path);
+            path.push(sid);
+            remove_dir_all_if_exists(path).context("remove the swap directory")?;
+        }
+    }
+    let Some(user) = state
+        .hypervisor
+        .as_ref()
+        .and_then(|h| h.config.security_info.rootless_user.as_ref())
+    else {
+        return Ok(());
+    };
+    // Once the user is gone its UID can belong to another sandbox's, and so
+    // can the runtime directory named after it.
+    match find_user(&user.user_name)? {
+        Some(found) if is_recorded_vmm_user(user.uid, &found, sid) => {
+            remove_dir_all_if_exists(vmm_user_runtime_dir(found.uid.as_raw()))
+                .context("remove the rootless runtime directory")?;
+            remove_vmm_user(&user.user_name).context("remove the VMM user")
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Runtime directory configure_non_root_hypervisor() gave the VMM user of a
 /// rootless sandbox. The user comes from the root-owned state.json, which
 /// the VMM user cannot replace.
@@ -1027,8 +1147,24 @@ fn rootless_runtime_dir(security: &SecurityInfo) -> Result<Option<PathBuf>> {
     Ok(Some(vmm_user_runtime_dir(user.uid)))
 }
 
-fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
-    let vmm_user_name = create_vmm_user().context("failed to create vmm user")?;
+fn configure_non_root_hypervisor(
+    sid: &str,
+    config: &mut Hypervisor,
+    record_candidate_user: &mut dyn FnMut(&Hypervisor) -> Result<()>,
+) -> Result<RootlessSetupGuard> {
+    let vmm_user_name = {
+        let mut record = |name: &str| {
+            let mut candidate = config.clone();
+            candidate.security_info.rootless_user = Some(RootlessUser {
+                uid: VMM_USER_UID_UNKNOWN,
+                gid: VMM_USER_UID_UNKNOWN,
+                groups: Vec::new(),
+                user_name: name.to_string(),
+            });
+            record_candidate_user(&candidate)
+        };
+        create_vmm_user(sid, &mut record).context("failed to create vmm user")?
+    };
     let mut guard = RootlessSetupGuard::new(vmm_user_name.clone());
 
     let user = User::from_name(&vmm_user_name)?.ok_or_else(|| {
@@ -1468,5 +1604,68 @@ mod tests {
             rootless_runtime_dir(&security).unwrap(),
             Some(PathBuf::from("/run/user/1001"))
         );
+    }
+
+    #[tokio::test]
+    async fn a_setup_whose_vmm_user_is_gone_cleans_up_without_touching_its_uid() {
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: 0,
+            user_name: "kata-no-such-user".to_string(),
+            ..Default::default()
+        });
+        let state = SandboxState::bootstrap(
+            &SandboxNetworkEnv::default(),
+            None,
+            Some(("qemu", &config)),
+            None,
+        );
+        cleanup_bootstrap("test-sid", &state, TomlConfig::default())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_setup_recorded_before_useradd_cleans_up_by_name() {
+        // The record of a user that was never created carries no UID; the
+        // cleanup must match it by name and find nothing to remove.
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: VMM_USER_UID_UNKNOWN,
+            user_name: "kata-0123abcd-9999".to_string(),
+            ..Default::default()
+        });
+        let state = SandboxState::bootstrap(
+            &SandboxNetworkEnv::default(),
+            None,
+            Some(("qemu", &config)),
+            None,
+        );
+        cleanup_bootstrap("test-sid", &state, TomlConfig::default())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_recorded_name_belonging_to_someone_else_is_left_alone() {
+        // A candidate record carries no UID. When its name matches an
+        // account that does not carry the VMM user comment, the recorded
+        // useradd did not create that account, so it must survive.
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: VMM_USER_UID_UNKNOWN,
+            user_name: "root".to_string(),
+            ..Default::default()
+        });
+        let state = SandboxState::bootstrap(
+            &SandboxNetworkEnv::default(),
+            None,
+            Some(("qemu", &config)),
+            None,
+        );
+        cleanup_bootstrap("test-sid", &state, TomlConfig::default())
+            .await
+            .unwrap();
+        assert!(find_user("root").unwrap().is_some());
     }
 }
