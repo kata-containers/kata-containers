@@ -212,23 +212,52 @@ impl CgroupManager for Manager {
     }
 
     fn destroy(&self) -> Result<()> {
-        if let Err(err) = self.cgroup.delete() {
-            warn!(
-                sl(),
-                "Failed to delete cgroup {}: {}",
-                self.cgroup.path(),
-                err
-            );
+        // `cgroups-rs`' `Cgroup::delete()` does not recurse into child
+        // cgroups, so a cgroup that has children (for example created by
+        // systemd) cannot be removed by it directly.  We therefore walk
+        // the cgroup subtree bottom-up ourselves.
+        //
+        // On cgroup v2 there is a single unified hierarchy, whose path we
+        // obtain from the memory controller.  On cgroup v1 every
+        // controller has its own mount, which we look up via `self.mounts`.
+        if cgroups::hierarchies::is_cgroup2_unified_mode() {
+            let mem_controller: &MemController = self.cgroup.controller_of().unwrap();
+            let cgroup_dir = Path::new(mem_controller.path());
+            if cgroup_dir.exists() {
+                if let Err(err) = destroy_cgroup_recursive(cgroup_dir) {
+                    warn!(
+                        sl(),
+                        "Failed to delete cgroup {}: {}",
+                        cgroup_dir.display(),
+                        err
+                    );
+                }
+            }
+        } else {
+            for (controller, mount) in &self.mounts {
+                if let Some(cpath) = self.paths.get(controller) {
+                    let cgroup_dir = Path::new(mount).join(cpath.trim_start_matches('/'));
+                    if cgroup_dir.exists() {
+                        if let Err(err) = destroy_cgroup_recursive(&cgroup_dir) {
+                            warn!(
+                                sl(),
+                                "Failed to delete cgroup {}: {}",
+                                cgroup_dir.display(),
+                                err
+                            );
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
 
     fn get_pids(&self) -> Result<Vec<pid_t>> {
         let mem_controller: &MemController = self.cgroup.controller_of().unwrap();
-        let pids = mem_controller.tasks();
-        let result = pids.iter().map(|x| x.pid as i32).collect::<Vec<i32>>();
-
-        Ok(result)
+        // Recurse into child cgroups so that processes moved there by
+        // systemd are not missed.
+        collect_pids_recursive(Path::new(mem_controller.path()))
     }
 
     fn update_cpuset_path(&self, guest_cpuset: &str, container_cpuset: &str) -> Result<()> {
@@ -1082,6 +1111,92 @@ fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Result<Cgroup> {
 fn load_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
     let valid_path = path.trim_start_matches('/').to_string();
     cgroups::Cgroup::load(h, valid_path.as_str())
+}
+
+/// Recursively collect all PIDs from a cgroup and its child cgroups.
+///
+/// When a container runs systemd, systemd creates child cgroups (for
+/// example `system.slice`, `user.slice`) under the container's cgroup and
+/// moves service processes into them.  Reading `cgroup.procs` of the
+/// container's cgroup alone would miss those processes, so the whole
+/// subtree must be walked.
+fn collect_pids_recursive(cgroup_dir: &Path) -> Result<Vec<pid_t>> {
+    let mut pids = Vec::new();
+
+    // Collect PIDs that belong directly to this cgroup.
+    let procs_file = cgroup_dir.join("cgroup.procs");
+    if let Ok(content) = fs::read_to_string(&procs_file) {
+        for line in content.lines() {
+            if let Ok(pid) = line.parse::<pid_t>() {
+                pids.push(pid);
+            }
+        }
+    }
+
+    // Recurse into child cgroups (subdirectories).  A failure reading a
+    // child must not abort the whole collection, so we log and continue.
+    if let Ok(entries) = fs::read_dir(cgroup_dir) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                match collect_pids_recursive(&entry_path) {
+                    Ok(child_pids) => pids.extend(child_pids),
+                    Err(err) => warn!(
+                        sl(),
+                        "Failed to collect pids from child cgroup {}: {}",
+                        entry_path.display(),
+                        err
+                    ),
+                }
+            }
+        }
+    }
+
+    Ok(pids)
+}
+
+/// Recursively kill every process inside a cgroup subtree and remove the
+/// cgroup directories bottom-up.
+///
+/// `cgroups-rs`' `Cgroup::delete()` does not descend into child cgroups,
+/// so a cgroup that has children (for example created by systemd) cannot
+/// be removed until the children are gone.
+fn destroy_cgroup_recursive(cgroup_dir: &Path) -> Result<()> {
+    // Destroy child cgroups first so the parent can be removed.  A
+    // failure on one child must not prevent the others from being
+    // cleaned up.
+    if let Ok(entries) = fs::read_dir(cgroup_dir) {
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                if let Err(err) = destroy_cgroup_recursive(&entry_path) {
+                    warn!(
+                        sl(),
+                        "Failed to destroy child cgroup {}: {}",
+                        entry_path.display(),
+                        err
+                    );
+                }
+            }
+        }
+    }
+
+    // Kill any process still attached to this cgroup.
+    let procs_file = cgroup_dir.join("cgroup.procs");
+    if let Ok(content) = fs::read_to_string(&procs_file) {
+        for line in content.lines() {
+            if let Ok(pid) = line.parse::<i32>() {
+                // The process may have exited already; ignore the error.
+                let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+            }
+        }
+    }
+
+    // Remove the cgroup directory itself.  Ignore errors: the directory
+    // may already be gone or may still be transiently populated.
+    let _ = fs::remove_dir(cgroup_dir);
+
+    Ok(())
 }
 
 impl Manager {
