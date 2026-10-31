@@ -6,9 +6,8 @@
 ; unprivileged and are otherwise denied their host work as container_t
 ; (kata-containers/kata-containers#13751).
 ;
-; Nothing is relabelled: with no filecon rules /opt/kata keeps the labels it has
-; today, so the Kata runtime is unaffected. The rules are only the delta over
-; container_t, whose attributes these domains join.
+; Installer rules are a delta over container_t. The compatibility rules at the
+; end also prepare device and CDI labels for older host policy packages.
 ;
 ; Read README.md before changing them. They were harvested from a full cycle
 ; with dontaudit disabled, and a missing one can present as a silent failure
@@ -18,7 +17,7 @@
 ; module is: it becomes the semodule priority, and the node keeps the highest.
 ; Bump it in the same commit as any change here, or an older image will happily
 ; overwrite this on a node a newer release already set up.
-; policy-revision: 3
+; policy-revision: 4
 
 ; Job mode runs each stage in a container of its own; daemonset mode runs them
 ; all in one, so kata_deploy_t is the union.
@@ -178,3 +177,32 @@
     (dir (search getattr write remove_name)))
 (allow kata_deploy_artifacts_t udev_rules_t
     (file (getattr unlink)))
+
+; Temporary compatibility until distro policy carries VFIO cdev labels,
+; confined QEMU IOMMUFD access, and the writable device-plugin CDI registry.
+(allow container_kvm_t vfio_device_t (chr_file (getattr open read write ioctl map)))
+(optional kata_gpu_iommufd_compat
+    (allow container_kvm_t iommu_device_t (chr_file (getattr open read write ioctl))))
+(filecon "/dev/vfio/devices/vfio[0-9]+" char (system_u object_r vfio_device_t ((s0) (s0))))
+; Keep this type separate from upstream container_cdi_t so the compatibility
+; module can coexist with a later container-selinux update.
+(type kata_cdi_compat_t)
+(roletype object_r kata_cdi_compat_t)
+(typeattributeset file_type (kata_cdi_compat_t))
+(typeattributeset non_security_file_type (kata_cdi_compat_t))
+(typeattributeset non_auth_file_type (kata_cdi_compat_t))
+(typeattributeset pidfile (kata_cdi_compat_t))
+(filecon "/run/cdi" dir (system_u object_r kata_cdi_compat_t ((s0) (s0))))
+(filecon "/run/cdi/.*" any (system_u object_r kata_cdi_compat_t ((s0) (s0))))
+(allow container_device_plugin_t kata_cdi_compat_t
+    (dir (open read getattr lock search ioctl add_name remove_name write)))
+(allow container_device_plugin_t kata_cdi_compat_t
+    (file (create open getattr setattr read write append rename link unlink ioctl lock watch watch_reads)))
+(allow container_runtime_domain kata_cdi_compat_t
+    (dir (getattr search open read lock ioctl watch)))
+(allow container_runtime_domain kata_cdi_compat_t
+    (file (getattr open read lock ioctl)))
+(allow container_kvm_t kata_cdi_compat_t
+    (dir (getattr search open read lock ioctl watch)))
+(allow container_kvm_t kata_cdi_compat_t
+    (file (getattr open read lock ioctl)))
