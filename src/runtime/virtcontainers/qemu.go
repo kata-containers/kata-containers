@@ -1624,6 +1624,31 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	return err
 }
 
+// listenQMP creates the inherited socket with QEMU's SELinux context.
+func (q *qemu) listenQMP(path string) (net.Listener, error) {
+	if q.config.DisableSeLinux || q.config.SELinuxProcessLabel == "" || !selinux.GetEnabled() {
+		return net.Listen("unix", path)
+	}
+	type result struct {
+		listener net.Listener
+		err      error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		// Keep the socket context off reusable runtime threads. Exiting with
+		// the thread locked makes Go terminate it instead of returning it.
+		goruntime.LockOSThread()
+		if err := selinux.SetSocketLabel(q.config.SELinuxProcessLabel); err != nil {
+			ch <- result{err: err}
+			return
+		}
+		listener, err := net.Listen("unix", path)
+		ch <- result{listener: listener, err: err}
+	}()
+	r := <-ch
+	return r.listener, r.err
+}
+
 // setupEarlyQmpConnection creates a listener socket to be passed to QEMU
 // as a QMP listening endpoint. An initial connection is established, to
 // be used as the QMP client socket. This allows to detect an early failure
@@ -1631,7 +1656,7 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 func (q *qemu) setupEarlyQmpConnection() (net.Conn, error) {
 	monitorSockPath := q.qmpMonitorCh.path
 
-	qmpListener, err := net.Listen("unix", monitorSockPath)
+	qmpListener, err := q.listenQMP(monitorSockPath)
 	if err != nil {
 		q.Logger().WithError(err).Errorf("Unable to listen on unix socket address (%s)", monitorSockPath)
 		return nil, err

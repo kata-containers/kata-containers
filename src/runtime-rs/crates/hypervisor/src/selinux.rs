@@ -6,7 +6,9 @@
 use std::ffi::CString;
 use std::fs;
 use std::io;
+use std::os::unix::net::UnixListener;
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -16,6 +18,27 @@ pub fn is_selinux_enabled() -> bool {
     fs::read_to_string("/proc/mounts")
         .map(|buf| buf.contains("selinuxfs"))
         .unwrap_or_default()
+}
+
+/// Create an inherited listener with the VMM's socket context, not the shim's.
+pub fn bind_unix_listener(path: &Path, label: Option<&str>) -> io::Result<UnixListener> {
+    let Some(label) = label.filter(|label| !label.is_empty()) else {
+        return UnixListener::bind(path);
+    };
+    let label = CString::new(label)?;
+    if !is_selinux_enabled() {
+        return UnixListener::bind(path);
+    }
+    let path = path.to_owned();
+    // sockcreate is thread-local. Let this dedicated thread exit rather than
+    // leaving the VMM context on an async worker or a reused shim thread.
+    std::thread::Builder::new()
+        .spawn(move || {
+            fs::write("/proc/thread-self/attr/sockcreate", label.as_bytes())?;
+            UnixListener::bind(path)
+        })?
+        .join()
+        .map_err(|_| io::Error::other("SELinux socket creation thread panicked"))?
 }
 
 /// Set the SELinux label the child will use when it executes the command.
@@ -82,6 +105,62 @@ pub fn apply_exec_label(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::net::UnixStream;
+
+    #[test]
+    fn unix_listener_without_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qmp.sock");
+        let listener = bind_unix_listener(&path, None).unwrap();
+        let _client = UnixStream::connect(&path).unwrap();
+        listener.accept().unwrap();
+        assert!(bind_unix_listener(&path, None).is_err());
+    }
+
+    #[test]
+    fn unix_listener_rejects_invalid_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qmp.sock");
+        assert!(bind_unix_listener(&path, Some("bad\0label")).is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    #[ignore = "requires SELinux and KATA_TEST_QMP_SELINUX_LABEL permitted by host policy"]
+    fn unix_listener_uses_vmm_socket_label() {
+        assert!(is_selinux_enabled());
+        let label = std::env::var("KATA_TEST_QMP_SELINUX_LABEL").unwrap();
+        let pending = fs::read("/proc/thread-self/attr/sockcreate").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qmp.sock");
+        let listener = bind_unix_listener(&path, Some(&label)).unwrap();
+        let client = UnixStream::connect(&path).unwrap();
+        let _accepted = listener.accept().unwrap();
+        let mut context = vec![0u8; 4096];
+        let mut len = context.len() as libc::socklen_t;
+        let ret = unsafe {
+            libc::getsockopt(
+                client.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_PEERSEC,
+                context.as_mut_ptr().cast(),
+                &mut len,
+            )
+        };
+        assert_eq!(ret, 0, "{}", io::Error::last_os_error());
+        let context = std::str::from_utf8(&context[..len as usize]).unwrap();
+        assert_eq!(context.trim_end_matches('\0'), label);
+        assert_eq!(
+            fs::read("/proc/thread-self/attr/sockcreate").unwrap(),
+            pending
+        );
+        assert!(bind_unix_listener(&path, Some(&label)).is_err());
+        assert_eq!(
+            fs::read("/proc/thread-self/attr/sockcreate").unwrap(),
+            pending
+        );
+    }
 
     #[test]
     fn command_rejects_label_with_nul() {
