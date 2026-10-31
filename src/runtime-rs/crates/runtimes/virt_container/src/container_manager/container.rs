@@ -617,6 +617,26 @@ impl Container {
             .context("clean up container")
     }
 
+    /// Called when this container is about to be dropped: any device reference
+    /// it still holds goes to the device manager, which keeps retrying it.
+    pub async fn orphan_device_references(&self) {
+        let devices = std::mem::take(&mut self.inner.write().await.devices);
+        if devices.is_empty() {
+            return;
+        }
+        warn!(
+            self.logger,
+            "handing {} unreleased device reference(s) to the device manager",
+            devices.len()
+        );
+        self.resource_manager
+            .get_device_manager()
+            .await
+            .write()
+            .await
+            .adopt_orphaned_references(devices);
+    }
+
     async fn copy_termination_log(&self) {
         let toml_config = self.resource_manager.config().await;
         let shared_fs = toml_config

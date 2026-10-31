@@ -534,6 +534,17 @@ impl ResourceManagerInner {
     ) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
 
+        // A device a deleted container kept may be the one requested here.
+        if let Err(e) = self
+            .device_manager
+            .write()
+            .await
+            .release_orphaned_references()
+            .await
+        {
+            warn!(sl!(), "{:#}", e);
+        }
+
         // Build a map of host_bdf -> Option<guest_pci_path> for cold-plugged
         // physical (VFIO) network endpoints.  When a VFIO char device in the
         // OCI spec belongs to one of these endpoints we bypass the

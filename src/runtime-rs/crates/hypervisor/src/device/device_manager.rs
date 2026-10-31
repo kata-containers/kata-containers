@@ -105,6 +105,8 @@ pub struct DeviceManager {
     hypervisor: Arc<dyn Hypervisor>,
     shared_info: SharedInfo,
     pcie_topology: Option<PCIeTopology>,
+    /// References whose owner was deleted before it could release them.
+    orphaned_references: Vec<String>,
 }
 
 impl DeviceManager {
@@ -118,7 +120,50 @@ impl DeviceManager {
             hypervisor,
             shared_info: SharedInfo::new().await,
             pcie_topology: PCIeTopology::new(topo_config),
+            orphaned_references: Vec::new(),
         })
+    }
+
+    /// Takes over device references an owner could not release before it was
+    /// deleted. Dropping them would keep the devices in the guest, and their
+    /// host resources held, until the sandbox goes away.
+    pub fn adopt_orphaned_references(&mut self, device_ids: Vec<String>) {
+        self.orphaned_references.extend(device_ids);
+    }
+
+    /// Retries releasing adopted references. Each one is dropped as soon as
+    /// it is released, so a cancelled call never releases one twice.
+    pub async fn release_orphaned_references(&mut self) -> Result<()> {
+        let mut failed = 0;
+        let mut first_err = None;
+        while failed < self.orphaned_references.len() {
+            let device_id = self.orphaned_references[failed].clone();
+            if !self.devices.contains_key(&device_id) {
+                warn!(
+                    sl!(),
+                    "orphaned reference to {} outlived its device", device_id
+                );
+                self.orphaned_references.remove(failed);
+                continue;
+            }
+            match self.try_remove_device(&device_id).await {
+                Ok(()) => {
+                    self.orphaned_references.remove(failed);
+                }
+                Err(err) => {
+                    first_err.get_or_insert(err);
+                    failed += 1;
+                }
+            }
+        }
+
+        match first_err {
+            Some(err) => Err(err.context(format!(
+                "failed to release {} orphaned device reference(s)",
+                failed
+            ))),
+            None => Ok(()),
+        }
     }
 
     pub fn get_pcie_topology(&self) -> Option<PCIeTopology> {
@@ -617,27 +662,23 @@ pub async fn do_handle_device(
     d: &RwLock<DeviceManager>,
     dev_info: &DeviceConfig,
 ) -> Result<DeviceType> {
-    let device_id = d
-        .write()
-        .await
+    // One lock for all three steps: new_device() may hand back the id of a
+    // device another owner is detaching, and the final detach removes it.
+    let mut device_manager = d.write().await;
+    let device_id = device_manager
         .new_device(dev_info)
         .await
         .context("failed to create device")?;
 
-    d.write()
-        .await
+    device_manager
         .try_add_device(&device_id)
         .await
         .context("failed to add device")?;
 
-    let device_info = d
-        .read()
-        .await
+    device_manager
         .get_device_info(&device_id)
         .await
-        .context("failed to get device info")?;
-
-    Ok(device_info)
+        .context("failed to get device info")
 }
 
 pub async fn do_update_device(
@@ -711,7 +752,10 @@ pub async fn find_cold_plugged_vfio_ap(
 mod tests {
     use super::DeviceManager;
     use crate::{
-        device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
+        device::{
+            device_manager::{do_handle_device, get_block_device_info},
+            DeviceConfig, DeviceType,
+        },
         qemu::Qemu,
         BlockConfigModern, KATA_BLK_DEV_TYPE,
     };
@@ -835,5 +879,82 @@ mod tests {
         assert!(
             matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
         );
+    }
+
+    /// A block device attached `owners` times. The VM is not running, so the
+    /// hypervisor refuses the final removal.
+    async fn shared_block_device(owners: usize) -> (Arc<RwLock<DeviceManager>>, String) {
+        let d = new_device_manager().await.unwrap();
+        let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
+            path_on_host: "/dev/shared-test-device".to_string(),
+            driver_option: get_block_device_info(&d).await.block_device_driver,
+            ..Default::default()
+        });
+        let mut device_id = String::new();
+        for _ in 0..owners {
+            device_id = match do_handle_device(&d, &dev_info).await.unwrap() {
+                DeviceType::BlockModern(device) => device.lock().await.device_id.clone(),
+                other => panic!("unexpected device {}", other),
+            };
+        }
+        (d, device_id)
+    }
+
+    async fn attach_count(d: &RwLock<DeviceManager>, device_id: &str) -> Option<u64> {
+        match d.read().await.get_device_info(device_id).await.ok()? {
+            DeviceType::BlockModern(device) => Some(device.lock().await.attach_count),
+            other => panic!("unexpected device {}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_final_detach_keeps_the_reference() {
+        let (d, device_id) = shared_block_device(1).await;
+
+        assert!(d.write().await.try_remove_device(&device_id).await.is_err());
+
+        assert_eq!(attach_count(&d, &device_id).await, Some(1));
+    }
+
+    #[tokio::test]
+    async fn detach_cancelled_after_removal_is_finished_on_retry() {
+        let (d, device_id) = shared_block_device(1).await;
+        if let DeviceType::BlockModern(device) =
+            d.read().await.get_device_info(&device_id).await.unwrap()
+        {
+            device.lock().await.attach_count = 0;
+        }
+
+        d.write().await.try_remove_device(&device_id).await.unwrap();
+
+        assert_eq!(attach_count(&d, &device_id).await, None);
+    }
+
+    #[rstest::rstest]
+    #[case::shared_device_is_released(2, true, Some(1), 0)]
+    #[case::refused_removal_is_kept(1, true, Some(1), 1)]
+    #[case::reference_without_device_is_dropped(1, false, Some(1), 0)]
+    #[tokio::test]
+    async fn orphaned_references_are_retried(
+        #[case] owners: usize,
+        #[case] device_exists: bool,
+        #[case] count_after: Option<u64>,
+        #[case] still_orphaned: usize,
+    ) {
+        let (d, device_id) = shared_block_device(owners).await;
+        let orphan = if device_exists {
+            device_id.clone()
+        } else {
+            "deleted-device".to_string()
+        };
+        d.write()
+            .await
+            .adopt_orphaned_references(vec![orphan.clone()]);
+
+        let released = d.write().await.release_orphaned_references().await;
+
+        assert_eq!(released.is_ok(), still_orphaned == 0);
+        assert_eq!(attach_count(&d, &device_id).await, count_after);
+        assert_eq!(d.read().await.orphaned_references.len(), still_orphaned);
     }
 }
