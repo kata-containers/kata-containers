@@ -26,7 +26,6 @@ use std::fmt::{Display, Write};
 use std::fs::{read_to_string, File, OpenOptions};
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
 use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
-use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::str;
 use tokio;
@@ -1994,12 +1993,15 @@ pub struct QmpSocket {
 }
 
 impl QmpSocket {
-    fn new(sid: &str, proto: MonitorProtocol) -> Result<Self> {
+    fn new(sid: &str, proto: MonitorProtocol, config: &HypervisorConfig) -> Result<Self> {
         let qmp_socket = match proto {
             MonitorProtocol::Qmp | MonitorProtocol::QmpPretty => {
                 let sock_path = PathBuf::from(get_qmp_socket_path(sid));
-                let listener =
-                    UnixListener::bind(&sock_path).context("unix listener bind failed.")?;
+                let listener = crate::selinux::bind_unix_listener(
+                    &sock_path,
+                    config.effective_selinux_label(),
+                )
+                .context("unix listener bind failed.")?;
                 if is_rootless() {
                     chown_to_parent(sock_path.as_path()).context("chown qmp socket failed")?;
                 }
@@ -3014,7 +3016,7 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
-            qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp)?,
+            qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp, config)?,
             knobs: Knobs::new(config),
             bios: None,
             explicit_pcie_root_ports: Vec::new(),
@@ -3112,7 +3114,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
-        let monitor = QmpSocket::new(self.id.as_str(), MonitorProtocol::new(proto))?;
+        let monitor = QmpSocket::new(self.id.as_str(), MonitorProtocol::new(proto), self.config)?;
         self.devices.push(Box::new(monitor));
 
         Ok(())

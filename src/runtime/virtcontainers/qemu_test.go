@@ -22,6 +22,9 @@ import (
 	"runtime"
 	"testing"
 
+	selinux "github.com/opencontainers/selinux/go-selinux"
+	"golang.org/x/sys/unix"
+
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
@@ -551,6 +554,50 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	assert.Error(err)
 	_, err = q.HotplugRemoveDevice(context.Background(), &MemoryDevice{0, 128, uint64(0), false}, FsDev)
 	assert.Error(err)
+}
+
+func TestQMPListenerSELinux(t *testing.T) {
+	label := os.Getenv("KATA_TEST_QMP_SELINUX_LABEL")
+	if label == "" || !selinux.GetEnabled() {
+		t.Skip("requires SELinux and KATA_TEST_QMP_SELINUX_LABEL permitted by host policy")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	pending, err := selinux.SocketLabel()
+	assert.NoError(t, err)
+	q := &qemu{config: HypervisorConfig{SELinuxProcessLabel: label}}
+	socketPath := filepath.Join(t.TempDir(), "qmp.sock")
+	listener, err := q.listenQMP(socketPath)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer listener.Close()
+	client, err := net.Dial("unix", socketPath)
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer client.Close()
+	raw, err := client.(*net.UnixConn).SyscallConn()
+	assert.NoError(t, err)
+	var context string
+	assert.NoError(t, raw.Control(func(fd uintptr) {
+		context, err = unix.GetsockoptString(int(fd), unix.SOL_SOCKET, unix.SO_PEERSEC)
+	}))
+	assert.NoError(t, err)
+	assert.Equal(t, label, context)
+	_, err = q.listenQMP(socketPath)
+	assert.Error(t, err)
+	current, err := selinux.SocketLabel()
+	assert.NoError(t, err)
+	assert.Equal(t, pending, current)
+}
+
+func TestQMPListenerWithoutSELinux(t *testing.T) {
+	q := &qemu{config: HypervisorConfig{DisableSeLinux: true, SELinuxProcessLabel: "invalid"}}
+	listener, err := q.listenQMP(filepath.Join(t.TempDir(), "qmp.sock"))
+	if assert.NoError(t, err) {
+		listener.Close()
+	}
 }
 
 func TestQMPSetupShutdown(t *testing.T) {
