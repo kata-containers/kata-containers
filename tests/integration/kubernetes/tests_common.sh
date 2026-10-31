@@ -907,6 +907,24 @@ set_nginx_image() {
 	esac
 }
 
+# The pinned nginx image only listens on IPv4. On clusters with IPv6 pod
+# networking, add an IPv6 listener to the nginx containers of a workload that
+# run the image's default command. Call it before generating the policy.
+#
+# Parameters:
+#	$1 - the workload yaml file, edited in place
+enable_nginx_ipv6_listener() {
+	local yaml_file="$1"
+
+	[[ "${K8S_IP_FAMILY:-ipv4}" == "ipv4" ]] && return 0
+
+	ensure_yq
+	# shellcheck disable=SC2016
+	NGINX_IPV6_CMD='sed -i -E '"'"'s/^([[:space:]]*)listen[[:space:]]+80;/&\n\1listen [::]:80;/'"'"' /etc/nginx/conf.d/default.conf && exec nginx -g "daemon off;"' \
+		yq -i '(.. | select(tag == "!!map" and .image != null and .command == null) | select(.image | test("nginx"))).command = ["/bin/sh", "-c", strenv(NGINX_IPV6_CMD)]' \
+		"${yaml_file}"
+}
+
 print_node_journal_since_test_start() {
 	local node="${1}"
 	local node_start_time="${2:-}"

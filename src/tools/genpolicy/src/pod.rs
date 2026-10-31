@@ -1158,7 +1158,11 @@ impl Container {
         compress_default_capabilities(capabilities, defaults);
     }
 
-    pub fn get_process_fields(&self, process: &mut policy::KataProcess) {
+    pub fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        pod_run_as_group_is_set: bool,
+    ) {
         debug!(
             "get_process_fields: container image = {:?}",
             self.registry.image
@@ -1172,35 +1176,36 @@ impl Container {
 
                 let new_uid = uid.try_into().unwrap();
                 process.User.UID = new_uid;
-                // Changing the UID can break the GID mapping
-                // if a /etc/passwd file is present.
-                // The proper GID is determined, in order of preference:
-                // 1. the securityContext runAsGroup field (applied last in code)
-                // 2. lacking an explicit runAsGroup, /etc/passwd (get_gid_from_passwd_uid)
-                // 3. fall back to pod-level GID if there is one (unwrap_or)
+                // The GID is determined, in order of preference:
+                // 1. the container securityContext runAsGroup field, if set (applied below)
+                // 2. the pod securityContext runAsGroup field, if set (already applied to process)
+                // 3. if neither runAsGroup field is set, resolve the UID's primary GID
+                //    from /etc/passwd (get_gid_from_passwd_uid)
+                // 4. if that lookup fails, retain the existing image/default GID
                 //
-                // This behavior comes from the containerd runtime implementation:
-                // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
-                let new_gid = match self.registry.get_gid_from_passwd_uid(new_uid) {
-                    Ok(gid) => gid,
-                    Err(e) => {
-                        debug!(
-                            "get_process_fields: no GID for UID = {new_uid} in container image, error {e}"
-                        );
-                        process.User.GID
-                    }
-                };
-                process.User.GID = new_gid;
-                debug!(
-                    "get_process_fields: set GID = {new_gid}, User = {:?}",
-                    process.User
-                );
-
-                process.User.AdditionalGids.insert(new_gid);
-                debug!(
-                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
-                    process.User
-                );
+                // This logic aims to model the Kubernetes/containerd identity-resolution
+                // path. Related containerd logic is in WithUser and WithUserID in
+                // pkg/oci/spec_opts.go. Because genpolicy reconstructs the expected OCI
+                // process independently, a mismatch can prevent policy generation or make
+                // the generated policy reject a valid runtime request.
+                // Comprehensive test coverage of pod-, container-, and image-derived
+                // UID/GID combinations is therefore essential.
+                if context.runAsGroup.is_none() && !pod_run_as_group_is_set {
+                    let new_gid = match self.registry.get_gid_from_passwd_uid(new_uid) {
+                        Ok(gid) => gid,
+                        Err(e) => {
+                            debug!(
+                                "get_process_fields: no GID for UID = {new_uid} in container image, error {e}"
+                            );
+                            process.User.GID
+                        }
+                    };
+                    process.User.GID = new_gid;
+                    debug!(
+                        "get_process_fields: set GID = {new_gid}, User = {:?}",
+                        process.User
+                    );
+                }
             }
 
             if let Some(gid) = context.runAsGroup {
@@ -1208,10 +1213,18 @@ impl Container {
 
                 let new_gid = gid.try_into().unwrap();
                 process.User.GID = new_gid;
+            }
 
-                process.User.AdditionalGids.insert(new_gid);
+            if context.runAsUser.is_some() || context.runAsGroup.is_some() {
+                // Container-level runAsUser and runAsGroup override the corresponding UID/GID
+                // values selected from image and pod settings. When either field is specified,
+                // reset AdditionalGids to the effective primary GID. The /etc/group memberships
+                // for the effective UID are added below; policy.rs applies pod fsGroup and
+                // supplementalGroups afterward.
+                process.User.AdditionalGids.clear();
+                process.User.AdditionalGids.insert(process.User.GID);
                 debug!(
-                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
+                    "get_process_fields: reset AdditionalGids to the final primary GID, User = {:?}",
                     process.User
                 );
             }
@@ -1328,6 +1341,119 @@ fn sum_limits_by_keys(limits: &BTreeMap<String, String>, keys: &[String]) -> Opt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn container_group_override_replaces_inherited_groups() {
+        for (context, expected_uid, expected_gid, expected_groups) in [
+            // Override UID and GID: discard inherited GID 0, use container GID 2000, and add
+            // image group 123 for UID 65534.
+            (
+                "runAsUser: 65534\nrunAsGroup: 2000",
+                65534,
+                2000,
+                vec![123, 2000],
+            ),
+            // Override GID: retain UID 0, discard inherited GID 0, and use container GID 2000.
+            // UID 0 has no supplementary image memberships.
+            ("runAsGroup: 2000", 0, 2000, vec![2000]),
+            // Override UID and GID using a UID without a primary-GID mapping or supplementary
+            // image memberships; explicit GID 2000 is the only resulting group.
+            ("runAsUser: 9999\nrunAsGroup: 2000", 9999, 2000, vec![2000]),
+        ] {
+            let mut container = Container {
+                securityContext: Some(serde_yaml::from_str(context).unwrap()),
+                ..Default::default()
+            };
+            container.registry.passwd =
+                "root:x:0:0::/:/bin/sh\nnobody:x:65534:1000::/:/bin/sh\n".into();
+            container.registry.group = "shared:x:123:nobody\n".into();
+            let mut process = policy::KataProcess::default();
+            process.User.AdditionalGids.insert(0);
+
+            container.get_process_fields(&mut process, false);
+
+            assert_eq!(process.User.UID, expected_uid, "{context}");
+            assert_eq!(process.User.GID, expected_gid, "{context}");
+            assert_eq!(
+                process
+                    .User
+                    .AdditionalGids
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                expected_groups,
+                "{context}"
+            );
+        }
+    }
+
+    #[test]
+    fn container_user_override_resolves_primary_and_additional_groups() {
+        struct TestCase {
+            name: &'static str,
+            initial_gid: u32,
+            pod_run_as_group_is_set: bool,
+            passwd: &'static str,
+            group: &'static str,
+            expected_gid: u32,
+            expected_groups: &'static [u32],
+        }
+
+        let cases = [
+            // Override UID: /etc/passwd maps UID 65534 to primary GID 1000, and /etc/group adds
+            // image group 123.
+            TestCase {
+                name: "image_primary_group_used_without_pod_group",
+                initial_gid: 0,
+                pod_run_as_group_is_set: false,
+                passwd: "root:x:0:0::/:/bin/sh\nnobody:x:65534:1000::/:/bin/sh\n",
+                group: "shared:x:123:nobody\n",
+                expected_gid: 1000,
+                expected_groups: &[123, 1000],
+            },
+            TestCase {
+                name: "pod_primary_group_preserved",
+                initial_gid: 1234,
+                pod_run_as_group_is_set: true,
+                passwd: "root:x:0:0::/:/bin/sh\ntestuser:x:65534:65534::/:/bin/sh\n",
+                group: "testuser:x:65534:\nextra:x:50000:testuser\n",
+                expected_gid: 1234,
+                expected_groups: &[1234, 50000],
+            },
+        ];
+
+        for case in cases {
+            let mut container = Container {
+                securityContext: Some(serde_yaml::from_str("runAsUser: 65534").unwrap()),
+                ..Default::default()
+            };
+            container.registry.passwd = case.passwd.into();
+            container.registry.group = case.group.into();
+
+            let mut process = policy::KataProcess::default();
+            process.User.GID = case.initial_gid;
+            process.User.AdditionalGids.insert(case.initial_gid);
+
+            container.get_process_fields(&mut process, case.pod_run_as_group_is_set);
+
+            let actual = (
+                process.User.UID,
+                process.User.GID,
+                process
+                    .User
+                    .AdditionalGids
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+            );
+            assert_eq!(
+                actual,
+                (65534, case.expected_gid, case.expected_groups.to_vec()),
+                "{}: (UID, GID, AdditionalGids)",
+                case.name
+            );
+        }
+    }
 
     fn make_limits(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
         entries

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 use crate::{
     VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_BLK_CCW, VM_ROOTFS_DRIVER_MMIO, VM_ROOTFS_DRIVER_PMEM,
@@ -124,6 +124,64 @@ pub(crate) struct KernelParams {
 }
 
 impl KernelParams {
+    // All image-booting backends must select the rootfs independently of the
+    // guest's asynchronous virtio-blk probe order. PARTUUID is resolved by the
+    // kernel itself, before an initrd or udev could provide /dev/disk symlinks.
+    pub(crate) fn new_image_rootfs_kernel_params(
+        image: &str,
+        kernel_verity_params: &str,
+        rootfs_driver: &str,
+        rootfs_type: &str,
+        use_dax: bool,
+    ) -> Result<Self> {
+        if image.is_empty()
+            || !matches!(
+                rootfs_driver,
+                VM_ROOTFS_DRIVER_BLK | VM_ROOTFS_DRIVER_BLK_CCW | VM_ROOTFS_DRIVER_MMIO
+            )
+        {
+            return Self::new_rootfs_kernel_params(
+                kernel_verity_params,
+                rootfs_driver,
+                rootfs_type,
+                use_dax,
+            );
+        }
+
+        let uuids = kata_types::fs::partition_uuids(std::path::Path::new(image))
+            .with_context(|| format!("read rootfs partition identities from {image}"))?;
+        let root = format!(
+            "PARTUUID={}",
+            uuids
+                .get(&1)
+                .context("rootfs image is missing partition 1")?
+        );
+        let hash = if kernel_verity_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "PARTUUID={}",
+                uuids
+                    .get(&2)
+                    .context("rootfs image is missing verity partition 2")?
+            )
+        };
+        let mut params = Self::new_rootfs_kernel_params_with_devices(
+            kernel_verity_params,
+            rootfs_driver,
+            rootfs_type,
+            use_dax,
+            &root,
+            &hash,
+        )?;
+        if kernel_verity_params.is_empty() {
+            params.push(Param::new("rootwait", ""));
+        } else {
+            params.push(Param::new("dm-mod.waitfor", &format!("{root},{hash}")));
+        }
+        Ok(params)
+    }
+
     pub(crate) fn new(debug: bool) -> Self {
         // default kernel params
         let mut params = vec![
@@ -147,11 +205,33 @@ impl KernelParams {
         rootfs_type: &str,
         use_dax: bool,
     ) -> Result<Self> {
+        let (root_device, hash_device) = match rootfs_driver {
+            VM_ROOTFS_DRIVER_PMEM => (VM_ROOTFS_ROOT_PMEM, "/dev/pmem0p2"),
+            _ => (VM_ROOTFS_ROOT_BLK, "/dev/vda2"),
+        };
+        Self::new_rootfs_kernel_params_with_devices(
+            kernel_verity_params,
+            rootfs_driver,
+            rootfs_type,
+            use_dax,
+            root_device,
+            hash_device,
+        )
+    }
+
+    fn new_rootfs_kernel_params_with_devices(
+        kernel_verity_params: &str,
+        rootfs_driver: &str,
+        rootfs_type: &str,
+        use_dax: bool,
+        root_device: &str,
+        hash_device: &str,
+    ) -> Result<Self> {
         let mut params = vec![];
 
         match rootfs_driver {
             VM_ROOTFS_DRIVER_PMEM => {
-                params.push(Param::new("root", VM_ROOTFS_ROOT_PMEM));
+                params.push(Param::new("root", root_device));
                 match rootfs_type {
                     VM_ROOTFS_FILESYSTEM_EXT4 => {
                         if use_dax {
@@ -184,7 +264,7 @@ impl KernelParams {
                 }
             }
             VM_ROOTFS_DRIVER_BLK | VM_ROOTFS_DRIVER_BLK_CCW | VM_ROOTFS_DRIVER_MMIO => {
-                params.push(Param::new("root", VM_ROOTFS_ROOT_BLK));
+                params.push(Param::new("root", root_device));
                 match rootfs_type {
                     VM_ROOTFS_FILESYSTEM_EXT4 => {
                         params.push(Param::new("rootflags", "data=ordered,errors=remount-ro ro"));
@@ -211,14 +291,6 @@ impl KernelParams {
         let cfg = match new_kernel_verity_params(kernel_verity_params)? {
             Some(cfg) => cfg,
             None => return Ok(params),
-        };
-
-        let (root_device, hash_device) = match rootfs_driver {
-            VM_ROOTFS_DRIVER_PMEM => ("/dev/pmem0p1", "/dev/pmem0p2"),
-            VM_ROOTFS_DRIVER_BLK | VM_ROOTFS_DRIVER_BLK_CCW | VM_ROOTFS_DRIVER_MMIO => {
-                ("/dev/vda1", "/dev/vda2")
-            }
-            _ => return Err(anyhow!("Unsupported rootfs driver {}", rootfs_driver)),
         };
 
         let data_sectors = (cfg.data_block_size / VERITY_BLOCK_SIZE_BYTES) * cfg.data_blocks;
@@ -308,7 +380,7 @@ impl KernelParams {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use anyhow::Result;
 
     use super::*;
@@ -319,6 +391,20 @@ mod tests {
     use kata_types::fs::{
         VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
     };
+
+    pub(crate) fn rootfs_image() -> tempfile::NamedTempFile {
+        use std::io::Write;
+        let mut image = tempfile::NamedTempFile::new().unwrap();
+        let mut mbr = [0u8; 512];
+        mbr[440..444].copy_from_slice(&0x603f58abu32.to_le_bytes());
+        for offset in [446, 462] {
+            mbr[offset + 4] = 0x83;
+            mbr[offset + 12..offset + 16].copy_from_slice(&2048u32.to_le_bytes());
+        }
+        mbr[510..512].copy_from_slice(&[0x55, 0xaa]);
+        image.write_all(&mbr).unwrap();
+        image
+    }
 
     #[test]
     fn test_params() {

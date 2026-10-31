@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 
 use oci_spec::runtime as oci;
 
-pub const DEFAULT_REMOVE_CONTAINER_REQUEST_TIMEOUT: u32 = 10;
-
 #[derive(PartialEq, Clone, Default)]
 pub struct Empty {}
 
@@ -177,14 +175,12 @@ impl ContainerProcessID {
 #[derive(PartialEq, Clone, Debug)]
 pub struct RemoveContainerRequest {
     pub container_id: String,
-    pub timeout: u32,
 }
 
 impl RemoveContainerRequest {
-    pub fn new(id: &str, timeout: u32) -> Self {
+    pub fn new(id: &str) -> Self {
         Self {
             container_id: id.to_string(),
-            timeout,
         }
     }
 }
@@ -193,7 +189,6 @@ impl std::default::Default for RemoveContainerRequest {
     fn default() -> Self {
         Self {
             container_id: "".to_string(),
-            timeout: DEFAULT_REMOVE_CONTAINER_REQUEST_TIMEOUT,
         }
     }
 }

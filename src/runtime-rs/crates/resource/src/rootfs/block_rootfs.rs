@@ -129,8 +129,8 @@ impl Rootfs for BlockRootfs {
         self.storage.clone().map(|s| vec![s])
     }
 
-    async fn get_device_id(&self) -> Result<Option<String>> {
-        Ok(Some(self.device_id.clone()))
+    async fn get_device_ids(&self) -> Result<Vec<String>> {
+        Ok(vec![self.device_id.clone()])
     }
 
     async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {

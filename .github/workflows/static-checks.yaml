@@ -352,3 +352,41 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash ci/check_nvrc_is_released.sh
+
+  msrv-check:
+    name: msrv-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install build-essential clang libdevmapper-dev libseccomp-dev libssl-dev protobuf-compiler
+      - name: Read MSRV from Cargo.toml
+        run: |
+          msrv="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)"
+          [ -n "${msrv}" ]
+          echo "MSRV=${msrv}" >> "$GITHUB_ENV"
+      - name: Install Rust ${{ env.MSRV }}
+        run: rustup toolchain install "${MSRV}" --profile minimal
+      # These sources are generated from *.in templates by the component
+      # Makefiles and are not checked in, so cargo cannot build without them.
+      - name: Generate sources
+        run: |
+          make -C src/agent src/version.rs
+          make -C src/runtime-rs crates/shim/src/config.rs
+          make -C src/tools/genpolicy src/version.rs
+          make -C src/tools/kata-ctl src/ops/version.rs
+      - name: Cargo check with Rust ${{ env.MSRV }}
+        run: |
+          rustc --version
+          cargo check --workspace --all-targets --locked
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.MSRV }}
