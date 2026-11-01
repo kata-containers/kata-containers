@@ -5,7 +5,7 @@
 //
 
 mod container;
-use container::{is_pod_sized, Container, Exec, PodHugePages};
+use container::{Container, Exec};
 mod container_inner;
 mod hugepages;
 mod io;

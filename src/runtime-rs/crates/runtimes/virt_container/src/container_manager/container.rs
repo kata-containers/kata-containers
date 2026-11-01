@@ -19,7 +19,7 @@ use common::{
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{
     annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA},
-    config::{hypervisor::HugePageType, TomlConfig},
+    config::TomlConfig,
     container::update_ocispec_annotations,
     k8s::{self, container_type},
 };
@@ -27,14 +27,12 @@ use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{
-    cdi_devices::container_device::annotate_container_devices,
-    cpu_mem::hugepage_sizing::{hugepages_resource_name, hugetlb_size_name, vm_huge_page_size},
-    ResourceManager, ResourceUpdateOp,
+    cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
 };
 use tokio::sync::RwLock;
 
 use super::{
-    hugepages::{self, Guest, HugePageBook, Reservation},
+    hugepages::{self, PodHugePages, Reservation},
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
@@ -43,19 +41,6 @@ use crate::container_manager::{is_termination_signal, logger_with_process};
 pub struct Exec {
     pub(crate) process: Process,
     pub(crate) oci_process: OCIProcess,
-}
-
-/// The pod's huge page state and its other running containers.
-pub(crate) struct PodHugePages {
-    pub book: Arc<tokio::sync::Mutex<HugePageBook>>,
-    pub others: Vec<Reservation>,
-}
-
-// What a container is given in a guest sized from the pod.
-struct HugePagePlan {
-    page: String,
-    guest: Guest,
-    copied: u64,
 }
 
 pub struct Container {
@@ -162,10 +147,14 @@ impl Container {
 
         let container_name = k8s::container_name(&spec);
         let plan = match pod {
-            Some(pod) => Some(
-                self.plan_huge_pages(&spec, &toml_config, pod, &container_name)
-                    .await?,
-            ),
+            Some(pod) => Some(hugepages::plan(
+                &toml_config,
+                pod,
+                &config.container_id,
+                &container_name,
+                spec.linux().as_ref().and_then(|l| l.resources().as_ref()),
+                true,
+            )?),
             None => None,
         };
 
@@ -224,9 +213,13 @@ impl Container {
         }
         spec.set_mounts(Some(oci_mounts));
 
-        if plan.is_some() && storages.iter().any(|s| s.fs_type == hypervisor::HUGETLBFS) {
+        if let Some(plan) = plan
+            .as_ref()
+            .filter(|_| storages.iter().any(|s| s.fs_type == hypervisor::HUGETLBFS))
+        {
             return Err(anyhow!(
-                "container {container_name} mounts a huge page volume, but huge pages inside the guest are not supported in a runtime class with enable_hugepages_pod_sizing"
+                "container {} mounts a huge page volume, but huge pages inside the guest are not supported in a runtime class with enable_hugepages_pod_sizing",
+                plan.name
             ));
         }
 
@@ -264,13 +257,7 @@ impl Container {
                 resource.set_network(None);
 
                 if let Some(plan) = &plan {
-                    hugepages::bound_container(
-                        resource,
-                        &plan.page,
-                        plan.guest,
-                        plan.copied,
-                        &container_name,
-                    )?;
+                    hugepages::bound_container(resource, plan);
                 }
             }
 
@@ -353,67 +340,28 @@ impl Container {
             .as_ref()
             .and_then(|s| s.linux().as_ref())
             .and_then(|l| l.resources().as_ref())
-            .map(|res| hugepages::memory_limit(Some(res)) as u64)
+            .map(|res| hugepages::memory_limit(Some(res)))
             .unwrap_or(0);
         let created = self.agent.create_container(r).await;
-        if let (Some(pod), Some(_), Ok(_)) = (pod, &plan, &created) {
-            pod.book
-                .lock()
-                .await
-                .applied
-                .insert(config.container_id.clone(), applied_ceiling);
+        if plan.is_some() && created.is_ok() {
+            inner.applied_ceiling = Some(applied_ceiling);
         }
         created.context("agent create container")?;
         self.resource_manager.dump().await;
         Ok(())
     }
 
-    // Works out what the container is given and refuses what the guest cannot hold.
-    async fn plan_huge_pages(
-        &self,
-        spec: &oci::Spec,
-        toml_config: &TomlConfig,
-        pod: &PodHugePages,
-        name: &str,
-    ) -> Result<HugePagePlan> {
-        let page_bytes = vm_huge_page_size().context("cannot tell the VM's huge page size")?;
-        let page = hugetlb_size_name(page_bytes)?;
-        let guest = static_guest(toml_config);
-        let vm_bytes = guest.memory_mib << 20;
-        let resources = spec.linux().as_ref().and_then(|l| l.resources().as_ref());
-        let this = Reservation {
-            id: self.config.container_id.clone(),
-            huge_pages: hugepages::huge_pages_of(resources, &page),
-            memory: hugepages::memory_limit(resources),
-        };
-        let mut rs = pod.others.clone();
-        rs.push(this.clone());
-        let resource = hugepages_resource_name(page_bytes);
-        if let Some(value) = hugepages::ambiguous_copy(&rs, vm_bytes) {
-            return Err(anyhow!(
-                "the pod level {resource} is copied into every container that does not declare it, and each container of this pod carries {} MiB of it, so a copy cannot be told from a declaration: declare {resource} on every container of the pod",
-                value >> 20
-            ));
-        }
-        let copied = hugepages::copied_reservation(&rs, vm_bytes);
-        let book = pod.book.lock().await;
-        hugepages::refuse_pod_ceilings(&rs, copied, &book.applied, guest, &this.id, name)?;
-        Ok(HugePagePlan {
-            page,
-            guest,
-            copied,
-        })
-    }
-
     /// What the container carries for the pod's huge page checks, None once it stopped.
-    pub(crate) async fn reservation(&self) -> Option<(String, Option<LinuxResources>)> {
+    pub(crate) async fn reservation(&self, page_size: &str) -> Option<Reservation> {
         let inner = self.inner.read().await;
         if inner.init_process.get_status().await == ProcessStatus::Stopped {
             return None;
         }
-        Some((
-            self.config.container_id.clone(),
-            inner.linux_resources.clone(),
+        Some(hugepages::reservation(
+            &self.config.container_id,
+            inner.linux_resources.as_ref(),
+            page_size,
+            inner.applied_ceiling,
         ))
     }
 
@@ -883,47 +831,24 @@ impl Container {
         let toml_config = self.resource_manager.config().await;
 
         // Check against the pod before recording, so a refusal leaves the container as it was.
-        let mut checked = None;
-        let mut merged = resources.clone();
-        if let Some(pod) = pod {
-            merged.set_hugepage_limits(hugepages::updated_limits(
-                inner
-                    .linux_resources
-                    .as_ref()
-                    .and_then(|l| l.hugepage_limits().as_ref()),
-                resources.hugepage_limits().as_ref(),
-            ));
-            let held_memory = inner.linux_resources.as_ref().and_then(|l| *l.memory());
-            if resources.memory().and_then(|m| m.limit()).is_none() {
-                let mut m = resources.memory().or(held_memory).unwrap_or_default();
-                m.set_limit(held_memory.and_then(|h| h.limit()));
-                merged.set_memory(Some(m));
+        let checked = match pod {
+            Some(pod) => {
+                let merged = hugepages::merged_update(inner.linux_resources.as_ref(), resources);
+                let name = k8s::container_name(&self.spec);
+                let plan = hugepages::plan(
+                    &toml_config,
+                    pod,
+                    &self.config.container_id,
+                    &name,
+                    Some(&merged),
+                    false,
+                )?;
+                Some((plan, merged))
             }
-            let page_bytes = vm_huge_page_size().context("cannot tell the VM's huge page size")?;
-            let page = hugetlb_size_name(page_bytes)?;
-            let guest = static_guest(&toml_config);
-            let held = hugepages::huge_pages_of(Some(&merged), &page);
-            let memory = hugepages::memory_limit(Some(&merged));
-            let name = k8s::container_name(&self.spec);
-            let this = Reservation {
-                id: self.config.container_id.clone(),
-                huge_pages: held,
-                memory,
-            };
-            let mut rs = pod.others.clone();
-            rs.push(this.clone());
-            let copied = hugepages::copied_reservation(&rs, guest.memory_mib << 20);
-            let book = pod.book.lock().await;
-            hugepages::refuse_pod_ceilings(&rs, copied, &book.applied, guest, &this.id, &name)?;
-            checked = Some((page, guest, copied, held, name));
-        }
-
-        let resources = if checked.is_some() {
-            &merged
-        } else {
-            resources
+            None => None,
         };
-        let previous = inner.linux_resources.replace(resources.clone());
+        let resources = checked.as_ref().map_or(resources, |(_, merged)| merged);
+        inner.linux_resources = Some(resources.clone());
 
         // update vcpus, mems and host cgroups
         let mut agent_resources = self
@@ -935,19 +860,14 @@ impl Container {
             )
             .await?;
 
-        if let (Some((page, guest, copied, held, name)), Some(res)) =
-            (&checked, agent_resources.as_mut())
-        {
-            hugepages::fold_held(res, page, *held);
-            if let Err(e) = hugepages::bound_container(res, page, *guest, *copied, name) {
-                inner.linux_resources = previous;
-                return Err(e);
-            }
+        if let (Some((plan, _)), Some(res)) = (&checked, agent_resources.as_mut()) {
+            hugepages::fold_held(res, &plan.page, plan.held);
+            hugepages::bound_container(res, plan);
         }
 
         let ceiling = agent_resources
             .as_ref()
-            .map(|res| hugepages::memory_limit(Some(res)) as u64)
+            .map(|res| hugepages::memory_limit(Some(res)))
             .unwrap_or(0);
         let req = agent::UpdateContainerRequest {
             container_id: self.container_id.container_id.clone(),
@@ -958,12 +878,8 @@ impl Container {
             .update_container(req)
             .await
             .context("agent update container")?;
-        if let (Some(pod), Some(_)) = (pod, &checked) {
-            pod.book
-                .lock()
-                .await
-                .applied
-                .insert(self.config.container_id.clone(), ceiling);
+        if checked.is_some() {
+            inner.applied_ceiling = Some(ceiling);
         }
         Ok(())
     }
@@ -1069,33 +985,6 @@ fn get_disable_guest_selinux(toml_config: &TomlConfig) -> bool {
         // is 'true'.
         None => true,
     }
-}
-
-// is_pod_sized: a hugetlbfs backed guest sized from the pod's hugepages-<size>.
-pub(crate) fn is_pod_sized(toml_config: &TomlConfig) -> bool {
-    toml_config
-        .hypervisor
-        .get(&toml_config.runtime.hypervisor_name)
-        .is_some_and(|hv| {
-            hv.memory_info.enable_hugepages
-                && hv.memory_info.enable_hugepages_pod_sizing
-                && matches!(hv.memory_info.hugepage_type, HugePageType::Hugetlbfs)
-        })
-}
-
-// The guest a statically sized sandbox boots, default when it grows on demand.
-fn static_guest(toml_config: &TomlConfig) -> Guest {
-    if !toml_config.runtime.static_sandbox_resource_mgmt {
-        return Guest::default();
-    }
-    toml_config
-        .hypervisor
-        .get(&toml_config.runtime.hypervisor_name)
-        .map(|hv| Guest {
-            memory_mib: hv.memory_info.default_memory as u64,
-            vcpus: hv.cpu_info.default_vcpus.ceil() as u64,
-        })
-        .unwrap_or_default()
 }
 
 // is_pid_namespace_enabled checks if Pid namespace for a container needs to be shared with its sandbox

@@ -33,8 +33,8 @@ use crate::container_manager::is_termination_signal;
 use crate::oom::CrioOomNotifier;
 
 use super::{
-    hugepages::{self, HugePageBook, Reservation},
-    is_pod_sized, logger_with_process, Container, PodHugePages,
+    hugepages::{is_pod_sized, PodHugePages},
+    logger_with_process, Container,
 };
 
 pub struct VirtContainerManager {
@@ -46,9 +46,10 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
-    hugepages: Arc<tokio::sync::Mutex<HugePageBook>>,
     // Serializes updates checked against the pod's huge page budget.
     hugepage_updates: tokio::sync::Mutex<()>,
+    // The page size the VM was sized on, as hugetlb names it.
+    pod_sized_page_size: String,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -75,6 +76,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
+        pod_sized_page_size: String,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -85,12 +87,12 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
-            hugepages: Default::default(),
             hugepage_updates: Default::default(),
+            pod_sized_page_size,
         }
     }
 
-    // The pod's huge page state and its running containers but except, when pod sized.
+    // The pod's running containers but except, when pod sized.
     async fn pod_huge_pages(
         &self,
         containers: &HashMap<String, Container>,
@@ -99,27 +101,17 @@ impl VirtContainerManager {
         if !is_pod_sized(&*self.resource_manager.config().await) {
             return None;
         }
-        let page = resource::cpu_mem::hugepage_sizing::vm_huge_page_size()
-            .ok()
-            .and_then(|b| resource::cpu_mem::hugepage_sizing::hugetlb_size_name(b).ok())
-            .unwrap_or_default();
+        let page = self.pod_sized_page_size.clone();
         let mut others = Vec::new();
         for (id, c) in containers.iter() {
             if id == except {
                 continue;
             }
-            if let Some((id, resources)) = c.reservation().await {
-                others.push(Reservation {
-                    id,
-                    huge_pages: hugepages::huge_pages_of(resources.as_ref(), &page),
-                    memory: hugepages::memory_limit(resources.as_ref()),
-                });
+            if let Some(r) = c.reservation(&page).await {
+                others.push(r);
             }
         }
-        Some(PodHugePages {
-            book: self.hugepages.clone(),
-            others,
-        })
+        Some(PodHugePages { page, others })
     }
 
     async fn get_vmm_master_tid(&self) -> Result<u32> {

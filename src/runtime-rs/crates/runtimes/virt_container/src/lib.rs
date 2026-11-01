@@ -163,6 +163,7 @@ impl RuntimeHandler for VirtContainer {
             )
         };
 
+        let pod_sized_page_size = init_size_manager.pod_sized_page_size().to_string();
         let resource_manager = Arc::new(
             ResourceManager::new(
                 sid,
@@ -193,6 +194,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor,
             resource_manager,
             sandbox.oom_notifier(),
+            pod_sized_page_size,
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),

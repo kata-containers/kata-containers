@@ -227,6 +227,34 @@ pub struct Runtime {
     pub pod_resource_api_sock: String,
 }
 
+/// Refuses a configuration that enable_hugepages_pod_sizing cannot size.
+pub fn validate_hugepages_pod_sizing(conf: &TomlConfig) -> Result<()> {
+    let Some(hv) = conf
+        .hypervisor
+        .get(&conf.runtime.hypervisor_name)
+        .filter(|hv| hv.memory_info.enable_hugepages_pod_sizing)
+    else {
+        return Ok(());
+    };
+    if hv.factory.enable_template {
+        return Err(std::io::Error::other(
+            "enable_hugepages_pod_sizing sizes each VM from its pod, so it cannot use VM templates",
+        ));
+    }
+    if !conf.runtime.static_sandbox_resource_mgmt {
+        return Err(std::io::Error::other(
+            "enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt",
+        ));
+    }
+    if conf.runtime.hypervisor_name != HYPERVISOR_NAME_DRAGONBALL {
+        return Err(std::io::Error::other(format!(
+            "enable_hugepages_pod_sizing needs the dragonball hypervisor, and the configuration selects `{}`",
+            conf.runtime.hypervisor_name
+        )));
+    }
+    Ok(())
+}
+
 fn default_passfd_listener_port() -> u32 {
     default::DEFAULT_PASSFD_LISTENER_PORT
 }
@@ -281,28 +309,7 @@ impl ConfigOps for Runtime {
             )));
         }
 
-        if let Some(hv) = conf
-            .hypervisor
-            .get(&conf.runtime.hypervisor_name)
-            .filter(|hv| hv.memory_info.enable_hugepages_pod_sizing)
-        {
-            if hv.factory.enable_template {
-                return Err(std::io::Error::other(
-                    "enable_hugepages_pod_sizing sizes each VM from its pod, so it cannot use VM templates",
-                ));
-            }
-            if !conf.runtime.static_sandbox_resource_mgmt {
-                return Err(std::io::Error::other(
-                    "enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt",
-                ));
-            }
-            if conf.runtime.hypervisor_name != HYPERVISOR_NAME_DRAGONBALL {
-                return Err(std::io::Error::other(format!(
-                    "enable_hugepages_pod_sizing needs the dragonball hypervisor, and the configuration selects `{}`",
-                    conf.runtime.hypervisor_name
-                )));
-            }
-        }
+        validate_hugepages_pod_sizing(conf)?;
 
         let emptydir_mode = &conf.runtime.emptydir_mode;
         if emptydir_mode != EMPTYDIR_MODE_SHARED_FS

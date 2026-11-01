@@ -5,7 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
+use kata_types::config::hypervisor::Hypervisor;
 
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const DEV_HUGEPAGES: &str = "/dev/hugepages";
@@ -116,6 +117,87 @@ fn pod_hugetlb_limit_at(root: &str, pod_cgroup: &str, page_size: u64) -> Result<
         .with_context(|| format!("parse {}", file.display()))
 }
 
+/// The host state the sizing reads, so tests can stand in for it.
+pub trait HugetlbHost {
+    fn vm_huge_page_size(&self) -> Result<u64>;
+    fn has_cgroup_v2(&self) -> bool;
+    fn pod_hugetlb_limit(&self, pod_cgroup: &str, page_size: u64) -> Result<Option<u64>>;
+}
+
+pub struct PodHugetlbHost;
+
+impl HugetlbHost for PodHugetlbHost {
+    fn vm_huge_page_size(&self) -> Result<u64> {
+        vm_huge_page_size()
+    }
+    fn has_cgroup_v2(&self) -> bool {
+        host_has_cgroup_v2()
+    }
+    fn pod_hugetlb_limit(&self, pod_cgroup: &str, page_size: u64) -> Result<Option<u64>> {
+        pod_hugetlb_limit(pod_cgroup, page_size)
+    }
+}
+
+// Sizes a huge page backed VM from hugetlb.<size>.max on the pod's cgroup, giving its
+// MiB and the page size, or refuses the sandbox when that cannot be done.
+pub fn pod_sized_memory_mib(
+    hv: &Hypervisor,
+    cgroups_path: Option<&str>,
+    host: &dyn HugetlbHost,
+) -> Result<(u32, String)> {
+    let cgroups_path = cgroups_path.filter(|p| !p.is_empty()).context(
+        "enable_hugepages_pod_sizing needs the sandbox's cgroup path to find its pod's cgroup",
+    )?;
+    let pod_cgroup = pod_cgroup_path(cgroups_path).with_context(|| {
+        format!("enable_hugepages_pod_sizing cannot find the pod's cgroup from {cgroups_path:?}")
+    })?;
+    let page_size = host
+        .vm_huge_page_size()
+        .context("enable_hugepages_pod_sizing cannot tell the VM's huge page size")?;
+    let page_name = hugetlb_size_name(page_size)
+        .context("enable_hugepages_pod_sizing cannot tell the VM's huge page size")?;
+    let resource = hugepages_resource_name(page_size);
+    ensure!(
+        host.has_cgroup_v2(),
+        "enable_hugepages_pod_sizing needs cgroup v2: the pod's huge page reservation is read from the unified hierarchy"
+    );
+    let reserved = host.pod_hugetlb_limit(&pod_cgroup, page_size).with_context(|| {
+        format!("enable_hugepages_pod_sizing cannot read the pod's {resource} reservation (pod cgroup {pod_cgroup})")
+    })?;
+    // An unlimited cgroup can also read back as a byte count near 2^63.
+    let reserved = match reserved {
+        Some(r) if r >> 20 <= u32::MAX as u64 => r,
+        other => {
+            let value = other.map_or("max".to_string(), |r| r.to_string());
+            return Err(anyhow!(
+                "the pod's cgroup {pod_cgroup} has no finite {resource} limit the VM can be sized from (it reads {value}): set a finite {resource} limit on the pod's cgroup, as the kubelet does"
+            ));
+        }
+    };
+    let reserved_mib = reserved >> 20;
+    ensure!(
+        reserved_mib != 0,
+        "the VM is backed by huge pages but its pod reserved none: request {resource} on a container of the pod, or give the runtime class a pod overhead of {resource} (pod cgroup {pod_cgroup})"
+    );
+    let max_mib = hv.memory_info.default_maxmemory as u64;
+    ensure!(
+        max_mib == 0 || reserved_mib <= max_mib,
+        "the pod reserved {reserved_mib} MiB of {resource}, more than the {max_mib} MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup {pod_cgroup})"
+    );
+    ensure!(
+        reserved_mib >= MIN_POD_SIZED_GUEST_MIB,
+        "the pod reserved {reserved_mib} MiB of {resource}, less than the {MIN_POD_SIZED_GUEST_MIB} MiB a guest needs: reserve more on a container of the pod or as the runtime class's pod overhead (pod cgroup {pod_cgroup})"
+    );
+    info!(
+        sl!(),
+        "sizing the huge page backed VM from the pod's huge page reservation";
+        "pod-cgroup" => &pod_cgroup,
+        "reserved-mb" => reserved_mib,
+        "default-memory-mb" => hv.memory_info.default_memory
+    );
+    Ok((reserved_mib as u32, page_name))
+}
+
 /// The memory a guest of vm_mib reports, less VM/64 for struct pages and 128 MiB.
 pub fn guest_mem_total_mib(vm_mib: u64) -> u64 {
     let memmap = vm_mib / 64;
@@ -137,8 +219,113 @@ pub fn holdable_guest_bytes(vm_mib: u64, vcpus: u64) -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    pub(crate) struct StubHost {
+        page_size: Option<u64>,
+        cgroup_v2: bool,
+        limit: Option<Option<u64>>,
+    }
+
+    impl HugetlbHost for StubHost {
+        fn vm_huge_page_size(&self) -> Result<u64> {
+            self.page_size.ok_or_else(|| anyhow!("statfs failed"))
+        }
+        fn has_cgroup_v2(&self) -> bool {
+            self.cgroup_v2
+        }
+        fn pod_hugetlb_limit(&self, _pod_cgroup: &str, _page_size: u64) -> Result<Option<u64>> {
+            self.limit.ok_or_else(|| anyhow!("no such file"))
+        }
+    }
+
+    pub(crate) fn host_reserving(limit: u64) -> StubHost {
+        StubHost {
+            page_size: Some(1 << 30),
+            cgroup_v2: true,
+            limit: Some(Some(limit)),
+        }
+    }
+
+    #[test]
+    fn test_pod_sized_memory_mib() {
+        let hv = Hypervisor::default();
+        let pod = Some("/kubepods/pod1/abc");
+        assert_eq!(
+            pod_sized_memory_mib(&hv, pod, &host_reserving(2 << 30)).unwrap(),
+            (2048, "1GB".to_string())
+        );
+        let cases: Vec<(&str, Option<&str>, StubHost, &str)> = vec![
+            (
+                "no sandbox cgroup",
+                None,
+                host_reserving(2 << 30),
+                "cgroup path",
+            ),
+            (
+                "huge page size unknown",
+                pod,
+                StubHost {
+                    page_size: None,
+                    ..host_reserving(2 << 30)
+                },
+                "huge page size",
+            ),
+            (
+                "cgroup v1",
+                pod,
+                StubHost {
+                    cgroup_v2: false,
+                    ..host_reserving(2 << 30)
+                },
+                "cgroup v2",
+            ),
+            (
+                "no limit file",
+                pod,
+                StubHost {
+                    limit: None,
+                    ..host_reserving(2 << 30)
+                },
+                "cannot read the pod's hugepages-1Gi reservation",
+            ),
+            (
+                "unlimited",
+                pod,
+                StubHost {
+                    limit: Some(None),
+                    ..host_reserving(2 << 30)
+                },
+                "no finite hugepages-1Gi limit the VM can be sized from (it reads max)",
+            ),
+            (
+                "unlimited as a number",
+                pod,
+                StubHost {
+                    limit: Some(Some(i64::MAX as u64 & !4095)),
+                    ..host_reserving(2 << 30)
+                },
+                "no finite hugepages-1Gi limit the VM can be sized from (it reads 9223372036854771712)",
+            ),
+            (
+                "below a guest",
+                pod,
+                host_reserving(512 << 20),
+                "less than the 1024 MiB a guest needs",
+            ),
+        ];
+        for (name, cgroups_path, host, want) in cases {
+            let err = pod_sized_memory_mib(&hv, cgroups_path, &host).unwrap_err();
+            assert!(
+                format!("{err:#}").contains(want),
+                "{}: {:#} does not mention {:?}",
+                name,
+                err,
+                want
+            );
+        }
+    }
 
     #[test]
     fn test_size_names() {
