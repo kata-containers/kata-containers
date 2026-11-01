@@ -562,13 +562,14 @@ impl CloudHypervisorInner {
             debug!(sl!(), "shutdown response: {:?}", detail);
         }
 
-        // Trigger a controlled shutdown
-        self.shutdown_tx
+        // Trigger a controlled shutdown. Without a receiver, the output task
+        // already saw CH exit and reported it.
+        let _ = self
+            .shutdown_tx
             .as_mut()
             .ok_or("no shutdown channel")
             .map_err(|e| anyhow!(e))?
-            .send(true)
-            .map_err(|e| anyhow!(e).context("failed to request shutdown"))?;
+            .send(true);
 
         let tasks = self
             .tasks
@@ -973,9 +974,8 @@ impl CloudHypervisorInner {
     }
 }
 
-// Log all output from the CH process until a shutdown signal is received.
-// When that happens, stop logging and wait for the child process to finish
-// before returning.
+// Log all output from the CH process until a shutdown signal is received or
+// the process exits, then reap it and report its exit status.
 async fn cloud_hypervisor_log_output(
     mut child: Child,
     mut shutdown: Receiver<bool>,
@@ -999,15 +999,21 @@ async fn cloud_hypervisor_log_output(
     let stderr_reader = BufReader::new(stderr);
     let mut stderr_lines = stderr_reader.lines();
 
+    let mut shutdown_requested = false;
     loop {
         tokio::select! {
             _ = shutdown.changed() => {
                 info!(sl!(), "got shutdown request");
+                shutdown_requested = true;
                 break;
             },
             stderr_line = poll_fn(|cx| Pin::new(&mut stderr_lines).poll_next_line(cx)) => {
                 if let Ok(line) = stderr_line {
-                    let line = line.ok_or("missing stderr line").map_err(|e| anyhow!(e))?;
+                    // The output closes when CH exits, e.g. once it is killed
+                    // through its pidfd after a failed shutdown.
+                    let Some(line) = line else {
+                        break;
+                    };
 
                     match parse_ch_log_level(&line) {
                         CloudHypervisorLogLevel::Trace => trace!(sl!(), "{:?}", line; "stream" => "stderr"),
@@ -1020,7 +1026,11 @@ async fn cloud_hypervisor_log_output(
             },
             stdout_line = poll_fn(|cx| Pin::new(&mut stdout_lines).poll_next_line(cx)) => {
                 if let Ok(line) = stdout_line {
-                    let line = line.ok_or("missing stdout line").map_err(|e| anyhow!(e))?;
+                    // The output closes when CH exits, e.g. once it is killed
+                    // through its pidfd after a failed shutdown.
+                    let Some(line) = line else {
+                        break;
+                    };
 
                     match parse_ch_log_level(&line) {
                         CloudHypervisorLogLevel::Trace => trace!(sl!(), "{:?}", line; "stream" => "stdout"),
@@ -1034,8 +1044,10 @@ async fn cloud_hypervisor_log_output(
         };
     }
 
-    // Note that this kills _and_ waits for the process!
-    let _ = child.kill().await;
+    if shutdown_requested {
+        // Note that this kills _and_ waits for the process!
+        let _ = child.kill().await;
+    }
     if let Ok(status) = child.wait().await {
         let _ = exit_notify.try_send(status.code().unwrap_or(0));
     }
