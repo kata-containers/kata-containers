@@ -34,7 +34,7 @@ use persist::sandbox_persist::Persist;
 use std::path::{Path, PathBuf};
 use tokio::{
     runtime,
-    sync::{Mutex, RwLock},
+    sync::{oneshot, Mutex, RwLock},
 };
 
 use crate::{
@@ -250,34 +250,68 @@ impl ResourceManagerInner {
     }
 
     pub async fn handle_network(&mut self, network_config: NetworkConfig) -> Result<()> {
-        // 1. When using Rust asynchronous programming, we use .await to
-        //    allow other task to run instead of waiting for the completion of the current task.
-        // 2. Also, when handling the pod network, we need to set the shim threads
-        //    into the network namespace to perform those operations.
-        // However, as the increase of the I/O intensive tasks, two issues could be caused by the two points above:
-        // a. When the future is blocked, the current thread (which is in the pod netns)
-        //    might be take over by other tasks. After the future is finished, the thread take over
-        //    the current task might not be in the pod netns. But the current task still need to run in pod netns
-        // b. When finish setting up the network, the current thread will be set back to the host namespace.
-        //    In Rust Async, if the current thread is taken over by other task, the netns is dropped on another thread,
-        //    but it is not in netns. So, the previous thread would still remain in the pod netns.
-        // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
-        // tokio runtime, and block the task on it.
-        let device_manager = self.device_manager.clone();
-        let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
-            let rt = runtime::Builder::new_current_thread().enable_io().build()?;
-            let d = rt
-                .block_on(network::new(&network_config, device_manager))
-                .context("new network")?;
-            rt.block_on(d.setup()).context("setup network")?;
-            Ok(d)
-        })
-        .join()
-        .map_err(|e| anyhow!("{:?}", e))
-        .context("Couldn't join on the associated thread")?
+        let (network, accepted) = Self::setup_network(
+            network_config,
+            self.device_manager.clone(),
+            self.hypervisor.clone(),
+        )
+        .await
         .context("failed to set up network")?;
+        // Store the network before acknowledging, without an intervening await.
         self.network = Some(network);
+        let _ = accepted.send(());
         Ok(())
+    }
+
+    async fn setup_network(
+        network_config: NetworkConfig,
+        device_manager: Arc<RwLock<DeviceManager>>,
+        hypervisor: Arc<dyn Hypervisor>,
+    ) -> Result<(Arc<dyn Network>, oneshot::Sender<()>)> {
+        // Namespace changes must stay on a dedicated OS thread. Await its
+        // result asynchronously so setup does not block a Tokio worker.
+        let (tx, rx) = oneshot::channel();
+        let (accepted, ack) = oneshot::channel();
+        thread::spawn(move || {
+            let setup = || -> Result<_> {
+                let rt = runtime::Builder::new_current_thread().enable_io().build()?;
+                let d = rt
+                    .block_on(network::new(&network_config, device_manager))
+                    .context("new network")?;
+                rt.block_on(d.setup()).context("setup network")?;
+                Ok((rt, d))
+            };
+            match setup() {
+                Ok((rt, network)) => {
+                    rt.block_on(Self::handoff_network(network, hypervisor, tx, ack));
+                }
+                Err(error) => {
+                    let _ = tx.send(Err(error));
+                }
+            }
+        });
+        let network = rx
+            .await
+            .context("network setup thread exited without a result")??;
+        Ok((network, accepted))
+    }
+
+    async fn handoff_network(
+        network: Arc<dyn Network>,
+        hypervisor: Arc<dyn Hypervisor>,
+        tx: oneshot::Sender<Result<Arc<dyn Network>>>,
+        ack: oneshot::Receiver<()>,
+    ) {
+        // send() can succeed even if the caller cancels before receiving the
+        // buffered result. Keep ownership until it acknowledges receipt.
+        if tx.send(Ok(network.clone())).is_ok() && ack.await.is_ok() {
+            return;
+        }
+
+        // The caller cancelled; remove the unclaimed network on the setup thread.
+        if let Err(error) = network.remove(hypervisor.as_ref()).await {
+            warn!(sl!(), "failed to remove cancelled network setup: {error:#}");
+        }
     }
 
     async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
@@ -1459,15 +1493,189 @@ fn block_device_node_is_readonly(major: i64, minor: i64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::device_cgroup_access_is_readonly;
+    use super::{device_cgroup_access_is_readonly, ResourceManagerInner};
+    use crate::network::{DanNetworkConfig, EndpointState, Network, NetworkConfig};
+    use anyhow::Result;
+    use async_trait::async_trait;
+    use hypervisor::{device::device_manager::DeviceManager, qemu::Qemu, Hypervisor};
     use oci_spec::runtime::{
         Linux, LinuxBuilder, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder, LinuxDeviceType,
         LinuxResourcesBuilder,
     };
     use rstest::rstest;
+    use std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        thread,
+        time::Duration,
+    };
+    use tokio::sync::{oneshot, RwLock};
 
     const MAJOR: i64 = 8;
     const MINOR: i64 = 0;
+
+    async fn network_device_manager() -> (Arc<RwLock<DeviceManager>>, Arc<dyn Hypervisor>) {
+        let hypervisor: Arc<dyn Hypervisor> = Arc::new(Qemu::new());
+        let manager = Arc::new(RwLock::new(
+            DeviceManager::new(hypervisor.clone(), None).await.unwrap(),
+        ));
+        (manager, hypervisor)
+    }
+
+    #[test]
+    fn test_network_setup_keeps_tokio_worker_available() {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dan_conf_path = dir.path().join("dan.json");
+        std::fs::write(
+            &dan_conf_path,
+            serde_json::json!({
+                "devices": [{
+                    "name": "eth0",
+                    "guest_mac": "02:00:00:00:00:01",
+                    "device": {
+                        "type": "vhost-user",
+                        "path": dir.path().join("vhost.sock"),
+                    },
+                    "network_info": { "interface": { "ip_addresses": [] } },
+                }],
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let (device_manager, hypervisor) = rt.block_on(network_device_manager());
+        let guard = rt.block_on(device_manager.clone().write_owned());
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let unlock = thread::spawn(move || {
+            // Release on timeout too, so a blocking join fails without hanging the test.
+            let result = release_rx.recv_timeout(Duration::from_secs(5));
+            drop(guard);
+            result
+        });
+        let setup = rt.spawn(async move {
+            // This task goes into this worker's LIFO slot, which other workers
+            // cannot steal. Network setup must yield so it can release the lock.
+            let release = tokio::spawn(async move {
+                let _ = release_tx.send(());
+            });
+            let result = ResourceManagerInner::setup_network(
+                NetworkConfig::Dan(DanNetworkConfig {
+                    dan_conf_path,
+                    network_queues: 1,
+                }),
+                device_manager,
+                hypervisor,
+            )
+            .await;
+            release.await.unwrap();
+            result
+        });
+        let result = rt.block_on(setup).unwrap();
+        let released = unlock.join().unwrap();
+        assert!(result.is_ok(), "network setup failed: {:?}", result.err());
+        assert!(released.is_ok(), "network setup blocked the Tokio worker");
+    }
+
+    #[tokio::test]
+    async fn test_network_setup_propagates_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (device_manager, hypervisor) = network_device_manager().await;
+        let error = ResourceManagerInner::setup_network(
+            NetworkConfig::Dan(DanNetworkConfig {
+                dan_conf_path: dir.path().join("missing.json"),
+                network_queues: 1,
+            }),
+            device_manager,
+            hypervisor,
+        )
+        .await
+        .err()
+        .expect("setup should fail for a missing DAN config");
+        let io_error = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<std::io::Error>())
+            .unwrap();
+        assert_eq!(io_error.kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[derive(Default)]
+    struct TestNetwork {
+        remove_calls: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl Network for TestNetwork {
+        async fn setup(&self) -> Result<()> {
+            unreachable!("handoff only runs after setup succeeds")
+        }
+
+        async fn remove(&self, _hypervisor: &dyn Hypervisor) -> Result<()> {
+            self.remove_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn interfaces(&self) -> Result<Vec<agent::Interface>> {
+            Ok(vec![])
+        }
+
+        async fn routes(&self) -> Result<Vec<agent::Route>> {
+            Ok(vec![])
+        }
+
+        async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>> {
+            Ok(vec![])
+        }
+
+        async fn save(&self) -> Option<Vec<EndpointState>> {
+            None
+        }
+    }
+
+    #[rstest]
+    #[case::received(false, false)]
+    #[case::cancelled_before_send(true, false)]
+    #[case::cancelled_after_send(false, true)]
+    #[tokio::test]
+    async fn test_network_handoff(
+        #[case] cancel_before_send: bool,
+        #[case] cancel_after_send: bool,
+    ) {
+        let network = Arc::new(TestNetwork::default());
+        let (tx, mut rx) = oneshot::channel();
+        let (accepted, ack) = oneshot::channel();
+        let handoff =
+            ResourceManagerInner::handoff_network(network.clone(), Arc::new(Qemu::new()), tx, ack);
+        tokio::pin!(handoff);
+
+        if cancel_before_send {
+            drop(rx);
+            drop(accepted);
+        } else {
+            // The result has been sent; stop before the caller receives it.
+            assert!(futures::poll!(&mut handoff).is_pending());
+            if cancel_after_send {
+                drop(rx);
+                drop(accepted);
+            } else {
+                let received = rx.try_recv().unwrap().unwrap();
+                let expected: Arc<dyn Network> = network.clone();
+                assert!(Arc::ptr_eq(&received, &expected));
+                accepted.send(()).unwrap();
+            }
+        }
+        handoff.await;
+
+        assert_eq!(
+            network.remove_calls.load(Ordering::SeqCst),
+            usize::from(cancel_before_send || cancel_after_send)
+        );
+    }
 
     fn rule(
         allow: bool,
