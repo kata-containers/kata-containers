@@ -1027,9 +1027,8 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
     if spec.linux().is_some() {
         let linux = spec.linux().as_ref().unwrap();
         let linux_masked_paths = linux.masked_paths().clone().unwrap_or_default();
-        for path in linux_masked_paths.iter() {
-            mask_path(path)?;
-        }
+        let mount_label = linux.mount_label().clone().unwrap_or_default();
+        mask_paths(&linux_masked_paths, &mount_label)?;
         let ro_paths = vec![];
         let linux_readonly_paths = linux.readonly_paths().as_ref().unwrap_or(&ro_paths);
         for path in linux_readonly_paths.iter() {
@@ -1065,22 +1064,73 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
     Ok(())
 }
 
-fn mask_path(path: &str) -> Result<()> {
+// Masks each path in maskedPaths.
+//
+// A file is masked by a bind mount of /dev/null over it.
+//
+// A directory is masked by an empty read-only tmpfs over it. Only the
+// first directory gets a new tmpfs. Every later directory is a bind mount
+// of that first tmpfs. All of them share one superblock, so all are
+// read-only and have the same SELinux label. runc and crun do the same.
+fn mask_paths(paths: &[String], label: &str) -> Result<()> {
+    let mut tmpfs_data = String::from("nr_blocks=1,nr_inodes=1");
+    if !label.is_empty() && selinux::is_enabled()? {
+        selinux::add_mount_label(&mut tmpfs_data, label);
+    }
+    let mut shared_tmpfs = None;
+    for path in paths {
+        mask_path(path, &tmpfs_data, &mut shared_tmpfs)?;
+    }
+    Ok(())
+}
+
+fn mask_path<'a>(
+    path: &'a str,
+    tmpfs_data: &str,
+    shared_tmpfs: &mut Option<&'a str>,
+) -> Result<()> {
     check_paths(path)?;
 
-    match mount(
-        Some("/dev/null"),
-        path,
-        None::<&str>,
-        MsFlags::MS_BIND,
-        None::<&str>,
-    ) {
-        Err(e) => match e {
-            nix::Error::ENOENT | nix::Error::ENOTDIR => Ok(()),
-            _ => Err(e.into()),
-        },
-        Ok(_) => Ok(()),
+    let is_dir = match fs::metadata(path) {
+        Ok(meta) => meta.is_dir(),
+        // Nothing to mask.
+        Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+            return Ok(())
+        }
+        Err(e) => return Err(e).context(format!("stat masked path {}", path)),
+    };
+    if !is_dir {
+        return mount(
+            Some("/dev/null"),
+            path,
+            None::<&str>,
+            MsFlags::MS_BIND,
+            None::<&str>,
+        )
+        .context(format!("mask {} with /dev/null", path));
     }
+    match *shared_tmpfs {
+        Some(src) => mount(
+            Some(src),
+            path,
+            None::<&str>,
+            MsFlags::MS_BIND,
+            None::<&str>,
+        )
+        .context(format!("mask {} with the tmpfs on {}", path, src))?,
+        None => {
+            mount(
+                Some("tmpfs"),
+                path,
+                Some("tmpfs"),
+                MsFlags::MS_RDONLY,
+                Some(tmpfs_data),
+            )
+            .context(format!("mask {} with a tmpfs", path))?;
+            *shared_tmpfs = Some(path);
+        }
+    }
+    Ok(())
 }
 
 fn readonly_path(path: &str) -> Result<()> {
@@ -1287,22 +1337,56 @@ mod tests {
 
     #[test]
     fn test_mask_path() {
-        let ret = mask_path("abc");
+        const TMPFS_DATA: &str = "nr_blocks=1,nr_inodes=1";
+        let mut shared_tmpfs = None;
+        let ret = mask_path("abc", TMPFS_DATA, &mut shared_tmpfs);
         assert!(
             ret.is_err(),
             "Should fail: path doesn't start with '/'. Got: {:?}",
             ret
         );
 
-        let ret = mask_path("abc/../");
+        let ret = mask_path("abc/../", TMPFS_DATA, &mut shared_tmpfs);
         assert!(
             ret.is_err(),
             "Should fail: path contains '..'. Got: {:?}",
             ret
         );
 
-        let ret = mask_path("/tmp");
-        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+        let ret = mask_path(
+            "/tmp/kata-rustjail-no-such-path",
+            TMPFS_DATA,
+            &mut shared_tmpfs,
+        );
+        assert!(ret.is_ok(), "Should pass: missing path. Got: {:?}", ret);
+        assert_eq!(shared_tmpfs, None);
+
+        let ret = mask_path("/dev/null/x", TMPFS_DATA, &mut shared_tmpfs);
+        assert!(
+            ret.is_ok(),
+            "Should pass: ENOTDIR is skipped. Got: {:?}",
+            ret
+        );
+        assert_eq!(shared_tmpfs, None);
+
+        let ret = mask_path("/dev/null", TMPFS_DATA, &mut shared_tmpfs);
+        assert!(ret.is_ok(), "Should pass: file. Got: {:?}", ret);
+        assert_eq!(
+            shared_tmpfs, None,
+            "a file must not become the shared tmpfs"
+        );
+
+        let ret = mask_path("/tmp", TMPFS_DATA, &mut shared_tmpfs);
+        assert!(ret.is_ok(), "Should pass: first directory. Got: {:?}", ret);
+        assert_eq!(shared_tmpfs, Some("/tmp"));
+
+        let ret = mask_path("/dev", TMPFS_DATA, &mut shared_tmpfs);
+        assert!(ret.is_ok(), "Should pass: second directory. Got: {:?}", ret);
+        assert_eq!(
+            shared_tmpfs,
+            Some("/tmp"),
+            "later directories reuse the first tmpfs"
+        );
     }
 
     #[test]
