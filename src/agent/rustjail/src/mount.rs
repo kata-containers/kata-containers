@@ -1008,7 +1008,12 @@ fn bind_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<()> {
+pub fn finish_rootfs(
+    cfd_log: RawFd,
+    spec: &Spec,
+    process: &Process,
+    selinux_enabled: bool,
+) -> Result<()> {
     let olddir = unistd::getcwd()?;
     log_child!(cfd_log, "old cwd: {}", olddir.to_str().unwrap());
     unistd::chdir("/")?;
@@ -1028,7 +1033,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
         let linux = spec.linux().as_ref().unwrap();
         let linux_masked_paths = linux.masked_paths().clone().unwrap_or_default();
         let mount_label = linux.mount_label().clone().unwrap_or_default();
-        mask_paths(&linux_masked_paths, &mount_label)?;
+        mask_paths(&linux_masked_paths, &mount_label, selinux_enabled)?;
         let ro_paths = vec![];
         let linux_readonly_paths = linux.readonly_paths().as_ref().unwrap_or(&ro_paths);
         for path in linux_readonly_paths.iter() {
@@ -1072,9 +1077,9 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
 // first directory gets a new tmpfs. Every later directory is a bind mount
 // of that first tmpfs. All of them share one superblock, so all are
 // read-only and have the same SELinux label. runc and crun do the same.
-fn mask_paths(paths: &[String], label: &str) -> Result<()> {
+fn mask_paths(paths: &[String], label: &str, selinux_enabled: bool) -> Result<()> {
     let mut tmpfs_data = String::from("nr_blocks=1,nr_inodes=1");
-    if !label.is_empty() && selinux::is_enabled()? {
+    if selinux_enabled && !label.is_empty() {
         selinux::add_mount_label(&mut tmpfs_data, label);
     }
     let mut shared_tmpfs = None;
@@ -1417,7 +1422,7 @@ mod tests {
         oci_mount.set_options(Some(vec!["shared".into()]));
         spec.set_mounts(Some(vec![oci_mount]));
 
-        let ret = finish_rootfs(stdout_fd, &spec, &oci::Process::default());
+        let ret = finish_rootfs(stdout_fd, &spec, &oci::Process::default(), false);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 
@@ -1454,7 +1459,7 @@ mod tests {
         let mut process = oci::Process::default();
         process.set_cwd(cwd_path.clone());
 
-        let ret = finish_rootfs(stdout_fd, &spec, &process);
+        let ret = finish_rootfs(stdout_fd, &spec, &process, false);
 
         let created = cwd_path.exists();
         let _ = remove_dir_all(&cwd_path);
