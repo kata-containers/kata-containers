@@ -20,7 +20,7 @@ use std::fs::{self, OpenOptions};
 use std::mem::MaybeUninit;
 use std::os::unix;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsRawFd, OwnedFd, RawFd};
 use std::path::{Component, Path, PathBuf};
 
 use path_absolutize::*;
@@ -130,6 +130,34 @@ pub fn mount<
     mount::mount(source, target, fstype, flags, data)
 }
 
+// The tests do not mount. This mount() records each call on its thread,
+// so a test can check what the code under test would have mounted.
+#[cfg(test)]
+#[derive(Debug)]
+struct MountCall {
+    source: Option<String>,
+    target: String,
+    fstype: Option<String>,
+    flags: MsFlags,
+    data: Option<String>,
+}
+
+#[cfg(test)]
+thread_local! {
+    static MOUNT_CALLS: std::cell::RefCell<Vec<MountCall>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+fn take_mount_calls() -> Vec<MountCall> {
+    MOUNT_CALLS.with(|calls| calls.take())
+}
+
+#[cfg(test)]
+fn nix_path_string<P: ?Sized + NixPath>(path: &P) -> String {
+    path.with_nix_path(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
 #[inline(always)]
 #[cfg(test)]
 pub fn mount<
@@ -138,12 +166,21 @@ pub fn mount<
     P3: ?Sized + NixPath,
     P4: ?Sized + NixPath,
 >(
-    _source: Option<&P1>,
-    _target: &P2,
-    _fstype: Option<&P3>,
-    _flags: MsFlags,
-    _data: Option<&P4>,
+    source: Option<&P1>,
+    target: &P2,
+    fstype: Option<&P3>,
+    flags: MsFlags,
+    data: Option<&P4>,
 ) -> std::result::Result<(), nix::Error> {
+    MOUNT_CALLS.with(|calls| {
+        calls.borrow_mut().push(MountCall {
+            source: source.map(nix_path_string),
+            target: nix_path_string(target),
+            fstype: fstype.map(nix_path_string),
+            flags,
+            data: data.map(nix_path_string),
+        })
+    });
     Ok(())
 }
 
@@ -1089,11 +1126,7 @@ fn mask_paths(paths: &[String], label: &str, selinux_enabled: bool) -> Result<()
     Ok(())
 }
 
-fn mask_path<'a>(
-    path: &'a str,
-    tmpfs_data: &str,
-    shared_tmpfs: &mut Option<&'a str>,
-) -> Result<()> {
+fn mask_path(path: &str, tmpfs_data: &str, shared_tmpfs: &mut Option<OwnedFd>) -> Result<()> {
     check_paths(path)?;
 
     let is_dir = match fs::metadata(path) {
@@ -1114,15 +1147,21 @@ fn mask_path<'a>(
         )
         .context(format!("mask {} with /dev/null", path));
     }
-    match *shared_tmpfs {
-        Some(src) => mount(
-            Some(src),
-            path,
-            None::<&str>,
-            MsFlags::MS_BIND,
-            None::<&str>,
-        )
-        .context(format!("mask {} with the tmpfs on {}", path, src))?,
+    match shared_tmpfs {
+        Some(fd) => {
+            // Bind from the descriptor, not from the path the tmpfs was
+            // mounted on: a later entry in maskedPaths may have masked a
+            // parent of that path.
+            let src = format!("/proc/self/fd/{}", fd.as_raw_fd());
+            mount(
+                Some(src.as_str()),
+                path,
+                None::<&str>,
+                MsFlags::MS_BIND,
+                None::<&str>,
+            )
+            .context(format!("mask {} with the shared tmpfs", path))?;
+        }
         None => {
             mount(
                 Some("tmpfs"),
@@ -1132,7 +1171,13 @@ fn mask_path<'a>(
                 Some(tmpfs_data),
             )
             .context(format!("mask {} with a tmpfs", path))?;
-            *shared_tmpfs = Some(path);
+            let fd = fcntl::open(
+                path,
+                OFlag::O_PATH | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC,
+                Mode::empty(),
+            )
+            .context(format!("open the tmpfs on {}", path))?;
+            *shared_tmpfs = Some(fd);
         }
     }
     Ok(())
@@ -1358,39 +1403,133 @@ mod tests {
             ret
         );
 
-        let ret = mask_path(
-            "/tmp/kata-rustjail-no-such-path",
-            TMPFS_DATA,
-            &mut shared_tmpfs,
-        );
-        assert!(ret.is_ok(), "Should pass: missing path. Got: {:?}", ret);
-        assert_eq!(shared_tmpfs, None);
+        let tempdir = tempdir().unwrap();
+        let root = tempdir.path().canonicalize().unwrap();
+        create_dir_all(root.join("first")).unwrap();
+        create_dir_all(root.join("second")).unwrap();
+        fs::write(root.join("file"), b"").unwrap();
+        let path = |name: &str| root.join(name).to_str().unwrap().to_string();
 
-        let ret = mask_path("/dev/null/x", TMPFS_DATA, &mut shared_tmpfs);
+        take_mount_calls();
+        let ret = mask_path(&path("missing"), TMPFS_DATA, &mut shared_tmpfs);
+        assert!(ret.is_ok(), "Should pass: missing path. Got: {:?}", ret);
+
+        let ret = mask_path(&path("file/x"), TMPFS_DATA, &mut shared_tmpfs);
         assert!(
             ret.is_ok(),
             "Should pass: ENOTDIR is skipped. Got: {:?}",
             ret
         );
-        assert_eq!(shared_tmpfs, None);
+        let calls = take_mount_calls();
+        assert!(calls.is_empty(), "nothing to mount: {:?}", calls);
+        assert!(shared_tmpfs.is_none());
 
-        let ret = mask_path("/dev/null", TMPFS_DATA, &mut shared_tmpfs);
+        let ret = mask_path(&path("file"), TMPFS_DATA, &mut shared_tmpfs);
         assert!(ret.is_ok(), "Should pass: file. Got: {:?}", ret);
-        assert_eq!(
-            shared_tmpfs, None,
+        let calls = take_mount_calls();
+        assert_eq!(calls.len(), 1, "{:?}", calls);
+        assert_eq!(calls[0].source.as_deref(), Some("/dev/null"));
+        assert_eq!(calls[0].target, path("file"));
+        assert!(calls[0].flags.contains(MsFlags::MS_BIND));
+        assert!(
+            shared_tmpfs.is_none(),
             "a file must not become the shared tmpfs"
         );
 
-        let ret = mask_path("/tmp", TMPFS_DATA, &mut shared_tmpfs);
+        let ret = mask_path(&path("first"), TMPFS_DATA, &mut shared_tmpfs);
         assert!(ret.is_ok(), "Should pass: first directory. Got: {:?}", ret);
-        assert_eq!(shared_tmpfs, Some("/tmp"));
-
-        let ret = mask_path("/dev", TMPFS_DATA, &mut shared_tmpfs);
-        assert!(ret.is_ok(), "Should pass: second directory. Got: {:?}", ret);
+        let calls = take_mount_calls();
+        assert_eq!(calls.len(), 1, "{:?}", calls);
+        assert_eq!(calls[0].fstype.as_deref(), Some("tmpfs"));
+        assert_eq!(calls[0].target, path("first"));
+        assert!(calls[0].flags.contains(MsFlags::MS_RDONLY));
+        assert_eq!(calls[0].data.as_deref(), Some(TMPFS_DATA));
+        let fd = shared_tmpfs
+            .as_ref()
+            .expect("the first directory opens the shared tmpfs")
+            .as_raw_fd();
+        let fd_path = format!("/proc/self/fd/{}", fd);
         assert_eq!(
-            shared_tmpfs,
-            Some("/tmp"),
+            fs::read_link(&fd_path).unwrap(),
+            root.join("first"),
+            "the descriptor is the first directory"
+        );
+
+        let ret = mask_path(&path("second"), TMPFS_DATA, &mut shared_tmpfs);
+        assert!(ret.is_ok(), "Should pass: second directory. Got: {:?}", ret);
+        let calls = take_mount_calls();
+        assert_eq!(calls.len(), 1, "{:?}", calls);
+        assert_eq!(calls[0].source.as_deref(), Some(fd_path.as_str()));
+        assert_eq!(calls[0].target, path("second"));
+        assert!(calls[0].flags.contains(MsFlags::MS_BIND));
+        assert_eq!(
+            shared_tmpfs.as_ref().map(|f| f.as_raw_fd()),
+            Some(fd),
             "later directories reuse the first tmpfs"
+        );
+    }
+
+    // maskedPaths may list a directory after one of its children. The binds
+    // onto the later entries must come from the descriptor of the shared
+    // tmpfs: the path it was mounted on is gone once the parent is masked.
+    #[test]
+    fn test_mask_paths_child_before_parent() {
+        let tempdir = tempdir().unwrap();
+        let root = tempdir.path();
+        create_dir_all(root.join("a/b")).unwrap();
+        create_dir_all(root.join("c")).unwrap();
+        let paths: Vec<String> = ["a/b", "a", "c"]
+            .iter()
+            .map(|name| root.join(name).to_str().unwrap().to_string())
+            .collect();
+
+        take_mount_calls();
+        let ret = mask_paths(&paths, "", false);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+        let calls = take_mount_calls();
+        assert_eq!(calls.len(), 3, "{:?}", calls);
+        assert_eq!(calls[0].fstype.as_deref(), Some("tmpfs"));
+        assert_eq!(calls[0].target, paths[0]);
+        assert_eq!(
+            calls[1].source, calls[2].source,
+            "both binds come from the one tmpfs"
+        );
+        for (call, path) in calls[1..].iter().zip(&paths[1..]) {
+            assert_eq!(call.target, *path);
+            assert!(call.flags.contains(MsFlags::MS_BIND));
+            let source = call.source.as_deref().unwrap_or_default();
+            assert!(
+                source.starts_with("/proc/self/fd/"),
+                "bind onto {} from {}, a path that masking {} hides",
+                path,
+                source,
+                paths[1]
+            );
+        }
+    }
+
+    #[test]
+    fn test_mask_paths_mount_label() {
+        let tempdir = tempdir().unwrap();
+        let paths = vec![tempdir.path().to_str().unwrap().to_string()];
+        let label = "system_u:object_r:container_file_t:s0";
+
+        take_mount_calls();
+        mask_paths(&paths, label, true).unwrap();
+        let calls = take_mount_calls();
+        assert_eq!(calls.len(), 1, "{:?}", calls);
+        assert_eq!(
+            calls[0].data.as_deref(),
+            Some(format!("nr_blocks=1,nr_inodes=1,context=\"{}\"", label).as_str())
+        );
+
+        mask_paths(&paths, label, false).unwrap();
+        let calls = take_mount_calls();
+        assert_eq!(calls.len(), 1, "{:?}", calls);
+        assert_eq!(
+            calls[0].data.as_deref(),
+            Some("nr_blocks=1,nr_inodes=1"),
+            "no SELinux, no context option"
         );
     }
 
