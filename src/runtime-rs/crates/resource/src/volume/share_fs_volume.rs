@@ -952,7 +952,7 @@ fn is_host_device(dest: &str) -> bool {
 fn is_system_mount(src: &str) -> bool {
     for p in SYS_MOUNT_PREFIX {
         let sub_dir_p = format!("{p}/");
-        if src == p || src.contains(sub_dir_p.as_str()) {
+        if src == p || src.starts_with(sub_dir_p.as_str()) {
             return true;
         }
     }
@@ -1028,6 +1028,31 @@ mod test {
         assert!(is_system_mount(sys_sub_dir));
         assert!(is_system_mount(proc_sub_dir));
         assert!(!is_system_mount(not_sys_dir));
+    }
+
+    #[rstest::rstest]
+    #[case("/proc", false)]
+    #[case("/proc/", false)]
+    #[case("/proc/meminfo", false)]
+    #[case("/sys", false)]
+    #[case("/sys/", false)]
+    #[case("/sys/fs/cgroup", false)]
+    #[case("/data", true)]
+    #[case("/process/data", true)]
+    #[case("/sysdata/config", true)]
+    #[case("/data/proc/train", true)]
+    #[case("/data/sys/config", true)]
+    #[case("/var/lib/kubelet/pods/pod/volume-subpaths/config/proc/0", true)]
+    #[case("/var/lib/kubelet/pods/pod/volume-subpaths/config/sys/0", true)]
+    fn test_is_share_fs_volume_system_paths(#[case] source: &str, #[case] expected: bool) {
+        let mount = oci::MountBuilder::default()
+            .typ("bind")
+            .source(source)
+            .destination("/data")
+            .build()
+            .unwrap();
+
+        assert_eq!(is_share_fs_volume(&mount), expected, "source: {source}");
     }
 
     #[test]
