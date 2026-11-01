@@ -13,6 +13,7 @@
 
 use std::{
     fs,
+    os::fd::AsRawFd,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -50,6 +51,73 @@ fn ensure_no_leftover_socket(path: &Path, sid: &str) -> Result<()> {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(err) => Err(err).with_context(|| format!("check {}", path.display())),
     }
+}
+
+/// Whether a running shim still serves the management socket of the sandbox.
+///
+/// A shim stops serving it before it stops its task server, and the kernel
+/// marks a dying shim as exiting before it closes its descriptors. So once
+/// containerd has seen the shim go away, the socket is either not served or
+/// served by a process that is exiting.
+pub fn shim_serves_sandbox(sid: &str) -> bool {
+    socket_served_by_live_process(&socket_path(sid), Path::new("/proc"))
+}
+
+// PF_EXITING from include/linux/sched.h.
+const PF_EXITING: u64 = 0x4;
+
+fn socket_served_by_live_process(path: &Path, proc_root: &Path) -> bool {
+    use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, UnixAddr};
+
+    let Ok(address) = UnixAddr::new(path) else {
+        return true;
+    };
+    let Ok(stream) = socket(
+        AddressFamily::Unix,
+        SockType::Stream,
+        SockFlag::SOCK_NONBLOCK | SockFlag::SOCK_CLOEXEC,
+        None,
+    ) else {
+        return true;
+    };
+    match connect(stream.as_raw_fd(), &address) {
+        Ok(()) => {}
+        Err(
+            nix::errno::Errno::ENOENT
+            | nix::errno::Errno::ECONNREFUSED
+            | nix::errno::Errno::ENOTSOCK,
+        ) => return false,
+        // A full accept queue returns EAGAIN. In-progress or inconclusive
+        // probes must not let recovery tear down another shim's sandbox.
+        Err(_) => return true,
+    }
+    // The credentials of a connected stream socket are those of the process
+    // that called listen().
+    let Ok(cred) =
+        nix::sys::socket::getsockopt(&stream, nix::sys::socket::sockopt::PeerCredentials)
+    else {
+        return true;
+    };
+    match fs::read_to_string(proc_root.join(cred.pid().to_string()).join("stat")) {
+        Ok(stat) => !process_is_exiting(&stat),
+        // Only a vanished process proves that the listener is no longer live.
+        // Restricted or unreadable procfs must not authorize sandbox cleanup.
+        Err(e) => e.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+fn process_is_exiting(stat: &str) -> bool {
+    // The command name can contain spaces and parentheses, the fields after it cannot.
+    let Some((_, fields)) = stat.rsplit_once(')') else {
+        return false;
+    };
+    let fields: Vec<&str> = fields.split_whitespace().collect();
+    let state = fields.first().copied().unwrap_or_default();
+    let flags = fields
+        .get(6)
+        .and_then(|f| f.parse::<u64>().ok())
+        .unwrap_or_default();
+    matches!(state, "Z" | "X" | "x") || flags & PF_EXITING != 0
 }
 
 /// The shim management server instance
@@ -117,5 +185,109 @@ mod tests {
         let err = ensure_no_leftover_socket(&path, "sid").unwrap_err();
         assert!(err.to_string().contains("did not finish its cleanup"));
         assert!(path.exists());
+    }
+
+    #[test]
+    fn test_socket_is_served_only_by_a_live_listener() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SHIM_MGMT_SOCK_NAME);
+        let proc_root = Path::new("/proc");
+        assert!(!socket_served_by_live_process(&path, proc_root));
+
+        fs::write(&path, "not a socket").unwrap();
+        assert!(!socket_served_by_live_process(&path, proc_root));
+        fs::remove_file(&path).unwrap();
+
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        assert!(socket_served_by_live_process(&path, proc_root));
+
+        // The listener's process is reported as exiting.
+        let fake_proc = dir.path().join("proc");
+        let pid_dir = fake_proc.join(std::process::id().to_string());
+        fs::create_dir_all(&pid_dir).unwrap();
+        fs::write(
+            pid_dir.join("stat"),
+            "1 (containerd-shim) R 1 1 1 0 -1 4194372 0 0 0 0",
+        )
+        .unwrap();
+        assert!(!socket_served_by_live_process(&path, &fake_proc));
+
+        drop(listener);
+        assert!(path.exists());
+        assert!(!socket_served_by_live_process(&path, proc_root));
+    }
+
+    #[test]
+    fn test_inconclusive_proc_reads_preserve_live_listener() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shim.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let proc_root = dir.path().join("proc");
+        let pid_dir = proc_root.join(std::process::id().to_string());
+        fs::create_dir_all(&pid_dir).unwrap();
+        let stat = pid_dir.join("stat");
+
+        // A missing process is evidence that recovery may proceed.
+        assert!(!socket_served_by_live_process(&path, &proc_root));
+
+        // Both failures are deterministic even when the tests run as root.
+        fs::create_dir(&stat).unwrap();
+        assert!(socket_served_by_live_process(&path, &proc_root));
+        fs::remove_dir(&stat).unwrap();
+        fs::write(&stat, [0xff]).unwrap();
+        assert!(socket_served_by_live_process(&path, &proc_root));
+
+        // Readable but unrecognized contents are also inconclusive.
+        fs::write(&stat, "unrecognized stat format").unwrap();
+        assert!(socket_served_by_live_process(&path, &proc_root));
+    }
+
+    #[test]
+    fn test_process_is_exiting() {
+        assert!(!process_is_exiting("7 (a) b) S 1 1 1 0 -1 4194560 0"));
+        assert!(process_is_exiting("7 (a) b) S 1 1 1 0 -1 4194564 0"));
+        assert!(process_is_exiting("7 (shim) Z 1 1 1 0 -1 4194560 0"));
+        assert!(!process_is_exiting("garbage"));
+    }
+
+    #[test]
+    fn test_full_accept_queue_does_not_block_recovery_probe() {
+        use nix::sys::socket::{
+            connect, listen, socket, AddressFamily, Backlog, SockFlag, SockType, UnixAddr,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("full.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        listen(&listener, Backlog::new(1).unwrap()).unwrap();
+        let address = UnixAddr::new(&path).unwrap();
+        let mut connections = Vec::new();
+        loop {
+            let stream = socket(
+                AddressFamily::Unix,
+                SockType::Stream,
+                SockFlag::SOCK_NONBLOCK,
+                None,
+            )
+            .unwrap();
+            match connect(stream.as_raw_fd(), &address) {
+                Ok(()) => connections.push(stream),
+                Err(nix::errno::Errno::EAGAIN) => break,
+                result => panic!("unexpected queue-fill result: {:?}", result),
+            }
+            assert!(connections.len() < 10, "listener backlog was not limited");
+        }
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let probe = std::thread::spawn(move || {
+            sender
+                .send(socket_served_by_live_process(&path, Path::new("/proc")))
+                .unwrap();
+        });
+        let served = receiver.recv_timeout(std::time::Duration::from_secs(1));
+        // Closing the listener also releases a blocking probe in the old
+        // implementation, so a failing test does not leave a stuck thread.
+        drop(listener);
+        drop(connections);
+        probe.join().unwrap();
+        assert!(served.expect("management socket probe blocked on a full queue"));
     }
 }

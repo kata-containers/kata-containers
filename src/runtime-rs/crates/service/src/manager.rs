@@ -92,6 +92,7 @@ impl ServiceManager {
                     Action::Start => self.start_service().await.context("start listen"),
                     Action::Stop => self.stop_service().await.context("stop listen"),
                     Action::Shutdown => {
+                        self.handler.stop_mgmt_server().await;
                         self.stop_service().await.context("stop listen")?;
                         break;
                     }
@@ -119,6 +120,16 @@ impl ServiceManager {
     }
 
     pub async fn cleanup(sid: &str) -> Result<()> {
+        // containerd also deletes a new shim that refused to start over a
+        // running one with the same ID. The sandbox, its state and its socket
+        // belong to the running shim, which cleans them up itself.
+        if runtimes::shim_serves_sandbox(sid) {
+            warn!(
+                sl!(),
+                "a running shim still serves sandbox {sid}, leaving its cleanup to it"
+            );
+            return Ok(());
+        }
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
         let state_dir = persist::state_dir(sid).context("sandbox state directory")?;
