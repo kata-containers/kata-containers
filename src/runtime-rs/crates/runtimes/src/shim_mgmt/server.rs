@@ -52,6 +52,50 @@ fn ensure_no_leftover_socket(path: &Path, sid: &str) -> Result<()> {
     }
 }
 
+/// Whether a running shim still serves the management socket of the sandbox.
+///
+/// A shim stops serving it before it stops its task server, and the kernel
+/// marks a dying shim as exiting before it closes its descriptors. So once
+/// containerd has seen the shim go away, the socket is either not served or
+/// served by a process that is exiting.
+pub fn shim_serves_sandbox(sid: &str) -> bool {
+    socket_served_by_live_process(&socket_path(sid), Path::new("/proc"))
+}
+
+// PF_EXITING from include/linux/sched.h.
+const PF_EXITING: u64 = 0x4;
+
+fn socket_served_by_live_process(path: &Path, proc_root: &Path) -> bool {
+    let Ok(stream) = std::os::unix::net::UnixStream::connect(path) else {
+        return false;
+    };
+    // The credentials of a connected stream socket are those of the process
+    // that called listen().
+    let Ok(cred) =
+        nix::sys::socket::getsockopt(&stream, nix::sys::socket::sockopt::PeerCredentials)
+    else {
+        return true;
+    };
+    match fs::read_to_string(proc_root.join(cred.pid().to_string()).join("stat")) {
+        Ok(stat) => !process_is_exiting(&stat),
+        Err(_) => false,
+    }
+}
+
+fn process_is_exiting(stat: &str) -> bool {
+    // The command name can contain spaces and parentheses, the fields after it cannot.
+    let Some((_, fields)) = stat.rsplit_once(')') else {
+        return false;
+    };
+    let fields: Vec<&str> = fields.split_whitespace().collect();
+    let state = fields.first().copied().unwrap_or_default();
+    let flags = fields
+        .get(6)
+        .and_then(|f| f.parse::<u64>().ok())
+        .unwrap_or_default();
+    matches!(state, "Z" | "X" | "x") || flags & PF_EXITING != 0
+}
+
 /// The shim management server instance
 pub struct MgmtServer {
     listener: UnixListener,
@@ -117,5 +161,39 @@ mod tests {
         let err = ensure_no_leftover_socket(&path, "sid").unwrap_err();
         assert!(err.to_string().contains("did not finish its cleanup"));
         assert!(path.exists());
+    }
+
+    #[test]
+    fn test_socket_is_served_only_by_a_live_listener() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SHIM_MGMT_SOCK_NAME);
+        let proc_root = Path::new("/proc");
+        assert!(!socket_served_by_live_process(&path, proc_root));
+
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        assert!(socket_served_by_live_process(&path, proc_root));
+
+        // The listener's process is reported as exiting.
+        let fake_proc = dir.path().join("proc");
+        let pid_dir = fake_proc.join(std::process::id().to_string());
+        fs::create_dir_all(&pid_dir).unwrap();
+        fs::write(
+            pid_dir.join("stat"),
+            "1 (containerd-shim) R 1 1 1 0 -1 4194372 0 0 0 0",
+        )
+        .unwrap();
+        assert!(!socket_served_by_live_process(&path, &fake_proc));
+
+        drop(listener);
+        assert!(path.exists());
+        assert!(!socket_served_by_live_process(&path, proc_root));
+    }
+
+    #[test]
+    fn test_process_is_exiting() {
+        assert!(!process_is_exiting("7 (a) b) S 1 1 1 0 -1 4194560 0"));
+        assert!(process_is_exiting("7 (a) b) S 1 1 1 0 -1 4194564 0"));
+        assert!(process_is_exiting("7 (shim) Z 1 1 1 0 -1 4194560 0"));
+        assert!(!process_is_exiting("garbage"));
     }
 }

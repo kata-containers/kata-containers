@@ -17,4 +17,5 @@ pub use manager::RuntimeHandlerManager;
 pub use shim_interface;
 mod shim_metrics;
 mod shim_mgmt;
+pub use shim_mgmt::server::shim_serves_sandbox;
 pub mod tracer;

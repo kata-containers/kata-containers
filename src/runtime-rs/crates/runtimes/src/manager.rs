@@ -99,6 +99,7 @@ struct RuntimeHandlerManagerInner {
     msg_sender: Sender<Message>,
     kata_tracer: Arc<Mutex<KataTracer>>,
     runtime_instance: Option<Arc<RuntimeInstance>>,
+    mgmt_server: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl std::fmt::Debug for RuntimeHandlerManagerInner {
@@ -118,6 +119,7 @@ impl RuntimeHandlerManagerInner {
             msg_sender,
             kata_tracer: Arc::new(Mutex::new(tracer)),
             runtime_instance: None,
+            mgmt_server: None,
         })
     }
 
@@ -278,7 +280,7 @@ impl RuntimeHandlerManagerInner {
         )
         .context(ERR_NO_SHIM_SERVER)?;
 
-        tokio::task::spawn(shim_mgmt_svr.run());
+        self.mgmt_server = Some(tokio::task::spawn(shim_mgmt_svr.run()));
         info!(sl!(), "shim management http server starts");
 
         Ok(())
@@ -311,6 +313,18 @@ impl RuntimeHandlerManager {
                 id, msg_sender,
             )?)),
         })
+    }
+
+    /// Stops serving the management socket. containerd may run the shim's
+    /// delete as soon as the task server stops, and that delete leaves a
+    /// sandbox whose socket is still served alone, so this has to come first.
+    pub async fn stop_mgmt_server(&self) {
+        let server = self.inner.write().await.mgmt_server.take();
+        if let Some(server) = server {
+            server.abort();
+            // The listener is closed once the aborted task has been dropped.
+            let _ = server.await;
+        }
     }
 
     pub async fn cleanup(&self) -> Result<()> {
