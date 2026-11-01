@@ -264,6 +264,10 @@ type ContainerConfig struct {
 
 	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
 	ReadonlyRootfs bool
+
+	// GuestMemoryCeiling is the memory ceiling the container was given in a
+	// guest sized from its pod, nil until it was given one.
+	GuestMemoryCeiling *uint64
 }
 
 // valid checks that the container configuration is valid.
@@ -735,7 +739,8 @@ func (c *Container) initConfigResourcesMemory() {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
+func newContainer(ctx context.Context, sandbox *Sandbox, config ContainerConfig) (*Container, error) {
+	contConfig := &config
 	span, ctx := katatrace.Trace(ctx, nil, "newContainer", containerTracingTags, map[string]string{"container_id": contConfig.ID, "sandbox_id": sandbox.id})
 	defer span.End()
 
@@ -1849,10 +1854,18 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		return fmt.Errorf("container(%s) not running or ready, impossible to update", state)
 	}
 
+	podSized := hugePagePodSized(&c.sandbox.config.HypervisorConfig)
+	var keepHugepages []specs.LinuxHugepageLimit
+	if podSized {
+		keepHugepages, resources.HugepageLimits = updatedHugepageLimits(c.config.Resources.HugepageLimits, resources.HugepageLimits)
+		if err := refusePodSizedUpdate(c, resources.Memory, keepHugepages); err != nil {
+			return err
+		}
+	}
+
 	if c.config.Resources.CPU == nil {
 		c.config.Resources.CPU = &specs.LinuxCPU{}
 	}
-	heldCPU := *c.config.Resources.CPU
 
 	if cpu := resources.CPU; cpu != nil {
 		if p := cpu.Period; p != nil && *p != 0 {
@@ -1872,15 +1885,13 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 	if c.config.Resources.Memory == nil {
 		c.config.Resources.Memory = &specs.LinuxMemory{}
 	}
-	heldMemory := *c.config.Resources.Memory
-	heldHugepages := append([]specs.LinuxHugepageLimit(nil), c.config.Resources.HugepageLimits...)
 
 	if mem := resources.Memory; mem != nil && mem.Limit != nil {
 		c.config.Resources.Memory.Limit = mem.Limit
 	}
 
-	if hugePagePodSized(&c.sandbox.config.HypervisorConfig) {
-		c.config.Resources.HugepageLimits, resources.HugepageLimits = updatedHugepageLimits(c.config.Resources.HugepageLimits, resources.HugepageLimits)
+	if podSized {
+		c.config.Resources.HugepageLimits = keepHugepages
 	}
 
 	if err := c.sandbox.updateResources(ctx); err != nil {
@@ -1900,17 +1911,7 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		}
 	}
 
-	if err := c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources); err != nil {
-		// A refused update must not stay recorded for later checks.
-		var refusal guestCapacityRefusal
-		if errors.As(err, &refusal) {
-			*c.config.Resources.CPU = heldCPU
-			*c.config.Resources.Memory = heldMemory
-			c.config.Resources.HugepageLimits = heldHugepages
-		}
-		return err
-	}
-	return nil
+	return c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources)
 }
 
 func (c *Container) pause(ctx context.Context) error {

@@ -734,7 +734,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// After validation, so MemorySize is what the VM would boot with.
-	if err := s.sizeHugepageBackedVMFromPod(&sandboxConfig); err != nil {
+	if err := s.sizeHugepageBackedVMFromPod(&sandboxConfig, factory != nil); err != nil {
 		return nil, err
 	}
 
@@ -862,37 +862,6 @@ var (
 	}
 )
 
-// Whether the hypervisor takes guest RAM from the hugetlb pool when
-// enable_hugepages is set. Only then is the pod's reservation the VM's size.
-func hypervisorBacksGuestRAMWithHugePages(hypervisorType HypervisorType) bool {
-	switch hypervisorType {
-	case QemuHypervisor, ClhHypervisor:
-		return true
-	default:
-		return false
-	}
-}
-
-// Whether the pod's huge page reservation sizes this huge page backed guest
-// and bounds its containers: enable_hugepages_pod_sizing.
-func hugePagePodSized(hc *HypervisorConfig) bool {
-	return hc.HugePages && hc.HugePagesPodSizing
-}
-
-// The settings enable_hugepages_pod_sizing depends on. Checked when the
-// configuration loads and again for each sandbox, since annotations can change them.
-func checkHugePagesPodSizing(sandboxConfig *SandboxConfig) error {
-	switch {
-	case !hypervisorBacksGuestRAMWithHugePages(sandboxConfig.HypervisorType):
-		return fmt.Errorf("enable_hugepages_pod_sizing needs a hypervisor that maps guest RAM from the huge page pool (qemu or cloud-hypervisor), and this sandbox uses %s", sandboxConfig.HypervisorType)
-	case !sandboxConfig.StaticResourceMgmt:
-		return errors.New("enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt")
-	case !sandboxConfig.SandboxCgroupOnly:
-		return errors.New("enable_hugepages_pod_sizing needs sandbox_cgroup_only: the hypervisor's huge pages are charged to the pod's cgroup")
-	}
-	return nil
-}
-
 // Floor for a VM sized from the pod's reservation. default_memory cannot serve:
 // the runtime cannot tell its own substituted default from a configured one.
 const minHugePageBackedVMMiB = 1024
@@ -900,12 +869,12 @@ const minHugePageBackedVMMiB = 1024
 // Sizes the VM from hugetlb.<size>.max on the pod's cgroup, which caps the
 // mapping its RAM comes from. The CRI does not carry it (k/enhancements#4113).
 // With the option set, a sandbox that cannot be sized this way is refused.
-func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) error {
+func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig, vmFactory bool) error {
 	hc := &sandboxConfig.HypervisorConfig
 	if !hugePagePodSized(hc) || s.state.State != "" {
 		return nil
 	}
-	if err := checkHugePagesPodSizing(sandboxConfig); err != nil {
+	if err := CheckHugePagesPodSizing(sandboxConfig.HypervisorType, sandboxConfig.StaticResourceMgmt, sandboxConfig.SandboxCgroupOnly, vmFactory); err != nil {
 		return err
 	}
 
@@ -920,6 +889,9 @@ func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) erro
 
 	pageSize, err := readVMHugepageSize()
 	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot tell the VM's huge page size: %w", err)
+	}
+	if _, err := resCtrl.HugetlbSizeName(pageSize); err != nil {
 		return fmt.Errorf("enable_hugepages_pod_sizing cannot tell the VM's huge page size: %w", err)
 	}
 	podResource := resCtrl.HugepagesResourceName(pageSize)
@@ -966,6 +938,7 @@ func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig) erro
 		"default-memory-mb": hc.MemorySize,
 	}).Info("sizing the huge page backed VM from the pod's huge page reservation")
 	hc.MemorySize = uint32(reservedMB)
+	hc.PodSizedHugePageSize = pageSize
 
 	return nil
 }
@@ -1914,17 +1887,18 @@ func (s *Sandbox) addContainer(c *Container) error {
 	return nil
 }
 
-// Points each container of a pod sized guest at its entry in s.config.Containers,
-// which append and delete move.
-func (s *Sandbox) relinkContainerConfigs() {
-	if !hugePagePodSized(&s.config.HypervisorConfig) {
-		return
-	}
+// The config each container holds, in s.config.Containers order. An entry
+// without a container yet stands for itself.
+func (s *Sandbox) containerConfigs() []*ContainerConfig {
+	cfgs := make([]*ContainerConfig, 0, len(s.config.Containers))
 	for i := range s.config.Containers {
 		if c, ok := s.containers[s.config.Containers[i].ID]; ok {
-			c.config = &s.config.Containers[i]
+			cfgs = append(cfgs, c.config)
+		} else {
+			cfgs = append(cfgs, &s.config.Containers[i])
 		}
 	}
+	return cfgs
 }
 
 // CreateContainer creates a new container in the sandbox
@@ -1933,7 +1907,6 @@ func (s *Sandbox) relinkContainerConfigs() {
 func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error) {
 	// Update sandbox config to include the new container's config
 	s.config.Containers = append(s.config.Containers, contConfig)
-	s.relinkContainerConfigs()
 
 	var err error
 
@@ -1942,13 +1915,12 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 			if len(s.config.Containers) > 0 {
 				// delete container config
 				s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
-				s.relinkContainerConfigs()
 			}
 		}
 	}()
 
 	// Create the container object, add devices to the sandbox's device-manager:
-	c, err := newContainer(ctx, s, &s.config.Containers[len(s.config.Containers)-1])
+	c, err := newContainer(ctx, s, contConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -2088,17 +2060,12 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, containerID string) (VCCo
 	}
 
 	// Update sandbox config
-	if hugePagePodSized(&s.config.HypervisorConfig) {
-		detached := *c.config
-		c.config = &detached
-	}
 	for idx, contConfig := range s.config.Containers {
 		if contConfig.ID == containerID {
 			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
 			break
 		}
 	}
-	s.relinkContainerConfigs()
 
 	// update the sandbox resource controller
 	if err = s.resourceControllerUpdate(ctx); err != nil {
@@ -2275,7 +2242,7 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	defer span.End()
 
 	for i := range s.config.Containers {
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, s.config.Containers[i])
 		if err != nil {
 			return err
 		}
@@ -2901,7 +2868,7 @@ func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
 	memorySandbox := uint64(0)
 	needPodSwap := false
 	swapSandbox := int64(0)
-	for _, c := range s.config.Containers {
+	for _, c := range s.containerConfigs() {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
 			s.Logger().WithField("container", c.ID).Debug("Do not taking into account memory resources of not running containers")
@@ -2948,7 +2915,7 @@ func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
 	floatCPU := float32(0)
 	cpusetCount := int(0)
 
-	for _, c := range s.config.Containers {
+	for _, c := range s.containerConfigs() {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
 			s.Logger().WithField("container", c.ID).Debug("Do not taking into account CPU resources of not running containers")
@@ -3200,7 +3167,7 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 
 	cpuResult := cpuset.NewCPUSet()
 	memResult := cpuset.NewCPUSet()
-	for _, ctr := range s.config.Containers {
+	for _, ctr := range s.containerConfigs() {
 		if ctr.Resources.CPU != nil {
 			currCPUSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
 			if err != nil {
@@ -3266,7 +3233,7 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 		contConfig.CustomSpec = &spec
 		s.config.Containers[i] = contConfig
 
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, s.config.Containers[i])
 		if err != nil {
 			return err
 		}

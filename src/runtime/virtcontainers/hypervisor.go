@@ -810,6 +810,10 @@ type HypervisorConfig struct {
 	// is default_memory plus the pod's memory limits.
 	HugePagesPodSizing bool
 
+	// PodSizedHugePageSize is the size, in bytes, of the huge pages a VM sized
+	// from its pod is on. Zero for any other VM.
+	PodSizedHugePageSize uint64
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 

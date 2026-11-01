@@ -2086,16 +2086,8 @@ func checkHugePagesPodSizingConfig(config oci.RuntimeConfig) error {
 	if !config.HypervisorConfig.HugePagesPodSizing {
 		return nil
 	}
-	if !config.StaticSandboxResourceMgmt {
-		return errors.New("enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt")
-	}
-	if !config.SandboxCgroupOnly {
-		return errors.New("enable_hugepages_pod_sizing needs sandbox_cgroup_only")
-	}
-	if config.FactoryConfig.Template || config.FactoryConfig.VMCacheNumber > 0 {
-		return errors.New("enable_hugepages_pod_sizing sizes each VM from its pod, so it cannot use VM templates or the VM cache")
-	}
-	return nil
+	vmFactory := config.FactoryConfig.Template || config.FactoryConfig.VMCacheNumber > 0
+	return vc.CheckHugePagesPodSizing(config.HypervisorType, config.StaticSandboxResourceMgmt, config.SandboxCgroupOnly, vmFactory)
 }
 
 func checkNumaConfig(config oci.RuntimeConfig) error {

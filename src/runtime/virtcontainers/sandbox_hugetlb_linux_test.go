@@ -112,8 +112,9 @@ func TestSizeHugepageBackedVMFromPodTakesTheReservation(t *testing.T) {
 	gotPath := stubHugetlbHost(t, nil, 64<<30, true, nil)
 
 	s, sbc := hugetlbSizingSandbox(true, true, true)
-	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc, false))
 	assert.Equal(uint32(64*1024), sbc.HypervisorConfig.MemorySize)
+	assert.Equal(testHugetlbPageSize, sbc.HypervisorConfig.PodSizedHugePageSize)
 	// The allowance is read from the pod's cgroup.
 	assert.Equal(testHugetlbPodCgroup, *gotPath)
 }
@@ -126,7 +127,7 @@ func TestSizeHugepageBackedVMFromPodNeedsTheOption(t *testing.T) {
 	// pod that reserved nothing starts.
 	s, sbc := hugetlbSizingSandbox(true, true, true)
 	sbc.HypervisorConfig.HugePagesPodSizing = false
-	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc, false))
 	assert.Equal(uint32(testHugetlbDefaultMemMB), sbc.HypervisorConfig.MemorySize)
 }
 
@@ -151,7 +152,7 @@ func TestSizeHugepageBackedVMFromPodRefusesAShortReservation(t *testing.T) {
 			if tc.tweak != nil {
 				tc.tweak(sbc)
 			}
-			err := s.sizeHugepageBackedVMFromPod(sbc)
+			err := s.sizeHugepageBackedVMFromPod(sbc, false)
 			assert.Error(err)
 			for _, want := range tc.want {
 				assert.Contains(err.Error(), want)
@@ -179,7 +180,7 @@ func TestSizeHugepageBackedVMFromPodSizesBelowDefaultMemory(t *testing.T) {
 			if tweak != nil {
 				tweak(sbc)
 			}
-			assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+			assert.NoError(s.sizeHugepageBackedVMFromPod(sbc, false))
 			assert.Equal(uint32(2048), sbc.HypervisorConfig.MemorySize)
 		})
 	}
@@ -191,7 +192,7 @@ func TestSizeHugepageBackedVMFromPodRefusesMoreThanDefaultMaxMemory(t *testing.T
 
 	s, sbc := hugetlbSizingSandbox(true, true, true)
 	sbc.HypervisorConfig.DefaultMaxMemorySize = 8192
-	err := s.sizeHugepageBackedVMFromPod(sbc)
+	err := s.sizeHugepageBackedVMFromPod(sbc, false)
 	assert.Error(err)
 	assert.Contains(err.Error(), "default_maxmemory")
 	assert.Contains(err.Error(), "hugepages-1Gi")
@@ -200,7 +201,7 @@ func TestSizeHugepageBackedVMFromPodRefusesMoreThanDefaultMaxMemory(t *testing.T
 	// An unset default_maxmemory is derived from the host later on and does
 	// not bound the reservation here.
 	sbc.HypervisorConfig.DefaultMaxMemorySize = 0
-	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc, false))
 	assert.Equal(uint32(16*1024), sbc.HypervisorConfig.MemorySize)
 }
 
@@ -210,7 +211,7 @@ func TestSizeHugepageBackedVMFromPodLeavesOtherGuests(t *testing.T) {
 
 	// A guest outside the huge page pool keeps default_memory, whatever else is set.
 	s, sbc := hugetlbSizingSandbox(false, false, false)
-	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc, false))
 	assert.Equal(testHugetlbDefaultMemMB, sbc.HypervisorConfig.MemorySize)
 }
 
@@ -221,9 +222,11 @@ func TestSizeHugepageBackedVMFromPodRefusesWhatItCannotSize(t *testing.T) {
 		limit                     uint64
 		limitErr                  error
 		pageSizeErr               error
+		vmFactory                 bool
 		tweak                     func(*SandboxConfig)
 		want                      string
 	}{
+		"VM factory":                        {static: true, sandboxCgroupOnly: true, stated: true, vmFactory: true, want: "VM templates or the VM cache"},
 		"not statically sized":              {static: false, sandboxCgroupOnly: true, stated: true, want: "static_sandbox_resource_mgmt"},
 		"hypervisor outside the pod cgroup": {static: true, sandboxCgroupOnly: false, stated: true, want: "sandbox_cgroup_only"},
 		"hypervisor without the huge page pool": {static: true, sandboxCgroupOnly: true, stated: true, want: "firecracker",
@@ -254,7 +257,7 @@ func TestSizeHugepageBackedVMFromPodRefusesWhatItCannotSize(t *testing.T) {
 			if tc.tweak != nil {
 				tc.tweak(sbc)
 			}
-			assert.ErrorContains(s.sizeHugepageBackedVMFromPod(sbc), tc.want)
+			assert.ErrorContains(s.sizeHugepageBackedVMFromPod(sbc, tc.vmFactory), tc.want)
 			assert.Equal(testHugetlbDefaultMemMB, sbc.HypervisorConfig.MemorySize)
 		})
 	}
@@ -268,7 +271,7 @@ func TestSizeHugepageBackedVMFromPodSizesOnlyANewSandbox(t *testing.T) {
 
 	s, sbc := hugetlbSizingSandbox(true, true, true)
 	s.state.State = types.StateRunning
-	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc))
+	assert.NoError(s.sizeHugepageBackedVMFromPod(sbc, false))
 	assert.Equal(testHugetlbDefaultMemMB, sbc.HypervisorConfig.MemorySize)
 	assert.Empty(*gotPath)
 }

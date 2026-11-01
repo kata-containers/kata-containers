@@ -1746,17 +1746,20 @@ func TestCheckHugePagesPodSizingConfig(t *testing.T) {
 	for name, tc := range map[string]struct {
 		podSizing, static, sandboxCgroupOnly bool
 		factory                              oci.FactoryConfig
+		hypervisorType                       vc.HypervisorType
 		want                                 string
 	}{
-		"option off":                 {false, false, false, oci.FactoryConfig{Template: true}, ""},
-		"all it needs":               {true, true, true, oci.FactoryConfig{}, ""},
-		"dynamically sized":          {true, false, true, oci.FactoryConfig{}, "static_sandbox_resource_mgmt"},
-		"hypervisor outside the pod": {true, true, false, oci.FactoryConfig{}, "sandbox_cgroup_only"},
-		"VM template":                {true, true, true, oci.FactoryConfig{Template: true}, "VM templates"},
-		"VM cache":                   {true, true, true, oci.FactoryConfig{VMCacheNumber: 1}, "VM cache"},
+		"option off":                  {false, false, false, oci.FactoryConfig{Template: true}, vc.QemuHypervisor, ""},
+		"all it needs":                {true, true, true, oci.FactoryConfig{}, vc.QemuHypervisor, ""},
+		"dynamically sized":           {true, false, true, oci.FactoryConfig{}, vc.QemuHypervisor, "static_sandbox_resource_mgmt"},
+		"hypervisor outside the pod":  {true, true, false, oci.FactoryConfig{}, vc.QemuHypervisor, "sandbox_cgroup_only"},
+		"VM template":                 {true, true, true, oci.FactoryConfig{Template: true}, vc.QemuHypervisor, "VM templates"},
+		"VM cache":                    {true, true, true, oci.FactoryConfig{VMCacheNumber: 1}, vc.QemuHypervisor, "VM cache"},
+		"hypervisor without the pool": {true, true, true, oci.FactoryConfig{}, vc.FirecrackerHypervisor, "firecracker"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := checkHugePagesPodSizingConfig(oci.RuntimeConfig{
+				HypervisorType:            tc.hypervisorType,
 				HypervisorConfig:          vc.HypervisorConfig{HugePages: true, HugePagesPodSizing: tc.podSizing},
 				StaticSandboxResourceMgmt: tc.static,
 				SandboxCgroupOnly:         tc.sandboxCgroupOnly,
