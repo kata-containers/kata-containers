@@ -115,7 +115,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.default_gpu_model` | string | the GPU model required for the VM. Only used by remote hypervisor to help with instance selection |
 | `io.katacontainers.config.hypervisor.block_device_num_queues` | `usize` | The number of queues to use for block devices (runtime-rs only) |
 | `io.katacontainers.config.hypervisor.block_device_queue_size` | uint32 | The size of the of the queue to use for block devices (runtime-rs only) |
-| `io.katacontainers.config.hypervisor.vsock_cid` | uint32 | the guest's vsock context ID, 3 to 1023, when a host-side client must know it in advance; 0 draws a random one (runtime-rs only) |
+| `io.katacontainers.config.hypervisor.vsock_cid` | uint32 | the guest's vsock context ID, 3 to 1023, when a host-side client must know it in advance; 0 draws a random one (runtime-rs only). A pod that sets it takes the CID from whichever VM the host-side client expects there, so in a multi-tenant cluster an admission policy must restrict who may set it |
 
 ### Container Options
 
