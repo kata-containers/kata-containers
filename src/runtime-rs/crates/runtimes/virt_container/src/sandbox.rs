@@ -1056,9 +1056,19 @@ impl VirtSandbox {
                 uds_path: get_hvsock_path(&self.sid),
             })
         } else {
-            // Qemu uses the vsock device model.
+            // Qemu uses the vsock device model. A configured CID is claimed
+            // as is; 0 leaves the choice to the device.
             ResourceConfig::Vsock(VsockConfig {
-                guest_cid: libc::VMADDR_CID_ANY,
+                guest_cid: match self
+                    .hypervisor
+                    .hypervisor_config()
+                    .await
+                    .device_info
+                    .vsock_cid
+                {
+                    0 => libc::VMADDR_CID_ANY,
+                    cid => cid,
+                },
             })
         };
 

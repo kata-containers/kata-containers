@@ -324,6 +324,12 @@ enable_iommu = false
 # Enabling this will result in the VM device having iommu_platform=on set
 enable_iommu_platform = false
 
+# The guest's vsock context ID, when a host-side client must know it in
+# advance, for example to reach a service inside the VM.  0 (default) draws
+# a random CID.  A set value must lie in 3..=1023, which random draws never
+# use; a CID already taken fails the sandbox instead of falling back.
+vsock_cid = 0
+
 # List of valid annotations values for the vhost user store path
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@

@@ -5,6 +5,7 @@
 //
 
 use anyhow::{Context, Result};
+use kata_types::config::hypervisor::VSOCK_CID_RESERVED;
 use rand::RngExt;
 use std::os::unix::prelude::AsRawFd;
 use tokio::fs::{File, OpenOptions};
@@ -133,9 +134,15 @@ impl VsockDevice {
     }
 
     pub async fn init_config(&mut self) -> Result<File> {
-        let (guest_cid, vhost_fd) = generate_vhost_vsock_cid()
-            .await
-            .context("generate vhost vsock cid failed")?;
+        let (guest_cid, vhost_fd) = if self.config.guest_cid == libc::VMADDR_CID_ANY {
+            generate_vhost_vsock_cid()
+                .await
+                .context("generate vhost vsock cid failed")?
+        } else {
+            claim_vhost_vsock_cid(self.config.guest_cid)
+                .await
+                .with_context(|| format!("claim vsock cid {}", self.config.guest_cid))?
+        };
         self.config.guest_cid = guest_cid;
         Ok(vhost_fd)
     }
@@ -199,9 +206,10 @@ pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
 
     // Try 50 times to find a context ID that is not in use.
     for _ in 0..CID_RETRY_COUNT {
-        // First usable CID above VMADDR_CID_HOST (see vsock(7))
-        let first_usable_cid = 3;
-        let rand_cid = rng.random_range(first_usable_cid..=(u32::MAX));
+        // Above the range kept for configured CIDs, so a configured CID never
+        // meets a random one.
+        let first_random_cid = VSOCK_CID_RESERVED.end() + 1;
+        let rand_cid = rng.random_range(first_random_cid..=(u32::MAX));
         let guest_cid =
             unsafe { vhost_vsock_set_guest_cid(vhost_fd.as_raw_fd(), &(rand_cid as u64)) };
         match guest_cid {
@@ -220,4 +228,22 @@ pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
         "failed to find a free vsock context ID after {} attempts",
         CID_RETRY_COUNT
     );
+}
+
+/// Take the configured CID or fail: a host-side client dials this exact
+/// address, so another CID would start a VM nobody can reach.
+pub async fn claim_vhost_vsock_cid(cid: u32) -> Result<(u32, File)> {
+    let vhost_fd = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(VHOST_VSOCK_DEVICE)
+        .await
+        .context(format!(
+            "failed to open {VHOST_VSOCK_DEVICE}, try to run modprobe vhost_vsock."
+        ))?;
+    match unsafe { vhost_vsock_set_guest_cid(vhost_fd.as_raw_fd(), &(cid as u64)) } {
+        Ok(_) => Ok((cid, vhost_fd)),
+        Err(nix::Error::EADDRINUSE) => anyhow::bail!("vsock context ID {cid} is already in use"),
+        Err(err) => Err(err).context("failed to set guest CID"),
+    }
 }

@@ -834,7 +834,20 @@ pub struct DeviceInfo {
     /// Enable balloon device reporting.
     #[serde(default)]
     pub reclaim_guest_freed_memory: bool,
+    /// The guest's vsock context ID, when a host-side client must know it
+    /// in advance, for example to reach a service inside the VM.
+    ///
+    /// `0` (default) draws a random CID. A set value must lie in
+    /// [`VSOCK_CID_RESERVED`], which random draws never use, and a CID
+    /// already taken fails the sandbox instead of falling back to random.
+    #[serde(default)]
+    pub vsock_cid: u32,
 }
+
+/// Context IDs kept for `vsock_cid`: random CIDs are drawn above this range,
+/// so a configured CID can only collide with another configured one.
+/// 0, 1 and 2 are the hypervisor, local and host CIDs of vsock(7).
+pub const VSOCK_CID_RESERVED: std::ops::RangeInclusive<u32> = 3..=1023;
 
 impl DeviceInfo {
     /// Adjust the configuration information after loading from configuration file.
@@ -861,6 +874,14 @@ impl DeviceInfo {
             ));
         }
 
+        if self.vsock_cid != 0 && !VSOCK_CID_RESERVED.contains(&self.vsock_cid) {
+            return Err(std::io::Error::other(format!(
+                "vsock_cid {} is outside the reserved range {}..={}",
+                self.vsock_cid,
+                VSOCK_CID_RESERVED.start(),
+                VSOCK_CID_RESERVED.end()
+            )));
+        }
         Ok(())
     }
 }
@@ -2252,6 +2273,20 @@ mod tests {
             error_msg,
             expected_error_msg
         );
+    }
+
+    #[test]
+    fn test_validate_vsock_cid_reserved_range() {
+        let mut info = DeviceInfo::default();
+        assert!(info.validate().is_ok(), "0 draws a random CID");
+        info.vsock_cid = *VSOCK_CID_RESERVED.start();
+        assert!(info.validate().is_ok());
+        info.vsock_cid = *VSOCK_CID_RESERVED.end();
+        assert!(info.validate().is_ok());
+        info.vsock_cid = VSOCK_CID_RESERVED.end() + 1;
+        assert!(info.validate().is_err(), "a random draw could take it");
+        info.vsock_cid = 2;
+        assert!(info.validate().is_err(), "the host's own CID");
     }
 
     #[test]

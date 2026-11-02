@@ -11,7 +11,7 @@ use std::result::{self};
 
 use serde::Deserialize;
 
-use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
+use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType, VSOCK_CID_RESERVED};
 
 use crate::config::TomlConfig;
 use crate::initdata::add_hypervisor_initdata_overrides;
@@ -191,6 +191,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT: &str =
 /// PCIeSwitchPort is used to indicate the number of PCIe Switch Port devices
 pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_SWITCH_PORT: &str =
     "io.katacontainers.config.hypervisor.pcie_switch_port";
+/// The guest's vsock context ID; see `DeviceInfo::vsock_cid`.
+pub const KATA_ANNO_CFG_HYPERVISOR_VSOCK_CID: &str =
+    "io.katacontainers.config.hypervisor.vsock_cid";
 /// A sandbox annotation to specify if the VM should have a vIOMMU device.
 pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU: &str = "io.katacontainers.config.hypervisor.enable_iommu";
 /// Enable Hypervisor Devices IOMMU_PLATFORM
@@ -761,6 +764,25 @@ impl Annotation {
                             } else {
                                 hv.device_info.pcie_switch_port = switch_ports;
                             }
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_VSOCK_CID => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            let cid = r.unwrap_or_default();
+                            if cid != 0 && !VSOCK_CID_RESERVED.contains(&cid) {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "vsock_cid {cid} is outside the reserved range {}..={}",
+                                        VSOCK_CID_RESERVED.start(),
+                                        VSOCK_CID_RESERVED.end()
+                                    ),
+                                ));
+                            }
+                            hv.device_info.vsock_cid = cid;
                         }
                         Err(_e) => {
                             return Err(u32_err);
