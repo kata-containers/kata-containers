@@ -199,7 +199,7 @@ args: ["--publish", "--unit=gpu"]
 The host publishes the view and activates partitions itself, without `kubectl exec`.
 
 !!! info "Prerequisites in review"
-    This recipe needs kata runtime-rs with the configured `vsock_cid` (kata-containers/kata-containers#14202) and without the ConnectX CDI kind (kata-containers/kata-containers#14205), NVRC with `nvrc.fm.vsock` (NVIDIA/nvrc#244), the vsock constants in pcilibs-rs (kata-containers/pcilibs-rs#42) and fmclient's `--vsock` default ([fmclient#7](https://github.com/zvonkok/fmclient/pull/7)). A runtime without the annotation handler refuses the `vsock_cid` annotation.
+    This recipe needs kata runtime-rs with the configured `vsock_cid` (kata-containers/kata-containers#14202), NVRC with `nvrc.fm.vsock` (NVIDIA/nvrc#244) and with the CDI spec for ConnectX functions that runtime-rs's `nvidia.com/nic` annotations resolve against, the vsock constants in pcilibs-rs (kata-containers/pcilibs-rs#42) and fmclient's `--vsock` default ([fmclient#7](https://github.com/zvonkok/fmclient/pull/7)). A runtime without the annotation handler refuses the `vsock_cid` annotation.
 
 Three settings make it possible, all of them off by default:
 
@@ -407,5 +407,5 @@ sudo journalctl --since "10 min ago" -o cat | grep -a -oE 'vmconsole="[^"]*"|vm 
 | guest kernel | `cannot find valid erofs superblock` | an image built as ext4 for a runtime configured with `rootfs_type = "erofs"` |
 | guest NVRC | `Module nvidia not found in directory /lib/modules/<version>` | an image whose kernel modules do not match the installed guest kernel |
 | containerd | `unsupported rootfs Mount { source: "overlay", ... }` | a runtime-rs NVIDIA pod on the overlayfs snapshotter; the shim has no shared filesystem and needs the erofs snapshotter |
-| kata-agent | `waiting for CDI spec(s) to be generated (N of 100 max tries) "unresolvable CDI devices nvidia.com/nic=0, ..."` | runtime-rs annotated the ConnectX functions with a CDI kind no guest image generates; the container fails after 100 s while the VM and Fabric Manager keep running. Fixed by removing the kind from the runtime's table |
+| kata-agent | `waiting for CDI spec(s) to be generated (N of 100 max tries) "unresolvable CDI devices nvidia.com/nic=0, ..."` | runtime-rs annotates every ConnectX function as `nvidia.com/nic=<index>` and the guest wrote no spec for that kind; the container fails after 100 s while the VM and Fabric Manager keep running. An NVRC without the ConnectX spec generator |
 | NVLSM in the Service VM | `GRPC_MGR - ... Failed to open configuration file "/usr/share/nvidia/nvlsm/grpc_mgr.conf"` | the base plus extension guest image with an NVRC that does not bind the extension's `/usr/share/nvidia` over the base path; Fabric Manager then exits with `failed to connect to the subnet manager` |
