@@ -11,7 +11,7 @@ use std::result::{self};
 
 use serde::Deserialize;
 
-use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType, VSOCK_CID_RESERVED};
+use crate::config::hypervisor::{check_vsock_cid, get_hypervisor_plugin, HugePageType};
 
 use crate::config::TomlConfig;
 use crate::initdata::add_hypervisor_initdata_overrides;
@@ -772,16 +772,7 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_VSOCK_CID => match self.get_value::<u32>(key) {
                         Ok(r) => {
                             let cid = r.unwrap_or_default();
-                            if cid != 0 && !VSOCK_CID_RESERVED.contains(&cid) {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::InvalidData,
-                                    format!(
-                                        "vsock_cid {cid} is outside the reserved range {}..={}",
-                                        VSOCK_CID_RESERVED.start(),
-                                        VSOCK_CID_RESERVED.end()
-                                    ),
-                                ));
-                            }
+                            check_vsock_cid(cid)?;
                             hv.device_info.vsock_cid = cid;
                         }
                         Err(_e) => {

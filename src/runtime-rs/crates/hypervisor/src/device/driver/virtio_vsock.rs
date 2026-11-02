@@ -193,15 +193,19 @@ impl Device for VsockDevice {
     }
 }
 
-pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
-    let vhost_fd = OpenOptions::new()
+async fn open_vhost_vsock() -> Result<File> {
+    OpenOptions::new()
         .read(true)
         .write(true)
         .open(VHOST_VSOCK_DEVICE)
         .await
         .context(format!(
             "failed to open {VHOST_VSOCK_DEVICE}, try to run modprobe vhost_vsock."
-        ))?;
+        ))
+}
+
+pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
+    let vhost_fd = open_vhost_vsock().await?;
     let mut rng = rand::rng();
 
     // Try 50 times to find a context ID that is not in use.
@@ -233,14 +237,7 @@ pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
 /// Take the configured CID or fail: a host-side client dials this exact
 /// address, so another CID would start a VM nobody can reach.
 pub async fn claim_vhost_vsock_cid(cid: u32) -> Result<(u32, File)> {
-    let vhost_fd = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(VHOST_VSOCK_DEVICE)
-        .await
-        .context(format!(
-            "failed to open {VHOST_VSOCK_DEVICE}, try to run modprobe vhost_vsock."
-        ))?;
+    let vhost_fd = open_vhost_vsock().await?;
     match unsafe { vhost_vsock_set_guest_cid(vhost_fd.as_raw_fd(), &(cid as u64)) } {
         Ok(_) => Ok((cid, vhost_fd)),
         Err(nix::Error::EADDRINUSE) => anyhow::bail!("vsock context ID {cid} is already in use"),

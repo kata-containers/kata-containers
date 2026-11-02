@@ -849,6 +849,19 @@ pub struct DeviceInfo {
 /// 0, 1 and 2 are the hypervisor, local and host CIDs of vsock(7).
 pub const VSOCK_CID_RESERVED: std::ops::RangeInclusive<u32> = 3..=1023;
 
+/// Whether `cid` is a usable `vsock_cid`: 0 for a random draw, or a reserved
+/// one. Shared by the configuration file and the annotation path.
+pub fn check_vsock_cid(cid: u32) -> Result<()> {
+    if cid != 0 && !VSOCK_CID_RESERVED.contains(&cid) {
+        return Err(std::io::Error::other(format!(
+            "vsock_cid {cid} is outside the reserved range {}..={}",
+            VSOCK_CID_RESERVED.start(),
+            VSOCK_CID_RESERVED.end()
+        )));
+    }
+    Ok(())
+}
+
 impl DeviceInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
@@ -874,15 +887,7 @@ impl DeviceInfo {
             ));
         }
 
-        if self.vsock_cid != 0 && !VSOCK_CID_RESERVED.contains(&self.vsock_cid) {
-            return Err(std::io::Error::other(format!(
-                "vsock_cid {} is outside the reserved range {}..={}",
-                self.vsock_cid,
-                VSOCK_CID_RESERVED.start(),
-                VSOCK_CID_RESERVED.end()
-            )));
-        }
-        Ok(())
+        check_vsock_cid(self.vsock_cid)
     }
 }
 
