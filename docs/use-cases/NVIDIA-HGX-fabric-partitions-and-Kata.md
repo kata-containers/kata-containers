@@ -85,6 +85,9 @@ Colocation
 
 The plugin never reads anything from the Service VM's filesystem or from the shim's private state: the view arrives as a protocol message or not at all.
 
+!!! warning "Only the fabric owner may request the fabric"
+    Whoever holds `nvidia.com/nvswitch-fabric` decides which GPUs share NVLink and publishes the view the node advertises, so a tenant holding it has a data path into other tenants' GPUs. The plugin cannot refuse a requester: the kubelet's Allocate names devices, not pods. The kata-device-plugin chart ships a `ValidatingAdmissionPolicy` that denies the request outside the namespaces in its `fabricOwnerNamespaces` value (Kubernetes 1.30 or later). The runtime class whose `vsock_cid` and `kernel_params` annotations the Service VM relies on needs the same gate, since a tenant pod at CID 3 would answer the host publisher in Fabric Manager's place, and tenants hold no `pods/exec` in the owner namespace. In the colocation model the owner namespace is the tenant's own; the gate is the same.
+
 ## Configurations
 
 Each configuration below lists the exact commands and what the node advertises afterwards. The plugin decides by two facts it can see: whether the fabric is bound to `vfio-pci`, and whether a view is published.
