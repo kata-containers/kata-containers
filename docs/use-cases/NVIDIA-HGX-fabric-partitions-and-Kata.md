@@ -366,7 +366,7 @@ NVRC starts a service and then blocks on the one syslog line that service writes
 | --- | --- | --- |
 | Fabric Manager | H100 and H200, direct NVSwitches | `FM starting NvLink Inband` |
 | Fabric Manager | B200, B300 and Rubin, ConnectX management PFs | ``fabric manager state is `3` (configured)`` |
-| nvidia-persistenced | tenant and gpu-mode VMs | `Local RPC services initialized` |
+| nvidia-persistenced | tenant and GPU-mode VMs | `Local RPC services initialized` |
 
 NVLSM is not waited for on its own. On these systems the subnet manager becomes master only after Fabric Manager has connected to it and synced partitions, 70 ms after FM's request on this box, so a wait for OpenSM's `Entering MASTER state` before FM starts never ends. FM configured implies NVLSM master.
 
