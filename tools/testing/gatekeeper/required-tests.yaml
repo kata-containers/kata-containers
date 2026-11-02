@@ -78,7 +78,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (minimum, dragonball) / run-cri-containerd-amd64 (minimum, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (minimum, qemu-runtime-rs) / run-cri-containerd-amd64 (minimum, qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (minimum, qemu) / run-cri-containerd-amd64 (minimum, qemu)
-      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-s390x (latest, qemu) / run-cri-containerd-s390x (latest, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-s390x (latest, qemu-runtime-rs) / run-cri-containerd-s390x (latest, qemu-runtime-rs)
       #- Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-arm64 / run-k8s-tests-on-arm64 (qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, small, containerd)
