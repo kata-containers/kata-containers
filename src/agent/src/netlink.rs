@@ -4,9 +4,9 @@
 //
 
 #[cfg(not(target_arch = "s390x"))]
-use crate::linux_abi::{create_pci_root_bus_path, pcipath_from_dev_tree_path, SYSFS_DIR};
+use crate::device::pcipath_to_sysfs;
 #[cfg(not(target_arch = "s390x"))]
-use crate::{device::pcipath_to_sysfs, pci};
+use crate::linux_abi::{create_pci_root_bus_path, pcipath_from_dev_tree_path, SYSFS_DIR};
 use anyhow::{anyhow, Context, Result};
 use futures::{future, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
@@ -236,7 +236,7 @@ impl Handle {
         let (root_complex, pcipath) = pcipath_from_dev_tree_path(dev_tree_path)
             .with_context(|| format!("invalid PCI path for network interface: {dev_tree_path}"))?;
         let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
-        let sysfs_rel_path = pcilib_to_sysfs_path(&root_bus_sysfs, &pcipath)?;
+        let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, root_complex, &pcipath)?;
         let net_dir = format!("{root_bus_sysfs}{sysfs_rel_path}/net");
 
         let mut entries = match fs::read_dir(&net_dir) {
@@ -722,11 +722,6 @@ impl Handle {
         }
         req.execute().await.context("executing NeighbourAddRequest")
     }
-}
-
-#[cfg(not(target_arch = "s390x"))]
-fn pcilib_to_sysfs_path(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
-    pcipath_to_sysfs(root_bus_sysfs, pcipath)
 }
 
 fn format_address(data: &[u8]) -> Result<String> {
