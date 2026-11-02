@@ -36,9 +36,10 @@ pub const PR_SCHED_CORE_SHARE_FROM: usize = 3;
 
 // create a new core sched domain, this will NOT succeed if kernel version < 5.14
 pub fn core_sched_create(pidtype: usize) -> Result<(), Errno> {
-    let errno = unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_CREATE, 0, pidtype, 0) };
-    if errno != 0 {
-        Err(nix::errno::Errno::from_raw(-errno))
+    let ret =
+        unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_CREATE, 0usize, pidtype, 0usize) };
+    if ret != 0 {
+        Err(Errno::last())
     } else {
         Ok(())
     }
@@ -47,10 +48,17 @@ pub fn core_sched_create(pidtype: usize) -> Result<(), Errno> {
 // shares the domain with *pid*
 #[allow(dead_code)]
 pub fn core_sched_share_from(pid: usize, pidtype: usize) -> Result<(), Errno> {
-    let errno =
-        unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_SHARE_FROM, pid, pidtype, 0) };
-    if errno != 0 {
-        Err(nix::errno::Errno::from_raw(-errno))
+    let ret = unsafe {
+        nix::libc::prctl(
+            PR_SCHED_CORE,
+            PR_SCHED_CORE_SHARE_FROM,
+            pid,
+            pidtype,
+            0usize,
+        )
+    };
+    if ret != 0 {
+        Err(Errno::last())
     } else {
         Ok(())
     }
@@ -59,44 +67,23 @@ pub fn core_sched_share_from(pid: usize, pidtype: usize) -> Result<(), Errno> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nix::errno::Errno::{EINVAL, ENODEV, ENOMEM, EPERM, ESRCH};
 
-    const RELEASE_MAJOR_VERSION: u8 = 5;
-    const RELEASE_MINOR_VERSION: u8 = 14;
-
-    // since this feature only lands in linux 5.14, we run the test when version is higher
-    fn core_sched_landed() -> bool {
-        let vinfo = std::fs::read_to_string("/proc/sys/kernel/osrelease");
-        if let Ok(info) = vinfo {
-            let vnum: Vec<&str> = info.as_str().split('.').collect();
-            if vnum.len() >= 2 {
-                let major: u8 = vnum[0].parse().unwrap();
-                let minor: u8 = vnum[1].parse().unwrap();
-                return major >= RELEASE_MAJOR_VERSION && minor >= RELEASE_MINOR_VERSION;
-            }
-        }
-        false
+    // An invalid scope fails without changing the test process's cookie.
+    // Kernels without SMT can return ENODEV before checking the scope. Both
+    // errors must survive libc returning -1 rather than a negative errno.
+    #[test]
+    fn test_core_sched_create_errno() {
+        assert!(matches!(
+            core_sched_create(usize::MAX),
+            Err(Errno::EINVAL | Errno::ENODEV)
+        ));
     }
 
     #[test]
-    fn test_core_sched() {
-        std::env::set_var("SCHED_CORE", "1");
-        assert_eq!(std::env::var("SCHED_CORE").unwrap(), "1");
-        if core_sched_landed() {
-            // it is possible that the machine running this test does not support SMT,
-            // therefore it does not make sense to assert a successful prctl call
-            // but we can still make sure that the return value is a possible value
-            let e = core_sched_create(PROCESS_GROUP);
-            if let Err(errno) = e {
-                if errno != EINVAL
-                    && errno != ENODEV
-                    && errno != ENOMEM
-                    && errno != EPERM
-                    && errno != ESRCH
-                {
-                    panic!("impossible return value {:?}", errno);
-                }
-            }
-        }
+    fn test_core_sched_share_from_errno() {
+        assert!(matches!(
+            core_sched_share_from(0, usize::MAX),
+            Err(Errno::EINVAL | Errno::ENODEV)
+        ));
     }
 }
