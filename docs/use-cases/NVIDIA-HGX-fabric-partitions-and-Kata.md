@@ -107,7 +107,7 @@ Each configuration below lists the exact commands and what the node advertises a
 
 A published view decides what the node advertises; the fabric's binding only tells the plugin whether to wait for one.
 
-### gpu mode, no fabric
+### GPU mode, no fabric
 
 The GPUs are on `vfio-pci`, the fabric functions stay on the host's driver, and nothing programs the switches: neither Fabric Manager nor NVLSM is installed on the host. This is also what a node without NVSwitches looks like.
 
@@ -123,7 +123,7 @@ kubectl get node <node> -o jsonpath='{.status.capacity}' | tr ',' '\n' | grep nv
 
 A pod requests `nvidia.com/gpu: 1` with `runtimeClassName: kata-qemu-nvidia-gpu` and gets one GPU. Any size up to the node's count is allocatable. Each GPU works on its own over PCIe; with no Fabric Manager anywhere the switch routing is never programmed, so the GPUs of one pod have no NVLink between them.
 
-### gpu mode, host Fabric Manager in `FABRIC_MODE=0`
+### GPU mode, host Fabric Manager in `FABRIC_MODE=0`
 
 Fabric Manager and NVLSM run on the host with `FABRIC_MODE=0` in `/usr/share/nvidia/nvswitch/fabricmanager.cfg` and program the default partition: all eight GPUs in one NVLink domain. The management PFs stay on `mlx5_core` for them; only the GPUs go to `vfio-pci`. The plugin sees the same two facts as in mode 1 and advertises the same.
 
@@ -181,7 +181,7 @@ After `fmclient -a 2`, `-a 6` and `-a 15` inside the Service VM, a half, a pair 
 "nvidia.com/nvswitch-fabric":"1"
 ```
 
-### Service VM with the view, gpu unit
+### Service VM with the view, GPU unit
 
 Same deployment with `--unit=gpu`. The plugin then advertises every bound GPU as its own `nvidia.com/gpu`, whatever the partition list says, and a pod may take any number of them; the plugin does not check which partition a pod's GPUs come from. This is bare-metal semantics for an owner who holds the whole node as one trust domain, with one partition of all GPUs active. A node shared by mutually untrusted tenants uses the partition unit.
 
