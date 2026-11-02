@@ -138,6 +138,15 @@ impl ConfigPlugin for DragonballConfig {
                 ));
             }
 
+            // dragonball boots either from an initrd or from an image-backed
+            // rootfs; it does not support a bootstrap initrd that mounts an
+            // image rootfs.
+            if !db.boot_info.image.is_empty() && !db.boot_info.initrd.is_empty() {
+                return Err(std::io::Error::other(
+                    "Cannot configure both initrd and image for boot on dragonball",
+                ));
+            }
+
             if !db.boot_info.firmware.is_empty() {
                 return Err(std::io::Error::other(
                     "Firmware for dragonball hypervisor should be empty",

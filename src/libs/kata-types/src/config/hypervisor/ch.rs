@@ -127,6 +127,14 @@ impl ConfigPlugin for CloudHypervisorConfig {
                 ));
             }
 
+            // CH boots either from an initrd or from an image-backed rootfs; it
+            // does not support a bootstrap initrd that mounts an image rootfs.
+            if !ch.boot_info.image.is_empty() && !ch.boot_info.initrd.is_empty() {
+                return Err(std::io::Error::other(
+                    "Cannot configure both initrd and image for boot on CH",
+                ));
+            }
+
             if (ch.cpu_info.default_vcpus > 0.0
                 && ch.cpu_info.default_vcpus as u32 > default::MAX_CH_VCPUS)
                 || ch.cpu_info.default_maxvcpus > default::MAX_CH_VCPUS

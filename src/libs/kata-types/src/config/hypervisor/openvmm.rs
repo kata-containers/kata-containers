@@ -72,6 +72,15 @@ impl ConfigPlugin for OpenVmmConfig {
             }
             validate_path!(ovmm.path, "OpenVMM binary path `{}` is invalid: {}")?;
 
+            // Only QEMU boots a bootstrap initrd that then mounts an
+            // image-backed rootfs; every other hypervisor keeps rejecting the
+            // pair, as the shared `BootInfo::validate()` used to.
+            if !ovmm.boot_info.image.is_empty() && !ovmm.boot_info.initrd.is_empty() {
+                return Err(std::io::Error::other(
+                    "Cannot configure both initrd and image for boot on OpenVMM",
+                ));
+            }
+
             if (ovmm.cpu_info.default_vcpus > 0.0
                 && ovmm.cpu_info.default_vcpus as u32 > MAX_OPENVMM_VCPUS)
                 || ovmm.cpu_info.default_maxvcpus > MAX_OPENVMM_VCPUS

@@ -50,7 +50,7 @@ func TestHypervisorConfigBothInitrdAndImage(t *testing.T) {
 		HypervisorPath: "",
 	}
 
-	testHypervisorConfigValid(t, hypervisorConfig, false)
+	testHypervisorConfigValid(t, hypervisorConfig, true)
 }
 
 func TestHypervisorConfigSecureExecution(t *testing.T) {

@@ -898,7 +898,18 @@ impl QemuInner {
         Ok(caps)
     }
 
-    pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub fn set_hypervisor_config(&mut self, mut config: HypervisorConfig) {
+        // A bootstrap initrd has to discover and mount the rootfs itself, and
+        // pmem devices are not enumerated by the minimal driver set such an
+        // initrd carries. Fall back to virtio-blk so the device and the
+        // `root=` parameter agree. This mirrors the Go runtime, which disables
+        // nvdimm whenever an initrd is configured.
+        if !config.boot_info.initrd.is_empty()
+            && config.boot_info.vm_rootfs_driver == crate::VM_ROOTFS_DRIVER_PMEM
+        {
+            config.boot_info.vm_rootfs_driver = crate::VM_ROOTFS_DRIVER_BLK.to_string();
+        }
+
         self.config = config;
     }
 
