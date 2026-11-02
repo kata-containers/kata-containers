@@ -20,7 +20,9 @@ use super::share_virtio_fs::{
 };
 use super::utils::get_host_rw_shared_path;
 use super::virtio_fs_share_mount::VirtiofsShareMount;
-use super::{kata_guest_nydus_root_dir, MountedInfo, NydusShareFs, ShareFs, ShareFsMount};
+use super::{
+    kata_guest_nydus_root_dir, MountedInfo, NydusShareFs, ShareFs, ShareFsMount, SharedVolumeKey,
+};
 
 const NYDUSD_API_SOCK: &str = "nydusd-api.sock";
 
@@ -36,7 +38,7 @@ pub struct ShareVirtioFsNydus {
     config: ShareVirtioFsNydusConfig,
     nydusd: Arc<RwLock<Option<Arc<Nydusd>>>>,
     share_fs_mount: Arc<dyn ShareFsMount>,
-    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
+    mounted_info_set: Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>>,
 }
 
 impl ShareVirtioFsNydus {
@@ -139,7 +141,7 @@ impl ShareFs for ShareVirtioFsNydus {
         Ok(storages)
     }
 
-    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>> {
         self.mounted_info_set.clone()
     }
 

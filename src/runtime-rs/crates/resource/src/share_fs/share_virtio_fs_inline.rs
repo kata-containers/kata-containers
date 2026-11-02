@@ -34,7 +34,7 @@ pub struct ShareVirtioFsInlineConfig {
 pub struct ShareVirtioFsInline {
     config: ShareVirtioFsInlineConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
-    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
+    mounted_info_set: Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>>,
 }
 
 impl ShareVirtioFsInline {
@@ -96,7 +96,7 @@ impl ShareFs for ShareVirtioFsInline {
         Ok(storages)
     }
 
-    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>> {
         self.mounted_info_set.clone()
     }
 }
