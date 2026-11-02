@@ -195,6 +195,8 @@ fmclient --vsock -a 2
 
 `--vsock` without a value is the contract address, CID 3 and FM's default port, both constants in `pcilibs-rs`. The node advertises the same resources as in the in-band configuration.
 
+As run on the HGX B300: the shim connected to the agent at CID 3 and the pod was Running 50 s after `kubectl apply`, Fabric Manager having reached `configured` 11 s after the guest booted. `fmclient --vsock -l` on the host listed the 15 partitions, `fmclient --vsock -a 2` made the node advertise `nvidia.com/nvlink-4gpu: 1` within seconds of the publisher's next view, and a tenant VM on that unit saw the partition's four GPUs with NVLink between all of them.
+
 !!! warning "Any host process can connect"
     A vsock connect needs no privilege on the host, so with the listener on every host process can reach Fabric Manager's API. This is the provider-owned model. Where the host must have no control path, run the in-band manifest, whose guest opens nothing.
 
