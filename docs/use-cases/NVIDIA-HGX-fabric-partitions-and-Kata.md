@@ -1,6 +1,6 @@
 # NVIDIA HGX fabric partitions and Kata
 
-On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch mode* Fabric Manager (FM) runs in a Service VM that holds only the switch fabric, and it activates *partitions*: sets of GPUs that may reach each other over NVLink. A tenant VM must receive exactly one active partition's GPUs. Two tenants inside one partition would share an NVLink domain, so this is an isolation boundary, not a convenience.
+On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch mode* Fabric Manager (FM) runs in a Service VM that holds only the switch fabric, and it activates *partitions*: sets of GPUs that may reach each other over NVLink. A tenant VM must receive exactly one active partition's GPUs. Two tenants inside one partition would share an NVLink domain, so the partition is the isolation boundary.
 
 This page describes the components that make a Kata cluster do this, the configurations they can run in, the day-to-day workflows, and how to read what the system says when something is off. Everything here was run on a DGX with eight GPUs and four ConnectX management PFs, Kubernetes 1.37, Kata 4.3.1 and Fabric Manager 615.
 
@@ -54,7 +54,7 @@ A partition is advertised only when it is active, supported by Fabric Manager, e
 Fabric Manager inside the Service VM is the only authority on partitions, and it knows GPUs by *physical ID*, the module slot on the baseboard. The host knows GPUs by PCI address. Two facts bridge them:
 
 - fmclient publishes Fabric Manager's partition list, the *view*, to the plugin over gRPC: a client stream, one message per change plus a heartbeat every 30 s. The open stream is the view's liveness. When it closes, the plugin withdraws the view after a 15 s grace period, so a Service VM restart does not flap the node's capacity and a dead Service VM does not keep its partitions advertised.
-- The firmware labels every GPU function in sysfs: `/sys/bus/pci/devices/<bdf>/label` reads `GPU4, SMX3` on this DGX. The `SMX` number is Fabric Manager's physical ID; the `GPU` number is only PCI enumeration order. This was verified module by module against Fabric Manager's own probe records.
+- The firmware labels every GPU function in sysfs: `/sys/bus/pci/devices/<bdf>/label` reads `GPU4, SMX3` on this DGX. The `SMX` number is Fabric Manager's physical ID; the `GPU` number is only PCI enumeration order.
 
 The plugin listens twice: on a TCP port, 9877, exposed as a hostPort for the in-band publisher inside the Service VM, admitting only the token minted at `Allocate`; and on a unix socket, `/var/run/kata-device-plugin/fabric-view.sock`, for a publisher on the host itself, where filesystem permissions are the credential and no token is checked. One stream at a time: a newer stream supersedes the current one, and a new fabric holder withdraws the view and ends the previous holder's stream.
 
@@ -86,24 +86,30 @@ Colocation
 The plugin never reads anything from the Service VM's filesystem or from the shim's private state: the view arrives as a protocol message or not at all.
 
 !!! warning "Only the fabric owner may request the fabric"
-    Whoever holds `nvidia.com/nvswitch-fabric` decides which GPUs share NVLink and publishes the view the node advertises, so a tenant holding it has a data path into other tenants' GPUs. The plugin cannot refuse a requester: the kubelet's Allocate names devices, not pods. The kata-device-plugin chart ships a `ValidatingAdmissionPolicy` that denies the request outside the namespaces in its `fabricOwnerNamespaces` value (Kubernetes 1.30 or later). The runtime class whose `vsock_cid` and `kernel_params` annotations the Service VM relies on needs the same gate, since a tenant pod at CID 3 would answer the host publisher in Fabric Manager's place, and tenants hold no `pods/exec` in the owner namespace. In the colocation model the owner namespace is the tenant's own; the gate is the same.
+    Whoever holds `nvidia.com/nvswitch-fabric` decides which GPUs share NVLink and publishes the view the node advertises, so a tenant holding it has a data path into other tenants' GPUs. The plugin cannot refuse a requester: the kubelet's Allocate carries device IDs and no pod identity. The kata-device-plugin chart ships a `ValidatingAdmissionPolicy` that denies the request outside the namespaces in its `fabricOwnerNamespaces` value (Kubernetes 1.30 or later). The runtime class whose `vsock_cid` and `kernel_params` annotations the Service VM relies on needs the same gate, since a tenant pod at CID 3 would answer the host publisher in Fabric Manager's place, and tenants hold no `pods/exec` in the owner namespace. In the colocation model the owner namespace is the tenant's own; the gate is the same.
 
 ## Configurations
 
-Each configuration below lists the exact commands and what the node advertises afterwards. The plugin decides by two facts it can see: whether the fabric is bound to `vfio-pci`, and whether a view is published.
+A node runs in one of three deployment modes:
+
+1. **GPU only, no fabric.** No Fabric Manager anywhere. The switches are never programmed and each GPU works alone over PCIe.
+2. **GPU with the host's Fabric Manager in `FABRIC_MODE=0`.** Fabric Manager and NVLSM run on the host and program the default partition, all eight GPUs in one NVLink domain. VMs of any size share that domain; in CC mode each VM that holds more than one GPU derives its own NVLink encryption key.
+3. **Service VM.** Fabric Manager runs in a Service VM in shared NVSwitch mode and activates partitions, which the node advertises as resources. The variants below, the `gpu` unit, out-of-band over vsock and the fail-closed state, all belong to this mode.
+
+Each configuration below lists the exact commands and what the node advertises afterwards. The plugin decides by two facts it can see: whether the fabric is bound to `vfio-pci`, and whether a view is published. Modes 1 and 2 look the same to it.
 
 | Fabric bound | View | Unit in view | Node advertises |
 | --- | --- | --- | --- |
-| no | none | n/a | `nvidia.com/gpu: N`, one per bound GPU |
+| no | none | n/a | `nvidia.com/gpu: N`, one per bound GPU (modes 1 and 2) |
 | yes | none | n/a | `nvidia.com/nvswitch-fabric: 1`, no GPUs |
 | yes | published | `partition` | the fabric plus one resource per active partition |
 | yes | published | `gpu` | the fabric plus `nvidia.com/gpu: N`, one per GPU in an active partition |
 
-A view always wins over the binding.
+A published view decides what the node advertises; the fabric's binding only tells the plugin whether to wait for one.
 
 ### gpu mode, no fabric
 
-The GPUs are on `vfio-pci`, the fabric is not. This is also what a node without NVSwitches, or with the host's own Fabric Manager in `FABRIC_MODE=0`, looks like.
+The GPUs are on `vfio-pci`, the fabric functions stay on the host's driver, and nothing programs the switches: neither Fabric Manager nor NVLSM is installed on the host. This is also what a node without NVSwitches looks like.
 
 ```bash title="$ provision the GPUs only"
 kata-device-provisioner apply --mode off
@@ -115,16 +121,34 @@ kubectl get node <node> -o jsonpath='{.status.capacity}' | tr ',' '\n' | grep nv
 "nvidia.com/nvswitch-fabric":"0"
 ```
 
-A pod requests `nvidia.com/gpu: 1` with `runtimeClassName: kata-qemu-nvidia-gpu` and gets one GPU. Any size up to the node's count is allocatable; NVLink between the GPUs of one pod is whatever the switches were configured for by the host's Fabric Manager.
+A pod requests `nvidia.com/gpu: 1` with `runtimeClassName: kata-qemu-nvidia-gpu` and gets one GPU. Any size up to the node's count is allocatable. Each GPU works on its own over PCIe; with no Fabric Manager anywhere the switch routing is never programmed, so the GPUs of one pod have no NVLink between them.
+
+### gpu mode, host Fabric Manager in `FABRIC_MODE=0`
+
+Fabric Manager and NVLSM run on the host with `FABRIC_MODE=0` in `/usr/share/nvidia/nvswitch/fabricmanager.cfg` and program the default partition: all eight GPUs in one NVLink domain. The management PFs stay on `mlx5_core` for them; only the GPUs go to `vfio-pci`. The plugin sees the same two facts as in mode 1 and advertises the same.
+
+```bash title="$ on the host, NVLSM before Fabric Manager"
+systemctl enable --now nvlsm
+systemctl enable --now nvidia-fabricmanager
+kata-device-provisioner apply --mode off     # --mode on for a CC node
+```
+
+```bash title="$ what the kubelet shows"
+"nvidia.com/gpu":"8"
+"nvidia.com/nvswitch-fabric":"0"
+```
+
+A pod requests `nvidia.com/gpu: N` for any N up to eight, and its GPUs reach each other over NVLink because every GPU sits in the one partition. All VMs on the node share that NVLink domain. In CC mode each VM that holds more than one GPU derives its own NVLink encryption key, so its traffic is unreadable to the GPUs of another VM. Shared NVSwitch mode, next, is the configuration in which the fabric itself separates tenants.
 
 ### Service VM with the view, partition unit
 
 The fabric is bound, the Service VM holds it, fmclient publishes with `--unit=partition`. This is the shared NVSwitch mode the HGX guide describes.
 
-```bash title="$ bind the fabric (stop the host's Fabric Manager and NVLSM first)"
-systemctl stop nvidia-fabricmanager nvlsm
+```bash title="$ bind the fabric"
 kata-device-provisioner apply --mode off --bind-fabric
 ```
+
+The host runs no fabric service in this model. A node whose OS image ships Fabric Manager and NVLSM, as a DGX OS does, has to disable them first: they hold the management PFs on `mlx5_core`, and the provisioner refuses to take a function from a host driver.
 
 ```yaml title="deploy/service-vm.yaml (fmclient repository), the parts that matter"
 runtimeClassName: kata-qemu-nvidia-gpu
@@ -172,7 +196,7 @@ args: ["--publish", "--unit=gpu"]
 
 The host publishes the view and activates partitions itself, without `kubectl exec`. Three settings make it possible, all of them off by default:
 
-- `io.katacontainers.config.hypervisor.vsock_cid: "3"` on the Service VM pod gives the VM a fixed CID. kata runtime-rs keeps 3 to 1023 for configured CIDs and draws random ones above that range; a configured CID already in use fails the sandbox rather than falling back.
+- `io.katacontainers.config.hypervisor.vsock_cid: "3"` on the Service VM pod gives the VM a fixed CID. kata runtime-rs keeps 3 to 1023 for configured CIDs and draws random ones above that range; a configured CID already in use fails the sandbox.
 - `io.katacontainers.config.hypervisor.kernel_params: "nvrc.fm.vsock=on"` makes NVRC write `FM_CMD_VSOCK_CID=VMADDR_CID_ANY` into Fabric Manager's configuration, so FM listens on vsock at its default port 1447971919.
 - The runtime class must be the runtime-rs NVIDIA shim, `kata-qemu-nvidia-gpu-runtime-rs`, with both annotations in its `enable_annotations`.
 - That shim runs without a shared filesystem and rejects an overlayfs container rootfs, so its pods need containerd's erofs snapshotter: `erofs-utils` 1.8.2 or newer on the host, and in the kata-deploy values `snapshotter.setup: ["erofs"]` plus `containerd.snapshotter: "erofs"` on the shim, as the chart's `try-kata-nvidia-gpu.values.yaml` profile sets them.
@@ -214,7 +238,7 @@ Between the provisioner binding the fabric and the Service VM publishing, and wh
 WARN fabric is bound but no partition view is published: advertising no GPU
 ```
 
-once per poll. This is the designed state, not an error: a GPU handed out without a view could land in a partition the operator did not activate.
+once per poll. This is the designed state: a GPU handed out without a view could land in a partition the operator did not activate.
 
 ## Workflows
 
@@ -223,12 +247,12 @@ once per poll. This is the designed state, not an error: a GPU handed out withou
 The provisioner binds every GPU and, with `--bind-fabric`, every function of the fabric. It refuses before changing anything when a function is held by a host driver, when a target has no IOMMU group, or when a target shares its IOMMU group with a function a host driver still holds.
 
 ```bash title="$ as root on the node"
-systemctl stop nvidia-fabricmanager nvlsm        # (1)!
-kata-device-provisioner status                   # (2)!
+systemctl disable --now nvidia-fabricmanager nvlsm   # (1)!
+kata-device-provisioner status                       # (2)!
 kata-device-provisioner apply --mode off --bind-fabric
 ```
 
-1. The host's own Fabric Manager holds the management PFs on `mlx5_core`; the provisioner refuses to steal them.
+1. Only on a node whose OS image ships them: they hold the management PFs on `mlx5_core`, and the provisioner refuses to take a function from a host driver.
 2. Lists what the node would provision and the driver each function has now.
 
 Persistence is written as `/etc/modprobe.d/kata-device-provisioner.conf` for the GPUs and address-scoped udev rules for the management functions. The node fact `kata.feature.node.kubernetes.io/managed-fabric=true` is published for Node Feature Discovery; without NFD, label the node by hand.
@@ -321,7 +345,7 @@ The plugin reloads the token, re-registers both resources with the kubelet and a
 The provisioner's persistence rebinds the fabric's management functions through its udev rules. The GPUs rebind through `vfio-pci`'s `ids=` option unless the host driver package is installed (see above). The host's `nvidia-fabricmanager.service`, if still enabled, fails its precheck because its PFs are now on `vfio-pci`; disable it. The Service VM DaemonSet recreates its pod and everything above repeats.
 
 !!! bug "Stale Fabric Manager sessions on the GPUs"
-    GPUs keep a session with the Fabric Manager that last configured them, and a VFIO reset does not clear it. After the host's own Fabric Manager has run on a node, the Service VM's Fabric Manager rejects the GPUs' inband responses with `previous session ID ... does not match the expected session ID` and lists no supported partitions. A node power cycle clears the sessions.
+    GPUs keep a session with the Fabric Manager that last configured them, and a VFIO reset does not clear it. After another Fabric Manager has run against the GPUs, the one a DGX OS ships on the host for example, the Service VM's Fabric Manager rejects the GPUs' inband responses with `previous session ID ... does not match the expected session ID` and lists no supported partitions. A node power cycle clears the sessions.
 
 ## Readiness and diagnostics
 
