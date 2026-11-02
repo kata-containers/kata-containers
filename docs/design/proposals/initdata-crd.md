@@ -156,9 +156,22 @@ Kata and CoCo do not have an issue for one shared admission webhook. The webhook
 
 Whether to include the code logic into current webhook code, or creating a new one is a open.
 
+## 5. Alternatives considered
 
-## 5. Related issues
+### 5.1 Maintain a Kyverno policy set
 
+Kyverno is a Kubernetes policy engine that mutates and validates resources at admission time. The alternative is for Kata to maintain a set of Kyverno policies instead of a new CRD and webhook. The Kyverno policy library already ships three CoCo policies: `inject-kata-cc-runtime` sets the runtime class, `inject-coco-initdata` copies a ConfigMap field into `cc_init_data`, and `validate-initdata-configmap` checks the ConfigMap shape.
+
+Compared to that, a CRD has a few points in its favour:
+
+1. Kyverno is not installed by default. A cluster that runs CoCo but no policy engine gets nothing from this path.
+2. The existing policies do not compose. Users need to define one ConfigMap for one whole initdata. There is no "select N objects, merge by key, reject on conflict" logic.
+3. The existing policies do not encode. The ConfigMap already stores a gzip+base64 blob, so the operator still runs the encoding step out of band.
+4. A CRD carries a schema. A ConfigMap is `map[string]string`; every check lives in a policy expression.
+
+The two can also coexist in the same cluster, as long as webhook ordering is handled, for example by giving each webhook `matchConditions` on its own annotation so only one fires per pod.
+
+## 6. Related issues
 
 - [confidential-containers#303](https://github.com/confidential-containers/confidential-containers/issues/303) discusses which Initdata keys Kata accepts, and whether unknown keys may exist. This RFC leaves that to Kata. The CRD only fills the `data` map.
 - [confidential-containers#140](https://github.com/confidential-containers/confidential-containers/issues/140) asks for a kubectl plugin because users must pre-process pods before deploy. The CRD is the cluster-side place for the pieces that plugin would otherwise paste into annotations.
