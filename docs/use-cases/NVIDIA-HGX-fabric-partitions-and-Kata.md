@@ -103,7 +103,7 @@ Each configuration below lists the exact commands and what the node advertises a
 | no | none | n/a | `nvidia.com/gpu: N`, one per bound GPU (modes 1 and 2) |
 | yes | none | n/a | `nvidia.com/nvswitch-fabric: 1`, no GPUs |
 | yes | published | `partition` | the fabric plus one resource per active partition |
-| yes | published | `gpu` | the fabric plus `nvidia.com/gpu: N`, one per GPU in an active partition |
+| yes | published | `gpu` | the fabric plus `nvidia.com/gpu: N`, one per bound GPU, whatever the partition list says |
 
 A published view decides what the node advertises; the fabric's binding only tells the plugin whether to wait for one.
 
@@ -145,10 +145,12 @@ A pod requests `nvidia.com/gpu: N` for any N up to eight, and its GPUs reach eac
 The fabric is bound, the Service VM holds it, fmclient publishes with `--unit=partition`. This is the shared NVSwitch mode the HGX guide describes.
 
 ```bash title="$ bind the fabric"
+kata-device-provisioner status                      # every target function and its current driver
+echo 0000:27:00.0 > /sys/bus/pci/devices/0000:27:00.0/driver/unbind   # once per management PF on mlx5_core
 kata-device-provisioner apply --mode off --bind-fabric
 ```
 
-The host runs no fabric service in this model. A node whose OS image ships Fabric Manager and NVLSM, as a DGX OS does, has to disable them first: they hold the management PFs on `mlx5_core`, and the provisioner refuses to take a function from a host driver.
+The provisioner refuses a function another driver holds, so each management PF is unbound by address first; `mlx5_core` stays loaded for the node's other NICs. The host runs no fabric service in this model. A node whose OS image ships Fabric Manager and NVLSM, as a DGX OS does, disables them before the unbind, since they use those PFs.
 
 ```yaml title="deploy/service-vm.yaml (fmclient repository), the parts that matter"
 runtimeClassName: kata-qemu-nvidia-gpu
@@ -181,7 +183,7 @@ After `fmclient -a 2`, `-a 6` and `-a 15` inside the Service VM, a half, a pair 
 
 ### Service VM with the view, gpu unit
 
-Same deployment with `--unit=gpu`. The owner of the fabric may want eight individual GPUs out of one eight-GPU partition instead of one unit. The plugin then advertises one `nvidia.com/gpu` per GPU of an active partition, and a pod may take any number of them. NVLink between the GPUs a pod receives is still bounded by the partition they belong to; the plugin does not check that one pod's GPUs come from one partition in this unit. Use it when the node's partitions are carved so that the question does not arise, for example one partition of all GPUs.
+Same deployment with `--unit=gpu`. The plugin then advertises every bound GPU as its own `nvidia.com/gpu`, whatever the partition list says, and a pod may take any number of them; the plugin does not check which partition a pod's GPUs come from. This is bare-metal semantics for an owner who holds the whole node as one trust domain, with one partition of all GPUs active. A node shared by mutually untrusted tenants uses the partition unit.
 
 ```yaml title="the only change"
 args: ["--publish", "--unit=gpu"]
@@ -194,7 +196,12 @@ args: ["--publish", "--unit=gpu"]
 
 ### Out-of-band over vsock
 
-The host publishes the view and activates partitions itself, without `kubectl exec`. Three settings make it possible, all of them off by default:
+The host publishes the view and activates partitions itself, without `kubectl exec`.
+
+!!! info "Prerequisites in review"
+    This recipe needs kata runtime-rs with the configured `vsock_cid` (kata-containers/kata-containers#14202) and without the ConnectX CDI kind (kata-containers/kata-containers#14205), NVRC with `nvrc.fm.vsock` (NVIDIA/nvrc#244), the vsock constants in pcilibs-rs (kata-containers/pcilibs-rs#42) and fmclient's `--vsock` default (zvonkok/fmclient#7). A runtime without the annotation handler refuses the `vsock_cid` annotation.
+
+Three settings make it possible, all of them off by default:
 
 - `io.katacontainers.config.hypervisor.vsock_cid: "3"` on the Service VM pod gives the VM a fixed CID. kata runtime-rs keeps 3 to 1023 for configured CIDs and draws random ones above that range; a configured CID already in use fails the sandbox.
 - `io.katacontainers.config.hypervisor.kernel_params: "nvrc.fm.vsock=on"` makes NVRC write `FM_CMD_VSOCK_CID=VMADDR_CID_ANY` into Fabric Manager's configuration, so FM listens on vsock at its default port 1447971919.
@@ -247,13 +254,15 @@ once per poll. This is the designed state: a GPU handed out without a view could
 The provisioner binds every GPU and, with `--bind-fabric`, every function of the fabric. It refuses before changing anything when a function is held by a host driver, when a target has no IOMMU group, or when a target shares its IOMMU group with a function a host driver still holds.
 
 ```bash title="$ as root on the node"
-systemctl disable --now nvidia-fabricmanager nvlsm   # (1)!
-kata-device-provisioner status                       # (2)!
+systemctl disable --now nvidia-fabricmanager nvlsm                     # (1)!
+kata-device-provisioner status                                         # (2)!
+echo 0000:27:00.0 > /sys/bus/pci/devices/0000:27:00.0/driver/unbind    # (3)!
 kata-device-provisioner apply --mode off --bind-fabric
 ```
 
 1. Only on a node whose OS image ships them: they hold the management PFs on `mlx5_core`, and the provisioner refuses to take a function from a host driver.
 2. Lists what the node would provision and the driver each function has now.
+3. Once per management PF `status` shows on `mlx5_core`, and per GPU a host driver holds: the provisioner refuses a function another driver holds, and unloading `mlx5_core` would take the node's other NICs down.
 
 Persistence is written as `/etc/modprobe.d/kata-device-provisioner.conf` for the GPUs and address-scoped udev rules for the management functions. The node fact `kata.feature.node.kubernetes.io/managed-fabric=true` is published for Node Feature Discovery; without NFD, label the node by hand.
 
@@ -338,7 +347,7 @@ A new Service VM pod is a new fabric holder. Its `Allocate` rotates the token: t
 
 ### Plugin restart
 
-The plugin reloads the token, re-registers both resources with the kubelet and advertises what it sees. The publisher's stream was cut by the restart; fmclient reconnects with backoff and resends the view, and the grace period covers the gap.
+The plugin reloads the token and re-registers both resources, but the view is not persisted: until fmclient reconnects and resends it, the node advertises the fail-closed set, the fabric and no GPUs. fmclient reconnects with backoff within seconds, and pods already running keep their devices. The 15 s grace period covers the other case, a publisher that drops while the plugin keeps running.
 
 ### Node reboot
 
@@ -376,10 +385,11 @@ The NVLink fabric for a tenant GPU is ready only after Fabric Manager in the Ser
 
 ### Capturing the guest console
 
-Two settings put the guest console into the node's journal: `enable_debug = true` in the runtime's configuration (the file under `/opt/kata/share/defaults/kata-containers/runtimes/<runtime class>/`, which is the one the shim loads) and `[debug] level = "debug"` in `/etc/containerd/config.toml`, since the shim's debug lines are dropped at containerd's default level. The pod annotation `io.katacontainers.config.hypervisor.kernel_params: "nvrc.log=trace"` makes NVRC print every step.
+Two settings put the guest console into the node's journal: `enable_debug = true` in the configuration the shim loads, named by `ConfigPath` in the runtime's containerd entry: `/opt/kata/share/defaults/kata-containers/runtimes/qemu-nvidia-gpu/configuration-qemu-nvidia-gpu.toml` for the Go shim, `/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/qemu-nvidia-gpu-runtime-rs/configuration-qemu-nvidia-gpu-runtime-rs.toml` for runtime-rs and `[debug] level = "debug"` in `/etc/containerd/config.toml`, since the shim's debug lines are dropped at containerd's default level. The pod annotation `io.katacontainers.config.hypervisor.kernel_params: "nvrc.log=trace"` makes NVRC print every step.
 
 ```bash title="$ read the console of the last sandbox"
-sudo journalctl --since "10 min ago" -o cat | grep -a -o 'vmconsole="[^"]*"' | sed 's/^vmconsole="//; s/"$//'
+# the Go shim logs vmconsole="...", runtime-rs logs vm console: "..."
+sudo journalctl --since "10 min ago" -o cat | grep -a -oE 'vmconsole="[^"]*"|vm console: "[^"]*"' | sed -E 's/^(vmconsole=|vm console: )"//; s/"$//'
 ```
 
 !!! danger "Do not restart containerd with a Kata VM holding VFIO devices"
@@ -393,7 +403,7 @@ sudo journalctl --since "10 min ago" -o cat | grep -a -o 'vmconsole="[^"]*"' | s
 | FM in the Service VM | `specified partition id N is not supported` | the partition list is empty or lacks N; see the stale-session case |
 | kata-deploy install job | `DEFAULT_SHIM 'qemu-runtime-rs' must be one of the configured SHIMS` | the chart's `defaultShim` names a shim the values disabled |
 | kata-deploy host check | `Required host command mkfs.erofs is not available` | the values ask for the erofs snapshotter on a node without `erofs-utils` |
-| containerd | `PodResources API Get method disabled` | Kubernetes before 1.31 without the `KubeletPodResourcesGet` feature gate |
+| containerd | `PodResources API Get method disabled` | Kubernetes before 1.34 without the `KubeletPodResourcesGet` feature gate, which both runtimes call during cold plug; default on from 1.34 |
 | guest kernel | `cannot find valid erofs superblock` | an image built as ext4 for a runtime configured with `rootfs_type = "erofs"` |
 | guest NVRC | `Module nvidia not found in directory /lib/modules/<version>` | an image whose kernel modules do not match the installed guest kernel |
 | containerd | `unsupported rootfs Mount { source: "overlay", ... }` | a runtime-rs NVIDIA pod on the overlayfs snapshotter; the shim has no shared filesystem and needs the erofs snapshotter |
