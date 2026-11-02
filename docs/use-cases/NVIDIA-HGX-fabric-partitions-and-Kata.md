@@ -199,7 +199,7 @@ args: ["--publish", "--unit=gpu"]
 The host publishes the view and activates partitions itself, without `kubectl exec`.
 
 !!! info "Prerequisites in review"
-    This recipe needs kata runtime-rs with the configured `vsock_cid` (kata-containers/kata-containers#14202), NVRC with `nvrc.fm.vsock` (NVIDIA/nvrc#244) and with the CDI spec for ConnectX functions that runtime-rs's `nvidia.com/nic` annotations resolve against, the vsock constants in pcilibs-rs (kata-containers/pcilibs-rs#42) and fmclient's `--vsock` default ([fmclient#7](https://github.com/zvonkok/fmclient/pull/7)). A runtime without the annotation handler refuses the `vsock_cid` annotation.
+    This recipe needs kata runtime-rs with the configured `vsock_cid` (kata-containers/kata-containers#14202), NVRC with `nvrc.fm.vsock` (NVIDIA/nvrc#244) and with the CDI spec for ConnectX functions that runtime-rs's `nvidia.com/nic` annotations resolve against (NVIDIA/nvrc#245, a bridge until `nvidia-ctk cdi generate` gains a NIC mode, NVIDIA/nvidia-container-toolkit#2197), the vsock constants in pcilibs-rs (kata-containers/pcilibs-rs#42) and fmclient's `--vsock` default ([fmclient#7](https://github.com/zvonkok/fmclient/pull/7)). A runtime without the annotation handler refuses the `vsock_cid` annotation.
 
 Three settings make it possible, all of them off by default:
 
