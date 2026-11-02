@@ -34,8 +34,9 @@ lazy_static! {
         let mut m = HashMap::new();
         m.insert("0x10de-0x030", "nvidia.com/gpu");
         m.insert("0x1002-0x030", "amd.com/gpu");
-        m.insert("0x15b3-0x020", "nvidia.com/nic");
-        // TODO:  it will be updated as required.
+        // Only kinds the guest generates a CDI spec for: the agent waits for the
+        // spec and fails the container without one. ConnectX functions
+        // (0x15b3-0x020) had a "nvidia.com/nic" row that no guest image generates.
         m
     };
 }
