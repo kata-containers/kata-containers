@@ -102,7 +102,7 @@ Each configuration below lists the exact commands and what the node advertises a
 | --- | --- | --- | --- |
 | no | none | n/a | `nvidia.com/gpu: N`, one per bound GPU (modes 1 and 2) |
 | yes | none | n/a | `nvidia.com/nvswitch-fabric: 1`, no GPUs |
-| yes | published | `partition` | the fabric plus one resource per active partition |
+| yes | published | `partition` | the fabric plus one device per active partition, Unhealthy unless Fabric Manager supports it, no other active partition shares a GPU with it, and every member is bound and labeled here |
 | yes | published | `gpu` | the fabric plus `nvidia.com/gpu: N`, one per bound GPU, whatever the partition list says |
 
 A published view decides what the node advertises; the fabric's binding only tells the plugin whether to wait for one.
@@ -407,5 +407,6 @@ sudo journalctl --since "10 min ago" -o cat | grep -a -oE 'vmconsole="[^"]*"|vm 
 | guest kernel | `cannot find valid erofs superblock` | an image built as ext4 for a runtime configured with `rootfs_type = "erofs"` |
 | guest NVRC | `Module nvidia not found in directory /lib/modules/<version>` | an image whose kernel modules do not match the installed guest kernel |
 | containerd | `unsupported rootfs Mount { source: "overlay", ... }` | a runtime-rs NVIDIA pod on the overlayfs snapshotter; the shim has no shared filesystem and needs the erofs snapshotter |
+| kubelet | `nvidia.com/nvlink-<k>gpu` in capacity but not in allocatable | an active partition the plugin advertises Unhealthy: unsupported by Fabric Manager, overlapping another active partition, or a member GPU not bound and labeled on this host; the plugin's log names the partition and the reason |
 | kata-agent | `waiting for CDI spec(s) to be generated (N of 100 max tries) "unresolvable CDI devices nvidia.com/nic=0, ..."` | runtime-rs annotates every ConnectX function as `nvidia.com/nic=<index>` and the guest wrote no spec for that kind; the container fails after 100 s while the VM and Fabric Manager keep running. An NVRC without the ConnectX spec generator |
 | NVLSM in the Service VM | `GRPC_MGR - ... Failed to open configuration file "/usr/share/nvidia/nvlsm/grpc_mgr.conf"` | the base plus extension guest image with an NVRC that does not bind the extension's `/usr/share/nvidia` over the base path; Fabric Manager then exits with `failed to connect to the subnet manager` |
