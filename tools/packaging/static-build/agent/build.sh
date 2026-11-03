@@ -26,6 +26,7 @@ docker pull "${container_image}" || \
 
 # shellcheck disable=SC2154
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	--env BUILD_VARIANT="${BUILD_VARIANT:-}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env AGENT_POLICY="${AGENT_POLICY:-no}" \
 	--env INIT_DATA="${INIT_DATA:-yes}" \

@@ -127,6 +127,7 @@ options:
 --build=<asset>       :
 	all
 	agent
+	agent-substrate
 	agent-ctl
 	boot-image-se
 	boot-image-se-runtime-rs
@@ -1785,6 +1786,10 @@ install_busybox() {
 install_agent() {
 	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/agent)"
 	latest_builder_image="$(get_agent_image_name)"
+	if [[ "${BUILD_VARIANT:-}" == substrate ]]; then
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/libs")"
+	fi
 
 	install_cached_tarball_component \
 		"${build_target}" \
@@ -2037,6 +2042,7 @@ handle_build() {
 		;;
 
 	agent) install_agent ;;
+	agent-substrate) BUILD_VARIANT=substrate install_agent ;;
 
 	agent-ctl) install_agent_ctl ;;
 

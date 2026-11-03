@@ -46,6 +46,7 @@ jobs:
       matrix:
         asset:
           - agent
+          - agent-substrate
           - busybox
           - cloud-hypervisor
           - coco-guest-components
@@ -147,7 +148,7 @@ jobs:
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: kata-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          name: ${{ contains(matrix.asset, 'substrate') && 'kata-substrate-artifacts' || 'kata-artifacts' }}-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error

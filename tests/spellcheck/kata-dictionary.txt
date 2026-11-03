@@ -167,3 +167,6 @@ kcli
 podvm
 eMudhra
 Substrate
+codegen
+libc
+Ziyue

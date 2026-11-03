@@ -239,7 +239,7 @@ FINAL_TARBALL_NAME ?= kata-static.tar.zst
 %-tarball-build:
 	$(call BUILD,$*)
 
-agent-tarball: copy-scripts-for-the-agent-build
+agent-tarball agent-substrate-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
 agent-ctl-tarball: copy-scripts-for-the-tools-build
