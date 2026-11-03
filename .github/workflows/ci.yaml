@@ -229,7 +229,7 @@ jobs:
       tag: ${{ inputs.tag }}-ppc64le
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-ppc64le
+      runner: ubuntu-26.04-ppc64le
       arch: ppc64le
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
@@ -247,7 +247,7 @@ jobs:
       tag: ${{ inputs.tag }}-ppc64le
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-ppc64le
+      runner: ubuntu-26.04-ppc64le
       arch: ppc64le
       image-kind: monitor
     secrets:
