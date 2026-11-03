@@ -5,6 +5,8 @@
 # Grace Config 4 - GPU + NIC passthrough
 # HostTopology: 1 socket (cpus 0-3), 1 GpuSmmuGroup [GPU], 1 NIC on separate SMMU
 # NIC root port emits no acpi-generic-initiator objects
+# QEMU: any QEMU >= 11.0 with the accelerated SMMUv3 (kata qemu-no-shared-fs or
+#       qemu-cca-experimental); ssidsize= is the PASID property in both.
 -object
 iommufd,id=iommufd0
 -object
@@ -32,7 +34,7 @@ node,nodeid=8
 -device
 pxb-pcie,id=pcie.1,bus_nr=32,bus=pcie.0,numa_node=0
 -device
-arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
+arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device
 pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device
@@ -40,7 +42,7 @@ vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iom
 -device
 pxb-pcie,id=pcie.2,bus_nr=64,bus=pcie.0,numa_node=0
 -device
-arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,pasid=on,oas=48
+arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device
 pcie-root-port,id=pcie.port2,bus=pcie.2,chassis=2,io-reserve=0
 -device

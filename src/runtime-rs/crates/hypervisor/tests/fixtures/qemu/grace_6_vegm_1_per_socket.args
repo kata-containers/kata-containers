@@ -5,6 +5,8 @@
 # Grace Config 6 - vEGM, 1 GPU per socket, 4 sockets, 36 NUMA nodes
 # HostTopology: 4 sockets, 4 GpuSmmuGroups (1 GPU each), 4 EgmSocketInfos
 # CpuMem nodes 0-3 (one per socket), GPU initiator nodes 4-35 (8 per GPU)
+# QEMU: NVIDIA's fork only (kata qemu-cca-experimental); the acpi-egm-memory
+#       object is not in upstream QEMU.
 -object
 iommufd,id=iommufd0
 -object
@@ -92,7 +94,7 @@ node,nodeid=35
 -device
 pxb-pcie,id=pcie.1,bus_nr=32,bus=pcie.0,numa_node=0
 -device
-arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
+arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device
 pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device
@@ -100,7 +102,7 @@ vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iom
 -device
 pxb-pcie,id=pcie.2,bus_nr=64,bus=pcie.0,numa_node=1
 -device
-arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,pasid=on,oas=48
+arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device
 pcie-root-port,id=pcie.port2,bus=pcie.2,chassis=2,io-reserve=0
 -device
@@ -108,7 +110,7 @@ vfio-pci-nohotplug,host=0009:06:00.0,bus=pcie.port2,rombar=0,id=dev1,iommufd=iom
 -device
 pxb-pcie,id=pcie.3,bus_nr=96,bus=pcie.0,numa_node=2
 -device
-arm-smmuv3,primary-bus=pcie.3,id=smmuv3.3,accel=on,ats=on,ril=off,pasid=on,oas=48
+arm-smmuv3,primary-bus=pcie.3,id=smmuv3.3,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device
 pcie-root-port,id=pcie.port3,bus=pcie.3,chassis=3,io-reserve=0
 -device
@@ -116,7 +118,7 @@ vfio-pci-nohotplug,host=0010:06:00.0,bus=pcie.port3,rombar=0,id=dev2,iommufd=iom
 -device
 pxb-pcie,id=pcie.4,bus_nr=128,bus=pcie.0,numa_node=3
 -device
-arm-smmuv3,primary-bus=pcie.4,id=smmuv3.4,accel=on,ats=on,ril=off,pasid=on,oas=48
+arm-smmuv3,primary-bus=pcie.4,id=smmuv3.4,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device
 pcie-root-port,id=pcie.port4,bus=pcie.4,chassis=4,io-reserve=0
 -device

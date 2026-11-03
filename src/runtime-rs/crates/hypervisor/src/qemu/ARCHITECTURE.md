@@ -247,7 +247,8 @@ pub enum BusIommu {
 pub struct SmmuV3Config {
     pub accel: bool,
     pub ats: bool,
-    pub pasid: bool,
+    /// Substream ID width in bits (`ssidsize=`); 0 disables PASID.
+    pub ssidsize: u8,
     pub oas: u8,
     pub ril: bool,
     /// Enable SMMU command-queue virtualisation (vCMDQ).  Requires
@@ -447,7 +448,12 @@ All Grace configurations share these constants:
 - `-device vfio-pci-nohotplug` (not `vfio-pci`) — required for C2C interconnect
 - `-object iommufd,id=iommufd0` — modern IOMMU fd interface; legacy VFIO groups
   not supported on Grace
-- `arm-smmuv3` fixed parameters: `accel=on,ats=on,ril=off,pasid=on,oas=48`
+- `arm-smmuv3` fixed parameters: `accel=on,ats=on,ril=off,ssidsize=16,oas=48`
+- QEMU: configs 1-4 run on any QEMU from 11.0 with the accelerated SMMUv3,
+  including the `qemu-no-shared-fs` kata ships (`ssidsize=` is the PASID
+  property there and in NVIDIA's 11.0 fork). Configs 5-7 need NVIDIA's fork,
+  shipped as `qemu-cca-experimental`: `cmdqv=` and `acpi-egm-memory` are not
+  in upstream QEMU.
 - Host kernel driver: `nvgrace-gpu-vfio-pci` (replaces standard `vfio-pci`)
 - EGM kernel module: `nvgrace-egm` (creates `/dev/egm*` character devices)
 
@@ -462,7 +468,7 @@ All Grace configurations share these constants:
 ...
 -numa node,nodeid=8
 -device pxb-pcie,id=pcie.1,bus_nr=32,bus=pcie.0,numa_node=0
--device arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
+-device arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iommufd0
 -object acpi-generic-initiator,id=gi0,pci-dev=dev0,node=1
@@ -486,7 +492,7 @@ root port).  Repeat the pxb-pcie/`smmuv3`/root-port/vfio block 4 times:
 
 # Per GPU (N = 1..4):
 -device pxb-pcie,id=pcie.N,bus_nr=<32*N>,bus=pcie.0,numa_node=0
--device arm-smmuv3,primary-bus=pcie.N,id=smmuv3.N,accel=on,ats=on,ril=off,pasid=on,oas=48
+-device arm-smmuv3,primary-bus=pcie.N,id=smmuv3.N,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device pcie-root-port,id=pcie.portN,bus=pcie.N,chassis=N,io-reserve=0
 -device vfio-pci-nohotplug,host=<addr>,bus=pcie.portN,rombar=0,id=dev<N-1>,iommufd=iommufd0
 -object acpi-generic-initiator,id=gi<8*(N-1)>,pci-dev=dev<N-1>,node=<1+8*(N-1)>
@@ -502,14 +508,14 @@ GPUs sharing a physical `SMMU` share one `PciRootComplex` with **2 root ports**.
 
 ```text
 -device pxb-pcie,id=pcie.1,bus_nr=32,bus=pcie.0,numa_node=0
--device arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
+-device arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iommufd0
 -device pcie-root-port,id=pcie.port2,bus=pcie.1,chassis=2,io-reserve=0
 -device vfio-pci-nohotplug,host=0009:06:00.0,bus=pcie.port2,rombar=0,id=dev1,iommufd=iommufd0
 
 -device pxb-pcie,id=pcie.2,bus_nr=64,bus=pcie.0,numa_node=0
--device arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,pasid=on,oas=48
+-device arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,ssidsize=16,oas=48
 -device pcie-root-port,id=pcie.port3,bus=pcie.2,chassis=3,io-reserve=0
 -device vfio-pci-nohotplug,host=0010:06:00.0,bus=pcie.port3,rombar=0,id=dev2,iommufd=iommufd0
 -device pcie-root-port,id=pcie.port4,bus=pcie.2,chassis=4,io-reserve=0

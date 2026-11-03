@@ -48,7 +48,10 @@ pub(crate) enum BusIommu {
 pub(crate) struct SmmuV3Config {
     pub accel: bool,
     pub ats: bool,
-    pub pasid: bool,
+    /// Substream ID width in bits, written as `ssidsize=`; 0 turns PASID off.
+    /// Upstream QEMU and NVIDIA's 11.0 fork both spell it this way; the
+    /// `pasid=on` of the 10.1 fork no longer exists. 16 was validated on GB200.
+    pub ssidsize: u8,
     pub oas: u8,
     pub ril: bool,
     /// Enable SMMU command-queue virtualisation. Requires physically
@@ -61,7 +64,7 @@ impl Default for SmmuV3Config {
         Self {
             accel: true,
             ats: true,
-            pasid: true,
+            ssidsize: 16,
             oas: 48,
             ril: false,
             cmdqv: false,
