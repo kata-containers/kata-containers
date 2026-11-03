@@ -1,11 +1,12 @@
 # NVIDIA HGX fabric partitions and Kata
 
-On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch mode* Fabric Manager (FM) runs in a Service VM that holds only the switch fabric, and it activates *partitions*: sets of GPUs that may reach each other over NVLink. A tenant VM must receive exactly one active partition's GPUs. Two tenants inside one partition would share an NVLink domain, so the partition is the isolation boundary.
+On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch mode* Fabric Manager (FM) runs in a Service VM that holds only the switch fabric, and it activates *partitions*: sets of GPUs that may reach each other over NVLink. A tenant VM must receive exactly one active partition's GPUs. Two tenants inside one partition would share an NVLink domain, so the partition is the isolation boundary. The switches' PCI face differs by generation: on H100 and H200 the NVSwitches are PCIe devices of their own; from B200 on they are reached through ConnectX management functions.
 
 This page describes the components that make a Kata cluster do this, the configurations they can run in, the day-to-day workflows, and how to read what the system says when something is off. Everything here was run on a DGX with eight GPUs and four ConnectX management PFs, Kubernetes 1.37, Kata 4.3.1 and Fabric Manager 615.
 
 *[FM]: Fabric Manager
 *[PF]: PCI physical function
+*[PFs]: PCI physical functions
 *[CDI]: Container Device Interface
 *[CID]: vsock context identifier
 
@@ -25,7 +26,7 @@ NVRC
 :   The init of the Kata guest image for NVIDIA systems. It detects what the VM received, starts Fabric Manager and NVLSM in a Service VM or the GPU driver and persistenced in a tenant VM, waits for each service to be ready, and only then starts the kata-agent.
 
 fmclient
-:   A client for Fabric Manager's SDK. Inside the Service VM it lists, activates and deactivates partitions and publishes the partition view to the plugin. On the host it does the same over vsock for the out-of-band configuration. It also owns the Service VM manifests.
+:   A client for Fabric Manager's SDK. It lists, activates and deactivates partitions, and every change publishes the partition view to the plugin in one call. It runs inside the Service VM or on the host, the two configurations defined under [The view channel](#the-view-channel). It also owns the Service VM manifests.
 
 The shared vocabulary lives in `pcilibs-rs`: which PCI identities are GPUs, NVSwitches or management functions, the partition view's wire format, the contract constants (environment variable names, socket path, port, the Service VM's CID), and the resolution from Fabric Manager's physical IDs to host PCI addresses.
 
@@ -53,16 +54,18 @@ An active partition is advertised Healthy when it is supported by Fabric Manager
 
 Fabric Manager inside the Service VM is the only authority on partitions, and it knows GPUs by *physical ID*, the module slot on the baseboard. The host knows GPUs by PCI address. Two facts bridge them:
 
-- fmclient publishes Fabric Manager's partition list, the *view*, to the plugin over gRPC: a client stream, one message per change plus a heartbeat every 30 s. The open stream is the view's liveness. When it closes, the plugin withdraws the view after a 15 s grace period, so a Service VM restart does not flap the node's capacity and a dead Service VM does not keep its partitions advertised.
+- fmclient publishes Fabric Manager's partition lists, the *view*, to the plugin in one gRPC call, and the plugin keeps that view, on disk next to its token so a plugin restart keeps the node's capacity, until the next call or until the fabric changes hands. Every fmclient command that changes partitions publishes the result; nothing stays connected. The plugin is a scheduling ledger and Fabric Manager is the enforcement point: a stale view sends a pod to GPUs whose fabric is not ready, where CUDA init fails, and cannot hand out another partition's GPUs.
 - The firmware labels every GPU function in sysfs: `/sys/bus/pci/devices/<bdf>/label` reads `GPU4, SMX3` on this DGX. The `SMX` number is Fabric Manager's physical ID; the `GPU` number is only PCI enumeration order.
 
-The plugin listens twice: on a TCP port, 9877, exposed as a hostPort for the in-band publisher inside the Service VM, admitting only the token minted at `Allocate`; and on a unix socket, `/var/run/kata-device-plugin/fabric-view.sock`, for a publisher on the host itself, where filesystem permissions are the credential and no token is checked. One stream at a time: a newer stream supersedes the current one, and a new fabric holder withdraws the view and ends the previous holder's stream.
+The plugin listens twice: on a TCP port, 9877, exposed as a hostPort for the in-band publisher inside the Service VM, admitting only the token minted at `Allocate`; and on a unix socket, `/var/run/kata-device-plugin/fabric-view.sock`, for a publisher on the host itself, where filesystem permissions are the credential and no token is checked. A new fabric holder withdraws the view: its `Allocate` rotates the token, and the previous holder's token no longer publishes.
+
+Where fmclient runs names the configuration. *In-band*: inside the Service VM's container, through `kubectl exec`, reaching Fabric Manager on the guest's loopback and the plugin on the token-gated port. *Out-of-band*: on the host, reaching Fabric Manager over vsock and the plugin on the unix socket. A node runs one of the two.
 
 ```mermaid
 flowchart LR
     subgraph svm["Service VM (holds the fabric)"]
         FM[Fabric Manager] --- NVLSM
-        fmc[fmclient --publish] -->|SDK, loopback| FM
+        fmc[fmclient -a N] -->|SDK, loopback| FM
     end
     subgraph host["Node"]
         plugin[kata-device-plugin]
@@ -78,7 +81,7 @@ flowchart LR
 ### Trust boundaries
 
 Provider-owned
-:   The infrastructure owns the hardware and the Service VM, in Kata and in Confidential Containers alike. The host may hold a control path into the Service VM. Both the in-band and the out-of-band configuration are admissible.
+:   The infrastructure owns the hardware and the Service VM, in Kata and in Confidential Containers alike. The host may hold a control path into the Service VM. Either the in-band or the out-of-band configuration is admissible, one per node: the two Service VM manifests differ in runtime class and annotations, and a node runs one.
 
 Colocation
 :   The tenant owns the hardware and the Service VM and carves partitions themselves, outside the infrastructure's reach. The host must have no Fabric Manager control path. Fabric Manager's API has no read-only mode, so there is no vsock listener at all; the in-band configuration is the only one. Fabric Manager's vsock listener is therefore off unless the Service VM's own kernel command line turns it on.
@@ -96,7 +99,7 @@ A node runs in one of three deployment modes:
 2. **GPU with the host's Fabric Manager in `FABRIC_MODE=0`.** Fabric Manager and NVLSM run on the host and program the default partition, all eight GPUs in one NVLink domain. VMs of any size share that domain; in CC mode each VM that holds more than one GPU derives its own NVLink encryption key.
 3. **Service VM.** Fabric Manager runs in a Service VM in shared NVSwitch mode and activates partitions, which the node advertises as resources. The variants below, the `gpu` unit, out-of-band over vsock and the fail-closed state, all belong to this mode.
 
-Each configuration below lists the exact commands and what the node advertises afterwards. The plugin decides by two facts it can see: whether the fabric is bound to `vfio-pci`, and whether a view is published. Modes 1 and 2 look the same to it.
+Each configuration below lists the exact commands and what the node advertises afterwards. What the node advertises follows from two facts: whether the fabric is bound to `vfio-pci`, and whether a view was published. Modes 1 and 2 share the same two facts, fabric not bound and no view, so the plugin treats them alike.
 
 | Fabric bound | View | Unit in view | Node advertises |
 | --- | --- | --- | --- |
@@ -142,7 +145,7 @@ A pod requests `nvidia.com/gpu: N` for any N up to eight, and its GPUs reach eac
 
 ### Service VM with the view, partition unit
 
-The fabric is bound, the Service VM holds it, fmclient publishes with `--unit=partition`. This is the shared NVSwitch mode the HGX guide describes.
+The fabric is bound, the Service VM holds it, and the view's unit is `partition`, fmclient's default. This is the shared NVSwitch mode the HGX guide describes. How the provisioner itself is deployed, as a Job through its chart and profiles, is in the [kata-device-provisioner](https://github.com/kata-containers/kata-device-provisioner) README; this page shows only the call.
 
 ```bash title="$ bind the fabric"
 kata-device-provisioner status                      # every target function and its current driver
@@ -158,8 +161,7 @@ nodeSelector:
   kata.feature.node.kubernetes.io/managed-fabric: "true"
 containers:
   - name: fmclient
-    command: ["fmclient"]
-    args: ["--publish", "--unit=partition"]
+    command: ["sleep", "infinity"]
     resources:
       limits:
         nvidia.com/nvswitch-fabric: 1
@@ -183,10 +185,10 @@ After `fmclient -a 2`, `-a 6` and `-a 15` inside the Service VM, a half, a pair 
 
 ### Service VM with the view, GPU unit
 
-Same deployment with `--unit=gpu`. The plugin then advertises every bound GPU as its own `nvidia.com/gpu`, whatever the partition list says, and a pod may take any number of them; the plugin does not check which partition a pod's GPUs come from. This is bare-metal semantics for an owner who holds the whole node as one trust domain, with one partition of all GPUs active. A node shared by mutually untrusted tenants uses the partition unit.
+Same deployment; the view is published with `--unit=gpu`. The plugin then advertises every bound GPU as its own `nvidia.com/gpu`, whatever the partition list says, and a pod may take any number of them; the plugin does not check which partition a pod's GPUs come from. This is bare-metal semantics for an owner who holds the whole node as one trust domain, with one partition of all GPUs active. It is wrong for a node shared by mutually untrusted tenants: two pods could each receive GPUs of the same active partition and share its NVLink domain, the boundary this page starts with. Such a node uses the partition unit, where a pod gets a whole partition or nothing.
 
-```yaml title="the only change"
-args: ["--publish", "--unit=gpu"]
+```bash title="$ the only change"
+kubectl -n kata-system exec $P -- fmclient --publish --unit=gpu
 ```
 
 ```text
@@ -196,10 +198,10 @@ args: ["--publish", "--unit=gpu"]
 
 ### Out-of-band over vsock
 
-The host publishes the view and activates partitions itself, without `kubectl exec`.
+The host activates partitions itself over vsock, without `kubectl exec`, and each change publishes the view to the plugin's host socket.
 
 !!! info "Prerequisites in review"
-    This recipe needs kata runtime-rs with the configured `vsock_cid` (kata-containers/kata-containers#14202), NVRC with `nvrc.fm.vsock` (NVIDIA/nvrc#244) and with the CDI spec for ConnectX functions that runtime-rs's `nvidia.com/nic` annotations resolve against (NVIDIA/nvrc#245, a bridge until `nvidia-ctk cdi generate` gains a NIC mode, NVIDIA/nvidia-container-toolkit#2197), the vsock constants in pcilibs-rs (kata-containers/pcilibs-rs#42) and fmclient's `--vsock` default ([fmclient#7](https://github.com/zvonkok/fmclient/pull/7)). A runtime without the annotation handler refuses the `vsock_cid` annotation.
+    This recipe needs kata runtime-rs with the configured `vsock_cid` ([kata-containers#14202](https://github.com/kata-containers/kata-containers/pull/14202)), NVRC with `nvrc.fm.vsock` ([nvrc#244](https://github.com/NVIDIA/nvrc/pull/244)) and with the CDI spec for ConnectX functions that runtime-rs's `nvidia.com/nic` annotations resolve against ([nvrc#245](https://github.com/NVIDIA/nvrc/pull/245), a bridge until `nvidia-ctk cdi generate` gains a NIC mode, [nvidia-container-toolkit#2197](https://github.com/NVIDIA/nvidia-container-toolkit/issues/2197)), the vsock constants in pcilibs-rs ([pcilibs-rs#42](https://github.com/kata-containers/pcilibs-rs/pull/42)) and fmclient's one-call publish ([fmclient#9](https://github.com/zvonkok/fmclient/pull/9)). A runtime without the annotation handler refuses the `vsock_cid` annotation; the Go runtime has no `vsock_cid` setting, so it cannot run this configuration, while the in-band configuration works on both runtimes.
 
 Three settings make it possible, all of them off by default:
 
@@ -222,36 +224,32 @@ containers:
 ```
 
 ```bash title="$ on the host, as root"
-fmclient --vsock --publish --publish-to unix:///var/run/kata-device-plugin/fabric-view.sock
 fmclient --vsock -l
-fmclient --vsock -a 2
+fmclient --vsock -a 2     # publishes to the plugin's host socket
 ```
 
-`--vsock` without a value is the contract address, CID 3 and FM's default port, both constants in `pcilibs-rs`. The node advertises the same resources as in the in-band configuration.
+`--vsock` without a value is the contract address, CID 3 and FM's default port, both constants in `pcilibs-rs`; with it the plugin's host socket is fmclient's default endpoint. The node advertises the same resources as in the in-band configuration.
 
-As run on the HGX B300: the shim connected to the agent at CID 3 and the pod was Running 50 s after `kubectl apply`, Fabric Manager having reached `configured` 11 s after the guest booted. `fmclient --vsock -l` on the host listed the 15 partitions, `fmclient --vsock -a 2` made the node advertise `nvidia.com/nvlink-4gpu: 1` within seconds of the publisher's next view, and a tenant VM on that unit saw the partition's four GPUs with NVLink between all of them.
+As run on the HGX B300: the shim connected to the agent at CID 3 and the pod was Running 50 s after `kubectl apply`, Fabric Manager having reached `configured` 11 s after the guest booted. `fmclient --vsock -l` on the host listed the 15 partitions, `fmclient --vsock -a 2` made the node advertise `nvidia.com/nvlink-4gpu: 1` within one plugin poll, and a tenant VM on that unit saw the partition's four GPUs with NVLink between all of them.
 
 !!! warning "Any host process can connect"
     A vsock connect needs no privilege on the host, so with the listener on every host process can reach Fabric Manager's API. This is the provider-owned model. Where the host must have no control path, run the in-band manifest, whose guest opens nothing.
 
-!!! warning "One publisher per node"
-    Never run the in-band and the out-of-band manifest on one node. The plugin keeps the newer stream and ends the other, so each publisher's reconnect would withdraw the other's view.
-
 ### Fail closed: fabric bound, no view
 
-Between the provisioner binding the fabric and the Service VM publishing, and whenever the Service VM is down for longer than the grace period, the node advertises the fabric and no GPUs. The plugin logs
+Between the provisioner binding the fabric and the first publish, and after a new Service VM pod took the fabric and has not published yet, the node advertises the fabric and no GPUs. The plugin logs
 
 ```text
 WARN fabric is bound but no partition view is published: advertising no GPU
 ```
 
-once per poll. This is the designed state: a GPU handed out without a view could land in a partition the operator did not activate.
+once per poll. This is the designed state: a GPU handed out without a view could land in a partition the operator did not activate. The way out is a publish from the fabric holder: `fmclient -a <id>`, or `fmclient --publish` to resend what Fabric Manager has.
 
 ## Workflows
 
 ### Provisioning the node
 
-The provisioner binds every GPU and, with `--bind-fabric`, every function of the fabric. It refuses before changing anything when a function is held by a host driver, when a target has no IOMMU group, or when a target shares its IOMMU group with a function a host driver still holds.
+The provisioner binds every GPU and, with `--bind-fabric`, every function of the fabric; how it is deployed is in its own [README](https://github.com/kata-containers/kata-device-provisioner). It refuses before changing anything when a function is held by a host driver, when a target has no IOMMU group, or when a target shares its IOMMU group with a function a host driver still holds.
 
 ```bash title="$ as root on the node"
 systemctl disable --now nvidia-fabricmanager nvlsm                     # (1)!
@@ -271,35 +269,37 @@ Persistence is written as `/etc/modprobe.d/kata-device-provisioner.conf` for the
 
 ### Bootstrapping the Service VM
 
-Apply the manifest. The pod schedules once the plugin advertises the fabric. Inside the guest, NVRC detects `ServiceVm(ConnectX)` on these systems, starts NVLSM and Fabric Manager back to back, waits for Fabric Manager to report its fabric configured, and starts the agent. On the DGX that took 29.5 s from boot. fmclient connects to Fabric Manager over the guest's loopback and publishes the view; the first message carries no active partitions.
+Apply the manifest. The pod schedules once the plugin advertises the fabric. Inside the guest, NVRC detects `ServiceVm(ConnectX)` on these systems, starts NVLSM and Fabric Manager back to back, waits for Fabric Manager to report its fabric configured, and starts the agent. On the DGX that took 29.5 s from boot. The node advertises the fabric and no GPUs until the first `fmclient -a` publishes a view.
 
 ```bash title="$ watch it come up"
 kubectl -n kata-system get pods -w
-kubectl -n kube-system logs -l app.kubernetes.io/name=kata-device-plugin | grep "fabric view"
+kubectl -n kube-system logs -l app.kubernetes.io/name=kata-device-plugin | grep fabric
 ```
 
 ```text
-INFO fabric view: unit "partition", active partitions (id x gpus): none
+WARN fabric is bound but no partition view is published: advertising no GPU
 ```
 
 ### Activating and deactivating partitions
 
-In-band, through the publishing container:
+In-band, through the Service VM's container:
 
-```bash title="$ the partition table and three activations"
+```bash title="$ the partition table, three activations, one deactivation"
 P=$(kubectl -n kata-system get pod -l app=nvswitch-service-vm -o name)
 kubectl -n kata-system exec $P -- fmclient -l
 kubectl -n kata-system exec $P -- fmclient -a 2
 kubectl -n kata-system exec $P -- fmclient -a 6
 kubectl -n kata-system exec $P -- fmclient -a 15
-kubectl -n kata-system exec $P -- fmclient -d 15
+kubectl -n kata-system exec $P -- fmclient -d 15    # -d deactivates
 ```
 
-Within one plugin poll the node's capacity follows. The publisher logs each change:
+Each command publishes the view it leaves behind and prints it; within one plugin poll the node's capacity follows:
 
 ```text
-fmclient: view changed: unit "partition", active partitions (id x gpus): 2x4 6x2 15x1
+fmclient: published to http://10.86.129.206:9877: unit "partition", active partitions (id x gpus): 2x4 6x2
 ```
+
+Nothing here needs a person at `kubectl exec`. An owner that wants a fixed layout makes the container's command activate it before idling, `command: ["sh", "-c", "fmclient -a 2 && fmclient -a 6 && sleep infinity"]`, or runs the same calls from a Job in the owner namespace. A controller that turns node labels into these calls is possible on top; this page stops at the calls.
 
 Deactivating a partition whose unit a pod holds does not take the GPUs away from that pod; the kubelet keeps its allocation. The resource stops being advertised for new pods.
 
@@ -323,8 +323,8 @@ spec:
 
 The kubelet allocates the unit, the plugin answers with its CDI name, and the Kata shim cold-plugs the four VFIO devices listed in the CDI entry into the VM.
 
-!!! note "Kubernetes 1.29 or later"
-    The kubelet forwards a device plugin's CDI names to the container runtime only with `DevicePluginCDIDevices`: beta and on by default since 1.29, GA since 1.31, alpha and off in 1.28. On a kubelet without it the VM still boots with the GPUs, since the shim learns them from the PodResources API, but the container inside sees no device.
+!!! note "DevicePluginCDIDevices"
+    The kubelet forwards a device plugin's CDI names to the container runtime only with `DevicePluginCDIDevices`, which is on in every supported Kubernetes release. On a kubelet without it the VM still boots with the GPUs, since the shim learns them from the PodResources API, but the container inside sees no device.
 
 ### What a tenant sees
 
@@ -341,20 +341,20 @@ GPU 3: NVIDIA Graphics Device (UUID: GPU-18a241c9-...)
 
 ### Service VM restart and token rotation
 
-The token is minted at `Allocate` and persisted on the host under `/var/run/kata-device-plugin`, so a plugin restart keeps the token a Service VM already holds. A container restart inside the same pod keeps the kubelet's allocation and the environment, so the same token keeps working; the publisher reconnects and its view replaces the one that was withdrawn after the grace period.
+The token is minted at `Allocate` and persisted on the host under `/var/run/kata-device-plugin`, so a plugin restart keeps the token a Service VM already holds. A container restart inside the same pod keeps the kubelet's allocation and the environment, so the same token keeps working and the view stays as it was.
 
-A new Service VM pod is a new fabric holder. Its `Allocate` rotates the token: the previous holder's stream is ended at its next message, its token no longer opens a stream, and the view is withdrawn at once, since the partitions it described were the previous holder's. Until the new holder publishes, the node is in the fail-closed state.
+A new Service VM pod is a new fabric holder. Its `Allocate` rotates the token: the previous holder's token no longer publishes, and the view is withdrawn at once, since the partitions it described were the previous holder's. Until the new holder publishes, the node is in the fail-closed state. Pods already running keep their GPUs: the kubelet keeps their allocation and the VMs their devices; only scheduling changes.
 
 ### Plugin restart
 
-The plugin reloads the token and re-registers both resources, but the view is not persisted: until fmclient reconnects and resends it, the node advertises the fail-closed set, the fabric and no GPUs. fmclient reconnects with backoff within seconds, and pods already running keep their devices. The 15 s grace period covers the other case, a publisher that drops while the plugin keeps running.
+The plugin reloads the token and the last view from `/var/run/kata-device-plugin` and re-registers its resources, so the node's capacity comes back as it was. Pods already running keep their devices.
 
 ### Node reboot
 
 The provisioner's persistence rebinds the fabric's management functions through its udev rules. The GPUs rebind through `vfio-pci`'s `ids=` option unless the host driver package is installed (see above). The host's `nvidia-fabricmanager.service`, if still enabled, fails its precheck because its PFs are now on `vfio-pci`; disable it. The Service VM DaemonSet recreates its pod and everything above repeats.
 
 !!! bug "Stale Fabric Manager sessions on the GPUs"
-    GPUs keep a session with the Fabric Manager that last configured them, and a VFIO reset does not clear it. After another Fabric Manager has run against the GPUs, the one a DGX OS ships on the host for example, the Service VM's Fabric Manager rejects the GPUs' inband responses with `previous session ID ... does not match the expected session ID` and lists no supported partitions. A node power cycle clears the sessions.
+    GPUs keep a session with the Fabric Manager that last configured them, and a VFIO reset does not clear it. After another Fabric Manager has run against the GPUs, the one a DGX OS ships on the host for example, the Service VM's Fabric Manager rejects the GPUs' inband responses with `previous session ID ... does not match the expected session ID` and lists no supported partitions. A node power cycle clears the sessions. Seen once, after the host's Fabric Manager had configured the GPUs before the Service VM's took over; a restart of the Service VM's own Fabric Manager was not tested, and FM's restart mode (`FABRIC_MODE_RESTART=1`, `fmclient --set-activated-list`) is the documented path for that.
 
 ## Readiness and diagnostics
 
