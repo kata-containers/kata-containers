@@ -59,6 +59,7 @@ jobs:
           - ovmf
           - pause-image
           - qemu
+          - qemu-cca-experimental
           - qemu-no-shared-fs
           - virtiofsd
     concurrency:

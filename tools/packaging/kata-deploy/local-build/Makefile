@@ -129,6 +129,7 @@ NVGPU_BASE_TARBALLS = \
 	kernel-nvidia-gpu-tarball \
 	ovmf-tarball \
 	pause-image-tarball \
+	qemu-cca-experimental-tarball \
 	qemu-no-shared-fs-tarball \
 	qemu-tarball \
 	virtiofsd-tarball \
@@ -146,6 +147,7 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-ovmf.tar.zst \
 	kata-static-pause-image.tar.zst \
 	kata-static-qemu-no-shared-fs.tar.zst \
+	kata-static-qemu-cca-experimental.tar.zst \
 	kata-static-qemu-snp-experimental.tar.zst \
 	kata-static-qemu-tdx-experimental.tar.zst \
 	kata-static-qemu.tar.zst \
@@ -307,6 +309,9 @@ qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tdx-experimental-tarball:
+	${MAKE} $@-build
+
+qemu-cca-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:

@@ -151,6 +151,7 @@ options:
 	qemu-no-shared-fs
 	qemu-snp-experimental
 	qemu-tdx-experimental
+	qemu-cca-experimental
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
@@ -1486,6 +1487,21 @@ install_qemu_tdx_experimental() {
 		"${qemu_flavour_builder}"
 }
 
+# NVIDIA's QEMU for the arm64 GPU runtime class: upstream QEMU drives a Grace
+# GPU through the accelerated SMMUv3, but the GB200 BAR placement, the
+# Tegra241 vCMDQ backend and the acpi-egm-memory object only exist in the
+# fork, so aarch64 boots that flavour instead of qemu-no-shared-fs.
+install_qemu_cca_experimental() {
+	export qemu_suffix="cca-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_flavour_builder}"
+}
+
 # Install static firecracker asset
 install_firecracker() {
 	local firecracker_version
@@ -2087,6 +2103,7 @@ handle_build() {
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
 	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
+	qemu-cca-experimental) install_qemu_cca_experimental ;;
 
 	stratovirt) install_stratovirt ;;
 

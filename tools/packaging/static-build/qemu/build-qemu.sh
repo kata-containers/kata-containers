@@ -66,6 +66,10 @@ kata-qemu-snp-experimental | kata-qemu-tdx-experimental)
 	_no_shared_fs=true
 	_tee=true
 	;;
+kata-qemu-cca-experimental)
+	# NVIDIA's fork for the arm64 GPU class: same trim as no-shared-fs.
+	_no_shared_fs=true
+	;;
 esac
 if [[ "${_no_shared_fs}" == "true" ]] && [[ "${ARCH}" != "x86_64" ]] && [[ "${ARCH}" != "aarch64" ]]; then
 	echo "ERROR: ${HYPERVISOR_NAME} is only built for x86_64 and aarch64, not ${ARCH}" >&2
@@ -211,6 +215,11 @@ elif [[ "${ARCH}" == "aarch64" ]]; then
 		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
 		"${_SHARED_FS_DEVS}" "${_PCIE_DEVS}" "${_DAX_DEVS}" \
 		>> configs/devices/aarch64-softmmu/default.mak
+	# NVIDIA's fork gates the Tegra241 vCMDQ backend behind its own symbol,
+	# which --without-default-devices would otherwise drop.
+	if [[ "${HYPERVISOR_NAME}" == "kata-qemu-cca-experimental" ]]; then
+		printf 'CONFIG_TEGRA241_CMDQV=y\n' >> configs/devices/aarch64-softmmu/default.mak
+	fi
 elif [[ "${ARCH}" == "ppc64le" ]]; then
 	# PSeries composes neither _MEM_DEVS (no VIRTIO_MEM_SUPPORTED) nor the
 	# PCIe topology: its PHBs are conventional PCI, with no root/switch
