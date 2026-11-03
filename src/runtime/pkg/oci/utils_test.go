@@ -1585,3 +1585,44 @@ func TestNewMount(t *testing.T) {
 		assert.Equal(tt.out.ReadOnly, actualMount.ReadOnly, "unexpected mount ReadOnly")
 	}
 }
+
+func TestParseCPUList(t *testing.T) {
+	assert := assert.New(t)
+
+	tests := []struct {
+		name     string
+		list     string
+		expected int64
+		hasError bool
+	}{
+		// An empty string yields a single (empty) token, which is counted
+		// as one CPU by parseCPUList, mirroring strings.Split semantics.
+		{"empty string", "", 1, false},
+		{"single cpu", "0", 1, false},
+		{"multiple cpus", "0,1,2,3", 4, false},
+		{"single range", "0-3", 4, false},
+		{"range and single cpus", "0-3,5,7-9", 8, false},
+		// /sys/devices/system/cpu/online content ends with a newline,
+		// which is trimmed from the upper bound of a range.
+		{"trailing newline on range", "0-3,5-7\n", 7, false},
+		{"trailing newline on single", "0\n", 1, false},
+		// A token without a '-' is treated as a single CPU even if it is
+		// not numeric (parseCPUList does not validate such tokens).
+		{"non-numeric single token", "0-2,abc", 4, false},
+		{"invalid low bound", "a-3", 0, true},
+		{"invalid high bound", "0-a", 0, true},
+		{"invalid range in middle", "0-1,x-2", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := parseCPUList(tt.list)
+			if tt.hasError {
+				assert.Error(err)
+				return
+			}
+			assert.NoError(err)
+			assert.Equal(tt.expected, count)
+		})
+	}
+}
