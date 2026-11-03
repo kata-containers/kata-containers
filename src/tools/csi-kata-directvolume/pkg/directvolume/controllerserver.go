@@ -196,10 +196,16 @@ func (dv *directVolume) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeR
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
 
+	volId := req.GetVolumeId()
+	// Non-UUID IDs cannot identify volumes created by this driver.
+	if uuid.Parse(volId) == nil {
+		klog.Warningf("Volume ID %s is invalid and not found: might have already deleted", volId)
+		return &csi.DeleteVolumeResponse{}, nil
+	}
+
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	volId := req.GetVolumeId()
 	vol, err := dv.state.GetVolumeByID(volId)
 	if err != nil {
 		// The state may have been lost while the backing device survived,
