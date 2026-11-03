@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -66,24 +65,23 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 
 	readOnly := req.GetReadonly()
 	volumeID := req.GetVolumeId()
+	volInStat, err := dv.state.GetVolumeByID(volumeID)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "volume %s not found in state: %v", volumeID, err)
+	}
 	attrib := req.GetVolumeContext()
 
 	devicePath := dv.config.VolumeDevices[volumeID]
 
 	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
 		if devicePath == "" {
-			if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
-				if dp := vol.Metadata["devicePath"]; dp != "" {
-					devicePath = dp
-					dv.config.VolumeDevices[volumeID] = dp
-					klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
-				} else {
-					return nil, status.Errorf(codes.NotFound,
-						"[SPDK] devicePath not found in state for volume %s", volumeID)
-				}
+			if dp := volInStat.Metadata["devicePath"]; dp != "" {
+				devicePath = dp
+				dv.config.VolumeDevices[volumeID] = dp
+				klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
 			} else {
 				return nil, status.Errorf(codes.NotFound,
-					"[SPDK] volume %s not found in state: %v", volumeID, err)
+					"[SPDK] devicePath not found in state for volume %s", volumeID)
 			}
 		}
 
@@ -133,22 +131,6 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		return nil, err
 	}
 	klog.Infof("add direct volume successfully.")
-
-	volInStat, err := dv.state.GetVolumeByID(volumeID)
-	if err != nil {
-		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
-		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
-		if err != nil {
-			return nil, err
-		}
-		vol.NodeID = dv.config.NodeID
-		vol.Published.Add(targetPath)
-		klog.Infof("create volume %v successfully", vol)
-
-		return &csi.NodePublishVolumeResponse{}, nil
-	}
 
 	volInStat.NodeID = dv.config.NodeID
 	volInStat.Published.Add(targetPath)

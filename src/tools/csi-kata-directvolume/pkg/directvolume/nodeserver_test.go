@@ -186,6 +186,23 @@ func TestSPDKStage(t *testing.T) {
 		"should call vhost_get_controllers at least once")
 }
 
+func TestNodePublishVolumeMissingState(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	_, err = dv.NodePublishVolume(context.TODO(), &csi.NodePublishVolumeRequest{
+		VolumeId:         "00000000-0000-0000-0000-000000000000",
+		TargetPath:       filepath.Join(t.TempDir(), "target"),
+		VolumeCapability: mountCap(),
+		VolumeContext: map[string]string{
+			utils.IsDirectVolume:                 "True",
+			utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName,
+		},
+	})
+	require.Equal(t, codes.NotFound, status.Code(err))
+}
+
 func TestStageDirectVolumeMissingBackingDevice(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := testConfig(tmp)
