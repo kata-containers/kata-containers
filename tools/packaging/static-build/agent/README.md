@@ -31,4 +31,4 @@ load, and do not establish performance gains for this Kata build. Revisit GNU
 libc and optimization level 3 only with measurements of those workloads too.
 
 See [Substrate tests](../../../../tests/integration/substrate/README.md) for
-checking a guest image and running the worker tests.
+checking the guest image and running the microVM e2e suites.

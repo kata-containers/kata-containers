@@ -19,6 +19,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         docker.io \
+        docker-buildx \
         curl \
         make \
         git \

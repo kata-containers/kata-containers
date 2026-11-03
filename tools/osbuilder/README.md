@@ -182,6 +182,78 @@ The Kata Containers kernel and rootfs images are by design "minimal". If advance
 site specific, or customized features are required, then building a customized
 kernel and/or rootfs may be required.
 
+### Substrate image
+
+Build the Substrate guest archive from the repository root:
+
+```bash
+make kata-static-substrate-tarball
+```
+
+This builds `agent-substrate`, `rootfs-image-substrate` and the standard
+`kernel` component. The agent is installed in the rootfs. The final
+`kata-static-substrate.tar.zst` in the current directory
+contains the Substrate rootfs, standard kernel and version metadata,
+using the same packaging script as other Kata archives. It excludes host
+binaries and all other kernel variants. Substrate supplies Cloud Hypervisor,
+virtiofsd and its other dependencies.
+
+The existing amd64 and arm64 build workflows build the components and select
+only the rootfs and standard kernel for this archive. Other archive allowlists
+exclude Substrate components. CI runs Substrate's microVM e2e tests with the
+candidate rootfs and kernel. The normal release workflow publishes
+`kata-static-substrate-VERSION-ARCH.tar.zst`.
+For rootfs-only development, use `make rootfs-image-substrate-tarball`.
+
+This builds from the current `debian:trixie-slim` container image configured in
+`versions.yaml`. The builder resolves the tag before checking the artifact cache
+and uses that digest for the build, so base image updates invalidate the cache.
+It retains the diagnostic tools and package dependency set
+used by Substrate, including dpkg metadata for vulnerability scanners.
+Both x86_64 and aarch64 are supported.
+
+`agent-substrate-tarball` builds a separate GNU libc agent with seccomp enabled,
+policy and init-data disabled, one codegen unit, LTO and optimization level 3.
+The binary is stripped. Its Cargo outputs and tarball are separate from the
+normal agent. The agent runs as PID 1.
+
+The package pruning and userspace ext4 packing are adapted from Ziyue Yan's
+work in [Substrate PR #1967](https://github.com/agent-substrate/substrate/pull/1967).
+The Debian recipe and pruning helper live in `rootfs-builder/debian/`.
+Packing runs through the shared `image-builder/image_builder.sh` with
+`BUILD_VARIANT=substrate`; there is no separate Substrate packer.
+It runs in userspace without loop devices or privileged containers.
+It uses ext4 with
+4 KiB blocks, no journal, a partition starting at 2 MiB and a total size
+aligned to 2 MiB for Cloud Hypervisor's PMEM device. Substrate supplies the
+read-only DAX mount options. Package versions can change when the image is
+rebuilt because apt installs current updates from Debian's repositories.
+
+The output is
+`tools/packaging/kata-deploy/local-build/build/kata-static-rootfs-image-substrate.tar.zst`.
+It contains `opt/kata/share/kata-containers/kata-containers-substrate.img`
+and package lists for the guest and the image builder. This flavour includes
+only Substrate's guest packages. It does not include Kata's general-purpose
+guest tools, such as iptables or mkfs.ext4. This image has no `chrony` service;
+Substrate must use a VMM that corrects the clock on restore. Use fresh snapshots
+when changing the guest image. The rootfs component is included with the
+standard kernel in the Substrate guest archive.
+
+See [Substrate microVM tests](../../tests/integration/substrate/README.md) for
+Kata's guest regression checks and links to upstream setup and testing.
+
+The shared image builder can also pack an existing guest tree:
+
+```bash
+BUILD_VARIANT=substrate AGENT_INIT=yes bash tools/osbuilder/image-builder/image_builder.sh -o rootfs.img rootfs
+```
+
+Run its filesystem checks on Linux with e2fsprogs, fdisk and jq installed:
+
+```bash
+bash tools/osbuilder/image-builder/tests/substrate.sh
+```
+
 ## Testing
 
 ```

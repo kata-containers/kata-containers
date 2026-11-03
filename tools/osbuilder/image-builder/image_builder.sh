@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright (c) 2017-2019 Intel Corporation
+# Copyright 2026 Google LLC
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -66,6 +67,8 @@ Options:
 	-f Filesystem type to use, only ext4, xfs and erofs are supported. ENV: FS_TYPE
 
 Extra environment variables:
+	BUILD_VARIANT:  "substrate" builds a read-only ext4 image in userspace for
+	                virtio-pmem, without the legacy NVDIMM metadata header.
 	AGENT_BIN:      Use it to change the expected agent binary name
 	AGENT_INIT:     Use kata agent as init process
 	BLOCK_SIZE:     Use to specify the size of blocks in bytes. DEFAULT: 4096
@@ -671,6 +674,51 @@ set_dax_header() {
 	rm -f "${dax_image}" "${header_image}"
 }
 
+# Populate a read-only ext4 filesystem without mounting it. The partition starts
+# at the DAX huge-page alignment used by virtio-pmem.
+create_readonly_ext4_image() (
+	local source_root="$1" image="$2"
+	local work tree part tree_kib inodes part_bytes raw_bytes image_bytes
+	local alignment_bytes=$((dax_alignment * 1024 * 1024))
+	local start_sector=$((alignment_bytes / 512))
+	work=$(mktemp -d)
+	trap 'rm -rf "${work}"' EXIT
+	tree="${work}/tree"
+	part="${work}/part.ext4"
+	export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1700000000}"
+	cp -a "${source_root}" "${tree}"
+	# Avoid builder-dependent access times in the filesystem metadata.
+	find "${tree}" -exec touch -h -a -d "@${SOURCE_DATE_EPOCH}" {} +
+
+	tree_kib=$(find "${tree}" -printf '%y %s\n' |
+		awk '{ kib += ($1 == "f") ? int(($2 + 4095) / 4096) * 4 : 4 } END { print kib }')
+	inodes=$(( $(find "${tree}" | wc -l) + 256 ))
+	truncate -s "$((tree_kib + tree_kib / 4 + 16 * 1024))K" "${part}"
+	mkfs.ext4 -q -F -b 4096 -m 0 -N "${inodes}" -O ^has_journal \
+		-U 00000000-0000-4000-8000-000000000001 \
+		-E root_owner=0:0,hash_seed=00000000-0000-4000-8000-000000000002 \
+		-d "${tree}" "${part}"
+	e2fsck -fn "${part}"
+	resize2fs -M "${part}"
+	# Match Substrate's data=ordered mount option without a journal.
+	tune2fs -o journal_data_ordered "${part}"
+
+	part_bytes=$(stat -c %s "${part}")
+	raw_bytes=$((alignment_bytes + part_bytes))
+	image_bytes=$(( (raw_bytes + alignment_bytes - 1) / alignment_bytes * alignment_bytes ))
+	truncate -s 0 "${image}"
+	truncate -s "${image_bytes}" "${image}"
+	sfdisk --quiet "${image}" <<EOF
+label: dos
+label-id: 0x65a39876
+unit: sectors
+start=${start_sector}, size=$((part_bytes / 512)), type=83
+EOF
+	dd if="${part}" of="${image}" bs=512 seek="${start_sector}" conv=notrunc status=none
+	e2fsck -fn "${image}?offset=${alignment_bytes}"
+	info "Created read-only ext4 image: $((image_bytes / 1048576)) MiB"
+)
+
 main() {
 	# variables that can be overwritten by environment variables
 	local agent_bin="${AGENT_BIN:-kata-agent}"
@@ -719,6 +767,15 @@ main() {
 		if ! check_rootfs "${rootfs}" ; then
 			die "Invalid rootfs"
 		fi
+	fi
+
+	if [[ "${BUILD_VARIANT}" == substrate ]]; then
+		[[ "${fs_type}" == ext4 && "${block_size}" == 4096 ]] \
+			|| die "Substrate requires ext4 with 4096-byte blocks"
+		[[ "${SELINUX}" == no && "${MEASURED_ROOTFS}" == no ]] \
+			|| die "Substrate does not support SELinux or measured rootfs images"
+		create_readonly_ext4_image "${rootfs}" "${image}"
+		return
 	fi
 
 	local skip_dax="${SKIP_DAX_HEADER:-no}"

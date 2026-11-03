@@ -170,3 +170,5 @@ Substrate
 codegen
 libc
 Ziyue
+fdisk
+fsprogs

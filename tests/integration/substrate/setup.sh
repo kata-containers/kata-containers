@@ -5,4 +5,4 @@
 set -euo pipefail
 
 sudo apt-get update
-sudo apt-get install -y iproute2 iptables kmod nfs-common util-linux
+sudo apt-get install -y iproute2 iptables jq kmod nfs-common util-linux zstd

@@ -10,6 +10,9 @@ on:
         required: false
         type: string
         default: ''
+      tarball-suffix:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -24,6 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
+      SUBSTRATE_ASSET_DIR: ${{ github.workspace }}/candidate-substrate
       KIND_CLUSTER_NAME: kata-substrate
       ATE_ATENET_DATAPLANE: envoy
       E2E_ATENET_DATAPLANE: envoy
@@ -66,6 +70,15 @@ jobs:
           buildkitd-config-inline: |
             [registry."localhost:5001"]
               http = true
+      - name: Download candidate guest archive
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-substrate-tarball-amd64${{ inputs.tarball-suffix }}
+          path: candidate-archive
+      - name: Extract candidate rootfs and kernel
+        run: tests/integration/substrate/extract-artifacts.sh candidate-archive/kata-static-substrate.tar.zst "${SUBSTRATE_ASSET_DIR}"
+      - name: Run guest build and staging regression checks
+        run: tests/integration/substrate/test-artifacts.sh "${SUBSTRATE_ASSET_DIR}"
       - name: Deploy Substrate and run microVM e2e suites
         run: tests/integration/substrate/e2e-ci.sh run substrate
       - name: Verify test execution and report failures
