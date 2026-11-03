@@ -336,7 +336,7 @@ externals:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
     url: "github.com/containerd/containerd"
-    minimum: "v2.2"
+    minimum: "v2.3"
     latest: "v2.4"
 
   runc:
