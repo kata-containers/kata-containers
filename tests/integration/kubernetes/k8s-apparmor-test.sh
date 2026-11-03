@@ -90,7 +90,13 @@ kubectl() {
 				node|runtimeclass) return 0 ;;
 				pod)
 					if [[ "${mock_scenario}" == api-failure ]]; then return 1; fi
-					if [[ "${args}" == *jsonpath=*Ready* ]]; then
+					if [[ "${args}" == *'-o json' && "${args}" != *jsonpath=* ]]; then
+						case "${mock_scenario}" in
+							started) printf '%s\n' '{"status":{"containerStatuses":[{"started":true,"state":{"running":{"startedAt":"2026-01-01T00:00:00Z"}}}]}}' ;;
+							previously-started) printf '%s\n' '{"status":{"containerStatuses":[{"started":false,"state":{"terminated":{"reason":"StartError","startedAt":"2026-01-01T00:00:00Z"}}}]}}' ;;
+							*) printf '%s\n' '{"status":{"containerStatuses":[{"containerID":"containerd://allocated-before-rejection","started":false,"restartCount":0,"lastState":{},"state":{"terminated":{"reason":"StartError","startedAt":"1970-01-01T00:00:00Z"}}}]}}' ;;
+						esac
+					elif [[ "${args}" == *jsonpath=*Ready* ]]; then
 						if [[ "${mock_scenario}" == positive || "${mock_scenario}" == became-ready ]]; then
 							printf '%s' True
 						else printf '%s' False; fi
@@ -249,6 +255,16 @@ baseline() {
 	[[ "${expected_profile}" == unconfined && "${probe_kind}" == baseline ]]
 }
 host_negative() { mock_scenario=host-error; setup; apparmor_test_7; }
+baseline_field() { KATA_K8S_APPARMOR_API=field; baseline_explicit "$@"; }
+baseline_explicit() {
+	KATA_GUEST_APPARMOR_TEST=no
+	KATA_GUEST_APPARMOR_BASELINE=yes
+	setup
+	"apparmor_test_$1"
+	[[ "${expected_profile}" == unconfined && "${probe_kind}" == baseline ]]
+	grep -q "type: $2" "${yaml_file}"
+	[[ "$(grep -c '^exec ' "${trace}")" -eq 2 ]]
+}
 
 check 'positive test requires Ready and both containers exec successfully' pass positive
 check 'startup complain mode fails' fail:logs bad_positive logs app complain
@@ -274,11 +290,14 @@ check 'the generated in-container probe has valid POSIX shell syntax' pass probe
 check 'only exact profile errors from the intended layer are accepted' pass exact_errors
 check 'a host CRI error cannot pass as an agent rejection' 'fail:get events' negative host-error
 check 'a started workload cannot pass a negative test' 'fail:get pod' negative started
+check 'a terminated workload with a real start time cannot pass a negative test' 'fail:get pod' negative previously-started
 check 'host-negative test requires a concrete host CRI error' pass host_negative
 check 'omitted uses the default guest profile' pass api_positive 3
 check 'RuntimeDefault uses the default guest profile' pass api_positive 4
 check 'Unconfined requires a successful mount control' pass api_positive 5
 check 'Localhost default collision uses the same default guest profile' pass api_positive 6
 check 'ordinary no-extension mode tests a default Pod with real labels' pass baseline
+check 'disabled RuntimeDefault preserves unconfined binding' pass baseline_field 9 RuntimeDefault
+check 'disabled Unconfined preserves unconfined binding' pass baseline_field 10 Unconfined
 printf '%s checks; %s failures\n' "${case_number}" "${failed}"
 [[ "${failed}" -eq 0 ]]

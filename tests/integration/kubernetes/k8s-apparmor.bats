@@ -238,8 +238,16 @@ assert_missing_profile() {
 	[[ "${status}" -ne 0 ]]
 	run kubectl get pod "${pod_name}" -o 'jsonpath={.status.conditions[?(@.type=="Ready")].status}'
 	[[ "${status}" -eq 0 && "${output}" != True ]]
-	run kubectl get pod "${pod_name}" -o 'jsonpath={.status.containerStatuses[*].containerID}'
-	[[ "${status}" -eq 0 && -z "${output}" ]]
+	# CRI may allocate an ID before the agent rejects task creation. Check that
+	# no workload started, rather than confusing an allocated ID with execution.
+	run kubectl get pod "${pod_name}" -o json
+	[[ "${status}" -eq 0 ]]
+	jq -e 'all(.status.containerStatuses[]?;
+		.started != true and .state.running == null and
+		((.restartCount // 0) == 0) and ((.lastState // {}) == {}) and
+		(.state.terminated == null or
+		 (.state.terminated.reason == "StartError" and
+		  .state.terminated.startedAt == "1970-01-01T00:00:00Z")))' <<< "${output}"
 	run kubectl get pod "${pod_name}" -o yaml
 	[[ "${status}" -eq 0 ]]
 	local pod_status="${output}"
@@ -298,6 +306,18 @@ assert_missing_profile() {
 @test "flag false without an extension preserves ordinary default Pod startup" {
 	[[ "${mode}" == disabled ]] || skip "requires the ordinary no-extension job"
 	select_case omitted
+	assert_ready_and_inheritance
+}
+
+@test "flag false preserves RuntimeDefault startup without guest policy lookup" {
+	[[ "${mode}" == disabled ]] || skip "requires the ordinary no-extension job"
+	select_case runtime/default
+	assert_ready_and_inheritance
+}
+
+@test "flag false preserves Unconfined startup and exec without an extension" {
+	[[ "${mode}" == disabled ]] || skip "requires the ordinary no-extension job"
+	select_case unconfined
 	assert_ready_and_inheritance
 }
 
