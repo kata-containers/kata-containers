@@ -3020,6 +3020,9 @@ pub struct QemuCmdLine<'a> {
     /// own: the kernel binds every device of an IOMMU group to one iommufd
     /// context, and QEMU rejects a duplicate object id.
     platform_iommufd: Option<String>,
+    // The Platform topology, emitted after every device the legacy generator
+    // places; see build() for why the order matters.
+    platform_topology: Option<RawArgs>,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -3045,6 +3048,7 @@ impl<'a> QemuCmdLine<'a> {
             next_fdset_id: 1,
             requires_memlock: false,
             platform_iommufd: None,
+            platform_topology: None,
         };
 
         // add_virtiofs_share() installs the file-backed memory backend when
@@ -3965,7 +3969,7 @@ impl<'a> QemuCmdLine<'a> {
         self.machine.memory_backend = None;
         self.memory.clear_memory_backend();
         self.platform_iommufd = iommufd_id.map(str::to_owned);
-        self.devices.push(Box::new(RawArgs(topology_args)));
+        self.platform_topology = Some(RawArgs(topology_args));
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
@@ -3984,6 +3988,15 @@ impl<'a> QemuCmdLine<'a> {
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
+        }
+
+        // QEMU inserts a new host bridge at the head of its bus list, so a
+        // device created after a pxb-pcie without an explicit bus= lands on
+        // the expander bus, which only accepts bridges:
+        //   vhost-vsock-pci: PCI: Only PCI/PCIe bridges can be plugged into pxb-pcie
+        // The legacy devices name no bus, so the expanders go last.
+        if let Some(topology) = &self.platform_topology {
+            result.append(&mut topology.qemu_params().await?);
         }
 
         if let Some(bios) = &self.bios {
