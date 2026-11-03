@@ -15,6 +15,9 @@ QEMUCMD := qemu-system-aarch64
 QEMUNOSHAREDFSCMD := qemu-system-aarch64-no-shared-fs
 QEMUFW := AAVMF_CODE.fd
 
+# cloud-hypervisor binary name
+CLHCMD := cloud-hypervisor
+
 # dragonball binary name
 DBCMD := dragonball
 FCCMD := firecracker
