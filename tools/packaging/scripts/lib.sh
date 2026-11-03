@@ -210,6 +210,11 @@ get_busybox_image_name() {
 	echo "${BUILDER_REGISTRY}:busybox-$(get_last_modification "${busybox_script_dir}")-$(uname -m)"
 }
 
+get_guest_selinux_image_name() {
+	guest_selinux_script_dir="${repo_root_dir}/tools/packaging/static-build/guest-selinux"
+	echo "${BUILDER_REGISTRY}:guest-selinux-$(get_last_modification "${guest_selinux_script_dir}")-$(uname -m)"
+}
+
 get_openvmm_image_name() {
 	openvmm_script_dir="${repo_root_dir}/tools/packaging/static-build/openvmm"
 	echo "${BUILDER_REGISTRY}:openvmm-$(get_last_modification "${openvmm_script_dir}")-$(uname -m)"
