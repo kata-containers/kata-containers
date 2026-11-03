@@ -47,7 +47,7 @@ Fabric Manager knows the eight GPUs of this box as fifteen partitions: one of al
 
 Each unit is one device whose CDI entry carries every GPU function of the partition, in Fabric Manager's member order. A pod requesting `nvidia.com/nvlink-4gpu: 1` gets those four GPUs and no others. `nvidia.com/gpu: N` was rejected for partitions: the count cannot say whether four GPUs are NVLinked, standalone or PCIe, and only a per-shape resource lets the scheduler see how many partitions of a shape remain.
 
-A partition is advertised only when it is active, supported by Fabric Manager, exclusive (no other active partition claims one of its GPUs) and complete (every member GPU is bound to `vfio-pci` and carries a readable slot label). Anything else is withheld and logged with the reason.
+An active partition is advertised Healthy when it is supported by Fabric Manager, exclusive (no other active partition claims one of its GPUs) and complete (every member GPU is bound to `vfio-pci` and carries a readable slot label). Otherwise it is advertised Unhealthy under the same name: counted in capacity, left out of allocatable, and the plugin logs the reason. An active partition with no member bound on this host is not advertised.
 
 ### The view channel
 
@@ -235,7 +235,7 @@ As run on the HGX B300: the shim connected to the agent at CID 3 and the pod was
     A vsock connect needs no privilege on the host, so with the listener on every host process can reach Fabric Manager's API. This is the provider-owned model. Where the host must have no control path, run the in-band manifest, whose guest opens nothing.
 
 !!! warning "One publisher per node"
-    Never run the in-band and the out-of-band manifest on one node. The plugin keeps the newer stream and ends the other, so the two publishers would take turns withdrawing each other's view.
+    Never run the in-band and the out-of-band manifest on one node. The plugin keeps the newer stream and ends the other, so each publisher's reconnect would withdraw the other's view.
 
 ### Fail closed: fabric bound, no view
 
@@ -267,7 +267,7 @@ kata-device-provisioner apply --mode off --bind-fabric
 Persistence is written as `/etc/modprobe.d/kata-device-provisioner.conf` for the GPUs and address-scoped udev rules for the management functions. The node fact `kata.feature.node.kubernetes.io/managed-fabric=true` is published for Node Feature Discovery; without NFD, label the node by hand.
 
 !!! bug "Host driver installed"
-    `options vfio-pci ids=` loses the boot race against an installed host `nvidia` driver, which the kernel autoloads for the GPU's PCI identity. On a node that still has the host driver package, the GPUs come back on `nvidia` after a reboot and have to be rebound. A Kata node without the driver package is unaffected.
+    With a host `nvidia` driver installed, the kernel autoloads it for the GPU's PCI identity and it binds the GPU before `vfio-pci` is loaded with its `options vfio-pci ids=`. On a node that still has the host driver package, the GPUs come back on `nvidia` after a reboot and have to be rebound. A Kata node without the driver package is unaffected.
 
 ### Bootstrapping the Service VM
 
@@ -323,8 +323,8 @@ spec:
 
 The kubelet allocates the unit, the plugin answers with its CDI name, and the Kata shim cold-plugs the four VFIO devices listed in the CDI entry into the VM.
 
-!!! note "Kubernetes 1.31 or later"
-    The kubelet forwards a device plugin's CDI names to the container runtime only with `DevicePluginCDIDevices`, on by default since 1.31. On an older kubelet the VM still boots with the GPUs, since the shim learns them from the PodResources API, but the container inside sees no device.
+!!! note "Kubernetes 1.29 or later"
+    The kubelet forwards a device plugin's CDI names to the container runtime only with `DevicePluginCDIDevices`: beta and on by default since 1.29, GA since 1.31, alpha and off in 1.28. On a kubelet without it the VM still boots with the GPUs, since the shim learns them from the PodResources API, but the container inside sees no device.
 
 ### What a tenant sees
 
@@ -407,6 +407,7 @@ sudo journalctl --since "10 min ago" -o cat | grep -a -oE 'vmconsole="[^"]*"|vm 
 | guest kernel | `cannot find valid erofs superblock` | an image built as ext4 for a runtime configured with `rootfs_type = "erofs"` |
 | guest NVRC | `Module nvidia not found in directory /lib/modules/<version>` | an image whose kernel modules do not match the installed guest kernel |
 | containerd | `unsupported rootfs Mount { source: "overlay", ... }` | a runtime-rs NVIDIA pod on the overlayfs snapshotter; the shim has no shared filesystem and needs the erofs snapshotter |
+| Go shim, after a kubelet restart | `No devices found in Pod Resources, skip cold plug` | the pod was scheduled on the capacity the kubelet kept across its restart, before the plugin re-registered the resource, so the kubelet allocated nothing and the VM booted without GPUs, NVRC in `Cpu` mode. Wait for the plugin's `device list changed` after a kubelet restart, or recreate the pod |
 | kubelet | `nvidia.com/nvlink-<k>gpu` in capacity but not in allocatable | an active partition the plugin advertises Unhealthy: unsupported by Fabric Manager, overlapping another active partition, or a member GPU not bound and labeled on this host; the plugin's log names the partition and the reason |
 | kata-agent | `waiting for CDI spec(s) to be generated (N of 100 max tries) "unresolvable CDI devices nvidia.com/nic=0, ..."` | runtime-rs annotates every ConnectX function as `nvidia.com/nic=<index>` and the guest wrote no spec for that kind; the container fails after 100 s while the VM and Fabric Manager keep running. An NVRC without the ConnectX spec generator |
 | NVLSM in the Service VM | `GRPC_MGR - ... Failed to open configuration file "/usr/share/nvidia/nvlsm/grpc_mgr.conf"` | the base plus extension guest image with an NVRC that does not bind the extension's `/usr/share/nvidia` over the base path; Fabric Manager then exits with `failed to connect to the subnet manager` |
