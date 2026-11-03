@@ -595,7 +595,9 @@ create_erofs_rootfs_image() {
 	setup_systemd "${mount_dir}"
 
 	local -r fsimage="$(mktemp)"
-	mkfs.erofs -zlz4hc -Enoinline_data "${fsimage}" "${mount_dir}"
+	# mkfs.erofs defaults to the host page size, 16K on a 64K-page host; the
+	# 4K-page guest kernel rejects anything above its own page size.
+	mkfs.erofs -b "${block_size}" -zlz4hc -Enoinline_data "${fsimage}" "${mount_dir}"
 	local -r img_size="$(stat -c"%s" "${fsimage}")"
 	local img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
 
