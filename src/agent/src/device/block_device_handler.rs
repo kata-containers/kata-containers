@@ -12,7 +12,8 @@ use crate::device::{
 #[cfg(target_arch = "s390x")]
 use crate::linux_abi::CCW_ROOT_BUS_PATH;
 use crate::linux_abi::{
-    create_pci_root_bus_path, pcipath_from_dev_tree_path, SYSFS_DIR, SYSTEM_DEV_PATH,
+    create_pci_root_bus_path, create_pci_root_bus_sysfs_path, pcipath_from_dev_tree_path,
+    SYSTEM_DEV_PATH,
 };
 use crate::pci;
 use crate::sandbox::Sandbox;
@@ -118,7 +119,7 @@ pub async fn get_virtio_blk_pci_device_name(
     root_complex: &str,
     pcipath: &pci::Path,
 ) -> Result<String> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
+    let root_bus_sysfs = create_pci_root_bus_sysfs_path(root_complex);
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, root_complex, pcipath)?;
     let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path, root_complex);
 
