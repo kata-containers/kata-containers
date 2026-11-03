@@ -1050,7 +1050,20 @@ impl VirtSandbox {
             .await?
             .is_hybrid_vsock_supported()
         {
-            // Firecracker/Dragonball/CLH use the hybrid-vsock device model.
+            // Firecracker/Dragonball/CLH use the hybrid-vsock device model: a
+            // unix socket on the host and the fixed default CID in the guest,
+            // so a configured CID would be ignored. Refuse it instead.
+            let configured = self
+                .hypervisor
+                .hypervisor_config()
+                .await
+                .device_info
+                .vsock_cid;
+            if configured != 0 {
+                return Err(anyhow!(
+                    "vsock_cid {configured} is set, but this hypervisor uses hybrid vsock, which has no configurable guest CID"
+                ));
+            }
             ResourceConfig::HybridVsock(HybridVsockConfig {
                 guest_cid: DEFAULT_GUEST_VSOCK_CID,
                 uds_path: get_hvsock_path(&self.sid),
