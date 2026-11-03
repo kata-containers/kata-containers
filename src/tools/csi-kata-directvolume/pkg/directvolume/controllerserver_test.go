@@ -232,13 +232,24 @@ func TestCreateVolumeUnsupportedType(t *testing.T) {
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
-func TestDeleteVolumeInvalidID(t *testing.T) {
+func TestDeleteVolumeMissingID(t *testing.T) {
 	cfg := testConfig(t.TempDir())
 	dv, err := NewDirectVolumeDriver(cfg)
 	require.NoError(t, err)
 
-	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: ".."})
-	require.Error(t, err)
+	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{})
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestDeleteVolumeUnknownID(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	for _, invalidVolumeID := range []string{"..", "fake-vol-id"} {
+		_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: invalidVolumeID})
+		require.NoError(t, err)
+	}
 	_, err = os.Stat(cfg.StoragePath)
 	require.NoError(t, err)
 }
