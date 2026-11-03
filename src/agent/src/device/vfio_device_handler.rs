@@ -334,8 +334,7 @@ pub async fn wait_for_pci_device(
     pcipath: &pci::Path,
 ) -> Result<pci::Address> {
     info!(logger, "wait_for_pci_device at {}", pcipath);
-    let root_bus_rel = create_pci_root_bus_path(root_complex); // "/devices/pci0000:00"
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, root_bus_rel); // "/sys/devices/pci0000:00"
+    let root_bus_sysfs = create_pci_root_bus_sysfs_path(root_complex); // "/sys/devices/pci0000:00"
     info!(
         logger,
         "wait_for_pci_device: root_bus_sysfs {} pcipath {}", &root_bus_sysfs, pcipath
