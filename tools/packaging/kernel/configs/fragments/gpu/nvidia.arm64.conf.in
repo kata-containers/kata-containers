@@ -23,6 +23,16 @@ CONFIG_IOMMU_SVA=y
 CONFIG_ARM_SMMU_V3=y
 CONFIG_ARM_SMMU_V3_SVA=y
 
+# ATS and PASID on the passthrough GPU behind an accelerated SMMUv3; the
+# driver reports "Addressing Mode: ATS" only with both.
+CONFIG_PCI_PASID=y
+CONFIG_PCI_PRI=y
+
+# NUMA nodes: every Grace GPU passed through brings eight generic-initiator
+# nodes on top of the CPU nodes and the memory hotplug placeholder. The
+# default of 16 fits one GPU; 128 covers 8 GPUs with room for EGM nodes.
+CONFIG_NODES_SHIFT=7
+
 # CC related configs
 CONFIG_CRYPTO_ECC=y
 CONFIG_CRYPTO_ECDH=y
