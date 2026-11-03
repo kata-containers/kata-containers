@@ -222,5 +222,9 @@ pub fn get_process_seccomp_rules() -> Vec<(i64, Vec<seccompiler::SeccompRule>)> 
         #[cfg(target_arch = "x86_64")]
         (libc::SYS_fchmodat2, vec![]),
         (libc::SYS_pselect6, vec![]),
+        // mount_at() enters the common lowerdir parent when long overlay
+        // options are compacted to relative paths, then restores the cwd.
+        (libc::SYS_fchdir, vec![]),
+        (libc::SYS_chdir, vec![]),
     ]
 }
