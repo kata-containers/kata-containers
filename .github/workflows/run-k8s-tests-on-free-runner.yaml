@@ -45,10 +45,10 @@ jobs:
           { vmm: clh, containerd_version: minimum },
           { vmm: dragonball, containerd_version: latest },
           { vmm: dragonball, containerd_version: minimum },
-          { vmm: qemu, containerd_version: latest },
+          { vmm: qemu, containerd_version: latest, guest_apparmor: "baseline" },
           { vmm: qemu, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: qemu, containerd_version: minimum },
-          { vmm: qemu-runtime-rs, containerd_version: latest },
+          { vmm: qemu-runtime-rs, containerd_version: latest, guest_apparmor: "baseline" },
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           # Separate opt-in legs; regular QEMU suites keep their default guest.
           { vmm: qemu, containerd_version: latest, guest_apparmor: "yes", k8s_test_union: k8s-apparmor.bats },
@@ -80,7 +80,8 @@ jobs:
       K8S_CNI: ${{ matrix.environment.cni }}
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
       K8S_TEST_UNION: ${{ matrix.environment.k8s_test_union }}
-      KATA_GUEST_APPARMOR_TEST: ${{ matrix.environment.guest_apparmor || 'no' }}
+      KATA_GUEST_APPARMOR_TEST: ${{ matrix.environment.guest_apparmor == 'yes' && 'yes' || 'no' }}
+      KATA_GUEST_APPARMOR_BASELINE: ${{ matrix.environment.guest_apparmor == 'baseline' && 'yes' || 'no' }}
       KATA_K8S_APPARMOR_API: field
       K8S_TEST_DEBUG_RETRY: ${{ matrix.environment.guest_apparmor == 'yes' && 'false' || 'true' }}
       CONTAINER_ENGINE: containerd
@@ -92,7 +93,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Prepare AppArmor evidence directory
-        if: matrix.environment.guest_apparmor == 'yes'
+        if: matrix.environment.guest_apparmor != ''
         run: |
           evidence_dir="${RUNNER_TEMP}/guest-apparmor-evidence"
           mkdir -p "$evidence_dir"
@@ -147,6 +148,16 @@ jobs:
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
+      - name: Build and install the separate AppArmor test extension
+        if: matrix.environment.guest_apparmor == 'yes'
+        timeout-minutes: 15
+        run: |
+          make rootfs-image-apparmor-test-extension-tarball
+          archive="$(readlink -f tools/packaging/kata-deploy/local-build/build/kata-static-rootfs-image-apparmor-test-extension.tar.zst)"
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,KATA_GUEST_APPARMOR_TEST,KATA_HYPERVISOR \
+            bash tests/integration/kubernetes/guest-apparmor-ci.sh install-test-extension "$archive" \
+            2>&1 | tee "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/install-test-extension.log"
+
       - name: Configure systemd guest and real AppArmor CI fixture
         if: matrix.environment.guest_apparmor == 'yes'
         timeout-minutes: 10
@@ -158,6 +169,14 @@ jobs:
             bash tests/integration/kubernetes/guest-apparmor-ci.sh configure \
             2>&1 | tee "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/configure.log"
 
+      - name: Configure flag-false baseline without guest extensions
+        if: matrix.environment.guest_apparmor == 'baseline'
+        timeout-minutes: 3
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,KATA_GUEST_APPARMOR_TEST,KATA_GUEST_APPARMOR_BASELINE,KATA_HYPERVISOR \
+            bash tests/integration/kubernetes/guest-apparmor-ci.sh configure-baseline \
+            2>&1 | tee "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/configure.log"
+
       - name: Run tests
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -167,7 +186,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
       - name: Collect AppArmor runner, runtime, agent and guest-console evidence
-        if: always() && matrix.environment.guest_apparmor == 'yes'
+        if: always() && matrix.environment.guest_apparmor != ''
         run: |
           mkdir -p "$KATA_GUEST_APPARMOR_EVIDENCE_DIR"
           # Hypervisor and agent debugging are enabled in the CI drop-in;
@@ -177,20 +196,20 @@ jobs:
             > "$KATA_GUEST_APPARMOR_EVIDENCE_DIR/containerd-effective.toml"
 
       - name: Upload AppArmor evidence (approval alone is not a test result)
-        if: always() && matrix.environment.guest_apparmor == 'yes'
+        if: always() && matrix.environment.guest_apparmor != ''
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: guest-apparmor-${{ matrix.environment.vmm }}
+          name: guest-apparmor-${{ matrix.environment.vmm }}-${{ matrix.environment.guest_apparmor }}
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/guest-apparmor-evidence
             tests/integration/kubernetes/reports
 
       - name: Remove the temporary host AppArmor fixture and guest CI drop-in
-        if: always() && matrix.environment.guest_apparmor == 'yes'
+        if: always() && matrix.environment.guest_apparmor != ''
         timeout-minutes: 3
         run: |
-          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,KATA_GUEST_APPARMOR_TEST,KATA_HYPERVISOR \
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,KATA_GUEST_APPARMOR_TEST,KATA_GUEST_APPARMOR_BASELINE,KATA_HYPERVISOR \
             bash tests/integration/kubernetes/guest-apparmor-ci.sh cleanup
 
       - name: Delete kata-deploy

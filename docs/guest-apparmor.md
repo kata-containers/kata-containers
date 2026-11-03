@@ -3,7 +3,9 @@
 This feature applies workload AppArmor profiles inside a Kata guest. It follows
 the composable-image direction discussed in
 [issue #7586](https://github.com/kata-containers/kata-containers/issues/7586).
-The Kubernetes profile-mapping contract is still under upstream discussion.
+The current local candidate uses an explicit guest opt-in and literal final OCI
+profile names. This is the candidate contract, not a claim of upstream approval
+or a passing CI run.
 
 ## Architecture and defaults
 
@@ -25,9 +27,40 @@ default. The distribution's `apparmor.service` is disabled by a preset, not
 masked. Explicitly preloading a workload profile before the agent first loads
 it will cause an unknown-provenance error, even if its name matches.
 
-The shipped `kata-apparmor-test` profile is a test fixture, not a production
-default or a guest-content isolation policy. No `kata-default` policy is shipped.
-NVIDIA integration and a SELinux extension are outside this change.
+`[agent.kata] enable_guest_apparmor` defaults to `false`. Omission and explicit
+`false` preserve existing Kata guest behavior and provide no Guest AppArmor:
+the agent does not load, prepare or select guest profiles, regardless of the host
+CRI default. Attaching an extension alone does not enable the feature. With
+`true`, a configured `apparmor` extension is required, the agent must actually
+load and verify policy, and errors fail closed without an unconfined retry.
+Host-side validation remains independent in either mode.
+`AgentDetails.guest_apparmor_enabled` reports the opt-in separately from the
+kernel's AppArmor availability; a kernel capability bit alone is insufficient.
+Both runtimes verify this reported mode before allowing workloads to start.
+
+The production image `kata-containers-apparmor-extension.img` contains only the
+`cri-containerd.apparmor.d` default profile and its dependencies/metadata. Its
+policy comes from the vendored containerd **v2.2.1** template, rendered with fixed
+inputs; the [source record](../tools/packaging/apparmor-extension/policy/metadata/default-profile-source.txt)
+records inputs, hashes, modifications and license attribution. It is extension
+content, never a base-image or agent-embedded fallback.
+
+The separate `kata-containers-apparmor-test-extension.img` contains that same
+default policy plus `kata-apparmor-test`. The latter is a permissive mechanism
+test fixture with one denied write, not a production hardening policy. Production
+packaging must exclude it. No `kata-default` alias is shipped. NVIDIA integration
+and a SELinux extension are outside this change.
+
+| Purpose | Build target | Image | Verity sidecar | Mount name |
+| --- | --- | --- | --- | --- |
+| Production, default only | `rootfs-image-apparmor-extension-tarball` | `kata-containers-apparmor-extension.img` | `root_hash_apparmor-extension.txt` | `apparmor` |
+| Tests, default plus fixture | `rootfs-image-apparmor-test-extension-tarball` | `kata-containers-apparmor-test-extension.img` | `root_hash_apparmor-test-extension.txt` | `apparmor` |
+
+The dedicated CI legs explicitly build the test target after kata-deploy, then
+install only the new test image and sidecar with overwrite refusal. The test
+tarball is excluded from production bundles. Configuration fails if either test
+artifact is absent; it never substitutes the production extension or adds
+fixtures to that image.
 
 ## Image and runtime requirements
 
@@ -64,6 +97,9 @@ name = "apparmor"
 path = "/opt/kata/share/kata-containers/kata-containers-apparmor-extension.img"
 # Set this to the verity parameters for this exact image when using dm-verity.
 verity_params = ""
+
+[agent.kata]
+enable_guest_apparmor = true
 ```
 
 An empty `verity_params` selects an unmeasured extension; it is not an integrity
@@ -109,14 +145,17 @@ An agent that loses the registry cannot adopt the surviving kernel profiles.
 
 ## Create and Exec behavior
 
-At CreateContainer, absent, empty or `unconfined` values create an unconfined
-binding. A valid name selects the corresponding extension profile. The agent
-saves the resulting binding in its container state, not in runtime caller state.
+These rules apply only with `enable_guest_apparmor = true`. At CreateContainer,
+absent, empty or `unconfined` final OCI values create an unconfined binding. Every
+other valid final OCI name selects **that literal name and policy** in the
+extension. The agent saves the binding in container state, not runtime caller
+state. Disabled mode keeps existing guest behavior without a Guest AppArmor
+binding or policy-loading requirement.
 
 | Exec request | Behavior |
 | --- | --- |
 | Absent or empty | Inherit the container's saved binding |
-| Same normalized name | Verify and select the saved profile |
+| Same literal name | Verify and select the saved profile |
 | Different profile, or `unconfined` for a confined container | Reject |
 | Named profile for an unconfined container | Reject |
 
@@ -128,9 +167,26 @@ successful write to a different filesystem. Failure to prepare or select it
 aborts process creation; there is no unconfined retry. Container deletion clears
 the binding, including when an ID is later reused.
 
-`localhost/<name>` normalization and `runtime/default` to `kata-default` are
-transitional compatibility handling, not an approved Kubernetes API. A requested
-`kata-default` fails unless the selected extension actually supplies that policy.
+There is no `runtime/default` alias and no `localhost/` prefix stripping at the
+OCI/agent boundary. Those strings are not valid literal guest profile names;
+as final OCI names they fail validation in enabled mode. Kubernetes API values
+and legacy annotations are interpreted by the existing CRI path before that
+boundary. This change does not modify containerd, add an annotation, or add an
+AppArmor runtime handler.
+
+| Kubernetes request in the containerd 2.2.1 test environment | Final OCI name | Enabled guest behavior |
+| --- | --- | --- |
+| Omitted `appArmorProfile` | `cri-containerd.apparmor.d` | Load the extension default with that exact name |
+| `RuntimeDefault` | `cri-containerd.apparmor.d` | Same name and same guest policy |
+| `Unconfined` | Empty/unconfined | Unconfined binding |
+| `Localhost`, `localhostProfile: kata-apparmor-test` | `kata-apparmor-test` | Load the test fixture from the test extension |
+| `Localhost`, `localhostProfile: cri-containerd.apparmor.d` | `cri-containerd.apparmor.d` | Same default as omitted/RuntimeDefault; no collision override |
+| `Localhost`, host accepts but guest policy is absent | Requested literal name | Agent rejects; no workload runs |
+
+Host and guest resolve names in separate kernels. Matching names do not establish
+cross-kernel identity; each must use its real policy, and the agent verifies the
+guest source and loaded kernel identity. A missing guest default is rejected
+just like any other missing guest policy.
 
 ### Guest SELinux identity alongside the AppArmor binding
 
@@ -169,68 +225,121 @@ policy source and is not an escape-prevention guarantee.
 | --- | --- |
 | Configured extension path is invalid/unreadable | Runtime rejects before VM startup |
 | Extension mount or dm-verity fails | Mount unit fails, agent dependency fails, VM powers off |
-| Profile requested without an extension | Agent rejects container creation |
+| Flag enabled without an extension | Runtime/agent rejects the opt-in; no workload starts |
+| Flag disabled, no extension, ordinary default Pod | Existing Kata guest behavior; no Guest AppArmor |
 | Missing profile/dependency/parser or invalid policy | Agent rejects container creation |
 | Unknown source, changed digest, missing policy or non-enforce mode | Agent rejects Create/Exec without replacement |
 | AppArmor exec selection fails | Helper aborts before workload exec |
 
-With no extension configured and no profile requested, normal Kata startup is
-unchanged. Configuring an extension creates an agent `Requires`/`After`
-dependency; ordering alone is not treated as mount success.
+With the flag disabled and no extension configured, normal Kata startup keeps
+its existing behavior, including ordinary Pods for which CRI emits its default
+profile name. With the flag enabled, no extension is an error even for Unconfined.
+Configuring an extension creates an agent `Requires`/`After` dependency; ordering
+alone is not treated as mount success.
 
-Containerd CRI can validate `Localhost` profiles on the host before producing an
-OCI request. A host rejection never reaches Kata. Host and guest resolve their
-own policy names independently; identical names do not prove identical policies.
-Host placeholder profiles are not a supported deployment requirement. CI may
-load the real test fixture on a disposable host to exercise this boundary, but
-must separately establish enforcement inside the guest.
+Containerd CRI can reject `Localhost` on the host before producing an OCI request.
+That rejection is host evidence only. Host placeholder policies are not a product
+deployment requirement. On disposable CI runners, configure loads the real test
+fixture and a renamed copy used only for the guest-negative test. The renamed
+copy is absent from the guest test extension. CI never replaces containerd's host
+`cri-containerd.apparmor.d` policy.
 
-Upstream decisions are still needed for concrete OCI-name ownership,
-`Localhost` host/guest semantics, and `RuntimeDefault` mapping/default policy.
-No new Kubernetes annotation or AppArmor-specific runtime handler is introduced.
-
-There is a concrete compatibility issue behind that open decision. In isolated
-Kubernetes 1.37.1 / containerd 2.2.1 tests with both runtimes and the Noble guest,
-omitting `appArmorProfile` and explicitly choosing `RuntimeDefault` both produced
-the OCI name `cri-containerd.apparmor.d`. The agent treated that as a guest policy
-name and rejected startup because the extension did not contain it. Separate
-no-extension tests with both runtimes also rejected these requests, with the
-specific error that the profile was requested but no AppArmor extension was
-configured. Explicit `Unconfined` started with an unconfined guest label in both
-configurations. These are observations of the current implementation, not
-approved default-policy semantics. This is a default Kubernetes compatibility
-blocker, including deployments that do not attach the extension. Do not silently
-discard the request to make them start. Resolving the default-policy contract
-is a merge gate, separate from proving an explicitly selected `Localhost` guest
-profile.
+The earlier default-Pod failure (CRI emitted `cri-containerd.apparmor.d` while
+the extension lacked it, and no-extension guests also rejected it) belongs to the
+old candidate. The new flag-false baseline and extension default are intended to
+resolve that compatibility gap. Their real-guest verification is still pending;
+old failures or passes cannot establish this candidate's behavior.
 
 ## Validation and limitations
 
-Unit tests cover identity registration/reuse, unknown preloaded profiles, changed
-source/kernel state, exact mode parsing, include closure, concurrency and Exec
-inheritance/downgrade rejection. Shell tests cover rootfs presets, extension
-startup dependencies, policy validation and generated runtime configuration.
-These tests do not replace a real guest boot.
+The local checks require Bash and Python 3.11 or newer. They exercise temporary
+files and mocked commands only. They
+do not mount images, load host policy, contact a cluster or boot a guest:
 
-The opt-in Kubernetes test requires `KATA_GUEST_APPARMOR_TEST=yes`. It must check
-readiness, enforce mode, allowed/denied operations, sidecar behavior and
-`kubectl exec`. Negative tests must match the expected security error rather than
-accepting an arbitrary NotReady pod. Keep per-run workload, runtime, agent and
-guest-console logs. Pending workflow approval is not a passing CI result.
+```bash
+bash tests/integration/kubernetes/guest-apparmor-ci-test.sh
+bash tests/integration/kubernetes/k8s-apparmor-test.sh
+```
 
-Historical 5.15 guest experiments demonstrated a denied write and exposed host
-CRI and extension failures. They do not establish the complete current Create/Exec
-matrix, successful BATS execution, or compatibility of the current 6.18 kernel.
-Those claims require the frozen candidate artifacts and isolated regression run.
+The first script asserts both render modes and rejects local execution of every
+host-changing CI entrypoint. The renderer checks installed paths, rejects
+existing extensions or an existing/later drop-in, and never overwrites output.
+Enabled mode explicitly sets `enable_guest_apparmor = true` and selects the
+**test** image and `root_hash_apparmor-test-extension.txt`; a production image
+cannot substitute. Disabled mode sets the flag to false, requires no extension
+assets and preserves the deployed guest image and boot parameters.
 
-### Isolated candidate results (2026-10-19)
+Ordinary latest QEMU Go/Rust jobs keep their upstream test collections and run the
+flag-false, no-extension default-Pod baseline. The two dedicated opt-in jobs keep
+`k8s-apparmor.bats` and configure the test image. Their cases cover omitted,
+RuntimeDefault, Unconfined, Localhost fixture, Localhost with the default name,
+and separate host/guest missing-policy failures. Every positive case requires
+Ready and exact real `/proc/self/attr/current` labels before and after probes,
+for app and sidecar, at startup and through standard `kubectl exec`.
 
-The candidate was built from `6df017821ca77a789bddfcc68a5fbfcb5bebac5f`,
-rebased on upstream `0008d6b9d7e2b6a586883aa05b894563efe86721`. Later changes
-to the test oracle and this report do not change the kernel, agent, runtime or
-image-building sources. The source checkpoint, toolchains, commands, pre/post-strip
-hashes and unchanged ELF Build IDs are recorded with the candidate artifacts.
-These are local acceptance results, not upstream CI results.
+The fixture must allow a scratch write and deny its protected path. The default
+must allow a scratch write and deny a tmpfs mount; the explicit Unconfined control
+gets the same `SYS_ADMIN` capability and must successfully perform that exact
+mount. Disabled baseline checks its real unconfined label and an allowed write;
+it makes no confinement claim. An unrelated command error is not a denial pass.
+
+Standard `kubectl exec` has no profile field and proves **inheritance only**.
+Explicit same-profile, different-profile and downgrade Exec requests require
+native OCI/RPC tests and cannot be inferred from Kubernetes results.
+
+Negative tests require a created Pod, no Ready condition or workload container
+ID, and an exact profile error from the intended layer in Pod status or
+UID-scoped events. An API admission error, image/scheduling failure, arbitrary
+NotReady state, wrong profile, host rejection in the guest case, absent parser,
+or missing extension cannot pass the guest-missing-policy case. Each invocation
+owns its Pod and evidence directory; snapshots and exec output are preserved.
+Workflow cleanup verifies drop-in hashes and removes only its temporary host
+profiles. Pending approval or configured jobs are not passing CI evidence.
+
+### Current candidate status
+
+The new local baseline is `938166d78`; the checkpoint before interface changes is
+`114ee05af`. The public PR HEAD remains `506...` (abbreviated checkpoint supplied
+for this work). These identifiers are distinct from the historical candidates
+below. This document does not assert that the public PR contains the local work.
+
+All new-candidate integration pass claims are **PENDING TESTING / NOT RUN** here:
+flag-false default Pods, enabled default policy, the complete API/Exec matrix,
+fail-closed errors, image startup and generated-artifact compatibility require
+fresh matching builds and isolated execution. Local script assertions cannot
+promote any of those gates to passed. No new upstream CI pass is claimed.
+
+The rebase retains upstream `f7703ac92` synchronous `RemoveContainer` as its
+baseline. The planned verification toolchain is official Go 1.26.10 and protoc
+21.12 in a separate tool directory; obtaining tools does not establish a completed
+build or test and does not replace server system tools.
+
+The Rust SELinux regression gate remains **BLOCKED** on its ABI/toolchain
+compatibility issue. **F7 is not-comparable** until compatible, matched artifacts
+and evidence exist. This is separate from the historical kernel-only SELinux
+mechanism result; neither that result nor an AppArmor pass clears this gate.
+
+### Historical evidence boundaries
+
+| Historical checkpoint | What may be retained | What it cannot prove |
+| --- | --- | --- |
+| `434...` / earlier 5.15 experiments | Historical mechanism observations only | New flag defaults, literal-name semantics, new images or current CI |
+| `6df017821ca77a789bddfcc68a5fbfcb5bebac5f` | The isolated acceptance record reproduced below | Passing results for `938166d78` plus new interface work |
+| `r2` | A separate historical run/checkpoint | Any new-candidate pass or a comparable F7 result |
+
+Do not transfer counts, artifact identities or pass labels between these
+checkpoints. The following section is a historical report, not a current
+candidate acceptance statement.
+
+### Historical isolated results for 6df (2026-10-19)
+
+The historical candidate was built from
+`6df017821ca77a789bddfcc68a5fbfcb5bebac5f`, rebased on upstream
+`0008d6b9d7e2b6a586883aa05b894563efe86721`. Its source checkpoint, toolchains,
+commands, pre/post-strip hashes and unchanged ELF Build IDs were recorded with
+those artifacts. The source and interface changes in the new candidate require
+new artifacts and new results. The counts below are historical local acceptance
+results, not current-candidate or upstream CI results.
 
 The disposable x86-64 node used nested KVM, Kubernetes 1.37.1, containerd 2.2.1
 and a 6.18.56 Kata guest kernel. The guest bases were Ubuntu 24.04 Noble and
@@ -263,11 +372,14 @@ The SELinux check is deliberately narrower than a distro/runtime regression:
 it does not validate CentOS `container-selinux`, agent mount/exec labeling or a
 production policy. The acceptance agent was a GNU build requiring glibc 2.39;
 these results do not cover older guest distributions, official static/musl
-builds, other architectures, NVIDIA or agent-as-init guests. Upstream workflow
-execution and the Kubernetes default-profile contract remain open gates.
+builds, other architectures, NVIDIA or agent-as-init guests. They do not clear
+the current Rust SELinux ABI block or establish a comparable F7 result. Fresh
+upstream workflow execution and verification of the new default-profile contract
+remain open gates.
 
-Workload confinement is not a claim that all guest contents remain inaccessible
-after every container escape. A least-privilege production profile needs review
+There is **no container-escape prevention guarantee**. Workload confinement is
+not a claim that all guest contents remain inaccessible after every container
+escape. A least-privilege production profile needs review
 against the actual guest tree, mounts, capabilities and profile transitions.
 Follow-up testing should expose representative guest files through controlled
 namespace/mount scenarios and verify both intended access and denial. A path

@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # CI ONLY: configure a disposable GitHub-hosted runner after kata-deploy.
+# Requires rootfs-image-apparmor-test-extension-tarball artifacts. The mount
+# name remains apparmor; the production extension never substitutes for tests.
 # No kubectl calls: this script neither discovers nor changes an existing cluster.
 # The real repository test policy is a temporary host CRI fixture, NOT a product
 # dependency. Host/guest name equality is NOT policy identity or a security
@@ -16,19 +18,39 @@ config_tool="${ci_dir}/guest-apparmor-ci-config.py"
 install_root=/opt/kata
 state=/run/kata-guest-apparmor-ci
 profile=kata-apparmor-test
+guest_missing_profile=kata-apparmor-guest-missing
+default_profile=cri-containerd.apparmor.d
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 require_disposable_runner() {
 	[[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == github-hosted &&
-		"${KATA_GUEST_APPARMOR_TEST:-}" == yes && "${EUID}" -eq 0 ]] ||
-		die "host changes require root, a disposable GitHub-hosted runner and KATA_GUEST_APPARMOR_TEST=yes"
+		( "${KATA_GUEST_APPARMOR_TEST:-}" == yes || "${KATA_GUEST_APPARMOR_BASELINE:-}" == yes ) && "${EUID}" -eq 0 ]] ||
+		die "host changes require root, a disposable GitHub-hosted runner and an explicit AppArmor CI mode"
 	case "${KATA_HYPERVISOR:-}" in
 		qemu) defaults="${install_root}/share/defaults/kata-containers" ;;
 		qemu-runtime-rs) defaults="${install_root}/share/defaults/kata-containers/runtime-rs" ;;
 		*) die "only qemu and qemu-runtime-rs are supported" ;;
 	esac
 	dropin="${defaults}/runtimes/${KATA_HYPERVISOR}/config.d/99-guest-apparmor-ci.toml"
+}
+
+install_test_extension() {
+	require_disposable_runner
+	[[ "${KATA_GUEST_APPARMOR_TEST:-}" == yes ]] || die "test image installation requires enabled test mode"
+	local archive="$1" images="${install_root}/share/kata-containers" name
+	[[ -f "${archive}" && "${archive##*/}" == kata-static-rootfs-image-apparmor-test-extension.tar.zst ]] || die "expected the separate test extension tarball"
+	[[ -d "${images}" && "$(readlink -f -- "${images}")" == "$(readlink -f -- "${install_root}")/share/kata-containers" ]] || die "unsafe installed image directory"
+	for name in kata-containers-apparmor-test-extension.img root_hash_apparmor-test-extension.txt; do
+		[[ ! -e "${images}/${name}" && ! -L "${images}/${name}" ]] || die "refusing to overwrite existing test artifact: ${name}"
+	done
+	# Select only the two new files. Keep-old-files also protects against a
+	# destination appearing after preflight; never unpack a whole bundle to /.
+	tar --zstd --extract --verbose --keep-old-files --no-same-owner --no-same-permissions \
+		--file "${archive}" --directory / -- \
+		./opt/kata/share/kata-containers/kata-containers-apparmor-test-extension.img \
+		./opt/kata/share/kata-containers/root_hash_apparmor-test-extension.txt
+	sha256sum -- "${images}/kata-containers-apparmor-test-extension.img" "${images}/root_hash_apparmor-test-extension.txt"
 }
 
 verify_image() (
@@ -89,48 +111,73 @@ verify_image() (
 			test -s /usr/lib/systemd/system/kata-extension-mount@.service
 		'
 	else
-		# Refuse stale/different artifacts. The host fixture comes from precisely
-		# this repository policy tree, never a permissive same-name placeholder.
-		local policy_root="${repo_root}/tools/packaging/apparmor-extension/policy" source_file relative
-		while IFS= read -r -d '' source_file; do
-			relative="${source_file#"${policy_root}/"}"
-			cmp -- "${source_file}" "${scratch}/root/${relative}"
-		done < <(find "${policy_root}" -type f -print0)
-		[[ -s "${scratch}/root/profiles/${profile}" ]] || die "extension lacks the real test profile"
+		# Packaging owns the source layout. Require exactly one source for each
+		# profile and byte equality with this measured TEST image, then retain
+		# its complete dependency tree for the temporary host CRI fixtures.
+		local name
+		local -a sources
+		for name in "${default_profile}" "${profile}"; do
+			mapfile -d '' -t sources < <(find "${repo_root}/tools/packaging/apparmor-extension" -type f -path "*/profiles/${name}" -print0)
+			[[ "${#sources[@]}" -eq 1 && -s "${scratch}/root/profiles/${name}" ]] || die "missing/ambiguous repository or image profile: ${name}"
+			cmp -- "${sources[0]}" "${scratch}/root/profiles/${name}"
+		done
+		[[ ! -e "${scratch}/root/profiles/${guest_missing_profile}" ]] || die "guest-negative profile must not exist in the image"
+		cp -a -- "${scratch}/root/." "${state}/policy"
 	fi
 	sha256sum -- "${image}" "${install_root}/share/kata-containers/root_hash_${variant}.txt"
 )
 
 configure() {
 	require_disposable_runner
+	[[ "${KATA_GUEST_APPARMOR_TEST:-}" == yes ]] || die "configure requires the enabled test mode"
 	local dependency
 	for dependency in python3 containerd apparmor_parser unshare losetup udevadm blkid veritysetup mount chroot cmp; do
 		command -v "${dependency}" >/dev/null || die "missing dependency: ${dependency}"
 	done
 	[[ -r /sys/kernel/security/apparmor/profiles ]] || die "host CRI AppArmor policy state is unavailable"
-	if grep -Eq "^${profile}([[:space:]]|$)" /sys/kernel/security/apparmor/profiles; then
-		die "refusing to replace an existing host ${profile} policy"
-	fi
+	local name
+	for name in "${profile}" "${guest_missing_profile}"; do
+		if grep -Fq "${name} (" /sys/kernel/security/apparmor/profiles; then
+			die "refusing to replace an existing host ${name} policy"
+		fi
+	done
+	# Containerd owns this host profile. Never replace it with a test policy.
+	grep -Fx "${default_profile} (enforce)" /sys/kernel/security/apparmor/profiles
 	[[ ! -e "${state}" && ! -L "${state}" ]] || die "CI fixture state already exists"
 	# Validate the actual loaded CRI imports, including containerd v2/v3 paths.
 	containerd --config /etc/containerd/config.toml config dump | \
 		python3 "${config_tool}" check-cri "${install_root}" "${KATA_HYPERVISOR}"
 	mkdir -m 0700 "${state}"
-	python3 "${config_tool}" render "${install_root}" "${KATA_HYPERVISOR}" "${dropin}"
+	python3 "${config_tool}" render "${install_root}" "${KATA_HYPERVISOR}" "${dropin}" enabled
 	sha256sum -- "${dropin}" > "${state}/dropin.sha256"
 	# No local/remote deployment, cluster access, or host mount-namespace changes.
 	unshare --mount --propagation private bash "${BASH_SOURCE[0]}" verify-images
-	cp -a -- "${repo_root}/tools/packaging/apparmor-extension/policy" "${state}/policy"
-	local fixture="${state}/policy/profiles/${profile}"
-	cmp -- "${repo_root}/tools/packaging/apparmor-extension/policy/profiles/${profile}" "${fixture}"
-	apparmor_parser --config-file=/dev/null -Q -K -I "${state}/policy" -b "${state}/policy" "${fixture}"
-	# Claim ownership only after the pre-existing-profile check, before loading,
-	# so even a partially successful parser invocation gets cleaned up.
-	touch "${state}/profile-owned"
-	apparmor_parser --config-file=/dev/null -a -K -I "${state}/policy" -b "${state}/policy" "${fixture}"
-	grep -Fx "${profile} (enforce)" /sys/kernel/security/apparmor/profiles
-	sha256sum -- "${fixture}"
+	# Same restrictive fixture with a different literal name, host only. This
+	# lets CRI accept Localhost while the agent must reject the missing policy.
+	sed "s/${profile}/${guest_missing_profile}/g" "${state}/policy/profiles/${profile}" \
+		> "${state}/policy/profiles/${guest_missing_profile}"
+	local fixture
+	for name in "${profile}" "${guest_missing_profile}"; do
+		fixture="${state}/policy/profiles/${name}"
+		apparmor_parser --config-file=/dev/null -Q -K -I "${state}/policy" -b "${state}/policy" "${fixture}"
+		# Claim ownership before loading so partial parser success is cleaned up.
+		touch "${state}/${name}.owned"
+		apparmor_parser --config-file=/dev/null -a -K -I "${state}/policy" -b "${state}/policy" "${fixture}"
+		grep -Fx "${name} (enforce)" /sys/kernel/security/apparmor/profiles
+		sha256sum -- "${fixture}"
+	done
 	echo "Temporary host CRI fixture loaded; guest enforcement and guest policy identity still require BATS evidence."
+}
+
+configure_baseline() {
+	require_disposable_runner
+	[[ "${KATA_GUEST_APPARMOR_BASELINE:-}" == yes && "${KATA_GUEST_APPARMOR_TEST:-no}" != yes ]] || die "baseline requires disabled mode"
+	[[ ! -e "${state}" && ! -L "${state}" ]] || die "CI fixture state already exists"
+	containerd --config /etc/containerd/config.toml config dump | \
+		python3 "${config_tool}" check-cri "${install_root}" "${KATA_HYPERVISOR}"
+	mkdir -m 0700 "${state}"
+	python3 "${config_tool}" render "${install_root}" "${KATA_HYPERVISOR}" "${dropin}" disabled
+	sha256sum -- "${dropin}" > "${state}/dropin.sha256"
 }
 
 cleanup() {
@@ -140,15 +187,18 @@ cleanup() {
 		return
 	fi
 	[[ ! -L "${state}" && "$(readlink -f -- "${state}")" == /run/kata-guest-apparmor-ci ]] || die "unsafe CI state path"
-	if [[ -f "${state}/profile-owned" ]]; then
-		if grep -Eq "^${profile}([[:space:]]|$)" /sys/kernel/security/apparmor/profiles; then
-			apparmor_parser --config-file=/dev/null -R -K -I "${state}/policy" -b "${state}/policy" "${state}/policy/profiles/${profile}"
+	local name
+	for name in "${profile}" "${guest_missing_profile}"; do
+		if [[ -f "${state}/${name}.owned" ]]; then
+			if grep -Fq "${name} (" /sys/kernel/security/apparmor/profiles; then
+				apparmor_parser --config-file=/dev/null -R -K -I "${state}/policy" -b "${state}/policy" "${state}/policy/profiles/${name}"
+			fi
+			if grep -Fq "${name} (" /sys/kernel/security/apparmor/profiles; then
+				die "temporary host profile remains loaded: ${name}"
+			fi
+			rm -- "${state}/${name}.owned"
 		fi
-		if grep -Eq "^${profile}([[:space:]]|$)" /sys/kernel/security/apparmor/profiles; then
-			die "temporary host profile remains loaded"
-		fi
-		rm -- "${state}/profile-owned"
-	fi
+	done
 	if [[ -f "${state}/dropin.sha256" ]]; then
 		# Preserve any intervening edit instead of deleting another writer's work.
 		sha256sum --check --strict "${state}/dropin.sha256"
@@ -159,14 +209,16 @@ cleanup() {
 }
 
 case "${1:-}" in
+	install-test-extension) install_test_extension "${2:-}" ;;
 	configure) configure ;;
+	configure-baseline) configure_baseline ;;
 	cleanup) cleanup ;;
 	verify-images)
 		require_disposable_runner
 		[[ "$(readlink /proc/self/ns/mnt)" != "$(readlink /proc/1/ns/mnt)" ]] || die "image checks require a private mount namespace"
 		base_filesystem="$(python3 "${config_tool}" rootfs-type "${install_root}" "${KATA_HYPERVISOR}")"
 		verify_image "${install_root}/share/kata-containers/kata-containers.img" base "${base_filesystem}"
-		verify_image "${install_root}/share/kata-containers/kata-containers-apparmor-extension.img" apparmor-extension erofs
+		verify_image "${install_root}/share/kata-containers/kata-containers-apparmor-test-extension.img" apparmor-test-extension erofs
 		;;
-	*) die "usage: $0 {configure|cleanup|verify-images}; CI only" ;;
+	*) die "usage: $0 {install-test-extension TARBALL|configure|configure-baseline|cleanup|verify-images}; CI only" ;;
 esac

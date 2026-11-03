@@ -36,7 +36,11 @@ must_not() {
 }
 
 probe_output() {
-	local mode=enforce
+	local mode=enforce label marker=APPARMOR_DENY_OK
+	case "${probe_kind}" in
+		unconfined) marker=APPARMOR_MOUNT_ALLOWED ;;
+		baseline) marker=APPARMOR_UNCONFINED_OK ;;
+	esac
 	if [[ "${mock_bad_stage}" == "$1" && "${mock_bad_container}" == "$2" ]]; then
 		case "${mock_bad_probe}" in
 			complain) mode=complain ;;
@@ -50,12 +54,15 @@ probe_output() {
 			command-failed) printf '%s\n' 'exec command failed'; return 1 ;;
 		esac
 	fi
-	printf 'APPARMOR_CURRENT=%s (%s)\n' "${expected_profile}" "${mode}"
-	printf '%s\n' APPARMOR_ALLOW_OK APPARMOR_DENY_OK
-	printf 'APPARMOR_AFTER=%s (%s)\n' "${expected_profile}" "${mode}"
+	label="${expected_profile} (${mode})"
+	[[ "${expected_profile}" != unconfined ]] || label=unconfined
+	printf 'APPARMOR_CURRENT=%s\n' "${label}"
+	printf '%s\n' APPARMOR_ALLOW_OK "${marker}"
+	printf 'APPARMOR_AFTER=%s\n' "${label}"
 }
 
-missing_error() { printf 'AppArmor profile %s is missing from the extension\n' "${missing_profile}"; }
+missing_error() { printf 'AppArmor profile %s is missing from the extension: No such file or directory\n' "${missing_profile}"; }
+host_error() { printf 'apparmor profile not found %s\n' "${missing_profile}"; }
 
 kubectl() {
 	printf '%q ' "$@" >> "${trace}"
@@ -87,9 +94,12 @@ kubectl() {
 						if [[ "${mock_scenario}" == positive || "${mock_scenario}" == became-ready ]]; then
 							printf '%s' True
 						else printf '%s' False; fi
+					elif [[ "${args}" == *jsonpath=*containerID* ]]; then
+						[[ "${mock_scenario}" != started ]] || printf containerd://unexpected
 					elif [[ "${args}" == *jsonpath=*metadata.uid* ]]; then
 						printf '%s' unit-pod-uid
-					elif [[ "${mock_scenario}" == missing ]]; then missing_error
+					elif [[ "${mock_scenario}" == missing || "${mock_scenario}" == started ]]; then missing_error
+					elif [[ "${mock_scenario}" == host-error ]]; then host_error
 					elif [[ "${mock_scenario}" == unrelated ]]; then printf '%s\n' ImagePullBackOff
 					elif [[ "${mock_scenario}" == wrong-profile ]]; then
 						printf '%s\n' 'AppArmor profile a-different-profile is missing from the extension'
@@ -97,7 +107,8 @@ kubectl() {
 					;;
 				events)
 					case "${mock_scenario}" in
-						missing|events-only|became-ready) missing_error ;;
+						missing|events-only|became-ready|started) missing_error ;;
+						host-error) host_error ;;
 						unrelated) printf '%s\n' 'FailedScheduling: insufficient memory' ;;
 						wrong-profile) printf '%s\n' 'AppArmor profile a-different-profile is missing from the extension' ;;
 					esac
@@ -115,8 +126,7 @@ fixture() {
 	: > "${trace}"
 	KATA_GUEST_APPARMOR_TEST=yes
 	KATA_GUEST_APPARMOR_PROFILE=unit-test
-	KATA_GUEST_APPARMOR_EXPECTED_PROFILE=unit-test
-	KATA_GUEST_APPARMOR_REQUEST=localhost/unit-test
+	KATA_GUEST_APPARMOR_BASELINE=no
 	KATA_GUEST_APPARMOR_NODE=unit-node
 	KATA_GUEST_APPARMOR_RUNTIME_CLASS=unit-runtime
 	KATA_GUEST_APPARMOR_SKIP_NODE_DIAGNOSTICS=yes
@@ -192,8 +202,17 @@ field_manifest() {
 	grep -q 'type: Localhost' "${yaml_file}"
 	grep -q 'localhostProfile: unit-test' "${yaml_file}"
 	must_not grep -q 'container.apparmor.security.beta' "${yaml_file}"
-	write_pod_manifest runtime/default "${evidence_dir}/runtime-default.yaml"
-	grep -q 'type: RuntimeDefault' "${evidence_dir}/runtime-default.yaml"
+	select_case runtime/default
+	grep -q 'type: RuntimeDefault' "${yaml_file}"
+	grep -q 'value: "cri-containerd.apparmor.d"' "${yaml_file}"
+	grep -q 'add: \["SYS_ADMIN"\]' "${yaml_file}"
+	select_case unconfined
+	grep -q 'type: Unconfined' "${yaml_file}"
+	grep -q 'value: "unconfined"' "${yaml_file}"
+	select_case localhost/cri-containerd.apparmor.d
+	grep -q 'localhostProfile: cri-containerd.apparmor.d' "${yaml_file}"
+	select_case omitted
+	must_not grep -q 'appArmorProfile:\|container.apparmor.security.beta' "${yaml_file}"
 }
 probe_syntax() {
 	apparmor_probe_script | /bin/sh -n
@@ -201,18 +220,35 @@ probe_syntax() {
 }
 exact_errors() {
 	missing_profile=unit-test-missing
-	is_missing_profile_error 'Cannot enforce AppArmor: profile "unit-test-missing" is not loaded'
-	is_missing_profile_error 'apparmor profile not found "unit-test-missing"'
-	is_missing_profile_error 'failed to generate apparmor spec opts: apparmor profile not found unit-test-missing'
+	is_missing_profile_error 'AppArmor profile unit-test-missing is missing from the extension: No such file or directory' guest
+	must_not is_missing_profile_error 'Cannot enforce AppArmor: profile "unit-test-missing" is not loaded' guest
+	must_not is_missing_profile_error 'apparmor profile not found unit-test-missing' guest
+	is_missing_profile_error 'Cannot enforce AppArmor: profile "unit-test-missing" is not loaded' host
+	is_missing_profile_error 'apparmor profile not found "unit-test-missing"' host
+	must_not is_missing_profile_error 'AppArmor profile unit-test-missing is missing from the extension: No such file' host
 	missing_profile=unit.test-missing
-	is_missing_profile_error 'apparmor profile not found unit.test-missing'
-	must_not is_missing_profile_error 'apparmor profile not found unitXtest-missing'
-	must_not is_missing_profile_error 'apparmor profile not found unit.test-missing-other'
-	missing_profile=unit-test-missing
-	must_not is_missing_profile_error 'No such file or directory (os error 2)'
-	must_not is_missing_profile_error 'AppArmor profile unit-test-missing requested but no apparmor guest extension is configured'
-	must_not is_missing_profile_error 'apparmor_parser is missing from the guest base image'
+	is_missing_profile_error 'apparmor profile not found unit.test-missing' host
+	must_not is_missing_profile_error 'apparmor profile not found unitXtest-missing' host
+	must_not is_missing_profile_error 'apparmor profile not found unit.test-missing-other' host
+	must_not is_missing_profile_error 'AppArmor profile unit.test-missing-other is missing from the extension: missing' guest
+	must_not is_missing_profile_error 'No such file or directory (os error 2)' guest
+	must_not is_missing_profile_error 'AppArmor profile unit.test-missing requested but no apparmor guest extension is configured' guest
+	must_not is_missing_profile_error 'apparmor_parser is missing from the guest base image' guest
 }
+api_positive() {
+	setup
+	"apparmor_test_$1"
+	[[ "$(grep -c '^exec ' "${trace}")" -eq 2 ]]
+}
+baseline() {
+	KATA_GUEST_APPARMOR_TEST=no
+	KATA_GUEST_APPARMOR_BASELINE=yes
+	setup
+	apparmor_test_8
+	must_not grep -q 'appArmorProfile:\|container.apparmor.security.beta\|add: \["SYS_ADMIN"\]' "${yaml_file}"
+	[[ "${expected_profile}" == unconfined && "${probe_kind}" == baseline ]]
+}
+host_negative() { mock_scenario=host-error; setup; apparmor_test_7; }
 
 check 'positive test requires Ready and both containers exec successfully' pass positive
 check 'startup complain mode fails' fail:logs bad_positive logs app complain
@@ -226,7 +262,7 @@ check 'the sidecar must also preserve exec confinement' fail:exec bad_positive e
 check 'enforcement must remain enabled after file checks' fail:exec bad_positive exec app mode-changed
 check 'a concrete missing profile error passes the negative test' pass negative missing
 check 'events are matched by this pod UID' pass events_only
-check 'an expected admission error passes the negative test' pass negative create-missing
+check 'an API admission failure cannot establish an agent rejection' fail:create negative create-missing
 check 'an unrelated admission error fails' fail:create negative create-unrelated
 check 'unrelated NotReady and scheduling/image errors fail' 'fail:get events' negative unrelated
 check 'an error naming another profile fails' 'fail:get events' negative wrong-profile
@@ -235,6 +271,14 @@ check 'a pod that becomes Ready cannot pass the negative test' 'fail:get pod' ne
 check 'evidence snapshots and repeated setups never overwrite each other' pass unique_evidence
 check 'structured API manifests include Localhost and RuntimeDefault' pass field_manifest
 check 'the generated in-container probe has valid POSIX shell syntax' pass probe_syntax
-check 'only specific profile errors are accepted' pass exact_errors
+check 'only exact profile errors from the intended layer are accepted' pass exact_errors
+check 'a host CRI error cannot pass as an agent rejection' 'fail:get events' negative host-error
+check 'a started workload cannot pass a negative test' 'fail:get pod' negative started
+check 'host-negative test requires a concrete host CRI error' pass host_negative
+check 'omitted uses the default guest profile' pass api_positive 3
+check 'RuntimeDefault uses the default guest profile' pass api_positive 4
+check 'Unconfined requires a successful mount control' pass api_positive 5
+check 'Localhost default collision uses the same default guest profile' pass api_positive 6
+check 'ordinary no-extension mode tests a default Pod with real labels' pass baseline
 printf '%s checks; %s failures\n' "${case_number}" "${failed}"
 [[ "${failed}" -eq 0 ]]

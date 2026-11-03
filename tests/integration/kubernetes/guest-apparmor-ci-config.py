@@ -5,7 +5,8 @@
 """Validate installed CI artifacts and render a last, per-shim TOML drop-in.
 
 Python 3.11+. `self-test` uses only temporary files, with no host/cluster access.
-`render INSTALL_ROOT SHIM OUTPUT` never edits an existing file.
+`render INSTALL_ROOT SHIM OUTPUT MODE` never edits an existing file.
+MODE is enabled (test extension + opt-in) or disabled (no extension).
 `check-cri INSTALL_ROOT SHIM` validates containerd's effective config on stdin.
 `rootfs-type INSTALL_ROOT SHIM` prints the effective QEMU rootfs filesystem.
 """
@@ -15,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -23,6 +25,8 @@ import unittest
 
 DROPIN = "99-guest-apparmor-ci.toml"
 LSM = "lockdown,yama,loadpin,safesetid,integrity,apparmor,bpf"
+TEST_EXTENSION = "kata-containers-apparmor-test-extension.img"
+TEST_VERITY = "root_hash_apparmor-test-extension.txt"
 
 
 def require(condition, message):
@@ -89,7 +93,8 @@ def rootfs_type(root, shim):
     return filesystem
 
 
-def render(root, shim, output):
+def render(root, shim, output, mode):
+    require(mode in ("enabled", "disabled"), f"unsupported render mode: {mode}")
     root, output = Path(root), Path(output)
     config, alias, shim_binary = layout(root, shim)
     artifact(config, root)
@@ -106,7 +111,6 @@ def render(root, shim, output):
         merge(effective, tomllib.loads(entry.read_text()))
     qemu = effective["hypervisor"]["qemu"]
     require(not qemu.get("guest_extension_images"), "CI expects no previously configured guest extensions")
-    require(qemu.get("rootfs_type") in ("ext4", "erofs"), "QEMU rootfs_type must explicitly select ext4 or erofs")
     artifact(shim_binary, root, executable=True)
     for key in ("path", "kernel"):
         artifact(qemu[key], root, executable=key == "path")
@@ -115,11 +119,20 @@ def render(root, shim, output):
     for key in ("firmware", "firmware_volume"):
         if qemu.get(key):
             artifact(qemu[key], root)
+    if mode == "disabled":
+        # Ordinary CI keeps its deployed guest. No AppArmor image, parser,
+        # verity sidecar or LSM boot change is required for the default mode.
+        text = "# Disposable runner baseline; no guest extensions.\n[agent.kata]\nenable_guest_apparmor = false\n"
+        with output.open("x") as stream:
+            stream.write(text)
+        print(text)
+        return
+    require(qemu.get("rootfs_type") in ("ext4", "erofs"), "QEMU rootfs_type must explicitly select ext4 or erofs")
     images = root / "share/kata-containers"
     base = artifact(images / "kata-containers.img", root)
-    extension = artifact(images / "kata-containers-apparmor-extension.img", root)
+    extension = artifact(images / TEST_EXTENSION, root)
     base_hash = verity(artifact(images / "root_hash_base.txt", root))
-    extension_hash = verity(artifact(images / "root_hash_apparmor-extension.txt", root))
+    extension_hash = verity(artifact(images / TEST_VERITY, root))
     params = [param for param in qemu.get("kernel_params", "").split()
               if param.split("=", 1)[0] not in ("lsm", "security", "apparmor", "selinux", "init")]
     params += [f"lsm={LSM}", "security=apparmor", "apparmor=1", "init=/sbin/init"]
@@ -133,7 +146,7 @@ def render(root, shim, output):
     # The array table MUST follow every QEMU scalar, or TOML changes its scope.
     lines += ["", "[[hypervisor.qemu.guest_extension_images]]", 'name = "apparmor"',
               f"path = {json.dumps(str(extension))}", f"verity_params = {json.dumps(extension_hash)}",
-              "", "[agent.kata]", "enable_debug = true", ""]
+              "", "[agent.kata]", "enable_debug = true", "enable_guest_apparmor = true", ""]
     text = "\n".join(lines)
     parsed = tomllib.loads(text)
     require(all(parsed["hypervisor"]["qemu"][key] == value for key, value in scalars.items()), "QEMU scalar scope changed")
@@ -172,13 +185,13 @@ class ConfigurationTests(unittest.TestCase):
         config.parent.joinpath("config.d").mkdir(parents=True)
         alias.symlink_to(config.relative_to(alias.parent))
         for name in ("bin/qemu", "bin/virtiofsd", "kernel", "share/kata-containers/kata-containers.img",
-                     "share/kata-containers/kata-containers-apparmor-extension.img", str(binary.relative_to(self.root))):
+                     f"share/kata-containers/{TEST_EXTENSION}", str(binary.relative_to(self.root))):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("fixture only; never executed\n")
             path.chmod(0o755)
         self.hash_text = f"root_hash={'a' * 64},salt={'b' * 64},data_blocks=8,data_block_size=4096,hash_block_size=4096"
-        for name in ("base", "apparmor-extension"):
+        for name in ("base", "apparmor-test-extension"):
             (self.root / f"share/kata-containers/root_hash_{name}.txt").write_text(self.hash_text + "\n")
         config.write_text(f'''[hypervisor.qemu]
 path = {json.dumps(str(self.root / "bin/qemu"))}
@@ -192,8 +205,8 @@ enable_debug = false
 ''')
         self.config, self.output = config, config.parent / "config.d" / DROPIN
 
-    def run_render(self):
-        render(self.root, self.shim, self.output)
+    def run_render(self, mode="enabled"):
+        render(self.root, self.shim, self.output, mode)
         return tomllib.loads(self.output.read_text())
 
     def test_both_runtimes_and_toml_scope(self):
@@ -202,7 +215,10 @@ enable_debug = false
                 if shim != self.shim:
                     self.create_fixture(shim)
                 self.shim = shim
-                qemu = self.run_render()["hypervisor"]["qemu"]
+                rendered = self.run_render()
+                qemu = rendered["hypervisor"]["qemu"]
+                self.assertIs(rendered["agent"]["kata"]["enable_guest_apparmor"], True)
+                self.assertEqual(Path(qemu["guest_extension_images"][0]["path"]).name, TEST_EXTENSION)
                 self.assertEqual(qemu["initrd"], "")
                 self.assertEqual(qemu["kernel_verity_params"], self.hash_text)
                 self.assertEqual(qemu["guest_extension_images"][0]["verity_params"], self.hash_text)
@@ -212,8 +228,8 @@ enable_debug = false
     def test_missing_assets_fail_without_output(self):
         paths = ["kernel", "bin/qemu", "bin/virtiofsd", "bin/containerd-shim-kata-v2",
                  "share/kata-containers/kata-containers.img", "share/kata-containers/root_hash_base.txt",
-                 "share/kata-containers/kata-containers-apparmor-extension.img",
-                 "share/kata-containers/root_hash_apparmor-extension.txt"]
+                 f"share/kata-containers/{TEST_EXTENSION}",
+                 f"share/kata-containers/{TEST_VERITY}"]
         for name in paths:
             with self.subTest(asset=name):
                 path = self.root / name
@@ -227,7 +243,7 @@ enable_debug = false
                     hidden.rename(path)
 
     def test_bad_verity_fails(self):
-        path = self.root / "share/kata-containers/root_hash_apparmor-extension.txt"
+        path = self.root / "share/kata-containers" / TEST_VERITY
         for bad in ("", "root_hash=abc", self.hash_text + ",salt=aa", self.hash_text.replace("data_blocks=8", "data_blocks=0"), self.hash_text.replace("4096", "513")):
             with self.subTest(verity=bad):
                 path.write_text(bad)
@@ -287,12 +303,80 @@ enable_debug = false
                 with self.assertRaisesRegex(ValueError, "ConfigPath"):
                     check_cri(self.root, shim, data)
 
+    def test_disabled_both_runtimes_without_extension_artifacts(self):
+        for name in (TEST_EXTENSION, TEST_VERITY, "kata-containers.img", "root_hash_base.txt"):
+            (self.root / "share/kata-containers" / name).unlink()
+        for shim in ("qemu", "qemu-runtime-rs"):
+            with self.subTest(shim=shim):
+                if shim != self.shim:
+                    # Build the second config without recreating image assets.
+                    config, alias, binary = layout(self.root, shim)
+                    config.parent.joinpath("config.d").mkdir(parents=True)
+                    alias.symlink_to(config.relative_to(alias.parent))
+                    binary.parent.mkdir(parents=True, exist_ok=True)
+                    binary.write_text("fixture only\n")
+                    binary.chmod(0o755)
+                    config.write_text(self.config.read_text())
+                    self.config, self.output = config, config.parent / "config.d" / DROPIN
+                self.shim = shim
+                rendered = self.run_render("disabled")
+                self.assertEqual(rendered, {"agent": {"kata": {"enable_guest_apparmor": False}}})
+
+    def test_production_extension_cannot_substitute_for_test_image(self):
+        images = self.root / "share/kata-containers"
+        (images / TEST_EXTENSION).rename(images / "kata-containers-apparmor-extension.img")
+        (images / TEST_VERITY).rename(images / "root_hash_apparmor-extension.txt")
+        with self.assertRaises(OSError):
+            self.run_render()
+        self.assertFalse(self.output.exists())
+
+    def test_disabled_rejects_existing_extension_and_preserves_output(self):
+        self.output.with_name("10-existing.toml").write_text('[[hypervisor.qemu.guest_extension_images]]\nname="apparmor"\n')
+        with self.assertRaisesRegex(ValueError, "previously configured"):
+            self.run_render("disabled")
+        self.assertFalse(self.output.exists())
+
+    def test_unknown_mode_is_rejected_without_output(self):
+        with self.assertRaisesRegex(ValueError, "render mode"):
+            self.run_render("typo")
+        self.assertFalse(self.output.exists())
+
+    def test_cli_render_modes(self):
+        for mode in ("enabled", "disabled"):
+            with self.subTest(mode=mode):
+                command = [sys.executable, __file__, "render", str(self.root), self.shim,
+                           str(self.output), mode]
+                result = subprocess.run(command, check=False, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                parsed = tomllib.loads(self.output.read_text())
+                self.assertEqual(parsed["agent"]["kata"]["enable_guest_apparmor"], mode == "enabled")
+                self.assertEqual("hypervisor" in parsed, mode == "enabled")
+                original = self.output.read_bytes()
+                repeated = subprocess.run(command, check=False, capture_output=True, text=True)
+                self.assertNotEqual(repeated.returncode, 0)
+                self.assertEqual(self.output.read_bytes(), original)
+                self.output.unlink()
+
+    def test_disabled_preserves_deployed_guest_and_existing_agent_settings(self):
+        self.output.with_name("10-ordinary.toml").write_text(
+            '[hypervisor.qemu]\nrootfs_type="other"\nimage="/ordinary/image"\n'
+            'initrd="/ordinary/initrd"\nkernel_params="console=ttyS0 security=selinux"\n'
+            '[agent.kata]\nenable_debug=false\n')
+        rendered = self.run_render("disabled")
+        effective = tomllib.loads(self.config.read_text())
+        merge(effective, tomllib.loads(self.output.with_name("10-ordinary.toml").read_text()))
+        before = copy.deepcopy(effective)
+        merge(effective, rendered)
+        self.assertEqual(effective["hypervisor"], before["hypervisor"])
+        self.assertIs(effective["agent"]["kata"]["enable_debug"], False)
+        self.assertIs(effective["agent"]["kata"]["enable_guest_apparmor"], False)
+
 
 if __name__ == "__main__":
     try:
         if sys.argv[1:] == ["self-test"]:
             unittest.main(argv=[sys.argv[0]], verbosity=2, buffer=True)
-        elif len(sys.argv) == 5 and sys.argv[1] == "render":
+        elif len(sys.argv) == 6 and sys.argv[1] == "render":
             render(*sys.argv[2:])
         elif len(sys.argv) == 4 and sys.argv[1] == "check-cri":
             check_cri(*sys.argv[2:], tomllib.loads(sys.stdin.read()))
