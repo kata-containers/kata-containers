@@ -100,7 +100,7 @@ production() {
 
 test_image() {
 	production
-	install_image_apparmor_test_extension
+	install_image_apparmor_test_extension ""
 	local tree="${MOCK_CAPTURE}/apparmor-test-extension"
 	[[ -f "${install_root}/kata-containers-apparmor-test-extension.img" ]]
 	[[ -s "${install_root}/root_hash_apparmor-test-extension.txt" ]]
@@ -141,7 +141,7 @@ production_fixture() {
 test_collision() {
 	cp "${extension_source}/test-policy/profiles/kata-apparmor-test" \
 		"${repo_root_dir}/tools/packaging/apparmor-extension/policy/profiles/"
-	install_image_apparmor_test_extension
+	install_image_apparmor_test_extension ""
 }
 builder_mode() { export MOCK_IMAGE_MODE="$1"; install_image_apparmor_extension; }
 stale_output() {
