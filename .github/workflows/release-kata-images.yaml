@@ -60,7 +60,7 @@ jobs:
             runner: ubuntu-26.04-s390x
           - arch: ppc64le
             tag_suffix: -ppc64le
-            runner: ubuntu-24.04-ppc64le
+            runner: ubuntu-26.04-ppc64le
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
