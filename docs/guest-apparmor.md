@@ -3,9 +3,8 @@
 This feature applies workload AppArmor profiles inside a Kata guest. It follows
 the composable-image direction discussed in
 [issue #7586](https://github.com/kata-containers/kata-containers/issues/7586).
-The current local candidate uses an explicit guest opt-in and literal final OCI
-profile names. This is the candidate contract, not a claim of upstream approval
-or a passing CI run.
+Guest enforcement requires an administrator opt-in and uses literal final OCI
+profile names. The proposed interface remains subject to upstream review.
 
 ## Architecture and defaults
 
@@ -287,95 +286,60 @@ Standard `kubectl exec` has no profile field and proves **inheritance only**.
 Explicit same-profile, different-profile and downgrade Exec requests require
 native OCI/RPC tests and cannot be inferred from Kubernetes results.
 
-Negative tests require a created Pod, no Ready condition or workload container
-ID, and an exact profile error from the intended layer in Pod status or
-UID-scoped events. An API admission error, image/scheduling failure, arbitrary
+Negative tests require a created Pod, no Ready condition or workload execution,
+and an exact profile error from the intended layer in Pod status or UID-scoped
+events. CRI may allocate an ID before task creation fails. A terminated state
+must be StartError with a zero start time, no restart history and no running
+process; an allocated ID alone is not evidence of execution. An API admission error, image/scheduling failure, arbitrary
 NotReady state, wrong profile, host rejection in the guest case, absent parser,
 or missing extension cannot pass the guest-missing-policy case. Each invocation
 owns its Pod and evidence directory; snapshots and exec output are preserved.
 Workflow cleanup verifies drop-in hashes and removes only its temporary host
 profiles. Pending approval or configured jobs are not passing CI evidence.
 
-### Current candidate status
+### Local validation (2026-11-03)
 
-The new local baseline is `938166d78`; the checkpoint before interface changes is
-`114ee05af`. The public PR HEAD remains `506...` (abbreviated checkpoint supplied
-for this work). These identifiers are distinct from the historical candidates
-below. This document does not assert that the public PR contains the local work.
+The binaries and images were built from `fee18de51f`, based on upstream
+`938166d78`. The BATS-only correction `a7e78be5c` changes the rejection oracle
+and adds disabled-mode API cases; runtime, agent and image-building sources are
+unchanged. These results are local acceptance evidence, not upstream CI.
 
-All new-candidate integration pass claims are **PENDING TESTING / NOT RUN** here:
-flag-false default Pods, enabled default policy, the complete API/Exec matrix,
-fail-closed errors, image startup and generated-artifact compatibility require
-fresh matching builds and isolated execution. Local script assertions cannot
-promote any of those gates to passed. No new upstream CI pass is claimed.
+The x86-64 acceptance node used Kubernetes 1.37.1, containerd 2.2.1, nested KVM,
+Ubuntu 24.04 and Debian 13 systemd guest bases. The Agent is a static musl build;
+its pre/post-strip Build ID is `5053ede49ec9d92e39505649676c58daddfb478b`.
+The reused 6.18.56 guest kernel has the same complete kernel component tree and
+version pins as its recorded build. The physical host kernel was not changed.
 
-The rebase retains upstream `f7703ac92` synchronous `RemoveContainer` as its
-baseline. The planned verification toolchain is official Go 1.26.10 and protoc
-21.12 in a separate tool directory; obtaining tools does not establish a completed
-build or test and does not replace server system tools.
-
-The Rust SELinux regression gate remains **BLOCKED** on its ABI/toolchain
-compatibility issue. **F7 is not-comparable** until compatible, matched artifacts
-and evidence exist. This is separate from the historical kernel-only SELinux
-mechanism result; neither that result nor an AppArmor pass clears this gate.
-
-### Historical evidence boundaries
-
-| Historical checkpoint | What may be retained | What it cannot prove |
-| --- | --- | --- |
-| `434...` / earlier 5.15 experiments | Historical mechanism observations only | New flag defaults, literal-name semantics, new images or current CI |
-| `6df017821ca77a789bddfcc68a5fbfcb5bebac5f` | The isolated acceptance record reproduced below | Passing results for `938166d78` plus new interface work |
-| `r2` | A separate historical run/checkpoint | Any new-candidate pass or a comparable F7 result |
-
-Do not transfer counts, artifact identities or pass labels between these
-checkpoints. The following section is a historical report, not a current
-candidate acceptance statement.
-
-### Historical isolated results for 6df (2026-10-19)
-
-The historical candidate was built from
-`6df017821ca77a789bddfcc68a5fbfcb5bebac5f`, rebased on upstream
-`0008d6b9d7e2b6a586883aa05b894563efe86721`. Its source checkpoint, toolchains,
-commands, pre/post-strip hashes and unchanged ELF Build IDs were recorded with
-those artifacts. The source and interface changes in the new candidate require
-new artifacts and new results. The counts below are historical local acceptance
-results, not current-candidate or upstream CI results.
-
-The disposable x86-64 node used nested KVM, Kubernetes 1.37.1, containerd 2.2.1
-and a 6.18.56 Kata guest kernel. The guest bases were Ubuntu 24.04 Noble and
-Debian 13 Trixie, both using systemd. The physical host kernel was unchanged.
-
-| Check | Result and scope |
+| Check | Observed result and scope |
 | --- | --- |
-| Native OCI matrix | 20/20: Go/Rust × Noble/Trixie × confinement, masked exec attribute, no-extension unconfined baseline, missing guest policy and invalid host extension path |
-| Measured extension corruption | 2/2: each base's console showed verity failure, extension mount failure, blocked agent and poweroff |
-| Kubernetes matrix | 4/4: Go/Rust × Noble/Trixie, each including both original BATS tests, a separate host-accepted/guest-rejected policy case and two-container delete/recreate checks |
-| SELinux kernel mechanism | Same kernel booted with SELinux selected, loaded a minimal policy, allowed one labeled read and denied another with an enforcing AVC; permissive control succeeded |
+| Native OCI, Go/Rust × both bases | 32/32: default/custom policy, unconfined control, disabled mode, explicit Exec, masked exec attribute and startup configuration failures |
+| Kubernetes, Go/Rust × both bases | 56/56 across enabled test extensions, disabled/no-extension defaults and production-only extensions; startup and inherited Exec checked for both containers |
+| Shared binding lifecycle | 4/4: same Guest boot ID, surviving container remains confined after the other is removed, then Pod recreation with a new UID |
+| New runtime with legacy Agent | 4/4 enabled requests rejected with the specific effective-mode mismatch |
+| Corrupted extension hash | 2/2 bases: verity/mount failure, Agent dependency failure and natural VM poweroff |
+| AppArmor enabled with another major LSM selected | 2/2 parser-equipped bases: exact inactive-AppArmor startup error and poweroff; not a SELinux distro-policy test |
 
-Native checks cover init and OCI Exec, omitted/same-profile reuse, rejected
-unconfined/different-profile requests, and confinement after the rejected
-requests. Kubernetes positive checks require Ready and verify the actual guest
-profile, enforce mode and allowed/denied operations for both containers at
-startup and through `kubectl exec`. Recreating the Pod must produce a new UID
-and repeat those checks. All four suites completed their owned-resource cleanup;
-the formal artifact hashes remained unchanged.
+AppArmor-focused Agent and rustjail tests passed as both an ordinary user and
+root, and strict clippy passed without lint exemptions. Ordinary-user Go tests
+passed in all 31 test packages; full current/root race validation is separate
+and is not claimed passed here. Failed harness attempts and corrected runs are
+retained separately rather than overwritten.
 
-The BATS missing-profile test can stop at host CRI validation. The additional
-guest-negative case therefore loaded a uniquely named copy of the real fixture
-on the disposable host, but not in the extension. It required that exact
-profile's rejection from the agent in UID-scoped Pod status/events, with no
-workload execution. A generic NotReady state, image failure or host-only
-rejection was not accepted as guest evidence. The temporary host policy was
-removed after the owned namespace was deleted.
+The CentOS compatibility experiment uses the new Go shim and Agent with an
+existing labeled distro-policy image. Create and two independent Exec calls
+retain the same full container domain/MCS; the allowed read succeeds and the
+protected read is refused. Guest inode labels are observed separately through
+an administrator console, without granting that access to the workload. This
+remains partial until the matching Guest audit records and remaining gates are
+verified. A CentOS image without a parser rejects explicit enablement at parser
+validation; that result does not prove the later inactive-LSM branch.
 
-The SELinux check is deliberately narrower than a distro/runtime regression:
-it does not validate CentOS `container-selinux`, agent mount/exec labeling or a
-production policy. The acceptance agent was a GNU build requiring glibc 2.39;
-these results do not cover older guest distributions, official static/musl
-builds, other architectures, NVIDIA or agent-as-init guests. They do not clear
-the current Rust SELinux ABI block or establish a comparable F7 result. Fresh
-upstream workflow execution and verification of the new default-profile contract
-remain open gates.
+The Rust shim requires glibc 2.39 and is blocked on the CentOS 9 host's glibc
+2.34. There is no matched upstream SELinux baseline. These limitations must not
+be summarized as complete Go/Rust SELinux compatibility. Default NVDIMM/pmem,
+DAX, other architectures, NVIDIA, agent-as-init and full escape resistance are
+outside the demonstrated scope. Official CI must actually run on the proposed
+revision before its checks can be reported as passing.
 
 There is **no container-escape prevention guarantee**. Workload confinement is
 not a claim that all guest contents remain inaccessible after every container
