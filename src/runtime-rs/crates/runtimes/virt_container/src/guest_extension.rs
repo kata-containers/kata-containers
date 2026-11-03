@@ -5,7 +5,57 @@
 use std::fs::{self, File};
 use std::io;
 
-/// AppArmor is opt-in, but an explicitly configured policy image must be usable.
+/// Validate before creating the VMM and again before attaching its devices.
+pub(crate) fn validate_guest_apparmor<'a>(
+    enabled: bool,
+    hypervisor: &str,
+    image: &str,
+    initrd: &str,
+    extensions: impl Iterator<Item = (&'a str, &'a str)>,
+) -> io::Result<()> {
+    if !enabled {
+        return Ok(());
+    }
+    if hypervisor != "qemu" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "enable_guest_apparmor requires QEMU",
+        ));
+    }
+    if image.trim().is_empty() || !initrd.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "enable_guest_apparmor requires an image-based guest without initrd",
+        ));
+    }
+    let mut apparmor = extensions.filter(|(name, _)| *name == "apparmor");
+    let image = apparmor.next();
+    if image.is_none() || apparmor.next().is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "enable_guest_apparmor requires exactly one guest_extension_images 'apparmor' entry",
+        ));
+    }
+    if let Some((name, path)) = image {
+        validate_apparmor_extension(name, path)?;
+    }
+    Ok(())
+}
+
+/// Old agents report false by omitting the proto3 bool (or all agent details).
+pub(crate) fn validate_guest_apparmor_mode(
+    expected: bool,
+    reported: Option<bool>,
+) -> io::Result<()> {
+    let actual = reported.unwrap_or(false);
+    if expected != actual {
+        return Err(io::Error::other(format!(
+            "guest AppArmor mode mismatch: configured={expected}, guest_apparmor_enabled={actual}"
+        )));
+    }
+    Ok(())
+}
+
 /// Other extensions retain their existing optional-path semantics.
 pub(crate) fn validate_apparmor_extension(name: &str, path: &str) -> io::Result<()> {
     if name != "apparmor" {
@@ -42,6 +92,88 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn guest_apparmor_requires_qemu_and_one_policy() {
+        for hypervisor in [
+            "qemu",
+            "clh",
+            "firecracker",
+            "dragonball",
+            "remote",
+            "openvmm",
+        ] {
+            for images in [
+                vec![],
+                vec![("gpu", "")],
+                vec![("apparmor", "/bin/echo")],
+                vec![("apparmor", "/bin/echo"), ("apparmor", "/bin/echo")],
+                vec![("gpu", ""), ("apparmor", "/bin/echo")],
+                vec![("AppArmor", "/bin/echo")],
+            ] {
+                let count = images
+                    .iter()
+                    .filter(|(name, _)| *name == "apparmor")
+                    .count();
+                assert_eq!(
+                    validate_guest_apparmor(
+                        true,
+                        hypervisor,
+                        "/guest.img",
+                        "",
+                        images.iter().copied()
+                    )
+                    .is_ok(),
+                    hypervisor == "qemu" && count == 1
+                );
+                validate_guest_apparmor(false, hypervisor, "", "/initrd", images.into_iter())
+                    .unwrap();
+            }
+        }
+        validate_guest_apparmor(
+            false,
+            "qemu",
+            "",
+            "",
+            std::iter::once(("apparmor", "bad\0path")),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn guest_apparmor_requires_image_without_initrd() {
+        for (image, initrd, valid) in [
+            ("", "", false),
+            (" \t", "", false),
+            ("", "/initrd", false),
+            ("/guest.img", "/initrd", false),
+            ("/guest.img", "", true),
+        ] {
+            assert_eq!(
+                validate_guest_apparmor(
+                    true,
+                    "qemu",
+                    image,
+                    initrd,
+                    std::iter::once(("apparmor", "/bin/echo"))
+                )
+                .is_ok(),
+                valid
+            );
+        }
+    }
+
+    #[test]
+    fn guest_apparmor_mode_must_match_including_legacy_agents() {
+        for expected in [false, true] {
+            for reported in [None, Some(false), Some(true)] {
+                assert_eq!(
+                    validate_guest_apparmor_mode(expected, reported).is_ok(),
+                    expected == reported.unwrap_or(false)
+                );
+            }
+        }
+    }
 
     // Keep these filesystem checks independent of the VMM and its dependencies.
     struct TestDir(PathBuf);

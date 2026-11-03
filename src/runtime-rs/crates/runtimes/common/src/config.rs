@@ -15,6 +15,8 @@ use protobuf::Message as ProtobufMessage;
 use slog::info;
 use tracing::instrument;
 
+const GUEST_APPARMOR_PARAM: &str = "agent.enable_guest_apparmor";
+
 /// Hypervisor plugins must be registered first, or hypervisor defaults are not applied.
 ///
 /// Config override ordering(high to low):
@@ -89,6 +91,7 @@ pub fn load_config_from<P: AsRef<Path> + std::fmt::Debug>(
             "load TOML config failed (tried {:?})",
             TomlConfig::get_default_config_file_list()
         ))?;
+    reject_guest_apparmor_overrides(&toml_config, an)?;
     annotation.update_config_by_annotation(&mut toml_config)?;
     update_agent_kernel_params(&mut toml_config)?;
 
@@ -117,16 +120,65 @@ fn config_path_matches_defaults(config_path: &str, default_config_paths: Vec<Pat
 // this update the agent-specfic kernel parameters into hypervisor's bootinfo
 // the agent inside the VM will read from file cmdline to get the params and function
 fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
+    if let Some(h) = config.hypervisor.get(&config.runtime.hypervisor_name) {
+        reject_guest_apparmor_kernel_param(&h.boot_info.kernel_params)?;
+    }
     let mut params = vec![];
-    if let Ok(kv) = config.get_agent_kernel_params() {
-        for (k, v) in kv.into_iter() {
-            if let Ok(s) = Param::new(k.as_str(), v.as_str()).to_string() {
-                params.push(s);
-            }
+    for (k, v) in config.get_agent_kernel_params()? {
+        if let Ok(s) = Param::new(k.as_str(), v.as_str()).to_string() {
+            params.push(s);
         }
-        if let Some(h) = config.hypervisor.get_mut(&config.runtime.hypervisor_name) {
-            h.boot_info.add_kernel_params(params);
-        }
+    }
+    let enabled = config
+        .agent
+        .get(&config.runtime.agent_name)
+        .is_some_and(|a| a.enable_guest_apparmor);
+    params.push(format!("{GUEST_APPARMOR_PARAM}={enabled}"));
+    if let Some(h) = config.hypervisor.get_mut(&config.runtime.hypervisor_name) {
+        h.boot_info.add_kernel_params(params);
+        validate_guest_apparmor_kernel_params(&h.boot_info.kernel_params, enabled)?;
+    }
+    Ok(())
+}
+
+/// Only the runtime may emit this parameter, exactly once with its configured value.
+pub fn validate_guest_apparmor_kernel_params(params: &str, enabled: bool) -> Result<()> {
+    let expected = format!("{GUEST_APPARMOR_PARAM}={enabled}");
+    let mut found = params
+        .split_ascii_whitespace()
+        .filter(|param| param.trim_matches('"').split('=').next() == Some(GUEST_APPARMOR_PARAM));
+    if found.next() != Some(expected.as_str()) || found.next().is_some() {
+        return Err(anyhow!(
+            "guest AppArmor requires exactly one canonical {}",
+            expected
+        ));
+    }
+    Ok(())
+}
+
+fn reject_guest_apparmor_kernel_param(params: &str) -> Result<()> {
+    if params
+        .split_ascii_whitespace()
+        .any(|param| param.trim_matches('"').split('=').next() == Some(GUEST_APPARMOR_PARAM))
+    {
+        return Err(anyhow!(
+            "{} is reserved; use [agent.kata].enable_guest_apparmor",
+            GUEST_APPARMOR_PARAM
+        ));
+    }
+    Ok(())
+}
+
+fn reject_guest_apparmor_overrides(
+    config: &TomlConfig,
+    an: &HashMap<String, String>,
+) -> Result<()> {
+    // Reject attempts even if another annotation would replace these parameters.
+    if let Some(h) = config.hypervisor.get(&config.runtime.hypervisor_name) {
+        reject_guest_apparmor_kernel_param(&h.boot_info.kernel_params)?;
+    }
+    if let Some(params) = an.get(kata_types::annotations::KATA_ANNO_CFG_HYPERVISOR_KERNEL_PARAMS) {
+        reject_guest_apparmor_kernel_param(params)?;
     }
     Ok(())
 }
@@ -135,6 +187,156 @@ fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    #[test]
+    fn guest_apparmor_kernel_param_is_reserved() {
+        for params in [
+            "agent.enable_guest_apparmor",
+            "agent.enable_guest_apparmor=true",
+            "foo=1\tagent.enable_guest_apparmor=false\nbar=2",
+            "\"agent.enable_guest_apparmor=true\"",
+            "agent.enable_guest_apparmor=\"false\"",
+            "agent.enable_guest_apparmor=true agent.enable_guest_apparmor=false",
+        ] {
+            assert!(
+                reject_guest_apparmor_kernel_param(params).is_err(),
+                "{}",
+                params
+            );
+        }
+        assert!(reject_guest_apparmor_kernel_param(
+            "selinux=0 apparmor=1 agent.enable_guest_apparmor_extra=true"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn guest_apparmor_final_kernel_param_must_be_unique_and_match_config() {
+        for enabled in [false, true] {
+            for (params, valid) in [
+                (String::new(), false),
+                ("agent.enable_guest_apparmor".into(), false),
+                (format!("agent.enable_guest_apparmor={enabled}"), true),
+                (format!("agent.enable_guest_apparmor={}", !enabled), false),
+                (format!("agent.enable_guest_apparmor={enabled} agent.enable_guest_apparmor={enabled}"), false),
+                ("agent.enable_guest_apparmor=true agent.enable_guest_apparmor=false".into(), false),
+                ("agent.enable_guest_apparmor=1".into(), false),
+                (format!("\"agent.enable_guest_apparmor={enabled}\""), false),
+            ] {
+                assert_eq!(validate_guest_apparmor_kernel_params(&params, enabled).is_ok(), valid, "{params}");
+            }
+        }
+    }
+
+    #[test]
+    fn guest_apparmor_rejects_config_and_annotation_overrides() {
+        use kata_types::annotations::KATA_ANNO_CFG_HYPERVISOR_KERNEL_PARAMS;
+        use kata_types::config::Hypervisor;
+
+        for configured in [false, true] {
+            for annotated in [false, true] {
+                let mut config = TomlConfig::default();
+                config.runtime.hypervisor_name = "qemu".into();
+                let mut hv = Hypervisor::default();
+                if configured {
+                    hv.boot_info.kernel_params = "agent.enable_guest_apparmor=false".into();
+                }
+                config.hypervisor.insert("qemu".into(), hv);
+                let mut annotations = HashMap::new();
+                annotations.insert(
+                    KATA_ANNO_CFG_HYPERVISOR_KERNEL_PARAMS.into(),
+                    if annotated {
+                        "agent.enable_guest_apparmor=true".into()
+                    } else {
+                        "console=hvc0".into()
+                    },
+                );
+                assert_eq!(
+                    reject_guest_apparmor_overrides(&config, &annotations).is_err(),
+                    configured || annotated
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn guest_apparmor_has_no_annotation_override() {
+        use kata_types::config::{Agent, Hypervisor};
+
+        kata_types::config::QemuConfig::new().register();
+        for enabled in [false, true] {
+            let mut config = TomlConfig::default();
+            config.runtime.name = "virt-container".into();
+            config.runtime.hypervisor_name = "qemu".into();
+            config.runtime.agent_name = "kata".into();
+            config.agent.insert(
+                "kata".into(),
+                Agent {
+                    enable_guest_apparmor: enabled,
+                    ..Default::default()
+                },
+            );
+            let mut hv = Hypervisor {
+                path: "/bin/echo".into(),
+                ..Default::default()
+            };
+            hv.boot_info.kernel = "/bin/echo".into();
+            config.hypervisor.insert("qemu".into(), hv);
+            let mut annotations = HashMap::new();
+            annotations.insert(
+                "io.katacontainers.config.agent.enable_guest_apparmor".into(),
+                (!enabled).to_string(),
+            );
+            Annotation::new(annotations)
+                .update_config_by_annotation(&mut config)
+                .unwrap();
+            assert_eq!(config.agent["kata"].enable_guest_apparmor, enabled);
+            update_agent_kernel_params(&mut config).unwrap();
+            assert!(config.hypervisor["qemu"]
+                .boot_info
+                .kernel_params
+                .contains(&format!("{GUEST_APPARMOR_PARAM}={enabled}")));
+        }
+    }
+
+    #[test]
+    fn guest_apparmor_kernel_param_matches_config_only() {
+        use kata_types::config::{hypervisor::GuestExtensionImage, Agent, Hypervisor};
+
+        for enabled in [false, true] {
+            for extension in [false, true] {
+                let mut config = TomlConfig::default();
+                config.runtime.hypervisor_name = "qemu".into();
+                config.runtime.agent_name = "kata".into();
+                config.agent.insert(
+                    "kata".into(),
+                    Agent {
+                        enable_guest_apparmor: enabled,
+                        ..Default::default()
+                    },
+                );
+                let mut hv = Hypervisor::default();
+                hv.boot_info.kernel_params = "selinux=0 apparmor=1".into();
+                if extension {
+                    hv.guest_extension_images.push(GuestExtensionImage {
+                        name: "apparmor".into(),
+                        path: "/policy.img".into(),
+                        ..Default::default()
+                    });
+                }
+                config.hypervisor.insert("qemu".into(), hv);
+                update_agent_kernel_params(&mut config).unwrap();
+                let params = &config.hypervisor["qemu"].boot_info.kernel_params;
+                assert_eq!(params.matches(GUEST_APPARMOR_PARAM).count(), 1);
+                assert!(params
+                    .split_ascii_whitespace()
+                    .any(|p| p == format!("{GUEST_APPARMOR_PARAM}={enabled}")));
+                assert!(params.contains("selinux=0 apparmor=1"));
+                // Re-appending parameters cannot silently introduce duplicates.
+                assert!(update_agent_kernel_params(&mut config).is_err());
+            }
+        }
+    }
 
     #[derive(Debug)]
     enum ConfigPathCase {

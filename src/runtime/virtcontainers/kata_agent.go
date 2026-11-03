@@ -303,6 +303,7 @@ type KataAgentConfig struct {
 	Trace                bool
 	EnableDebugConsole   bool
 	VisibleCdiDevices    bool
+	EnableGuestAppArmor  bool
 	Policy               string
 }
 
@@ -344,7 +345,7 @@ func (k *kataAgent) longLiveConn() bool {
 // KataAgentKernelParams returns a list of Kata Agent specific kernel
 // parameters.
 func KataAgentKernelParams(config KataAgentConfig) []Param {
-	var params []Param
+	params := []Param{{Key: GuestAppArmorKernelParam, Value: strconv.FormatBool(config.EnableGuestAppArmor)}}
 
 	if config.Debug {
 		params = append(params, Param{Key: "agent.log", Value: "debug"})

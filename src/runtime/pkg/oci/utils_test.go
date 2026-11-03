@@ -681,6 +681,32 @@ func TestContainerPipeSizeAnnotation(t *testing.T) {
 	assert.Exactly(expectedAgentConfig, config.AgentConfig)
 }
 
+func TestKernelAnnotationsCannotOverrideGuestAppArmor(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		for _, value := range []string{
+			"agent.enable_guest_apparmor=true",
+			"agent.enable_guest_apparmor=false",
+			"agent.enable_guest_apparmor=false agent.enable_guest_apparmor=true",
+			"agent.enable_guest_apparmor=true agent.enable_guest_apparmor=true",
+			"quiet agent.enable_guest_apparmor",
+		} {
+			t.Run(fmt.Sprintf("enabled=%t/%s", enabled, value), func(t *testing.T) {
+				original := []vc.Param{{Key: vc.GuestAppArmorKernelParam, Value: strconv.FormatBool(enabled)}}
+				config := vc.SandboxConfig{
+					AgentConfig:      vc.KataAgentConfig{EnableGuestAppArmor: enabled},
+					HypervisorConfig: vc.HypervisorConfig{KernelParams: append([]vc.Param(nil), original...)},
+				}
+				spec := specs.Spec{Annotations: map[string]string{vcAnnotations.KernelParams: value}}
+				runtimeConfig := RuntimeConfig{HypervisorType: vc.QemuHypervisor}
+				runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+				err := addHypervisorConfigOverrides(spec, &config, runtimeConfig)
+				assert.ErrorContains(t, err, "cannot set reserved parameter")
+				assert.Equal(t, original, config.HypervisorConfig.KernelParams)
+			})
+		}
+	}
+}
+
 func TestAddHypervisorAnnotations(t *testing.T) {
 	assert := assert.New(t)
 

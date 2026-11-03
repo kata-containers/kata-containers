@@ -500,7 +500,8 @@ disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 # constrained when it asks for a profile through its OCI apparmorProfile, and
 # a workload that asks for nothing is unaffected either way.
 #
-# Enable by uncommenting the block below and setting the path to the image
+# To enable, set [agent.kata].enable_guest_apparmor = true, uncomment the
+# block below and set the path to the image
 # built as kata-containers-apparmor-extension.img, together with the verity
 # parameters generated for that build. Keep this block after all QEMU scalar
 # settings: TOML assigns subsequent keys to the extension table.
@@ -530,6 +531,10 @@ enable_template = false
 template_path = "/run/vc/vm/template"
 
 [agent.@PROJECT_TYPE@]
+# Enable guest AppArmor. Requires QEMU, image (no initrd), and one apparmor extension.
+# Attaching an extension alone does not enable this mode.
+enable_guest_apparmor = false
+
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
 enable_debug = false

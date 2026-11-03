@@ -52,6 +52,31 @@ impl PreparedProfile {
     }
 }
 
+/// The creation-time binding. Absence of a binding is never an unconfined default.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProfileBinding {
+    Disabled,
+    Unconfined,
+    Confined(PreparedProfile),
+}
+
+impl ProfileBinding {
+    pub fn prepared(&self) -> Option<&PreparedProfile> {
+        match self {
+            Self::Confined(profile) => Some(profile),
+            Self::Disabled | Self::Unconfined => None,
+        }
+    }
+
+    pub fn exec_profile(&self, requested: Option<&str>) -> Result<Option<PreparedProfile>> {
+        match self {
+            Self::Disabled => Ok(None),
+            Self::Unconfined => exec_profile(None, requested),
+            Self::Confined(profile) => exec_profile(Some(profile), requested),
+        }
+    }
+}
+
 /// Owned by Sandbox and accessed under its mutex. Entries outlive containers;
 /// deleting one container must not unload policy shared with another container.
 #[derive(Debug, Default)]
@@ -66,6 +91,25 @@ trait PolicyBackend {
 }
 
 impl ProfileRegistry {
+    pub fn bind(&mut self, enabled: bool, profile: Option<&str>) -> Result<ProfileBinding> {
+        self.bind_with(enabled, profile, &mut GuestPolicy)
+    }
+
+    fn bind_with(
+        &mut self,
+        enabled: bool,
+        profile: Option<&str>,
+        backend: &mut impl PolicyBackend,
+    ) -> Result<ProfileBinding> {
+        if !enabled {
+            return Ok(ProfileBinding::Disabled);
+        }
+        Ok(match self.prepare_with(profile, backend)? {
+            Some(prepared) => ProfileBinding::Confined(prepared),
+            None => ProfileBinding::Unconfined,
+        })
+    }
+
     pub fn prepare(&mut self, profile: Option<&str>) -> Result<Option<PreparedProfile>> {
         self.prepare_with(profile, &mut GuestPolicy)
     }
@@ -206,14 +250,8 @@ fn requested_name(profile: Option<&str>) -> Result<Option<String>> {
     match profile.map(str::trim) {
         None | Some("" | "unconfined") => Ok(None),
         Some(value) => {
-            // Transitional mapping, not an agreed Kubernetes API.
-            let name = if value == "runtime/default" {
-                "kata-default"
-            } else {
-                value.strip_prefix("localhost/").unwrap_or(value)
-            };
-            validate_profile_name(name)?;
-            Ok(Some(name.to_owned()))
+            validate_profile_name(value)?;
+            Ok(Some(value.to_owned()))
         }
     }
 }
@@ -233,23 +271,84 @@ fn validate_profile_name(name: &str) -> Result<()> {
 
 struct GuestPolicy;
 
+/// Validate the administrator's opt-in before serving RPCs. Policy contents,
+/// source hashes and enforce mode are still checked when first loading a profile.
+pub fn validate_guest_apparmor(enabled: bool, init_mode: bool) -> Result<()> {
+    validate_startup_with(enabled, init_mode, || {
+        if fs::read_to_string("/proc/1/comm")?.trim() != "systemd"
+            || !Path::new("/run/systemd/system").is_dir()
+        {
+            bail!("guest AppArmor requires a systemd guest");
+        }
+        trusted_extension_mount()?;
+        let parser = guest_parser()?;
+        let output = Command::new(parser)
+            .arg("--config-file=/dev/null")
+            .arg("--version")
+            .stdin(Stdio::null())
+            .output()
+            .context("check guest apparmor_parser availability")?;
+        if !output.status.success() {
+            bail!("guest apparmor_parser is not usable");
+        }
+        ensure_securityfs()?;
+        fs::read_to_string(PROFILES_PATH).context("read active guest AppArmor profiles")?;
+        Ok(())
+    })
+}
+
+fn validate_startup_with(
+    enabled: bool,
+    init_mode: bool,
+    check: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if !enabled {
+        return Ok(());
+    }
+    if init_mode {
+        bail!("guest AppArmor requires systemd; agent PID 1 mode is unsupported");
+    }
+    check().context("guest AppArmor was explicitly enabled but startup validation failed")
+}
+
+fn guest_parser() -> Result<&'static Path> {
+    ["/sbin/apparmor_parser", "/usr/sbin/apparmor_parser"]
+        .iter()
+        .copied()
+        .map(Path::new)
+        .find(|p| p.is_file())
+        .ok_or_else(|| anyhow::anyhow!("apparmor_parser is missing from the guest base image"))
+}
+
+fn trusted_extension_mount() -> Result<String> {
+    let cmdline = fs::read_to_string("/proc/cmdline")?;
+    if !extension_is_configured(&cmdline) {
+        bail!("no unique apparmor guest extension is configured");
+    }
+    let root = Path::new(EXTENSION_ROOT);
+    let mount = extension_mount(&fs::read_to_string("/proc/self/mountinfo")?, root)?;
+    if fs::canonicalize(root)? != root {
+        bail!("AppArmor extension root must not contain symbolic links");
+    }
+    Ok(mount)
+}
+
+fn extension_is_configured(cmdline: &str) -> bool {
+    // Empty/bare parameters configure an unmeasured extension. Trust comes from
+    // the selected guest and read-only mount, not from the mere presence of a
+    // verity argument; the mount unit validates measured images separately.
+    let mut parameters = cmdline.split_whitespace().filter(|p| {
+        *p == EXTENSION_PARAMETER
+            || p.strip_prefix(EXTENSION_PARAMETER)
+                .is_some_and(|value| value.starts_with('='))
+    });
+    parameters.next().is_some() && parameters.next().is_none()
+}
+
 impl PolicyBackend for GuestPolicy {
     fn source(&self, name: &str) -> Result<PolicySource> {
-        let cmdline = fs::read_to_string("/proc/cmdline")?;
-        if !cmdline.split_whitespace().any(|p| {
-            p == EXTENSION_PARAMETER
-                || p.strip_prefix(EXTENSION_PARAMETER)
-                    .is_some_and(|s| s.starts_with('='))
-        }) {
-            bail!(
-                "AppArmor profile {name} requested but no apparmor guest extension is configured"
-            );
-        }
+        let mount = trusted_extension_mount()?;
         let root = Path::new(EXTENSION_ROOT);
-        let mount = extension_mount(&fs::read_to_string("/proc/self/mountinfo")?, root)?;
-        if fs::canonicalize(root)? != root {
-            bail!("AppArmor extension root must not contain symbolic links");
-        }
         let metadata = fs::symlink_metadata(root.join("profiles").join(name)).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
                 anyhow::anyhow!("AppArmor profile {name} is missing from the extension: {error}")
@@ -307,13 +406,7 @@ impl PolicyBackend for GuestPolicy {
     fn add(&mut self, name: &str) -> Result<()> {
         let root = Path::new(EXTENSION_ROOT);
         let profile = root.join("profiles").join(name);
-        let parser = ["/sbin/apparmor_parser", "/usr/sbin/apparmor_parser"]
-            .iter()
-            .map(Path::new)
-            .find(|p| p.is_file())
-            .ok_or_else(|| {
-                anyhow::anyhow!("apparmor_parser is missing from the guest base image")
-            })?;
+        let parser = guest_parser()?;
         let parsed = run_parser(parser, root, &profile, &["-Q", "-N"])?;
         if std::str::from_utf8(&parsed.stdout)?.trim() != name {
             bail!(
@@ -534,10 +627,9 @@ fn validate_includes(root: &Path, path: &Path, content: &[u8]) -> Result<()> {
                 .and_then(|rest| rest.strip_prefix("exists"))
                 .filter(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
         });
-        let (optional, rest) = if !abi && optional_rest.is_some() {
-            (true, optional_rest.unwrap().trim_start())
-        } else {
-            (false, rest)
+        let (optional, rest) = match optional_rest {
+            Some(optional_rest) if !abi => (true, optional_rest.trim_start()),
+            _ => (false, rest),
         };
         let (closing, relative) = match rest.as_bytes().first() {
             Some(b'<') => ('>', &rest[1..]),
@@ -615,6 +707,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn extension_parameter_accepts_measured_and_unmeasured_only_once() {
+        for value in [
+            EXTENSION_PARAMETER.to_owned(),
+            format!("{EXTENSION_PARAMETER}="),
+            format!("{EXTENSION_PARAMETER}=root_hash=abcd"),
+        ] {
+            assert!(extension_is_configured(&format!("console=ttyS0 {value}")));
+            assert!(!extension_is_configured(&format!("{value} {value}")));
+        }
+        for value in [
+            "",
+            "kata.extension.other.verity_params",
+            "kata.extension.apparmor.verity_params_extra=x",
+        ] {
+            assert!(!extension_is_configured(value));
+        }
+    }
+
+    #[test]
     fn securityfs_mount_detection() {
         // What a SELinux-only guest init leaves behind: securityfs is mounted, AppArmor is
         // not active, so ensure_securityfs must reach its diagnosis instead of EBUSY.
@@ -688,9 +799,7 @@ mod tests {
         let mut backend = Backend::default();
         let first = registry.prepare_with(Some("test"), &mut backend).unwrap();
         assert_eq!(
-            registry
-                .prepare_with(Some("localhost/test"), &mut backend)
-                .unwrap(),
+            registry.prepare_with(Some("test"), &mut backend).unwrap(),
             first
         );
         assert_eq!(backend.loads, 1);
@@ -729,23 +838,23 @@ mod tests {
     #[test]
     fn exec_inherits_and_cannot_change_confinement() {
         let p = prepared();
-        for request in [
-            None,
-            Some(""),
-            Some("  "),
-            Some("test"),
-            Some("localhost/test"),
-        ] {
+        for request in [None, Some(""), Some("  "), Some("test")] {
             assert_eq!(exec_profile(Some(&p), request).unwrap(), Some(p.clone()));
         }
-        for request in [Some("unconfined"), Some("other")] {
+        for request in [
+            Some("unconfined"),
+            Some("other"),
+            Some("localhost/test"),
+            Some("runtime/default"),
+        ] {
             assert!(exec_profile(Some(&p), request).is_err());
         }
         assert!(exec_profile(None, Some("test")).is_err());
         assert_eq!(exec_profile(None, Some("unconfined")).unwrap(), None);
         assert!(validate_prepared(Some("test"), None).is_err());
         assert!(validate_prepared(None, Some(&p)).is_err());
-        validate_prepared(Some("localhost/test"), Some(&p)).unwrap();
+        validate_prepared(Some("test"), Some(&p)).unwrap();
+        assert!(validate_prepared(Some("localhost/test"), Some(&p)).is_err());
     }
     #[test]
     fn no_profile_requires_no_backend_access() {
@@ -761,6 +870,98 @@ mod tests {
                 .unwrap()
                 .is_none());
         }
+    }
+
+    struct ForbiddenBackend;
+
+    impl PolicyBackend for ForbiddenBackend {
+        fn source(&self, _: &str) -> Result<PolicySource> {
+            panic!("disabled mode must not inspect policy sources")
+        }
+        fn kernel(&self, _: &str) -> Result<Option<KernelProfile>> {
+            panic!("disabled mode must not inspect guest AppArmor")
+        }
+        fn add(&mut self, _: &str) -> Result<()> {
+            panic!("disabled mode must not run apparmor_parser")
+        }
+    }
+
+    #[test]
+    fn disabled_binding_ignores_every_host_profile_without_backend_access() {
+        let mut registry = ProfileRegistry::default();
+        for profile in [
+            None,
+            Some("unconfined"),
+            Some("docker-default"),
+            Some("runtime/default"),
+            Some("localhost/host-only"),
+            Some("../invalid"),
+        ] {
+            let bound = registry
+                .bind_with(false, profile, &mut ForbiddenBackend)
+                .unwrap();
+            assert_eq!(bound, ProfileBinding::Disabled);
+            assert_eq!(bound.exec_profile(profile).unwrap(), None);
+        }
+        assert!(registry.profiles.is_empty());
+    }
+
+    #[test]
+    fn enabled_bindings_never_fall_back_on_preparation_failure() {
+        let mut registry = ProfileRegistry::default();
+        assert_eq!(
+            registry
+                .bind_with(true, None, &mut ForbiddenBackend)
+                .unwrap(),
+            ProfileBinding::Unconfined
+        );
+        let mut backend = Backend {
+            fail_source: true,
+            ..Default::default()
+        };
+        assert!(registry
+            .bind_with(true, Some("missing"), &mut backend)
+            .is_err());
+        assert_eq!(backend.loads, 0);
+        backend.fail_source = false;
+        backend.fail_add = true;
+        assert!(registry
+            .bind_with(true, Some("missing"), &mut backend)
+            .is_err());
+        assert!(registry.profiles.is_empty());
+        backend.fail_add = false;
+        let bound = registry
+            .bind_with(true, Some("test"), &mut backend)
+            .unwrap();
+        assert!(matches!(bound, ProfileBinding::Confined(_)));
+        for request in [None, Some("test")] {
+            assert_eq!(
+                bound.exec_profile(request).unwrap().as_ref(),
+                bound.prepared()
+            );
+        }
+        assert!(bound.exec_profile(Some("other")).is_err());
+        assert!(bound.exec_profile(Some("unconfined")).is_err());
+        assert!(ProfileBinding::Unconfined
+            .exec_profile(Some("test"))
+            .is_err());
+    }
+
+    #[test]
+    fn startup_opt_in_is_strict_and_disabled_does_not_probe() {
+        for init_mode in [true, false] {
+            validate_startup_with(false, init_mode, || {
+                panic!("disabled startup must not probe")
+            })
+            .unwrap();
+        }
+        assert!(
+            validate_startup_with(true, true, || panic!("PID 1 must be rejected first")).is_err()
+        );
+        let err =
+            validate_startup_with(true, false, || bail!("prerequisites unavailable")).unwrap_err();
+        assert!(format!("{err:#}").contains("prerequisites unavailable"));
+        validate_startup_with(true, false, || Ok(())).unwrap();
     }
 
     #[test]
@@ -806,10 +1007,12 @@ mod tests {
     #[test]
     fn names_are_not_paths_or_reserved_labels() {
         assert_eq!(
-            requested_name(Some("runtime/default")).unwrap(),
+            requested_name(Some("kata-default")).unwrap(),
             Some("kata-default".into())
         );
         for name in [
+            "runtime/default",
+            "localhost/test",
             "..",
             ".",
             "../escape",

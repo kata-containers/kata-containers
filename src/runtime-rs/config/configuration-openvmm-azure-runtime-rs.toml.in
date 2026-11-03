@@ -248,6 +248,10 @@ guest_swap_size_percent = 100
 guest_swap_create_threshold_secs = 60
 
 [agent.@PROJECT_TYPE@]
+# Enable guest AppArmor. Requires QEMU, image (no initrd), and one apparmor extension.
+# Attaching an extension alone does not enable this mode.
+enable_guest_apparmor = false
+
 container_pipe_size = @PIPESIZE@
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)

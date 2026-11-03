@@ -1,6 +1,10 @@
 # This is an agent configuration file example.
 server_addr = 'vsock://8:2048'
 
+# Administrator opt-in. Requires a systemd guest, verified read-only AppArmor
+# extension, a usable apparmor_parser, and active guest AppArmor.
+enable_guest_apparmor = false
+
 [endpoints]
 # All endpoints are allowed
 allowed = [

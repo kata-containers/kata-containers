@@ -690,6 +690,13 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
 		if value != "" {
 			params := vc.DeserializeParams(strings.Fields(value))
+			// Reject reserved inputs before merging: deduplication must not hide
+			// an attempted workload override of the administrator's agent mode.
+			for _, param := range params {
+				if param.Key == vc.GuestAppArmorKernelParam {
+					return fmt.Errorf("kernel_params annotation cannot set reserved parameter %s", vc.GuestAppArmorKernelParam)
+				}
+			}
 
 			// Annotation parameters should replace existing parameters with the same key
 			// rather than append, to allow overriding default values

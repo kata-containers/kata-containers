@@ -558,6 +558,11 @@ vm_cache_number = 0
 vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
 
 [agent.@PROJECT_TYPE@]
+# Enable guest-side AppArmor policy enforcement. Requires the AppArmor guest
+# extension and a systemd guest with AppArmor selected. Disabled preserves
+# existing Kata guest behavior; it does not provide guest AppArmor confinement.
+enable_guest_apparmor = false
+
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
 enable_debug = false

@@ -422,6 +422,10 @@ message AgentDetails {
 
 	// List of additional features enabled at agent build time.
 	repeated string extra_features = 6;
+
+	// Effective administrator-selected guest AppArmor mode. Absent on older
+	// agents; runtimes requiring guest AppArmor must reject a false value.
+	bool guest_apparmor_enabled = 7;
 }
 
 message GuestDetailsRequest {

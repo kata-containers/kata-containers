@@ -498,6 +498,10 @@ disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
 
 [agent.@PROJECT_TYPE@]
+# Enable guest AppArmor. Requires QEMU, image (no initrd), and one apparmor extension.
+# Attaching an extension alone does not enable this mode.
+enable_guest_apparmor = false
+
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
 enable_debug = false

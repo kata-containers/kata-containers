@@ -218,6 +218,7 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         })?;
 
         lazy_static::initialize(&AGENT_CONFIG);
+        rustjail::apparmor::validate_guest_apparmor(AGENT_CONFIG.enable_guest_apparmor, true)?;
         let cgroup_v2 = AGENT_CONFIG.unified_cgroup_hierarchy || AGENT_CONFIG.cgroup_no_v1 == "all";
 
         init_agent_as_init(&logger, cgroup_v2)?;
@@ -269,12 +270,6 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
     //
     // XXX: Note that *ALL* spans needs to start after this point!!
     let span_guard = root_span.enter();
-
-    // Start the fd passthrough io listener
-    let passfd_listener_port = config.passfd_listener_port as u32;
-    if passfd_listener_port != 0 {
-        passfd_io::start_listen(passfd_listener_port).await?;
-    }
 
     // Start the sandbox and wait for its ttRPC server to end
     start_sandbox(&logger, config, init_mode, &mut tasks, shutdown_rx.clone()).await?;
@@ -368,6 +363,15 @@ async fn start_sandbox(
     tasks: &mut Vec<JoinHandle<Result<()>>>,
     shutdown: Receiver<bool>,
 ) -> Result<()> {
+    // Validate and freeze the administrator's security mode before starting any services.
+    let s = Sandbox::new_with_apparmor(logger, config.enable_guest_apparmor, init_mode)
+        .context("Failed to create sandbox")?;
+
+    // Start the fd passthrough io listener only after validating the security mode.
+    let passfd_listener_port = config.passfd_listener_port as u32;
+    if passfd_listener_port != 0 {
+        passfd_io::start_listen(passfd_listener_port).await?;
+    }
     let debug_console_vport = config.debug_console_vport as u32;
 
     if config.debug_console {
@@ -381,7 +385,6 @@ async fn start_sandbox(
     }
 
     // Initialize unique sandbox structure.
-    let s = Sandbox::new(logger).context("Failed to create sandbox")?;
     if init_mode {
         s.rtnl.handle_localhost().await?;
     }

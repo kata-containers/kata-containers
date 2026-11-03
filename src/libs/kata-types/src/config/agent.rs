@@ -87,6 +87,11 @@ pub struct Agent {
     #[serde(default)]
     pub enable_tracing: bool,
 
+    /// Enable guest AppArmor policy loading and workload confinement.
+    /// Requires QEMU, an image-based guest without initrd, and one AppArmor extension.
+    #[serde(default)]
+    pub enable_guest_apparmor: bool,
+
     /// Enable debug console.
     /// If enabled, user can connect guest OS running inside hypervisor through
     /// "kata-runtime exec <sandbox-id>" command
@@ -185,6 +190,7 @@ impl std::default::Default for Agent {
             debug: true,
             log_level: "info".to_string(),
             enable_tracing: false,
+            enable_guest_apparmor: false,
             debug_console_enabled: false,
             visible_cdi_devices: false,
             server_port: DEFAULT_AGENT_VSOCK_PORT,
@@ -290,3 +296,37 @@ mod vendor {
 #[cfg(feature = "enable-vendor")]
 #[path = "agent_vendor.rs"]
 mod vendor;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guest_apparmor_is_explicitly_enabled() {
+        assert!(!Agent::default().enable_guest_apparmor);
+        for (setting, enabled) in [("", false), ("false", false), ("true", true)] {
+            let content = if setting.is_empty() {
+                "[agent.kata]".to_owned()
+            } else {
+                format!("[agent.kata]\nenable_guest_apparmor = {setting}")
+            };
+            let config: TomlConfig = toml::from_str(&content).unwrap();
+            assert_eq!(config.agent["kata"].enable_guest_apparmor, enabled);
+            let serialized = toml::to_string(&config).unwrap();
+            let restored: TomlConfig = toml::from_str(&serialized).unwrap();
+            assert_eq!(restored.agent["kata"].enable_guest_apparmor, enabled);
+        }
+        assert!(toml::from_str::<Agent>("enable_guest_apparmor = 'true'").is_err());
+    }
+
+    #[test]
+    fn guest_apparmor_extension_does_not_enable_mode() {
+        let config: TomlConfig = toml::from_str(
+            "[agent.kata]\n\
+             [[hypervisor.qemu.guest_extension_images]]\n\
+             name = 'apparmor'\npath = '/policy.img'",
+        )
+        .unwrap();
+        assert!(!config.agent["kata"].enable_guest_apparmor);
+    }
+}

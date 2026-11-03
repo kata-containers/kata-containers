@@ -432,6 +432,74 @@ impl From<ExecProcessRequest> for agent::ExecProcessRequest {
     }
 }
 
+#[cfg(test)]
+mod apparmor_tests {
+    use super::*;
+    use protobuf::Message;
+
+    #[test]
+    fn guest_apparmor_details_preserve_effective_mode() {
+        for enabled in [false, true] {
+            let details = agent::AgentDetails {
+                guest_apparmor_enabled: enabled,
+                ..Default::default()
+            };
+            let decoded =
+                agent::AgentDetails::parse_from_bytes(&details.write_to_bytes().unwrap()).unwrap();
+            assert_eq!(AgentDetails::from(decoded).guest_apparmor_enabled, enabled);
+        }
+        // An older agent has no field 7 and therefore decodes to false.
+        let legacy = agent::AgentDetails::parse_from_bytes(&[]).unwrap();
+        assert!(!AgentDetails::from(legacy).guest_apparmor_enabled);
+    }
+
+    #[test]
+    fn create_and_exec_preserve_final_oci_apparmor_names() {
+        use oci_spec::runtime::{Process, Spec};
+
+        for profile in [
+            "",
+            "custom-policy",
+            "docker-default",
+            "runtime/default",
+            "policy//hat",
+            "profile with spaces",
+        ] {
+            let mut process = Process::default();
+            process.set_apparmor_profile(Some(profile.to_owned()));
+            let mut spec = Spec::default();
+            spec.set_process(Some(process.clone()));
+            let create: agent::CreateContainerRequest = CreateContainerRequest {
+                oci: Some(spec),
+                ..Default::default()
+            }
+            .into();
+            let create =
+                agent::CreateContainerRequest::parse_from_bytes(&create.write_to_bytes().unwrap())
+                    .unwrap();
+            assert_eq!(
+                create
+                    .OCI
+                    .as_ref()
+                    .unwrap()
+                    .Process
+                    .as_ref()
+                    .unwrap()
+                    .ApparmorProfile,
+                profile
+            );
+            let exec: agent::ExecProcessRequest = ExecProcessRequest {
+                process: Some(process),
+                ..Default::default()
+            }
+            .into();
+            let exec = agent::ExecProcessRequest::parse_from_bytes(&exec.write_to_bytes().unwrap())
+                .unwrap();
+            assert_eq!(exec.process.as_ref().unwrap().ApparmorProfile, profile);
+        }
+    }
+}
+
 impl From<agent::CpuUsage> for CpuUsage {
     fn from(src: agent::CpuUsage) -> Self {
         Self {
@@ -779,6 +847,7 @@ impl From<agent::AgentDetails> for AgentDetails {
             storage_handlers: trans_vec(src.storage_handlers),
             supports_seccomp: src.supports_seccomp,
             extra_features: trans_vec(src.extra_features),
+            guest_apparmor_enabled: src.guest_apparmor_enabled,
         }
     }
 }
