@@ -82,6 +82,10 @@ Extra environment variables:
 	                Make sure that selinuxfs is mounted to /sys/fs/selinux on the host
 	                and the rootfs is built with SELINUX=yes.
 	                DEFAULT value: "no"
+	SELINUX_FILE_CONTEXTS: Path to an SELinux file_contexts file. erofs only:
+	                the image is labeled from it at mkfs time, with no host
+	                SELinux needed and the rootfs directory left untouched.
+	                DEFAULT: not set
 
 Following diagram shows how the resulting image will look like
 
@@ -155,6 +159,13 @@ build_with_container() {
 		fi
 	fi
 
+	local file_contexts_mount=""
+	local file_contexts_env=""
+	if [[ -n "${SELINUX_FILE_CONTEXTS:-}" ]]; then
+		file_contexts_mount="-v $(readlink -f "${SELINUX_FILE_CONTEXTS}"):/selinux_file_contexts:ro"
+		file_contexts_env="--env SELINUX_FILE_CONTEXTS=/selinux_file_contexts"
+	fi
+
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
@@ -185,6 +196,8 @@ build_with_container() {
 		   -v "${rootfs}":"/rootfs" \
 		   -v "${image_dir}":"/image" \
 		   ${selinuxfs} \
+		   ${file_contexts_mount} \
+		   ${file_contexts_env} \
 		   ${shared_files} \
 		   "${container_image_name}" \
 		   bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
@@ -594,8 +607,15 @@ create_erofs_rootfs_image() {
 	info "Setup systemd"
 	setup_systemd "${mount_dir}"
 
+	local -a label_args=()
+	if [[ -n "${SELINUX_FILE_CONTEXTS:-}" ]]; then
+		[[ -f "${SELINUX_FILE_CONTEXTS}" ]] || die "SELINUX_FILE_CONTEXTS ${SELINUX_FILE_CONTEXTS} not found"
+		info "Labeling the erofs image from ${SELINUX_FILE_CONTEXTS}"
+		label_args=("--file-contexts=${SELINUX_FILE_CONTEXTS}")
+	fi
+
 	local -r fsimage="$(mktemp)"
-	mkfs.erofs -zlz4hc -Enoinline_data "${fsimage}" "${mount_dir}"
+	mkfs.erofs -zlz4hc -Enoinline_data "${label_args[@]}" "${fsimage}" "${mount_dir}"
 	local -r img_size="$(stat -c"%s" "${fsimage}")"
 	local img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
 
