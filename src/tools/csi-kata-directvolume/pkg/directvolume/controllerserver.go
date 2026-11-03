@@ -106,7 +106,7 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 			}
 		}
 
-		volumeCtx[utils.CapabilityInBytes] = fmt.Sprintf("%d", exVol.VolSize)
+		volumeCtx[utils.CapacityInBytes] = fmt.Sprintf("%d", exVol.VolSize)
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
@@ -173,7 +173,7 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		klog.Infof("successfully populated volume %s", vol.VolID)
 	}
 
-	volumeCtx[utils.CapabilityInBytes] = fmt.Sprintf("%d", capacity)
+	volumeCtx[utils.CapacityInBytes] = fmt.Sprintf("%d", capacity)
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
