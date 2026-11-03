@@ -162,14 +162,6 @@ func TestSPDKStage(t *testing.T) {
 	}
 	require.True(t, foundDelete, "should call vhost_delete_controller at NodeUnstage")
 
-	_, err = dv.NodeUnstageVolume(context.TODO(), &csi.NodeUnstageVolumeRequest{
-		VolumeId:          volID,
-		StagingTargetPath: stagePath,
-	})
-	if err != nil {
-		require.Contains(t, err.Error(), "file does not exist")
-	}
-
 	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: volID})
 	require.NoError(t, err)
 
@@ -203,22 +195,50 @@ func TestNodePublishVolumeMissingState(t *testing.T) {
 	require.Equal(t, codes.NotFound, status.Code(err))
 }
 
+func TestNodeUnpublishVolumeMissingTarget(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := testConfig(tmp)
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	createResp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
+	require.NoError(t, err)
+
+	_, err = dv.NodeUnpublishVolume(context.TODO(), &csi.NodeUnpublishVolumeRequest{
+		VolumeId:   createResp.GetVolume().GetVolumeId(),
+		TargetPath: filepath.Join(tmp, "missing-target"),
+	})
+	require.NoError(t, err)
+}
+
+func TestNodeUnstageVolumeMissingTarget(t *testing.T) {
+	tmp := t.TempDir()
+
+	oldCall := spdkrpc.Call
+	spdkrpc.Call = newFakeSpdkNS().fn
+	defer func() { spdkrpc.Call = oldCall }()
+
+	cfg := testConfig(tmp)
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	createResp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
+	require.NoError(t, err)
+
+	_, err = dv.NodeUnstageVolume(context.TODO(), &csi.NodeUnstageVolumeRequest{
+		VolumeId:          createResp.GetVolume().GetVolumeId(),
+		StagingTargetPath: filepath.Join(tmp, "missing-target"),
+	})
+	require.NoError(t, err)
+}
+
 func TestStageDirectVolumeMissingBackingDevice(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := testConfig(tmp)
 	dv, err := NewDirectVolumeDriver(cfg)
 	require.NoError(t, err)
 
-	createResp, err := dv.CreateVolume(context.TODO(), &csi.CreateVolumeRequest{
-		Name: "vol-direct",
-		CapacityRange: &csi.CapacityRange{
-			RequiredBytes: 8 << 20,
-		},
-		Parameters: map[string]string{
-			utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName,
-		},
-		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
-	})
+	createResp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
 	require.NoError(t, err)
 	volID := createResp.GetVolume().GetVolumeId()
 	req := &csi.NodeStageVolumeRequest{
