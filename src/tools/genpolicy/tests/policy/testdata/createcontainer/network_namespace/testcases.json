@@ -181,6 +181,18 @@
           "value": "/run/netns/podns-diff"
         }
       ]
+    },
+    {
+      "description": "namespaces in a different order than the policy",
+      "base": "create-container",
+      "allowed": true,
+      "patch": [
+        {
+          "op": "move",
+          "from": "/OCI/Linux/Namespaces/1",
+          "path": "/OCI/Linux/Namespaces/0"
+        }
+      ]
     }
   ]
 }
