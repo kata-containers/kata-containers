@@ -192,7 +192,7 @@ func TestCreateDirectVolumeRetry(t *testing.T) {
 	resp, err = dv.CreateVolume(context.TODO(), req)
 	require.NoError(t, err)
 	require.Equal(t, volID, resp.GetVolume().GetVolumeId())
-	require.Equal(t, "8388608", resp.GetVolume().GetVolumeContext()[utils.CapabilityInBytes])
+	require.Equal(t, "8388608", resp.GetVolume().GetVolumeContext()[utils.CapacityInBytes])
 	_, err = os.Stat(backing)
 	require.NoError(t, err)
 }
