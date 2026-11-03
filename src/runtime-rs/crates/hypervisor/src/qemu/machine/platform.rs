@@ -608,7 +608,9 @@ impl Platform {
             self.objects.numa_nodes.push(NumaNode {
                 nodeid: socket_idx as u32,
                 memdev,
-                cpus: Some(socket.cpu_range.clone()),
+                // Fewer vCPUs than host sockets leaves a socket with none;
+                // it keeps its memory node, and QEMU refuses `cpus=1-0`.
+                cpus: (!socket.cpu_range.is_empty()).then(|| socket.cpu_range.clone()),
             });
         }
 

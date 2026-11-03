@@ -399,6 +399,39 @@ fn gb200_4gpu_2socket() {
     );
 }
 
+/// Fewer vCPUs than host sockets: the socket that received none keeps its
+/// memory node without `cpus=`; QEMU rejects the empty range `cpus=1-0`.
+#[test]
+fn a_socket_without_vcpus_is_a_memory_only_node() {
+    let socket = |id: u32| SocketInfo {
+        id,
+        cpu_range: 0..0,
+        host_node: Some(id),
+        mem_path: None,
+        mem_size: Some(4 << 30),
+    };
+    let mut topo = HostTopology {
+        sockets: vec![socket(0), socket(1)],
+        gpu_smmu_groups: vec![GpuSmmuGroup {
+            pci_bus_addrs: vec!["0008:01:00.0".to_owned()],
+            socket: 0,
+        }],
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+        gpu_mmio_bytes: BTreeMap::new(),
+    };
+    topo.map_guest_vcpus(1);
+    let mut platform = Platform::from_config_defaults("virt", 8 << 30).expect("build");
+    platform.apply_host_defaults(&topo);
+    let args = platform.to_qemu_args().expect("to_qemu_args");
+
+    assert!(args.contains(&"node,memdev=m0,cpus=0,nodeid=0".to_owned()), "{:?}", args);
+    assert!(args.contains(&"node,memdev=m1,nodeid=1".to_owned()), "{:?}", args);
+}
+
 /// Read the real host through the same entry point as auto cold plug, without
 /// opening device FDs or launching QEMU. Output is the Platform argument fragment,
 /// not the legacy kernel/CPU/console/device arguments of a complete sandbox.
