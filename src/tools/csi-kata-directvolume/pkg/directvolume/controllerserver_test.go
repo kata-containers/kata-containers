@@ -65,7 +65,19 @@ func testConfig(tmp string) Config {
 	}
 }
 
-func TestSPDKVolume(t *testing.T) {
+func directVolumeRequest(name string) *csi.CreateVolumeRequest {
+	return &csi.CreateVolumeRequest{
+		Name:          name,
+		CapacityRange: &csi.CapacityRange{RequiredBytes: 8 << 20},
+		Parameters: map[string]string{
+			utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName,
+			utils.KataContainersDirectFsType:     "ext4",
+		},
+		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
+	}
+}
+
+func TestSPDKVolumeLifecycle(t *testing.T) {
 	tmp := t.TempDir()
 
 	oldDir := utils.SpdkRawDiskDir
@@ -134,25 +146,14 @@ func TestSPDKVolume(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDirectVolume(t *testing.T) {
+func TestDirectVolumeLifecycle(t *testing.T) {
 	tmp := t.TempDir()
 
 	cfg := testConfig(tmp)
 	dv, err := NewDirectVolumeDriver(cfg)
 	require.NoError(t, err)
 
-	req := &csi.CreateVolumeRequest{
-		Name: "vol-direct",
-		CapacityRange: &csi.CapacityRange{
-			RequiredBytes: 8 << 20,
-		},
-		Parameters: map[string]string{
-			utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName,
-			utils.KataContainersDirectFsType:     "ext4",
-		},
-		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
-	}
-	resp, err := dv.CreateVolume(context.TODO(), req)
+	resp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
 	require.NoError(t, err)
 	volID := resp.GetVolume().GetVolumeId()
 	require.NotEmpty(t, volID)
@@ -165,6 +166,26 @@ func TestDirectVolume(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, backing, vol.Metadata["backingFile"])
 
+	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: volID})
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(cfg.StoragePath, volID))
+	require.True(t, os.IsNotExist(err), "DeleteVolume should release the backing device")
+
+	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: volID})
+	require.NoError(t, err)
+}
+
+func TestCreateDirectVolumeRetry(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	req := directVolumeRequest("vol-direct")
+	resp, err := dv.CreateVolume(context.TODO(), req)
+	require.NoError(t, err)
+	volID := resp.GetVolume().GetVolumeId()
+	backing := filepath.Join(cfg.StoragePath, volID, "directvol-rawdisk.8M")
+
 	// A retried CreateVolume returns the same volume and the context
 	// NodeStageVolume needs, and recreates a missing backing device.
 	require.NoError(t, os.RemoveAll(filepath.Join(cfg.StoragePath, volID)))
@@ -174,9 +195,20 @@ func TestDirectVolume(t *testing.T) {
 	require.Equal(t, "8388608", resp.GetVolume().GetVolumeContext()[utils.CapabilityInBytes])
 	_, err = os.Stat(backing)
 	require.NoError(t, err)
+}
+
+func TestDeleteDirectVolumeInUse(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	resp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
+	require.NoError(t, err)
+	volID := resp.GetVolume().GetVolumeId()
+	backing := filepath.Join(cfg.StoragePath, volID, "directvol-rawdisk.8M")
 
 	// A volume that is still staged must not lose its backing device.
-	vol, err = dv.state.GetVolumeByID(volID)
+	vol, err := dv.state.GetVolumeByID(volID)
 	require.NoError(t, err)
 	vol.Staged.Add("/staging")
 	require.NoError(t, dv.state.UpdateVolume(vol))
@@ -184,15 +216,11 @@ func TestDirectVolume(t *testing.T) {
 	require.Equal(t, codes.FailedPrecondition, status.Code(err))
 	_, err = os.Stat(backing)
 	require.NoError(t, err)
-	vol.Staged.Remove("/staging")
-	require.NoError(t, dv.state.UpdateVolume(vol))
+}
 
-	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: volID})
-	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(cfg.StoragePath, volID))
-	require.True(t, os.IsNotExist(err), "DeleteVolume should release the backing device")
-
-	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: volID})
+func TestCreateVolumeUnsupportedType(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
 	require.NoError(t, err)
 
 	// A volume without a supported volume type could never be staged.
@@ -202,6 +230,12 @@ func TestDirectVolume(t *testing.T) {
 		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
 	})
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestDeleteVolumeInvalidID(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
 
 	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: ".."})
 	require.Error(t, err)
