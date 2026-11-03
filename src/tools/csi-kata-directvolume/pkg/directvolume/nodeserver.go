@@ -9,6 +9,7 @@ package directvolume
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -163,7 +164,10 @@ func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUn
 
 	// Unmount only if the target path is really a mount point.
 	if isMnt, err := dv.config.safeMounter.IsMountPoint(targetPath); err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("check target path: %v", err))
+		// An absent target means the volume is already unpublished.
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("check target path: %v", err))
+		}
 	} else if isMnt {
 		// Unmounting the image or filesystem.
 		err = dv.config.safeMounter.Unmount(targetPath)
@@ -255,7 +259,10 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 
 	// Unmount only if the target path is really a mount point.
 	if isMnt, err := dv.config.safeMounter.IsMountPoint(stagingTargetPath); err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("check staging target path: %v", err))
+		// An absent target means the volume is already unstaged.
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("check staging target path: %v", err))
+		}
 	} else if isMnt {
 		err = dv.config.safeMounter.Unmount(stagingTargetPath)
 		if err != nil {
