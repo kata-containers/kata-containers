@@ -362,6 +362,9 @@ impl ToQemuParams for Memory {
 struct Smp {
     num_vcpus: u32,
     max_num_vcpus: u32,
+    /// Sockets the Platform's NUMA layout spreads the vCPUs over. None keeps
+    /// QEMU's default of one socket per vCPU.
+    sockets: Option<u32>,
 }
 
 impl Smp {
@@ -377,6 +380,7 @@ impl Smp {
         Smp {
             num_vcpus,
             max_num_vcpus,
+            sockets: None,
         }
     }
 }
@@ -389,9 +393,27 @@ impl ToQemuParams for Smp {
         // will have sanitised non-zero values
         params.push(format!("{}", self.num_vcpus));
 
-        // Only add maxcpus if it differs from num_vcpus (enables CPU hotplug)
-        if self.max_num_vcpus > self.num_vcpus {
-            params.push(format!("maxcpus={}", self.max_num_vcpus));
+        match self.sockets {
+            Some(sockets) if sockets > 0 => {
+                // The NUMA nodes carry vCPU ranges split evenly over the
+                // sockets, the first ones taking the remainder. QEMU puts
+                // vCPU i in socket i / cores, which agrees with that split
+                // only when the topology says so; without it QEMU warns that
+                // CPUs of one socket sit in different nodes and that Linux
+                // may misbehave. QEMU requires sockets * cores == maxcpus.
+                let cores = self.max_num_vcpus.max(self.num_vcpus).div_ceil(sockets);
+                params.push(format!("sockets={sockets},cores={cores},threads=1"));
+                let maxcpus = sockets * cores;
+                if maxcpus > self.num_vcpus {
+                    params.push(format!("maxcpus={maxcpus}"));
+                }
+            }
+            _ => {
+                // Only add maxcpus if it differs from num_vcpus (enables CPU hotplug)
+                if self.max_num_vcpus > self.num_vcpus {
+                    params.push(format!("maxcpus={}", self.max_num_vcpus));
+                }
+            }
         }
 
         Ok(vec!["-smp".to_owned(), params.join(",")])
@@ -3964,7 +3986,9 @@ impl<'a> QemuCmdLine<'a> {
         machine_options: &[String],
         topology_args: Vec<String>,
         iommufd_id: Option<&str>,
+        cpu_sockets: u32,
     ) {
+        self.smp.sockets = (cpu_sockets > 0).then_some(cpu_sockets);
         self.machine.merge_options(machine_options);
         self.machine.memory_backend = None;
         self.memory.clear_memory_backend();
@@ -4221,6 +4245,39 @@ mod tests {
     }
 
     #[actix_rt::test]
+    async fn test_smp_follows_the_platform_sockets() {
+        // 5 vCPUs over 2 sockets: the NUMA split is 3 + 2, QEMU's is
+        // cores=3 per socket, so socket 1 is vCPUs 3-5 and maxcpus is 6.
+        let smp = Smp {
+            num_vcpus: 5,
+            max_num_vcpus: 5,
+            sockets: Some(2),
+        };
+        assert_eq!(
+            smp.qemu_params().await.unwrap(),
+            vec!["-smp", "5,sockets=2,cores=3,threads=1,maxcpus=6"]
+        );
+
+        let smp = Smp {
+            num_vcpus: 4,
+            max_num_vcpus: 4,
+            sockets: Some(2),
+        };
+        assert_eq!(
+            smp.qemu_params().await.unwrap(),
+            vec!["-smp", "4,sockets=2,cores=2,threads=1"]
+        );
+
+        // No Platform: the legacy line, maxcpus only for hotplug.
+        let smp = Smp {
+            num_vcpus: 2,
+            max_num_vcpus: 8,
+            sockets: None,
+        };
+        assert_eq!(smp.qemu_params().await.unwrap(), vec!["-smp", "2,maxcpus=8"]);
+    }
+
+    #[actix_rt::test]
     #[serial]
     async fn test_vfio_joins_platform_iommufd() {
         let config = test_qemu_config(Some("none"), false);
@@ -4230,6 +4287,7 @@ mod tests {
             &[],
             vec!["-object".to_owned(), "iommufd,id=iommufd0".to_owned()],
             Some("iommufd0"),
+            0,
         );
         let vfio = VfioDeviceConfig::new("0000:21:00.0", 9, 10).with_vfio_bus("rp0");
         cmdline.add_pcie_vfio_device(vfio).unwrap();

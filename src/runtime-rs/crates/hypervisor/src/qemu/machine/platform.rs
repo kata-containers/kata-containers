@@ -287,6 +287,16 @@ impl Platform {
         Ok(args)
     }
 
+    /// Sockets that hold vCPUs, for the -smp topology; a socket that received
+    /// no vCPU is a memory-only node and not a socket QEMU needs to know.
+    pub fn cpu_sockets(&self) -> u32 {
+        self.objects
+            .numa_nodes
+            .iter()
+            .filter(|node| node.cpus.is_some())
+            .count() as u32
+    }
+
     /// ID of the shared iommufd object, once a passthrough device is placed.
     pub fn iommufd_id(&self) -> Option<&str> {
         self.objects.iommufd.as_ref().map(|ifd| ifd.id.as_str())

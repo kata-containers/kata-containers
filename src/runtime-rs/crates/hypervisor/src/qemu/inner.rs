@@ -173,6 +173,7 @@ impl QemuInner {
                         &platform.machine_options(),
                         platform.topology_args()?,
                         platform.iommufd_id(),
+                        platform.cpu_sockets(),
                     );
                     info!(
                         sl!(),
