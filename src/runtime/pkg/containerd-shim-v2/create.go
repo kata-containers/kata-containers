@@ -31,9 +31,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	// only register the proto type
-	crioption "github.com/containerd/containerd/api/types/runtimeoptions/v1"
 	_ "github.com/containerd/containerd/api/types/runc/options"
+	crioption "github.com/containerd/containerd/api/types/runtimeoptions/v1"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
@@ -84,7 +83,6 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 	detach := !r.Terminal
 	ociSpec, bundlePath, err := loadSpec(r)
-
 	if err != nil {
 		return nil, err
 	}
