@@ -6,6 +6,9 @@
 # Per-architecture allowlists for merged release tarballs:
 #   kata-static.tar.zst  - runtime-rs focused (composable guest images)
 #   kata-go-static.tar.zst - Go runtime focused (monolithic guest images)
+# AppArmor production policy is a separate rootfs-image-apparmor-extension
+# component, never part of rootfs-image (the Base). The explicitly built
+# rootfs-image-apparmor-test-extension is excluded from production bundles.
 
 set -o errexit
 set -o nounset

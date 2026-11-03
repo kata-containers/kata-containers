@@ -206,8 +206,12 @@ docker_no_parser() { mock_mode=docker; mock_builder_broken=yes; validate; }
 no_parser() { mock_mode=none; validate; }
 real_profile() {
 	mock_real_parser=yes
-	cp "${repo_root_dir}/tools/packaging/apparmor-extension/policy/profiles/kata-apparmor-test" "${policy_root}/profiles/"
+	cp "${repo_root_dir}/tools/packaging/apparmor-extension/test-policy/profiles/kata-apparmor-test" "${policy_root}/profiles/"
 	validate
+}
+default_profile() {
+	mock_real_parser=yes
+	validate_apparmor_profiles "${repo_root_dir}/tools/packaging/apparmor-extension/policy"
 }
 real_includes() { mock_real_parser=yes; closed_includes; }
 real_quoted() { mock_real_parser=yes; closed_includes; quoted_include_after; }
@@ -283,6 +287,7 @@ check 'failed builder construction is fatal' 'Failed to build AppArmor parser im
 check 'a builder still lacking a parser is fatal' 'Agent builder has no apparmor_parser' docker_no_parser
 check 'absence of both parser and Docker is fatal' 'no apparmor_parser on the host' no_parser
 if [[ -n "${real_parser}" ]]; then
+	check 'the default profile compiles and declares exactly its requested name' pass default_profile
 	check 'the shipped profile compiles with the real parser' pass real_profile
 	check 'real parser resolves angle includes from root' pass real_includes
 	check 'real parser also checks quoted include resolution' 'failed to compile' real_quoted

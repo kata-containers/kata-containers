@@ -125,6 +125,7 @@ options:
 
 -h|--help      	      : Show this help
 -s             	      : Silent mode (produce output in case of failure only)
+--apparmor-policy-dir=<path> : Custom AppArmor policy root (profiles/ and its include closure)
 --build=<asset>       :
 	all
 	agent
@@ -156,6 +157,7 @@ options:
 	rootfs-image
 	rootfs-image-confidential
 	rootfs-image-apparmor-extension
+	rootfs-image-apparmor-test-extension
 	rootfs-image-coco-extension
 	rootfs-image-mariner
 	rootfs-initrd
@@ -1050,13 +1052,15 @@ install_image_devkit_extension() {
 # There is no distro bootstrap here: the tree is assembled directly from the
 # reviewed policy in tools/packaging/apparmor-extension/policy and handed to
 # image_builder.sh, which is why this does not go through rootfs.sh at all.
-install_image_apparmor_extension() {
-	local component="rootfs-image-apparmor-extension"
-	local policy_dir="${repo_root_dir}/tools/packaging/apparmor-extension/policy"
-
-	[[ -d "${policy_dir}" ]] || die "AppArmor policy directory not found: ${policy_dir}"
-	[[ -n "$(ls -A "${policy_dir}/profiles" 2>/dev/null)" ]] || \
-		die "no AppArmor profiles found in ${policy_dir}/profiles"
+install_image_apparmor_extension() (
+	# A positional root keeps custom policy trees usable by packaging callers.
+	# Validate that original root before copying: staging must not hide symlinks.
+	local policy_dir="${1:-${APPARMOR_POLICY_DIR:-${repo_root_dir}/tools/packaging/apparmor-extension/policy}}"
+	local variant="${2:-apparmor-extension}"
+	case "${variant}" in
+		apparmor-extension|apparmor-test-extension) ;;
+		*) die "Invalid AppArmor extension variant: ${variant}" ;;
+	esac
 
 	# A wrong profile name would otherwise only surface as a failure inside a
 	# guest, so validate at build time with a real parser.
@@ -1064,26 +1068,46 @@ install_image_apparmor_extension() {
 
 	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
 	local install_dir="${destdir}/${prefix}/share/kata-containers/"
-	local extension_img="${install_dir}/kata-containers-apparmor-extension.img"
+	local extension_img="${install_dir}/kata-containers-${variant}.img"
 
 	mkdir -p "${install_dir}"
 
-	local extension_rootfs
-	extension_rootfs="$(mktemp -d "${repo_root_dir}/.apparmor-extension-rootfs.XXXX")"
+	local extension_workdir extension_rootfs built_image
+	extension_workdir="$(mktemp -d "${repo_root_dir}/.apparmor-extension-rootfs.XXXX")"
+	extension_rootfs="${extension_workdir}/rootfs"
+	built_image="${extension_workdir}/output/kata-containers-${variant}.img"
+	trap 'if command -v sudo >/dev/null 2>&1; then
+		sudo rm -rf --one-file-system "${extension_workdir:?}"
+	else
+		rm -rf --one-file-system "${extension_workdir:?}"
+	fi' EXIT
+	mkdir -p "${extension_rootfs}" "${extension_workdir}/output"
 
 	cp -a "${policy_dir}/." "${extension_rootfs}/"
+	if [[ "${variant}" == apparmor-test-extension ]]; then
+		local fixture_root="${repo_root_dir}/tools/packaging/apparmor-extension/test-policy"
+		validate_apparmor_profiles "${fixture_root}"
+		[[ ! -e "${extension_rootfs}/profiles/kata-apparmor-test" ]] || \
+			die "Custom policy root already contains the reserved test fixture"
+		cp -a "${fixture_root}/." "${extension_rootfs}/"
+	elif [[ -e "${extension_rootfs}/profiles/kata-apparmor-test" ]]; then
+		die "Production AppArmor extension must not contain kata-apparmor-test"
+	fi
 	mkdir -p "${extension_rootfs}/metadata"
 	{
 		echo "name=apparmor"
+		echo "variant=${variant}"
 		echo "kata_version=$(get_kata_version)"
 		echo "policy_commit=$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
 			-- tools/packaging/apparmor-extension 2>/dev/null || echo unknown)"
 		echo "profiles=$(find "${extension_rootfs}/profiles" -mindepth 1 -type f -printf '%f\n' \
 			| sort | tr '\n' ' ')"
 	} > "${extension_rootfs}/metadata/manifest"
+	# Check the exact assembled tree, including metadata and the test overlay.
+	validate_apparmor_profiles "${extension_rootfs}"
 
 	export USE_DOCKER="1"
-	export BUILD_VARIANT="apparmor-extension"
+	export BUILD_VARIANT="${variant}"
 	export FS_TYPE="erofs"
 	# s390x does not use a measured rootfs, so no dm-verity hash is produced.
 	if [[ "${ARCH}" == "s390x" ]]; then
@@ -1095,20 +1119,25 @@ install_image_apparmor_extension() {
 	export SKIP_ROOTFS_CHECK="yes"
 
 	local rc=0
-	"${image_builder}" -o "${extension_img}" "${extension_rootfs}" || rc=$?
-
-	if command -v sudo >/dev/null 2>&1; then
-		sudo rm -rf --one-file-system "${extension_rootfs:?}"
-	else
-		rm -rf --one-file-system "${extension_rootfs:?}"
-	fi
+	"${image_builder}" -o "${built_image}" "${extension_rootfs}" || rc=$?
 
 	[[ "${rc}" -eq 0 ]] || die "building the AppArmor extension image failed"
-	[[ -f "${extension_img}" ]] || die "image_builder.sh did not produce ${extension_img}"
+	[[ -f "${built_image}" ]] || die "image_builder.sh did not produce ${built_image}"
 
-	if [[ -e "${install_dir}/root_hash_apparmor-extension.txt" ]]; then
-		info "Root hash file: ${install_dir}/root_hash_apparmor-extension.txt"
+	if [[ "${MEASURED_ROOTFS}" == yes ]]; then
+		local root_hash_file="${extension_workdir}/output/root_hash_${variant}.txt"
+		[[ -s "${root_hash_file}" ]] || die "Missing AppArmor extension root hash: ${root_hash_file}"
+		grep -Eq '^root_hash=[0-9a-f]{64},salt=([0-9a-f]+|-),data_blocks=[1-9][0-9]*,data_block_size=[1-9][0-9]*,hash_block_size=[1-9][0-9]*$' \
+			"${root_hash_file}" || die "Invalid AppArmor extension verity parameters: ${root_hash_file}"
+		install -m 0644 "${root_hash_file}" "${install_dir}/root_hash_${variant}.txt"
+		info "Root hash file: ${install_dir}/root_hash_${variant}.txt"
 	fi
+	install -m 0644 "${built_image}" "${extension_img}"
+)
+
+# Explicit test-only target; never selected by production release manifests.
+install_image_apparmor_test_extension() {
+	install_image_apparmor_extension "${1:-}" apparmor-test-extension
 }
 
 # Check the entire policy tree before letting the parser open any includes.
@@ -2379,6 +2408,8 @@ handle_build() {
 
 	rootfs-image-apparmor-extension) install_image_apparmor_extension ;;
 
+	rootfs-image-apparmor-test-extension) install_image_apparmor_test_extension ;;
+
 	rootfs-image-devkit-extension) install_image_devkit_extension ;;
 
 	rootfs-image-mariner) install_image_mariner ;;
@@ -2590,6 +2621,12 @@ main() {
 			build=*)
 				# shellcheck disable=SC2206
 				build_targets=(${OPTARG#*=})
+				;;
+			apparmor-policy-dir=*)
+				APPARMOR_POLICY_DIR="${OPTARG#*=}"
+				[[ -n "${APPARMOR_POLICY_DIR}" ]] || die "Empty AppArmor policy root"
+				# Keep the lexical path: profile validation must detect symlink ancestors.
+				APPARMOR_POLICY_DIR="$(realpath -ms -- "${APPARMOR_POLICY_DIR}")"
 				;;
 			help)
 				usage 0

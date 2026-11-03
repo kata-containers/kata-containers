@@ -13,8 +13,8 @@
 # writes to one well known path while otherwise staying permissive, so it can
 # never be mistaken for a hardening profile.
 #
-# A production default profile would have to start from a real guest file tree
-# and a real workload's access needs, and be reviewed as such.
+# Only kata-containers-apparmor-test-extension.img carries this fixture. The
+# production extension carries the separately reviewed containerd baseline.
 #
 # Deliberately self-contained: no #include. The distribution's abstractions and
 # tunables are a deep tree of policy text that carries distribution-specific
