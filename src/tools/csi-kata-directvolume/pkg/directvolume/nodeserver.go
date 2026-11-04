@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -67,31 +68,9 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	volumeID := req.GetVolumeId()
 	attrib := req.GetVolumeContext()
 
-	devicePath := dv.config.VolumeDevices[volumeID]
-
-	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
-		if devicePath == "" {
-			if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
-				if dp := vol.Metadata["devicePath"]; dp != "" {
-					devicePath = dp
-					dv.config.VolumeDevices[volumeID] = dp
-					klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
-				} else {
-					return nil, status.Errorf(codes.NotFound,
-						"[SPDK] devicePath not found in state for volume %s", volumeID)
-				}
-			} else {
-				return nil, status.Errorf(codes.NotFound,
-					"[SPDK] volume %s not found in state: %v", volumeID, err)
-			}
-		}
-
-		if _, err := os.Stat(devicePath); err != nil {
-			return nil, status.Errorf(codes.NotFound,
-				"[SPDK] vhost socket missing after driver restart: %s (err=%v)", devicePath, err)
-		}
-
-		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
+	devicePath, err := dv.publishDevicePath(volumeID, req.GetVolumeContext())
+	if err != nil {
+		return nil, err
 	}
 
 	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
@@ -151,6 +130,59 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	klog.Infof("directvolume: volume %s has been published.", targetPath)
 
 	return &csi.NodePublishVolumeResponse{}, nil
+}
+
+// publishDevicePath returns the device which backs a staged volume. The
+// device map is not persisted, so it is empty after a driver restart: the
+// device of an SPDK volume is then read from the state, and the raw disk of
+// a directvol volume has a fixed path.
+func (dv *directVolume) publishDevicePath(volumeID string, volumeCtx map[string]string) (string, error) {
+	devicePath := dv.config.VolumeDevices[volumeID]
+
+	if volumeCtx[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
+		if devicePath == "" {
+			if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
+				if dp := vol.Metadata["devicePath"]; dp != "" {
+					devicePath = dp
+					dv.config.VolumeDevices[volumeID] = dp
+					klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
+				} else {
+					return "", status.Errorf(codes.NotFound,
+						"[SPDK] devicePath not found in state for volume %s", volumeID)
+				}
+			} else {
+				return "", status.Errorf(codes.NotFound,
+					"[SPDK] volume %s not found in state: %v", volumeID, err)
+			}
+		}
+
+		if _, err := os.Stat(devicePath); err != nil {
+			return "", status.Errorf(codes.NotFound,
+				"[SPDK] vhost socket missing after driver restart: %s (err=%v)", devicePath, err)
+		}
+
+		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
+		return devicePath, nil
+	}
+
+	if devicePath != "" {
+		return devicePath, nil
+	}
+
+	size, err := strconv.ParseInt(volumeCtx[utils.CapabilityInBytes], 10, 64)
+	if err != nil {
+		return "", status.Errorf(codes.InvalidArgument, "volume %s has an invalid %s %q in its volume context",
+			volumeID, utils.CapabilityInBytes, volumeCtx[utils.CapabilityInBytes])
+	}
+	devicePath = utils.DirectBlockDevicePath(dv.config.StoragePath, volumeID, size)
+	if _, err := os.Stat(devicePath); err != nil {
+		return "", status.Errorf(codes.FailedPrecondition, "raw disk of volume %s is not available, the volume must be staged first: %v",
+			volumeID, err)
+	}
+	dv.config.VolumeDevices[volumeID] = devicePath
+	klog.Infof("recovered device %s of volume %s", devicePath, volumeID)
+
+	return devicePath, nil
 }
 
 func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {

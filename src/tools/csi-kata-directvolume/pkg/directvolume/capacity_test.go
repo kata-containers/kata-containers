@@ -1015,3 +1015,25 @@ func TestAdoptVolume(t *testing.T) {
 	_, err = d.adoptVolume("broken", map[string]string{utils.CapabilityInBytes: "lots"})
 	requireCode(t, err, codes.InvalidArgument)
 }
+
+func TestPublishDevicePathAfterRestart(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{})
+	vol := d.mustCreate(t, createRequest("vol-1", 64*utils.MiB, utils.DirectVolumeTypeName, ""))
+	volumeCtx := vol.GetVolumeContext()
+
+	// Not staged yet: there is no raw disk to publish.
+	_, err := d.publishDevicePath(vol.GetVolumeId(), volumeCtx)
+	requireCode(t, err, codes.FailedPrecondition)
+
+	// Staging creates the raw disk and remembers it in memory only.
+	rawDisk := utils.DirectBlockDevicePath(d.config.StoragePath, vol.GetVolumeId(), 64*utils.MiB)
+	require.NoError(t, os.MkdirAll(filepath.Dir(rawDisk), 0750))
+	require.NoError(t, os.WriteFile(rawDisk, nil, 0600))
+
+	d = d.restart(t)
+	require.Empty(t, d.config.VolumeDevices)
+	devicePath, err := d.publishDevicePath(vol.GetVolumeId(), volumeCtx)
+	require.NoError(t, err)
+	require.Equal(t, rawDisk, devicePath)
+	require.Equal(t, rawDisk, d.config.VolumeDevices[vol.GetVolumeId()])
+}
