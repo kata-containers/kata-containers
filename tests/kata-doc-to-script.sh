@@ -220,7 +220,7 @@ main()
 
 	if [[ "${strict}" = "yes" ]]
 	then
-		echo "${file}"|grep -q "${extension_regex}" ||\
+		grep -q "${extension_regex}" <<< "${file}" ||\
 			die "file '${file}' doesn't match pattern '${extension_regex}'"
 	fi
 

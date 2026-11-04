@@ -126,7 +126,7 @@ validate_env() {
         fi
     done
 
-    if ! ${container_engine} ps | grep -q "${registry_name}"; then
+    if ! ${container_engine} ps | grep "${registry_name}" > /dev/null; then
         echo "Docker registry not found. Installing..."
         ${container_engine} run -d -p "${registry_port}":5000 --restart=always --name "${registry_name}" "${registry_image}"
         # wait for registry container
