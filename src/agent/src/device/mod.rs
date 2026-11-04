@@ -235,8 +235,8 @@ pub async fn add_devices(
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
 
-    // The map changes only through VFIO devices. A workload must not fail
-    // because a file that only serves metrics labels cannot be written.
+    // Only VFIO devices change the map. It is for metrics only, so a write
+    // error does not fail the container.
     if container_has_vfio_device(devices) {
         if let Err(e) = write_pci_map(&sandbox.lock().await.pcimap) {
             warn!(logger, "failed to write {}: {e:?}", PCI_MAP_PATH);
