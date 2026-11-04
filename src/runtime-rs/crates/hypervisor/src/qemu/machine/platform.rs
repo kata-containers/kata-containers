@@ -256,20 +256,14 @@ impl Platform {
     /// The `key=value` options of the machine line without the type and
     /// `accel=`, for merging into a machine line rendered elsewhere.
     pub fn machine_options(&self) -> Vec<String> {
-        emit_machine(&self.machine, self.numa_has_memdev())
-            .split(',')
-            .skip(2)
-            .map(String::from)
-            .collect()
+        machine_options(&self.machine, self.numa_has_memdev())
     }
 
-    /// Everything `to_qemu_args` emits except the `-machine` pair.
+    /// Everything `to_qemu_args` emits except the `-machine` pair, for a
+    /// command line that renders the machine line itself from
+    /// `machine_options`.
     pub fn topology_args(&self) -> Result<Vec<String>> {
-        let mut args = self.to_qemu_args()?;
-        if let Some(pos) = args.iter().position(|a| a == "-machine") {
-            args.drain(pos..pos + 2);
-        }
-        Ok(args)
+        self.emit_args(false)
     }
 
     /// Sockets that hold vCPUs, for the -smp topology; a socket that received
@@ -794,14 +788,18 @@ impl Platform {
     }
 
     /// Emit the complete QEMU command-line argument list.
-    ///
+    pub(crate) fn to_qemu_args(&self) -> Result<Vec<String>> {
+        self.emit_args(true)
+    }
+
     /// Dispatch by machine type: Q35 and virt/Grace have different emission
     /// ordering because virt may reference `memory-backend=` on the machine line
-    /// (backends must precede machine), whereas Q35 does not.
-    pub(crate) fn to_qemu_args(&self) -> Result<Vec<String>> {
+    /// (backends must precede machine), whereas Q35 does not.  `with_machine`
+    /// includes the `-machine` pair at its position.
+    fn emit_args(&self, with_machine: bool) -> Result<Vec<String>> {
         match &self.machine {
-            Machine::Q35(_) => self.emit_q35_args(),
-            Machine::Virt(_) => self.emit_virt_args(),
+            Machine::Q35(_) => self.emit_q35_args(with_machine),
+            Machine::Virt(_) => self.emit_virt_args(with_machine),
             Machine::Pseries(_) => todo!("pSeries args"),
             Machine::S390xCcwVirtio(_) => todo!("s390x args"),
         }
@@ -832,7 +830,7 @@ impl Platform {
     ///   5. the shared iommufd object, once, when any VFIO device is placed
     ///   6. pxb-pcie GPU roots (pxb + root ports + vfio)
     ///   7. cold-plug root ports on pcie.0
-    fn emit_q35_args(&self) -> Result<Vec<String>> {
+    fn emit_q35_args(&self, with_machine: bool) -> Result<Vec<String>> {
         let mut args: Vec<String> = Vec::new();
 
         if let Some(ref prot) = self.objects.protection {
@@ -840,8 +838,10 @@ impl Platform {
             args.push(emit_protection(prot));
         }
 
-        args.push("-machine".to_owned());
-        args.push(emit_machine(&self.machine, self.numa_has_memdev()));
+        if with_machine {
+            args.push("-machine".to_owned());
+            args.push(emit_machine(&self.machine, self.numa_has_memdev()));
+        }
 
         for (backend, node) in self
             .objects
@@ -912,7 +912,7 @@ impl Platform {
     ///   4. NUMA nodes
     ///   5. pxb-pcie + arm-smmuv3 + root ports + vfio
     ///   6. acpi_links (GenericInitiators then EgmMemory)
-    fn emit_virt_args(&self) -> Result<Vec<String>> {
+    fn emit_virt_args(&self, with_machine: bool) -> Result<Vec<String>> {
         let mut args: Vec<String> = Vec::new();
 
         if let Some(ifd) = &self.objects.iommufd {
@@ -935,8 +935,10 @@ impl Platform {
             }
         }
 
-        args.push("-machine".to_owned());
-        args.push(emit_machine(&self.machine, self.numa_has_memdev()));
+        if with_machine {
+            args.push("-machine".to_owned());
+            args.push(emit_machine(&self.machine, self.numa_has_memdev()));
+        }
 
         for node in &self.objects.numa_nodes {
             args.push("-numa".to_owned());
@@ -1107,37 +1109,52 @@ fn emit_protection(prot: &ProtectionDevice) -> String {
     }
 }
 
-fn emit_machine(machine: &Machine, numa_has_memdev: bool) -> String {
+/// The `key=value` options of the machine line, after the type and `accel=`.
+/// `memory-backend=` is omitted when the NUMA nodes carry `memdev=`: QEMU
+/// rejects the two together.
+fn machine_options(machine: &Machine, numa_has_memdev: bool) -> Vec<String> {
+    let mut options = Vec::new();
     match machine {
         Machine::Q35(q) => {
-            let mut s = format!("q35,accel={}", q.base.accel);
             if let Some(ki) = &q.kernel_irqchip {
-                s.push_str(&format!(",kernel_irqchip={ki}"));
+                options.push(format!("kernel_irqchip={ki}"));
             }
             if let Some(cgs) = &q.confidential_guest_support {
-                s.push_str(&format!(",confidential-guest-support={cgs}"));
+                options.push(format!("confidential-guest-support={cgs}"));
             }
-            s
         }
         Machine::Virt(v) => {
-            let mut s = format!("virt,accel={}", v.base.accel);
             if let Some(gv) = v.gic_version {
-                s.push_str(&format!(",gic-version={gv}"));
+                options.push(format!("gic-version={gv}"));
             }
-            s.push_str(if v.ras { ",ras=on" } else { ",ras=off" });
+            options.push(if v.ras { "ras=on" } else { "ras=off" }.to_owned());
             if let Some(sz) = v.highmem_mmio_size {
-                s.push_str(&format!(",highmem-mmio-size={}", format_memory(sz)));
+                options.push(format!("highmem-mmio-size={}", format_memory(sz)));
             }
             if !numa_has_memdev {
                 if let Some(mb) = &v.base.memory_backend {
-                    s.push_str(&format!(",memory-backend={mb}"));
+                    options.push(format!("memory-backend={mb}"));
                 }
             }
-            s
         }
+        Machine::Pseries(_) | Machine::S390xCcwVirtio(_) => {}
+    }
+    options
+}
+
+fn emit_machine(machine: &Machine, numa_has_memdev: bool) -> String {
+    let machine_type = match machine {
+        Machine::Q35(_) => "q35",
+        Machine::Virt(_) => "virt",
         Machine::Pseries(_) => todo!("pSeries machine emission"),
         Machine::S390xCcwVirtio(_) => todo!("s390x machine emission"),
-    }
+    };
+    let mut parts = vec![
+        machine_type.to_owned(),
+        format!("accel={}", machine.base().accel),
+    ];
+    parts.extend(machine_options(machine, numa_has_memdev));
+    parts.join(",")
 }
 
 fn emit_numa_node(node: &NumaNode) -> String {
