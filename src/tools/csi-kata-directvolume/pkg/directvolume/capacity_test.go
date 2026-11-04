@@ -70,9 +70,9 @@ func getCapacityForTest(t *testing.T, dv *directVolume, kind string) *csi.GetCap
 	return response
 }
 
-// schedulingLimit models the kube-scheduler VolumeBinding predicate. It uses
+// capacityTestSchedulingLimit models the kube-scheduler VolumeBinding predicate. It uses
 // maximum_volume_size when present and falls back to available_capacity.
-func schedulingLimit(response *csi.GetCapacityResponse) (int64, bool) {
+func capacityTestSchedulingLimit(response *csi.GetCapacityResponse) (int64, bool) {
 	if response == nil {
 		return 0, false
 	}
@@ -91,7 +91,7 @@ func filterCapacityTestNodes(t *testing.T, requiredBytes int64, nodes ...capacit
 		// an RPC error. An error here must fail the test rather than be treated
 		// as ordinary scheduler filtering.
 		response := getCapacityForTest(t, node.driver, capacityTestPool)
-		limit, reported := schedulingLimit(response)
+		limit, reported := capacityTestSchedulingLimit(response)
 		if reported && limit >= requiredBytes {
 			eligible = append(eligible, node.name)
 		}
@@ -148,16 +148,16 @@ func TestCapacityAwareSchedulingUsesMaximumVolumeSize(t *testing.T) {
 		MaximumVolumeSize: &wrappers.Int64Value{Value: 3 * utils.GiB},
 	}
 
-	limit, reported := schedulingLimit(response)
+	limit, reported := capacityTestSchedulingLimit(response)
 	require.True(t, reported)
 	require.Equal(t, int64(3*utils.GiB), limit)
-	require.True(t, schedulingFits(response, 3*utils.GiB))
-	require.False(t, schedulingFits(response, 4*utils.GiB))
-	require.False(t, schedulingFits(nil, utils.GiB))
+	require.True(t, capacityTestSchedulingFits(response, 3*utils.GiB))
+	require.False(t, capacityTestSchedulingFits(response, 4*utils.GiB))
+	require.False(t, capacityTestSchedulingFits(nil, utils.GiB))
 }
 
-func schedulingFits(response *csi.GetCapacityResponse, requiredBytes int64) bool {
-	limit, reported := schedulingLimit(response)
+func capacityTestSchedulingFits(response *csi.GetCapacityResponse, requiredBytes int64) bool {
+	limit, reported := capacityTestSchedulingLimit(response)
 	return reported && limit >= requiredBytes
 }
 
@@ -170,14 +170,14 @@ func TestCapacityAwareSchedulingMissingInformation(t *testing.T) {
 		require.NoError(t, err)
 		require.Zero(t, response.AvailableCapacity)
 		require.Zero(t, response.MaximumVolumeSize.GetValue())
-		require.False(t, schedulingFits(response, utils.GiB))
+		require.False(t, capacityTestSchedulingFits(response, utils.GiB))
 	})
 
 	t.Run("missing pool parameter is not eligible", func(t *testing.T) {
 		dv := newCapacityTestDriver(t, "node-missing-pool", 8*utils.GiB, 8*utils.GiB)
 		response := getCapacityForTest(t, dv, "")
 		require.Zero(t, response.AvailableCapacity)
-		require.False(t, schedulingFits(response, utils.GiB))
+		require.False(t, capacityTestSchedulingFits(response, utils.GiB))
 	})
 
 	t.Run("unconfigured capacity uses explicit per-volume fallback", func(t *testing.T) {
@@ -189,8 +189,8 @@ func TestCapacityAwareSchedulingMissingInformation(t *testing.T) {
 		// physical-capacity report when capacity scheduling is enabled.
 		require.Equal(t, int64(4*utils.GiB), response.AvailableCapacity)
 		require.Equal(t, int64(4*utils.GiB), response.MaximumVolumeSize.GetValue())
-		require.True(t, schedulingFits(response, 4*utils.GiB))
-		require.False(t, schedulingFits(response, 4*utils.GiB+1))
+		require.True(t, capacityTestSchedulingFits(response, 4*utils.GiB))
+		require.False(t, capacityTestSchedulingFits(response, 4*utils.GiB+1))
 	})
 }
 
@@ -201,7 +201,7 @@ func TestCapacityAwareSchedulingStaleReportFallback(t *testing.T) {
 	// Take the snapshot which a scheduler could have observed before another
 	// provisioner consumed the remaining capacity on node A.
 	staleReport := getCapacityForTest(t, nodeA, capacityTestPool)
-	require.True(t, schedulingFits(staleReport, 4*utils.GiB))
+	require.True(t, capacityTestSchedulingFits(staleReport, 4*utils.GiB))
 	require.NoError(t, createCapacityTestVolume(nodeA, "other-reservation", 4*utils.GiB))
 
 	// The stale report must not be treated as a reservation. CreateVolume is

@@ -111,6 +111,9 @@ func TestDirectVolumeCapacityScheduling(t *testing.T) {
 		t.Fatalf("PV %s node affinity %s does not select %s", volumeName, nodeAffinity, largeNode)
 	}
 
+	// Let the 4 GiB reservation reach CSIStorageCapacity before creating the
+	// next claim; otherwise this scenario would intentionally race the poll.
+	time.Sleep(30 * time.Second)
 	applyCapacityE2EWorkload(t, ctx, namespace, storageClass, runtimeClass, "five", 5)
 	// Allow several 10-second capacity polls and scheduling cycles. Neither
 	// node can fit 5 GiB while the 4 GiB volume remains reserved.
