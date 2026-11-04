@@ -317,6 +317,47 @@ jobs:
           path: /tmp/artifacts
           retention-days: 1
 
+  run-tracing:
+    name: run-tracing
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-tracing-amd64
+      cancel-in-progress: true
+    timeout-minutes: 15
+    env:
+      KATA_HYPERVISOR: qemu-runtime-rs
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Install dependencies
+        env:
+          GITHUB_API_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tests/functional/tracing/gha-run.sh install-dependencies
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/functional/tracing/gha-run.sh install-kata kata-artifacts
+
+      - name: Run tracing test
+        timeout-minutes: 5
+        run: bash tests/functional/tracing/gha-run.sh run
+
   run-kata-agent-apis:
     name: run-kata-agent-apis
     runs-on: ubuntu-24.04
