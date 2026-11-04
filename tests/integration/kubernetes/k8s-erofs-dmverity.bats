@@ -5,14 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Verifies that, when the erofs snapshotter is configured with dm-verity,
-# kata-agent activates dm-verity for every workload EROFS layer mounted
+# kata-agent activates dm-verity for every workload and pause EROFS layer mounted
 # inside the guest.
 #
 # Verification strategy:
 #   The pod derives the expected workload layer count from the root overlay's
-#   lowerdirs, then requires the same number of kata-verity devices and
-#   dm-backed EROFS mounts. The guest rootfs and pause container are outside
-#   this test's scope. The command exits 0 on success and 1 on failure; with
+#   lowerdirs plus one for the single-layer pause image, then requires the same
+#   number of kata-verity devices and dm-backed EROFS mounts. The guest rootfs
+#   is outside this test's scope. The command exits 0 on success and 1 on failure; with
 #   restartPolicy: Never the pod reaches Succeeded or Failed respectively,
 #   which the test polls for.
 
