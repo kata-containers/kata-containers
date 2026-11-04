@@ -117,13 +117,13 @@ impl QemuInner {
                 if vfio_device.device.device_type == VfioDeviceType::MediatedAp {
                     continue;
                 }
-                let devices = vfio_device
-                    .device
-                    .iommu_group
-                    .as_ref()
-                    .map(|g| &g.devices)
-                    .unwrap_or(&vfio_device.device.devices);
-                bdfs.extend(devices.iter().map(|d| d.addr.to_string()));
+                bdfs.extend(
+                    vfio_device
+                        .device
+                        .cold_plug_devices()
+                        .iter()
+                        .map(|d| d.addr.to_string()),
+                );
             }
         }
         bdfs
@@ -328,15 +328,7 @@ impl QemuInner {
                         let device_type = vfio_device.device.device_type.clone();
                         let ap_sysfs_path =
                             vfio_device.device.primary.sysfs_path.display().to_string();
-                        // Legacy path: take devices from the IOMMU group.
-                        // IOMMUFD path: iommu_group is None; fall back to
-                        // VfioDevice::devices which holds the single cdev device.
-                        let devices = vfio_device
-                            .device
-                            .iommu_group
-                            .as_ref()
-                            .map(|g| g.devices.clone())
-                            .unwrap_or_else(|| vfio_device.device.devices.clone());
+                        let devices = vfio_device.device.cold_plug_devices().to_vec();
                         (
                             vfio_device_id,
                             device_type,

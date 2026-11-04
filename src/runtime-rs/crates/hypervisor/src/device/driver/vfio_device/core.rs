@@ -52,6 +52,17 @@ pub struct VfioDevice {
     pub ap_devices: Vec<String>,
 }
 
+impl VfioDevice {
+    /// The host devices QEMU is given for this assignment: every device of
+    /// the IOMMU group on the legacy backend, the single cdev on the iommufd
+    /// backend, where `iommu_group` is `None`.
+    pub fn cold_plug_devices(&self) -> &[DeviceInfo] {
+        self.iommu_group
+            .as_ref()
+            .map_or(&self.devices[..], |group| &group.devices[..])
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VfioDeviceType {
     #[default]
