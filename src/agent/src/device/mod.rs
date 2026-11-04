@@ -235,8 +235,8 @@ pub async fn add_devices(
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
 
-    // Only VFIO handlers add mappings. A map that cannot be written costs a
-    // metrics label, not the container.
+    // The map changes only through VFIO devices. A workload must not fail
+    // because a file that only serves metrics labels cannot be written.
     if container_has_vfio_device(devices) {
         if let Err(e) = write_pci_map(&sandbox.lock().await.pcimap) {
             warn!(logger, "failed to write {}: {e:?}", PCI_MAP_PATH);
@@ -294,8 +294,9 @@ fn add_pci_mappings(
 /// Where the agent publishes the sandbox's host to guest PCI address map:
 /// one `<host> <guest>` pair per line in sysfs spelling, sorted by host
 /// address. A guest service that reports PCI addresses, dcgm-exporter for a
-/// passed-through GPU, reads it to name the host device behind a guest
-/// address. The file is rewritten on every change, so readers re-read it.
+/// passed-through GPU, reads it to find the host address of a device it knows
+/// by guest address. The file is rewritten on every change, so readers
+/// re-read it.
 pub const PCI_MAP_PATH: &str = "/run/kata-containers/pci-map";
 
 /// The text of the PCI map: the mappings of all containers, each pair once.
