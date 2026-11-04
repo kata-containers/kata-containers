@@ -27,6 +27,19 @@ function setup_unencrypted_confidential_pod() {
 		sed -i "s/-nightly/-${GH_PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
 	fi
 
+	# The IBM SEL check reads /sys/firmware/uv, but the container runtime
+	# lists /sys/firmware in maskedPaths and the agent hides it behind an
+	# empty tmpfs. A privileged container has no masked paths.
+	#
+	# This is a test-only workaround: it exists so that the test can read
+	# the protected virtualization state from inside the container. It is
+	# not a recommended configuration, and real workloads should not run
+	# privileged just to see /sys/firmware.
+	if is_se_hypervisor "${KATA_HYPERVISOR}"; then
+		yq -i 'select(.kind == "Deployment").spec.template.spec.containers[0].securityContext.privileged = true' \
+			"${pod_config_dir}/pod-confidential-unencrypted.yaml"
+	fi
+
 	# Set permissions on private key file
 	sudo chmod 600 "${SSH_KEY_FILE}"
 }
