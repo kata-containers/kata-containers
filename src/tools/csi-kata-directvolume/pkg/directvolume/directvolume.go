@@ -22,22 +22,16 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 	utilexec "k8s.io/utils/exec"
-)
-
-const (
-	// storageKind is the special parameter which requests
-	// storage of a certain kind (only affects capacity checks).
-	storageKind = "kind"
 )
 
 type directVolume struct {
 	mutex sync.Mutex
 
-	config Config
-	state  state.State
+	config  Config
+	state   state.State
+	storage backingStorage
 }
 
 type Config struct {
@@ -133,9 +127,11 @@ func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
 		return nil, err
 	}
 	dv := &directVolume{
-		config: cfg,
-		state:  s,
+		config:  cfg,
+		state:   s,
+		storage: hostStorage{},
 	}
+	dv.logCapacityState()
 
 	return dv, nil
 }
@@ -155,52 +151,36 @@ func (dv *directVolume) getVolumePath(volID string) string {
 	return filepath.Join(dv.config.StateDir, volID)
 }
 
-// createVolume allocates capacity, creates the directory for the direct volume, and
-// adds the volume to the list.
-// It returns the volume path or err if one occurs. That error is suitable as result of a gRPC call.
-func (dv *directVolume) createVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
-	// Check for maximum available capacity
-	if cap > dv.config.MaxVolumeSize {
-		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
-	}
-	if dv.config.Capacity.Enabled() {
-		if kind == "" {
-			// Pick some kind with sufficient remaining capacity.
-			for k, c := range dv.config.Capacity {
-				if dv.sumVolumeSizes(k)+cap <= c.Value() {
-					kind = k
-					break
-				}
-			}
-		}
-
-		used := dv.sumVolumeSizes(kind)
-		available := dv.config.Capacity[kind]
-		if used+cap > available.Value() {
-			return nil, status.Errorf(codes.ResourceExhausted, "requested capacity %d exceeds remaining capacity for %q, %s out of %s already used",
-				cap, kind, resource.NewQuantity(used, resource.BinarySI).String(), available.String())
-		}
-	} else if kind != "" {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("capacity tracking disabled, specifying kind %q is invalid", kind))
+// createVolume reserves capacity for a new directvol volume, creates the
+// directory for the direct volume, and adds the volume to the list. The
+// caller allocates the raw disk afterwards.
+// It returns the volume or err if one occurs. That error is suitable as result of a gRPC call.
+func (dv *directVolume) createVolume(volID, name string, size int64, params volumeParameters, volumeCtx map[string]string) (*state.Volume, error) {
+	if err := dv.admitVolume(size, params); err != nil {
+		return nil, err
 	}
 
 	path := dv.getVolumePath(volID)
 
 	if err := os.MkdirAll(path, utils.PERM); err != nil {
 		klog.Errorf("mkdirAll for path %s failed with error: %v", path, err.Error())
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "create volume directory %s: %v", path, err)
 	}
 
 	volume := state.Volume{
-		VolID:   volID,
-		VolName: name,
-		VolSize: cap,
-		VolPath: path,
-		Kind:    kind,
+		VolID:         volID,
+		VolName:       name,
+		VolSize:       size,
+		VolPath:       path,
+		Kind:          params.pool,
+		VolumeContext: volumeCtx,
 	}
 
 	klog.Infof("adding direct volume: %s = %+v", volID, volume)
 	if err := dv.state.UpdateVolume(volume); err != nil {
+		if rmErr := os.RemoveAll(path); rmErr != nil {
+			klog.Warningf("failed to remove %s after a failed state update: %v", path, rmErr)
+		}
 		return nil, err
 	}
 
@@ -230,50 +210,67 @@ func (dv *directVolume) deleteVolume(volID string) error {
 	return nil
 }
 
-// createSPDKVolume allocates backing file, creates the SPDK bdev, and adds the volume to the list.
+// createSPDKVolume reserves capacity for a new spdkvol volume, allocates its
+// sparse backing file, creates the SPDK bdev, and adds the volume to the list.
+// The capacity is checked before any backend resource is created, and the
+// resources created here are released again if a later step fails.
 // It returns the created volume or an error if one occurs.
-func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int64, kind string) (*state.Volume, error) {
+func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int64, params volumeParameters, volumeCtx map[string]string) (*state.Volume, error) {
+	if err := dv.admitVolume(capacity, params); err != nil {
+		return nil, err
+	}
+
 	backingFile := filepath.Join(utils.SpdkRawDiskDir, fmt.Sprintf("%s.raw", volName))
 
 	if err := os.MkdirAll(utils.SpdkRawDiskDir, 0750); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create dir %s: %v", utils.SpdkRawDiskDir, err)
 	}
 
+	createdFile := false
 	fi, err := os.Stat(backingFile)
 	if err == nil {
+		// Left behind by an earlier attempt which did not finish.
+		if fi.Size() != capacity {
+			return nil, status.Errorf(codes.Internal, "backing file %s already exists with %d bytes instead of %d",
+				backingFile, fi.Size(), capacity)
+		}
 		klog.Infof("[SPDK] reuse existing backing file %s (size=%d)", backingFile, fi.Size())
 	} else if os.IsNotExist(err) {
-		f, err := os.Create(backingFile)
-		if err != nil {
+		if err := createSparseFile(backingFile, capacity); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create backing file %s: %v", backingFile, err)
 		}
-		defer f.Close()
-
-		if err := f.Truncate(capacity); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to truncate backing file %s: %v", backingFile, err)
-		}
-
+		createdFile = true
 		klog.Infof("[SPDK] created new sparse backing file %s (%d bytes)", backingFile, capacity)
 	} else {
 		return nil, status.Errorf(codes.Internal, "stat backing file %s failed: %v", backingFile, err)
 	}
+	removeCreatedFile := func() {
+		if !createdFile {
+			return
+		}
+		if err := os.Remove(backingFile); err != nil && !os.IsNotExist(err) {
+			klog.Warningf("[SPDK] failed to remove backing file %s: %v", backingFile, err)
+		}
+	}
 
 	bdevName := fmt.Sprintf("bdev-%s", volName)
 
-	params := map[string]interface{}{
+	bdevParams := map[string]interface{}{
 		"name":       bdevName,
 		"filename":   backingFile,
 		"block_size": 512,
 	}
-	if _, err := spdkrpc.Call("bdev_aio_create", params); err != nil {
+	if _, err := spdkrpc.Call("bdev_aio_create", bdevParams); err != nil {
+		removeCreatedFile()
 		return nil, status.Errorf(codes.Internal, "bdev_aio_create failed: %v", err)
 	}
 
 	vol := &state.Volume{
-		VolID:   volumeID,
-		VolName: volName,
-		VolSize: capacity,
-		Kind:    kind,
+		VolID:         volumeID,
+		VolName:       volName,
+		VolSize:       capacity,
+		Kind:          params.pool,
+		VolumeContext: volumeCtx,
 		Metadata: map[string]string{
 			"type":        utils.SpdkVolumeTypeName,
 			"bdevName":    bdevName,
@@ -281,6 +278,10 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 		},
 	}
 	if err := dv.state.UpdateVolume(*vol); err != nil {
+		if _, delErr := spdkrpc.Call("bdev_aio_delete", map[string]any{"name": bdevName}); delErr != nil {
+			klog.Warningf("[SPDK] failed to delete bdev %s after a failed state update: %v", bdevName, delErr)
+		}
+		removeCreatedFile()
 		return nil, err
 	}
 
@@ -288,13 +289,22 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 	return vol, nil
 }
 
-func (dv *directVolume) sumVolumeSizes(kind string) (sum int64) {
-	for _, volume := range dv.state.GetVolumes() {
-		if volume.Kind == kind {
-			sum += volume.VolSize
-		}
+// createSparseFile creates a sparse file of the given size.
+func createSparseFile(path string, size int64) (err error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	if err != nil {
+		return err
 	}
-	return
+	defer func() {
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			_ = os.Remove(path)
+		}
+	}()
+
+	return f.Truncate(size)
 }
 
 // loadFromVolume populates the given destPath with data from the srcVolumeID

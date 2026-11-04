@@ -8,6 +8,7 @@
 package state
 
 import (
+	"os"
 	"path"
 	"testing"
 
@@ -15,6 +16,25 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// TestFailedSave checks that a change which cannot be saved is not applied.
+func TestFailedSave(t *testing.T) {
+	dir := path.Join(t.TempDir(), "state")
+	require.NoError(t, os.Mkdir(dir, 0750))
+
+	s, err := New(path.Join(dir, "state.json"))
+	require.NoError(t, err, "construct state")
+	volume := Volume{VolID: "foo", VolName: "bar"}
+	require.NoError(t, s.UpdateVolume(volume), "add volume")
+
+	// Without its directory the state file cannot be written.
+	require.NoError(t, os.RemoveAll(dir))
+
+	require.Error(t, s.UpdateVolume(Volume{VolID: "new"}), "add volume")
+	require.Error(t, s.UpdateVolume(Volume{VolID: "foo", VolName: "changed"}), "change volume")
+	require.Error(t, s.DeleteVolume("foo"), "delete volume")
+	require.Equal(t, []Volume{volume}, s.GetVolumes(), "volumes after the failed changes")
+}
 
 func TestVolumes(t *testing.T) {
 	tmp := t.TempDir()
