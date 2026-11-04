@@ -299,6 +299,16 @@ externals:
     url: "https://get.helm.sh/"
     version: "v4.0.4"
 
+  kind:
+    description: "Kubernetes in Docker, for the csi-kata-directvolume e2e test"
+    url: "https://github.com/kubernetes-sigs/kind"
+    version: "v0.33.0"
+
+  csi-test:
+    description: "CSI test suite, csi-sanity for csi-kata-directvolume"
+    url: "https://github.com/kubernetes-csi/csi-test"
+    version: "v5.6.0"
+
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"

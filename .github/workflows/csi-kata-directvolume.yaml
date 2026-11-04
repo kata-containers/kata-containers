@@ -1,0 +1,188 @@
+# Tests of the csi-kata-directvolume CSI driver: unit tests, the CSI sanity
+# suite and a two-node end-to-end test of storage capacity aware scheduling.
+name: csi-kata-directvolume
+
+on:
+  pull_request:
+    paths:
+      - src/tools/csi-kata-directvolume/**
+      - .github/workflows/csi-kata-directvolume.yaml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DRIVER_DIR: src/tools/csi-kata-directvolume
+
+jobs:
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install yq
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Read properties from versions.yaml
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          linter_version="$(yq '.languages.golangci-lint.version' versions.yaml)"
+          [[ -n "${go_version}" && -n "${linter_version}" ]]
+          echo "GO_VERSION=${go_version}" >> "${GITHUB_ENV}"
+          echo "GOLANGCI_LINT_VERSION=${linter_version}" >> "${GITHUB_ENV}"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.DRIVER_DIR }}/go.sum
+
+      - name: Run the unit tests
+        working-directory: ${{ env.DRIVER_DIR }}
+        run: go test -race -count=1 -v ./...
+
+      - name: Check formatting and run golangci-lint
+        working-directory: ${{ env.DRIVER_DIR }}
+        run: |
+          make test-fmt
+          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${GOLANGCI_LINT_VERSION}"
+          "$(go env GOPATH)/bin/golangci-lint" run -c "${GITHUB_WORKSPACE}/tests/.golangci.yml" ./...
+
+  csi-sanity:
+    name: csi-sanity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install yq
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Read properties from versions.yaml
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          csi_test_version="$(yq '.externals.csi-test.version' versions.yaml)"
+          [[ -n "${go_version}" && -n "${csi_test_version}" ]]
+          echo "GO_VERSION=${go_version}" >> "${GITHUB_ENV}"
+          echo "CSI_TEST_VERSION=${csi_test_version}" >> "${GITHUB_ENV}"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.DRIVER_DIR }}/go.sum
+
+      - name: Install csi-sanity ${{ env.CSI_TEST_VERSION }}
+        run: go install "github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity@${CSI_TEST_VERSION}"
+
+      - name: Run csi-sanity
+        run: |
+          sudo -E env "PATH=${PATH}" "ARTIFACTS=${RUNNER_TEMP}/csi-sanity" \
+            "${DRIVER_DIR}/test/sanity/run-csi-sanity.sh"
+
+      - name: Upload the driver log
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: csi-sanity
+          path: ${{ runner.temp }}/csi-sanity
+          if-no-files-found: ignore
+
+  e2e:
+    name: e2e (${{ matrix.shim }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shim:
+          - qemu-runtime-rs
+          - dragonball
+    env:
+      KATA_SHIM: ${{ matrix.shim }}
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/lib/android /usr/share/dotnet \
+            /opt/ghc /usr/local/share/boost /usr/lib/jvm /usr/share/swift /usr/local/share/powershell \
+            /usr/local/julia* /opt/az /usr/local/share/chromium /opt/microsoft /opt/google /usr/lib/firefox
+
+      - name: Install yq
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Read properties from versions.yaml
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          helm_version="$(yq '.externals.helm.version' versions.yaml)"
+          kind_version="$(yq '.externals.kind.version' versions.yaml)"
+          [[ -n "${go_version}" && -n "${helm_version}" && -n "${kind_version}" ]]
+          {
+            echo "GO_VERSION=${go_version}"
+            echo "HELM_VERSION=${helm_version}"
+            echo "KIND_VERSION=${kind_version}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.DRIVER_DIR }}/go.sum
+
+      - name: Install kind ${{ env.KIND_VERSION }} and helm ${{ env.HELM_VERSION }}
+        run: |
+          curl -fsSLo "${RUNNER_TEMP}/kind" "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          sudo install -m 0755 "${RUNNER_TEMP}/kind" /usr/local/bin/kind
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C "${RUNNER_TEMP}"
+          sudo install -m 0755 "${RUNNER_TEMP}/linux-amd64/helm" /usr/local/bin/helm
+          kind version
+          helm version
+
+      - name: Run the two-node capacity test
+        timeout-minutes: 60
+        run: bash "${DRIVER_DIR}/test/e2e/run-capacity-e2e.sh" all
+        env:
+          ARTIFACTS: ${{ runner.temp }}/e2e
+
+      - name: Show the report
+        if: always()
+        run: |
+          report="${RUNNER_TEMP}/e2e/report.md"
+          [[ -f "${report}" ]] && cat "${report}" >> "${GITHUB_STEP_SUMMARY}"
+          exit 0
+
+      - name: Upload the report and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: e2e-${{ matrix.shim }}
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
