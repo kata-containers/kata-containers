@@ -1,6 +1,6 @@
 # Setup to run SPDK vhost-user devices with Kata Containers
 
-> **Note:** This guide applies to both **runtime-rs with Dragonball** and **QEMU** hypervisors. For runtime-rs, the procedure is simplified as there is no need to manually create device nodes.
+> **Note:** This guide applies to both **runtime-rs with Dragonball or Cloud Hypervisor** and **QEMU** hypervisors. For runtime-rs, the procedure is simplified as there is no need to manually create device nodes.
 
 ## SPDK vhost-user Target Overview
 
@@ -93,7 +93,7 @@ applications. Its diagram is:
 
 SPDK vhost is a vhost-user slave server. It exposes Unix domain sockets and allows external applications to connect. It is capable of exposing virtualized storage devices to QEMU instances or other arbitrary processes.
 
-Currently, the SPDK vhost-user target can expose several types of virtualized devices, but the most commonly used one in Kata Containers is the block device, which is supported by both runtime-rs with Dragonball and QEMU hypervisors:
+Currently, the SPDK vhost-user target can expose several types of virtualized devices, but the most commonly used one in Kata Containers is the block device, which is supported by both runtime-rs with Dragonball or Cloud Hypervisor and QEMU hypervisors:
 
 - `vhost-user-blk`
 
@@ -103,7 +103,7 @@ For more information, visit [SPDK](https://spdk.io) and [SPDK vhost-user target]
 
 ## Prerequisites
 
-- A Kubernetes cluster with Kata Containers enabled (runtime-rs with Dragonball or QEMU)
+- A Kubernetes cluster with Kata Containers enabled (runtime-rs with Dragonball or Cloud Hypervisor, or QEMU)
 - SPDK built and `spdk_tgt` available
 - For Kubernetes CSI integration: `csi-kata-directvolume` deployed
 
@@ -204,9 +204,10 @@ $ sudo ${SPDK_DEVEL}/build/bin/spdk_tgt -S $VHU_UDS_PATH -s 1024 -m 0x3 &
 Create a vhost controller:
 
 ```bash
-# Create raw disk
+# Create raw disk, formatted with the file system that the guest mounts
 $ mkdir -p "${RAW_DISKS}" # ensure the directory exists
-$ sudo dd if=/dev/zero of=${RAW_DISKS}/rawdisk01.20g bs=1M count=20480
+$ sudo truncate -s 20G ${RAW_DISKS}/rawdisk01.20g
+$ sudo mkfs.ext4 -F ${RAW_DISKS}/rawdisk01.20g
 
 # Create AIO bdev
 $ sudo ${SPDK_DEVEL}/scripts/rpc.py bdev_aio_create ${RAW_DISKS}/rawdisk01.20g vhu-rawdisk01.20g 512
@@ -219,11 +220,11 @@ A vhost controller `vhost-blk-rawdisk01.sock` is created under `$VHU_UDS_PATH/`.
 
 ### 2. Configure Direct Volume with kata-ctl
 
-For runtime-rs with Dragonball, there is no need to manually create device nodes. Use `kata-ctl direct-volume add`:
+For runtime-rs with Dragonball or Cloud Hypervisor, there is no need to manually create device nodes. Use `kata-ctl direct-volume add`:
 
 ```bash
 # Add direct volume
-$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 "{\"device\": \"${VHU_UDS_PATH}/vhost-blk-rawdisk01.sock\", \"volume_type\":\"spdkvol\", \"fs_type\": \"ext4\", \"metadata\":{}, \"options\": []}"
+$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 "{\"device\": \"${VHU_UDS_PATH}/vhost-blk-rawdisk01.sock\", \"volume-type\":\"spdkvol\", \"fstype\": \"ext4\", \"metadata\":{}, \"options\": []}"
 ```
 
 The volume info is stored at `/run/kata-containers/shared/direct-volumes/` with encoded path.
@@ -231,7 +232,7 @@ The volume info is stored at `/run/kata-containers/shared/direct-volumes/` with 
 ### 3. Run a Kata Container
 
 ```bash
-# For runtime-rs with Dragonball
+# For runtime-rs with Dragonball or Cloud Hypervisor
 # IMAGE=docker.io/library/ubuntu:latest
 $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 \
   --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001,options=rbind:rw \
@@ -239,6 +240,10 @@ $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 \
 ```
 
 Inside the container, the SPDK volume will be available at `/disk001`.
+
+With Cloud Hypervisor, the guest memory must be backed by huge pages (`enable_hugepages = true`
+in the `[hypervisor.clh]` section), see
+[SPDK vhost-user block device with Cloud Hypervisor](../how-to/how-to-run-kata-containers-with-kinds-of-Block-Volumes.md#spdk-vhost-user-block-device-with-cloud-hypervisor).
 
 ## Additional Resources
 
