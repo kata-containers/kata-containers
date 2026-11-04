@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
-use std::io::{Seek, SeekFrom};
+use std::io::{Seek, SeekFrom, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -78,6 +78,13 @@ const MAX_NODE: u32 = 64;
 // We will split the memory region if it conflicts with the MMIO hole.
 // But if the space below the MMIO hole is smaller than the MINIMAL_SPLIT_SPACE, we won't split the memory region in order to enhance performance.
 const MINIMAL_SPLIT_SPACE: u64 = 128 << 20;
+
+// Size of each chunk used to scan guest memory when creating a sparse snapshot.
+//
+// Guest memory is scanned in 1 MiB chunks. All-zero chunks remain sparse
+// holes; the chunk size is a performance choice, not part of the snapshot
+// format or restore contract.
+const SNAPSHOT_CHUNK_SIZE: usize = 1024 * 1024;
 
 /// Errors associated with virtual machine address space management.
 #[derive(Debug, thiserror::Error)]
@@ -860,20 +867,72 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
 
         let mut regions = Vec::new();
         let mut file_offset = 0u64;
+        let mut buffer = vec![0u8; SNAPSHOT_CHUNK_SIZE];
+        let mut scanned_chunks = 0u64;
+        let mut non_zero_chunks = 0u64;
+        let mut written_bytes = 0u64;
+
         for region in guard.iter() {
             let size = region.len();
-            region
-                .write_all_volatile_to(MemoryRegionAddress(0), file, size as usize)
-                .map_err(|e| {
-                    AddressManagerError::AccessGuestMemory(region.start_addr().raw_value(), e)
-                })?;
+            let mut region_offset = 0u64;
+            while region_offset < size {
+                let length = (size - region_offset).min(SNAPSHOT_CHUNK_SIZE as u64) as usize;
+                let guest_addr = region
+                    .start_addr()
+                    .raw_value()
+                    .checked_add(region_offset)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+                region
+                    .read_slice(&mut buffer[..length], MemoryRegionAddress(region_offset))
+                    .map_err(|e| AddressManagerError::AccessGuestMemory(guest_addr, e))?;
+                scanned_chunks = scanned_chunks
+                    .checked_add(1)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+
+                if buffer[..length].iter().any(|byte| *byte != 0) {
+                    let snapshot_offset = file_offset
+                        .checked_add(region_offset)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                    file.seek(SeekFrom::Start(snapshot_offset))
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    file.write_all(&buffer[..length])
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    non_zero_chunks = non_zero_chunks
+                        .checked_add(1)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                    written_bytes = written_bytes
+                        .checked_add(length as u64)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                }
+
+                region_offset = region_offset
+                    .checked_add(length as u64)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+            }
+
             regions.push(GuestMemoryRegionState {
                 guest_addr: region.start_addr().raw_value(),
                 size,
                 file_offset,
             });
-            file_offset += size;
+
+            file_offset = file_offset
+                .checked_add(size)
+                .ok_or(AddressManagerError::InvalidOperation)?;
         }
+
+        file.set_len(file_offset)
+            .map_err(AddressManagerError::SnapshotFile)?;
+
+        info!(
+            "Dragonball guest memory snapshot completed: guest_regions={} logical_bytes={} scanned_chunks={} non_zero_chunks={} written_bytes={} chunk_bytes={}",
+            regions.len(),
+            file_offset,
+            scanned_chunks,
+            non_zero_chunks,
+            written_bytes,
+            SNAPSHOT_CHUNK_SIZE,
+        );
 
         Ok(GuestMemoryState { regions })
     }
@@ -991,6 +1050,7 @@ mod tests {
     use dbs_boot::layout::GUEST_MEM_START;
     use std::ops::Deref;
     use std::os::fd::AsRawFd;
+    use std::os::unix::fs::MetadataExt;
 
     use vm_memory::{Bytes, GuestAddressSpace, GuestMemory, GuestMemoryRegion};
     use vmm_sys_util::tempfile::TempFile;
@@ -1036,6 +1096,9 @@ mod tests {
 
         let mut file = TempFile::new().unwrap().into_file();
         let state = dbs_snapshot::Persist::save_state(&mut src_mgr, &mut file).unwrap();
+        let snapshot_metadata = file.metadata().unwrap();
+        assert_eq!(snapshot_metadata.len(), 16 << 20);
+        assert!(snapshot_metadata.blocks() * 512 < snapshot_metadata.len());
         assert_eq!(state.regions.len(), 2);
         assert_eq!(state.regions[0].guest_addr, GUEST_MEM_START);
         assert_eq!(state.regions[0].size, 8 << 20);
