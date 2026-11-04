@@ -12,15 +12,15 @@ version = "0.0.1"
 
 [dependencies]
 anyhow.workspace = true
-bincode = "1.3.3"
 byteorder = "1.4.3"
 clap = { features = ["cargo"], workspace = true }
-futures.workspace = true
 libc.workspace = true
 nix = { features = ["fs", "user"], version = "0.30.1" }
-opentelemetry = { features = ["trace"], version = "0.32.0" }
+opentelemetry = { features = ["serialize"], workspace = true }
+opentelemetry-otlp-api = { package = "opentelemetry", features = ["trace"], version = "0.32.0" }
 opentelemetry-otlp = { features = ["grpc-tonic", "trace"], version = "0.32.0" }
 opentelemetry_sdk = { features = ["rt-tokio"], version = "0.32.1" }
+serde_json.workspace = true
 tokio = { features = ["rt-multi-thread"], version = "1" }
 vsock = "0.2.3"
 

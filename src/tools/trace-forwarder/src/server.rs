@@ -6,10 +6,9 @@
 
 use crate::handler;
 use anyhow::{anyhow, Result};
-use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_sdk::trace::SpanProcessor;
 use privdrop::PrivDrop;
 use slog::{debug, o, Logger};
-use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixListener;
 use std::sync::Arc;
 use vsock::{SockAddr, VsockListener};
@@ -59,29 +58,33 @@ impl VsockTraceServer {
     }
 
     pub fn start(&self) -> Result<()> {
-        let provider = tracer::create_otlp_trace_exporter(
-            self.service_name.clone(),
-            self.otlp_endpoint.clone(),
-        )?;
+        let processor: Option<Arc<dyn SpanProcessor>> = if self.dump_only {
+            None
+        } else {
+            Some(Arc::new(tracer::create_otlp_span_processor(
+                self.service_name.clone(),
+                self.otlp_endpoint.clone(),
+            )?))
+        };
 
-        // Get a tracer from the provider and wrap in Arc for sharing across connections
-        let tracer = provider.tracer("kata-trace-forwarder");
-        let shared_tracer = Arc::new(tracer);
-
-        match &self.vsock {
-            VsockType::Standard { port, cid } => start_std_vsock(
-                self.logger.clone(),
-                shared_tracer.clone(),
-                *port,
-                *cid,
-                self.dump_only,
-            ),
-            VsockType::Hybrid { socket_path } => start_hybrid_vsock(
-                self.logger.clone(),
-                shared_tracer,
-                socket_path,
-                self.dump_only,
-            ),
+        let result = match &self.vsock {
+            VsockType::Standard { port, cid } => {
+                start_std_vsock(self.logger.clone(), processor.clone(), *port, *cid)
+            }
+            VsockType::Hybrid { socket_path } => {
+                start_hybrid_vsock(self.logger.clone(), processor.clone(), socket_path)
+            }
+        };
+        let shutdown = match processor {
+            Some(processor) => processor
+                .shutdown()
+                .map_err(|error| anyhow!("failed to shut down trace exporter: {error}")),
+            None => Ok(()),
+        };
+        match (result, shutdown) {
+            (Err(error), Err(shutdown)) => Err(error.context(shutdown)),
+            (Err(error), Ok(())) => Err(error),
+            (Ok(()), shutdown) => shutdown,
         }
     }
 }
@@ -102,9 +105,8 @@ fn drop_privs(logger: &Logger) -> Result<()> {
 
 fn start_hybrid_vsock(
     logger: Logger,
-    tracer: Arc<opentelemetry_sdk::trace::Tracer>,
+    processor: Option<Arc<dyn SpanProcessor>>,
     socket_path: &str,
-    dump_only: bool,
 ) -> Result<()> {
     let logger =
         logger.new(o!("vsock-type" => "hybrid", "vsock-socket-path" => socket_path.to_string()));
@@ -128,9 +130,7 @@ fn start_hybrid_vsock(
     for conn in listener.incoming() {
         let conn = conn?;
 
-        let fd = conn.as_raw_fd();
-
-        handler::handle_connection(logger.clone(), fd, &tracer, dump_only)?;
+        handler::handle_connection(logger.clone(), conn, processor.as_deref())?;
     }
 
     Ok(())
@@ -138,10 +138,9 @@ fn start_hybrid_vsock(
 
 fn start_std_vsock(
     logger: Logger,
-    tracer: Arc<opentelemetry_sdk::trace::Tracer>,
+    processor: Option<Arc<dyn SpanProcessor>>,
     port: u32,
     cid: u32,
-    dump_only: bool,
 ) -> Result<()> {
     let sock_addr = SockAddr::new_vsock(cid, port);
     let listener = VsockListener::bind(&sock_addr)?;
@@ -154,9 +153,7 @@ fn start_std_vsock(
     for conn in listener.incoming() {
         let conn = conn?;
 
-        let fd = conn.as_raw_fd();
-
-        handler::handle_connection(logger.clone(), fd, &tracer, dump_only)?;
+        handler::handle_connection(logger.clone(), conn, processor.as_deref())?;
     }
 
     Ok(())
