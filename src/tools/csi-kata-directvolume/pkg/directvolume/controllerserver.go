@@ -9,9 +9,9 @@ package directvolume
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/pborman/uuid"
@@ -36,47 +36,45 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		return nil, status.Error(codes.InvalidArgument, "Name missing in request")
 	}
 	caps := req.GetVolumeCapabilities()
-	if caps == nil {
+	if len(caps) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume Capabilities missing in request")
+	}
+	if err := validateVolumeCapabilities(caps); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	params, err := parseVolumeParameters(req.GetParameters())
+	if err != nil {
+		return nil, err
+	}
+	capacity, err := requiredCapacity(req.GetCapacityRange())
+	if err != nil {
+		return nil, err
 	}
 	klog.Infof("createVolume with request: %+v", req)
 
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	capacity := int64(req.GetCapacityRange().GetRequiredBytes())
-	topologies := []*csi.Topology{}
-	if dv.config.EnableTopology {
-		topologies = append(topologies, &csi.Topology{Segments: map[string]string{TopologyKeyNode: dv.config.NodeID}})
-	}
-
-	volumeCtx := make(map[string]string)
-	volumeCtx[utils.IsDirectVolume] = "False"
-
-	for key, value := range req.GetParameters() {
-		switch strings.ToLower(key) {
-		case utils.KataContainersDirectVolumeType:
-			if value == utils.DirectVolumeTypeName || value == utils.SpdkVolumeTypeName {
-				volumeCtx[utils.IsDirectVolume] = "True"
-				volumeCtx[utils.KataContainersDirectVolumeType] = value
-			}
-		case utils.KataContainersDirectFsType:
-			volumeCtx[utils.KataContainersDirectFsType] = value
-		default:
-			continue
-		}
-	}
-
+	topologies := dv.accessibleTopology()
 	contentSrc := req.GetVolumeContentSource()
 
 	// Need to check for already existing volume name, and if found
-	// check for the requested capacity and already allocated capacity
-	// If err is nil, it means the volume with the same name already exists
-	// need to check if the size of existing volume is the same as in new
-	// request
+	// check that it is compatible with the request. A repeated request
+	// returns the existing volume and does not reserve capacity again.
 	if exVol, err := dv.state.GetVolumeByName(req.GetName()); err == nil {
 		if exVol.VolSize < capacity {
 			return nil, status.Errorf(codes.AlreadyExists, "Volume with the same name: %s but with different size already exist", req.GetName())
+		}
+		if limit := req.GetCapacityRange().GetLimitBytes(); limit > 0 && exVol.VolSize > limit {
+			return nil, status.Errorf(codes.AlreadyExists, "Volume with the same name: %s already exists with %d bytes, more than the limit of %d bytes",
+				req.GetName(), exVol.VolSize, limit)
+		}
+		if !params.compatibleWith(exVol) {
+			return nil, status.Errorf(codes.AlreadyExists, "Volume with the same name: %s already exists with different parameters", req.GetName())
+		}
+		if !dv.accessibleFromRequirements(req.GetAccessibilityRequirements()) {
+			return nil, status.Errorf(codes.AlreadyExists, "Volume with the same name: %s already exists on node %q, which does not satisfy the accessibility requirements",
+				req.GetName(), dv.config.NodeID)
 		}
 
 		if contentSrc != nil {
@@ -91,10 +89,15 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 			}
 		}
 
+		volumeCtx := exVol.VolumeContext
+		if volumeCtx == nil {
+			volumeCtx = params.volumeContext(exVol.VolName, exVol.VolSize)
+		}
+
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:           exVol.VolID,
-				CapacityBytes:      int64(exVol.VolSize),
+				CapacityBytes:      exVol.VolSize,
 				VolumeContext:      volumeCtx,
 				ContentSource:      contentSrc,
 				AccessibleTopology: topologies,
@@ -102,18 +105,24 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		}, nil
 	}
 
+	// Volumes are node-local: honour the node selected by the scheduler.
+	if !dv.accessibleFromRequirements(req.GetAccessibilityRequirements()) {
+		return nil, status.Errorf(codes.ResourceExhausted, "volumes on node %q do not satisfy the requisite topologies %v",
+			dv.config.NodeID, req.GetAccessibilityRequirements().GetRequisite())
+	}
+
 	volumeID := uuid.NewUUID().String()
-	kind := volumeCtx[storageKind]
+	volumeCtx := params.volumeContext(req.GetName(), capacity)
 
 	var vol *state.Volume
-	var err error
-	if volumeCtx[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
-		vol, err = dv.createSPDKVolume(volumeID, req.GetName(), capacity, kind)
+	if params.volumeType == utils.SpdkVolumeTypeName {
+		vol, err = dv.createSPDKVolume(volumeID, req.GetName(), capacity, params, volumeCtx)
 		if err != nil {
+			klog.Errorf("failed to create SPDK volume %s: %v", volumeID, err)
 			return nil, err
 		}
 	} else {
-		vol, err = dv.createVolume(volumeID, req.GetName(), capacity, kind)
+		vol, err = dv.createVolume(volumeID, req.GetName(), capacity, params, volumeCtx)
 		if err != nil {
 			klog.Errorf("failed to create volume %s: %v", volumeID, err)
 			return nil, err
@@ -134,6 +143,9 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 			err = status.Errorf(codes.InvalidArgument, "%v not a proper volume source", volumeSource)
 		}
 
+		if err == nil {
+			err = dv.state.UpdateVolume(*vol)
+		}
 		if err != nil {
 			klog.V(4).Infof("VolumeSource error: %v", err)
 			if delErr := dv.deleteVolume(volumeID); delErr != nil {
@@ -143,9 +155,6 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		}
 		klog.Infof("successfully populated volume %s", vol.VolID)
 	}
-
-	volumeCtx[utils.DirectVolumeName] = req.GetName()
-	volumeCtx[utils.CapabilityInBytes] = fmt.Sprintf("%d", capacity)
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
@@ -243,6 +252,10 @@ func (dv *directVolume) ValidateVolumeCapabilities(ctx context.Context, req *csi
 		return nil, err
 	}
 
+	if err := validateVolumeCapabilities(req.GetVolumeCapabilities()); err != nil {
+		return &csi.ValidateVolumeCapabilitiesResponse{Message: err.Error()}, nil
+	}
+
 	return &csi.ValidateVolumeCapabilitiesResponse{
 		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
 			VolumeContext:      req.GetVolumeContext(),
@@ -252,33 +265,64 @@ func (dv *directVolume) ValidateVolumeCapabilities(ctx context.Context, req *csi
 	}, nil
 }
 
+// GetCapacity reports how much storage a new volume with the requested
+// parameters can still get on this node. It uses the same calculation as
+// the admission check of CreateVolume. Requests which this node cannot
+// serve at all (unsupported capabilities, the topology of another node,
+// a capacity pool which is not configured here) get zero capacity.
 func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+	params, err := parseVolumeParameters(req.GetParameters())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := validateVolumeCapabilities(req.GetVolumeCapabilities()); err != nil {
+		klog.V(4).Infof("GetCapacity: no capacity for the requested volume capabilities: %v", err)
+		return capacityResponse(0, 0), nil
+	}
+
+	if topology := req.GetAccessibleTopology(); topology != nil && !dv.isLocalTopology(topology) {
+		klog.V(4).Infof("GetCapacity: no capacity for topology %v on node %q", topology.GetSegments(), dv.config.NodeID)
+		return capacityResponse(0, 0), nil
+	}
+
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Topology and capabilities are irrelevant. We only
-	// distinguish based on the "kind" parameter, if at all.
-	// Without configured capacity, we just have the maximum size.
-	available := dv.config.MaxVolumeSize
-	if dv.config.Capacity.Enabled() {
-		// Empty "kind" will return "zero capacity". There is no fallback
-		// to some arbitrary kind here because in practice it always should
-		// be set.
-		kind := req.GetParameters()[storageKind]
-		quantity := dv.config.Capacity[kind]
-		allocated := dv.sumVolumeSizes(kind)
-		available = quantity.Value() - allocated
+	available, err := dv.remainingCapacity(params)
+	if errors.Is(err, errNoCapacity) {
+		klog.V(4).Infof("GetCapacity: %v", err)
+		return capacityResponse(0, 0), nil
 	}
-	maxVolumeSize := dv.config.MaxVolumeSize
-	if maxVolumeSize > available {
-		maxVolumeSize = available
+	if err != nil {
+		return nil, err
 	}
 
+	return capacityResponse(available, min(available, dv.config.MaxVolumeSize)), nil
+}
+
+// capacityResponse builds a GetCapacity response. Both values must be
+// non-negative and maximumVolumeSize must not exceed available.
+func capacityResponse(available, maximumVolumeSize int64) *csi.GetCapacityResponse {
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: available,
-		MaximumVolumeSize: &wrappers.Int64Value{Value: maxVolumeSize},
+		MaximumVolumeSize: &wrappers.Int64Value{Value: maximumVolumeSize},
 		MinimumVolumeSize: &wrappers.Int64Value{Value: 0},
-	}, nil
+	}
+}
+
+// requiredCapacity returns the size of a new volume for the given capacity
+// range.
+func requiredCapacity(capacityRange *csi.CapacityRange) (int64, error) {
+	required := capacityRange.GetRequiredBytes()
+	limit := capacityRange.GetLimitBytes()
+	if required < 0 || limit < 0 {
+		return 0, status.Errorf(codes.InvalidArgument, "capacity range %v must not be negative", capacityRange)
+	}
+	if limit > 0 && required > limit {
+		return 0, status.Errorf(codes.InvalidArgument, "required bytes %d exceed the limit of %d bytes", required, limit)
+	}
+	return required, nil
 }
 
 func (dv *directVolume) validateControllerServiceRequest(c csi.ControllerServiceCapability_RPC_Type) error {
@@ -297,6 +341,7 @@ func (dv *directVolume) validateControllerServiceRequest(c csi.ControllerService
 func (dv *directVolume) getControllerServiceCapabilities() []*csi.ControllerServiceCapability {
 	cl := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 	}
 
 	var csc []*csi.ControllerServiceCapability

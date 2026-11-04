@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -136,22 +135,15 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 
 	volInStat, err := dv.state.GetVolumeByID(volumeID)
 	if err != nil {
-		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
-		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
-		if err != nil {
+		if volInStat, err = dv.adoptVolume(volumeID, req.GetVolumeContext()); err != nil {
 			return nil, err
 		}
-		vol.NodeID = dv.config.NodeID
-		vol.Published.Add(targetPath)
-		klog.Infof("create volume %v successfully", vol)
-
-		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	volInStat.NodeID = dv.config.NodeID
-	volInStat.Published.Add(targetPath)
+	if !volInStat.Published.Has(targetPath) {
+		volInStat.Published.Add(targetPath)
+	}
 	if err := dv.state.UpdateVolume(volInStat); err != nil {
 		return nil, err
 	}
@@ -466,17 +458,9 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 
 	volInStat, err := dv.state.GetVolumeByID(req.VolumeId)
 	if err != nil {
-		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
-		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
-		if err != nil {
+		if volInStat, err = dv.adoptVolume(volumeID, req.GetVolumeContext()); err != nil {
 			return nil, err
 		}
-		vol.Staged.Add(stagingTargetPath)
-
-		klog.Infof("create volume %v successfully", vol)
-		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
 	if volInStat.Staged.Has(stagingTargetPath) {
