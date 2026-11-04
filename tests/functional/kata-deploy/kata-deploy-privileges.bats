@@ -92,7 +92,7 @@ stage_container() {
 	shift 2
 	per_node_pod_spec "${stage}" "$@" | awk -v want="            - name: ${name}" '
 		$0 == want { inside = 1 }
-		inside && $0 != want && $0 ~ /^            - name: / { exit }
+		inside && $0 != want && $0 ~ /^            - name: / { inside = 0 }
 		inside { print }
 	'
 }

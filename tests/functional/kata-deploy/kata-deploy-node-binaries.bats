@@ -60,7 +60,7 @@ stage_container() {
 	shift 2
 	per_node_pod_spec "${stage}" "$@" | awk -v want="            - name: ${name}" '
 		$0 == want { inside = 1 }
-		inside && $0 != want && $0 ~ /^            - name: / { exit }
+		inside && $0 != want && $0 ~ /^            - name: / { inside = 0 }
 		inside { print }
 	'
 }
@@ -96,10 +96,12 @@ last_line_of() {
 
 # Why the chart refused to render, for the tests asserting that it does.
 render_error() {
-	helm template kata-deploy "${CHART_PATH}" \
+	if helm template kata-deploy "${CHART_PATH}" \
 		--set image.reference=quay.io/kata-containers/kata-deploy \
 		--set image.tag=latest \
-		"$@" 2>&1 >/dev/null && return 1
+		"$@" 2>&1 >/dev/null; then
+		return 1
+	fi
 }
 
 @test "each nodeBinaries entry stages its binaries in a container of its own" {
