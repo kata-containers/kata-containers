@@ -116,6 +116,18 @@ not forwarded unless listed below.
 Additional containerd annotation patterns can be enabled globally or for one
 shim:
 
+!!! note "Regular expressions and glob patterns"
+    Kata's `enable_annotations` entries are regular expressions matched against
+    the annotation name after `io.katacontainers.config.hypervisor.`. For example,
+    `enable_iommu` also matches `enable_iommu_platform`; `^enable_iommu$` matches
+    only `enable_iommu`.
+
+    Containerd's annotation filters, including `extraPodAnnotations`, use glob
+    patterns on the full key instead. Do not copy regular expressions into
+    `extraPodAnnotations`. Use an exact key such as
+    `io.katacontainers.config.hypervisor.enable_iommu`, or an appropriate glob
+    pattern.
+
 ```yaml title="values.yaml"
 containerd:
   extraPodAnnotations:
