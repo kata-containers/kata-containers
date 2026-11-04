@@ -41,15 +41,19 @@ type directVolume struct {
 }
 
 type Config struct {
-	DriverName     string
-	Endpoint       string
-	NodeID         string
-	VendorVersion  string
-	MaxVolumeSize  int64
-	Capacity       utils.Capacity
-	ShowVersion    bool
-	EnableAttach   bool
-	EnableTopology bool
+	DriverName    string
+	Endpoint      string
+	NodeID        string
+	VendorVersion string
+	MaxVolumeSize int64
+	// Capacity holds the capacity pools of this node.
+	Capacity utils.Capacity
+	// CapacityConfigDir, if set, is a directory which may hold a file named
+	// after the node with additional capacity pools for this node.
+	CapacityConfigDir string
+	ShowVersion       bool
+	EnableAttach      bool
+	EnableTopology    bool
 
 	StateDir       string
 	VolumeDevices  map[string]string
@@ -77,6 +81,23 @@ func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
 
 	if cfg.StoragePath == "" {
 		return nil, errors.New("no storage path provided")
+	}
+
+	if cfg.MaxVolumeSize < 0 {
+		return nil, fmt.Errorf("maximum volume size must not be negative, got %d", cfg.MaxVolumeSize)
+	}
+
+	if cfg.CapacityConfigDir != "" {
+		nodeCapacity, found, err := utils.LoadNodeCapacity(cfg.CapacityConfigDir, cfg.NodeID)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			klog.Infof("loaded capacity pools %s for node %q from %s", nodeCapacity.String(), cfg.NodeID, cfg.CapacityConfigDir)
+			cfg.Capacity = cfg.Capacity.Merge(nodeCapacity)
+		} else {
+			klog.Infof("%s has no capacity file for node %q", cfg.CapacityConfigDir, cfg.NodeID)
+		}
 	}
 
 	if err := utils.MakeFullPath(cfg.StoragePath); err != nil {
