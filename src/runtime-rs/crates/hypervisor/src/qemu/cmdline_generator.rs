@@ -545,18 +545,6 @@ impl CcwSubChannel {
     }
 }
 
-/// Arguments rendered elsewhere (the machine-centric `Platform`), emitted
-/// verbatim at their position in the device list.
-#[derive(Debug)]
-struct RawArgs(Vec<String>);
-
-#[async_trait]
-impl ToQemuParams for RawArgs {
-    async fn qemu_params(&self) -> Result<Vec<String>> {
-        Ok(self.0.clone())
-    }
-}
-
 #[derive(Debug)]
 struct Machine {
     r#type: String,
@@ -3044,7 +3032,9 @@ pub struct QemuCmdLine<'a> {
     platform_iommufd: Option<String>,
     // The Platform topology, emitted after every device the legacy generator
     // places; see build() for why the order matters.
-    platform_topology: Option<RawArgs>,
+    /// Memory, NUMA and PCIe/VFIO arguments rendered by the machine-centric
+    /// `Platform`, appended after the legacy devices (see `build`).
+    platform_topology: Option<Vec<String>>,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -3993,7 +3983,7 @@ impl<'a> QemuCmdLine<'a> {
         self.machine.memory_backend = None;
         self.memory.clear_memory_backend();
         self.platform_iommufd = iommufd_id.map(str::to_owned);
-        self.platform_topology = Some(RawArgs(topology_args));
+        self.platform_topology = Some(topology_args);
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
@@ -4020,7 +4010,7 @@ impl<'a> QemuCmdLine<'a> {
         //   vhost-vsock-pci: PCI: Only PCI/PCIe bridges can be plugged into pxb-pcie
         // The legacy devices name no bus, so the expanders go last.
         if let Some(topology) = &self.platform_topology {
-            result.append(&mut topology.qemu_params().await?);
+            result.extend(topology.iter().cloned());
         }
 
         if let Some(bios) = &self.bios {
