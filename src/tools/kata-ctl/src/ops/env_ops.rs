@@ -548,35 +548,23 @@ pub fn handle_env(env_args: EnvArgument) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::os::unix::fs::{symlink, PermissionsExt};
+    use std::os::unix::fs::symlink;
     use tempfile::TempDir;
 
-    fn make_shim(dir: &Path, output: &str, exit_code: u8) -> std::path::PathBuf {
-        let shim = dir.join(SHIM_BINARY_NAME);
-        fs::write(
-            &shim,
-            format!("#!/bin/sh\nprintf '%s\\n' '{output}'\nexit {exit_code}\n"),
-        )
-        .unwrap();
-        fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
-        shim
+    fn shim_fixture(name: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join(name)
     }
 
     #[test]
     fn runtime_info_reports_the_selected_shims_path_variant_and_version() {
-        for (marker, variant, id) in [
-            ("Rust", "rust", "io.containerd.kata.v2"),
-            ("Golang", "golang", "\"io.containerd.kata.v2\""),
+        for (fixture, variant) in [
+            ("shim-version-rust.sh", "rust"),
+            ("shim-version-golang.sh", "golang"),
         ] {
-            let dir = TempDir::new().unwrap();
-            let shim = make_shim(
-                dir.path(),
-                &format!(
-                    "Kata Containers containerd shim ({marker}): id: {id}, version: 4.0.0, commit: abc123"
-                ),
-                0,
-            );
+            let shim = shim_fixture(fixture);
             let info = get_runtime_info_for_shim(&TomlConfig::default(), &shim).unwrap();
 
             assert_eq!(info.path, shim.canonicalize().unwrap().to_str().unwrap());
@@ -600,11 +588,7 @@ mod tests {
     #[test]
     fn runtime_info_resolves_shim_symlinks() {
         let dir = TempDir::new().unwrap();
-        let shim = make_shim(
-            dir.path(),
-            "Kata Containers containerd shim (Rust): id: io.containerd.kata.v2, version: 4.0.0, commit: abc123",
-            0,
-        );
+        let shim = shim_fixture("shim-version-rust.sh");
         let link = dir.path().join("shim-link");
         symlink(&shim, &link).unwrap();
 
@@ -618,11 +602,7 @@ mod tests {
         let shim = dir.path().join(SHIM_BINARY_NAME);
         assert!(get_runtime_info_for_shim(&TomlConfig::default(), &shim).is_err());
 
-        let shim = make_shim(
-            dir.path(),
-            "Kata Containers containerd shim (Rust): id: io.containerd.kata.v2, version: 4.0.0, commit: abc123",
-            7,
-        );
+        let shim = shim_fixture("shim-version-failure.sh");
         let error = get_runtime_info_for_shim(&TomlConfig::default(), &shim).unwrap_err();
         assert!(error.to_string().contains("--version failed"));
     }
