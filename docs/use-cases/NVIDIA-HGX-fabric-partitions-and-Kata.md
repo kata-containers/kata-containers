@@ -8,7 +8,6 @@ This page describes the components that make a Kata cluster do this, the configu
 *[PF]: PCI physical function
 *[PFs]: PCI physical functions
 *[CDI]: Container Device Interface
-*[CID]: vsock context identifier
 
 ## The model
 
@@ -26,7 +25,7 @@ NVRC
 :   The init of the Kata guest image for NVIDIA systems. It detects what the VM received, starts Fabric Manager and NVLSM in a Service VM or the GPU driver and persistenced in a tenant VM, waits for each service to be ready, and only then starts the kata-agent.
 
 fmclient
-:   A client for Fabric Manager's SDK. It lists, activates and deactivates partitions, and every change publishes the partition view to the plugin in one call. It runs inside the Service VM or on the host, the two configurations defined under [The view channel](#the-view-channel). It also owns the Service VM manifests.
+:   A client for Fabric Manager's SDK. It lists, activates and deactivates partitions, and every change publishes the partition view to the plugin in one call. It runs inside the Service VM's container, through `kubectl exec`. It also owns the Service VM manifest.
 
 The shared vocabulary lives in `pcilibs-rs`: which PCI identities are GPUs, NVSwitches or management functions, the partition view's wire format, the contract constants (environment variable names, socket path, port, the Service VM's CID), and the resolution from Fabric Manager's physical IDs to host PCI addresses.
 
@@ -57,9 +56,9 @@ Fabric Manager inside the Service VM is the only authority on partitions, and it
 - fmclient publishes Fabric Manager's partition lists, the *view*, to the plugin in one gRPC call, and the plugin keeps that view, on disk next to its token so a plugin restart keeps the node's capacity, until the next call or until the fabric changes hands. Every fmclient command that changes partitions publishes the result; nothing stays connected. The plugin is a scheduling ledger and Fabric Manager is the enforcement point: a stale view sends a pod to GPUs whose fabric is not ready, where CUDA init fails, and cannot hand out another partition's GPUs.
 - The firmware labels every GPU function in sysfs: `/sys/bus/pci/devices/<bdf>/label` reads `GPU4, SMX3` on this DGX. The `SMX` number is Fabric Manager's physical ID; the `GPU` number is only PCI enumeration order.
 
-The plugin listens twice: on a TCP port, 9877, exposed as a hostPort for the in-band publisher inside the Service VM, admitting only the token minted at `Allocate`; and on a unix socket, `/var/run/kata-device-plugin/fabric-view.sock`, for a publisher on the host itself, where filesystem permissions are the credential and no token is checked. A new fabric holder withdraws the view: its `Allocate` rotates the token, and the previous holder's token no longer publishes.
+The plugin listens on a TCP port, 9877, exposed as a hostPort for the publisher inside the Service VM, admitting only the token minted at `Allocate`. A new fabric holder withdraws the view: its `Allocate` rotates the token, and the previous holder's token no longer publishes.
 
-Where fmclient runs names the configuration. *In-band*: inside the Service VM's container, through `kubectl exec`, reaching Fabric Manager on the guest's loopback and the plugin on the token-gated port. *Out-of-band*: on the host, reaching Fabric Manager over vsock and the plugin on the unix socket. A node runs one of the two.
+fmclient runs inside the Service VM's container, through `kubectl exec`, reaching Fabric Manager on the guest's loopback and the plugin on the token-gated port. The host holds no control path into the Service VM in either trust model: a host-side mode over vsock was built and withdrawn, since the host is not a control plane for the Service VM, the Kubernetes API is.
 
 ```mermaid
 flowchart LR
@@ -81,15 +80,15 @@ flowchart LR
 ### Trust boundaries
 
 Provider-owned
-:   The infrastructure owns the hardware and the Service VM, in Kata and in Confidential Containers alike. The host may hold a control path into the Service VM. Either the in-band or the out-of-band configuration is admissible, one per node: the two Service VM manifests differ in runtime class and annotations, and a node runs one.
+:   The infrastructure owns the hardware and the Service VM, in Kata and in Confidential Containers alike, and operates the Service VM as it operates any pod, through the Kubernetes API.
 
 Colocation
-:   The tenant owns the hardware and the Service VM and carves partitions themselves, outside the infrastructure's reach. The host must have no Fabric Manager control path. Fabric Manager's API has no read-only mode, so there is no vsock listener at all; the in-band configuration is the only one. Fabric Manager's vsock listener is therefore off unless the Service VM's own kernel command line turns it on.
+:   The tenant owns the hardware and the Service VM and carves partitions themselves, outside the infrastructure's reach. The host must have no Fabric Manager control path, and has none: Fabric Manager listens on the guest's loopback only, and its API has no read-only mode that a host could be given.
 
 The plugin never reads anything from the Service VM's filesystem or from the shim's private state: the view arrives as a protocol message or not at all.
 
 !!! warning "Only the fabric owner may request the fabric"
-    Whoever holds `nvidia.com/nvswitch-fabric` decides which GPUs share NVLink and publishes the view the node advertises, so a tenant holding it has a data path into other tenants' GPUs. The plugin cannot refuse a requester: the kubelet's Allocate carries device IDs and no pod identity. The kata-device-plugin chart ships a `ValidatingAdmissionPolicy` that denies the request outside the namespaces in its `fabricOwnerNamespaces` value (Kubernetes 1.30 or later). The runtime class whose `vsock_cid` and `kernel_params` annotations the Service VM relies on needs the same gate, since a tenant pod at CID 3 would answer the host publisher in Fabric Manager's place, and tenants hold no `pods/exec` in the owner namespace. In the colocation model the owner namespace is the tenant's own; the gate is the same.
+    Whoever holds `nvidia.com/nvswitch-fabric` decides which GPUs share NVLink and publishes the view the node advertises, so a tenant holding it has a data path into other tenants' GPUs. The plugin cannot refuse a requester: the kubelet's Allocate carries device IDs and no pod identity. The kata-device-plugin chart ships a `ValidatingAdmissionPolicy` that denies the request outside the namespaces in its `fabricOwnerNamespaces` value (Kubernetes 1.30 or later). Tenants hold no `pods/exec` in the owner namespace. In the colocation model the owner namespace is the tenant's own; the gate is the same.
 
 ## Configurations
 
@@ -97,7 +96,7 @@ A node runs in one of three deployment modes:
 
 1. **GPU only, no fabric.** No Fabric Manager anywhere. The switches are never programmed and each GPU works alone over PCIe.
 2. **GPU with the host's Fabric Manager in `FABRIC_MODE=0`.** Fabric Manager and NVLSM run on the host and program the default partition, all eight GPUs in one NVLink domain. VMs of any size share that domain; in CC mode each VM that holds more than one GPU derives its own NVLink encryption key.
-3. **Service VM.** Fabric Manager runs in a Service VM in shared NVSwitch mode and activates partitions, which the node advertises as resources. The variants below, the `gpu` unit, out-of-band over vsock and the fail-closed state, all belong to this mode.
+3. **Service VM.** Fabric Manager runs in a Service VM in shared NVSwitch mode and activates partitions, which the node advertises as resources. The variants below, the `gpu` unit and the fail-closed state, belong to this mode.
 
 Each configuration below lists the exact commands and what the node advertises afterwards. What the node advertises follows from two facts: whether the fabric is bound to `vfio-pci`, and whether a view was published. Modes 1 and 2 share the same two facts, fabric not bound and no view, so the plugin treats them alike.
 
@@ -196,45 +195,6 @@ kubectl -n kata-system exec $P -- fmclient --publish --unit=gpu
 "nvidia.com/nvswitch-fabric":"1"
 ```
 
-### Out-of-band over vsock
-
-The host activates partitions itself over vsock, without `kubectl exec`, and each change publishes the view to the plugin's host socket.
-
-!!! info "Prerequisites in review"
-    This recipe needs kata runtime-rs with the configured `vsock_cid` ([kata-containers#14202](https://github.com/kata-containers/kata-containers/pull/14202)), NVRC with `nvrc.fm.vsock` ([nvrc#244](https://github.com/NVIDIA/nvrc/pull/244)) and with the CDI spec for ConnectX functions that runtime-rs's `nvidia.com/nic` annotations resolve against ([nvrc#245](https://github.com/NVIDIA/nvrc/pull/245), a bridge until `nvidia-ctk cdi generate` gains a NIC mode, [nvidia-container-toolkit#2197](https://github.com/NVIDIA/nvidia-container-toolkit/issues/2197)), the vsock constants in pcilibs-rs ([pcilibs-rs#42](https://github.com/kata-containers/pcilibs-rs/pull/42)) and fmclient's one-call publish ([fmclient#9](https://github.com/zvonkok/fmclient/pull/9)). A runtime without the annotation handler refuses the `vsock_cid` annotation; the Go runtime has no `vsock_cid` setting, so it cannot run this configuration, while the in-band configuration works on both runtimes.
-
-Three settings make it possible, all of them off by default:
-
-- `io.katacontainers.config.hypervisor.vsock_cid: "3"` on the Service VM pod gives the VM a fixed CID. kata runtime-rs keeps 3 to 1023 for configured CIDs and draws random ones above that range; a configured CID already in use fails the sandbox.
-- `io.katacontainers.config.hypervisor.kernel_params: "nvrc.fm.vsock=on"` makes NVRC write `FM_CMD_VSOCK_CID=VMADDR_CID_ANY` into Fabric Manager's configuration, so FM listens on vsock at its default port 1447971919.
-- The runtime class must be the runtime-rs NVIDIA shim, `kata-qemu-nvidia-gpu-runtime-rs`, with both annotations in its `enable_annotations`.
-- That shim runs without a shared filesystem and rejects an overlayfs container rootfs, so its pods need containerd's erofs snapshotter: `erofs-utils` 1.8.2 or newer on the host, and in the kata-deploy values `snapshotter.setup: ["erofs"]` plus `containerd.snapshotter: "erofs"` on the shim, as the chart's `try-kata-nvidia-gpu.values.yaml` profile sets them.
-
-```yaml title="deploy/service-vm-out-of-band.yaml (fmclient repository), the parts that matter"
-annotations:
-  io.katacontainers.config.hypervisor.vsock_cid: "3"
-  io.katacontainers.config.hypervisor.kernel_params: "nvrc.fm.vsock=on"
-runtimeClassName: kata-qemu-nvidia-gpu-runtime-rs
-containers:
-  - name: fabric-holder
-    command: ["sleep", "infinity"]
-    resources:
-      limits:
-        nvidia.com/nvswitch-fabric: 1
-```
-
-```bash title="$ on the host, as root"
-fmclient --vsock -l
-fmclient --vsock -a 2     # publishes to the plugin's host socket
-```
-
-`--vsock` without a value is the contract address, CID 3 and FM's default port, both constants in `pcilibs-rs`; with it the plugin's host socket is fmclient's default endpoint. The node advertises the same resources as in the in-band configuration.
-
-As run on the HGX B300: the shim connected to the agent at CID 3 and the pod was Running 50 s after `kubectl apply`, Fabric Manager having reached `configured` 11 s after the guest booted. `fmclient --vsock -l` on the host listed the 15 partitions, `fmclient --vsock -a 2` made the node advertise `nvidia.com/nvlink-4gpu: 1` within one plugin poll, and a tenant VM on that unit saw the partition's four GPUs with NVLink between all of them.
-
-!!! warning "Any host process can connect"
-    A vsock connect needs no privilege on the host, so with the listener on every host process can reach Fabric Manager's API. This is the provider-owned model. Where the host must have no control path, run the in-band manifest, whose guest opens nothing.
-
 ### Fail closed: fabric bound, no view
 
 Between the provisioner binding the fabric and the first publish, and after a new Service VM pod took the fabric and has not published yet, the node advertises the fabric and no GPUs. The plugin logs
@@ -282,7 +242,7 @@ WARN fabric is bound but no partition view is published: advertising no GPU
 
 ### Activating and deactivating partitions
 
-In-band, through the Service VM's container:
+Through the Service VM's container:
 
 ```bash title="$ the partition table, three activations, one deactivation"
 P=$(kubectl -n kata-system get pod -l app=nvswitch-service-vm -o name)
