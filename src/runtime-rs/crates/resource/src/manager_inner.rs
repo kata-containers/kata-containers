@@ -520,6 +520,7 @@ impl ResourceManagerInner {
             sid: &self.sid,
             agent: self.agent.clone(),
             emptydir_mode: &self.toml_config.runtime.emptydir_mode,
+            emptydir_noinit_itable: self.toml_config.runtime.emptydir_noinit_itable,
             fs_sharing_supported: capabilities.is_fs_sharing_supported(),
             block_device_discard_supported: capabilities.is_block_device_discard_supported(),
         };

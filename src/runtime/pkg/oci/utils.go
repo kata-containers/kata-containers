@@ -169,6 +169,10 @@ type RuntimeConfig struct {
 	// Valid values are "shared-fs" (default), "block-encrypted", or "block-plain".
 	EmptyDirMode string
 
+	// EmptyDirNoInitItable mounts block-plain emptyDir filesystems with the
+	// ext4 noinit_itable option. Ignored for other emptyDir modes.
+	EmptyDirNoInitItable bool
+
 	// CreateContainer timeout which, if provided, indicates the createcontainer request timeout
 	// needed for the workload ( Mostly used for pulling images in the guest )
 	CreateContainerTimeout uint64
@@ -1309,7 +1313,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 
-		EmptyDirMode: runtime.EmptyDirMode,
+		EmptyDirMode:         runtime.EmptyDirMode,
+		EmptyDirNoInitItable: runtime.EmptyDirNoInitItable,
 
 		EnableVCPUsPinning: runtime.EnableVCPUsPinning,
 
