@@ -297,7 +297,7 @@ owns its Pod and evidence directory; snapshots and exec output are preserved.
 Workflow cleanup verifies drop-in hashes and removes only its temporary host
 profiles. Pending approval or configured jobs are not passing CI evidence.
 
-### Local validation (2026-11-03)
+### Local validation (2026-11-04)
 
 The binaries and images were built from `fee18de51f`, based on upstream
 `938166d78`. The BATS-only correction `a7e78be5c` changes the rejection oracle
@@ -320,19 +320,26 @@ version pins as its recorded build. The physical host kernel was not changed.
 | AppArmor enabled with another major LSM selected | 2/2 parser-equipped bases: exact inactive-AppArmor startup error and poweroff; not a SELinux distro-policy test |
 
 AppArmor-focused Agent and rustjail tests passed as both an ordinary user and
-root, and strict clippy passed without lint exemptions. Ordinary-user Go tests
-passed in all 31 test packages; full current/root race validation is separate
-and is not claimed passed here. Failed harness attempts and corrected runs are
+root, and strict clippy passed without lint exemptions. The full Go suite ran
+with `-race -count=1` through its normal current-user and root rounds on the
+acceptance VM. Each round completed with 50 passing packages, six skipped
+packages, no failures and no data races. Source-file hashes and the real host
+`/etc` contents were unchanged. Failed harness attempts and corrected runs are
 retained separately rather than overwritten.
 
 The CentOS compatibility experiment uses the new Go shim and Agent with an
-existing labeled distro-policy image. Create and two independent Exec calls
-retain the same full container domain/MCS; the allowed read succeeds and the
-protected read is refused. Guest inode labels are observed separately through
-an administrator console, without granting that access to the workload. This
-remains partial until the matching Guest audit records and remaining gates are
-verified. A CentOS image without a parser rejects explicit enablement at parser
-validation; that result does not prove the later inactive-LSM branch.
+existing labeled distro-policy image. Both without an extension and with a
+measured policy-only extension while AppArmor remains disabled, Create and two
+independent Exec calls retain the same full container domain/MCS. The allowed
+read succeeds; the protected read produces a matching Guest `{ read }` AVC and
+an `openat` syscall with `exit=-13` for each process. A test-only audit receiver
+runs in the stock `auditd_t` domain and restores the original audit PID before
+teardown. Guest inode labels are observed separately through an administrator
+console, without granting that access to the workload. No policy, audit rule
+or enforcing mode was changed. This is candidate-only compatibility evidence,
+not a fresh distro image build or a matched upstream baseline. A CentOS image
+without a parser rejects explicit enablement at parser validation; that result
+does not prove the later inactive-LSM branch.
 
 The Rust shim requires glibc 2.39 and is blocked on the CentOS 9 host's glibc
 2.34. There is no matched upstream SELinux baseline. These limitations must not
