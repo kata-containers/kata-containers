@@ -45,7 +45,7 @@ render_install_hook() {
 # fails without saying what it found.
 refute_match() {
 	local rendered="${1}" pattern="${2}"
-	if echo "${rendered}" | grep -q -- "${pattern}"; then
+	if grep -q -- "${pattern}" <<< "${rendered}"; then
 		echo "unexpected in rendered output: ${pattern}" >&2
 		return 1
 	fi
@@ -76,8 +76,8 @@ dispatcher_flags() {
 	local reconcile
 	reconcile=$(render_reconcile)
 
-	echo "${reconcile}" | grep -q 'kind: CronJob'
-	echo "${reconcile}" | grep -q -- '--job-template=/etc/kata-job/install-job.yaml'
+	grep -q 'kind: CronJob' <<< "${reconcile}"
+	grep -q -- '--job-template=/etc/kata-job/install-job.yaml' <<< "${reconcile}"
 
 	# The install pipeline only. With a cleanup template the dispatcher would also
 	# dismantle nodes that fell out of the selection, on a timer, with nobody
@@ -86,17 +86,17 @@ dispatcher_flags() {
 
 	# Nodes that already show a finished install are left out, so a tick over a
 	# settled fleet creates no pods at all.
-	echo "${reconcile}" | grep -q -- '--skip-satisfied-nodes'
+	grep -q -- '--skip-satisfied-nodes' <<< "${reconcile}"
 
 	# An upgrade rolling out while a tick starts is the overlap
 	# concurrencyPolicy cannot see, and the tick is the one that gives way.
-	echo "${reconcile}" | grep -q -- '--yield-to-live-run'
-	echo "${reconcile}" | grep -q 'concurrencyPolicy: Forbid'
+	grep -q -- '--yield-to-live-run' <<< "${reconcile}"
+	grep -q 'concurrencyPolicy: Forbid' <<< "${reconcile}"
 
 	# The Job a CronJob creates is named after the schedule it fired on, so a tick
 	# cannot name its own Job to own the per-node Jobs with. It reads it off its pod.
-	echo "${reconcile}" | grep -q -- '--owner-job-from-pod=$(POD_NAME)'
-	echo "${reconcile}" | grep -q 'fieldPath: metadata.name'
+	grep -q -- '--owner-job-from-pod=$(POD_NAME)' <<< "${reconcile}"
+	grep -q 'fieldPath: metadata.name' <<< "${reconcile}"
 	refute_match "${reconcile}" '--owner-job-name'
 }
 
@@ -109,14 +109,14 @@ dispatcher_flags() {
 	# an error. For something periodic that is a quiet no-op, so the wait is off -
 	# which also switches off settling, since a tick that catches the fleet
 	# mid-labelling can leave the rest to the next one.
-	echo "${reconcile}" | grep -q -- '--wait-for-nodes-secs=0'
+	grep -q -- '--wait-for-nodes-secs=0' <<< "${reconcile}"
 	refute_match "${reconcile}" '--wait-for-nodes-secs=120'
 	refute_match "${reconcile}" '--node-settle-secs'
 
 	# A tick that failed on a node is a failed Job to look at, not a retry loop:
 	# the next tick is the retry.
-	echo "${reconcile}" | grep -q 'backoffLimit: 0'
-	echo "${reconcile}" | grep -q 'failedJobsHistoryLimit: 3'
+	grep -q 'backoffLimit: 0' <<< "${reconcile}"
+	grep -q 'failedJobsHistoryLimit: 3' <<< "${reconcile}"
 }
 
 @test "Helm template: a tick installs like the hook it stands in for" {
@@ -135,18 +135,18 @@ dispatcher_flags() {
 			--wait-for-nodes-secs=*|--node-settle-secs=*) continue ;;
 			--cleanup-job-template=*|--owner-job-name=*) continue ;;
 		esac
-		echo "${reconcile}" | grep -q -- "${flag}"
+		grep -q -- "${flag}" <<< "${reconcile}"
 	done < <(echo "${install}" | dispatcher_flags)
 
 	# Including the name prefix, which is what makes the two runs one family: each
 	# recognises the other's per-node Jobs instead of reading them as an abandoned
 	# run's leftovers to clear away.
-	echo "${reconcile}" | grep -q -- '--name-prefix=kata-deploy-install'
+	grep -q -- '--name-prefix=kata-deploy-install' <<< "${reconcile}"
 
 	# The pod that holds the token is still confined and unprivileged.
-	echo "${reconcile}" | grep -q 'runAsNonRoot: true'
-	echo "${reconcile}" | grep -q 'readOnlyRootFilesystem: true'
-	echo "${reconcile}" | grep -q 'privileged: false'
+	grep -q 'runAsNonRoot: true' <<< "${reconcile}"
+	grep -q 'readOnlyRootFilesystem: true' <<< "${reconcile}"
+	grep -q 'privileged: false' <<< "${reconcile}"
 }
 
 @test "Helm template: the reconcile follows the dispatcher's node selection" {
@@ -195,7 +195,7 @@ EOF
 	# those nodes and no others.
 	local named
 	named=$(render_reconcile --set 'job.nodes={worker-1,worker-2}')
-	echo "${named}" | grep -q -- '--nodes=worker-1,worker-2'
+	grep -q -- '--nodes=worker-1,worker-2' <<< "${named}"
 	refute_match "${named}" '--node-selector='
 }
 
@@ -206,14 +206,14 @@ EOF
 	# Helm deletes the CronJob only once the pre-delete hooks are done, so a tick
 	# firing in between would reinstall a node the uninstall has just cleaned. This
 	# hook runs at a lower weight than the cleanup dispatcher's 5.
-	echo "${reconcile}" | grep -q 'helm.sh/hook": pre-delete'
-	echo "${reconcile}" | grep -q 'helm.sh/hook-weight": "0"'
-	echo "${reconcile}" | grep -q 'kubectl delete cronjob "kata-deploy-reconcile"'
+	grep -q 'helm.sh/hook": pre-delete' <<< "${reconcile}"
+	grep -q 'helm.sh/hook-weight": "0"' <<< "${reconcile}"
+	grep -q 'kubectl delete cronjob "kata-deploy-reconcile"' <<< "${reconcile}"
 
 	# Only this release's per-node Jobs: with env.multiInstallSuffix a sibling
 	# release's installs carry the same stage label, and they are none of this
 	# uninstall's business.
-	echo "${reconcile}" | grep -q 'app.kubernetes.io/instance=kata-deploy'
+	grep -q 'app.kubernetes.io/instance=kata-deploy' <<< "${reconcile}"
 }
 
 @test "Helm template: the reconcile asks for its own rights and no others" {
@@ -222,21 +222,21 @@ EOF
 
 	# Deleting the CronJob is what the uninstall hook needs, and get on pods is
 	# how --owner-job-from-pod reads the Job that owns the tick.
-	echo "${role}" | grep -q 'resources: \["cronjobs"\]'
-	echo "${role}" | grep -q 'verbs: \["get", "list", "watch", "delete"\]'
-	echo "${role}" | grep -q 'verbs: \["get", "list"\]'
+	grep -q 'resources: \["cronjobs"\]' <<< "${role}"
+	grep -q 'verbs: \["get", "list", "watch", "delete"\]' <<< "${role}"
+	grep -q 'verbs: \["get", "list"\]' <<< "${role}"
 
 	# A rollout only lists the pod a failed Job left behind.
 	local plain
 	plain=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=job \
 		--show-only templates/kata-rbac.yaml)
-	echo "${plain}" | grep -q 'resources: \["pods"\]'
-	echo "${plain}" | grep -q 'verbs: \["list"\]'
+	grep -q 'resources: \["pods"\]' <<< "${plain}"
+	grep -q 'verbs: \["list"\]' <<< "${plain}"
 	refute_match "${plain}" 'cronjobs'
 
 	# And nothing only the reconcile needs.
-	echo "${plain}" | grep -q 'verbs: \["create", "get", "list", "delete"\]'
+	grep -q 'verbs: \["create", "get", "list", "delete"\]' <<< "${plain}"
 	refute_match "${plain}" 'watch'
 }
 
@@ -247,8 +247,8 @@ EOF
 	hook=$(render_with_reconcile kata-deploy-reconcile.yaml)
 	role=$(render_with_reconcile kata-rbac.yaml)
 
-	echo "${hook}" | grep -q 'kubectl delete cronjob .* -n'
-	echo "${hook}" | grep -q 'kubectl delete jobs -n'
+	grep -q 'kubectl delete cronjob .* -n' <<< "${hook}"
+	grep -q 'kubectl delete jobs -n' <<< "${hook}"
 	# Two waited deletes, and no third one this test has not accounted for.
 	[[ "$(echo "${hook}" | grep -c -- '--cascade=foreground --wait=true')" -eq 2 ]]
 
@@ -260,8 +260,8 @@ EOF
 	echo "# cronjobs: ${cronjob_verbs}" >&3
 	echo "# jobs: ${jobs_verbs}" >&3
 	for verb in list watch delete; do
-		echo "${cronjob_verbs}" | grep -q "\"${verb}\""
-		echo "${jobs_verbs}" | grep -q "\"${verb}\""
+		grep -q "\"${verb}\"" <<< "${cronjob_verbs}"
+		grep -q "\"${verb}\"" <<< "${jobs_verbs}"
 	done
 }
 
@@ -273,5 +273,5 @@ EOF
 		--set job.reconcile.enabled=true \
 		--set job.reconcile.schedule=""
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'job.reconcile.schedule is empty'
+	grep -q 'job.reconcile.schedule is empty' <<< "${output}"
 }

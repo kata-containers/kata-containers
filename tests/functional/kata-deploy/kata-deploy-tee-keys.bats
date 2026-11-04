@@ -50,7 +50,7 @@ rendered_feature_selectors() {
 }
 
 refute_feature_selector() {
-	if rendered_feature_selectors | grep -qx "$1"; then
+	if rendered_feature_selectors | grep -x "$1" > /dev/null; then
 		echo "unexpected RuntimeClass nodeSelector: $1" >&2
 		return 1
 	fi

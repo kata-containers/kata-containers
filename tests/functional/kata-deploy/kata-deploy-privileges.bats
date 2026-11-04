@@ -61,7 +61,7 @@ first_line_of() {
 # one.
 refute_match() {
 	local rendered="${1}" pattern="${2}"
-	if echo "${rendered}" | grep -q -- "${pattern}"; then
+	if grep -q -- "${pattern}" <<< "${rendered}"; then
 		echo "unexpected in rendered output: ${pattern}" >&2
 		return 1
 	fi
@@ -132,7 +132,7 @@ rbac_doc() {
 	for stage in install cleanup; do
 		pod_spec=$(per_node_pod_spec "${stage}")
 		[[ -n "${pod_spec}" ]]
-		echo "${pod_spec}" | grep -qE '^          automountServiceAccountToken: false$'
+		grep -qE '^          automountServiceAccountToken: false$' <<< "${pod_spec}"
 	done
 }
 
@@ -149,7 +149,7 @@ rbac_doc() {
 	# so its tolerations are theirs and none of them is a catch-all.
 	install_spec=$(per_node_pod_spec install --set 'tolerations[0].key=kata' \
 		--set 'tolerations[0].operator=Exists')
-	echo "${install_spec}" | tolerations_of | grep 'key: kata' | grep -q 'operator: Exists'
+	echo "${install_spec}" | tolerations_of | grep 'key: kata' | grep 'operator: Exists' > /dev/null
 	refute_match "$(echo "${install_spec}" | tolerations_of)" '^operator: Exists$'
 }
 
@@ -164,12 +164,12 @@ rbac_doc() {
 
 	# The stages that are left, in order. Install ends with the CRI restart, which
 	# is why it is the main container rather than an init container.
-	echo "${jobs}" | grep -q 'install-stage-load-kernel-modules'
-	echo "${jobs}" | grep -q 'install-stage-host-check'
-	echo "${jobs}" | grep -q 'install-stage-artifacts'
-	echo "${jobs}" | grep -q 'install-stage-cri'
-	echo "${jobs}" | grep -q 'cleanup-stage-revert-cri'
-	echo "${jobs}" | grep -q 'cleanup-stage-remove-artifacts'
+	grep -q 'install-stage-load-kernel-modules' <<< "${jobs}"
+	grep -q 'install-stage-host-check' <<< "${jobs}"
+	grep -q 'install-stage-artifacts' <<< "${jobs}"
+	grep -q 'install-stage-cri' <<< "${jobs}"
+	grep -q 'cleanup-stage-revert-cri' <<< "${jobs}"
+	grep -q 'cleanup-stage-remove-artifacts' <<< "${jobs}"
 }
 
 @test "Helm template (job mode): module loading is the only privileged stage" {
@@ -183,15 +183,15 @@ rbac_doc() {
 	remove_artifacts=$(stage_container cleanup remove-artifacts)
 
 	[[ -n "${loader}" ]]
-	echo "${loader}" | grep -q 'install-stage-load-kernel-modules'
-	echo "${loader}" | grep -qE '^                privileged: true$'
-	echo "${loader}" | grep -qE '^                  mountPath: /host$'
-	echo "${loader}" | grep -qE '^                  readOnly: true$'
-	echo "${loader}" | grep -qE '^                  mountPath: /host-modules-load.d$'
+	grep -q 'install-stage-load-kernel-modules' <<< "${loader}"
+	grep -qE '^                privileged: true$' <<< "${loader}"
+	grep -qE '^                  mountPath: /host$' <<< "${loader}"
+	grep -qE '^                  readOnly: true$' <<< "${loader}"
+	grep -qE '^                  mountPath: /host-modules-load.d$' <<< "${loader}"
 
 	for container in "${host_check}" "${artifacts}" "${cri}"; do
 		[[ -n "${container}" ]]
-		echo "${container}" | grep -qE '^                privileged: false$'
+		grep -qE '^                privileged: false$' <<< "${container}"
 		refute_match "${container}" 'mountPath: /host$'
 		refute_match "${container}" 'mountPath: /host-modules-load.d$'
 	done
@@ -201,8 +201,8 @@ rbac_doc() {
 	refute_match "${cleanup}" 'install-stage-load-kernel-modules'
 	refute_match "${cleanup}" 'name: host-root'
 	refute_match "${revert_cri}" 'mountPath: /host-modules-load.d$'
-	echo "${remove_artifacts}" | grep -qE '^                  mountPath: /host-modules-load.d$'
-	echo "${remove_artifacts}" | grep -qE '^                privileged: false$'
+	grep -qE '^                  mountPath: /host-modules-load.d$' <<< "${remove_artifacts}"
+	grep -qE '^                privileged: false$' <<< "${remove_artifacts}"
 
 	# Module loading is job-mode only, so the DaemonSet path stays unprivileged.
 	local daemonset
@@ -221,21 +221,21 @@ rbac_doc() {
 	devices=$(stage_container install rootless-devices --set shims.qemu-runtime-rs.hypervisor.rootless=true)
 
 	[[ -n "${devices}" ]]
-	echo "${devices}" | grep -q 'install-stage-rootless-devices'
+	grep -q 'install-stage-rootless-devices' <<< "${devices}"
 
-	echo "${devices}" | grep -qE '^                privileged: true$'
+	grep -qE '^                privileged: true$' <<< "${devices}"
 	[[ "$(host_mount_qualifier "${devices}")" == *"readOnly: false"* ]]
 	[[ "$(host_mount_qualifier "${loader}")" == *"readOnly: true"* ]]
 
-	echo "${devices}" | grep -qE '^                  mountPath: /host-dev$'
-	echo "${devices}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+	grep -qE '^                  mountPath: /host-dev$' <<< "${devices}"
+	grep -qE '^                  mountPath: /host-udev-rules.d$' <<< "${devices}"
 	[[ "$(env_value "${devices}" ROOTLESS_X86_64)" == *'value: "qemu-runtime-rs"'* ]]
 
 	local container
 	for container in host-check artifacts cri; do
 		container=$(stage_container install "${container}" --set shims.qemu-runtime-rs.hypervisor.rootless=true)
 		[[ -n "${container}" ]]
-		echo "${container}" | grep -qE '^                privileged: false$'
+		grep -qE '^                privileged: false$' <<< "${container}"
 		refute_match "${container}" 'mountPath: /host$'
 		refute_match "${container}" 'mountPath: /host-dev$'
 	done
@@ -243,8 +243,8 @@ rbac_doc() {
 	local remove_artifacts revert_cri
 	remove_artifacts=$(stage_container cleanup remove-artifacts --set shims.qemu-runtime-rs.hypervisor.rootless=true)
 	revert_cri=$(stage_container cleanup revert-cri --set shims.qemu-runtime-rs.hypervisor.rootless=true)
-	echo "${remove_artifacts}" | grep -qE '^                privileged: false$'
-	echo "${remove_artifacts}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+	grep -qE '^                privileged: false$' <<< "${remove_artifacts}"
+	grep -qE '^                  mountPath: /host-udev-rules.d$' <<< "${remove_artifacts}"
 	refute_match "${remove_artifacts}" 'mountPath: /host$'
 	refute_match "${revert_cri}" 'mountPath: /host-udev-rules.d$'
 }
@@ -253,7 +253,7 @@ rbac_doc() {
 	run helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=daemonset --set shims.qemu-runtime-rs.hypervisor.rootless=true
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'requires deploymentMode: job'
+	grep -q 'requires deploymentMode: job' <<< "${output}"
 
 	run helm template kata-deploy "${CHART_PATH}" --set shims.qemu-runtime-rs.hypervisor.rootless=true
 	[ "${status}" -eq 0 ]
@@ -265,7 +265,7 @@ rbac_doc() {
 		run helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job \
 			--set "shims.${shim}.hypervisor.rootless=true"
 		[ "${status}" -ne 0 ]
-		echo "${output}" | grep -q "does not run its VMM unprivileged"
+		grep -q "does not run its VMM unprivileged" <<< "${output}"
 	done
 }
 
@@ -310,8 +310,8 @@ rbac_doc() {
 	local spec container
 	for spec in install:artifacts cleanup:remove-artifacts; do
 		container=$(stage_container "${spec%%:*}" "${spec#*:}")
-		echo "${container}" | grep -qE '^                privileged: false$'
-		echo "${container}" | grep -qE '^                  mountPath: /host-udev-rules.d$'
+		grep -qE '^                privileged: false$' <<< "${container}"
+		grep -qE '^                  mountPath: /host-udev-rules.d$' <<< "${container}"
 	done
 
 	for spec in install:host-check install:cri cleanup:revert-cri; do
@@ -352,8 +352,8 @@ rbac_doc() {
 		# A Job is bound to a node by name, and a name can outlive the machine that
 		# answered to it. Without the host's own identity to compare against, the
 		# machine ID the dispatcher passes down would be unverifiable.
-		echo "${pod_spec}" | grep -q 'path: /etc/machine-id'
-		echo "${pod_spec}" | grep -q 'mountPath: /host-machine-id'
+		grep -q 'path: /etc/machine-id' <<< "${pod_spec}"
+		grep -q 'mountPath: /host-machine-id' <<< "${pod_spec}"
 	done
 }
 
@@ -372,7 +372,7 @@ rbac_doc() {
 	ds_rbac=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=daemonset \
 		--show-only templates/kata-rbac.yaml)
-	echo "${ds_rbac}" | grep -qE 'name: kata-deploy-sa$'
+	grep -qE 'name: kata-deploy-sa$' <<< "${ds_rbac}"
 }
 
 @test "Helm template (job mode): the dispatcher does the node-level work" {
@@ -382,27 +382,27 @@ rbac_doc() {
 	cleanup=$(render_job_mode kata-deploy-cleanup-job.yaml)
 
 	for rendered in "${install}" "${cleanup}"; do
-		echo "${rendered}" | grep -q 'image: ghcr.io/kata-containers/k8s-job-dispatcher:0.3.0'
-		echo "${rendered}" | grep -q -- '/usr/bin/k8s-job-dispatcher'
-		echo "${rendered}" | grep -q -- '--tracking-label-prefix=kata-deploy-job-dispatcher'
-		echo "${rendered}" | grep -q -- '--node-label-key=katacontainers.io/kata-runtime'
-		echo "${rendered}" | grep -q -- '--instance-label-prefix=kata-deploy.katacontainers.io'
-		echo "${rendered}" | grep -q -- '--require-node-runtime-version'
-		echo "${rendered}" | grep -q -- '--require-node-machine-id'
+		grep -q 'image: ghcr.io/kata-containers/k8s-job-dispatcher:0.3.0' <<< "${rendered}"
+		grep -q -- '/usr/bin/k8s-job-dispatcher' <<< "${rendered}"
+		grep -q -- '--tracking-label-prefix=kata-deploy-job-dispatcher' <<< "${rendered}"
+		grep -q -- '--node-label-key=katacontainers.io/kata-runtime' <<< "${rendered}"
+		grep -q -- '--instance-label-prefix=kata-deploy.katacontainers.io' <<< "${rendered}"
+		grep -q -- '--require-node-runtime-version' <<< "${rendered}"
+		grep -q -- '--require-node-machine-id' <<< "${rendered}"
 	done
 
 	# Labelling last, and only once the node is Ready again: the install restarts
 	# the node's CRI runtime, and the label is what admits workloads.
-	echo "${install}" | grep -q -- '--node-label=true'
-	echo "${install}" | grep -q -- '--wait-node-ready-secs=300'
-	echo "${install}" | grep -q -- '--remove-node-taints=kata/installing:NoSchedule'
+	grep -q -- '--node-label=true' <<< "${install}"
+	grep -q -- '--wait-node-ready-secs=300' <<< "${install}"
+	grep -q -- '--remove-node-taints=kata/installing:NoSchedule' <<< "${install}"
 
 	# Claimed before its Job starts, so an install that dies half way still leaves
 	# a node an uninstall can find.
-	echo "${install}" | grep -q -- '--claim-node-pending'
+	grep -q -- '--claim-node-pending' <<< "${install}"
 
 	# Cleanup goes the other way: unlabel before the node is taken apart.
-	echo "${cleanup}" | grep -q -- '--remove-node-label'
+	grep -q -- '--remove-node-label' <<< "${cleanup}"
 	refute_match "${cleanup}" '--node-label='
 	refute_match "${cleanup}" '--claim-node-pending'
 	refute_match "${cleanup}" '--require-node-handlers'
@@ -473,8 +473,8 @@ EOF
 	# into another role would still match.
 	noderole=$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-noderole')
 	[[ -n "${noderole}" ]]
-	echo "${noderole}" | grep -q 'resources: \["nodes"\]'
-	echo "${noderole}" | grep -q 'verbs: \["list", "get", "patch"\]'
+	grep -q 'resources: \["nodes"\]' <<< "${noderole}"
+	grep -q 'verbs: \["list", "get", "patch"\]' <<< "${noderole}"
 
 	# Job mode never reasons about DaemonSets: all releases in one cluster use the
 	# same deployment mode.
@@ -489,9 +489,9 @@ EOF
 	local role
 	role=$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-role')
 	[[ -n "${role}" ]]
-	echo "${role}" | grep -q 'resources: \["jobs"\]'
-	echo "${role}" | grep -q 'verbs: \["create", "get", "list", "delete"\]'
-	echo "${role}" | grep -q '^kind: Role$'
+	grep -q 'resources: \["jobs"\]' <<< "${role}"
+	grep -q 'verbs: \["create", "get", "list", "delete"\]' <<< "${role}"
+	grep -q '^kind: Role$' <<< "${role}"
 }
 
 @test "Helm template (job mode): kubelet config is only read when it matters" {
@@ -502,8 +502,8 @@ EOF
 
 	# The TEE profile enables the confidential shims, which pull images inside
 	# CreateContainer - the one thing slow enough to hit runtimeRequestTimeout.
-	echo "${rbac}" | grep -q 'resources: \["nodes/proxy"\]'
-	echo "${install}" | grep -q -- '--kubelet-timeout-warn-secs=600'
+	grep -q 'resources: \["nodes/proxy"\]' <<< "${rbac}"
+	grep -q -- '--kubelet-timeout-warn-secs=600' <<< "${install}"
 
 	# Without guest pull or image conversion there is nothing to warn about, so the
 	# right to read any node's kubelet configuration is not asked for. Spelled out
@@ -544,8 +544,8 @@ customRuntimes:
 EOF
 
 	render_job_mode kata-deploy-install-job.yaml -f "${values_file}" |
-		grep -q -- '--kubelet-timeout-warn-secs=600'
-	render_job_mode kata-rbac.yaml -f "${values_file}" | grep -q 'nodes/proxy'
+		grep -- '--kubelet-timeout-warn-secs=600' > /dev/null
+	render_job_mode kata-rbac.yaml -f "${values_file}" | grep 'nodes/proxy' > /dev/null
 	rm -f "${values_file}"
 }
 
@@ -598,19 +598,19 @@ EOF
 	host_check=$(stage_container install host-check --set selinux.enabled=true)
 
 	[[ -n "${policy}" ]]
-	echo "${policy}" | grep -qE '^                privileged: true$'
+	grep -qE '^                privileged: true$' <<< "${policy}"
 	# Writable, unlike every other /host mount in the chart: semodule rebuilds the
 	# node's policy store in place.
-	echo "${policy}" | grep -qE '^                  mountPath: /host$'
-	echo "${policy}" | grep -qE '^                  readOnly: false$'
+	grep -qE '^                  mountPath: /host$' <<< "${policy}"
+	grep -qE '^                  readOnly: false$' <<< "${policy}"
 
 	# Privileged, so it is spc_t already: a domain here would be a downgrade.
 	refute_match "${policy}" 'seLinuxOptions'
 
 	# The stages that were privileged before are unchanged, and still read-only.
-	echo "${loader}" | grep -qE '^                  readOnly: true$'
+	grep -qE '^                  readOnly: true$' <<< "${loader}"
 	refute_match "${loader}" 'seLinuxOptions'
-	echo "${host_check}" | grep -qE '^                privileged: false$'
+	grep -qE '^                privileged: false$' <<< "${host_check}"
 }
 
 @test "Helm template (job mode): each confined stage gets its own domain" {
@@ -644,17 +644,17 @@ EOF
 	stage_c=$(stage_container install erofs-utils --set selinux.enabled=true \
 		"${NODE_BINARIES_VALUES[@]}")
 	[[ -n "${stage_c}" ]]
-	echo "${stage_c}" | grep -q 'image: "quay.io/kata-containers/erofs-utils:1.9.3"'
+	grep -q 'image: "quay.io/kata-containers/erofs-utils:1.9.3"' <<< "${stage_c}"
 	refute_match "${stage_c}" 'seLinuxOptions'
 
 	install_c=$(stage_container install node-binaries-install --set selinux.enabled=true \
 		"${NODE_BINARIES_VALUES[@]}")
 	[[ -n "${install_c}" ]]
-	echo "${install_c}" | grep -q 'type: kata_deploy_node_binaries_t'
+	grep -q 'type: kata_deploy_node_binaries_t' <<< "${install_c}"
 
 	# Its removal counterpart is confined the same way, or an uninstall could not
 	# take the binaries back out.
-	echo "${jobs}" | grep -q 'name: node-binaries-remove'
+	grep -q 'name: node-binaries-remove' <<< "${jobs}"
 	[[ "$(echo "${jobs}" | grep -c 'type: kata_deploy_node_binaries_t')" -eq 2 ]]
 }
 
@@ -663,8 +663,8 @@ EOF
 	local daemonset
 	daemonset=$(render_daemonset_mode --set selinux.enabled=true)
 
-	echo "${daemonset}" | grep -q 'install-stage-selinux-policy'
-	echo "${daemonset}" | grep -qE '^            type: kata_deploy_t$'
+	grep -q 'install-stage-selinux-policy' <<< "${daemonset}"
+	grep -qE '^            type: kata_deploy_t$' <<< "${daemonset}"
 
 	# Bar node-binaries', which requires job mode.
 	refute_match "${daemonset}" 'kata_deploy_node_binaries_t'
@@ -672,7 +672,7 @@ EOF
 	# kube-kata itself stays unprivileged, which is the whole reason the policy is
 	# loaded for it.
 	[[ "$(echo "${daemonset}" | grep -c 'privileged: true')" -eq 1 ]]
-	echo "${daemonset}" | grep -qE '^          privileged: false$'
+	grep -qE '^          privileged: false$' <<< "${daemonset}"
 }
 
 @test "Helm template: every domain the chart asks for is defined by the shipped policy" {

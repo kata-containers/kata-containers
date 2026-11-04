@@ -37,7 +37,7 @@ persisted_modules() {
 # /sys/module as well because a built-in module never reaches /proc/modules.
 module_states() {
 	local modules="${1}"
-	run_on_host "for m in ${modules}; do if [ -d /host/sys/module/\$m ] || cut -d' ' -f1 /host/proc/modules | grep -qx \$m; then echo \$m=loaded; else echo \$m=missing; fi; done"
+	run_on_host "for m in ${modules}; do if [ -d /host/sys/module/\$m ] || cut -d' ' -f1 /host/proc/modules | grep -x \$m > /dev/null; then echo \$m=loaded; else echo \$m=missing; fi; done"
 }
 
 setup_file() {
