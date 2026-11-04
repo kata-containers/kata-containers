@@ -90,9 +90,47 @@ pub struct VmSnapshotConfig {
     pub destination_url: String,
 }
 
+/// Memory restore mode supported by Cloud Hypervisor's `vm.restore` API.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum MemoryRestoreMode {
+    /// Copy the snapshot memory into guest memory (Cloud Hypervisor default).
+    #[serde(rename = "Copy")]
+    Copy,
+    /// Populate guest memory on demand from the snapshot using userfaultfd.
+    #[serde(rename = "OnDemand")]
+    OnDemand,
+    /// Map the snapshot memory copy-on-write instead of copying it.
+    #[serde(rename = "CopyOnWrite")]
+    CopyOnWrite,
+}
+
+impl Default for MemoryRestoreMode {
+    fn default() -> Self {
+        Self::Copy
+    }
+}
+
+impl MemoryRestoreMode {
+    pub fn parse(mode: &str) -> Result<Self> {
+        let normalized = mode.trim().to_ascii_lowercase();
+
+        match normalized.as_str() {
+            "copy" => Ok(Self::Copy),
+            "ondemand" => Ok(Self::OnDemand),
+            "copyonwrite" => Ok(Self::CopyOnWrite),
+            _ => Err(anyhow!(
+                "invalid memory restore mode {mode:?}: valid values are \"copy\", \"ondemand\" and \"copyonwrite\""
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct RestoreConfig {
     pub source_url: String,
+    /// Memory restore mode. When unset, Cloud Hypervisor's default (`Copy`) is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_restore_mode: Option<MemoryRestoreMode>,
 }
 
 pub async fn cloud_hypervisor_vm_snapshot(
@@ -205,4 +243,66 @@ pub async fn cloud_hypervisor_vm_resize(
 ) -> Result<Option<String>> {
     let body = serde_json::to_string(&vmresize)?;
     api_command(api_socket, "PUT", "vm.resize", Some(body), None).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_restore_mode_parse() {
+        for (input, expected) in [
+            ("Copy", MemoryRestoreMode::Copy),
+            ("copy", MemoryRestoreMode::Copy),
+            ("COPY", MemoryRestoreMode::Copy),
+            ("OnDemand", MemoryRestoreMode::OnDemand),
+            ("ondemand", MemoryRestoreMode::OnDemand),
+            ("ONDEMAND", MemoryRestoreMode::OnDemand),
+            ("CopyOnWrite", MemoryRestoreMode::CopyOnWrite),
+            ("copyonwrite", MemoryRestoreMode::CopyOnWrite),
+            ("COPYONWRITE", MemoryRestoreMode::CopyOnWrite),
+        ] {
+            assert_eq!(
+                MemoryRestoreMode::parse(input).unwrap(),
+                expected,
+                "failed to parse {input:?}"
+            );
+        }
+
+        for input in [
+            "",
+            "PreFault",
+            "userfaultfd",
+            "on_demand",
+            "on-demand",
+            "copy_on_write",
+            "copy-on-write",
+        ] {
+            assert!(
+                MemoryRestoreMode::parse(input).is_err(),
+                "{:?} should be rejected",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_restore_config_serialization() {
+        let cfg = RestoreConfig {
+            source_url: "file:///run/vc/vm/template".to_string(),
+            memory_restore_mode: Some(MemoryRestoreMode::OnDemand),
+        };
+        let json = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(json["source_url"], "file:///run/vc/vm/template");
+        assert_eq!(json["memory_restore_mode"], "OnDemand");
+
+        // When no mode is configured the field must be omitted so that Cloud
+        // Hypervisor applies its own default ("Copy").
+        let cfg = RestoreConfig {
+            source_url: "file:///run/vc/vm/template".to_string(),
+            memory_restore_mode: None,
+        };
+        let json = serde_json::to_value(&cfg).unwrap();
+        assert!(json.get("memory_restore_mode").is_none());
+    }
 }
