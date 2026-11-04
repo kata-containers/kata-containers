@@ -532,7 +532,8 @@ impl Platform {
             // Multi-socket without EGM: one RAM backend per socket, bound to
             // that socket's host node, so guest node i is backed by host node
             // i (the model apply_q35_defaults uses).  A single socket keeps the
-            // seed m0 spanning all guest RAM.
+            // seed m0 spanning all guest RAM.  File backing is `with_hugepages`'
+            // job, applied after this, so only `Ram` is produced here.
             let seed_size = match self.objects.memory_backends.first() {
                 Some(MemoryBackend::Ram { size, .. }) => *size,
                 _ => 0,
@@ -542,30 +543,13 @@ impl Platform {
                 .sockets
                 .iter()
                 .enumerate()
-                .map(|(i, socket)| {
-                    let id = format!("m{i}");
-                    let size = socket
+                .map(|(i, socket)| MemoryBackend::Ram {
+                    id: format!("m{i}"),
+                    size: socket
                         .mem_size
-                        .unwrap_or_else(|| equal_share(seed_size, n, i));
-                    let policy = socket.host_node.map(|_| "bind".to_owned());
-                    match &socket.mem_path {
-                        Some(path) => MemoryBackend::File {
-                            id,
-                            size,
-                            path: path.clone(),
-                            prealloc: false,
-                            share: true,
-                            host_nodes: socket.host_node,
-                            policy,
-                            is_egm: false,
-                        },
-                        None => MemoryBackend::Ram {
-                            id,
-                            size,
-                            host_nodes: socket.host_node,
-                            policy,
-                        },
-                    }
+                        .unwrap_or_else(|| equal_share(seed_size, n, i)),
+                    host_nodes: socket.host_node,
+                    policy: socket.host_node.map(|_| "bind".to_owned()),
                 })
                 .collect();
         }
