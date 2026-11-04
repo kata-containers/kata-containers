@@ -4274,7 +4274,10 @@ mod tests {
             max_num_vcpus: 8,
             sockets: None,
         };
-        assert_eq!(smp.qemu_params().await.unwrap(), vec!["-smp", "2,maxcpus=8"]);
+        assert_eq!(
+            smp.qemu_params().await.unwrap(),
+            vec!["-smp", "2,maxcpus=8"]
+        );
     }
 
     #[actix_rt::test]

@@ -428,8 +428,16 @@ fn a_socket_without_vcpus_is_a_memory_only_node() {
     platform.apply_host_defaults(&topo);
     let args = platform.to_qemu_args().expect("to_qemu_args");
 
-    assert!(args.contains(&"node,memdev=m0,cpus=0,nodeid=0".to_owned()), "{:?}", args);
-    assert!(args.contains(&"node,memdev=m1,nodeid=1".to_owned()), "{:?}", args);
+    assert!(
+        args.contains(&"node,memdev=m0,cpus=0,nodeid=0".to_owned()),
+        "{:?}",
+        args
+    );
+    assert!(
+        args.contains(&"node,memdev=m1,nodeid=1".to_owned()),
+        "{:?}",
+        args
+    );
 }
 
 /// Read the real host through the same entry point as auto cold plug, without
