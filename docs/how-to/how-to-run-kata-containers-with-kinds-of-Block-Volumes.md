@@ -151,6 +151,8 @@ $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=vfiovol,src=
 
 SPDK vhost-user devices in runtime-rs, unlike runtime (golang version), there is no need to `mknod` device node under `/dev/` any more.
 Just using the `kata-ctl direct-volume add ..` to make a mount info config is enough.
+For the Cloud Hypervisor configuration, socket permissions and error messages, see
+[Use SPDK vhost-user-blk volumes with Cloud Hypervisor](how-to-use-spdk-vhost-user-blk-with-cloud-hypervisor.md).
 
 #### Run SPDK vhost target and Expose vhost block device
 
