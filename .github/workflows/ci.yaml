@@ -51,6 +51,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  run-substrate-tests:
+    needs: [build-kata-static-tarball-amd64, build-kata-static-tarball-arm64]
+    if: ${{ inputs.skip-test != 'yes' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/run-substrate-tests.yaml
+    with:
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      tarball-suffix: -${{ inputs.tag }}
+
   build-kata-static-tarball-amd64:
     permissions:
       contents: read

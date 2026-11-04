@@ -46,6 +46,7 @@ jobs:
       matrix:
         asset:
           - agent
+          - agent-substrate
           - busybox
           - cloud-hypervisor
           - coco-guest-components
@@ -140,7 +141,7 @@ jobs:
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          name: ${{ contains(matrix.asset, 'substrate') && 'kata-substrate-artifacts' || 'kata-artifacts' }}-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
@@ -207,6 +208,7 @@ jobs:
       matrix:
         asset:
           - rootfs-image
+          - rootfs-image-substrate
           - rootfs-image-confidential
           - rootfs-image-coco-extension
           - rootfs-image-devkit-extension
@@ -239,11 +241,19 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
+        if: matrix.asset != 'rootfs-image-substrate'
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-arm64-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
           merge-multiple: true
+
+      - name: Get Substrate agent
+        if: matrix.asset == 'rootfs-image-substrate'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-substrate-artifacts-arm64-agent-substrate${{ inputs.tarball-suffix }}
+          path: kata-artifacts
 
       - name: Build ${{ matrix.asset }}
         run: |
@@ -268,7 +278,7 @@ jobs:
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          name: ${{ contains(matrix.asset, 'substrate') && 'kata-substrate-artifacts' || 'kata-artifacts' }}-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
@@ -515,6 +525,11 @@ jobs:
           pattern: kata-artifacts-arm64-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
           merge-multiple: true
+      - name: Get Substrate rootfs
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-substrate-artifacts-arm64-rootfs-image-substrate${{ inputs.tarball-suffix }}
+          path: kata-artifacts
       - name: merge-artifacts
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-release-tarballs.sh kata-artifacts versions.yaml arm64
@@ -524,7 +539,7 @@ jobs:
         run: |
           # https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas
           GITHUB_ASSET_MAX_BYTES=2147483648
-          for tarball in kata-static.tar.zst kata-go-static.tar.zst; do
+          for tarball in kata-static.tar.zst kata-go-static.tar.zst kata-static-substrate.tar.zst; do
             tarball_size=$(stat -c "%s" "${tarball}")
             if [[ "${tarball_size}" -ge "${GITHUB_ASSET_MAX_BYTES}" ]]; then
               echo "::error::${tarball} size (${tarball_size} bytes) >= GitHub release asset limit (${GITHUB_ASSET_MAX_BYTES} bytes)"
@@ -544,5 +559,12 @@ jobs:
         with:
           name: kata-go-static-tarball-arm64${{ inputs.tarball-suffix }}
           path: kata-go-static.tar.zst
+          retention-days: 15
+          if-no-files-found: error
+      - name: Store Substrate guest artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kata-static-substrate-tarball-arm64${{ inputs.tarball-suffix }}
+          path: kata-static-substrate.tar.zst
           retention-days: 15
           if-no-files-found: error

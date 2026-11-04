@@ -172,6 +172,8 @@ SCRIPTS += initrd-builder/initrd_builder.sh
 
 HELPER_FILES :=
 HELPER_FILES += scripts/lib.sh
+HELPER_FILES += rootfs-builder/debian/Dockerfile.substrate
+HELPER_FILES += rootfs-builder/debian/substrate-prune.sh
 HELPER_FILES += image-builder/nsdax.gpl.c
 
 define INSTALL_FILE

@@ -127,6 +127,7 @@ options:
 --build=<asset>       :
 	all
 	agent
+	agent-substrate
 	agent-ctl
 	boot-image-se
 	boot-image-se-runtime-rs
@@ -156,6 +157,7 @@ options:
 	rootfs-image-confidential
 	rootfs-image-coco-extension
 	rootfs-image-mariner
+	rootfs-image-substrate
 	rootfs-initrd
 	rootfs-initrd-confidential
 	shim-v2-go
@@ -1233,6 +1235,28 @@ install_image_nvidia() {
 	install_image "nvidia"
 }
 
+install_image_substrate() {
+	case "${ARCH}" in
+		x86_64|aarch64) ;;
+		*) die "The substrate image is not supported on ${ARCH}" ;;
+	esac
+	local agent_tarball base_image base_digest
+	agent_tarball="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-agent-substrate.tar.zst"
+	[[ -f "${agent_tarball}" ]] || die "Substrate agent tarball not found: ${agent_tarball}"
+	base_image=$(get_from_kata_deps \
+		".assets.image.architecture.${ARCH}.substrate | .name + \":\" + .version")
+	base_digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${base_image}" | jq -er '.digest')
+	latest_builder_image="${base_image}@${base_digest}"
+	latest_artefact="$(get_kata_version)-$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	latest_artefact+="-$(sha256sum "${agent_tarball}" | cut -d' ' -f1)"
+	install_cached_tarball_component \
+		"${build_target}" "${latest_artefact}" "${latest_builder_image}" \
+		"${final_tarball_name}" "${final_tarball_path}" && return 0
+	DESTDIR="${destdir}" AGENT_TARBALL="${agent_tarball}" SUBSTRATE_BASE_IMAGE="${latest_builder_image}" \
+		"${repo_root_dir}/tools/packaging/guest-image/build_substrate_image.sh"
+}
+
 # Install the gpu extension image: driver userspace selected directly from the
 # package-installed rootfs and laid out for /run/kata-extensions/gpu (see
 # docs/design/composable-vm-images.md).  It is an erofs+verity image
@@ -1785,6 +1809,10 @@ install_busybox() {
 install_agent() {
 	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/agent)"
 	latest_builder_image="$(get_agent_image_name)"
+	if [[ "${BUILD_VARIANT:-}" == substrate ]]; then
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/libs")"
+	fi
 
 	install_cached_tarball_component \
 		"${build_target}" \
@@ -2037,6 +2065,7 @@ handle_build() {
 		;;
 
 	agent) install_agent ;;
+	agent-substrate) BUILD_VARIANT=substrate install_agent ;;
 
 	agent-ctl) install_agent_ctl ;;
 
@@ -2109,6 +2138,8 @@ handle_build() {
 	rootfs-image-nvidia-gpu-confidential) install_image_nvidia_gpu_confidential ;;
 
 	rootfs-image-nvidia) install_image_nvidia ;;
+
+	rootfs-image-substrate) install_image_substrate ;;
 
 	rootfs-image-nvidia-gpu-extension) install_image_nvidia_gpu_extension ;;
 
