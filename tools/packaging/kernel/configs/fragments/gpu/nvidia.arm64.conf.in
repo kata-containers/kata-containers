@@ -23,8 +23,11 @@ CONFIG_IOMMU_SVA=y
 CONFIG_ARM_SMMU_V3=y
 CONFIG_ARM_SMMU_V3_SVA=y
 
-# ATS and PASID on the passthrough GPU behind an accelerated SMMUv3; the
-# driver reports "Addressing Mode: ATS" only with both.
+# PCI_PASID selects PCI_ATS, which lets the guest SMMU driver enable ATS on
+# the passthrough GPU behind the accelerated SMMUv3. On Rubin the GSP
+# firmware does its DMA with ATS: without it the host SMMU rejects every
+# translation request (F_BAD_ATS_TREQ) and GSP-RM times out during probe.
+# GB200 falls back to a non-ATS addressing mode without it.
 CONFIG_PCI_PASID=y
 CONFIG_PCI_PRI=y
 
