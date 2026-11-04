@@ -359,7 +359,7 @@ impl QemuInner {
                         // PCI cold plug devices
                         for (index, dev) in devices.iter().enumerate() {
                             let host_bdf = dev.addr.to_string();
-                            if platform_paths.contains_key(&host_bdf.to_ascii_lowercase()) {
+                            if platform_paths.contains_key(&host_bdf) {
                                 // Placed by the Platform: pxb, root port and vfio device
                                 // are already in the topology args.
                                 continue;
@@ -386,11 +386,11 @@ impl QemuInner {
 
                         // Write back guest PCI path: where the Platform put the
                         // device, or the legacy root port slot on pcie.0.
-                        let platform_path = devices.first().and_then(|dev| {
-                            platform_paths.get(&dev.addr.to_string().to_ascii_lowercase())
-                        });
+                        let platform_path = devices
+                            .first()
+                            .and_then(|dev| platform_paths.get(&dev.addr.to_string()));
                         let pci_path = match platform_path {
-                            Some(path) => PciPath::try_from(path.as_str())?,
+                            Some(path) => path.clone(),
                             None => {
                                 PciPath::try_from(format!("{:02x}/00", bus_port_id.1).as_str())?
                             }

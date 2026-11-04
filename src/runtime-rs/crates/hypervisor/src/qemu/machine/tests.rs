@@ -558,6 +558,11 @@ fn retain_devices_keeps_only_assigned() {
         1,
         "NIC kept, matched case-insensitively"
     );
+    assert_eq!(
+        topo.nic_smmu_groups[0].pci_bus_addrs,
+        vec!["0002:00:01.0"],
+        "stored in lower case"
+    );
     assert_eq!(topo.sockets.len(), 1, "sockets untouched");
 }
 
@@ -578,12 +583,17 @@ fn guest_pci_paths_follow_bus_nr_and_port_order() {
         gpu_mmio_bytes: BTreeMap::new(),
     });
     let paths = platform.guest_pci_paths();
-    assert_eq!(paths["0008:06:00.0"], "20/00/00");
+    assert_eq!(paths["0008:06:00.0"].to_string(), "20/00/00");
     assert_eq!(
-        paths["0009:06:00.0"], "20/01/00",
+        paths["0009:06:00.0"].to_string(),
+        "20/01/00",
         "second port on the same pxb"
     );
-    assert_eq!(paths["0010:06:00.0"], "40/00/00", "second pxb complex");
+    assert_eq!(
+        paths["0010:06:00.0"].to_string(),
+        "40/00/00",
+        "second pxb complex"
+    );
     assert_eq!(paths.len(), 3);
 }
 

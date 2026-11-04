@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
+use crate::device::pci_path::{PciPath, PciSlot};
 use anyhow::{bail, Result};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
@@ -262,12 +263,6 @@ impl Platform {
         Self::from_config_and_topology(config, topo).map(Some)
     }
 
-    /// Guest PCI path of every placed passthrough device, keyed by host BDF:
-    /// `<bus_nr>/<port index>/00` in hex, i.e. the pxb root complex, the root
-    /// port's slot on it (QEMU assigns functions on an expander bus in
-    /// emission order) and the device at function 0 behind the port.  The
-    /// kata-agent parses this form when the first segment is >= 0x20, which
-    /// `pxb_bus_nr` guarantees.
     /// The `key=value` options of the machine line without the type and
     /// `accel=`, for merging into a machine line rendered elsewhere.
     pub fn machine_options(&self) -> Vec<String> {
@@ -302,14 +297,23 @@ impl Platform {
         self.objects.iommufd.as_ref().map(|ifd| ifd.id.as_str())
     }
 
-    pub fn guest_pci_paths(&self) -> HashMap<String, String> {
+    /// Guest PCI path of every placed passthrough device, keyed by host BDF
+    /// as `HostTopology::retain_devices` normalized it: the pxb root complex,
+    /// the root port's slot on it (QEMU assigns functions on an expander bus
+    /// in emission order) and the device at function 0 behind the port.  The
+    /// kata-agent reads the first segment as a bus number when it is >= 0x20,
+    /// which `pxb_bus_nr` guarantees.
+    pub fn guest_pci_paths(&self) -> HashMap<String, PciPath> {
         let mut paths = HashMap::new();
         for root in &self.pci.roots {
             for (port_idx, port) in root.root_ports.iter().enumerate() {
                 if let Some(dev) = &port.device {
                     paths.insert(
-                        dev.host.to_ascii_lowercase(),
-                        format!("{:02x}/{:02x}/00", root.bus_nr, port_idx),
+                        dev.host.clone(),
+                        PciPath::on_root_complex(
+                            root.bus_nr,
+                            vec![PciSlot(port_idx as u8), PciSlot(0)],
+                        ),
                     );
                 }
             }

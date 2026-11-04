@@ -158,22 +158,29 @@ impl HostTopology {
         }
     }
 
-    /// Keep only the passthrough devices named in `keep` (BDFs, compared
-    /// case-insensitively) and drop groups that end up empty.  The prober sees
-    /// every NVIDIA device on the host; a sandbox only gets the ones its pod
-    /// was allocated.
+    /// Keep only the passthrough devices named in `keep` and drop groups that
+    /// end up empty.  The prober lists every NVIDIA device on the host; a
+    /// sandbox only gets the ones its pod was allocated.  BDFs are compared
+    /// and stored in lower case here, once, so later lookups by the runtime's
+    /// `DeviceAddress` (lower-case hex) need no conversion.
     pub(crate) fn retain_devices(&mut self, keep: &[String]) {
         let keep: Vec<String> = keep.iter().map(|b| b.to_ascii_lowercase()).collect();
         for groups in [&mut self.gpu_smmu_groups, &mut self.nic_smmu_groups] {
             for group in groups.iter_mut() {
-                group
+                group.pci_bus_addrs = group
                     .pci_bus_addrs
-                    .retain(|addr| keep.contains(&addr.to_ascii_lowercase()));
+                    .iter()
+                    .map(|addr| addr.to_ascii_lowercase())
+                    .filter(|addr| keep.contains(addr))
+                    .collect();
             }
             groups.retain(|group| !group.pci_bus_addrs.is_empty());
         }
-        self.gpu_mmio_bytes
-            .retain(|bdf, _| keep.contains(&bdf.to_ascii_lowercase()));
+        self.gpu_mmio_bytes = std::mem::take(&mut self.gpu_mmio_bytes)
+            .into_iter()
+            .map(|(bdf, bytes)| (bdf.to_ascii_lowercase(), bytes))
+            .filter(|(bdf, _)| keep.contains(bdf))
+            .collect();
     }
 }
 
