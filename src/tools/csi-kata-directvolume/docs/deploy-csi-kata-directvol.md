@@ -20,6 +20,13 @@ the cluster as shown below for Kubernetes 1.28.2.
 sudo deploy/deploy.sh
 ```
 
+On Kubernetes 1.24 or later, the deployment publishes the storage capacity of every node to the scheduler. The capacity
+pools of each node are configured with the `csi-kata-directvol-capacity` ConfigMap, see
+[Storage Capacity Aware Scheduling](storage-capacity.md). `deploy.sh` honours these environment variables:
+
+- `CAPACITY_TRACKING`: `auto` (default) enables capacity tracking if the cluster supports it, `true` or `false` force it.
+- `CAPACITY_POLL_INTERVAL`: how often the `csi-provisioner` refreshes the published capacity, `1m` by default.
+
 You'll get an output similar to the following, indicating the application of `RBAC rules` and the successful deployment of `csi-provisioner`, `node-driver-registrar`, `kata directvolume csi driver`(`csi-kata-directvol-plugin`), liveness-probe. Please note that the following output is specific to Kubernetes 1.28.2.
 
 ```shell
