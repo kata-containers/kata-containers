@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use hypervisor::utils::remove_dir_all_if_exists;
 use kata_sys_util::mount::{bind_remount, get_mount_points_under, umount_all, umount_timeout};
 use kata_types::k8s::is_watchable_mount;
+use nix::mount::MsFlags;
 use std::fs;
 use std::path::Path;
 
@@ -55,6 +56,7 @@ impl ShareFsMount for VirtiofsShareMount {
             config.readonly,
             false,
             config.is_rafs,
+            MsFlags::MS_SLAVE,
         )
         .context("share to guest")?;
         Ok(ShareFsMountResult {
@@ -64,6 +66,10 @@ impl ShareFsMount for VirtiofsShareMount {
     }
 
     async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult> {
+        // MS_PRIVATE matches the Go runtime's bindMount(..., "private"): it severs
+        // propagation from the volume source (e.g. a CSI staging mount), so an
+        // unmount of the source does not remove the bind mount from the shared
+        // directory while the sandbox is still running.
         let mut guest_path = utils::share_to_guest(
             &config.source,
             &config.target,
@@ -72,6 +78,7 @@ impl ShareFsMount for VirtiofsShareMount {
             config.readonly,
             true,
             config.is_rafs,
+            MsFlags::MS_PRIVATE,
         )
         .context("share to guest")?;
 
