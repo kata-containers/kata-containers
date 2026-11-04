@@ -442,13 +442,16 @@ async fn start_sandbox(
     let mut oma = None;
     let mut _ort = None;
     if let Some(c) = &config.mem_agent {
-        let (ma, rt) =
-            mem_agent::agent::MemAgent::new(c.memcg_config.clone(), c.compact_config.clone())
-                .map_err(|e| {
-                    error!(logger, "MemAgent::new fail: {}", e);
-                    e
-                })
-                .context("start mem-agent")?;
+        let (ma, rt) = mem_agent::agent::MemAgent::new(
+            c.memcg_config.clone(),
+            c.compact_config.clone(),
+            || Ok(()),
+        )
+        .map_err(|e| {
+            error!(logger, "MemAgent::new fail: {}", e);
+            e
+        })
+        .context("start mem-agent")?;
         oma = Some(ma);
         _ort = Some(rt);
     }
