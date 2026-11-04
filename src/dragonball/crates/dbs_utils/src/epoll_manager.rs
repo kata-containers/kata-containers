@@ -4,7 +4,7 @@
 //! A simple wrapper over event_manager::EventManager to solve possible deadlock.
 
 use anyhow::{anyhow, Result};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 
 pub use event_manager::{
     Error, EventManager, EventOps, EventSet, Events, MutEventSubscriber, RemoteEndpoint,
@@ -51,12 +51,22 @@ impl EpollManager {
 
     /// Remove a given epoll event subscriber.
     pub fn remove_subscriber(&mut self, subscriber_id: SubscriberId) -> Result<EpollSubscriber> {
-        let mut mgr = self
-            .mgr
-            .lock()
-            .map_err(|e| anyhow!("EventManager lock fail. {:?}", e))?;
-        mgr.remove_subscriber(subscriber_id)
-            .map_err(|e| anyhow!("remove subscriber err. {:?}", e))
+        let result = match self.mgr.try_lock() {
+            Ok(mut mgr) => mgr.remove_subscriber(subscriber_id),
+            Err(TryLockError::WouldBlock) => {
+                // The poller holds the manager lock while waiting for events.
+                // Queue removal through its endpoint so it wakes up and performs
+                // the operation without competing for the manager lock.
+                self.endpoint
+                    .lock()
+                    .map_err(|e| anyhow!("RemoteEndpoint lock fail. {:?}", e))?
+                    .call_blocking(move |mgr| mgr.remove_subscriber(subscriber_id))
+            }
+            Err(TryLockError::Poisoned(e)) => {
+                return Err(anyhow!("EventManager lock fail. {:?}", e));
+            }
+        };
+        result.map_err(|e| anyhow!("remove subscriber err. {:?}", e))
     }
 
     /// Add an epoll event to be monitored.
@@ -155,5 +165,41 @@ mod tests {
         epoll_manager.clone().remove_subscriber(id).unwrap();
         let _ = stop_tx.send(());
         worker.join().unwrap();
+    }
+
+    #[test]
+    fn test_remove_subscriber_wakes_poller() {
+        let mut epoll_manager = EpollManager::default();
+        let (notify_tx, _notify_rx) = channel();
+        let event = Arc::new(EventFd::new(0).unwrap());
+        let id = epoll_manager.add_subscriber(Box::new(DummySubscriber::new(event, notify_tx)));
+        // Drain the kick left by add_subscriber before testing an idle poller.
+        epoll_manager.handle_events(0).unwrap();
+
+        let (ready_tx, ready_rx) = channel();
+        let worker_mgr = epoll_manager.clone();
+        let worker = std::thread::spawn(move || {
+            let mut mgr = worker_mgr.mgr.lock().unwrap();
+            ready_tx.send(()).unwrap();
+            mgr.run_with_timeout(-1).unwrap();
+        });
+        // Ensure removal encounters the manager lock held by the poller.
+        ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+
+        let (removed_tx, removed_rx) = channel();
+        let endpoint = epoll_manager.endpoint.clone();
+        let remover = std::thread::spawn(move || {
+            removed_tx
+                .send(epoll_manager.remove_subscriber(id).is_ok())
+                .unwrap();
+        });
+        let removed = removed_rx.recv_timeout(Duration::from_secs(2));
+
+        // Also release the poller if removal failed to wake it, so a regression
+        // fails this test instead of leaving a blocked thread behind.
+        endpoint.lock().unwrap().kick().unwrap();
+        worker.join().unwrap();
+        remover.join().unwrap();
+        assert!(removed.expect("subscriber removal did not wake the poller"));
     }
 }
