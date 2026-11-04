@@ -44,12 +44,29 @@ pub(crate) fn build_bind_mount_options(
     opts
 }
 
-/// Filter OCI bind-mount flags ("bind", "rbind") from volume options that
-/// will be passed to the agent's `Storage.options`.
+// Mount propagation flags, such as the "rprivate" that CRI adds to bind mounts,
+// only apply to the container-side bind mount. mount(2) fails with EINVAL when
+// they are combined with mounting the file system of the block device.
+const MOUNT_PROPAGATION_OPTIONS: [&str; 8] = [
+    "shared",
+    "rshared",
+    "private",
+    "rprivate",
+    "slave",
+    "rslave",
+    "unbindable",
+    "runbindable",
+];
+
+/// Filter OCI bind-mount flags ("bind", "rbind") and mount propagation flags
+/// from volume options that will be passed to the agent's `Storage.options`.
 pub(crate) fn filter_block_storage_options(options: &[String]) -> Vec<String> {
     options
         .iter()
-        .filter(|o| !matches!(o.as_str(), KATA_MOUNT_BIND_TYPE | KATA_MOUNT_RBIND_TYPE))
+        .filter(|o| {
+            !matches!(o.as_str(), KATA_MOUNT_BIND_TYPE | KATA_MOUNT_RBIND_TYPE)
+                && !MOUNT_PROPAGATION_OPTIONS.contains(&o.as_str())
+        })
         .cloned()
         .collect()
 }
@@ -238,6 +255,33 @@ mod tests {
                 KATA_MOUNT_BIND_TYPE.to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn test_filter_block_storage_options() {
+        let to_vec = |opts: &[&str]| opts.iter().map(|o| o.to_string()).collect::<Vec<_>>();
+
+        // The options CRI sets on the bind mount of a volume.
+        assert_eq!(
+            filter_block_storage_options(&to_vec(&["rbind", "rprivate", "rw"])),
+            to_vec(&["rw"])
+        );
+        assert_eq!(
+            filter_block_storage_options(&to_vec(&[
+                "bind",
+                "shared",
+                "rshared",
+                "private",
+                "slave",
+                "rslave",
+                "unbindable",
+                "runbindable",
+                "ro",
+                "nosuid",
+            ])),
+            to_vec(&["ro", "nosuid"])
+        );
+        assert!(filter_block_storage_options(&[]).is_empty());
     }
 
     #[tokio::test]
