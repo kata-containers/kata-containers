@@ -14,7 +14,7 @@ CPUFEATURES := pmu=off
 QEMUCMD := qemu-system-aarch64
 QEMUNOSHAREDFSCMD := qemu-system-aarch64-no-shared-fs
 # NVIDIA's QEMU fork; the GPU runtime class boots it instead of the trimmed build.
-QEMUCCACMD := qemu-system-aarch64-cca-experimental
+QEMUNVIDIAGPUCMD := qemu-system-aarch64-cca-experimental
 QEMUFW := AAVMF_CODE.fd
 
 # dragonball binary name
