@@ -167,9 +167,9 @@ async fn handle_agent_cmd(
         },
     };
 
-    ret_tx
-        .send(ret_msg)
-        .map_err(|e| anyhow!("ret_tx.send failed: {e:?}"))?;
+    if ret_tx.send(ret_msg).is_err() {
+        debug!("mem-agent reply receiver was dropped");
+    }
 
     Ok(need_reset_mas)
 }
@@ -591,6 +591,44 @@ mod tests {
         // Regression test: this used to propagate an error out of
         // mem_agent_loop and permanently stop mem-agent command handling.
         send_busy_reply(ret_tx);
+    }
+
+    #[tokio::test]
+    async fn test_cancelled_reply_does_not_stop_command_loop() {
+        let mut config = memcg::Config::default();
+        config.default.disabled = true;
+        let initializer: MemcgInitializer = Arc::new(|| Ok(()));
+        let memcg = MemcgState::new(false, config, &initializer).unwrap();
+        let comp = compact::Compact::new(
+            false,
+            compact::Config {
+                disabled: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let (cmd_tx, cmd_rx) = mpsc::channel(2);
+        let (cancelled_tx, cancelled_rx) = oneshot::channel();
+        drop(cancelled_rx);
+        cmd_tx
+            .send((AgentCmd::MemcgStatus, cancelled_tx))
+            .await
+            .unwrap();
+        let (reply_tx, reply_rx) = oneshot::channel();
+        cmd_tx
+            .send((AgentCmd::MemcgStatus, reply_tx))
+            .await
+            .unwrap();
+
+        let task = tokio::spawn(mem_agent_loop(cmd_rx, memcg, comp, false, initializer));
+        let reply = tokio::time::timeout(Duration::from_secs(2), reply_rx).await;
+        task.abort();
+        let _ = task.await;
+
+        assert!(matches!(
+            reply.unwrap().unwrap(),
+            AgentReturn::MemcgStatus(_)
+        ));
     }
 
     #[test]
