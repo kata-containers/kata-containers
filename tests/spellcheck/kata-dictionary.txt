@@ -166,3 +166,8 @@ Rego
 kcli
 podvm
 eMudhra
+NVLSM
+fmclient
+kmsg
+persistenced
+precheck
