@@ -47,7 +47,7 @@ EOF
 @test "Verify nginx connectivity between pods under l3forwarding" {
 	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
-	kubectl expose deployment/${deployment}
+	kubectl expose "deployment/${deployment}" --labels=katacontainers.io/test-resource=true
 
 	busybox_pod="test-nginx-l3fwd"
 	# We need to use `-O index.html` as the busybox' wget has a different behaviour
