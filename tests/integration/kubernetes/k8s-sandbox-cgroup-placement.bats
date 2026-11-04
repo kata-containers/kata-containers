@@ -73,7 +73,7 @@ setup() {
 	local shim_cgroup
 	shim_cgroup="$(host_cgroup_v2_path "${shim_pid}")"
 	info "shim cgroup: ${shim_cgroup}"
-	echo "${shim_cgroup}" | grep -q "kubepods" || die "shim is not in a kubepods cgroup: ${shim_cgroup}"
+	grep -q "kubepods" <<< "${shim_cgroup}" || die "shim is not in a kubepods cgroup: ${shim_cgroup}"
 
 	# The VMM must be co-located with the shim, not left in the spawn cgroup.
 	local vmm_cgroup

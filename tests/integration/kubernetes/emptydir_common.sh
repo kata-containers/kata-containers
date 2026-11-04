@@ -13,7 +13,7 @@
 # shellcheck disable=SC2154
 
 pod_evicted() {
-	kubectl get pod "${pod_name}" -o jsonpath='{.status.reason}' 2>/dev/null | grep -q '^Evicted$'
+	kubectl get pod "${pod_name}" -o jsonpath='{.status.reason}' 2>/dev/null | grep '^Evicted$' > /dev/null
 }
 
 pod_eviction_message() {
@@ -60,13 +60,13 @@ size_limit_eviction_observed() {
 	fi
 
 	message="$(pod_eviction_message)"
-	if echo "${message}" | grep -Eqi "${size_limit_pattern}"; then
+	if grep -Eqi "${size_limit_pattern}" <<< "${message}"; then
 		return 0
 	fi
 
 	events="$(pod_events)"
-	echo "${events}" | grep -Eqi "evict" || return 1
-	echo "${events}" | grep -Eqi "${size_limit_pattern}"
+	grep -Eqi "evict" <<< "${events}" || return 1
+	grep -Eqi "${size_limit_pattern}" <<< "${events}"
 }
 
 host_emptydir_exceeds_allocated_bytes_or_pod_evicted() {

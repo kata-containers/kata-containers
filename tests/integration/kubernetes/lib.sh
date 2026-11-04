@@ -49,7 +49,7 @@ retry_kubectl_apply() {
         echo "${func_name}: Attempt ${attempt}/${retries}"
         echo "${output}"
 
-        if echo "${output}" | grep -iq "timed out"; then
+        if grep -iq "timed out" <<< "${output}"; then
             if [[ "${attempt}" -ge "${retries}" ]]; then
                 echo "${func_name}: Max ${retries} retries reached. Failed due to timeout."
                 return 1
@@ -60,7 +60,7 @@ retry_kubectl_apply() {
             continue
         fi
 
-        if echo "${output}" | grep -iq "error"; then
+        if grep -iq "error" <<< "${output}"; then
             echo "${func_name}: Error detected in kubectl output. Aborting."
             return 1
         fi

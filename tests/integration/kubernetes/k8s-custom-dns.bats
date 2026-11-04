@@ -36,8 +36,8 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
 
 	# Check dns config at /etc/resolv.conf
-	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep -q "nameserver 1.2.3.4"
-	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep -q "search dns.test.search"
+	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep "nameserver 1.2.3.4" > /dev/null
+	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep "search dns.test.search" > /dev/null
 }
 
 teardown() {
