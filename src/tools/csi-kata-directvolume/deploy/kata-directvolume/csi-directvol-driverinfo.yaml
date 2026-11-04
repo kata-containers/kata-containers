@@ -15,7 +15,12 @@ spec:
   podInfoOnMount: true
   # No attacher needed.
   attachRequired: false
-  storageCapacity: false
+  # The csi-provisioner sidecars publish the capacity of every node as
+  # CSIStorageCapacity objects, and the scheduler only places pods with
+  # unbound WaitForFirstConsumer volumes on nodes which have enough of it.
+  # directvol-deploy.sh removes this line if the cluster has no
+  # CSIStorageCapacity v1 API (Kubernetes < 1.24).
+  storageCapacity: true
   # Kubernetes may use fsGroup to change permissions and ownership
   # of the volume to match user requested fsGroup in the pod's SecurityPolicy
   fsGroupPolicy: File

@@ -1,1 +1,3 @@
 bin/
+# Downloaded by deploy/rbac-deploy.sh.
+deploy/kata-directvolume/kata-directvol-rbac.yaml
