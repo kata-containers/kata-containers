@@ -586,13 +586,13 @@ QEMU VFIO passthrough uses two independent configuration axes.
 and one `vfio-pci[/vfio-pci-nohotplug]` per device, emitted together in the static
 command line.  No empty pre-provisioned slots are used; device count is exact.
 
-**Sandbox scoping (`Platform::for_assigned_devices`):** the prober sees every
+**Sandbox scoping (`Platform::for_assigned_devices`):** the prober lists every
 NVIDIA device on the host; a sandbox only receives the ones its pod was
 allocated.  `HostTopology::retain_devices` prunes the probed groups to the
 assigned BDFs (dropping emptied groups) before the guest layout is derived, so a
 one-GPU pod on a four-GPU tray gets one complex and 8 initiator nodes.
 
-**Guest PCI path:** a Platform-placed device sits at `<bus_nr>/<port index>/00`
+**Guest PCI path:** a Platform-placed device has the path `<bus_nr>/<port index>/00`
 (hex): the pxb root complex, the root port's slot on it (QEMU assigns functions
 on an expander bus in emission order) and the device at function 0 behind the
 port.  `Platform::guest_pci_paths` hands these to the runtime, which writes them
@@ -973,8 +973,10 @@ Phase 7; deleting the superseded legacy sections is Phase 8.
 
 ### Phase 7: Platform drives the launch for `cold_plug_vfio = "auto"` (2026-09-15)
 
-The strangle seam flips, gated.  With `cold_plug_vfio = "auto"` in the kata
-config, `QemuInner::start_vm` collects the host BDFs of the VFIO devices
+With `cold_plug_vfio = "auto"` the Platform emits the machine options, the
+guest memory and NUMA layout and the VFIO topology; the legacy generator emits
+the rest, and with any other value it emits everything, unchanged.  In auto
+mode `QemuInner::platform_for_auto` collects the host BDFs of the VFIO devices
 assigned to the sandbox, calls `Platform::for_assigned_devices`, and hands the
 result to `QemuCmdLine::apply_platform`:
 
@@ -989,7 +991,7 @@ result to `QemuCmdLine::apply_platform`:
   appended to the device list verbatim;
 - Platform-placed devices are skipped by the legacy VFIO cold-plug loop and
   get their `guest_pci_path` from `Platform::guest_pci_paths`
-  (`<bus_nr>/<port>/00`); `PciPath` learned the root-complex form for that.
+  (`<bus_nr>/<port>/00`); `PciPath` carries the root-complex form for that.
 - VFIO devices the prober does not model (NVSwitches, non-NVIDIA devices)
   still go through the legacy cold-plug loop but join the Platform's
   `iommufd0` instead of creating their own object: a second iommufd context
