@@ -21,7 +21,7 @@ hyperlocal = { workspace = true }
 kata-sys-util = { path = "../kata-sys-util" }
 kata-types = { path = "../kata-types" }
 nix = { workspace = true }
-tokio = { features = ["rt-multi-thread"], version = "1.44.2" }
+tokio = { features = ["rt-multi-thread"], workspace = true }
 
 [dev-dependencies]
 tempfile = "3.19.1"
