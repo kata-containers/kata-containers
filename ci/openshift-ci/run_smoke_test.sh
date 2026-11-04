@@ -61,7 +61,7 @@ fi
 
 info "Wait for the HTTP server to respond"
 tempfile=$(mktemp)
-check_cmd="curl -vvv '${host}:${port}${hello_file}' 2>&1 | tee -a '${tempfile}' | grep -q '${hello_msg}'"
+check_cmd="curl -vvv '${host}:${port}${hello_file}' 2>&1 | tee -a '${tempfile}' | grep '${hello_msg}' > /dev/null"
 if waitForProcess 60 1 "${check_cmd}"; then
     test_status=0
     info "HTTP server is working"
