@@ -10,6 +10,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 
 pub(crate) struct HostTopology {
+    /// Guest sockets, one NUMA node each; from `layout_guest` or a fixture.
     pub sockets: Vec<SocketInfo>,
     /// GPU devices: each group maps to one pxb-pcie + arm-smmuv3 complex.
     /// GPUs emit 8 acpi-generic-initiator NUMA nodes per device.
@@ -34,15 +35,86 @@ pub(crate) struct HostTopology {
     pub protection: Option<ProtectionDevice>,
 }
 
+/// A guest socket: one NUMA node with its vCPUs and its memory.  Built from
+/// the `HostSocket`s by `layout_guest`, or by hand for a fixture.
 pub(crate) struct SocketInfo {
     pub id: u32,
-    pub cpu_range: Range<u32>,
+    /// Guest vCPUs of the node.  `None` for a socket that received none: it
+    /// stays a memory-only node, since QEMU rejects an empty `cpus=` range.
+    pub cpus: Option<Range<u32>>,
     /// Host NUMA node to bind this socket's memory to via `policy=bind`.
     pub host_node: Option<u32>,
     /// File-backed memory path (e.g. `/dev/shm`).  `None` → `memory-backend-ram`.
     pub mem_path: Option<String>,
     /// Per-socket memory size in bytes.  `None` → use the Platform-level default.
     pub mem_size: Option<u64>,
+}
+
+/// A host CPU socket as the prober found it: the package's CPU indices and
+/// the NUMA node its memory is on.  Host facts only; `layout_guest` derives
+/// the guest sockets from them.
+pub(crate) struct HostSocket {
+    pub id: u32,
+    pub cpus: Range<u32>,
+    pub host_node: Option<u32>,
+}
+
+/// The `-smp` topology the guest sockets were laid out with.  QEMU derives
+/// the socket of vCPU `i` as `i / cores` and requires `sockets * cores ==
+/// maxcpus`; emitting these values with NUMA nodes built from the same
+/// numbers keeps the two descriptions in agreement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SmpLayout {
+    pub sockets: u32,
+    pub cores: u32,
+    pub maxcpus: u32,
+}
+
+/// What `probe_host_topology` returns: the host's sockets and the device
+/// topology, whose `sockets` stay empty until `layout_guest` fills them.
+pub(crate) struct HostProbe {
+    pub sockets: Vec<HostSocket>,
+    pub topology: HostTopology,
+}
+
+/// Lay `max_vcpus` guest CPUs and `ram_bytes` of guest RAM out over the host
+/// sockets.  The first `min(sockets, max_vcpus)` sockets get `cores =
+/// ceil(max_vcpus / that count)` consecutive vCPUs each, and the same
+/// numbers go to `-smp`, so every vCPU below `maxcpus = sockets * cores`
+/// belongs to one node and the socket QEMU derives for it (`vcpu / cores`)
+/// is that node's socket.  `maxcpus` exceeds `max_vcpus` by the rounding,
+/// at most `sockets - 1` vCPUs.  Sockets past the first ones get no vCPU and
+/// stay memory-only nodes.  RAM is split equally, whole MiB per socket, the
+/// last socket taking the remainder.
+pub(crate) fn layout_guest(
+    host: &[HostSocket],
+    max_vcpus: u32,
+    ram_bytes: u64,
+) -> (Vec<SocketInfo>, SmpLayout) {
+    let n = host.len();
+    let max_vcpus = max_vcpus.max(1);
+    let with_cpus = (n as u32).min(max_vcpus).max(1);
+    let cores = max_vcpus.div_ceil(with_cpus);
+    let smp = SmpLayout {
+        sockets: with_cpus,
+        cores,
+        maxcpus: with_cpus * cores,
+    };
+    let sockets = host
+        .iter()
+        .enumerate()
+        .map(|(i, socket)| {
+            let i = i as u32;
+            SocketInfo {
+                id: socket.id,
+                cpus: (i < with_cpus).then(|| (i * cores)..((i + 1) * cores)),
+                host_node: socket.host_node,
+                mem_path: None,
+                mem_size: Some(equal_share(ram_bytes, n, i as usize)),
+            }
+        })
+        .collect();
+    (sockets, smp)
 }
 
 /// GPUs sharing a physical SMMU must be placed on the same pxb-pcie + arm-smmuv3.
@@ -122,42 +194,6 @@ pub(crate) fn equal_share(total: u64, n: usize, i: usize) -> u64 {
 }
 
 impl HostTopology {
-    /// Replace the host CPU indices the prober recorded with guest vCPU ranges:
-    /// `max_vcpus` guest CPUs laid out contiguously over the sockets in socket
-    /// order, earlier sockets taking the remainder.  `-numa node,cpus=` names
-    /// guest CPUs, and every possible vCPU (up to maxcpus) needs a node so that
-    /// hot-plugged CPUs have somewhere to land.
-    pub(crate) fn map_guest_vcpus(&mut self, max_vcpus: u32) {
-        let n = self.sockets.len() as u32;
-        if n == 0 {
-            return;
-        }
-        let (base, rem) = (max_vcpus / n, max_vcpus % n);
-        let mut start = 0u32;
-        for (i, socket) in self.sockets.iter_mut().enumerate() {
-            let count = base + u32::from((i as u32) < rem);
-            socket.cpu_range = start..start + count;
-            start += count;
-        }
-    }
-
-    /// Give every socket without an explicit `mem_size` an equal share of the
-    /// guest RAM that the explicitly sized sockets leave over.
-    pub(crate) fn fill_guest_memory(&mut self, total_bytes: u64) {
-        let claimed: u64 = self.sockets.iter().filter_map(|s| s.mem_size).sum();
-        let open: Vec<usize> = self
-            .sockets
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.mem_size.is_none())
-            .map(|(i, _)| i)
-            .collect();
-        let remaining = total_bytes.saturating_sub(claimed);
-        for (k, idx) in open.iter().enumerate() {
-            self.sockets[*idx].mem_size = Some(equal_share(remaining, open.len(), k));
-        }
-    }
-
     /// Keep only the passthrough devices named in `keep` and drop groups that
     /// end up empty.  The prober lists every NVIDIA device on the host; a
     /// sandbox only gets the ones its pod was allocated.  BDFs are compared
@@ -258,7 +294,7 @@ fn bdf_of(dev_path: &Path) -> Option<String> {
 
 /// Resolve PCI affinity using the CPU's node links, not its package ID.
 /// Package IDs are opaque (and large on Grace), not host NUMA node numbers.
-fn numa_node_to_socket(node: i32, sockets: &[SocketInfo]) -> Result<u32> {
+fn numa_node_to_socket(node: i32, sockets: &[HostSocket]) -> Result<u32> {
     if let Some(socket) = sockets.iter().find(|s| s.host_node == Some(node as u32)) {
         return Ok(socket.id);
     }
@@ -281,7 +317,7 @@ fn numa_node_to_socket(node: i32, sockets: &[SocketInfo]) -> Result<u32> {
 ///
 /// Returns `Ok(topo)` with empty `gpu_smmu_groups` if no NVIDIA devices are
 /// found (e.g., on a plain x86 CI runner).
-pub(crate) fn probe_host_topology() -> Result<HostTopology> {
+pub(crate) fn probe_host_topology() -> Result<HostProbe> {
     probe_host_topology_at(
         Path::new("/sys/bus/pci/devices"),
         Path::new("/sys/devices/system/cpu"),
@@ -296,7 +332,7 @@ pub(crate) fn probe_host_topology_at(
     cpu_root: &Path,
     dev_root: &Path,
     egm_class_root: &Path,
-) -> Result<HostTopology> {
+) -> Result<HostProbe> {
     // ── 1. Walk /sys/bus/pci/devices and collect NVIDIA devices ─────────────
     // complex key → [(BDF, numa_node)]; the key is the physical SMMU when the
     // kernel exposes it, otherwise the IOMMU group
@@ -406,15 +442,18 @@ pub(crate) fn probe_host_topology_at(
     // ── 3. EGM detection: /dev/egmN devices ─────────────────────────────────
     let egm_sockets = probe_egm_devices(egm_class_root, dev_root, pci_root, &sockets);
 
-    Ok(HostTopology {
+    Ok(HostProbe {
         sockets,
-        gpu_smmu_groups: gpu_smmu_groups.into_iter().map(|(_, g)| g).collect(),
-        nic_smmu_groups: nic_smmu_groups.into_iter().map(|(_, g)| g).collect(),
-        egm_sockets,
-        gpu_mmio_bytes,
-        numa_distances: vec![],
-        pcie_root_port: 0,
-        protection: None,
+        topology: HostTopology {
+            sockets: vec![],
+            gpu_smmu_groups: gpu_smmu_groups.into_iter().map(|(_, g)| g).collect(),
+            nic_smmu_groups: nic_smmu_groups.into_iter().map(|(_, g)| g).collect(),
+            egm_sockets,
+            gpu_mmio_bytes,
+            numa_distances: vec![],
+            pcie_root_port: 0,
+            protection: None,
+        },
     })
 }
 
@@ -440,12 +479,12 @@ fn pci_mmio64_bytes(dev_path: &Path) -> u64 {
         .sum()
 }
 
-/// Reads `/sys/devices/system/cpu/` to build SocketInfo per physical package.
+/// Reads `/sys/devices/system/cpu/` to build one HostSocket per physical package.
 ///
 /// Keep host NUMA affinity from cpuN/nodeN separately from the decimal package
 /// ID. A package spanning multiple host nodes gets one memory domain per node.
 /// Sorted keys make guest socket IDs independent of sysfs/HashMap iteration.
-fn build_socket_info(cpu_root: &Path) -> Vec<SocketInfo> {
+fn build_socket_info(cpu_root: &Path) -> Vec<HostSocket> {
     let mut packages: BTreeMap<(u32, Option<u32>), Vec<u32>> = BTreeMap::new();
 
     if let Ok(dir) = std::fs::read_dir(cpu_root) {
@@ -484,12 +523,10 @@ fn build_socket_info(cpu_root: &Path) -> Vec<SocketInfo> {
 
     if packages.is_empty() {
         // Fallback: single socket, unknown CPU range
-        return vec![SocketInfo {
+        return vec![HostSocket {
             id: 0,
-            cpu_range: 0..1,
+            cpus: 0..1,
             host_node: None,
-            mem_path: None,
-            mem_size: None,
         }];
     }
 
@@ -500,12 +537,10 @@ fn build_socket_info(cpu_root: &Path) -> Vec<SocketInfo> {
             cpus.sort_unstable();
             let first = *cpus.first().unwrap();
             let last = *cpus.last().unwrap();
-            SocketInfo {
+            HostSocket {
                 id: id as u32,
-                cpu_range: first..(last + 1),
+                cpus: first..(last + 1),
                 host_node,
-                mem_path: None,
-                mem_size: None,
             }
         })
         .collect()
@@ -522,7 +557,7 @@ fn probe_egm_devices(
     class_root: &Path,
     dev_root: &Path,
     pci_root: &Path,
-    sockets: &[SocketInfo],
+    sockets: &[HostSocket],
 ) -> Vec<EgmSocketInfo> {
     let mut result = Vec::new();
 

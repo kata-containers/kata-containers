@@ -10,8 +10,8 @@ use super::platform::{
     MemoryBackend, NumaNode, Objects, Platform, SHARED_IOMMUFD_ID,
 };
 use super::probe::{
-    probe_host_topology_at, EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice,
-    SocketInfo, TdxQuoteSocket,
+    layout_guest, probe_host_topology_at, EgmSocketInfo, GpuSmmuGroup, HostSocket, HostTopology,
+    ProtectionDevice, SmpLayout, SocketInfo, TdxQuoteSocket,
 };
 use super::q35::Q35;
 use super::topology::{PciRootComplex, PciRootPort, PciTopology, VfioDevice, VfioDeviceKind};
@@ -43,7 +43,7 @@ fn check(topo: HostTopology, fixture: &str) {
 fn single_socket(cpus: std::ops::Range<u32>) -> Vec<SocketInfo> {
     vec![SocketInfo {
         id: 0,
-        cpu_range: cpus,
+        cpus: Some(cpus),
         host_node: None,
         mem_path: None,
         mem_size: None,
@@ -190,28 +190,28 @@ fn grace_6_vegm_1_per_socket() {
             sockets: vec![
                 SocketInfo {
                     id: 0,
-                    cpu_range: 0..1,
+                    cpus: Some(0..1),
                     host_node: None,
                     mem_path: None,
                     mem_size: None,
                 },
                 SocketInfo {
                     id: 1,
-                    cpu_range: 1..2,
+                    cpus: Some(1..2),
                     host_node: None,
                     mem_path: None,
                     mem_size: None,
                 },
                 SocketInfo {
                     id: 2,
-                    cpu_range: 2..3,
+                    cpus: Some(2..3),
                     host_node: None,
                     mem_path: None,
                     mem_size: None,
                 },
                 SocketInfo {
                     id: 3,
-                    cpu_range: 3..4,
+                    cpus: Some(3..4),
                     host_node: None,
                     mem_path: None,
                     mem_size: None,
@@ -280,14 +280,14 @@ fn grace_7_vegm_2_per_socket() {
             sockets: vec![
                 SocketInfo {
                     id: 0,
-                    cpu_range: 0..2,
+                    cpus: Some(0..2),
                     host_node: None,
                     mem_path: None,
                     mem_size: None,
                 },
                 SocketInfo {
                     id: 1,
-                    cpu_range: 2..4,
+                    cpus: Some(2..4),
                     host_node: None,
                     mem_path: None,
                     mem_size: None,
@@ -370,7 +370,7 @@ fn gb300_nvl_2gpu() {
 fn gb200_4gpu_2socket() {
     let socket = |id: u32, cpus: std::ops::Range<u32>| SocketInfo {
         id,
-        cpu_range: cpus,
+        cpus: Some(cpus),
         host_node: Some(id),
         mem_path: None,
         mem_size: Some(8 << 30),
@@ -399,19 +399,27 @@ fn gb200_4gpu_2socket() {
     );
 }
 
-/// Fewer vCPUs than host sockets: the socket that received none keeps its
-/// memory node without `cpus=`; QEMU rejects the empty range `cpus=1-0`.
+/// Fewer vCPUs than host sockets: the layout gives the later socket no vCPU
+/// and it keeps its memory node without `cpus=`; QEMU rejects the empty
+/// range `cpus=1-0`.
 #[test]
 fn a_socket_without_vcpus_is_a_memory_only_node() {
-    let socket = |id: u32| SocketInfo {
+    let host = |id: u32| HostSocket {
         id,
-        cpu_range: 0..0,
+        cpus: (id * 72)..((id + 1) * 72),
         host_node: Some(id),
-        mem_path: None,
-        mem_size: Some(4 << 30),
     };
-    let mut topo = HostTopology {
-        sockets: vec![socket(0), socket(1)],
+    let (sockets, smp) = layout_guest(&[host(0), host(1)], 1, 8 << 30);
+    assert_eq!(
+        smp,
+        SmpLayout {
+            sockets: 1,
+            cores: 1,
+            maxcpus: 1
+        }
+    );
+    let topo = HostTopology {
+        sockets,
         gpu_smmu_groups: vec![GpuSmmuGroup {
             pci_bus_addrs: vec!["0008:01:00.0".to_owned()],
             socket: 0,
@@ -423,7 +431,6 @@ fn a_socket_without_vcpus_is_a_memory_only_node() {
         protection: None,
         gpu_mmio_bytes: BTreeMap::new(),
     };
-    topo.map_guest_vcpus(1);
     let mut platform = Platform::from_config_defaults("virt", 8 << 30).expect("build");
     platform.apply_host_defaults(&topo);
     let args = platform.to_qemu_args().expect("to_qemu_args");
@@ -496,40 +503,38 @@ fn dump_host_topology_args() {
     }
 }
 
-// The prober records host CPU indices and host memory; the guest layout is
-// derived from them before apply_host_defaults.
+// The prober records host CPU indices; the guest layout, and the -smp
+// numbers that have to match it, are derived from them before
+// apply_host_defaults.
 
 #[test]
 fn guest_layout_from_probe() {
-    let host_socket = |id: u32, cpus: std::ops::Range<u32>| SocketInfo {
+    let host = |id: u32, cpus: std::ops::Range<u32>| HostSocket {
         id,
-        cpu_range: cpus,
+        cpus,
         host_node: Some(id),
-        mem_path: None,
-        mem_size: None,
     };
-    let mut topo = HostTopology {
-        sockets: vec![
-            host_socket(0, 0..72),
-            host_socket(1, 72..144),
-            host_socket(2, 144..216),
-        ],
-        gpu_smmu_groups: vec![],
-        nic_smmu_groups: vec![],
-        egm_sockets: vec![],
-        numa_distances: vec![],
-        pcie_root_port: 0,
-        protection: None,
-        gpu_mmio_bytes: BTreeMap::new(),
-    };
-
-    topo.map_guest_vcpus(8);
-    let ranges: Vec<_> = topo.sockets.iter().map(|s| s.cpu_range.clone()).collect();
-    assert_eq!(ranges, vec![0..3, 3..6, 6..8]);
-
     let total = 16u64 << 30;
-    topo.fill_guest_memory(total);
-    let sizes: Vec<u64> = topo.sockets.iter().map(|s| s.mem_size.unwrap()).collect();
+    let (sockets, smp) = layout_guest(
+        &[host(0, 0..72), host(1, 72..144), host(2, 144..216)],
+        8,
+        total,
+    );
+
+    // 8 vCPUs over 3 sockets: 3 cores each, so -smp carries maxcpus=9 and
+    // every vCPU below it belongs to a node.
+    assert_eq!(
+        smp,
+        SmpLayout {
+            sockets: 3,
+            cores: 3,
+            maxcpus: 9
+        }
+    );
+    let ranges: Vec<_> = sockets.iter().map(|s| s.cpus.clone().unwrap()).collect();
+    assert_eq!(ranges, vec![0..3, 3..6, 6..9]);
+
+    let sizes: Vec<u64> = sockets.iter().map(|s| s.mem_size.unwrap()).collect();
     // Whole-MiB shares for all but the last socket, which takes the remainder.
     let share = (total / 3 / (1 << 20)) << 20;
     assert_eq!(sizes, vec![share, share, total - 2 * share]);
@@ -680,6 +685,7 @@ fn q35_coco_snp_single_gpu() {
                 host_data: Some("S0FUQS1TWU5USEVUSUMtSE9TVC1EQVRBLTAwMDAwMDA=".to_owned()),
             }),
         },
+        smp: None,
     };
 
     let got = platform.to_qemu_args().expect("to_qemu_args");
@@ -919,6 +925,7 @@ fn q35_vanilla_8gpu_4nvswitch() {
             rng: None,
             protection: None,
         },
+        smp: None,
     };
 
     let got = platform.to_qemu_args().expect("to_qemu_args");
@@ -1160,6 +1167,7 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                 }),
             }),
         },
+        smp: None,
     };
 
     let got = platform.to_qemu_args().expect("to_qemu_args");
@@ -1179,14 +1187,14 @@ fn q35_vanilla_kata_x86() {
         sockets: vec![
             SocketInfo {
                 id: 0,
-                cpu_range: 0..33,
+                cpus: Some(0..33),
                 host_node: Some(0),
                 mem_path: Some("/dev/shm".into()),
                 mem_size: Some(36864 << 20),
             },
             SocketInfo {
                 id: 1,
-                cpu_range: 33..66,
+                cpus: Some(33..66),
                 host_node: Some(1),
                 mem_path: Some("/dev/shm".into()),
                 mem_size: Some(36864 << 20),
@@ -1245,7 +1253,9 @@ fn probe_groups_by_physical_smmu() {
     make_gpu("0009:06:00.0", 48, "smmu3.0x0000000005000000");
     make_gpu("0018:06:00.0", 88, "smmu3.0x0000100005000000");
 
-    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).expect("probe");
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm"))
+        .expect("probe")
+        .topology;
     assert_eq!(
         topo.gpu_smmu_groups.len(),
         2,
@@ -1322,19 +1332,20 @@ fn probe_gb200_package_ids_preserve_numa_binding() {
         fs::write(d.join("numa_node"), node.to_string()).unwrap();
         symlink(tmp.path().join(format!("{node}")), d.join("iommu_group")).unwrap();
     }
-    let topo = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).unwrap();
-    assert_eq!(topo.sockets.len(), 2);
-    assert_eq!(topo.sockets[0].host_node, Some(0));
-    assert_eq!(topo.sockets[1].host_node, Some(1));
-    assert_eq!(topo.gpu_smmu_groups[0].socket, topo.sockets[0].id);
-    assert_eq!(topo.gpu_smmu_groups[1].socket, topo.sockets[1].id);
+    let probe = probe_host_topology_at(&pci, &cpu, &dev, &tmp.path().join("egm")).unwrap();
+    assert_eq!(probe.sockets.len(), 2);
+    assert_eq!(probe.sockets[0].host_node, Some(0));
+    assert_eq!(probe.sockets[1].host_node, Some(1));
+    let groups = &probe.topology.gpu_smmu_groups;
+    assert_eq!(groups[0].socket, probe.sockets[0].id);
+    assert_eq!(groups[1].socket, probe.sockets[1].id);
 
     let mut config = kata_types::config::Hypervisor::default();
     config.machine_info.machine_type = "virt".to_owned();
     config.memory_info.default_memory = 16384;
     config.cpu_info.default_vcpus = 8.0;
     config.cpu_info.default_maxvcpus = 8;
-    let platform = Platform::from_config_and_topology(&config, topo).unwrap();
+    let platform = Platform::from_probe(&config, probe).unwrap();
     let args = platform.to_qemu_args().unwrap();
     for (idx, bus_nr) in [(0, 32), (1, 64)] {
         assert!(args.contains(&format!(
@@ -1414,7 +1425,9 @@ fn probe_synthetic_sysfs() {
     fs::write(egm.join("egm4/gpu_devices"), "0008:06:00.0 0009:06:00.0\n").unwrap();
     fs::write(dev.join("egm4"), "").unwrap();
 
-    let topo = probe_host_topology_at(&pci, &cpu, &dev, &egm).expect("probe");
+    let topo = probe_host_topology_at(&pci, &cpu, &dev, &egm)
+        .expect("probe")
+        .topology;
 
     assert_eq!(topo.gpu_smmu_groups.len(), 1, "one GPU SMMU group");
     let gpu_group = &topo.gpu_smmu_groups[0];

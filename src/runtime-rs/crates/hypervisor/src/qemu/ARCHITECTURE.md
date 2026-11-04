@@ -369,12 +369,22 @@ pub struct HostTopology {
     pub protection: Option<ProtectionDevice>,
 }
 
+/// A guest socket: one NUMA node.  From `layout_guest` or a fixture.
 pub struct SocketInfo {
     pub id: u32,
-    pub cpu_range: std::ops::Range<u32>,
+    pub cpus: Option<std::ops::Range<u32>>, // None: memory-only node
     pub host_node: Option<u32>,   // NUMA pinning for Q35 memory backends
     pub mem_path: Option<String>, // "/dev/shm" or EGM path; None = RAM backend
     pub mem_size: Option<u64>,    // per-socket size; None = Platform default
+}
+
+/// A host socket as the prober found it; `layout_guest` turns these into
+/// `SocketInfo`s and the `SmpLayout` (`sockets`, `cores`, `maxcpus`) that
+/// `-smp` repeats.
+pub struct HostSocket {
+    pub id: u32,
+    pub cpus: std::ops::Range<u32>, // host CPU indices
+    pub host_node: Option<u32>,
 }
 
 /// All GPUs in this group share a physical SMMU and must be placed on the same
@@ -471,16 +481,21 @@ Or by disabling NUMA balancing in the guest OS.
 - GB300 NVL72 with 4 GPUs → `8T`
 - Must be a power of 2; round up to the next power when in doubt.
 
-**Guest layout from the probe (`from_config_and_topology`):** the prober records
-host CPU indices and host NUMA nodes; the guest sees neither.  Before
-`apply_host_defaults`, `HostTopology::map_guest_vcpus` replaces the CPU ranges
-with guest vCPUs `0..maxcpus` laid out contiguously over the sockets (earlier
-sockets take the remainder, so hot-plugged CPUs always have a node), and
-`fill_guest_memory` splits guest RAM over the sockets in whole MiB with the
-remainder on the last one, so the `memdev` sizes add up to `-m`.  Multi-socket
-virt without EGM then gets one `memory-backend-ram` per socket carrying
-`host-nodes=<host node>,policy=bind`, the same model Q35 uses; a single socket
-keeps one backend spanning all guest RAM.
+**Guest layout from the probe (`Platform::from_probe`):** the prober records
+host CPU indices and host NUMA nodes as `HostSocket`s; the guest sees neither.
+`layout_guest` turns them into the guest sockets and the `SmpLayout` in one
+step: the first `min(sockets, maxcpus)` sockets get `cores = ceil(maxcpus /
+that count)` consecutive vCPUs each, `-smp` gets the same `sockets=`, `cores=`
+and `maxcpus = sockets * cores` (QEMU requires the product and derives the
+socket of vCPU `i` as `i / cores`), so every vCPU below `maxcpus` belongs to a
+node and sits in the socket QEMU expects.  `maxcpus` exceeds the configured
+maximum by the rounding, at most `sockets - 1`.  A socket past the first ones
+gets no vCPU and stays a memory-only node.  Guest RAM is split over the
+sockets in whole MiB with the remainder on the last one, so the `memdev`
+sizes add up to `-m`.  Multi-socket virt without EGM then gets one
+`memory-backend-ram` per socket carrying `host-nodes=<host node>,policy=bind`,
+the same model Q35 uses; a single socket keeps one backend spanning all guest
+RAM.
 
 ### Hugepages wiring (`with_hugepages`)
 
@@ -995,8 +1010,8 @@ Groundwork that preparing the first real launch on a GB200 node forced:
 - Grace pxb buses are numbered `0x20 * (idx + 1)` like Q35, above the
   `pcie.0` secondary-bus range and in the form the agent resolves;
 - probed groups sort by BDF, not IOMMU group id;
-- the probe's host CPU ranges and memory become a guest layout
-  (`map_guest_vcpus`, `fill_guest_memory`, per-socket RAM bound to host nodes);
+- the probe's host sockets become a guest layout and the matching `-smp`
+  numbers (`layout_guest`, per-socket RAM bound to host nodes);
 - host NUMA binding comes from `cpuN/nodeN` links, independently of the
   decimal `physical_package_id` (Grace reports large, non-sequential IDs);
 - `HostTopology::retain_devices` scopes the Platform to the sandbox's devices;

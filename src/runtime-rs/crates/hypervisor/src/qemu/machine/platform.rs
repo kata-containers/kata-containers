@@ -10,7 +10,10 @@ use anyhow::{bail, Result};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use super::{
-    probe::{equal_share, probe_host_topology, HostTopology, ProtectionDevice, SocketInfo},
+    probe::{
+        equal_share, layout_guest, probe_host_topology, HostProbe, HostTopology, ProtectionDevice,
+        SmpLayout, SocketInfo,
+    },
     pseries::Pseries,
     q35::Q35,
     s390x::S390xCcwVirtio,
@@ -25,6 +28,9 @@ pub(crate) struct Platform {
     pub machine: Machine,
     pub pci: PciTopology,
     pub objects: Objects,
+    /// The `-smp` layout the NUMA nodes were built with; `None` for a
+    /// hand-built topology, which leaves `-smp` to the legacy generator.
+    pub smp: Option<SmpLayout>,
 }
 
 pub(crate) enum Machine {
@@ -208,17 +214,23 @@ impl Platform {
         Self::build(&config.machine_info.machine_type, memory_size)
     }
 
-    /// Lay a probed host topology out as a guest, then build the Platform:
-    /// guest vCPUs (up to maxcpus) spread over the sockets, guest RAM split per
-    /// socket, hugepage backing when the config asks for it.
-    pub(crate) fn from_config_and_topology(
-        config: &HypervisorConfig,
-        mut topo: HostTopology,
-    ) -> Result<Self> {
+    /// Lay a probed host out as a guest and build the Platform from it: guest
+    /// vCPUs (up to maxcpus) and guest RAM over the host sockets, the matching
+    /// `-smp` layout, hugepage backing when the config asks for it.
+    pub(crate) fn from_probe(config: &HypervisorConfig, probe: HostProbe) -> Result<Self> {
+        let HostProbe {
+            sockets,
+            mut topology,
+        } = probe;
+        let (guest_sockets, smp) = layout_guest(
+            &sockets,
+            guest_max_vcpus(config),
+            u64::from(config.memory_info.default_memory) << 20,
+        );
+        topology.sockets = guest_sockets;
         let mut platform = Self::from_config(config)?;
-        topo.map_guest_vcpus(guest_max_vcpus(config));
-        topo.fill_guest_memory(u64::from(config.memory_info.default_memory) << 20);
-        platform.apply_host_defaults(&topo);
+        platform.apply_host_defaults(&topology);
+        platform.smp = Some(smp);
         if config.memory_info.enable_hugepages {
             platform = platform.with_hugepages("/dev/hugepages/");
         }
@@ -233,7 +245,8 @@ impl Platform {
         config: &HypervisorConfig,
         assigned: &[String],
     ) -> Result<Option<Self>> {
-        let mut topo = probe_host_topology()?;
+        let mut probe = probe_host_topology()?;
+        let topo = &mut probe.topology;
         topo.retain_devices(assigned);
         if topo.gpu_smmu_groups.is_empty() && topo.nic_smmu_groups.is_empty() {
             return Ok(None);
@@ -250,7 +263,7 @@ impl Platform {
             );
             topo.egm_sockets.clear();
         }
-        Self::from_config_and_topology(config, topo).map(Some)
+        Self::from_probe(config, probe).map(Some)
     }
 
     /// The `key=value` options of the machine line without the type and
@@ -266,14 +279,10 @@ impl Platform {
         self.emit_args(false)
     }
 
-    /// Sockets that hold vCPUs, for the -smp topology; a socket that received
-    /// no vCPU is a memory-only node and not a socket QEMU needs to know.
-    pub fn cpu_sockets(&self) -> u32 {
-        self.objects
-            .numa_nodes
-            .iter()
-            .filter(|node| node.cpus.is_some())
-            .count() as u32
+    /// The `-smp` layout the NUMA nodes were built with, for the command
+    /// line that renders `-smp` itself.
+    pub fn smp_layout(&self) -> Option<SmpLayout> {
+        self.smp
     }
 
     /// ID of the shared iommufd object, once a passthrough device is placed.
@@ -374,6 +383,7 @@ impl Platform {
                 rng: None,
                 protection: None,
             },
+            smp: None,
         })
     }
 
@@ -426,7 +436,7 @@ impl Platform {
             self.objects.numa_nodes.push(NumaNode {
                 nodeid: i as u32,
                 memdev: Some(id),
-                cpus: Some(socket.cpu_range.clone()),
+                cpus: socket.cpus.clone(),
             });
         }
 
@@ -590,9 +600,7 @@ impl Platform {
             self.objects.numa_nodes.push(NumaNode {
                 nodeid: socket_idx as u32,
                 memdev,
-                // Fewer vCPUs than host sockets leaves a socket with none;
-                // it keeps its memory node, and QEMU refuses `cpus=1-0`.
-                cpus: (!socket.cpu_range.is_empty()).then(|| socket.cpu_range.clone()),
+                cpus: socket.cpus.clone(),
             });
         }
 
