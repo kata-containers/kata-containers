@@ -133,6 +133,21 @@ impl ConfigPlugin for QemuConfig {
                 ));
             }
 
+            // "auto" backs guest RAM per NUMA node through `-numa memdev=`,
+            // which cannot also be the shared file-backed memory virtio-fs
+            // needs, so the two settings exclude each other.
+            if qemu.device_info.cold_plug_vfio == "auto"
+                && matches!(
+                    qemu.shared_fs.shared_fs.as_deref(),
+                    Some("virtio-fs") | Some("virtio-fs-nydus")
+                )
+            {
+                return Err(std::io::Error::other(
+                    "cold_plug_vfio = \"auto\" requires shared_fs = \"none\": guest RAM is \
+                     bound per NUMA node and virtio-fs gets no shared memory backend",
+                ));
+            }
+
             if qemu.boot_info.kernel.is_empty() {
                 return Err(std::io::Error::other(
                     "Guest kernel image for qemu is empty",
