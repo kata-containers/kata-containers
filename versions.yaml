@@ -372,8 +372,8 @@ externals:
 
   nydus:
     description: "Nydus image acceleration service"
-    url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.3"
+    url: "https://github.com/dragonflyoss/nydus"
+    version: "v2.4.5"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
