@@ -76,7 +76,7 @@ use crate::device::network_device_handler::wait_for_ccw_net_interface;
 use crate::device::network_device_handler::wait_for_pci_net_interface;
 use crate::device::{
     add_devices, cdi_devices_from_visible_devices, dump_nvidia_cdi_yaml, handle_cdi_devices,
-    update_env_pci,
+    update_env_pci, write_pci_map, PCI_MAP_PATH,
 };
 use crate::features::get_build_features;
 use crate::metrics::{get_metrics, is_collection_in_progress};
@@ -2210,8 +2210,13 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
 
     sandbox.container_mounts.remove(cid);
     sandbox.containers.remove(cid);
-    // Remove any host -> guest mappings for this container
-    sandbox.pcimap.remove(cid);
+    // Remove any host -> guest mappings for this container, and republish
+    // the map without them.
+    if sandbox.pcimap.remove(cid).is_some() {
+        if let Err(e) = write_pci_map(&sandbox.pcimap) {
+            warn!(sl(), "failed to write {}: {e:?}", PCI_MAP_PATH);
+        }
+    }
     Ok(())
 }
 
