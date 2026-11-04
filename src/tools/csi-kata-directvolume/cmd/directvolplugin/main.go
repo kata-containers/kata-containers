@@ -39,7 +39,11 @@ func main() {
 	flag.StringVar(&cfg.StateDir, "statedir", "/csi-persist-data", "directory for storing state information across driver restarts, volumes ")
 	flag.StringVar(&cfg.StoragePath, "storagepath", "", "storage path for storing the backend files on host")
 	flag.StringVar(&cfg.NodeID, "nodeid", "", "node id")
-	flag.Var(&cfg.Capacity, "capacity", "Simulate storage capacity. The parameter is <kind>=<quantity> where <kind> is the value of a 'kind' storage class parameter and <quantity> is the total amount of bytes for that kind. The flag may be used multiple times to configure different kinds.")
+	flag.Var(&cfg.Capacity, "capacity", "Configure a capacity pool on every node. The parameter is <pool>=<quantity> where <pool> is the value of the "+
+		"'katacontainers.direct.volume/capacity-pool' storage class parameter and <quantity> is the total amount of bytes that volumes may reserve from that pool. "+
+		"The flag may be used multiple times to configure different pools.")
+	flag.StringVar(&cfg.CapacityConfigDir, "capacity-config-dir", "", "Directory with per-node capacity pools. If it contains a file named after the node id, "+
+		"the <pool>=<quantity> entries of that file, separated by newlines or commas, are added to and override the --capacity pools of this node.")
 	flag.Int64Var(&cfg.MaxVolumeSize, "max-volume-size", 1024*1024*1024*1024, "maximum size of volumes in bytes (inclusive)")
 	flag.BoolVar(&cfg.EnableTopology, "enable-topology", true, "Enables PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS capability.")
 	flag.DurationVar(&cfg.SpdkRPCTimeout, "spdk-rpc-timeout", 10*time.Second,
