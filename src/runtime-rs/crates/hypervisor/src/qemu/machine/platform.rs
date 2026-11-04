@@ -825,7 +825,7 @@ impl Platform {
     /// Q35 emission order:
     ///   1. protection object (sev-snp-guest / tdx-guest), if any
     ///   2. -machine q35,...
-    ///   3. memory backends + NUMA nodes, interleaved per socket
+    ///   3. NUMA nodes, each right after the memory backend it names
     ///   4. -numa dist entries
     ///   5. the shared iommufd object, once, when any VFIO device is placed
     ///   6. pxb-pcie GPU roots (pxb + root ports + vfio)
@@ -843,24 +843,19 @@ impl Platform {
             args.push(emit_machine(&self.machine, self.numa_has_memdev()));
         }
 
-        for (backend, node) in self
-            .objects
-            .memory_backends
-            .iter()
-            .zip(self.objects.numa_nodes.iter())
-        {
-            args.push("-object".to_owned());
-            args.push(emit_backend(backend, backend_id(backend)));
-            args.push("-numa".to_owned());
-            args.push(emit_numa_node(node));
-        }
-        // Nodes beyond the memory-backed ones (the hot-plug placeholder).
-        for node in self
-            .objects
-            .numa_nodes
-            .iter()
-            .skip(self.objects.memory_backends.len())
-        {
+        // Each node is preceded by the backend its `memdev=` names; a node
+        // without memory (the hot-plug placeholder) comes on its own.
+        for node in &self.objects.numa_nodes {
+            let backend = node.memdev.as_deref().and_then(|id| {
+                self.objects
+                    .memory_backends
+                    .iter()
+                    .find(|backend| backend_id(backend) == id)
+            });
+            if let Some(backend) = backend {
+                args.push("-object".to_owned());
+                args.push(emit_backend(backend, backend_id(backend)));
+            }
             args.push("-numa".to_owned());
             args.push(emit_numa_node(node));
         }
