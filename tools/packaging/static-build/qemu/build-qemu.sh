@@ -58,6 +58,7 @@ scripts/git-submodule.sh update meson capstone
 # on a TEE guest.
 _no_shared_fs=false
 _tee=false
+_fork_devs=""
 case "${HYPERVISOR_NAME}" in
 kata-qemu-no-shared-fs)
 	_no_shared_fs=true
@@ -67,8 +68,11 @@ kata-qemu-snp-experimental | kata-qemu-tdx-experimental)
 	_tee=true
 	;;
 kata-qemu-cca-experimental)
-	# NVIDIA's fork for the arm64 GPU class: same trim as no-shared-fs.
+	# NVIDIA's fork for the arm64 GPU class: same trim as no-shared-fs. The
+	# fork gates its Tegra241 vCMDQ backend behind a symbol of its own, which
+	# --without-default-devices would otherwise drop.
 	_no_shared_fs=true
+	_fork_devs="CONFIG_TEGRA241_CMDQV=y"
 	;;
 esac
 if [[ "${_no_shared_fs}" == "true" ]] && [[ "${ARCH}" != "x86_64" ]] && [[ "${ARCH}" != "aarch64" ]]; then
@@ -211,15 +215,10 @@ elif [[ "${ARCH}" == "aarch64" ]]; then
 	# CONFIG_CXL is required by CONFIG_ACPI_CXL (auto-selected by ARM_VIRT) for Rubin vCXL.
 	# CONFIG_PXB (in _PCIE_DEVS) is a dependency of CONFIG_CXL.
 	# arm-smmuv3 comes via ARM_VIRT (selects ARM_SMMUV3).
-	printf 'CONFIG_ARM_VIRT=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+	printf 'CONFIG_ARM_VIRT=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
 		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
-		"${_SHARED_FS_DEVS}" "${_PCIE_DEVS}" "${_DAX_DEVS}" \
+		"${_SHARED_FS_DEVS}" "${_PCIE_DEVS}" "${_DAX_DEVS}" "${_fork_devs}" \
 		>> configs/devices/aarch64-softmmu/default.mak
-	# NVIDIA's fork gates the Tegra241 vCMDQ backend behind its own symbol,
-	# which --without-default-devices would otherwise drop.
-	if [[ "${HYPERVISOR_NAME}" == "kata-qemu-cca-experimental" ]]; then
-		printf 'CONFIG_TEGRA241_CMDQV=y\n' >> configs/devices/aarch64-softmmu/default.mak
-	fi
 elif [[ "${ARCH}" == "ppc64le" ]]; then
 	# PSeries composes neither _MEM_DEVS (no VIRTIO_MEM_SUPPORTED) nor the
 	# PCIe topology: its PHBs are conventional PCI, with no root/switch
