@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::ops::Range;
 
 use crate::device::pci_path::{PciPath, PciSlot};
@@ -222,6 +223,13 @@ impl Platform {
             sockets,
             mut topology,
         } = probe;
+        let complexes = topology.gpu_smmu_groups.len() + topology.nic_smmu_groups.len();
+        if complexes > MAX_PXB_COMPLEXES {
+            bail!(
+                "{complexes} passthrough complexes assigned, the guest PCI bus numbering \
+                 fits {MAX_PXB_COMPLEXES}: assign fewer devices or devices behind fewer host IOMMUs"
+            );
+        }
         let (guest_sockets, smp) = layout_guest(
             &sockets,
             guest_max_vcpus(config),
@@ -1296,6 +1304,11 @@ pub(crate) fn highmem_mmio_size_for(bar_bytes: u64, gpus: u64) -> u64 {
     need.next_power_of_two().max(GRACE_HIGHMEM_MMIO_MIN)
 }
 
+/// Most `pxb-pcie` complexes a guest can carry: bus numbers 0x20, 0x40, ...
+/// 0xe0, see `pxb_bus_nr`.  `Platform::from_probe` rejects a topology with
+/// more before anything is emitted.
+pub(crate) const MAX_PXB_COMPLEXES: usize = 7;
+
 /// Guest bus number of the `complex_idx`-th `pxb-pcie` (0-based), 0x20 apart.
 ///
 /// Shared by Q35 and virt.  Two constraints pin the scheme: the firmware
@@ -1303,10 +1316,11 @@ pub(crate) fn highmem_mmio_size_for(bar_bytes: u64, gpus: u64) -> u64 {
 /// `pcie_root_port = N`) upwards from 1, so expander buses must sit above that
 /// range; and the kata-agent recognises a guest PCI path as pxb-rooted only
 /// when its first segment is >= 0x20 (`PXB_PCIE_ROOT_BUS_MIN`).  Each complex
-/// then owns 31 secondary bus numbers for its root ports, and at most seven
-/// complexes fit below 0x100.
+/// then owns 31 secondary bus numbers for its root ports, and at most
+/// `MAX_PXB_COMPLEXES` fit below 0x100; the eighth would wrap to 0.
 fn pxb_bus_nr(complex_idx: usize) -> u8 {
-    0x20u8 * (complex_idx as u8 + 1)
+    u8::try_from(0x20 * (complex_idx + 1))
+        .expect("complex count is checked against MAX_PXB_COMPLEXES before emission")
 }
 
 /// Highest vCPU count the guest can reach, mirroring the legacy `-smp`

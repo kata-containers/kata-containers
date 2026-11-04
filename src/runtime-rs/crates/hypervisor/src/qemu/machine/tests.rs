@@ -7,11 +7,11 @@ use std::path::Path;
 
 use super::platform::{
     highmem_mmio_size_for, BaseMachine, CpuConfig, CpuModel, IommufdBackend, Machine,
-    MemoryBackend, NumaNode, Objects, Platform, SHARED_IOMMUFD_ID,
+    MemoryBackend, NumaNode, Objects, Platform, MAX_PXB_COMPLEXES, SHARED_IOMMUFD_ID,
 };
 use super::probe::{
-    layout_guest, probe_host_topology_at, EgmSocketInfo, GpuSmmuGroup, HostSocket, HostTopology,
-    ProtectionDevice, SmpLayout, SocketInfo, TdxQuoteSocket,
+    layout_guest, probe_host_topology_at, EgmSocketInfo, GpuSmmuGroup, HostProbe, HostSocket,
+    HostTopology, ProtectionDevice, SmpLayout, SocketInfo, TdxQuoteSocket,
 };
 use super::q35::Q35;
 use super::topology::{PciRootComplex, PciRootPort, PciTopology, VfioDevice, VfioDeviceKind};
@@ -1456,6 +1456,48 @@ fn probe_synthetic_sysfs() {
         !topo.gpu_mmio_bytes.contains_key("0009:06:00.0"),
         "no resource file, no entry"
     );
+}
+
+// ---- pxb bus numbers: at most seven complexes fit below 0x100 ----
+
+#[test]
+fn more_complexes_than_bus_numbers_are_rejected_before_emission() {
+    let group = |i: usize| GpuSmmuGroup {
+        pci_bus_addrs: vec![format!("{i:04x}:01:00.0")],
+        socket: 0,
+    };
+    let probe = |complexes: usize| HostProbe {
+        sockets: vec![HostSocket {
+            id: 0,
+            cpus: 0..72,
+            host_node: Some(0),
+        }],
+        topology: HostTopology {
+            sockets: vec![],
+            gpu_smmu_groups: (0..complexes).map(group).collect(),
+            nic_smmu_groups: vec![],
+            egm_sockets: vec![],
+            numa_distances: vec![],
+            pcie_root_port: 0,
+            protection: None,
+            gpu_mmio_bytes: BTreeMap::new(),
+        },
+    };
+    let mut config = kata_types::config::Hypervisor::default();
+    config.machine_info.machine_type = "virt".to_owned();
+    config.memory_info.default_memory = 8192;
+    config.cpu_info.default_vcpus = 4.0;
+    config.cpu_info.default_maxvcpus = 4;
+
+    let platform = Platform::from_probe(&config, probe(MAX_PXB_COMPLEXES)).expect("seven fit");
+    let args = platform.to_qemu_args().expect("args");
+    assert!(args.contains(&"pxb-pcie,id=pcie.7,bus=pcie.0,bus_nr=224,numa_node=0".to_owned()));
+
+    let err = Platform::from_probe(&config, probe(MAX_PXB_COMPLEXES + 1))
+        .err()
+        .expect("eight do not")
+        .to_string();
+    assert!(err.contains("8 passthrough complexes"), "{}", err);
 }
 
 // ---- highmem-mmio-size from the probed BARs ----
