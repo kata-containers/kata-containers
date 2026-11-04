@@ -2023,8 +2023,8 @@ handle_build() {
 		install_ovmf_tdx
 		install_qemu
 		install_qemu_no_shared_fs
-		install_qemu_snp_experimental
-		install_qemu_tdx_experimental
+		install_qemu_experimental_flavour snp-experimental
+		install_qemu_experimental_flavour tdx-experimental
 		install_stratovirt
 		install_shim_v2_go
 		install_shim_v2_rust
