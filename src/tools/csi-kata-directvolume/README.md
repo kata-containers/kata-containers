@@ -16,11 +16,15 @@ This repository houses the `Direct Volume CSI driver`, along with all build and 
 
 The driver can provision volumes based on direct block devices, eliminating the need for loop devices and relying solely on single files stored on the host.
 
+On Kubernetes 1.24 or later, the driver publishes the storage capacity of every node, from per-node capacity pools and the free space of the backing filesystem, so that the scheduler only places pods on nodes which can store their volumes.
+
 ## Deployment
 
 [Deployment for K8S 1.20+](docs/deploy-csi-kata-directvol.md)
 
 [SPDK Usage Guide](docs/spdk-usage.md)
+
+[Storage Capacity Aware Scheduling](docs/storage-capacity.md)
 
 ## Building the Binary
 
@@ -29,6 +33,10 @@ If you want to build the driver yourself, you can do so with the following comma
 ```shell
 cd tools/csi-kata-directvolume/ && make
 ```
+
+## Testing
+
+`go test ./...` runs the unit tests and the checks of the deployment manifests. The CSI sanity test and the two-node end-to-end test of capacity aware scheduling are described in [Storage Capacity Aware Scheduling](docs/storage-capacity.md#testing).
 
 ## Building the Container Image
 
