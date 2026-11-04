@@ -179,8 +179,9 @@ func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUn
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Unmount only if the target path is really a mount point.
-	if isMnt, err := dv.config.safeMounter.IsMountPoint(targetPath); err != nil {
+	// Unmount only if the target path is really a mount point. A missing
+	// target path means that the volume is not published there (any more).
+	if isMnt, err := dv.config.safeMounter.IsMountPoint(targetPath); err != nil && !os.IsNotExist(err) {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("check target path: %v", err))
 	} else if isMnt {
 		// Unmounting the image or filesystem.
@@ -271,8 +272,9 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Unmount only if the target path is really a mount point.
-	if isMnt, err := dv.config.safeMounter.IsMountPoint(stagingTargetPath); err != nil {
+	// Unmount only if the target path is really a mount point. A missing
+	// staging path means that the volume is not staged there (any more).
+	if isMnt, err := dv.config.safeMounter.IsMountPoint(stagingTargetPath); err != nil && !os.IsNotExist(err) {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("check staging target path: %v", err))
 	} else if isMnt {
 		err = dv.config.safeMounter.Unmount(stagingTargetPath)
