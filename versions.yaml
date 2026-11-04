@@ -490,6 +490,12 @@ languages:
 docker_images:
   description: "Docker images used for testing"
 
+  busybox:
+    description: "Pods of the csi-kata-directvolume end-to-end test"
+    registry: "quay.io/prometheus/busybox"
+    # yamllint disable-line rule:line-length
+    digest: "sha256:7379672d53c28113469275f2eb48adffa19954f39f8ef20c1e2992278f658e6c"  # 1.38.0
+
   nginx:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
     registry: "quay.io/kata-containers/nginx"

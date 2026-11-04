@@ -5,8 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Run the csi-sanity suite of github.com/kubernetes-csi/csi-test against the
-# driver. The node tests stage and publish volumes, which bind mounts and
-# formats them, so this must run as root.
+# driver, with a capacity pool configured. The node tests stage and publish
+# volumes, which bind mounts and formats them, so this must run as root.
 #
 # Environment:
 #   CSI_SANITY       csi-sanity binary (default: csi-sanity from PATH)
@@ -27,6 +27,7 @@ driver_dir=$(cd "${script_dir}/../.." && pwd)
 # Keep the test volumes small: the filesystem which holds the work directory
 # must provide them.
 test_volume_size=$((64 * 1024 * 1024))
+pool="sanity"
 
 work_dir=$(mktemp -d -t csi-kata-directvolume-sanity.XXXXXX)
 driver_pid=""
@@ -77,6 +78,7 @@ endpoint="${work_dir}/csi.sock"
 	--storagepath="${work_dir}/storage" \
 	--spdk-rawpath="${work_dir}/spdk-raw" \
 	--spdk-vhostpath="${work_dir}/spdk-vhost" \
+	--capacity="${pool}=1Ti" \
 	--v=5 >"${work_dir}/driver.log" 2>&1 &
 driver_pid=$!
 
@@ -90,6 +92,7 @@ done
 cat >"${work_dir}/parameters.yaml" <<EOF
 katacontainers.direct.volume/volumetype: directvol
 katacontainers.direct.volume/fstype: ext4
+katacontainers.direct.volume/capacity-pool: ${pool}
 EOF
 
 read -r -a extra_args <<<"${CSI_SANITY_ARGS}"
