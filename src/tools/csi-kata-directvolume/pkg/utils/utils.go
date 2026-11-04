@@ -27,9 +27,13 @@ import (
 const (
 	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
 	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
-	DirectVolumeTypeName           = "directvol"
-	SpdkVolumeTypeName             = "spdkvol"
-	IsDirectVolume                 = "is_directvolume"
+	// KataContainersDirectCapacityPool is the StorageClass parameter that
+	// selects the capacity pool a volume is reserved from. The driver also
+	// stores it in the volume context.
+	KataContainersDirectCapacityPool = "katacontainers.direct.volume/capacity-pool"
+	DirectVolumeTypeName             = "directvol"
+	SpdkVolumeTypeName               = "spdkvol"
+	IsDirectVolume                   = "is_directvolume"
 )
 
 const (
