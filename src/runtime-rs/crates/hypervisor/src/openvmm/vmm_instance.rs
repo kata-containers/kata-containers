@@ -415,14 +415,17 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
 
-    fn make_nonresponsive_openvmm(temp_dir: &TempDir) -> (String, std::path::PathBuf) {
+    fn make_nonresponsive_openvmm(
+        temp_dir: &TempDir,
+        startup_delay: Duration,
+    ) -> (String, std::path::PathBuf) {
         let script_path = temp_dir.path().join("openvmm");
         let pid_path = temp_dir.path().join("openvmm.pid");
         fs::write(
             &script_path,
             format!(
-                "#!/bin/sh\necho $$ > {}\ntouch \"$2\"\nexec sleep 30\n",
-                pid_path.display()
+                "#!/bin/sh\nsleep {}\ntouch \"$2\"\nprintf '%s\\n' \"$$\" > \"$0.pid.tmp\"\nmv \"$0.pid.tmp\" \"$0.pid\"\nexec sleep 30\n",
+                startup_delay.as_secs_f64()
             ),
         )
         .unwrap();
@@ -517,30 +520,57 @@ mod tests {
 
     #[tokio::test]
     async fn launch_failure_reaps_child_and_suppresses_exit_notification() {
+        assert_launch_failure_cleanup(Duration::ZERO).await;
+    }
+
+    #[tokio::test]
+    async fn delayed_helper_start_still_reaps_child_and_suppresses_exit_notification() {
+        assert_launch_failure_cleanup(Duration::from_millis(200)).await;
+    }
+
+    async fn assert_launch_failure_cleanup(startup_delay: Duration) {
         let temp_dir = TempDir::new().unwrap();
-        let (openvmm_path, pid_path) = make_nonresponsive_openvmm(&temp_dir);
+        let (openvmm_path, pid_path) = make_nonresponsive_openvmm(&temp_dir, startup_delay);
         let socket_path = temp_dir.path().join("openvmm.sock");
         let socket_path_string = socket_path.to_string_lossy().into_owned();
         let (exit_notify, exit_waiter) = watch::channel(Some(9));
         let mut instance = VmmInstance::new(exit_notify);
 
-        let result = instance
-            .launch_with_timeout(
+        let inject_failure = async {
+            let pid = loop {
+                match fs::read_to_string(&pid_path) {
+                    Ok(pid) => break pid.trim().parse::<u32>().unwrap(),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                    Err(err) => panic!("failed to read helper PID: {}", err),
+                }
+            };
+
+            // Fail the RPC only after the helper has published its PID.
+            fs::remove_file(&socket_path).unwrap();
+            let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+            let (connection, _) = listener.accept().await.unwrap();
+            drop(connection);
+            pid
+        };
+        let (result, pid) = tokio::join!(
+            instance.launch_with_timeout(
                 &openvmm_path,
                 socket_path_string,
                 vmservice::CreateVMRequest::new(),
                 None,
                 None,
-                Duration::from_millis(100),
-            )
-            .await;
+                OPENVMM_READY_TIMEOUT,
+            ),
+            async {
+                tokio::time::timeout(OPENVMM_READY_TIMEOUT, inject_failure)
+                    .await
+                    .expect("helper did not start and accept the connection")
+            },
+        );
 
         assert!(result.is_err());
-        let pid: u32 = fs::read_to_string(pid_path)
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap();
         assert!(!Path::new(&format!("/proc/{pid}")).exists());
         assert!(!socket_path.exists());
         assert!(instance.pid.is_none());
