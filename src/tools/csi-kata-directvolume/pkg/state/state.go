@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"slices"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,9 +25,11 @@ type Volume struct {
 	VolSize int64
 	VolPath string
 	// VolAccessType  AccessType
-	ParentVolID    string
-	ParentSnapID   string
-	NodeID         string
+	ParentVolID  string
+	ParentSnapID string
+	NodeID       string
+	// Kind is the capacity pool the volume is reserved from, empty if the
+	// volume does not belong to a pool.
 	Kind           string
 	ReadOnlyAttach bool
 	Attached       bool
@@ -38,12 +41,17 @@ type Volume struct {
 	// was published.
 	Published Strings
 
+	// VolumeContext is the volume context returned by CreateVolume. It
+	// is kept so that a repeated CreateVolume returns the same response.
+	VolumeContext map[string]string
+
 	Metadata map[string]string
 }
 
 // State is the interface that the rest of the code has to use to
 // access and change state. All error messages contain gRPC
-// status codes and can be returned without wrapping.
+// status codes and can be returned without wrapping. A change
+// which cannot be saved is not applied.
 type State interface {
 	// GetVolumeByID retrieves a volume by its unique ID or returns
 	// an error including that ID when not found.
@@ -141,22 +149,34 @@ func (s *state) GetVolumes() []Volume {
 	return volumes
 }
 
+// save replaces the list of volumes and writes it to the state file. If that
+// fails, the list stays as it was: callers treat the change as failed and may
+// roll back what depends on it, so a later request must not find it.
+func (s *state) save(volumes []Volume) error {
+	previous := s.Volumes
+	s.Volumes = volumes
+	if err := s.dump(); err != nil {
+		s.Volumes = previous
+		return err
+	}
+	return nil
+}
+
 func (s *state) UpdateVolume(update Volume) error {
-	for i, volume := range s.Volumes {
+	volumes := slices.Clone(s.Volumes)
+	for i, volume := range volumes {
 		if volume.VolID == update.VolID {
-			s.Volumes[i] = update
-			return s.dump()
+			volumes[i] = update
+			return s.save(volumes)
 		}
 	}
-	s.Volumes = append(s.Volumes, update)
-	return s.dump()
+	return s.save(append(volumes, update))
 }
 
 func (s *state) DeleteVolume(volID string) error {
 	for i, volume := range s.Volumes {
 		if volume.VolID == volID {
-			s.Volumes = append(s.Volumes[:i], s.Volumes[i+1:]...)
-			return s.dump()
+			return s.save(slices.Concat(s.Volumes[:i], s.Volumes[i+1:]))
 		}
 	}
 	return nil

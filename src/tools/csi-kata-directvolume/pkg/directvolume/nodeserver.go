@@ -138,7 +138,9 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	klog.Infof("add direct volume successfully.")
 
 	volInStat.NodeID = dv.config.NodeID
-	volInStat.Published.Add(targetPath)
+	if !volInStat.Published.Has(targetPath) {
+		volInStat.Published.Add(targetPath)
+	}
 	if err := dv.state.UpdateVolume(volInStat); err != nil {
 		return nil, err
 	}
