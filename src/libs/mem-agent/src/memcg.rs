@@ -187,6 +187,87 @@ fn format_path(path: &str) -> String {
 }
 
 impl Config {
+    pub fn is_disabled(&self) -> bool {
+        self.default.disabled
+            && self
+                .cgroups
+                .values()
+                .flatten()
+                .all(|config| config.config.disabled)
+    }
+
+    /// Apply a partial configuration update without accessing MGLRU.
+    pub(crate) fn updated(&self, config: OptionConfig) -> Result<(Self, bool)> {
+        let mut updated = self.clone();
+        let mut need_reset = false;
+
+        for (path, numa) in config.del {
+            let cur_path = format_path(&path);
+            let should_del = if let Some(configs) = updated.cgroups.get_mut(&cur_path) {
+                configs.retain(|cfg| cfg.numa_id != numa);
+                configs.is_empty()
+            } else {
+                false
+            };
+
+            if should_del {
+                updated.cgroups.remove(&cur_path);
+                need_reset = true;
+            }
+        }
+
+        for option in config.add {
+            let cur_path = format_path(&option.path);
+            let mut numa = option.numa_id.clone();
+            numa.sort_unstable();
+
+            let configs = updated.cgroups.entry(cur_path.clone()).or_default();
+            if configs.iter().any(|config| config.numa_id == numa) {
+                return Err(anyhow!("path {cur_path} numa_id {numa:?} already exists"));
+            }
+
+            let mut cgroup_config = CgroupConfig {
+                numa_id: numa,
+                ..Default::default()
+            };
+            cgroup_config.set(&option);
+            configs.push(cgroup_config);
+            need_reset = true;
+        }
+
+        'outer: for option in config.set {
+            let cur_path = format_path(&option.path);
+            if let Some(configs) = updated.cgroups.get_mut(&cur_path) {
+                let mut numa = option.numa_id.clone();
+                numa.sort_unstable();
+                for cgroup_config in configs {
+                    if cgroup_config.numa_id == numa {
+                        if cgroup_config.set(&option) {
+                            need_reset = true;
+                        }
+                        continue 'outer;
+                    }
+                }
+            }
+
+            return Err(anyhow!(
+                "path {} numa_id {:?} not exists",
+                cur_path,
+                option.numa_id
+            ));
+        }
+
+        if updated.default.set(&config.default) {
+            need_reset = true;
+        }
+
+        if need_reset {
+            updated.format();
+        }
+
+        Ok((updated, need_reset))
+    }
+
     fn format(&mut self) {
         let mut updates = Vec::new();
         for path in self.cgroups.keys().cloned().collect::<Vec<_>>() {
@@ -825,93 +906,24 @@ impl MemCgroups {
 
     // return if MemAgentSleep need be reset
     fn set_config(&mut self, config: OptionConfig) -> Result<bool> {
+        let (new_config, need_reset) = self.config.updated(config)?;
+
+        // Disabling memcg must not require a working MGLRU/debugfs interface.
+        if new_config.is_disabled() {
+            self.config = new_config;
+            self.config_map.clear();
+            return Ok(true);
+        }
+
         // refresh
         let mg_hash = mglru::host_memcgs_get(&HashSet::new(), true, self.is_cg_v2)
             .map_err(|e| anyhow!("mglru::host_memcgs_get failed: {e}"))?;
         self.remove_changed(&mg_hash);
         self.update_and_add(&mg_hash, true);
 
-        let mut need_reset = false;
-
-        let orig_config = self.config.clone();
-
-        // handle del
-        for (path, numa) in config.del {
-            let cur_path = format_path(&path);
-            let should_del = if let Some(configs) = self.config.cgroups.get_mut(&cur_path) {
-                configs.retain(|cfg| cfg.numa_id != numa);
-                configs.is_empty()
-            } else {
-                false
-            };
-
-            if should_del {
-                self.config.cgroups.remove(&cur_path);
-                need_reset = true;
-            }
-        }
-
-        // handle add
-        for oc in config.add {
-            loop {
-                let cur_path = format_path(&oc.path);
-                if let Some(numa_cgs) = self.config.cgroups.get_mut(&cur_path) {
-                    let mut numa = oc.numa_id.clone();
-                    numa.sort_unstable();
-                    for cg in numa_cgs.clone() {
-                        if cg.numa_id == numa {
-                            self.config = orig_config;
-                            return Err(anyhow!("path {cur_path} numa_id {numa:?} already exists"));
-                        }
-                    }
-
-                    let mut numa_cg = CgroupConfig {
-                        numa_id: numa,
-                        ..Default::default()
-                    };
-                    numa_cg.set(&oc);
-
-                    numa_cgs.push(numa_cg);
-
-                    need_reset = true;
-
-                    break;
-                } else {
-                    self.config.cgroups.insert(cur_path, vec![]);
-                }
-            }
-        }
-
-        // handle set
-        'outer: for oc in config.set {
-            let cur_path = format_path(&oc.path);
-            if let Some(numa_cgs) = self.config.cgroups.get_mut(&cur_path) {
-                let mut numa = oc.numa_id.clone();
-                numa.sort_unstable();
-                for cg in numa_cgs {
-                    if cg.numa_id == numa {
-                        if cg.set(&oc) {
-                            need_reset = true;
-                        }
-                        continue 'outer;
-                    }
-                }
-            }
-            self.config = orig_config;
-            return Err(anyhow!(
-                "path {} numa_id {:?} not exists",
-                cur_path,
-                oc.numa_id
-            ));
-        }
-
-        if self.config.default.set(&config.default) {
-            need_reset = true;
-        }
+        self.config = new_config;
 
         if need_reset {
-            self.config.format();
-
             // remove old config_map
             self.config_map.clear();
 
@@ -1324,11 +1336,15 @@ impl MemCG {
             .unwrap_or_else(|_| TokioDuration::from_secs(0))
     }
 
-    pub async fn set_config(&mut self, new_config: OptionConfig) -> Result<bool> {
+    pub async fn set_config(&mut self, new_config: OptionConfig) -> Result<(bool, Config)> {
         let memcgs = self.memcgs.clone();
-        tokio::task::spawn_blocking(move || memcgs.write().unwrap().set_config(new_config))
-            .await
-            .map_err(|e| anyhow!("tokio::task::spawn_blocking failed: {e:?}"))?
+        tokio::task::spawn_blocking(move || {
+            let mut memcgs = memcgs.write().unwrap();
+            let need_reset = memcgs.set_config(new_config)?;
+            Ok((need_reset, memcgs.config.clone()))
+        })
+        .await
+        .map_err(|e| anyhow!("tokio::task::spawn_blocking failed: {e:?}"))?
     }
 
     pub async fn get_status(&self) -> Result<HashMap<String, MemCgroup>> {
@@ -1344,6 +1360,43 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
     use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_config_is_disabled_includes_cgroup_overrides() {
+        let mut config = Config::default();
+        config.default.disabled = true;
+        assert!(config.is_disabled());
+
+        config.cgroups.insert(
+            "/workload".to_string(),
+            vec![CgroupConfig {
+                config: SingleConfig {
+                    disabled: false,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+        );
+        assert!(!config.is_disabled());
+    }
+
+    #[test]
+    fn test_disabled_config_can_be_enabled_without_mglru() {
+        let mut config = Config::default();
+        config.default.disabled = true;
+        let option = OptionConfig {
+            default: SingleOptionConfig {
+                disabled: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let (updated, need_reset) = config.updated(option).unwrap();
+
+        assert!(need_reset);
+        assert!(!updated.is_disabled());
+    }
 
     #[test]
     fn test_memcg_swap_not_available() {
