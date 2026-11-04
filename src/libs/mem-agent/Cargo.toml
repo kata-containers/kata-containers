@@ -13,7 +13,7 @@ nix = { features = ["fs", "sched"], workspace = true }
 page_size = "0.6"
 slog = "2.5.2"
 slog-scope = "4.1.2"
-tokio = { features = ["full"], version = "1.45.1" }
+tokio = { features = ["full"], workspace = true }
 
 [dev-dependencies]
 lazy_static = "1.4"
