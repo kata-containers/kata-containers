@@ -81,12 +81,21 @@ func (mounter *SafeMountFormater) SafeFormatWithFstype(source string, fstype str
 			return mountutils.NewMountError(mountutils.UnformattedReadOnly, "cannot mount unformatted disk %s as it is in read-only mode", source)
 		}
 
-		// Disk is unformatted so format it.
+		// Disk is unformatted so format it. The disks are files, and by
+		// default mkfs discards their blocks, which punches holes into the
+		// space that fallocate has allocated for a raw disk.
 		args := []string{source}
-		if fstype == "ext4" || fstype == "ext3" {
+		switch fstype {
+		case "ext4", "ext3":
 			args = []string{
-				"-F",  // Force flag
-				"-m0", // Zero blocks reserved for super-user
+				"-F",              // Force flag
+				"-m0",             // Zero blocks reserved for super-user
+				"-E", "nodiscard", // Keep the allocated blocks
+				source,
+			}
+		case "xfs", "btrfs":
+			args = []string{
+				"-K", // Keep the allocated blocks
 				source,
 			}
 		}
