@@ -129,6 +129,44 @@ impl QemuInner {
         bdfs
     }
 
+    /// With `cold_plug_vfio = "auto"` the machine-centric Platform owns the
+    /// machine options, the guest memory and NUMA layout and the passthrough
+    /// PCIe topology for the VFIO devices assigned to this sandbox; `cmdline`
+    /// keeps everything else.  `None` when the option is off or none of the
+    /// assigned devices is one the prober models, in which case the legacy
+    /// topology stands.
+    async fn platform_for_auto(&self, cmdline: &mut QemuCmdLine<'_>) -> Result<Option<Platform>> {
+        if self.config.device_info.cold_plug_vfio != "auto" {
+            return Ok(None);
+        }
+        let assigned = self.assigned_vfio_bdfs().await;
+        let Some(mut platform) = Platform::for_assigned_devices(&self.config, &assigned)
+            .context("cold_plug_vfio=auto: probing host topology")?
+        else {
+            info!(
+                sl!(),
+                "cold_plug_vfio=auto: no modelled passthrough device among {:?}, \
+                 using the legacy topology",
+                assigned
+            );
+            return Ok(None);
+        };
+        if cmdline.has_memory_hotplug_region() {
+            platform.add_hotplug_placeholder_node();
+        }
+        cmdline.apply_platform(
+            &platform.machine_options(),
+            platform.topology_args()?,
+            platform.iommufd_id(),
+            platform.cpu_sockets(),
+        );
+        info!(
+            sl!(),
+            "cold_plug_vfio=auto: Platform owns the topology for {:?}", assigned
+        );
+        Ok(Some(platform))
+    }
+
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
@@ -146,44 +184,7 @@ impl QemuInner {
         // 'cmdline' has to live at least until spawn() is called
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
-        // Phase 7: with cold_plug_vfio = "auto" the machine-centric Platform
-        // owns the machine options, guest memory/NUMA and the passthrough PCIe
-        // topology for the VFIO devices assigned to this sandbox; the legacy
-        // generator keeps everything else.
-        let platform = if self.config.device_info.cold_plug_vfio == "auto" {
-            let assigned = self.assigned_vfio_bdfs().await;
-            match Platform::for_assigned_devices(&self.config, &assigned)
-                .context("cold_plug_vfio=auto: probing host topology")?
-            {
-                Some(mut platform) => {
-                    if cmdline.has_memory_hotplug_region() {
-                        platform.add_hotplug_placeholder_node();
-                    }
-                    cmdline.apply_platform(
-                        &platform.machine_options(),
-                        platform.topology_args()?,
-                        platform.iommufd_id(),
-                        platform.cpu_sockets(),
-                    );
-                    info!(
-                        sl!(),
-                        "cold_plug_vfio=auto: Platform owns the topology for {:?}", assigned
-                    );
-                    Some(platform)
-                }
-                None => {
-                    info!(
-                        sl!(),
-                        "cold_plug_vfio=auto: no modelled passthrough device among {:?}, \
-                         using the legacy topology",
-                        assigned
-                    );
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let platform = self.platform_for_auto(&mut cmdline).await?;
         let platform_paths = platform
             .as_ref()
             .map(|p| p.guest_pci_paths())
@@ -460,26 +461,6 @@ impl QemuInner {
 
         let qemu_args = cmdline.build().await?;
         info!(sl!(), "qemu args: {}", qemu_args.join(" "));
-
-        // Outside auto mode, probe the host and log what the machine-centric
-        // Platform would emit, for comparison.  Errors are non-fatal: the
-        // legacy command line is used regardless.
-        if platform.is_none() {
-            match Platform::from_config_with_probe(&self.config) {
-                Ok(platform) => match platform.to_qemu_args() {
-                    Ok(platform_args) if !platform_args.is_empty() => {
-                        info!(
-                            sl!(),
-                            "platform args (GPU topology): {}",
-                            platform_args.join(" ")
-                        );
-                    }
-                    Ok(_) => {}
-                    Err(e) => info!(sl!(), "platform args error: {e}"),
-                },
-                Err(e) => info!(sl!(), "platform probe error: {e}"),
-            }
-        }
 
         let mut command = Command::new(&self.config.path);
         command.args(qemu_args);

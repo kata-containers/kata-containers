@@ -208,16 +208,6 @@ impl Platform {
         Self::build(&config.machine_info.machine_type, memory_size)
     }
 
-    /// Build a Platform from config and apply real host topology via sysfs probe.
-    ///
-    /// This is the entry-point for "auto" mode: `cold_plug_vfio = "auto"` in the
-    /// kata config calls this instead of using a manually-specified topology.
-    /// Returns the Platform as-is (no GPU args emitted) when no NVIDIA devices
-    /// are found, which is correct for bare x86 CI runners.
-    pub fn from_config_with_probe(config: &HypervisorConfig) -> Result<Self> {
-        Self::from_config_and_topology(config, probe_host_topology()?)
-    }
-
     /// Lay a probed host topology out as a guest, then build the Platform:
     /// guest vCPUs (up to maxcpus) spread over the sockets, guest RAM split per
     /// socket, hugepage backing when the config asks for it.

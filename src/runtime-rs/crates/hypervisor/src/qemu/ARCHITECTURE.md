@@ -942,15 +942,15 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
   under `/dev/egmN`.
 - `probe_host_topology_at(pci, cpu, dev)`: test-injectable variant used by the
   `probe_synthetic_sysfs` unit test.
-- `Platform::from_config_with_probe()`: builds Platform from kata config and
-  applies `probe_host_topology()` — the `"auto"` entry-point.
+- `Platform::for_assigned_devices()`: probes the host, keeps the devices of
+  the sandbox and lays the result out as a guest; the `"auto"` entry point.
 - Switch-port topology (`x3130-upstream` + `N xio3130-downstream`):
   `PciRootPort::switch_downstreams: Vec<VfioDevice>` drives `emit_switch_ports()`
   called from both `emit_virt_args()` and `emit_q35_args()`.
-- `inner.rs` integration: `Platform::from_config_with_probe()` is called at VM
-  start; the resulting GPU-topology args are logged at INFO level alongside the
-  legacy cmdline args.  The legacy path is still used for the actual launch
-  (strangle pattern — Platform takes over one section at a time).
+- `inner.rs` integration: `QemuInner::platform_for_auto()` builds the Platform
+  at VM start when `cold_plug_vfio = "auto"` and hands its machine options and
+  topology to the legacy command line; with any other value the legacy path
+  emits everything, with no Platform probe.
 - 14 golden tests passing (12 original + `probe_synthetic_sysfs` + `grace_switch_port_emission`).
 
 **Follow-up:** the `"auto"` wiring and the memory/NUMA/PCIe hand-over landed in
