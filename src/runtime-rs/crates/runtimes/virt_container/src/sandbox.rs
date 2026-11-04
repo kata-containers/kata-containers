@@ -172,6 +172,20 @@ impl std::fmt::Debug for VirtSandbox {
     }
 }
 
+/// The PCIe port the VFIO devices of a sandbox are cold-plugged on, `None`
+/// when `cold_plug_vfio` turns cold plug off.  `"auto"` collects devices like
+/// `"root-port"`; the QEMU hypervisor then derives the guest topology from the
+/// host at VM start.
+fn cold_plug_port(cold_plug_vfio: &str) -> Result<Option<PCIePort>> {
+    match cold_plug_vfio {
+        "" | "no-port" => Ok(None),
+        "root-port" | "auto" => Ok(Some(PCIePort::RootPort)),
+        other => Err(anyhow!(
+            "unsupported cold_plug_vfio value {other:?}; only \"root-port\" and \"auto\" are supported"
+        )),
+    }
+}
+
 impl VirtSandbox {
     pub async fn new(
         sid: &str,
@@ -376,21 +390,8 @@ impl VirtSandbox {
         sandbox_config: &SandboxConfig,
     ) -> Result<Vec<ResourceConfig>> {
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        let cold_plug_vfio = &hypervisor_config.device_info.cold_plug_vfio;
-        if cold_plug_vfio.is_empty() || cold_plug_vfio == "no-port" {
+        let Some(port) = cold_plug_port(&hypervisor_config.device_info.cold_plug_vfio)? else {
             return Ok(Vec::new());
-        }
-
-        let port = match cold_plug_vfio.as_str() {
-            // "auto" collects devices like "root-port"; the QEMU hypervisor
-            // then derives the guest topology from the host at VM start.
-            "root-port" | "auto" => PCIePort::RootPort,
-            other => {
-                return Err(anyhow!(
-                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" and \"auto\" are supported",
-                    other
-                ))
-            }
         };
 
         let config = self.resource_manager.config().await;
@@ -473,21 +474,8 @@ impl VirtSandbox {
         sandbox_config: &SandboxConfig,
     ) -> Result<Vec<ResourceConfig>> {
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        let cold_plug_vfio = &hypervisor_config.device_info.cold_plug_vfio;
-        if cold_plug_vfio.is_empty() || cold_plug_vfio == "no-port" {
+        let Some(port) = cold_plug_port(&hypervisor_config.device_info.cold_plug_vfio)? else {
             return Ok(Vec::new());
-        }
-
-        let port = match cold_plug_vfio.as_str() {
-            // "auto" collects devices like "root-port"; the QEMU hypervisor
-            // then derives the guest topology from the host at VM start.
-            "root-port" | "auto" => PCIePort::RootPort,
-            other => {
-                return Err(anyhow!(
-                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" and \"auto\" are supported",
-                    other
-                ))
-            }
         };
 
         let bundle = &sandbox_config.state.bundle;
