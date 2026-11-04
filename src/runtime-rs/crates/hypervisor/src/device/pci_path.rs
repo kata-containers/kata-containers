@@ -113,10 +113,25 @@ impl PciPath {
             return None;
         }
 
-        Some(PciPath {
+        Some(Self::from_slots(slots))
+    }
+
+    /// `slots` descend from the default root bus (`pcie.0`).
+    pub fn from_slots(slots: Vec<PciSlot>) -> PciPath {
+        PciPath {
             root_complex: None,
             slots,
-        })
+        }
+    }
+
+    /// `slots` descend from the `pxb-pcie` whose guest bus number is
+    /// `bus_nr`; the agent treats a first segment of `PXB_ROOT_COMPLEX_MIN`
+    /// or more as that bus number, so `bus_nr` has to be at least that.
+    pub fn on_root_complex(bus_nr: u8, slots: Vec<PciSlot>) -> PciPath {
+        PciPath {
+            root_complex: Some(bus_nr),
+            slots,
+        }
     }
 
     // device_slot to get the slot of the device on its PCI bridge
@@ -150,10 +165,9 @@ impl TryFrom<u32> for PciPath {
     type Error = anyhow::Error;
 
     fn try_from(slot: u32) -> Result<PciPath> {
-        Ok(PciPath {
-            root_complex: None,
-            slots: vec![PciSlot::try_from(slot).context("pci slot convert failed.")?],
-        })
+        Ok(PciPath::from_slots(vec![
+            PciSlot::try_from(slot).context("pci slot convert failed.")?
+        ]))
     }
 }
 
@@ -168,14 +182,13 @@ impl TryFrom<&str> for PciPath {
 
         let mut segments: Vec<&str> = path.split('/').collect();
 
-        // "rr/xx/zz" with rr >= 0x20 descends from a pxb-pcie root complex;
-        // a plain slot never reaches 0x20, so the two forms cannot collide.
-        let root_complex = match segments.first() {
-            Some(first) if segments.len() >= 3 => u8::from_str_radix(first, 16)
-                .ok()
-                .filter(|rc| *rc >= PXB_ROOT_COMPLEX_MIN),
-            _ => None,
-        };
+        // A first segment of 0x20 or more is the bus number of a pxb-pcie
+        // root complex: a slot is at most 0x1f, so the two forms cannot
+        // collide.  This is the agent's rule (PXB_PCIE_ROOT_BUS_MIN).
+        let root_complex = segments
+            .first()
+            .and_then(|first| u8::from_str_radix(first, 16).ok())
+            .filter(|rc| *rc >= PXB_ROOT_COMPLEX_MIN);
         if root_complex.is_some() {
             segments.remove(0);
         }
@@ -242,8 +255,11 @@ mod tests {
         assert_eq!(path.root_complex, Some(0x40));
         assert_eq!(path.to_string(), "40/01/00");
 
-        // two segments never name a root complex; "20" is still an invalid slot
-        assert!(PciPath::try_from("20/00").is_err());
+        // the rule is the first segment alone: a device directly on the
+        // expander bus parses too, and round-trips through the constructor
+        let path = PciPath::try_from("20/00").unwrap();
+        assert_eq!(path, PciPath::on_root_complex(0x20, vec![PciSlot(0)]));
+        assert_eq!(path.to_string(), "20/00");
 
         // a leading segment below 0x20 is a slot on root bus 00 (nested bridge path)
         let path = PciPath::try_from("02/00/01").unwrap();
