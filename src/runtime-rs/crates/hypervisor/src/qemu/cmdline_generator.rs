@@ -3680,10 +3680,10 @@ impl<'a> QemuCmdLine<'a> {
         // guest RAM, so one object per device would fail with ENOMEM there.
         let iommufd_name = VFIO_IOMMUFD_ID;
         let fd_config = config.fd_config.as_ref();
-        self.add_iommufd_object(
-            iommufd_name,
-            fd_config.map(|fd_config| fd_config.iommufd_dev.as_path()),
-        )?;
+
+        if let Some(fd_config) = fd_config {
+            self.add_iommufd_object(iommufd_name, Some(&fd_config.iommufd_dev))?;
+        }
 
         let root_port_id = config.bus.clone();
         let root_port = PCIeRootPortDevice::new(&root_port_id, DEFAULT_PCIE_ROOT_BUS)
@@ -3693,7 +3693,13 @@ impl<'a> QemuCmdLine<'a> {
             .with_addr(format!("0x{:02x}", config.port));
         info!(sl!(), "PCIe Root Port: {:?}", root_port.clone());
 
-        let mut vfio_device = PCIeVfioDevice::new(&config.host_bdf, root_port_id, iommufd_name);
+        let mut vfio_device = if fd_config.is_some() {
+            PCIeVfioDevice::new(&config.host_bdf, &root_port_id, iommufd_name)
+        } else {
+            PCIeVfioDevice::new_without_iommufd(&config.host_bdf, &root_port_id)
+        }
+        .with_addr(&config.vfio_addr);
+
         if let Some(fd_config) = fd_config {
             vfio_device = vfio_device
                 .with_id(&fd_config.qemu_device_id)
