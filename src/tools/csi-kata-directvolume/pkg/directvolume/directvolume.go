@@ -28,9 +28,8 @@ import (
 )
 
 const (
-	// storageKind 是 StorageClass 中用于选择容量池的特殊参数，
-	// 仅影响容量记账，不影响后端存储的实际创建方式。
-	// storageKind selects the capacity pool a volume is accounted against.
+	// storageKind is the special parameter which requests
+	// storage of a certain kind (only affects capacity checks).
 	storageKind = utils.StorageKind
 )
 
@@ -144,12 +143,14 @@ func (dv *directVolume) createVolume(volID, name string, cap int64, kind string)
 		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
 	}
 	if dv.config.Capacity.Enabled() {
-		// kind 已在 CreateVolume 入口完成校验（非空且已知）。
-		// 此处刻意不做任何"挑一个够用的池"的兜底：Go map 遍历
-		// 顺序随机，兜底会让卷被记到任意池，与 StorageClass 声明
-		// 的池、以及 GetCapacity 通报的池不一致（issue #14151
-		// gap 3）。入口强校验 + 无兜底 = 池选择在架构上确定。
-		// The kind was validated upstream; no arbitrary-pool fallback.
+		// The kind was validated by CreateVolume: it is non-empty and
+		// known. There is deliberately no fallback to picking "some
+		// pool with room": Go map iteration order is random, so a
+		// fallback could charge the volume to an arbitrary pool,
+		// inconsistent with the pool its StorageClass named and the
+		// pool GetCapacity advertises (#14151, gap 3). Upfront
+		// validation with no fallback makes pool selection
+		// deterministic by construction.
 		used := dv.sumVolumeSizes(kind)
 		available := dv.config.Capacity[kind]
 		if used+cap > available.Value() {
