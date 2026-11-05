@@ -69,7 +69,7 @@ func createVolumeReq(name string, size int64, params map[string]string) *csi.Cre
 		CapacityRange: &csi.CapacityRange{
 			RequiredBytes: size,
 		},
-		Parameters:        params,
+		Parameters:         params,
 		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
 	}
 }
@@ -83,8 +83,8 @@ func getCapacityReq(kind string) *csi.GetCapacityRequest {
 }
 
 const (
-	giB   int64 = 1024 * 1024 * 1024
-	tiB         = giB * 1024
+	giB int64 = 1024 * 1024 * 1024
+	tiB       = giB * 1024
 )
 
 func TestGetCapacityWithoutConfiguredPools(t *testing.T) {
@@ -287,7 +287,6 @@ func TestCapacitySurvivesRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 5*giB, cap.GetAvailableCapacity(), "reservations must survive restart")
 }
-
 
 func TestGetCapacityMaximumVolumeSizeInvariant(t *testing.T) {
 	// 0 <= maximum_volume_size <= available_capacity, also when the

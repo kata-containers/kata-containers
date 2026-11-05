@@ -61,8 +61,9 @@ func (c *Capacity) Enabled() bool {
 	return len(*c) > 0
 }
 
-// Kinds returns the list of configured pool names. It is
-// intended for error messages; callers must not rely on order.
+// Kinds 返回已配置的池名列表，仅供错误信息展示；
+// 调用方不得依赖其顺序（Go map 遍历无序）。
+// Kinds returns configured pool names for error messages; order is random.
 func (c *Capacity) Kinds() []string {
 	kinds := make([]string, 0, len(*c))
 	for kind := range *c {

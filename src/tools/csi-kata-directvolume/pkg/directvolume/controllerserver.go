@@ -53,10 +53,12 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	volumeCtx := make(map[string]string)
 	volumeCtx[utils.IsDirectVolume] = "False"
 
-	// kind selects the capacity pool that this volume is accounted
-	// against. It must be propagated so that the same pool is used by
-	// CreateVolume capacity accounting, the persisted volume state,
-	// GetCapacity and later NodeStage/NodePublish calls.
+	// kind 参数用于选择本卷记账的容量池（capacity pool）。
+	// 该参数必须透传：CreateVolume 的容量记账、持久化的卷状态、
+	// GetCapacity 的容量汇报、以及后续 NodeStage/NodePublish 都必须
+	// 使用同一个池，两侧账本才能一致（issue #14151 gap 3）。
+	// The "kind" parameter selects the capacity pool this volume is
+	// accounted against and must be propagated to all consumers.
 	kind := ""
 
 	for key, value := range req.GetParameters() {
@@ -76,10 +78,15 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		}
 	}
 
-	// When capacity tracking is configured, the pool must be known:
-	// GetCapacity picks the pool from the same parameter, and an
-	// unknown or missing pool has no meaningful capacity. Deterministic
-	// failure is preferable to silently picking an arbitrary pool.
+	// 容量跟踪开启时，池标识必须存在且已知：GetCapacity 从同一个
+	// 参数解析池，缺失或未知的池没有可报告的容量。此处宁可
+	// 确定性地拒绝（InvalidArgument），也不静默地随机选择一个池——
+	// Go map 遍历顺序是随机的，随机选池会让卷的记账去向不可复现，
+	// 且与 GetCapacity 通报的池不一致，造成误调度。
+	// 校验规则保持对称：跟踪开启时 kind 为必需品（缺失/未知均拒绝），
+	// 跟踪关闭时 kind 为违禁品（出现即拒绝），不存在中间地带。
+	// With capacity tracking on, the pool must be present and known;
+	// deterministic rejection beats nondeterministic pool selection.
 	if dv.config.Capacity.Enabled() {
 		if kind == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "capacity tracking is enabled, storage class parameter %q must select a capacity pool", utils.StorageKind)
@@ -279,13 +286,17 @@ func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityReq
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Topology and capabilities are irrelevant. We only
-	// distinguish based on the "kind" parameter, if at all.
+	// 拓扑与卷能力暂不参与容量计算（issue #14151 gap 5 另行处理），
+	// 仅按 "kind" 参数区分容量池。
+	// Topology and volume capabilities are not part of capacity yet.
 	if !dv.config.Capacity.Enabled() {
-		// Without configured capacity tracking there is no logical
-		// capacity model to report. MaxVolumeSize is a per-volume size
-		// limit, not the node's available storage, and must not be
-		// reported as node capacity.
+		// 未配置容量跟踪时，驱动没有可报告的逻辑容量模型。
+		// 注意：MaxVolumeSize 是"单卷尺寸上限"，不是节点的可用
+		// 存储，把它当节点容量上报属于语义挪用（issue #14151
+		// gap 2a）：默认部署下会对外谎报 1TiB。此处如实返回零，
+		// 调度器看到零只会跳过本节点，是安全的行为。
+		// No logical capacity model: report zero. MaxVolumeSize is a
+		// per-volume limit, not node capacity.
 		return &csi.GetCapacityResponse{
 			AvailableCapacity: 0,
 			MaximumVolumeSize: &wrappers.Int64Value{Value: 0},
@@ -293,8 +304,12 @@ func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityReq
 		}, nil
 	}
 
-	// Resolve the same capacity pool that CreateVolume uses. An
-	// unknown or missing pool has no usable capacity to offer.
+	// 与 CreateVolume 解析同一个容量池（同一个 "kind" 参数），
+	// 保证读写两侧账本同页。未知或缺失的池没有可用容量，
+	// 返回零容量而不是报错——GetCapacity 是查询型 RPC，
+	// "最多为零"是如实的回答。
+	// Resolve the same pool CreateVolume uses; unknown pools have
+	// no capacity to offer.
 	kind := req.GetParameters()[storageKind]
 	quantity, ok := dv.config.Capacity[kind]
 	if !ok {
@@ -306,18 +321,24 @@ func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityReq
 	}
 
 	allocated := dv.sumVolumeSizes(kind)
-	// Clamp negative results to zero: reduced configuration or volumes
-	// which bypassed quota enforcement must not leak a negative
-	// available_capacity into CSIStorageCapacity objects, where it
-	// could overflow into a huge advertised quantity.
+	// 负值钳制为零（issue #14151 gap 2b）：池超配（配置被调小、
+	// 状态漂移、或绕过配额检查的分配路径）会让差值为负。
+	// 负的 available_capacity 违反 CSI 规范，且流入 external-
+	// provisioner 的 CSIStorageCapacity（resource.Quantity）后可能
+	// 溢出为巨大正数，被调度器误解为"容量无穷大"，反而把 workload
+	// 调度到最没空间的节点。钳成零是安全的；同时打一条含
+	// 配置值/已分配值的告警日志，为诊断状态漂移留线索。
+	// Clamp negatives to zero: negative capacity must not leak into
+	// CSIStorageCapacity where it can overflow into a huge quantity.
 	available := quantity.Value() - allocated
 	if available < 0 {
 		klog.Warningf("capacity pool %q is overcommitted: configured %d, allocated %d, reporting zero", kind, quantity.Value(), allocated)
 		available = 0
 	}
 
-	// Enforce 0 <= maximum_volume_size <= available_capacity, also
-	// respecting the configured per-volume maximum.
+	// 维持不变式 0 <= maximum_volume_size <= available_capacity，
+	// 同时尊重配置的单卷尺寸上限（MaxVolumeSize）。
+	// Enforce 0 <= maximum_volume_size <= available_capacity.
 	maxVolumeSize := dv.config.MaxVolumeSize
 	if maxVolumeSize > available {
 		maxVolumeSize = available
