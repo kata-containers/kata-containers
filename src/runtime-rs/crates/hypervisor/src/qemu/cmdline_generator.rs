@@ -2576,6 +2576,7 @@ pub struct PCIeVfioDevice {
     host_bdf: String,
     bus: String,
     addr: String,
+    multifunction: bool,
     /// Optional QEMU device ID (e.g. `physical_nic_340_0`). When set, emits
     /// `id=<id>` on the command line so that callers can look the device up
     /// via QMP (`qom-get`) or the runtime can match it to a guest PCI path.
@@ -2596,6 +2597,7 @@ impl PCIeVfioDevice {
             host_bdf: host_bdf.into(),
             bus: bus.into(),
             addr: "0x0".to_string(),
+            multifunction: false,
             id: None,
             iommufd: Some(iommufd.into()),
             fd: None,
@@ -2611,6 +2613,7 @@ impl PCIeVfioDevice {
             host_bdf: host_bdf.into(),
             bus: bus.into(),
             addr: "0x0".to_string(),
+            multifunction: false,
             id: None,
             iommufd: None,
             fd: None,
@@ -2621,6 +2624,11 @@ impl PCIeVfioDevice {
 
     pub fn with_id(mut self, id: impl Into<String>) -> Self {
         self.id = Some(id.into());
+        self
+    }
+
+    pub fn with_multifunction(mut self, enabled: bool) -> Self {
+        self.multifunction = enabled;
         self
     }
 
@@ -2672,6 +2680,9 @@ impl ToQemuParams for PCIeVfioDevice {
         }
         write!(params, ",bus={}", self.bus).unwrap();
         write!(params, ",addr={}", self.addr).unwrap();
+        if self.multifunction {
+            write!(params, ",multifunction=on").unwrap();
+        }
 
         if let Some(id) = &self.id {
             write!(params, ",id={}", id).unwrap();
@@ -2752,6 +2763,9 @@ pub struct VfioDeviceConfig {
     #[allow(dead_code)]
     pub vfio_addr: String,
 
+    /// Enable multifunction on function 0 of a VFIO endpoint.
+    pub vfio_multifunction: bool,
+
     /// Optional PCI Vendor ID override.
     pub x_pci_vendor_id: Option<String>,
 
@@ -2782,6 +2796,7 @@ impl VfioDeviceConfig {
             // Defaults to 0x5 based on port offset; subsequent devices increment from here.
             root_port_addr: format!("0x{}", port),
             vfio_addr: format!("0x{}", port),
+            vfio_multifunction: false,
             x_pci_vendor_id: None,
             x_pci_device_id: None,
             fd_config: None,
@@ -2842,6 +2857,11 @@ impl VfioDeviceConfig {
     #[allow(dead_code)]
     pub fn with_vfio_addr(mut self, addr: impl Into<String>) -> Self {
         self.vfio_addr = addr.into();
+        self
+    }
+
+    pub fn with_vfio_multifunction(mut self, enabled: bool) -> Self {
+        self.vfio_multifunction = enabled;
         self
     }
     #[allow(dead_code)]
@@ -3630,7 +3650,8 @@ impl<'a> QemuCmdLine<'a> {
             .context("physical VFIO device has no QMP ID")?;
         let mut dev = PCIeVfioDevice::new_without_iommufd(&config.host_bdf, &config.bus)
             .with_id(qdev_id)
-            .with_addr(&config.vfio_addr);
+            .with_addr(&config.vfio_addr)
+            .with_multifunction(config.vfio_multifunction);
         if let Some(vid) = &config.x_pci_vendor_id {
             dev = dev.with_vendor_id(vid);
         }
@@ -3714,7 +3735,8 @@ impl<'a> QemuCmdLine<'a> {
         } else {
             PCIeVfioDevice::new_without_iommufd(&config.host_bdf, &root_port_id)
         }
-        .with_addr(&config.vfio_addr);
+        .with_addr(&config.vfio_addr)
+        .with_multifunction(config.vfio_multifunction);
 
         if let Some(id) = &config.qdev_id {
             vfio_device = vfio_device.with_id(id);
@@ -4392,10 +4414,10 @@ mod tests {
 
     #[actix_rt::test]
     #[serial]
-    async fn test_vfio_devices_without_fds_share_iommufd() {
+    async fn test_vfio_devices_without_fds_use_legacy_vfio() {
         let config = test_qemu_config(Some("none"), false);
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
-        let mut cmdline = QemuCmdLine::new("vfio-shared-iommufd", &config).unwrap();
+        let mut cmdline = QemuCmdLine::new("vfio-legacy-multifunction", &config).unwrap();
 
         // e.g. four NVSwitches in one IOMMU group
         let bdfs = [
@@ -4405,8 +4427,11 @@ mod tests {
             "0000:c0:00.0",
         ];
         for (idx, bdf) in bdfs.iter().enumerate() {
-            let vfio = VfioDeviceConfig::new(*bdf, 9 + idx as u16, 10 + idx as u32)
-                .with_vfio_bus(format!("rp{idx}"));
+            let vfio = VfioDeviceConfig::new(*bdf, 9, 10)
+                .with_vfio_bus("rp0")
+                .with_root_port(idx == 0)
+                .with_vfio_addr(format!("0x0.0x{:x}", idx))
+                .with_vfio_multifunction(idx == 0);
             cmdline.add_pcie_vfio_device(vfio).unwrap();
         }
         let params = cmdline.build().await.unwrap();
@@ -4418,7 +4443,7 @@ mod tests {
                     .then_some(args[1].as_str())
             })
             .collect();
-        assert_eq!(iommufds, vec!["iommufd,id=iommufd0"]);
+        assert!(iommufds.is_empty());
 
         let vfio_devices: Vec<&str> = params
             .windows(2)
@@ -4428,9 +4453,21 @@ mod tests {
             })
             .collect();
         assert_eq!(vfio_devices.len(), bdfs.len());
-        assert!(vfio_devices
-            .iter()
-            .all(|arg| arg.split(',').any(|param| param == "iommufd=iommufd0")));
+        assert!(vfio_devices.iter().enumerate().all(|(idx, arg)| {
+            arg.split(',').any(|param| param == "bus=rp0")
+                && arg
+                    .split(',')
+                    .any(|param| param == format!("addr=0x0.0x{:x}", idx))
+                && arg.split(',').any(|param| param == "multifunction=on") == (idx == 0)
+                && !arg.split(',').any(|param| param.starts_with("iommufd="))
+        }));
+        assert_eq!(
+            params
+                .windows(2)
+                .filter(|args| args[0] == "-device" && args[1].starts_with("pcie-root-port,"))
+                .count(),
+            1
+        );
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 
