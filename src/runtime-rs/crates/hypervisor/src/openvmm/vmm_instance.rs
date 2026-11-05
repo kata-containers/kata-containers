@@ -516,6 +516,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "flaky: https://github.com/kata-containers/kata-containers/issues/14228"]
     async fn launch_failure_reaps_child_and_suppresses_exit_notification() {
         let temp_dir = TempDir::new().unwrap();
         let (openvmm_path, pid_path) = make_nonresponsive_openvmm(&temp_dir);
