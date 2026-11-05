@@ -9,3 +9,10 @@ CMDS=directvolplugin
 all: build
 
 include release-tools/build.make
+
+# Static checks: build everything and vet it, mirroring what CI's
+# "make check" expects from a component.
+.PHONY: check
+check:
+	go build ./...
+	go vet ./...

@@ -81,6 +81,10 @@ jobs:
             needs:
               - rust
               - protobuf-compiler
+          - name: csi-kata-directvolume
+            path: src/tools/csi-kata-directvolume
+            needs:
+              - golang
         instance:
           - ${{ inputs.instance }}
     concurrency:
