@@ -20,8 +20,10 @@ opentelemetry = { features = ["serialize"], workspace = true }
 opentelemetry-otlp-api = { package = "opentelemetry", features = ["trace"], version = "0.32.0" }
 opentelemetry-otlp = { features = ["grpc-tonic", "trace"], version = "0.32.0" }
 opentelemetry_sdk = { features = ["rt-tokio"], version = "0.32.1" }
-serde_json.workspace = true
+serde_json = { features = ["arbitrary_precision"], workspace = true }
 tokio = { features = ["rt-multi-thread"], version = "1" }
+tracing.workspace = true
+tracing-subscriber.workspace = true
 vsock = "0.2.3"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
@@ -30,3 +32,6 @@ logging.workspace = true
 slog.workspace = true
 
 privdrop = "0.5.1"
+
+[dev-dependencies]
+tempfile.workspace = true

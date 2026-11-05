@@ -3813,7 +3813,10 @@ dependencies = [
  "privdrop",
  "serde_json",
  "slog",
+ "tempfile",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "vsock 0.2.6",
 ]
 

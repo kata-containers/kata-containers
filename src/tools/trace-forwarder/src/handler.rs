@@ -5,12 +5,11 @@
 //
 
 use crate::span_data;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use byteorder::{ByteOrder, NetworkEndian};
 use opentelemetry::sdk::export::trace::SpanData as AgentSpanData;
 use opentelemetry_sdk::trace::SpanProcessor;
 use slog::{debug, info, o, Logger};
-use std::convert::TryFrom;
 use std::io::{ErrorKind, Read, Write};
 
 // The VSOCK "packet" protocol used comprises two elements:
@@ -73,17 +72,18 @@ fn handle_trace_data(
             .context("failed to read complete trace header")?;
         debug!(logger, "read header");
 
-        let payload_len = usize::try_from(NetworkEndian::read_u64(&header))
-            .context("trace payload length does not fit in memory")?;
+        let payload_len = NetworkEndian::read_u64(&header);
         let mut encoded_payload = Vec::new();
-        encoded_payload
-            .try_reserve_exact(payload_len)
-            .context("failed to allocate trace payload")?;
-        encoded_payload.resize(payload_len, 0);
-
-        reader
-            .read_exact(&mut encoded_payload)
+        (&mut *reader)
+            .take(payload_len)
+            .read_to_end(&mut encoded_payload)
             .with_context(|| "failed to read payload")?;
+        if encoded_payload.len() as u64 != payload_len {
+            return Err(anyhow!(
+                "incomplete trace payload: expected {payload_len} bytes, received {}",
+                encoded_payload.len()
+            ));
+        }
 
         debug!(logger, "read payload");
 
@@ -106,7 +106,7 @@ fn handle_trace_data(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use opentelemetry::sdk::trace::{EvictedHashMap, EvictedQueue};
     use opentelemetry::trace::{
@@ -120,15 +120,15 @@ mod tests {
     use std::time::{Duration, UNIX_EPOCH};
 
     #[derive(Clone, Debug, Default)]
-    struct RecordingExporter {
-        spans: Arc<Mutex<Vec<SpanData>>>,
-        fail: bool,
+    pub(crate) struct RecordingExporter {
+        pub(crate) spans: Arc<Mutex<Vec<SpanData>>>,
+        pub(crate) failure: Option<&'static str>,
     }
 
     impl SpanExporter for RecordingExporter {
         async fn export(&self, spans: Vec<SpanData>) -> OTelSdkResult {
-            if self.fail {
-                return Err(OTelSdkError::InternalFailure("export rejected".to_owned()));
+            if let Some(message) = self.failure {
+                return Err(OTelSdkError::InternalFailure(message.to_owned()));
             }
             self.spans.lock().unwrap().extend(spans);
             Ok(())
@@ -139,7 +139,7 @@ mod tests {
         Logger::root(slog::Discard, o!())
     }
 
-    fn agent_span() -> AgentSpanData {
+    pub(crate) fn agent_span() -> AgentSpanData {
         let context = SpanContext::new(
             TraceId::from_bytes(123_u128.to_be_bytes()),
             SpanId::from_bytes(456_u64.to_be_bytes()),
@@ -182,7 +182,7 @@ mod tests {
         }
     }
 
-    fn packet(payload: &[u8]) -> Vec<u8> {
+    pub(crate) fn packet(payload: &[u8]) -> Vec<u8> {
         let mut data = vec![0; HEADER_SIZE_BYTES as usize];
         NetworkEndian::write_u64(&mut data, payload.len() as u64);
         data.extend_from_slice(payload);
@@ -234,9 +234,20 @@ mod tests {
             UNIX_EPOCH + Duration::from_secs(11)
         );
         assert_eq!(span.events[0].dropped_attributes_count, 2);
+        assert_eq!(
+            span.events[0].attributes,
+            vec![opentelemetry_otlp_api::KeyValue::new(
+                "event-key",
+                "event-value"
+            )]
+        );
         assert_eq!(span.links.len(), 1);
         assert_eq!(span.links.dropped_count, 1);
         assert_eq!(span.links[0].span_context, span.span_context);
+        assert_eq!(
+            span.links[0].attributes,
+            vec![opentelemetry_otlp_api::KeyValue::new("linked", true)]
+        );
         assert_eq!(
             span.status,
             opentelemetry_otlp_api::trace::Status::error("request failed")
@@ -261,6 +272,54 @@ mod tests {
             .map(|line| serde_json::from_str(line).unwrap())
             .collect();
         assert_eq!(decoded, values);
+    }
+
+    #[test]
+    fn review_dump_preserves_full_width_trace_ids() {
+        let mut agent = agent_span();
+        agent.span_context = SpanContext::new(
+            TraceId::from_bytes(u128::MAX.to_be_bytes()),
+            SpanId::from_bytes(u64::MAX.to_be_bytes()),
+            TraceFlags::SAMPLED,
+            false,
+            TraceState::default(),
+        );
+        let payload = serde_json::to_vec(&agent).unwrap();
+        let mut output = Vec::new();
+        handle_trace_data(
+            logger(),
+            &mut Cursor::new(packet(&payload)),
+            None,
+            &mut output,
+        )
+        .unwrap();
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.contains(&u128::MAX.to_string()), "{}", text);
+        assert!(text.contains(&u64::MAX.to_string()), "{}", text);
+    }
+
+    #[test]
+    fn review_payload_length_does_not_preallocate_the_declared_size() {
+        struct ObservedReader {
+            header: Cursor<Vec<u8>>,
+            max_requested: usize,
+        }
+
+        impl Read for ObservedReader {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                self.max_requested = self.max_requested.max(buffer.len());
+                self.header.read(buffer)
+            }
+        }
+
+        let mut header = vec![0; HEADER_SIZE_BYTES as usize];
+        NetworkEndian::write_u64(&mut header, 16 * 1024 * 1024);
+        let mut reader = ObservedReader {
+            header: Cursor::new(header),
+            max_requested: 0,
+        };
+        assert!(handle_trace_data(logger(), &mut reader, None, &mut Vec::new()).is_err());
+        assert!(reader.max_requested <= 8192, "{}", reader.max_requested);
     }
 
     #[test]
@@ -388,7 +447,7 @@ mod tests {
     #[test]
     fn exporter_failures_are_reported_when_the_connection_is_flushed() {
         let exporter = RecordingExporter {
-            fail: true,
+            failure: Some("export rejected"),
             ..Default::default()
         };
         let processor = BatchSpanProcessor::builder(exporter).build();

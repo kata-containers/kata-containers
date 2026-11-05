@@ -8,7 +8,8 @@ use crate::handler;
 use anyhow::{anyhow, Result};
 use opentelemetry_sdk::trace::SpanProcessor;
 use privdrop::PrivDrop;
-use slog::{debug, o, Logger};
+use slog::{debug, error, o, Logger};
+use std::io::Read;
 use std::os::unix::net::UnixListener;
 use std::sync::Arc;
 use vsock::{SockAddr, VsockListener};
@@ -127,13 +128,7 @@ fn start_hybrid_vsock(
 
     debug!(logger, "Waiting for connections");
 
-    for conn in listener.incoming() {
-        let conn = conn?;
-
-        handler::handle_connection(logger.clone(), conn, processor.as_deref())?;
-    }
-
-    Ok(())
+    serve_incoming(logger, processor, listener.incoming())
 }
 
 fn start_std_vsock(
@@ -150,11 +145,71 @@ fn start_std_vsock(
         "vsock-cid" => cid,
         "vsock-port" => port);
 
-    for conn in listener.incoming() {
-        let conn = conn?;
+    serve_incoming(logger, processor, listener.incoming())
+}
 
-        handler::handle_connection(logger.clone(), conn, processor.as_deref())?;
+fn serve_incoming<R: Read>(
+    logger: Logger,
+    processor: Option<Arc<dyn SpanProcessor>>,
+    incoming: impl IntoIterator<Item = std::io::Result<R>>,
+) -> Result<()> {
+    for conn in incoming {
+        let conn = conn?;
+        if let Err(error) = handler::handle_connection(logger.clone(), conn, processor.as_deref()) {
+            error!(logger, "failed to handle trace connection"; "error" => format!("{error:#}"));
+        }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::handler::tests::{agent_span, packet, RecordingExporter};
+    use opentelemetry_sdk::trace::BatchSpanProcessor;
+    use std::io::Write;
+    use std::net::Shutdown;
+    use std::os::unix::net::UnixStream;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    #[test]
+    fn malformed_connection_does_not_stop_the_next_guest() {
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("traces.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let exporter = RecordingExporter::default();
+        let processor = Arc::new(BatchSpanProcessor::builder(exporter.clone()).build());
+        let server_processor = processor.clone();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let result = serve_incoming(
+                Logger::root(slog::Discard, o!()),
+                Some(server_processor),
+                listener.incoming().take(2),
+            );
+            finished_tx.send(result).unwrap();
+        });
+
+        let mut malformed = UnixStream::connect(&socket).unwrap();
+        malformed.write_all(&packet(b"not JSON")).unwrap();
+        malformed.shutdown(Shutdown::Write).unwrap();
+        drop(malformed);
+
+        let mut valid = UnixStream::connect(&socket).unwrap();
+        valid
+            .write_all(&packet(&serde_json::to_vec(&agent_span()).unwrap()))
+            .unwrap();
+        valid.shutdown(Shutdown::Write).unwrap();
+        drop(valid);
+
+        finished_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        server.join().unwrap();
+        processor.shutdown().unwrap();
+        assert_eq!(exporter.spans.lock().unwrap().len(), 1);
+    }
 }

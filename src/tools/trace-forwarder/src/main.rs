@@ -215,6 +215,7 @@ fn real_main() -> Result<()> {
         Box::new(io::stdout())
     };
     let (logger, _logger_guard) = logging::create_logger(name, name, log_level, writer);
+    tracer::init_sdk_diagnostics(io::stderr)?;
 
     announce(&logger, version, dump_only);
 
