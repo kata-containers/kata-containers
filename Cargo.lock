@@ -3815,9 +3815,9 @@ dependencies = [
  "slog",
  "tempfile",
  "tokio",
+ "tokio-vsock 0.3.4",
  "tracing",
  "tracing-subscriber",
- "vsock 0.2.6",
 ]
 
 [[package]]

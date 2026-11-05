@@ -63,6 +63,10 @@ flushed when the agent closes its connection. Invalid records and export
 failures are reported as errors, and the listener continues serving subsequent
 connections. OpenTelemetry background export errors also go to standard error.
 
+In forwarding mode, `SIGINT` and `SIGTERM` stop the listeners and interrupt
+incomplete records before shutting down the batch processor. Completed spans
+that are still queued are flushed before the forwarder exits.
+
 ## Run
 
 The way the trace forwarder is run depends on the configured hypervisor.

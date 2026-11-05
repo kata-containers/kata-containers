@@ -15,16 +15,23 @@ anyhow.workspace = true
 byteorder = "1.4.3"
 clap = { features = ["cargo"], workspace = true }
 libc.workspace = true
-nix = { features = ["fs", "user"], version = "0.30.1" }
+nix = { features = ["fs", "signal", "user"], version = "0.30.1" }
 opentelemetry = { features = ["serialize"], workspace = true }
 opentelemetry-otlp-api = { package = "opentelemetry", features = ["trace"], version = "0.32.0" }
 opentelemetry-otlp = { features = ["grpc-tonic", "trace"], version = "0.32.0" }
 opentelemetry_sdk = { features = ["rt-tokio"], version = "0.32.1" }
 serde_json = { features = ["arbitrary_precision"], workspace = true }
-tokio = { features = ["rt-multi-thread"], version = "1" }
+tokio = { features = [
+  "io-util",
+  "macros",
+  "net",
+  "process",
+  "rt-multi-thread",
+  "signal",
+], version = "1" }
+tokio-vsock.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-vsock = "0.2.3"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.

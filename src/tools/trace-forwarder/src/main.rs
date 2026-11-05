@@ -261,12 +261,11 @@ fn real_main() -> Result<()> {
 
     // OTLP gRPC exporter uses hyper/tonic and requires a Tokio reactor context.
     let tokio_rt = Runtime::new().map_err(|e| anyhow!("failed to create tokio runtime: {e}"))?;
-    let _tokio_enter_guard = tokio_rt.enter();
 
     let server =
         server::VsockTraceServer::new(&logger, vsock, otlp_endpoint, trace_name, dump_only);
 
-    let result = server.start();
+    let result = tokio_rt.block_on(server.start());
 
     if let Err(error) = &result {
         error!(logger, "failed"; "error" => format!("{error:#}"));

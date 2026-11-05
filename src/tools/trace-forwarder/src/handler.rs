@@ -10,7 +10,9 @@ use byteorder::{ByteOrder, NetworkEndian};
 use opentelemetry::sdk::export::trace::SpanData as AgentSpanData;
 use opentelemetry_sdk::trace::SpanProcessor;
 use slog::{debug, info, o, Logger};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Write};
+use std::sync::Arc;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 // The VSOCK "packet" protocol used comprises two elements:
 //
@@ -25,20 +27,27 @@ use std::io::{ErrorKind, Read, Write};
 // vsock-exporter.
 const HEADER_SIZE_BYTES: u64 = std::mem::size_of::<u64>() as u64;
 
-pub fn handle_connection(
+pub async fn handle_connection(
     logger: Logger,
-    mut conn: impl Read,
-    processor: Option<&dyn SpanProcessor>,
+    mut conn: impl AsyncRead + Unpin,
+    processor: Option<Arc<dyn SpanProcessor>>,
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "handler"));
 
     debug!(logger, "handling connection");
 
-    handle_trace_data(logger.clone(), &mut conn, processor, &mut std::io::stdout())
-        .context("failed to handle trace data")?;
+    handle_trace_data(
+        logger.clone(),
+        &mut conn,
+        processor.as_deref(),
+        &mut std::io::stdout(),
+    )
+    .await
+    .context("failed to handle trace data")?;
     if let Some(processor) = processor {
-        processor
-            .force_flush()
+        tokio::task::spawn_blocking(move || processor.force_flush())
+            .await
+            .context("trace flush worker failed")?
             .context("failed to flush trace data")?;
     }
 
@@ -47,9 +56,9 @@ pub fn handle_connection(
     Ok(())
 }
 
-fn handle_trace_data(
+async fn handle_trace_data<R: AsyncRead + Unpin + ?Sized>(
     logger: Logger,
-    reader: &mut dyn Read,
+    reader: &mut R,
     processor: Option<&dyn SpanProcessor>,
     output: &mut dyn Write,
 ) -> Result<()> {
@@ -58,7 +67,7 @@ fn handle_trace_data(
 
         info!(logger, "waiting for traces");
 
-        let read = match reader.read(&mut header) {
+        let read = match reader.read(&mut header).await {
             Ok(0) => {
                 info!(logger, "agent shut down");
                 break;
@@ -69,6 +78,7 @@ fn handle_trace_data(
         };
         reader
             .read_exact(&mut header[read..])
+            .await
             .context("failed to read complete trace header")?;
         debug!(logger, "read header");
 
@@ -77,6 +87,7 @@ fn handle_trace_data(
         (&mut *reader)
             .take(payload_len)
             .read_to_end(&mut encoded_payload)
+            .await
             .with_context(|| "failed to read payload")?;
         if encoded_payload.len() as u64 != payload_len {
             return Err(anyhow!(
@@ -100,6 +111,8 @@ fn handle_trace_data(
                 .context("failed to write trace newline")?;
             output.flush().context("failed to flush trace output")?;
         }
+        // Keep shutdown responsive when another complete record is already buffered.
+        tokio::task::yield_now().await;
     }
 
     Ok(())
@@ -116,8 +129,11 @@ pub(crate) mod tests {
     use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
     use opentelemetry_sdk::trace::{BatchSpanProcessor, SpanData, SpanExporter};
     use std::io::Cursor;
-    use std::sync::{Arc, Mutex};
+    use std::pin::Pin;
+    use std::sync::Mutex;
+    use std::task::{Context as TaskContext, Poll};
     use std::time::{Duration, UNIX_EPOCH};
+    use tokio::io::ReadBuf;
 
     #[derive(Clone, Debug, Default)]
     pub(crate) struct RecordingExporter {
@@ -189,14 +205,20 @@ pub(crate) mod tests {
         data
     }
 
-    #[test]
-    fn agent_json_is_exported_with_its_original_span_data() {
+    #[tokio::test]
+    async fn agent_json_is_exported_with_its_original_span_data() {
         let agent = agent_span();
         let payload = serde_json::to_vec(&agent).unwrap();
         let exporter = RecordingExporter::default();
-        let processor = BatchSpanProcessor::builder(exporter.clone()).build();
+        let processor = Arc::new(BatchSpanProcessor::builder(exporter.clone()).build());
 
-        handle_connection(logger(), Cursor::new(packet(&payload)), Some(&processor)).unwrap();
+        handle_connection(
+            logger(),
+            Cursor::new(packet(&payload)),
+            Some(processor.clone()),
+        )
+        .await
+        .unwrap();
         processor.shutdown().unwrap();
 
         let spans = exporter.spans.lock().unwrap();
@@ -254,8 +276,8 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
-    fn dump_mode_writes_each_json_record_without_an_exporter() {
+    #[tokio::test]
+    async fn dump_mode_writes_each_json_record_without_an_exporter() {
         let values = [
             serde_json::json!({"name": "first", "attributes": {"answer": 42}}),
             serde_json::json!({"name": "second"}),
@@ -265,7 +287,9 @@ pub(crate) mod tests {
             .flat_map(|value| packet(&serde_json::to_vec_pretty(value).unwrap()))
             .collect();
         let mut output = Vec::new();
-        handle_trace_data(logger(), &mut Cursor::new(input), None, &mut output).unwrap();
+        handle_trace_data(logger(), &mut Cursor::new(input), None, &mut output)
+            .await
+            .unwrap();
         let text = String::from_utf8(output).unwrap();
         let decoded: Vec<serde_json::Value> = text
             .lines()
@@ -274,8 +298,8 @@ pub(crate) mod tests {
         assert_eq!(decoded, values);
     }
 
-    #[test]
-    fn review_dump_preserves_full_width_trace_ids() {
+    #[tokio::test]
+    async fn review_dump_preserves_full_width_trace_ids() {
         let mut agent = agent_span();
         agent.span_context = SpanContext::new(
             TraceId::from_bytes(u128::MAX.to_be_bytes()),
@@ -292,23 +316,29 @@ pub(crate) mod tests {
             None,
             &mut output,
         )
+        .await
         .unwrap();
         let text = String::from_utf8(output).unwrap();
         assert!(text.contains(&u128::MAX.to_string()), "{}", text);
         assert!(text.contains(&u64::MAX.to_string()), "{}", text);
     }
 
-    #[test]
-    fn review_payload_length_does_not_preallocate_the_declared_size() {
+    #[tokio::test]
+    async fn review_payload_length_does_not_preallocate_the_declared_size() {
         struct ObservedReader {
             header: Cursor<Vec<u8>>,
             max_requested: usize,
         }
 
-        impl Read for ObservedReader {
-            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-                self.max_requested = self.max_requested.max(buffer.len());
-                self.header.read(buffer)
+        impl AsyncRead for ObservedReader {
+            fn poll_read(
+                self: Pin<&mut Self>,
+                cx: &mut TaskContext<'_>,
+                buffer: &mut ReadBuf<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                let reader = self.get_mut();
+                reader.max_requested = reader.max_requested.max(buffer.remaining());
+                Pin::new(&mut reader.header).poll_read(cx, buffer)
             }
         }
 
@@ -318,12 +348,16 @@ pub(crate) mod tests {
             header: Cursor::new(header),
             max_requested: 0,
         };
-        assert!(handle_trace_data(logger(), &mut reader, None, &mut Vec::new()).is_err());
+        assert!(
+            handle_trace_data(logger(), &mut reader, None, &mut Vec::new())
+                .await
+                .is_err()
+        );
         assert!(reader.max_requested <= 8192, "{}", reader.max_requested);
     }
 
-    #[test]
-    fn every_agent_attribute_type_is_preserved_through_export() {
+    #[tokio::test]
+    async fn every_agent_attribute_type_is_preserved_through_export() {
         use opentelemetry::{Array as AgentArray, Value as AgentValue};
         use opentelemetry_otlp_api::{Array, Value};
 
@@ -353,7 +387,7 @@ pub(crate) mod tests {
             ),
         ];
         let exporter = RecordingExporter::default();
-        let processor = BatchSpanProcessor::builder(exporter.clone()).build();
+        let processor = Arc::new(BatchSpanProcessor::builder(exporter.clone()).build());
         let mut input = Vec::new();
         let mut expected = Vec::new();
         for (value, converted) in cases {
@@ -364,7 +398,9 @@ pub(crate) mod tests {
             expected.push(converted);
         }
 
-        handle_connection(logger(), Cursor::new(input), Some(&processor)).unwrap();
+        handle_connection(logger(), Cursor::new(input), Some(processor.clone()))
+            .await
+            .unwrap();
         processor.shutdown().unwrap();
         let spans = exporter.spans.lock().unwrap();
         assert_eq!(spans.len(), expected.len());
@@ -373,40 +409,55 @@ pub(crate) mod tests {
         }
     }
 
-    #[test]
-    fn invalid_span_json_is_not_exported() {
+    #[tokio::test]
+    async fn invalid_span_json_is_not_exported() {
         let exporter = RecordingExporter::default();
-        let processor = BatchSpanProcessor::builder(exporter.clone()).build();
-        assert!(handle_connection(logger(), Cursor::new(packet(b"{}")), Some(&processor)).is_err());
+        let processor = Arc::new(BatchSpanProcessor::builder(exporter.clone()).build());
+        assert!(handle_connection(
+            logger(),
+            Cursor::new(packet(b"{}")),
+            Some(processor.clone())
+        )
+        .await
+        .is_err());
         processor.shutdown().unwrap();
         assert!(exporter.spans.lock().unwrap().is_empty());
     }
 
-    #[test]
-    fn fragmented_records_are_reassembled_before_export() {
+    #[tokio::test]
+    async fn fragmented_records_are_reassembled_before_export() {
         struct FragmentedReader(Cursor<Vec<u8>>);
-        impl Read for FragmentedReader {
-            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-                let len = buffer.len().min(3);
-                self.0.read(&mut buffer[..len])
+        impl AsyncRead for FragmentedReader {
+            fn poll_read(
+                self: Pin<&mut Self>,
+                _cx: &mut TaskContext<'_>,
+                buffer: &mut ReadBuf<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                let mut chunk = [0; 3];
+                let len = buffer.remaining().min(chunk.len());
+                Poll::Ready(
+                    std::io::Read::read(&mut self.get_mut().0, &mut chunk[..len])
+                        .map(|read| buffer.put_slice(&chunk[..read])),
+                )
             }
         }
 
         let payload = serde_json::to_vec(&agent_span()).unwrap();
         let exporter = RecordingExporter::default();
-        let processor = BatchSpanProcessor::builder(exporter.clone()).build();
+        let processor = Arc::new(BatchSpanProcessor::builder(exporter.clone()).build());
         handle_connection(
             logger(),
             FragmentedReader(Cursor::new(packet(&payload))),
-            Some(&processor),
+            Some(processor.clone()),
         )
+        .await
         .unwrap();
         processor.shutdown().unwrap();
         assert_eq!(exporter.spans.lock().unwrap().len(), 1);
     }
 
-    #[test]
-    fn malformed_or_truncated_records_are_reported() {
+    #[tokio::test]
+    async fn malformed_or_truncated_records_are_reported() {
         for input in [
             vec![0],
             vec![u8::MAX; HEADER_SIZE_BYTES as usize],
@@ -416,13 +467,14 @@ pub(crate) mod tests {
         ] {
             assert!(
                 handle_trace_data(logger(), &mut Cursor::new(input), None, &mut Vec::new(),)
+                    .await
                     .is_err()
             );
         }
     }
 
-    #[test]
-    fn dump_write_errors_are_reported() {
+    #[tokio::test]
+    async fn dump_write_errors_are_reported() {
         struct RejectWrites;
         impl Write for RejectWrites {
             fn write(&mut self, _buffer: &[u8]) -> std::io::Result<usize> {
@@ -440,20 +492,26 @@ pub(crate) mod tests {
             None,
             &mut RejectWrites,
         )
+        .await
         .unwrap_err();
         assert!(error.to_string().contains("failed to write trace JSON"));
     }
 
-    #[test]
-    fn exporter_failures_are_reported_when_the_connection_is_flushed() {
+    #[tokio::test]
+    async fn exporter_failures_are_reported_when_the_connection_is_flushed() {
         let exporter = RecordingExporter {
             failure: Some("export rejected"),
             ..Default::default()
         };
-        let processor = BatchSpanProcessor::builder(exporter).build();
+        let processor = Arc::new(BatchSpanProcessor::builder(exporter).build());
         let payload = serde_json::to_vec(&agent_span()).unwrap();
-        let error = handle_connection(logger(), Cursor::new(packet(&payload)), Some(&processor))
-            .unwrap_err();
+        let error = handle_connection(
+            logger(),
+            Cursor::new(packet(&payload)),
+            Some(processor.clone()),
+        )
+        .await
+        .unwrap_err();
         assert!(format!("{error:#}").contains("export rejected"));
         processor.shutdown().unwrap();
     }
