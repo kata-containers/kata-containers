@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Probe pod used by k8s-erofs-dmverity.bats.
-# The container command verifies that every workload and pause EROFS lower layer
-# was mounted through a dm-verity device by checking the root overlay lowerdirs
-# and their backing devices, then exits 0 on success or 1 on failure.
+# The container command reports the root overlay lowerdir count and the number
+# of kata-verity devices, which k8s-erofs-dmverity.bats compares, and exits 1
+# if any kata-verity device was not mounted as EROFS.
 
 apiVersion: v1
 kind: Pod
@@ -32,8 +32,6 @@ spec:
         fi
 
         lower_count=$(printf "%s\n" "${lowerdirs}" | awk -F: '{ print NF }')
-        # The single-layer pause image is also verity-backed and counted below.
-        expected_count=$((lower_count + 1))
         erofs_devices=$(dmesg 2>&1 |
           sed -n 's/.*erofs (device \([^)]*\)): mounted.*/\1/p' |
           sort -u)
@@ -56,10 +54,9 @@ spec:
           esac
         done
 
-        echo "workload_lower_layers=${lower_count} expected_layers=${expected_count}" \
+        echo "workload_lower_layers=${lower_count}" \
           "kata_verity_devices=${verity_count} dm_erofs_mounts=${mounted_count}"
-        if [ "${expected_count}" -ne "${verity_count}" ] ||
-          [ "${expected_count}" -ne "${mounted_count}" ]; then
+        if [ "${verity_count}" -ne "${mounted_count}" ]; then
           echo "--- EROFS devices from dmesg ---"
           printf "%s\n" "${erofs_devices}"
           echo "--- device-mapper devices ---"
