@@ -12,6 +12,7 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/state"
@@ -228,7 +229,7 @@ func TestCreateVolumePoolExhaustion(t *testing.T) {
 	_, err = dv.CreateVolume(context.TODO(), createVolumeReq("second", 1*giB, directvolParams("fast")))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "remaining capacity")
-	require.Equal(t, "Code:ResourceExhausted", status.Convert(err).Code().String())
+	require.Equal(t, codes.ResourceExhausted, status.Convert(err).Code())
 }
 
 func TestCreateVolumeIdempotent(t *testing.T) {
