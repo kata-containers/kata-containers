@@ -60,3 +60,13 @@ var _ flag.Value = &Capacity{}
 func (c *Capacity) Enabled() bool {
 	return len(*c) > 0
 }
+
+// Kinds returns the list of configured pool names. It is
+// intended for error messages; callers must not rely on order.
+func (c *Capacity) Kinds() []string {
+	kinds := make([]string, 0, len(*c))
+	for kind := range *c {
+		kinds = append(kinds, kind)
+	}
+	return kinds
+}

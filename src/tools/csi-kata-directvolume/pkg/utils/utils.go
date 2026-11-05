@@ -29,6 +29,10 @@ const (
 	DirectVolumeTypeName           = "directvol"
 	SpdkVolumeTypeName             = "spdkvol"
 	IsDirectVolume                 = "is_directvolume"
+	// StorageKind is the StorageClass parameter which selects the
+	// capacity pool ("kind") that a volume is accounted against. The
+	// same value is used by GetCapacity to pick the pool it reports.
+	StorageKind = "kind"
 )
 
 const (
