@@ -992,7 +992,67 @@ fn install_stage_selinux_policy(config: &config::Config) -> Result<()> {
         result?;
     }
 
-    verify_selinux_domains(&selinuxfs)
+    verify_selinux_domains(&selinuxfs)?;
+    prepare_selinux_gpu_paths(std::path::Path::new(HOST_ROOT))
+}
+
+fn prepare_selinux_gpu_paths(host: &std::path::Path) -> Result<()> {
+    let registry = host.join("run/cdi");
+    if registry.is_symlink() {
+        anyhow::bail!("refusing symlink CDI registry {}", registry.display());
+    }
+    std::fs::create_dir_all(&registry).context("create host CDI registry")?;
+    install_cdi_tmpfiles(host)?;
+    let restorecon = ["/usr/sbin/restorecon", "/sbin/restorecon"]
+        .into_iter()
+        .find(|path| host_path_is_file(host, std::path::Path::new(path)))
+        .context("install policycoreutils on the node: host restorecon is required")?;
+    let mut command = host_tool_command(restorecon);
+    command.args(["-RF", "/run/cdi"]);
+    if host.join("dev/vfio/devices").is_dir() {
+        command.arg("/dev/vfio/devices");
+    }
+    let output = command
+        .output()
+        .context("restore host CDI and VFIO labels")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "host restorecon failed ({}): {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+fn install_cdi_tmpfiles(host: &std::path::Path) -> Result<()> {
+    let tmpfiles = host.join("etc/tmpfiles.d/kata-cdi.conf");
+    if tmpfiles.is_symlink() {
+        anyhow::bail!(
+            "refusing symlink tmpfiles configuration {}",
+            tmpfiles.display()
+        );
+    }
+    std::fs::create_dir_all(host.join("etc/tmpfiles.d"))
+        .context("create host tmpfiles configuration directory")?;
+    let contents = "# Managed by kata-deploy: CDI SELinux compatibility\nd /run/cdi 0755 root root -\nz /run/cdi - - - -\n";
+    match std::fs::read_to_string(&tmpfiles) {
+        Ok(existing) if existing == contents => {}
+        Ok(_) => anyhow::bail!(
+            "refusing to replace administrator configuration {}",
+            tmpfiles.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&tmpfiles)
+                .context("create host CDI tmpfiles configuration")?
+                .write_all(contents.as_bytes())
+                .context("write host CDI tmpfiles configuration")?;
+        }
+        Err(error) => return Err(error).context("read host CDI tmpfiles configuration"),
+    }
+    Ok(())
 }
 
 /// Where the node's selinuxfs is, or `None` when SELinux is disabled.
@@ -1050,7 +1110,7 @@ fn selinux_policy_revision(policy: &str) -> Result<u32> {
 /// Every module in the node's store, by name, at the highest priority it is
 /// installed at.
 fn installed_selinux_modules(semodule: &str) -> Result<std::collections::HashMap<String, u32>> {
-    let output = host_semodule_command(semodule)
+    let output = host_tool_command(semodule)
         .arg("--list-modules=full")
         .output()
         .with_context(|| format!("failed to execute host {semodule} to list the policy store"))?;
@@ -1242,12 +1302,12 @@ fn stage_selinux_modules_on_host(modules: &[(String, String)]) -> Result<StagedM
 }
 
 /// A `semodule` that will run against the node's own policy store.
-fn host_semodule_command(semodule: &str) -> std::process::Command {
+fn host_tool_command(tool: &str) -> std::process::Command {
     use std::os::unix::process::CommandExt;
 
     let host_root = std::ffi::CString::new(HOST_ROOT).expect("HOST_ROOT contains no NUL");
     let root_dir = std::ffi::CString::new("/").expect("root path contains no NUL");
-    let mut command = std::process::Command::new(semodule);
+    let mut command = std::process::Command::new(tool);
 
     unsafe {
         command.pre_exec(move || {
@@ -1265,7 +1325,7 @@ fn host_semodule_command(semodule: &str) -> std::process::Command {
 
 fn run_host_semodule(semodule: &str, priority: u32, policies: &[String]) -> Result<()> {
     // One transaction for all of them: each is a full policy rebuild otherwise.
-    let mut command = host_semodule_command(semodule);
+    let mut command = host_tool_command(semodule);
     command.arg(format!("--priority={priority}"));
     for policy in policies {
         command.arg("--install").arg(policy);
@@ -2932,6 +2992,59 @@ mod tests {
             host.path(),
             std::path::Path::new("/usr/sbin/modprobe")
         ));
+    }
+
+    #[test]
+    fn gpu_host_preparation_rejects_a_symlink_registry() {
+        let host = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("outside");
+        std::fs::create_dir(host.path().join("run")).expect("run");
+        std::os::unix::fs::symlink(outside.path(), host.path().join("run/cdi"))
+            .expect("registry symlink");
+        let error = prepare_selinux_gpu_paths(host.path()).expect_err("symlink must fail");
+        assert!(error.to_string().contains("refusing symlink CDI registry"));
+        assert_eq!(
+            outside.path().read_dir().expect("outside entries").count(),
+            0
+        );
+    }
+
+    #[test]
+    fn cdi_tmpfiles_setup_is_idempotent_and_preserves_admin_configuration() {
+        let host = tempfile::tempdir().expect("tempdir");
+        install_cdi_tmpfiles(host.path()).expect("first setup");
+        let path = host.path().join("etc/tmpfiles.d/kata-cdi.conf");
+        let contents = std::fs::read_to_string(&path).expect("tmpfiles configuration");
+        install_cdi_tmpfiles(host.path()).expect("repeat setup");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("repeat contents"),
+            contents
+        );
+        std::fs::write(&path, "# administrator configuration\n").expect("admin configuration");
+        assert!(install_cdi_tmpfiles(host.path()).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("admin contents"),
+            "# administrator configuration\n"
+        );
+    }
+
+    #[test]
+    fn cdi_tmpfiles_setup_rejects_symlinks() {
+        let host = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::NamedTempFile::new().expect("outside file");
+        std::fs::create_dir_all(host.path().join("etc/tmpfiles.d")).expect("tmpfiles directory");
+        std::os::unix::fs::symlink(
+            outside.path(),
+            host.path().join("etc/tmpfiles.d/kata-cdi.conf"),
+        )
+        .expect("configuration symlink");
+        assert!(install_cdi_tmpfiles(host.path()).is_err());
+        assert_eq!(
+            std::fs::metadata(outside.path())
+                .expect("outside metadata")
+                .len(),
+            0
+        );
     }
 
     #[test]
