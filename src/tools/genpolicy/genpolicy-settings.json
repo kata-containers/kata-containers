@@ -91,7 +91,6 @@
             {
                 "destination": "/etc/hostname",
                 "type_": "bind",
-                "source": "$(sfprefix)hostname$|^/run/kata-containers/sandbox/hostname$",
                 "options": [
                     "rbind",
                     "rprivate"
@@ -100,7 +99,6 @@
             {
                 "destination": "/etc/resolv.conf",
                 "type_": "bind",
-                "source": "$(sfprefix)resolv.conf$|^/run/kata-containers/sandbox/resolv\\.conf$",
                 "options": [
                     "rbind",
                     "rprivate"
@@ -270,6 +268,10 @@
             }
         ]
     },
+    "sandbox_api_mount_sources": {
+        "/etc/hostname": "^/run/kata-containers/sandbox/hostname$",
+        "/etc/resolv.conf": "^/run/kata-containers/sandbox/resolv\\.conf$"
+    },
     "common": {
         "cpath": "/run/kata-containers/shared/containers(?:/passthrough)?",
         "spath": "/run/kata-containers/sandbox/storage",
@@ -351,7 +353,8 @@
         "cgroup_mount_extras_allowed": [
             "nsdelegate",
             "memory_recursiveprot"
-        ]
+        ],
+        "runtime_api": "any"
     },
     "request_defaults": {
         "CreateContainerRequest": {
@@ -371,6 +374,15 @@
                 "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",
                 "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$",
                 "^TERM=xterm$"
+            ]
+        },
+        "CreateSandboxRequest": {
+            "hostname_regex": "[a-zA-Z0-9]([a-zA-Z0-9\\-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]*[a-zA-Z0-9])?)*",
+            "allow_dns_regex": [
+                "^$",
+                "^nameserver ($(ipv4_a)|[0-9a-fA-F:\\.]*:[0-9a-fA-F:\\.]*(%[a-zA-Z0-9_\\.\\-]+)?)$",
+                "^search( $(dns_label))+$",
+                "^options( [a-zA-Z0-9_\\-]+(:[0-9]+)?)+$"
             ]
         },
         "UpdateInterfaceRequest": {
