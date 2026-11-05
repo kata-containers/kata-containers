@@ -61,16 +61,18 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str) -> Result<()> {
 
 /// Rebind a PCI device from vfio-pci to its original host driver.
 pub fn bind_device_to_host(bdf: &str, host_driver: &str) -> Result<()> {
-    let sysfs = Sysfs::default();
-    let current_driver = vfio::current_driver(&sysfs, bdf);
+    bind_device_to_host_in(&Sysfs::default(), bdf, host_driver)
+}
+
+fn bind_device_to_host_in(sysfs: &Sysfs, bdf: &str, host_driver: &str) -> Result<()> {
+    let current_driver = vfio::current_driver(sysfs, bdf);
     if current_driver.as_deref() == Some(host_driver) {
         return Ok(());
     }
-    if current_driver.as_deref() != Some(VFIO_PCI_DRIVER) {
-        return Err(anyhow!("device {bdf} is not bound to vfio-pci"));
-    }
-    vfio::unbind(&sysfs, bdf).with_context(|| format!("unbind {bdf} from vfio-pci"))?;
-    vfio::bind(&sysfs, bdf, host_driver)
+    // An interrupted detach may have already unbound the device. Unbind
+    // whichever driver still holds it, or proceed directly to the probe.
+    vfio::unbind(sysfs, bdf).with_context(|| format!("unbind {bdf} before host driver probe"))?;
+    vfio::bind(sysfs, bdf, host_driver)
         .with_context(|| format!("probe {bdf} with {host_driver}"))?;
     Ok(())
 }
@@ -120,5 +122,46 @@ pub fn get_vfio_device(device: String) -> Result<String> {
         get_vfio_iommu_group(device)
     } else {
         Ok(device)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+
+    const BDF: &str = "0000:01:00.0";
+
+    #[test]
+    fn a_half_rebound_device_only_needs_the_probe() {
+        let dir = tempfile::tempdir().unwrap();
+        let sysfs = Sysfs::new(dir.path());
+        let device = sysfs.device(BDF).unwrap();
+        fs::create_dir_all(&device).unwrap();
+        fs::write(device.join("driver_override"), "vfio-pci").unwrap();
+        fs::write(sysfs.drivers_probe(), "").unwrap();
+
+        bind_device_to_host_in(&sysfs, BDF, "mlx5_core").unwrap();
+
+        assert_eq!(fs::read_to_string(sysfs.drivers_probe()).unwrap(), BDF);
+        assert_eq!(
+            fs::read_to_string(device.join("driver_override")).unwrap(),
+            "mlx5_core"
+        );
+    }
+
+    #[test]
+    fn a_device_already_on_its_host_driver_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let sysfs = Sysfs::new(dir.path());
+        let device = sysfs.device(BDF).unwrap();
+        let driver = sysfs.driver("mlx5_core").unwrap();
+        fs::create_dir_all(&device).unwrap();
+        fs::create_dir_all(&driver).unwrap();
+        symlink(driver, device.join("driver")).unwrap();
+
+        bind_device_to_host_in(&sysfs, BDF, "mlx5_core").unwrap();
+        assert!(!device.join("driver_override").exists());
+        assert!(!sysfs.drivers_probe().exists());
     }
 }

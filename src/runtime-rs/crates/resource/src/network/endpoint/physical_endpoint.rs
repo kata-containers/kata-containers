@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use futures_lite::stream::StreamExt;
 use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::DeviceConfig;
-use hypervisor::{vfio_device as driver, Hypervisor};
+use hypervisor::{device::driver, Hypervisor};
 use hypervisor::{get_vfio_device, VfioDeviceBase};
 use kata_sys_util::netns::NetnsGuard;
 use netlink_packet_core::{NetlinkMessage, NLM_F_ACK, NLM_F_CREATE, NLM_F_EXCL, NLM_F_REQUEST};
