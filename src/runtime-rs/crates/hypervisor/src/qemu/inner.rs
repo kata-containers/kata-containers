@@ -316,6 +316,10 @@ impl QemuInner {
                         return Err(anyhow!("VFIO IOMMUFD group has a device without a cdev"));
                     }
 
+                    if device_type != VfioDeviceType::MediatedAp && devices.len() > 8 {
+                        return Err(anyhow!("VFIO group has more than 8 PCI functions"));
+                    }
+
                     if device_type == VfioDeviceType::MediatedAp {
                         // s390x VFIO-AP: -device vfio-ap,sysfsdev=<path>
                         // No PCIe root port, no guest_pci_path.
@@ -347,7 +351,12 @@ impl QemuInner {
                             .with_vfio_bus(bus_port_id.0.clone())
                             .with_qdev_id(vfio_qdev_id(&vfio_device_id, index))
                             .with_root_port(index == 0)
-                            .with_vfio_addr(format!("0x{:x}", index));
+                            .with_vfio_addr(if devices.len() > 1 {
+                                format!("0x0.0x{:x}", index)
+                            } else {
+                                "0x0".to_string()
+                            })
+                            .with_vfio_multifunction(index == 0 && devices.len() > 1);
                             if let (Some(iommufd), Some(cdev)) =
                                 (iommufd.as_ref(), dev.vfio_cdev.as_ref())
                             {
@@ -371,7 +380,7 @@ impl QemuInner {
                                 .iter()
                                 .enumerate()
                                 .map(|(index, device)| {
-                                    format!("{}={:02x}/{:02x}", device.addr, bus_port_id.1, index)
+                                    format!("{}={:02x}/00.{:x}", device.addr, bus_port_id.1, index)
                                 })
                                 .collect();
                         }
