@@ -166,6 +166,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: amd64
 
+      - name: Download amd64 Substrate guest artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-substrate-tarball-amd64
+
+      - name: Upload amd64 Substrate static tarball to GitHub
+        run: ./tools/packaging/release/release.sh upload-kata-substrate-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: amd64
+          KATA_SUBSTRATE_STATIC_TARBALL: kata-static-substrate.tar.zst
+
       - name: Download amd64 Go runtime artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -189,6 +201,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: arm64
+
+      - name: Download arm64 Substrate guest artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-substrate-tarball-arm64
+
+      - name: Upload arm64 Substrate static tarball to GitHub
+        run: ./tools/packaging/release/release.sh upload-kata-substrate-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: arm64
+          KATA_SUBSTRATE_STATIC_TARBALL: kata-static-substrate.tar.zst
 
       - name: Download arm64 Go runtime artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0

@@ -1,0 +1,93 @@
+name: Substrate microVM e2e
+
+on:
+  workflow_call:
+    inputs:
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ''
+      tarball-suffix:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-substrate
+  cancel-in-progress: true
+
+jobs:
+  substrate-microvm-e2e:
+    name: substrate-microvm-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SUBSTRATE_ASSET_DIR: ${{ github.workspace }}/candidate-substrate
+      KIND_CLUSTER_NAME: kata-substrate
+      ATE_ATENET_DATAPLANE: envoy
+      E2E_ATENET_DATAPLANE: envoy
+      ATE_INSTALL_E2E_TUNING: 'true'
+      ATE_CREDENTIAL_PROVIDER: '{"name":"k8s.io"}'
+      ATE_PREVIEW: ''
+      ATE_INGRESS_ALLOWED_SPIFFE_IDS: spiffe://cluster.local/ns/ate-e2e-router-client/sa/router-client
+      E2E_PARALLELISM: '4'
+      ARTIFACTS: ${{ github.workspace }}/substrate/_artifacts
+      E2E_JUNIT_FILE: ${{ github.workspace }}/substrate/_artifacts/e2e-microvm.xml
+    steps:
+      - name: Checkout Kata
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Rebase onto the target branch
+        run: tests/git-helper.sh rebase-atop-of-the-latest-target-branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+      - name: Checkout Substrate main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: agent-substrate/substrate
+          ref: main
+          path: substrate
+          persist-credentials: false
+      - name: Set up Substrate's Go toolchain
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version-file: substrate/go.mod
+          cache-dependency-path: substrate/go.sum
+      - name: Install test dependencies
+        run: tests/integration/substrate/setup.sh
+      - name: Set up Docker Buildx for the Kind registry
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: network=host
+          buildkitd-config-inline: |
+            [registry."localhost:5001"]
+              http = true
+      - name: Download candidate guest archive
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-substrate-tarball-amd64${{ inputs.tarball-suffix }}
+          path: candidate-archive
+      - name: Extract candidate rootfs and kernel
+        run: tests/integration/substrate/extract-artifacts.sh candidate-archive/kata-static-substrate.tar.zst "${SUBSTRATE_ASSET_DIR}"
+      - name: Run guest build and staging regression checks
+        run: tests/integration/substrate/test-artifacts.sh "${SUBSTRATE_ASSET_DIR}"
+      - name: Deploy Substrate and run microVM e2e suites
+        run: tests/integration/substrate/e2e-ci.sh run substrate
+      - name: Verify test execution and report failures
+        if: always()
+        run: tests/integration/substrate/e2e-ci.sh report substrate
+      - name: Save e2e results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: substrate-microvm-e2e
+          path: substrate/_artifacts/
+          if-no-files-found: warn

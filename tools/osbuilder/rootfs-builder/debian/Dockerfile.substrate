@@ -1,0 +1,87 @@
+# Copyright 2026 Google LLC
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Adapted from Ziyue Yan, Substrate PR 1967, commit 6f1597a87f09.
+ARG DEBIAN_IMAGE
+
+# The rootfs stage mounts prune.sh from here rather than the whole build context, so
+# editing the image builder or another stage leaves the guest tree cached.
+FROM scratch AS scripts
+COPY prune.sh /
+
+# The builder supplies the image from versions.yaml with its resolved digest.
+# hadolint ignore=DL3006
+FROM ${DEBIAN_IMAGE} AS rootfs
+# kata-agent is PID 1 (ateworker boots init=/usr/bin/kata-agent) and the only thing that
+# runs unasked. The actor's processes run in its container rootfs, which the agent
+# pivots into from the virtio-fs share, never in this tree. ateworker never calls the
+# agent's GetIPTables/SetIPTables RPCs (guest networking uses netlink), so the guest
+# needs only what the agent links and what DebugConsoleDump runs:
+#   libseccomp2  kata-agent links it (SECCOMP=yes)
+#   bash, coreutils, grep, iproute2, mount, procps
+#                the agent's debug console and the commands ateworker runs in it
+#                (DebugConsoleDump in cmd/ateworker-microvm/run.go: ip, ls, head, grep...)
+ARG GUEST_PACKAGES="bash coreutils grep iproute2 libseccomp2 mount procps"
+# prune.sh then purges everything those packages do not depend on, which is most of
+# trixie-slim: apt, perl and the rest of the Essential set. PRUNE=false keeps it all,
+# for comparison; the image roughly doubles.
+ARG PRUNE=true
+# prune.sh is mounted at /mnt, which the image already has, so the mount leaves
+# nothing behind in the tree. apt-get full-upgrade brings the base image's own
+# packages up to date as well (including updates that add new dependencies), so the
+# guest carries trixie's current security fixes however old the DEBIAN_IMAGE pin is,
+# and prune.sh resolves against the installed versions.
+# kata-agent names the guest after /etc/hostname at boot, and the base image ships the
+# name of the tool that built it there (debuerreotype); without the file the agent
+# uses localhost until CreateSandbox sets the sandbox's hostname.
+RUN --mount=type=bind,from=scripts,target=/mnt \
+    apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${GUEST_PACKAGES} \
+ && if [ "${PRUNE}" = true ]; then bash /mnt/prune.sh ${GUEST_PACKAGES}; fi \
+ && rm -rf /var/lib/apt/lists/* /var/cache/* /var/log/* /var/lib/dpkg/status-old \
+      /etc/hostname
+COPY kata-agent /usr/bin/kata-agent
+# /sbin/init is the agent too, so a kernel command line without init= boots it as well.
+RUN ln -sf ../bin/kata-agent /usr/sbin/init
+# Everything the guest runs must start: a missing library or a dangling alternative
+# fails the build here rather than a boot or a debug dump later.
+RUN kata-agent --version \
+ && /sbin/init --version \
+ && bash -c 'ip -V && ip addr show lo && ps -e && ls -la / && head -n1 /etc/passwd \
+      && grep -q "^root:" /etc/passwd && cat /etc/os-release && mount --version \
+      && umount --version && sh -c true' >/dev/null
+
+# e2fsprogs 1.47.1 and later honor SOURCE_DATE_EPOCH when populating ext4.
+# DEBIAN_IMAGE is the same resolved reference used by the rootfs stage.
+# hadolint ignore=DL3006
+FROM ${DEBIAN_IMAGE} AS image
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends e2fsprogs fdisk jq \
+ && rm -rf /var/lib/apt/lists/*
+COPY osbuilder /osbuilder
+ARG SOURCE_DATE_EPOCH=1700000000
+RUN bash /osbuilder/image-builder/tests/substrate.sh
+RUN --mount=type=bind,from=rootfs,target=/rootfs \
+    mkdir -p /out \
+ && BUILD_VARIANT=substrate AGENT_INIT=yes SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
+      bash /osbuilder/image-builder/image_builder.sh -f ext4 -o /out/rootfs.img /rootfs \
+ && dpkg-query --admindir=/rootfs/var/lib/dpkg -W -f '${Package}\t${Version}\n' \
+      > /out/rootfs-packages.txt \
+ && dpkg-query -W -f '${Package}\t${Version}\n' \
+      > /out/image-packages.txt
+
+FROM scratch AS export
+COPY --from=image /out/ /

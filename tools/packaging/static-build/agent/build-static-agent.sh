@@ -18,6 +18,22 @@ build_agent_from_source() {
 
 	/usr/bin/install_libseccomp.sh /opt /opt
 
+	if [[ "${BUILD_VARIANT:-}" == substrate ]]; then
+		# Substrate omits policy/init-data but still enforces container seccomp profiles.
+		export LIBC=gnu SECCOMP=yes AGENT_POLICY=no INIT_DATA=no USE_DEVMAPPER=no
+		# One codegen unit per crate and fat LTO trade build time for optimization.
+		export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_LTO=true
+		# Keep level 3 until steady-state benchmarks justify size optimization; see README.md.
+		export CARGO_PROFILE_RELEASE_OPT_LEVEL=3 CARGO_PROFILE_RELEASE_STRIP=symbols
+		# shellcheck disable=SC2154
+		export CARGO_TARGET_DIR="${repo_root_dir}/target/substrate"
+		local target_path
+		target_path="${CARGO_TARGET_DIR}/$(uname -m)-unknown-linux-gnu/release/kata-agent"
+		make -C src/agent TARGET_PATH="${target_path}" BUILD_TYPE=release INIT=yes
+		make -C src/agent TARGET_PATH="${target_path}" BUILD_TYPE=release INIT=yes install
+		return
+	fi
+
 	# Note: when USE_DEVMAPPER=yes the agent Makefile overrides LIBC=gnu
 	cd src/agent
 	# shellcheck disable=SC2154

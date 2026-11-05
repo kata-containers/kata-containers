@@ -176,12 +176,24 @@ EOF
 	esac
 }
 
+kata_substrate_tarball_inputs() {
+	local arch
+	arch="$(normalize_arch "${1}")"
+	case "${arch}" in
+		amd64|arm64)
+			printf '%s\n' kata-static-rootfs-image-substrate.tar.zst kata-static-kernel.tar.zst
+			;;
+		*) echo "Substrate is unsupported on ${arch}" >&2; return 1 ;;
+	esac
+}
+
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 	action="${1:-}"
 	arch="${2:-$(uname -m)}"
 	case "${action}" in
 		kata-static) kata_static_tarball_inputs "${arch}" ;;
 		kata-go-static) kata_go_tarball_inputs "${arch}" ;;
-		*) echo "usage: ${0} {kata-static|kata-go-static} [arch]" >&2; exit 1 ;;
+		kata-static-substrate) kata_substrate_tarball_inputs "${arch}" ;;
+		*) echo "usage: ${0} {kata-static|kata-go-static|kata-static-substrate} [arch]" >&2; exit 1 ;;
 	esac
 fi

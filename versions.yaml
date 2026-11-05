@@ -115,6 +115,9 @@ assets:
       aarch64:
         name: "ubuntu"
         version: "resolute"  # 26.04 LTS
+        substrate:
+          name: "debian"
+          version: "trixie-slim"
         confidential:
           name: "ubuntu"
           version: "resolute"  # 26.04 LTS
@@ -142,6 +145,9 @@ assets:
       x86_64:
         name: "ubuntu"
         version: "resolute"  # 26.04 LTS
+        substrate:
+          name: "debian"
+          version: "trixie-slim"
         confidential:
           name: "ubuntu"
           version: "resolute"  # 26.04 LTS

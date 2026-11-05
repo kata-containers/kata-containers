@@ -30,7 +30,7 @@ jobs:
         # Keep this matrix in sync with the one in ci-devel (minus non-self-hosted instances)
         instance:
           - "ubuntu-24.04-arm"
-          - "ubuntu-24.04-s390x"
+          - "ubuntu-24.06-s390x"
     uses: ./.github/workflows/build-checks.yaml
     with:
       instance: ${{ matrix.instance }}

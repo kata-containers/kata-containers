@@ -36,3 +36,10 @@ merge_with_allowlist "kata-static.tar.zst" "${allowlist}"
 
 allowlist="$(kata_go_tarball_inputs "${arch}" | tr '\n' ' ')"
 merge_with_allowlist "kata-go-static.tar.zst" "${allowlist}"
+
+case "$(normalize_arch "${arch}")" in
+	amd64|arm64)
+		allowlist="$(kata_substrate_tarball_inputs "${arch}" | tr '\n' ' ')"
+		merge_with_allowlist "kata-static-substrate.tar.zst" "${allowlist}"
+		;;
+esac
