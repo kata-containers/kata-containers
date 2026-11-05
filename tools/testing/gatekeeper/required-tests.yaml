@@ -157,7 +157,7 @@ mapping:
       # - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-26.04-s390x)
-      - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.06-s390x)
+      - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang, ubuntu-24.04-s...
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ubu...
@@ -165,7 +165,7 @@ mapping:
       # - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-26.04-s390x)
-      - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.06-s390x)
+      - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (make test, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-26.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust, ubuntu-26.04-s390x)
