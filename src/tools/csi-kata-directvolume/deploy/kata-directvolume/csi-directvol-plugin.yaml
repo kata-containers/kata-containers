@@ -202,10 +202,11 @@ spec:
             path: /run/kata-containers/shared/direct-volumes/
             type: DirectoryOrCreate
           name: shared-directvols
-        # vhost there.
+        # vhost there. Created if missing, so that the driver also starts on
+        # nodes without SPDK.
         - hostPath:
             path: /var/lib/spdk/vhost
-            type: Directory
+            type: DirectoryOrCreate
           name: vhost-dir
         # rawdisk there.
         - hostPath:
