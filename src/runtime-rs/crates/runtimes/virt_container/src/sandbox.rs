@@ -1695,6 +1695,10 @@ impl Sandbox for VirtSandbox {
         // Cancel the OOM watcher before tearing down the VM so it exits
         // cleanly instead of hitting ECONNRESET/EOF on a closed channel.
         self.cancel_token.cancel();
+        // Likewise the health check: a check that fails against the stopped
+        // VM with no stop signal pending exits the shim. wait_process() and
+        // shutdown() stop it first, but StopSandbox reaches here directly.
+        self.monitor.stop().await;
 
         info!(sl!(), "begin stop sandbox");
         if !vmm_start_attempted {
