@@ -1,0 +1,25 @@
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "hostname": "gid-experiment",
+        "sandbox_pidns": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "sandbox hostname is the pod name",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "workload of the pod named by the sandbox hostname",
+      "base": "sandbox-rw",
+      "allowed": true,
+      "patch": []
+    }
+  ]
+}

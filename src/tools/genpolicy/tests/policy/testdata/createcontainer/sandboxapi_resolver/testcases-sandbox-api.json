@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "description": "Sandbox API mode rejects the shared hostname source",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/8/source",
+          "value": "/run/kata-containers/shared/containers/gid-89f0faae823d569c-hostname"
+        }
+      ]
+    },
+    {
+      "description": "Sandbox API mode rejects the shared resolver source",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/9/source",
+          "value": "/run/kata-containers/shared/containers/gid-8c0d97703dbbb30e-resolv.conf"
+        }
+      ]
+    },
+    {
+      "description": "Sandbox API mode admits the guest-local sources",
+      "base": "sandbox-rw",
+      "allowed": true,
+      "patch": []
+    }
+  ]
+}

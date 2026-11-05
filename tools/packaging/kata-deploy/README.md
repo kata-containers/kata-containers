@@ -51,11 +51,17 @@ each container's bundle before mounting them, so writable mounts cannot change
 the sandbox templates or sibling containers' files. Explicit workload mounts
 take precedence.
 
-Genpolicy currently produces policies compatible with both Task API and
-SandboxAPI. They permit both system-file source patterns and retain the pause
-container entry even when SandboxAPI does not create a pause container. This is
-compatibility behavior, rather than a policy restricted to a single API.
-The `CreateSandboxRequest` policy does not constrain DNS or hostname values;
-validating mount paths does not authenticate the contents supplied by the host.
-Confidential deployments must account for this existing limitation when
-deciding which host-provided network configuration to trust.
+By default, genpolicy produces policies compatible with both Task API and
+SandboxAPI, because the `shim` sandboxer falls back to `podsandbox` on hosts
+without a usable shim sandbox controller. They permit both system-file source
+patterns and retain the pause container entry, which SandboxAPI does not use.
+When every node running the pods uses the same API, generate their policies
+with the `30-sandbox-api-drop-in.json` or `30-task-api-drop-in.json` genpolicy
+drop-in to allow only what that API needs.
+
+The `CreateSandboxRequest` policy only accepts the hostname kubelet assigns to
+the pod, and resolver lines with the `nameserver`, `search` and `options`
+syntax kubelet writes. The nameserver addresses and search domains themselves
+remain host-provided. Confidential deployments that must not trust them can
+restrict `request_defaults.CreateSandboxRequest.allow_dns_regex` to the
+cluster's DNS configuration with a genpolicy drop-in.
