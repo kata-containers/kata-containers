@@ -29,11 +29,10 @@ const (
 	DirectVolumeTypeName           = "directvol"
 	SpdkVolumeTypeName             = "spdkvol"
 	IsDirectVolume                 = "is_directvolume"
-	// StorageKind 是 StorageClass 参数 "kind"：声明本卷记入哪个
-	// 容量池。CreateVolume 与 GetCapacity 均从该参数解析池，
-	// 是调用方（StorageClass）与驱动之间唯一的池选择契约。
-	// StorageKind is the shared StorageClass parameter selecting the
-	// capacity pool, used symmetrically by CreateVolume and GetCapacity.
+	// StorageKind is the StorageClass parameter which selects the
+	// capacity pool ("kind") that a volume is accounted against. Both
+	// CreateVolume and GetCapacity resolve the pool from it, making it
+	// the single pool-selection contract between StorageClass and driver.
 	StorageKind = "kind"
 )
 
