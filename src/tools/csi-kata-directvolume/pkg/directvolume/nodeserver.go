@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
+	"kata-containers/csi-kata-directvolume/pkg/state"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -72,26 +73,9 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	}
 	attrib := req.GetVolumeContext()
 
-	devicePath := dv.config.VolumeDevices[volumeID]
-
-	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
-		if devicePath == "" {
-			if dp := volInStat.Metadata["devicePath"]; dp != "" {
-				devicePath = dp
-				dv.config.VolumeDevices[volumeID] = dp
-				klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
-			} else {
-				return nil, status.Errorf(codes.NotFound,
-					"[SPDK] devicePath not found in state for volume %s", volumeID)
-			}
-		}
-
-		if _, err := os.Stat(devicePath); err != nil {
-			return nil, status.Errorf(codes.NotFound,
-				"[SPDK] vhost socket missing after driver restart: %s (err=%v)", devicePath, err)
-		}
-
-		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
+	devicePath, err := dv.publishDevicePath(volInStat, attrib)
+	if err != nil {
+		return nil, err
 	}
 
 	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
@@ -142,6 +126,46 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	klog.Infof("directvolume: volume %s has been published.", targetPath)
 
 	return &csi.NodePublishVolumeResponse{}, nil
+}
+
+// publishDevicePath returns the device which backs a staged volume. The device
+// map is not persisted, so it is empty after a driver restart: the device is
+// then read from the state.
+func (dv *directVolume) publishDevicePath(vol state.Volume, volumeCtx map[string]string) (string, error) {
+	devicePath := dv.config.VolumeDevices[vol.VolID]
+
+	if volumeCtx[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
+		if devicePath == "" {
+			dp := vol.Metadata["devicePath"]
+			if dp == "" {
+				return "", status.Errorf(codes.NotFound,
+					"[SPDK] devicePath not found in state for volume %s", vol.VolID)
+			}
+			devicePath = dp
+			dv.config.VolumeDevices[vol.VolID] = dp
+			klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", vol.VolID, dp)
+		}
+
+		if _, err := os.Stat(devicePath); err != nil {
+			return "", status.Errorf(codes.NotFound,
+				"[SPDK] vhost socket missing after driver restart: %s (err=%v)", devicePath, err)
+		}
+
+		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", vol.VolID, devicePath)
+		return devicePath, nil
+	}
+
+	if devicePath == "" {
+		devicePath = vol.Metadata["backingFile"]
+		if _, err := os.Stat(devicePath); err != nil {
+			return "", status.Errorf(codes.FailedPrecondition, "backing device %q of volume %s is not available: %v",
+				devicePath, vol.VolID, err)
+		}
+		dv.config.VolumeDevices[vol.VolID] = devicePath
+		klog.Infof("recovered the device of volume %s from the state: %s", vol.VolID, devicePath)
+	}
+
+	return devicePath, nil
 }
 
 func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
