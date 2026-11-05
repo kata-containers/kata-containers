@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: Apache-2.0
+
+set positional-arguments
+
+target := env("JUST_KATA_TARGET", if os() == "macos" { "targets/macos.json" } else { "targets/local.json" })
+kata_source := env("JUST_KATA_SOURCE", "../../..")
+kubernetes := env("JUST_KATA_KUBERNETES", "kubeadm")
+ci_config := env("JUST_KATA_CI_CONFIG", "ci/default.json")
+release := env("JUST_KATA_RELEASE", "")
+runtime := env("JUST_KATA_RUNTIME", "")
+backend := env("JUST_KATA_BACKEND", "lima")
+host := env("JUST_KATA_HOST", "")
+pr := env("JUST_KATA_PR", "")
+branch := env("JUST_KATA_BRANCH", "")
+image := env("JUST_KATA_IMAGE", "")
+kubeconfig := env("JUST_KATA_KUBECONFIG", "")
+runner := "python3 scripts/lab.py --target " + quote(target) + " --source " + quote(kata_source) + " --kubernetes " + quote(kubernetes) + " --ci-config " + quote(ci_config) + " --release " + quote(release) + " --runtime " + quote(runtime) + " --backend " + quote(backend) + " --host " + quote(host) + " --pr " + quote(pr) + " --branch " + quote(branch) + " --image " + quote(image) + " --kubeconfig " + quote(kubeconfig)
+
+default:
+    @just --list
+
+# Check controller tools and the selected execution host.
+doctor:
+    {{ runner }} doctor
+
+# Diagnose installed QEMU/KVM; on arm64, also boot the Kata image read-only.
+probe:
+    {{ runner }} probe
+
+# Show the selected target and commands without changing any machine.
+plan:
+    {{ runner }} --dry-run up
+
+# Create a VM, run Kata's Kubernetes CI installer, deploy Kata, and test a pod.
+up:
+    {{ runner }} up
+
+# Install Kata and test a pod on an existing baremetal Kubernetes cluster.
+install-kata:
+    {{ runner }} install-kata
+
+# Install Kubernetes and Kata on a fresh Ubuntu baremetal host.
+install-cluster:
+    {{ runner }} install-cluster
+
+# Run a Kubernetes pod using the Kata RuntimeClass.
+test suite="smoke":
+    {{ runner }} test {{ quote(suite) }}
+
+# Run an action from tests/integration/kubernetes/gha-run.sh in the guest.
+ci +args:
+    {{ runner }} ci "$@"
+
+# Run any repository CI script in the guest, forwarding arguments literally.
+ci-script +args:
+    {{ runner }} ci-script "$@"
+
+# Fetch the pinned workload on the controller and import it over SSH.
+load-image:
+    {{ runner }} load-image
+
+ssh:
+    {{ runner }} ssh
+
+# Save host facts, service logs, and the artifact pins locally.
+logs:
+    {{ runner }} logs
+
+# Delete only the VM recorded by this workspace.
+down:
+    {{ runner }} down
+
+# Run controller safety tests and check guest script syntax.
+check:
+    python3 -m unittest discover -s tests -v
+    bash -n scripts/guest.sh
+    bash -n scripts/guest-ci.sh
+    shellcheck scripts/guest.sh scripts/guest-ci.sh
