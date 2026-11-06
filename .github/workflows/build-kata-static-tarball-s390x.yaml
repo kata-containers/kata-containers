@@ -346,6 +346,23 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+  build-kata-tools-tarball:
+    permissions:
+      contents: read
+      packages: write # needed to push build artifacts to ghcr.io
+    uses: ./.github/workflows/build-kata-tools-tarball.yaml
+    with:
+      arch: s390x
+      runner: ubuntu-26.04-s390x
+      assets: '["agent-ctl","genpolicy","kata-ctl","kata-manager","trace-forwarder"]'
+      stage: ${{ inputs.stage }}
+      tarball-suffix: ${{ inputs.tarball-suffix }}
+      push-to-registry: ${{ inputs.push-to-registry }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
   create-kata-tarball:
     name: create-kata-tarball
     runs-on: ubuntu-26.04-s390x
