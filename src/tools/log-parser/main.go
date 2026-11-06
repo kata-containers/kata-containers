@@ -200,7 +200,7 @@ func handleLogFiles(c *cli.Context) (err error) {
 		file = devNull
 	} else {
 		if outputFilename != "" {
-			outputFile, err = os.OpenFile(outputFilename, os.O_CREATE|os.O_WRONLY, fileMode)
+			outputFile, err = os.OpenFile(outputFilename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode)
 			if err != nil {
 				return err
 			}
