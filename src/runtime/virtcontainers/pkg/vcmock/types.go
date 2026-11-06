@@ -68,6 +68,7 @@ type Sandbox struct {
 	GetAgentMetricsFunc      func(context.Context) (string, error)
 	StatsFunc                func() (vc.SandboxStats, error)
 	GetAgentURLFunc          func() (string, error)
+	HasPhysicalEndpointFunc  func() bool
 }
 
 // Container is a fake Container type used for testing

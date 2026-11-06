@@ -288,6 +288,12 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, end
 		}
 	}
 
+	// Detaching a physical endpoint hands its device back to the host
+	// driver, which is only safe once the VMM has released it.
+	if endpoint.Type() == PhysicalEndpointType && s != nil && !s.canRestorePassthroughDevices() {
+		return fmt.Errorf("%w: leaving %s bound to vfio-pci", errVMMExitUnconfirmed, endpoint.Name())
+	}
+
 	// Detach for an endpoint should enter the network namespace
 	// if required.
 	networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")

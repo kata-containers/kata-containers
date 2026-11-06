@@ -9,16 +9,123 @@ package virtcontainers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
+
+// detachRecordingEndpoint is a physical endpoint that records its detach
+// instead of touching the host's PCI devices.
+type detachRecordingEndpoint struct {
+	PhysicalEndpoint
+	detached int
+}
+
+func (endpoint *detachRecordingEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
+	endpoint.detached++
+	return nil
+}
+
+// TestSandboxStopRestoresPassthroughDeviceOnlyOnConfirmedVMMExit covers the
+// teardown's side of an unconfirmed VMM exit.
+func TestSandboxStopRestoresPassthroughDeviceOnlyOnConfirmedVMMExit(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		stopVMErr    error
+		wantDetaches int
+	}{
+		{
+			name:         "a confirmed exit hands the device back",
+			stopVMErr:    nil,
+			wantDetaches: 1,
+		},
+		{
+			name:         "an unconfirmed exit leaves the device alone",
+			stopVMErr:    fmt.Errorf("%w: QEMU pid 1 still running", errVMMExitUnconfirmed),
+			wantDetaches: 0,
+		},
+		{
+			name:         "an unrelated stop failure still hands the device back",
+			stopVMErr:    errors.New("failed to stop the virtiofs daemon"),
+			wantDetaches: 1,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			endpoint := &detachRecordingEndpoint{
+				PhysicalEndpoint: PhysicalEndpoint{
+					IfaceName:    "eth0",
+					HardAddr:     net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+					EndpointType: PhysicalEndpointType,
+					BDF:          "0000:b5:09.7",
+					Driver:       "mlx5_core",
+				},
+			}
+
+			store, err := persist.GetDriver()
+			assert.NoError(err)
+
+			s := &Sandbox{
+				id:     testSandboxID,
+				ctx:    context.Background(),
+				config: &SandboxConfig{},
+				store:  store,
+				state: types.SandboxState{
+					State:         types.StateReady,
+					BlockIndexMap: make(map[int]struct{}),
+				},
+				containers: make(map[string]*Container),
+				agent:      NewMockAgent(),
+				devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
+				network:    &LinuxNetwork{eps: []Endpoint{endpoint}},
+				hypervisor: &mockHypervisor{
+					stopVMFunc: func(ctx context.Context, waitOnly bool) error {
+						return tc.stopVMErr
+					},
+				},
+			}
+
+			// Only a force stop carries on past the hypervisor failure,
+			// which is the case that matters here.
+			s.Stop(context.Background(), true) //nolint:errcheck
+
+			assert.Equal(tc.wantDetaches, endpoint.detached)
+			assert.Equal(types.StateStopped, s.state.State)
+		})
+	}
+}
+
+func TestSandboxHasPhysicalEndpoint(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Sandbox{network: &LinuxNetwork{}}
+	assert.False(s.HasPhysicalEndpoint())
+
+	s = &Sandbox{network: &LinuxNetwork{eps: []Endpoint{
+		&VethEndpoint{EndpointType: VethEndpointType},
+	}}}
+	assert.False(s.HasPhysicalEndpoint())
+
+	s = &Sandbox{network: &LinuxNetwork{eps: []Endpoint{
+		&VethEndpoint{EndpointType: VethEndpointType},
+		&PhysicalEndpoint{EndpointType: PhysicalEndpointType},
+	}}}
+	assert.True(s.HasPhysicalEndpoint())
+}
 
 func TestPhysicalEndpoint_HotAttach(t *testing.T) {
 	assert := assert.New(t)
@@ -96,4 +203,49 @@ func TestIsPhysicalIface(t *testing.T) {
 	})
 	assert.NoError(err)
 	assert.False(isPhysical)
+}
+
+// TestSandboxForceStopRestoresPassthroughDeviceDespiteAContainerFailure covers
+// what the shim relies on when it holds the container exit back: a forced stop
+// reaches the network teardown even when a container will not stop, or the exit
+// goes out with the device still on vfio-pci.
+func TestSandboxForceStopRestoresPassthroughDeviceDespiteAContainerFailure(t *testing.T) {
+	assert := assert.New(t)
+
+	endpoint := &detachRecordingEndpoint{
+		PhysicalEndpoint: PhysicalEndpoint{
+			IfaceName:    "eth0",
+			HardAddr:     net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+			EndpointType: PhysicalEndpointType,
+			BDF:          "0000:b5:09.7",
+			Driver:       "mlx5_core",
+		},
+	}
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	s := &Sandbox{
+		// An id no store can write a file for, so that the one step
+		// Container.stop() takes even under force -- persisting the new
+		// container state -- fails.
+		id:         strings.Repeat("x", 300),
+		ctx:        context.Background(),
+		config:     &SandboxConfig{},
+		store:      store,
+		state:      types.SandboxState{State: types.StateReady},
+		agent:      NewMockAgent(),
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
+		network:    &LinuxNetwork{eps: []Endpoint{endpoint}},
+		hypervisor: &mockHypervisor{},
+	}
+	s.fsShare, err = NewFilesystemShare(s)
+	assert.NoError(err)
+	s.containers = map[string]*Container{
+		"c": {id: "c", sandbox: s, state: types.ContainerState{State: types.StateRunning}},
+	}
+
+	s.Stop(context.Background(), true) //nolint:errcheck
+
+	assert.Equal(1, endpoint.detached, "the device was not handed back")
 }
