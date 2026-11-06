@@ -1,0 +1,23 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+name = "initdata-processor"
+rust-version.workspace = true
+version = "0.1.0"
+
+[dependencies]
+anyhow.workspace = true
+flate2.workspace = true
+slog.workspace = true
+slog-term.workspace = true
+# TODO(burgerdev): slog-async is used by a couple of crates, add to root Cargo.toml
+slog-async = "2.8.0"
+toml.workspace = true
+
+# Local dependencies
+kata-types = { path = "../../libs/kata-types" } # TODO(burgerdev): figure out how to use this from workspace without including safe-path.
+
+
+[dev-dependencies]
+tempfile.workspace = true
