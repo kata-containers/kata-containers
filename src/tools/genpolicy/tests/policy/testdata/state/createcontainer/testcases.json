@@ -295,20 +295,21 @@
       ]
     },
     {
-      "description": "reject remove container with missing container_id",
+      "description": "allow remove container with empty container_id without changing existing state",
       "base": "remove-container",
-      "allowed": false,
+      "allowed": true,
       "patch": [
         {
-          "op": "remove",
-          "path": "/container_id"
+          "op": "replace",
+          "path": "/container_id",
+          "value": ""
         }
       ]
     },
     {
-      "description": "reject remove container with unknown container_id",
+      "description": "allow remove container with unknown container_id without changing existing state",
       "base": "remove-container",
-      "allowed": false,
+      "allowed": true,
       "patch": [
         {
           "op": "replace",
@@ -319,6 +320,12 @@
     },
     {
       "description": "test remove container and remove container_id from state",
+      "base": "remove-container",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "allow repeated removal after container policy state has been removed",
       "base": "remove-container",
       "allowed": true,
       "patch": []

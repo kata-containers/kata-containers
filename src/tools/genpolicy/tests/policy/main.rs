@@ -21,6 +21,60 @@ mod tests {
 
     use kata_agent_policy::policy::{AgentPolicy, PolicyCopyFileRequest};
 
+    #[tokio::test]
+    async fn test_state_create_container_remove_without_state_returns_empty_patch() {
+        let workdir = tempfile::tempdir().unwrap();
+        let policy_path = workdir.path().join("policy.rego");
+        let log_path = workdir.path().join("policy.log");
+        fs::write(
+            &policy_path,
+            format!(
+                "{}\npolicy_data := {{\"containers\": [{{}}]}}\n",
+                include_str!("../../rules.rego"),
+            ),
+        )
+        .unwrap();
+        let mut policy = AgentPolicy::new();
+        policy
+            .initialize(
+                slog::Level::Debug.as_usize(),
+                policy_path.to_str().unwrap().into(),
+                Some(log_path.to_str().unwrap().into()),
+            )
+            .await
+            .unwrap();
+
+        for container_id in ["unknown", "unknown", ""] {
+            let request = RemoveContainerRequest {
+                container_id: container_id.to_string(),
+                ..Default::default()
+            };
+            let decision = policy
+                .evaluate_request(
+                    "RemoveContainerRequest",
+                    &serde_json::to_string(&request).unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(decision.allowed());
+            decision.commit(&mut policy).await.unwrap();
+        }
+        let responses: Vec<serde_json::Value> = fs::read_to_string(log_path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .filter_map(|entry| entry.get("response").cloned())
+            .collect();
+        assert_eq!(
+            responses,
+            vec![
+                serde_json::json!({"allowed": true, "ops": []}),
+                serde_json::json!({"allowed": true, "ops": []}),
+                serde_json::json!({"allowed": true, "ops": []}),
+            ]
+        );
+    }
+
     // Translate each test case in testcases.json
     // to one request type.
     #[derive(Clone, Debug, Deserialize, Serialize)]
