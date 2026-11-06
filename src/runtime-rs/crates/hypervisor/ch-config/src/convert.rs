@@ -16,7 +16,7 @@ use kata_types::config::hypervisor::{CpuInfo, MachineInfo, MemoryInfo};
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::errors::*;
 
@@ -146,7 +146,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             disks,
             vsock: Some(vsock),
             rng,
-            rtc: Some(RtcConfig::default()),
+            rtc: get_rtc_cfg(Path::new("/dev/mshv")),
             balloon,
 
             ..Default::default()
@@ -154,6 +154,10 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         Ok(cfg)
     }
+}
+
+fn get_rtc_cfg(mshv_device: &Path) -> Option<RtcConfig> {
+    mshv_device.exists().then(RtcConfig::default)
 }
 
 impl TryFrom<(String, u32)> for VsockConfig {
@@ -1375,6 +1379,27 @@ mod tests {
     }
 
     #[test]
+    fn test_get_rtc_cfg() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let missing_device = manifest.join("mshv");
+
+        for (device_path, expected) in [
+            (manifest.as_path(), Some(RtcConfig::default())),
+            (missing_device.as_path(), None),
+        ] {
+            let config = VmConfig {
+                rtc: get_rtc_cfg(device_path),
+                ..Default::default()
+            };
+            assert_eq!(config.rtc, expected);
+            assert_eq!(
+                serde_json::to_value(config).unwrap().get("rtc").is_some(),
+                expected.is_some()
+            );
+        }
+    }
+
+    #[test]
     fn test_vmconfig_rtc_json() {
         let config = VmConfig {
             cpus: CpusConfig {
@@ -1443,6 +1468,8 @@ mod tests {
 
         let (machine_info, rng_config) = make_machineinfo_rngconfig_objects(entropy_source);
 
+        let rtc_config = Path::new("/dev/mshv").exists().then(RtcConfig::default);
+
         let payload_firmware = None;
 
         let (boot_info_with_initrd, payload_config_with_initrd) =
@@ -1481,7 +1508,7 @@ mod tests {
             cpus: cpus_config.clone(),
             memory: mem_config_std.clone(),
             rng: rng_config.clone(),
-            rtc: Some(RtcConfig::default()),
+            rtc: rtc_config.clone(),
             vsock: Some(valid_vsock.clone()),
 
             // rootfs image specific
@@ -1501,7 +1528,7 @@ mod tests {
             cpus: cpus_config.clone(),
             memory: mem_config_std,
             rng: rng_config.clone(),
-            rtc: Some(RtcConfig::default()),
+            rtc: rtc_config,
             vsock: Some(valid_vsock.clone()),
 
             // initrd/initramfs specific
