@@ -190,6 +190,11 @@ pub struct VirtSandbox {
     // Held from the snapshot to the write, so an older snapshot cannot
     // replace a newer one.
     saving_state: Arc<Mutex<()>>,
+    // What the state recorded for keep_abnormal when this sandbox was
+    // restored. A failed cleanup saves the state again for its retry, and
+    // sampling the configuration there would launder the reloaded file's
+    // current value back into the record the cleanup exists to trust.
+    restored_keep_abnormal: Option<bool>,
 }
 
 #[derive(Default)]
@@ -394,6 +399,7 @@ impl VirtSandbox {
             exit_pending: Arc::new(watch::channel(false).0),
             vmm_exit_confirmed: CancellationToken::new(),
             vmm_process: Arc::new(RwLock::new(None)),
+            restored_keep_abnormal: None,
         })
     }
 
@@ -2228,6 +2234,11 @@ impl Persist for VirtSandbox {
     /// Save a state of Sandbox
     async fn save(&self) -> Result<Self::State> {
         let _saving = self.saving_state.lock().await;
+        // A restored sandbox re-saves what the state said; see the field.
+        let keep_abnormal = match self.restored_keep_abnormal {
+            Some(recorded) => recorded,
+            None => self.resource_manager.config().await.runtime.keep_abnormal,
+        };
         let hypervisor_state = self.hypervisor.save_state().await?;
         let mut resource_state = self.resource_manager.save().await?;
         if resource_state.netns_path.is_none() {
@@ -2246,6 +2257,7 @@ impl Persist for VirtSandbox {
             config_path: self.config_path.clone(),
             created_netns: self.created_netns.clone(),
             bootstrap: false,
+            keep_abnormal: Some(keep_abnormal),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -2369,6 +2381,7 @@ impl Persist for VirtSandbox {
             config_path: sandbox_state.config_path,
             created_netns: sandbox_state.created_netns,
             saving_state: Arc::new(Mutex::new(())),
+            restored_keep_abnormal: sandbox_state.keep_abnormal,
         })
     }
 }
