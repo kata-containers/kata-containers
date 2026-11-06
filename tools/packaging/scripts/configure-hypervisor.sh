@@ -248,7 +248,10 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-auth-pam)
 
 	# Disable unused filesystem support
-	qemu_options+=(size:--disable-glusterfs)
+	# GlusterFS support was removed in QEMU 11.1.
+	if ! gt_eq "${qemu_version}" "11.1.0"; then
+		qemu_options+=(size:--disable-glusterfs)
+	fi
 	qemu_options+=(size:--disable-libiscsi)
 	qemu_options+=(size:--disable-libnfs)
 
