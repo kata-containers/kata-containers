@@ -6,6 +6,7 @@
 
 use std::{
     fs,
+    future::Future,
     os::unix::{fs::MetadataExt, io::RawFd},
     path::Path,
 };
@@ -30,13 +31,6 @@ impl ShimExecutor {
         // Regist shim logger for later use.
         logging::register_subsystem_logger("runtimes", "shim");
 
-        if try_core_sched().is_err() {
-            warn!(
-                sl!(),
-                "Failed to enable core sched since prctl() returns non-zero value."
-            );
-        }
-
         self.do_run()
             .await
             .map_err(|err| {
@@ -54,11 +48,17 @@ impl ShimExecutor {
 
         let address = self.socket_address(&self.args.id)?;
         let socket_path = socket_path(&address)?;
-        let socket_id = file_id(&socket_path);
-
-        let result = self.serve().await;
-        remove_socket_if_unchanged(&socket_path, socket_id);
-        result
+        run_service(
+            &socket_path,
+            || {
+                try_core_sched(
+                    std::env::var("SCHED_CORE").ok().as_deref(),
+                    core_sched::core_sched_create,
+                )
+            },
+            self.serve(),
+        )
+        .await
     }
 
     async fn serve(&mut self) -> Result<()> {
@@ -76,6 +76,23 @@ impl ShimExecutor {
 
         Ok(())
     }
+}
+
+// Activation and serving share one cleanup path, including when activation
+// fails before the service has taken ownership of the inherited listener.
+async fn run_service(
+    socket_path: &Path,
+    activate: impl FnOnce() -> Result<()>,
+    serve: impl Future<Output = Result<()>>,
+) -> Result<()> {
+    let socket_id = file_id(socket_path);
+    let result = async {
+        activate().context("enable core scheduling")?;
+        serve.await
+    }
+    .await;
+    remove_socket_if_unchanged(socket_path, socket_id);
+    result
 }
 
 fn file_id(path: &Path) -> Option<(u64, u64)> {
@@ -100,22 +117,108 @@ fn get_server_fd() -> Result<RawFd> {
     Ok(fd)
 }
 
-// TODO: currently we log a warning on fail (i.e. kernel version < 5.14), maybe just exit
-// TODO: more test on higher version of kernel
-fn try_core_sched() -> Result<()> {
-    if let Ok(v) = std::env::var("SCHED_CORE") {
-        if !v.is_empty() {
-            core_sched::core_sched_create(core_sched::PROCESS_GROUP)?
-        }
+fn try_core_sched(
+    value: Option<&str>,
+    create: impl FnOnce(usize) -> Result<(), nix::errno::Errno>,
+) -> Result<()> {
+    if value.is_some_and(|v| !v.is_empty()) {
+        create(core_sched::PROCESS_GROUP)?;
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::net::UnixListener;
+    use std::{cell::Cell, os::unix::net::UnixListener};
+
+    use nix::errno::Errno;
 
     use super::*;
+
+    #[test]
+    fn test_core_sched_activation() {
+        for (value, requested) in [
+            (None, false),
+            (Some(""), false),
+            (Some("1"), true),
+            (Some("0"), true),
+        ] {
+            for outcome in [Ok(()), Err(Errno::EINVAL)] {
+                let called = Cell::new(false);
+                let result = try_core_sched(value, |scope| {
+                    called.set(true);
+                    assert_eq!(scope, core_sched::PROCESS_GROUP);
+                    outcome
+                });
+                assert_eq!(called.get(), requested);
+                if requested && outcome.is_err() {
+                    assert_eq!(
+                        result.unwrap_err().downcast_ref::<Errno>(),
+                        Some(&Errno::EINVAL)
+                    );
+                } else {
+                    result.unwrap();
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_core_sched_failure_cleans_socket_and_allows_retry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("startup.sock");
+        let _listener = UnixListener::bind(&path).unwrap();
+        let served = Cell::new(false);
+        let result = run_service(
+            &path,
+            || try_core_sched(Some("1"), |_| Err(Errno::EINVAL)),
+            async {
+                served.set(true);
+                Ok(())
+            },
+        )
+        .await;
+
+        let err = result.unwrap_err();
+        assert_eq!(err.downcast_ref::<Errno>(), Some(&Errno::EINVAL));
+        assert!(format!("{err:#}").contains("enable core scheduling"));
+        assert!(!served.get());
+        assert!(!path.exists());
+
+        // The next start can bind the same socket and serve after activation.
+        let _retry = UnixListener::bind(&path).unwrap();
+        run_service(&path, || try_core_sched(Some("1"), |_| Ok(())), async {
+            served.set(true);
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(served.get());
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_core_sched_failure_keeps_replaced_socket() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("replaced.sock");
+        let _listener = UnixListener::bind(&path).unwrap();
+        let mut replacement = None;
+        let err = run_service(
+            &path,
+            || {
+                fs::remove_file(&path).unwrap();
+                replacement = Some(UnixListener::bind(&path).unwrap());
+                try_core_sched(Some("1"), |_| Err(Errno::EINVAL))
+            },
+            async { panic!("must not serve after failed activation") },
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(err.downcast_ref::<Errno>(), Some(&Errno::EINVAL));
+        assert!(path.exists());
+        assert!(replacement.is_some());
+    }
 
     #[test]
     fn test_remove_own_socket() {
