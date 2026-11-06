@@ -133,7 +133,7 @@ version = 3
   ...
 
   [plugins.'io.containerd.differ.v1.erofs']
-    mkfs_options = ["-T0", "--mkfs-time", "--sort=none"]
+    mkfs_options = ["-b4096", "-T0", "--mkfs-time", "--sort=none"]
     enable_tar_index = false
 
   [plugins.'io.containerd.service.v1.diff-service']
