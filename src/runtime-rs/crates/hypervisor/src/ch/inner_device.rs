@@ -37,7 +37,7 @@ use kata_types::config::hypervisor::RateLimiterConfig;
 use kata_types::rootless::is_rootless;
 use kata_types::vmdk::{validate_vmdk_layout, VmdkConfig};
 
-use safe_path::scoped_join;
+use kata_types::path::scoped_join;
 use std::convert::TryFrom;
 use std::fs::OpenOptions;
 use std::io::Write as _;

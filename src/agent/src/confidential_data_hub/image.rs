@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use safe_path::scoped_join;
+use kata_types::path::scoped_join;
 use std::fs;
 use std::path::{Path, PathBuf};
 

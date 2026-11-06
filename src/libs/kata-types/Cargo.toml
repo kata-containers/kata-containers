@@ -24,8 +24,8 @@ lazy_static = "1.4.0"
 nix = { workspace = true }
 num_cpus = "1.13.1"
 oci-spec = { workspace = true }
+pathrs = { optional = true, workspace = true }
 regex = "1.10.5"
-safe-path = { optional = true, path = "../safe-path" }
 scopeguard = "1.0.0"
 serde = { features = ["derive"], version = "1.0.100" }
 serde-enum-str = "0.5"
@@ -50,4 +50,4 @@ test-utils = { path = "../test-utils" }
 default = []
 devicemapper = ["dep:devicemapper", "dep:tokio"]
 enable-vendor = []
-safe-path = ["dep:safe-path"]                    # safe-path is platform-specific
+pathrs = ["dep:pathrs"] # Path resolution requires Linux.

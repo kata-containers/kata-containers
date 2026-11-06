@@ -14,4 +14,3 @@ serde_json = { workspace = true }
 # Local dependencies
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
-safe-path = { workspace = true }

@@ -67,7 +67,7 @@ tower = "0.4.13"
 tar = "0.4.46"
 
 # init data support
-kata-types = { path = "../../libs/kata-types" } # TODO(burgerdev): figure out how to use this from workspace without including safe-path.
+kata-types = { path = "../../libs/kata-types" } # TODO(burgerdev): figure out how to use this from workspace without enabling pathrs.
 
 [dev-dependencies]
 assert_cmd = "2.0.14"

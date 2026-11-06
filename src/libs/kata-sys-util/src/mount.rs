@@ -38,7 +38,7 @@
 //!   that all received paths are safe.
 //! - the caller must ensure safe version of `PathBuf` are passed to mount variants.
 //! - `create_mount_destination()` may be used to generated safe `PathBuf` for mount destinations.
-//! - the `safe_path` crate should be used to generate safe `PathBuf` for general cases.
+//! - libpathrs should be used for path operations within untrusted directory trees.
 
 use std::fmt::Debug;
 use std::fs;
