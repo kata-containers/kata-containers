@@ -273,3 +273,13 @@ get_pause_image_name() {
 	pause_image_script_dir="${repo_root_dir}/tools/packaging/static-build/pause-image"
 	echo "${BUILDER_REGISTRY}:pause-image-$(get_last_modification "${pause_image_script_dir}")-$(uname -m)"
 }
+
+# Map tool directory name under src/tools/ to the binary name produced by cargo
+get_tool_binary_name() {
+	local tool="${1}"
+	case "${tool}" in
+		agent-ctl) echo "kata-agent-ctl" ;;
+		trace-forwarder) echo "kata-trace-forwarder" ;;
+		*) echo "${tool}" ;;
+	esac
+}

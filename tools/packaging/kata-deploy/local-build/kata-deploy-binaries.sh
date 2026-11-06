@@ -1982,9 +1982,8 @@ install_tools_helper() {
 	info "build static ${tool}"
 	"${tools_builder}" "${tool}"
 
-	tool_binary=${tool}
-	[[ "${tool}" = "agent-ctl" ]] && tool_binary="kata-agent-ctl"
-	[[ "${tool}" = "trace-forwarder" ]] && tool_binary="kata-trace-forwarder"
+	local tool_binary
+	tool_binary="$(get_tool_binary_name "${tool}")"
 
 	local tool_build_dir="target"
 	binary=$(find "${repo_root_dir}/${tool_build_dir}" -type f -name "${tool_binary}")
