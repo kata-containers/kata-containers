@@ -1017,7 +1017,7 @@ async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result
         return Ok(());
     }
 
-    const MAX_WAIT_MS: u64 = 1000;
+    const MAX_WAIT_MS: u64 = 10_000;
     const POLL_INTERVAL_MS: u64 = 50;
 
     for attempt in 0..(MAX_WAIT_MS / POLL_INTERVAL_MS) {
