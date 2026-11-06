@@ -23,6 +23,7 @@ strum = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+ttrpc = { workspace = true }
 url = { workspace = true }
 uuid = { features = ["v4"], version = "1" }
 

@@ -12,10 +12,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use common::message::{Action, Message};
 use containerd_shim_protos::shim_async;
+use containerd_shim_protos::ttrpc::asynchronous::Server;
 use kata_types::config::KATA_PATH;
 use runtimes::RuntimeHandlerManager;
 use tokio::sync::mpsc::{channel, Receiver};
-use ttrpc::asynchronous::Server;
 
 use crate::event::{new_event_publisher, Forwarder};
 use crate::sandbox_service::SandboxService;

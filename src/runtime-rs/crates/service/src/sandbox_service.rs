@@ -11,9 +11,9 @@ use std::{
 
 use async_trait::async_trait;
 use common::types::{SandboxRequest, SandboxResponse};
+use containerd_shim_protos::ttrpc::{self, r#async::TtrpcContext};
 use containerd_shim_protos::{sandbox_api, sandbox_async};
 use runtimes::RuntimeHandlerManager;
-use ttrpc::{self, r#async::TtrpcContext};
 
 pub(crate) struct SandboxService {
     handler: Arc<RuntimeHandlerManager>,

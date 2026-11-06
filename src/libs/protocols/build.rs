@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::fs;
 use std::path::Path;
 use std::process::exit;
 
@@ -18,7 +17,9 @@ struct GenSerde;
 
 impl ProtobufCustomizeCallback for GenSerde {
     fn message(&self, _message: &MessageDescriptor) -> ProtobufCustomize {
-        ProtobufCustomize::default().before("#[cfg_attr(feature = \"with-serde\", derive(::serde::Serialize, ::serde::Deserialize))]")
+        ProtobufCustomize::default().before(
+            "#[cfg_attr(feature = \"with-serde\", derive(::serde::Serialize, ::serde::Deserialize))]\n#[cfg_attr(feature = \"with-serde\", serde(default))]",
+        )
     }
 
     fn enumeration(&self, _enum_type: &EnumDescriptor) -> ProtobufCustomize {
@@ -48,198 +49,78 @@ impl ProtobufCustomizeCallback for GenSerde {
     }
 }
 
-fn replace_text_in_file(file_name: &str, from: &str, to: &str) -> Result<(), std::io::Error> {
-    let mut src = File::open(file_name)?;
-    let mut contents = String::new();
-    src.read_to_string(&mut contents).unwrap();
-    drop(src);
+const SERVICE_PROTOS: &[&str] = &[
+    "protos/agent.proto",
+    "protos/health.proto",
+    "protos/confidential_data_hub.proto",
+    "protos/remote.proto",
+];
 
-    let new_contents = contents.replace(from, to);
+fn real_main() -> std::io::Result<()> {
+    // Watch imported protos too; generated Rust files are outputs, not inputs.
+    println!("cargo:rerun-if-changed=protos");
+    let out_dir = Path::new("src/generated");
+    fs::create_dir_all(out_dir)?;
 
-    let mut dst = File::create(file_name)?;
-    dst.write_all(new_contents.as_bytes())?;
-
-    Ok(())
-}
-
-fn use_serde(protos: &[&str], out_dir: &Path) -> Result<(), std::io::Error> {
-    protos
-        .iter()
-        .try_for_each(|f: &&str| -> Result<(), std::io::Error> {
-            let out_file = Path::new(f)
-                .file_name()
-                .and_then(|s| s.to_str())
-                .ok_or(format!("failed to get proto file name for {f:?}"))
-                .map(|s| {
-                    let t = s.replace(".proto", ".rs");
-                    out_dir.join(t)
-                })
-                .map_err(std::io::Error::other)?
-                .to_str()
-                .ok_or(format!("cannot convert {f:?} path to string"))
-                .map_err(std::io::Error::other)?
-                .to_string();
-
-            replace_text_in_file(
-                &out_file,
-                "derive(Serialize, Deserialize)",
-                "derive(serde::Serialize, serde::Deserialize)",
-            )
-        })
-}
-
-fn handle_file(autogen_comment: &str, rust_filename: &str) -> Result<(), std::io::Error> {
-    let mut new_contents = Vec::new();
-
-    let file = File::open(rust_filename)?;
-
-    let reader = BufReader::new(file);
-
-    // Guard the code since it is only needed for the agent-ctl tool,
-    // not the agent itself.
-    let serde_default_code = r#"#[cfg_attr(feature = "with-serde", serde(default))]"#;
-
-    for line in reader.lines() {
-        let line = line?;
-
-        new_contents.push(line.clone());
-
-        let pattern = "//! Generated file from";
-
-        if line.starts_with(pattern) {
-            new_contents.push(autogen_comment.into());
-        }
-
-        let struct_pattern = "pub struct ";
-
-        // Although we've requested serde support via `Customize`, to
-        // allow the `kata-agent-ctl` tool to partially deserialise structures
-        // specified in JSON, we need this bit of additional magic.
-        if line.starts_with(struct_pattern) {
-            new_contents.insert(new_contents.len() - 1, serde_default_code.trim().into());
-        }
-    }
-
-    let data = new_contents.join("\n");
-
-    let mut dst = File::create(rust_filename)?;
-
-    dst.write_all(data.as_bytes())?;
-
-    Ok(())
-}
-
-fn codegen(path: &str, protos: &[&str], async_all: bool) -> Result<(), std::io::Error> {
-    fs::create_dir_all(path).unwrap();
-
-    // Tell Cargo that if the .proto files changed, to rerun this build script.
-    protos
-        .iter()
-        .for_each(|p| println!("cargo:rerun-if-changed={}", p));
-
-    let ttrpc_options = Customize {
-        async_all,
-        ..Default::default()
-    };
-
-    let protobuf_options = ProtobufCustomize::default()
-        .gen_mod_rs(false)
-        .generate_getter(true)
-        .generate_accessors(true);
-
-    let out_dir = Path::new("src");
+    let mut protos = vec![
+        "protos/gogo/protobuf/gogoproto/gogo.proto",
+        "protos/oci.proto",
+        "protos/types.proto",
+        "protos/csi.proto",
+        "protos/runtimeoptions.proto",
+        "protos/cri-api/api.proto",
+    ];
+    protos.extend_from_slice(SERVICE_PROTOS);
 
     Codegen::new()
         .out_dir(out_dir)
-        .inputs(protos)
+        .inputs(&protos)
         .include("protos")
-        .customize(ttrpc_options)
         .rust_protobuf()
-        .rust_protobuf_customize(protobuf_options)
+        .rust_protobuf_customize(
+            ProtobufCustomize::default()
+                .gen_mod_rs(true)
+                .generate_getter(true)
+                .generate_accessors(true),
+        )
         .rust_protobuf_customize_callback(GenSerde)
         .run()?;
 
-    let autogen_comment = format!("\n//! Generated by {:?} ({:?})", file!(), module_path!());
-    for file in protos.iter() {
-        let proto_filename = Path::new(file).file_name().unwrap();
+    // Export bindings for the agent services. CRI's streaming services are
+    // message-only consumers here and must not enter the sync module index.
+    Codegen::new()
+        .out_dir(out_dir)
+        .inputs(SERVICE_PROTOS)
+        .include("protos")
+        .customize(Customize {
+            gen_mod: true,
+            ..Default::default()
+        })
+        .run()?;
 
-        let generated_file = proto_filename
-            .to_str()
-            .ok_or("failed")
-            .map_err(std::io::Error::other)?
-            .replace(".proto", ".rs");
-
-        let out_file = out_dir.join(generated_file);
-
-        let out_file_str = out_file
-            .to_str()
-            .ok_or("failed")
-            .map_err(std::io::Error::other)?;
-
-        handle_file(&autogen_comment, out_file_str)?;
-    }
-
-    use_serde(protos, out_dir)?;
-    Ok(())
-}
-fn real_main() -> Result<(), std::io::Error> {
-    codegen(
-        "src",
-        &[
-            "protos/google/protobuf/empty.proto",
-            "protos/gogo/protobuf/gogoproto/gogo.proto",
-            "protos/oci.proto",
-            "protos/types.proto",
-            "protos/csi.proto",
-            "protos/runtimeoptions.proto",
-        ],
-        false,
-    )?;
-
-    // generate async
     #[cfg(feature = "async")]
     {
-        codegen(
-            "src",
-            &[
-                "protos/agent.proto",
-                "protos/health.proto",
-                "protos/confidential_data_hub.proto",
-                "protos/remote.proto",
-            ],
-            true,
-        )?;
+        // Reuse the messages above: only service bindings differ between runtimes.
+        let async_dir = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("async");
+        fs::create_dir_all(&async_dir)?;
+        Codegen::new()
+            .out_dir(&async_dir)
+            .inputs(SERVICE_PROTOS)
+            .include("protos")
+            .customize(Customize {
+                async_all: true,
+                ..Default::default()
+            })
+            .run()?;
 
-        fs::rename("src/agent_ttrpc.rs", "src/agent_ttrpc_async.rs")?;
-        fs::rename("src/health_ttrpc.rs", "src/health_ttrpc_async.rs")?;
-        fs::rename(
-            "src/confidential_data_hub_ttrpc.rs",
-            "src/confidential_data_hub_ttrpc_async.rs",
-        )?;
-        fs::rename("src/remote_ttrpc.rs", "src/remote_ttrpc_async.rs")?;
+        for proto in SERVICE_PROTOS {
+            let name = Path::new(proto).file_stem().unwrap().to_str().unwrap();
+            fs::copy(
+                async_dir.join(format!("{name}_ttrpc.rs")),
+                out_dir.join(format!("{name}_ttrpc_async.rs")),
+            )?;
+        }
     }
-
-    codegen(
-        "src",
-        &[
-            "protos/agent.proto",
-            "protos/health.proto",
-            "protos/confidential_data_hub.proto",
-            "protos/remote.proto",
-        ],
-        false,
-    )?;
-
-    codegen("src", &["protos/cri-api/api.proto"], false)?;
-
-    // There is a message named 'Box' in oci.proto
-    // so there is a struct named 'Box', we should replace Box<Self> to ::std::boxed::Box<Self>
-    // to avoid the conflict.
-    replace_text_in_file(
-        "src/oci.rs",
-        "self: Box<Self>",
-        "self: ::std::boxed::Box<Self>",
-    )?;
 
     Ok(())
 }
