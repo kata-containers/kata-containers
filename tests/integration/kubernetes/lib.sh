@@ -111,9 +111,10 @@ create_debugger_pod() {
 	local pod_name
 	pod_name="custom-node-debugger-$(echo -n "${node}" | sha1sum | cut -c1-7)"
 
-	# Check if there is an existing node debugger pod and reuse it
-	# Otherwise, create a new one
-	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
+	# Reuse an existing node debugger pod, unless it predates hostPID: a
+	# persistent cluster can keep one from an earlier run.
+	if [[ "$(kubectl get pod -n kube-system "${pod_name}" -o jsonpath='{.spec.hostPID}' 2>/dev/null)" != "true" ]]; then
+		kubectl delete pod -n kube-system "${pod_name}" --ignore-not-found=true --wait=true > /dev/null
 		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
 			kubectl apply -n kube-system -f - > /dev/null
 		# Wait for the newly created pod to be ready
@@ -168,6 +169,21 @@ exec_host() {
 	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
 }
 
+# Return the CRI socket used by the Kubernetes distribution on the node.
+get_cri_runtime_endpoint() {
+	if [[ "${CONTAINER_RUNTIME:-containerd}" == "crio" ]]; then
+		echo "unix:///run/crio/crio.sock"
+		return
+	fi
+
+	case "${KUBERNETES:-}" in
+		k3s|rke2) echo "unix:///run/k3s/containerd/containerd.sock" ;;
+		k0s) echo "unix:///run/k0s/containerd.sock" ;;
+		microk8s) echo "unix:///var/snap/microk8s/common/run/containerd.sock" ;;
+		*) echo "unix:///run/containerd/containerd.sock" ;;
+	esac
+}
+
 # Return the sandbox id of a pod, as the container runtime knows it. For Kata
 # that is also the id the shim, the guest and kata-ctl go by.
 #
@@ -179,7 +195,6 @@ exec_host() {
 get_pod_sandbox_id() {
 	local pod_name="$1"
 	local node
-	local runtime
 	local runtime_endpoint
 
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
@@ -187,12 +202,7 @@ get_pod_sandbox_id() {
 	exec_host "${node}" "command -v crictl >/dev/null" || \
 		die "crictl is required on Kubernetes node ${node}"
 
-	runtime="$(exec_host "${node}" "crictl version | grep 'RuntimeName:' | awk '{print  \$2}'")"
-	if [[ "${runtime}" == "cri-o" ]]; then
-		runtime_endpoint="unix:///run/crio/crio.sock"
-	else
-		runtime_endpoint="unix:///run/containerd/containerd.sock"
-	fi
+	runtime_endpoint="$(get_cri_runtime_endpoint)"
 	exec_host "${node}" \
 		"crictl --runtime-endpoint ${runtime_endpoint} \
 		pods --name \"${pod_name}\" --state ready -q | head -1"

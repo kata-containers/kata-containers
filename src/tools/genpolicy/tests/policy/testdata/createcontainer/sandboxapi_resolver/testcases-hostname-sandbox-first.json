@@ -1,0 +1,31 @@
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "hostname": "gid-experiment",
+        "sandbox_pidns": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "pod name is unknown yet, so any valid hostname is accepted",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": "attacker"
+        }
+      ]
+    },
+    {
+      "description": "workload is rejected when the pod name differs from the sandbox hostname",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": []
+    }
+  ]
+}

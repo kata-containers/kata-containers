@@ -164,6 +164,10 @@ impl yaml::K8sResource for StatefulSet {
         &self.spec.template.spec.containers
     }
 
+    fn get_pod_spec(&self) -> &pod::PodSpec {
+        &self.spec.template.spec
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         if let Some(metadata) = &self.spec.template.metadata {
             return &metadata.annotations;

@@ -82,6 +82,15 @@ pub struct PodSpec {
     hostname: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    hostnameOverride: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subdomain: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    setHostnameAsFQDN: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hostNetwork: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -692,6 +701,69 @@ struct TopologySpreadConstraint {
     nodeTaintsPolicy: Option<String>,
 }
 
+// Same truncation as kubelet's truncatePodHostnameIfNeeded(). Keep in sync
+// with pod_hostname() in rules.rego.
+fn truncate_pod_hostname(hostname: &str) -> &str {
+    const HOSTNAME_MAX_LEN: usize = 63;
+    match hostname.get(..HOSTNAME_MAX_LEN) {
+        Some(truncated) if hostname.len() > HOSTNAME_MAX_LEN => {
+            truncated.trim_end_matches(['-', '.'])
+        }
+        _ => hostname,
+    }
+}
+
+impl PodSpec {
+    /// Host name kubelet sends for this pod in the CRI sandbox config, which
+    /// the runtime forwards in CreateSandboxRequest. `any_hostname` is the
+    /// unanchored syntax accepted for parts that are unknown at policy
+    /// generation time.
+    pub fn sandbox_hostname(&self, any_hostname: &str) -> policy::SandboxHostname {
+        let exact = |hostname: &str| regex::escape(truncate_pod_hostname(hostname));
+
+        // The runtime falls back to the node host name.
+        if self.hostNetwork == Some(true) {
+            return policy::SandboxHostname {
+                regex: format!("^({any_hostname})?$"),
+                from_sandbox_name: false,
+            };
+        }
+
+        if let Some(hostname) = &self.hostnameOverride {
+            return policy::SandboxHostname {
+                regex: format!("^{}$", exact(hostname)),
+                from_sandbox_name: false,
+            };
+        }
+
+        let hostname = self.hostname.as_deref().filter(|h| !h.is_empty());
+        if let Some(subdomain) = self.subdomain.as_deref().filter(|s| !s.is_empty()) {
+            if self.setHostnameAsFQDN == Some(true) {
+                // <hostname>.<subdomain>.<namespace>.svc.<cluster domain>
+                let hostname = hostname.map_or_else(|| any_hostname.to_string(), exact);
+                return policy::SandboxHostname {
+                    regex: format!(
+                        "^{hostname}\\.{}\\.{any_hostname}$",
+                        regex::escape(subdomain)
+                    ),
+                    from_sandbox_name: false,
+                };
+            }
+        }
+
+        match hostname {
+            Some(hostname) => policy::SandboxHostname {
+                regex: format!("^{}$", exact(hostname)),
+                from_sandbox_name: false,
+            },
+            None => policy::SandboxHostname {
+                regex: format!("^{any_hostname}$"),
+                from_sandbox_name: true,
+            },
+        }
+    }
+}
+
 impl Container {
     pub async fn init(&mut self, config: &Config) {
         // Load container image properties from the registry.
@@ -1058,6 +1130,10 @@ impl yaml::K8sResource for Pod {
 
     fn get_containers(&self) -> &Vec<Container> {
         &self.spec.containers
+    }
+
+    fn get_pod_spec(&self) -> &PodSpec {
+        &self.spec
     }
 
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
@@ -1537,5 +1613,65 @@ mod tests {
 
         assert!(emitted.contains("port: 8080"), "{emitted}");
         assert!(!emitted.contains("\"8080\""), "{emitted}");
+    }
+
+    fn sandbox_hostname(spec: serde_json::Value) -> policy::SandboxHostname {
+        let mut spec = spec;
+        spec["containers"] = serde_json::json!([]);
+        serde_json::from_value::<PodSpec>(spec)
+            .unwrap()
+            .sandbox_hostname("[a-z]+")
+    }
+
+    #[test]
+    fn sandbox_hostname_defaults_to_the_pod_name() {
+        let hostname = sandbox_hostname(serde_json::json!({}));
+        assert_eq!(hostname.regex, "^[a-z]+$");
+        assert!(hostname.from_sandbox_name);
+    }
+
+    #[test]
+    fn sandbox_hostname_uses_the_truncated_spec_hostname() {
+        let hostname = sandbox_hostname(serde_json::json!({"hostname": "web.0"}));
+        assert_eq!(hostname.regex, "^web\\.0$");
+        assert!(!hostname.from_sandbox_name);
+
+        let long = format!("{}-.x", "a".repeat(61));
+        let hostname = sandbox_hostname(serde_json::json!({ "hostname": long }));
+        assert_eq!(hostname.regex, format!("^{}$", "a".repeat(61)));
+    }
+
+    #[test]
+    fn sandbox_hostname_override_wins() {
+        let hostname = sandbox_hostname(serde_json::json!({
+            "hostname": "web",
+            "hostnameOverride": "custom",
+            "subdomain": "svc",
+            "setHostnameAsFQDN": true
+        }));
+        assert_eq!(hostname.regex, "^custom$");
+        assert!(!hostname.from_sandbox_name);
+    }
+
+    #[test]
+    fn sandbox_hostname_fqdn_needs_a_subdomain() {
+        let hostname = sandbox_hostname(serde_json::json!({
+            "hostname": "web",
+            "subdomain": "svc",
+            "setHostnameAsFQDN": true
+        }));
+        assert_eq!(hostname.regex, "^web\\.svc\\.[a-z]+$");
+        assert!(!hostname.from_sandbox_name);
+
+        let hostname = sandbox_hostname(serde_json::json!({ "setHostnameAsFQDN": true }));
+        assert!(hostname.from_sandbox_name);
+    }
+
+    #[test]
+    fn sandbox_hostname_with_host_network_may_be_empty() {
+        let hostname =
+            sandbox_hostname(serde_json::json!({"hostNetwork": true, "hostname": "web"}));
+        assert_eq!(hostname.regex, "^([a-z]+)?$");
+        assert!(!hostname.from_sandbox_name);
     }
 }

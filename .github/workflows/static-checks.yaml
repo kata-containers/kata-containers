@@ -118,6 +118,8 @@ jobs:
         run: |
           export PATH="$PATH:/usr/local/bin"
           ./tests/install_rust.sh
+      - name: Install protobuf-compiler
+        run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
       - name: Run kata-deploy rust checks
         run: |
           export PATH="$PATH:${HOME}/.cargo/bin"

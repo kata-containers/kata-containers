@@ -14,6 +14,7 @@ use hypervisor::{
         device_manager::{
             do_handle_device, find_cold_plugged_vfio_ap, get_block_device_info, DeviceManager,
         },
+        driver,
         util::{get_host_path, DEVICE_TYPE_BLOCK, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
@@ -69,6 +70,9 @@ pub(crate) struct ResourceManagerInner {
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
     cleanup_steps: Mutex<ResourceCleanupSteps>,
+    // Endpoints of a sandbox restored after its shim went away, which has no
+    // network to detach them with.
+    restored_endpoints: Vec<network::EndpointState>,
 }
 
 #[derive(Default)]
@@ -89,6 +93,7 @@ impl ResourceManagerInner {
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
+        cgroup_parent: Option<&str>,
     ) -> Result<Self> {
         let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
@@ -97,7 +102,6 @@ impl ResourceManagerInner {
             .context("failed to create device manager")?;
         let device_manager = Arc::new(RwLock::new(dev_manager));
 
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
         let mem_resource = MemResource::new(init_size_manager)?;
         let swap_resource = if hypervisor
@@ -136,6 +140,9 @@ impl ResourceManagerInner {
         } else {
             None
         };
+        // Created last: nothing removes the cgroups of a resource manager that
+        // failed to come up, nor records them until the sandbox saves its state.
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config, cgroup_parent)?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
@@ -152,6 +159,7 @@ impl ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            restored_endpoints: Vec::new(),
         })
     }
 
@@ -264,20 +272,22 @@ impl ResourceManagerInner {
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
         // tokio runtime, and block the task on it.
         let device_manager = self.device_manager.clone();
-        let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
+        let (network, set_up) = thread::spawn(move || -> Result<_> {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
             let d = rt
                 .block_on(network::new(&network_config, device_manager))
                 .context("new network")?;
-            rt.block_on(d.setup()).context("setup network")?;
-            Ok(d)
+            let set_up = rt.block_on(d.setup()).context("setup network");
+            Ok((d, set_up))
         })
         .join()
         .map_err(|e| anyhow!("{:?}", e))
         .context("Couldn't join on the associated thread")?
         .context("failed to set up network")?;
+        // Kept when the setup fails too: the endpoints it attached are left
+        // for the state to record and the cleanup to detach.
         self.network = Some(network);
-        Ok(())
+        set_up.context("failed to set up network")
     }
 
     async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
@@ -1020,7 +1030,13 @@ impl ResourceManagerInner {
                     Err(e) => errors.push(e),
                 }
             } else {
-                steps.network = true;
+                match network::rebind_saved_physical_endpoints(
+                    &self.restored_endpoints,
+                    driver::bind_device_to_host,
+                ) {
+                    Ok(()) => steps.network = true,
+                    Err(e) => errors.push(e),
+                }
             }
         }
 
@@ -1199,7 +1215,7 @@ impl Persist for ResourceManagerInner {
 
     /// Save a state of ResourceManagerInner
     async fn save(&self) -> Result<Self::State> {
-        let mut endpoint_state = vec![];
+        let mut endpoint_state = self.restored_endpoints.clone();
         if let Some(network) = &self.network {
             if let Some(ens) = network.save().await {
                 endpoint_state = ens;
@@ -1209,6 +1225,7 @@ impl Persist for ResourceManagerInner {
         Ok(ResourceState {
             endpoint: endpoint_state,
             cgroup_state: Some(cgroup_state),
+            ephemeral_disks: self.volume_resource.ephemeral_disks().await,
         })
     }
 
@@ -1217,6 +1234,8 @@ impl Persist for ResourceManagerInner {
         resource_args: Self::ConstructorArgs,
         resource_state: Self::State,
     ) -> Result<Self> {
+        // Cleanup reads it, for the sandbox bind mounts to unmount for one.
+        let toml_config = Arc::new(resource_args.config.clone());
         let args = CgroupArgs {
             sid: resource_args.sid.clone(),
             config: resource_args.config,
@@ -1258,17 +1277,18 @@ impl Persist for ResourceManagerInner {
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
-            volume_resource: VolumeResource::new(),
+            volume_resource: VolumeResource::restore(resource_state.ephemeral_disks),
             cgroups_resource: CgroupsResource::restore(
                 args,
                 resource_state.cgroup_state.unwrap_or_default(),
             )
             .await?,
-            toml_config: Arc::new(TomlConfig::default()),
+            toml_config,
             cpu_resource: CpuResource::default(),
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            restored_endpoints: resource_state.endpoint,
         })
     }
 }

@@ -47,6 +47,43 @@ pub fn remove_dir_all_if_exists(path: impl AsRef<Path>) -> Result<()> {
     }
 }
 
+/// Remove the VM directory of a sandbox. A rootful VMM shares it with the
+/// sandbox state, which has to outlive the rest of the cleanup for a failure
+/// to be retried; the sandbox removes it last.
+pub fn remove_vm_dir(sid: &str, vm_path: &str) -> Result<()> {
+    remove_vm_dir_in(Path::new(KATA_PATH), sid, Path::new(vm_path))
+}
+
+fn remove_vm_dir_in(state_root: &Path, sid: &str, vm_path: &Path) -> Result<()> {
+    if vm_path != state_root.join(sid) {
+        return remove_dir_all_if_exists(vm_path);
+    }
+    let entries = match std::fs::read_dir(vm_path) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if entry.file_name() == persist::PERSIST_FILE {
+            continue;
+        }
+        let path = entry.path();
+        let removed = if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match removed {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => {
+                return Err(err).with_context(|| format!("remove {}", path.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn get_child_threads(pid: u32) -> HashSet<u32> {
     let mut result = HashSet::new();
     let path_name = format!("/proc/{pid}/task");
@@ -532,6 +569,90 @@ pub fn remove_vmm_user_runtime_dir(uid: u32) -> Result<()> {
     remove_dir_all_if_exists(vmm_user_runtime_dir(uid))
 }
 
+fn vmm_uid_range(login_defs: &str) -> Result<std::ops::RangeInclusive<u32>> {
+    let (mut min, mut max) = (1000, 60000);
+    for line in login_defs.lines() {
+        let mut fields = line
+            .split('#')
+            .next()
+            .unwrap_or_default()
+            .split_whitespace();
+        let Some(key @ ("UID_MIN" | "UID_MAX")) = fields.next() else {
+            continue;
+        };
+        let value = fields
+            .next()
+            .ok_or_else(|| anyhow!("missing {key} value in login.defs"))?
+            .parse::<u32>()
+            .with_context(|| format!("invalid {key} value in login.defs"))?;
+        if key == "UID_MIN" {
+            min = value;
+        } else {
+            max = value;
+        }
+    }
+    if min == 0 || min > max || max == u32::MAX {
+        return Err(anyhow!("invalid VMM UID allocation range {min}..={max}"));
+    }
+    Ok(min..=max)
+}
+
+fn active_process_uids(proc_dir: &Path) -> Result<HashSet<u32>> {
+    let mut uids = HashSet::new();
+    for entry in std::fs::read_dir(proc_dir).context("read process directory")? {
+        let entry = entry?;
+        if entry.file_name().to_string_lossy().parse::<u32>().is_err() {
+            continue;
+        }
+        let path = entry.path().join("status");
+        let status = match std::fs::read(&path) {
+            Ok(status) => status,
+            // The process can exit between directory enumeration and reading.
+            Err(error)
+                if error.kind() == io::ErrorKind::NotFound
+                    || error.raw_os_error() == Some(libc::ESRCH) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+        };
+        // Process names can contain non-UTF8 bytes. Only the ASCII Uid field
+        // matters; an unrelated process name must not prevent UID allocation.
+        let status = String::from_utf8_lossy(&status);
+        let uid_line = status
+            .lines()
+            .find_map(|line| line.strip_prefix("Uid:"))
+            .ok_or_else(|| anyhow!("missing Uid field in {}", path.display()))?;
+        for uid in uid_line.split_whitespace() {
+            uids.insert(
+                uid.parse::<u32>()
+                    .with_context(|| format!("invalid Uid field in {}", path.display()))?,
+            );
+        }
+    }
+    Ok(uids)
+}
+
+fn available_vmm_uid() -> Result<u32> {
+    let login_defs = match std::fs::read_to_string("/etc/login.defs") {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error).context("read VMM UID allocation limits"),
+    };
+    let active_uids = active_process_uids(Path::new("/proc"))?;
+    // Container processes can use a host-visible UID with no passwd entry.
+    // Reusing it for QEMU lets unrelated workloads share host credentials and
+    // makes userdel reject cleanup even after QEMU has exited. Prefer the high
+    // end of the configured range, away from common image UIDs such as 1000.
+    for uid in vmm_uid_range(&login_defs)?.rev() {
+        if !active_uids.contains(&uid) && nix::unistd::User::from_uid(Uid::from_raw(uid))?.is_none()
+        {
+            return Ok(uid);
+        }
+    }
+    Err(anyhow!("no unused UID available for the rootless VMM"))
+}
+
 pub fn create_vmm_user() -> Result<String> {
     let useradd_path =
         first_valid_executable_path(&["/usr/sbin/useradd", "/sbin/useradd", "/bin/useradd"])?;
@@ -541,8 +662,11 @@ pub fn create_vmm_user() -> Result<String> {
     let max_attempt = 5;
     for _ in 0..max_attempt {
         let user_name = format!("kata-{}", rng().random_range(0..10000));
+        let uid = available_vmm_uid()?;
         let status = Command::new(&useradd_path)
             .arg("-M")
+            .arg("-u")
+            .arg(uid.to_string())
             .arg("-s")
             .arg(&nologin_path)
             .arg(&user_name)
@@ -569,8 +693,17 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
     Err(anyhow!("failed to remove VMM user"))
 }
 
+/// getpwnam_r() may report a missing user as an error rather than no entry.
+pub fn find_user(name: &str) -> Result<Option<nix::unistd::User>> {
+    match nix::unistd::User::from_name(name) {
+        Ok(user) => Ok(user),
+        Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ESRCH) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("look up user {name}")),
+    }
+}
+
 pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
-    let path_result = remove_dir_all_if_exists(vm_path);
+    let path_result = remove_vm_dir(sid, vm_path);
     if kata_types::rootless::is_rootless() {
         let symlink_result = remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(sid));
         let user = &config
@@ -579,7 +712,7 @@ pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
             .as_ref()
             .ok_or_else(|| anyhow!("rootless user not specified in security_info"))?
             .user_name;
-        match nix::unistd::User::from_name(user)? {
+        match find_user(user)? {
             Some(_) => {
                 remove_vmm_user(user)?;
             }
@@ -815,10 +948,75 @@ mod tests {
     use super::set_process_credentials_with;
     use super::vmm_user_runtime_dir;
     use super::SocketAddress;
+    use super::{active_process_uids, vmm_uid_range};
     use super::{
         authorize_rootless_resource_access, authorize_rootless_socket, select_rootless_access_group,
     };
     use super::{check_unix_socket_path_len, link_socket_into_dir, MAX_UNIX_SOCKET_PATH_LEN};
+
+    #[test]
+    fn test_vmm_uid_range_uses_login_defs_limits() {
+        assert_eq!(vmm_uid_range("").unwrap(), 1000..=60000);
+        assert_eq!(
+            vmm_uid_range("# UID_MIN 0\nUID_MIN 2000 # minimum\nUID_MAX 3000\n").unwrap(),
+            2000..=3000
+        );
+        assert!(vmm_uid_range("UID_MIN 0").is_err());
+        assert!(vmm_uid_range("UID_MAX 999").is_err());
+        assert!(vmm_uid_range("UID_MIN not-a-number").is_err());
+    }
+
+    #[test]
+    fn test_active_process_uids_include_container_credentials() {
+        let proc_dir = TempDir::new().unwrap();
+        for (pid, status) in [
+            ("11", "Name:\tcontainer\nUid:\t1000\t1001\t1002\t1003\n"),
+            ("22", "Name:\tinit\nUid:\t0\t0\t0\t0\n"),
+            ("self", "Uid:\t9999\t9999\t9999\t9999\n"),
+        ] {
+            let path = proc_dir.path().join(pid);
+            fs::create_dir(&path).unwrap();
+            fs::write(path.join("status"), status).unwrap();
+        }
+        // A process disappeared after its directory was enumerated.
+        fs::create_dir(proc_dir.path().join("33")).unwrap();
+        let actual = active_process_uids(proc_dir.path()).unwrap();
+        assert_eq!(
+            actual,
+            [0, 1000, 1001, 1002, 1003].iter().copied().collect()
+        );
+    }
+
+    #[test]
+    fn test_active_process_uids_reject_unknown_credentials() {
+        let proc_dir = TempDir::new().unwrap();
+        fs::create_dir(proc_dir.path().join("11")).unwrap();
+        fs::write(proc_dir.path().join("11/status"), "Uid:\tunknown\n").unwrap();
+        assert!(active_process_uids(proc_dir.path()).is_err());
+    }
+
+    #[test]
+    fn test_active_process_uids_allow_non_utf8_names_but_reject_invalid_uids() {
+        let proc_dir = TempDir::new().unwrap();
+        let path = proc_dir.path().join("11");
+        fs::create_dir(&path).unwrap();
+        let status = path.join("status");
+        fs::write(
+            &status,
+            b"Name:\tcontainer-\xff\nUid:\t1000\t1001\t1002\t1003\n",
+        )
+        .unwrap();
+        assert_eq!(
+            active_process_uids(proc_dir.path()).unwrap(),
+            [1000, 1001, 1002, 1003].iter().copied().collect()
+        );
+        fs::write(
+            &status,
+            b"Name:\tcontainer\nUid:\t10\xff00\t1001\t1002\t1003\n",
+        )
+        .unwrap();
+        assert!(active_process_uids(proc_dir.path()).is_err());
+    }
 
     #[test]
     fn test_check_unix_socket_path_len() {
@@ -1131,6 +1329,28 @@ mod tests {
         assert!(!runtime_dir.exists());
 
         remove_dir_all_if_exists(&runtime_dir).unwrap();
+    }
+
+    #[rstest]
+    #[case::shared_with_the_state("sid", true)]
+    #[case::of_its_own("other", false)]
+    fn the_vm_dir_goes_but_the_state_stays(#[case] dir: &str, #[case] state_stays: bool) {
+        let root = TempDir::new().unwrap();
+        let vm_path = root.path().join(dir);
+        fs::create_dir_all(vm_path.join("vhost-fs")).unwrap();
+        fs::write(vm_path.join("qmp.sock"), b"").unwrap();
+        fs::write(vm_path.join(persist::PERSIST_FILE), b"{}").unwrap();
+
+        super::remove_vm_dir_in(root.path(), "sid", &vm_path).unwrap();
+        let left: Vec<_> = fs::read_dir(&vm_path)
+            .map(|d| d.map(|e| e.unwrap().file_name()).collect())
+            .unwrap_or_default();
+        if state_stays {
+            assert_eq!(left, vec![persist::PERSIST_FILE]);
+        } else {
+            assert!(!vm_path.exists());
+        }
+        super::remove_vm_dir_in(root.path(), "sid", &vm_path).unwrap();
     }
 
     #[test]

@@ -183,7 +183,7 @@ impl FcInner {
         debug!(sl(), "Cleanup");
         self.cleanup_resource();
 
-        std::fs::remove_dir_all(self.vm_path.as_str())
+        crate::utils::remove_vm_dir(&self.id, &self.vm_path)
             .inspect_err(|err| {
                 error!(
                     sl(),

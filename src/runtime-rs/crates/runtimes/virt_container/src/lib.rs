@@ -67,6 +67,7 @@ use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use kata_types::config::OpenVmmConfig;
 
 use crate::factory::{check_template_vm_config, template_device_state_path};
+use persist::sandbox_persist::Persist;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
@@ -170,11 +171,19 @@ impl RuntimeHandler for VirtContainer {
                 hypervisor.clone(),
                 config,
                 init_size_manager,
+                sandbox_config.cgroup_parent.as_deref(),
             )
             .await?,
         );
         let pid = std::process::id();
 
+        let mut sandbox_files = Vec::new();
+        if !sandbox_config.dns.is_empty() {
+            sandbox_files.push("resolv.conf");
+        }
+        if !sandbox_config.hostname.is_empty() {
+            sandbox_files.push("hostname");
+        }
         let sandbox = sandbox::VirtSandbox::new(
             sid,
             msg_sender,
@@ -186,6 +195,12 @@ impl RuntimeHandler for VirtContainer {
         )
         .await
         .context("new virt sandbox")?;
+        // The rootless VMM user, the created netns and the cgroups exist from
+        // here on, and only the state tells recovery about them.
+        sandbox
+            .save()
+            .await
+            .context("save the initial sandbox state")?;
         let container_manager = container_manager::VirtContainerManager::new(
             sid,
             pid,
@@ -193,6 +208,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor,
             resource_manager,
             sandbox.oom_notifier(),
+            sandbox_files,
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),

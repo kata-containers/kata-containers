@@ -86,8 +86,42 @@ mod tests {
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestCases {
+        #[serde(default)]
         bases: BTreeMap<String, TestRequest>,
         cases: Vec<TestCase>,
+    }
+
+    /// Another way to run the test cases of a directory.
+    struct Variant {
+        /// Applied to pod.yaml.
+        pod_patch: Patch,
+        /// Applied to every CreateContainerRequest before the case patch.
+        request_patch: Patch,
+        /// Applied to the genpolicy settings after settings-patch.json.
+        settings_patch: Patch,
+        /// Test case file to run. Its bases extend those of testcases.json.
+        cases: &'static str,
+    }
+
+    impl Default for Variant {
+        fn default() -> Self {
+            Variant {
+                pod_patch: Patch(Vec::new()),
+                request_patch: Patch(Vec::new()),
+                settings_patch: Patch(Vec::new()),
+                cases: "testcases.json",
+            }
+        }
+    }
+
+    fn json_patch(value: serde_json::Value) -> Patch {
+        serde_json::from_value(value).unwrap()
+    }
+
+    fn runtime_api_patch(runtime_api: &str) -> Patch {
+        json_patch(serde_json::json!([
+            {"op": "replace", "path": "/cluster_config/runtime_api", "value": runtime_api}
+        ]))
     }
 
     /// Run tests from the given directory.
@@ -100,6 +134,12 @@ mod tests {
     /// An optional `settings-patch.json` file in the test case directory customizes
     /// the genpolicy settings used by that test.
     async fn runtests(test_case_dir: &str) {
+        runtests_variant(test_case_dir, &Variant::default()).await;
+    }
+
+    async fn runtests_variant(test_case_dir: &str, variant: &Variant) {
+        let pod_patch = &variant.pod_patch;
+        let request_patch = &variant.request_patch;
         // Check if config_map.yaml exists.
         // If it does, we need to copy it to the workdir.
         let is_config_map_file_present = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -115,9 +155,17 @@ mod tests {
         };
 
         // Prepare temp dir for running genpolicy.
-        let (workdir, testdata_dir) = prepare_workdir(test_case_dir, &files_to_copy);
+        let (workdir, testdata_dir) = prepare_workdir(test_case_dir, variant.cases, &files_to_copy);
 
-        let settings = prepare_settings(&workdir, &testdata_dir);
+        if !pod_patch.0.is_empty() {
+            let pod_path = workdir.join("pod.yaml");
+            let mut pod: serde_json::Value =
+                serde_yaml::from_str(&fs::read_to_string(&pod_path).unwrap()).unwrap();
+            patch(&mut pod, pod_patch).unwrap();
+            fs::write(&pod_path, serde_yaml::to_string(&pod).unwrap()).unwrap();
+        }
+
+        let settings = prepare_settings(&workdir, &testdata_dir, &variant.settings_patch);
 
         let config_files = if is_config_map_file_present {
             Some(vec![workdir
@@ -186,10 +234,17 @@ mod tests {
 
         // Run through the test cases and evaluate the canned requests.
 
-        let case_file =
-            File::open(testdata_dir.join("testcases.json")).expect("test case file should open");
-        let test_cases: TestCases =
-            serde_json::from_reader(case_file).expect("test case file should parse");
+        let read_cases = |name: &str| -> TestCases {
+            let case_file =
+                File::open(testdata_dir.join(name)).expect("test case file should open");
+            serde_json::from_reader(case_file).expect("test case file should parse")
+        };
+        let mut test_cases = read_cases(variant.cases);
+        if variant.cases != "testcases.json" {
+            for (name, base) in read_cases("testcases.json").bases {
+                test_cases.bases.entry(name).or_insert(base);
+            }
+        }
 
         for test_case in test_cases.cases {
             println!("\n== case: {} ==\n", test_case.description);
@@ -199,6 +254,9 @@ mod tests {
                 .get(&test_case.base)
                 .unwrap_or_else(|| panic!("Unknown test case base: {}", test_case.base));
             let mut request = serialize_request_only(base).unwrap();
+            if matches!(base, TestRequest::CreateContainerRequest(_)) {
+                patch(&mut request, request_patch).unwrap();
+            }
             patch(&mut request, &test_case.patch).unwrap_or_else(|e| {
                 panic!(
                     "Failed to apply patch for test case {}: {}",
@@ -249,11 +307,12 @@ mod tests {
     fn prepare_settings(
         workdir: &path::Path,
         testdata_dir: &path::Path,
+        variant_patch: &Patch,
     ) -> genpolicy::settings::Settings {
+        let drop_in_dir = workdir.join("genpolicy-settings.d");
         let settings_patch = testdata_dir.join("settings-patch.json");
         if settings_patch.exists() {
-            let drop_in_dir = workdir.join("genpolicy-settings.d");
-            fs::create_dir(&drop_in_dir).expect("settings drop-in directory should be created");
+            fs::create_dir_all(&drop_in_dir).expect("settings drop-in directory should be created");
             fs::copy(&settings_patch, drop_in_dir.join("settings-patch.json"))
                 .context(format!(
                     "{:?} --> {:?}",
@@ -262,16 +321,28 @@ mod tests {
                 ))
                 .expect("copying the settings patch should not fail");
         }
+        if !variant_patch.0.is_empty() {
+            fs::create_dir_all(&drop_in_dir).expect("settings drop-in directory should be created");
+            fs::write(
+                drop_in_dir.join("variant-patch.json"),
+                serde_json::to_string(variant_patch).unwrap(),
+            )
+            .expect("writing the variant settings patch should not fail");
+        }
 
         genpolicy::settings::Settings::new(workdir.to_str().unwrap())
     }
 
     fn prepare_workdir(
         test_case_dir: &str,
+        cases: &str,
         files_to_copy: &[&str],
     ) -> (path::PathBuf, path::PathBuf) {
-        // Prepare temp dir for running genpolicy.
-        let workdir = path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(test_case_dir);
+        // Prepare temp dir for running genpolicy. Tests run concurrently, so
+        // each case file of a directory gets its own.
+        let workdir = path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+            .join(test_case_dir)
+            .join(cases.trim_end_matches(".json"));
         fs::create_dir_all(&workdir)
             .expect("should be able to create directories under CARGO_TARGET_TMPDIR");
 
@@ -379,8 +450,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_sandboxapi_resolver() {
+        // Variants sharing a case file share a work directory, so run them
+        // sequentially.
+        let dir = "createcontainer/sandboxapi_resolver";
+        runtests(dir).await;
+        runtests_variant(
+            dir,
+            &Variant {
+                pod_patch: json_patch(serde_json::json!([
+                    {"op": "add", "path": "/spec/containers/0/securityContext/readOnlyRootFilesystem", "value": true}
+                ])),
+                request_patch: json_patch(serde_json::json!([
+                    {"op": "replace", "path": "/OCI/Root/Readonly", "value": true},
+                    {"op": "replace", "path": "/OCI/Mounts/8/options/2", "value": "ro"},
+                    {"op": "replace", "path": "/OCI/Mounts/9/options/2", "value": "ro"}
+                ])),
+                ..Default::default()
+            },
+        )
+        .await;
+        for (runtime_api, cases) in [
+            ("sandbox", "testcases-sandbox-api.json"),
+            ("task", "testcases-task-api.json"),
+        ] {
+            runtests_variant(
+                dir,
+                &Variant {
+                    settings_patch: runtime_api_patch(runtime_api),
+                    cases,
+                    ..Default::default()
+                },
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_sandbox_hostname() {
+        let dir = "createcontainer/sandboxapi_resolver";
+        for cases in [
+            "testcases-hostname-match.json",
+            "testcases-hostname-sandbox-first.json",
+            "testcases-hostname-container-first.json",
+        ] {
+            runtests_variant(
+                dir,
+                &Variant {
+                    cases,
+                    ..Default::default()
+                },
+            )
+            .await;
+        }
+        runtests_variant(
+            dir,
+            &Variant {
+                pod_patch: json_patch(serde_json::json!([
+                    {"op": "add", "path": "/spec/hostname", "value": "web"}
+                ])),
+                cases: "testcases-hostname-spec.json",
+                ..Default::default()
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn test_state_create_container() {
         runtests("state/createcontainer").await;
+        runtests_variant(
+            "state/createcontainer",
+            &Variant {
+                settings_patch: runtime_api_patch("sandbox"),
+                cases: "testcases-sandbox-api.json",
+                ..Default::default()
+            },
+        )
+        .await;
     }
 
     #[tokio::test]

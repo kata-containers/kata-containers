@@ -183,6 +183,12 @@ pub struct VirtSandbox {
     // Resource cleanup waits for this confirmation after VM startup.
     vmm_exit_confirmed: CancellationToken,
     vmm_process: Arc<RwLock<Option<VmmProcessIdentity>>>,
+    config_path: Option<PathBuf>,
+    // Network namespace the runtime created for the sandbox and has to remove.
+    created_netns: Option<String>,
+    // Held from the snapshot to the write, so an older snapshot cannot
+    // replace a newer one.
+    saving_state: Arc<Mutex<()>>,
 }
 
 #[derive(Default)]
@@ -307,6 +313,25 @@ where
         )))
 }
 
+/// A state saved before prepare_vm() has no hypervisor id yet. QEMU builds the
+/// directory its cleanup removes from the id, so an empty one would remove
+/// all of /run/kata.
+fn restored_hypervisor_id(sid: &str, saved: &str) -> Result<String> {
+    if saved.is_empty() || saved == sid {
+        Ok(sid.to_string())
+    } else {
+        Err(anyhow!("state of sandbox {sid} names hypervisor {saved}"))
+    }
+}
+
+pub(crate) fn created_netns(network_env: &SandboxNetworkEnv) -> Option<String> {
+    if network_env.network_created {
+        network_env.netns.clone()
+    } else {
+        None
+    }
+}
+
 async fn wait_for_exit_record(
     wait: impl std::future::Future<Output = Result<SandboxExitInfo>>,
     grace: Duration,
@@ -361,6 +386,9 @@ impl VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             exit_notify_tx,
             shm_size: sandbox_config.shm_size,
+            config_path: sandbox_config.config_path.clone(),
+            created_netns: created_netns(&sandbox_config.network_env),
+            saving_state: Arc::new(Mutex::new(())),
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
@@ -403,6 +431,21 @@ impl VirtSandbox {
         match identity {
             Ok(identity) => *self.vmm_process.write().await = Some(identity),
             Err(err) => warn!(sl!(), "could not record VMM process identity: {err:#}"),
+        }
+    }
+
+    /// A step can leave host resources behind whether it succeeds or not, so
+    /// save the state after it either way. A later recovery only cleans up
+    /// what the state records.
+    async fn save_after<T>(&self, step: Result<T>) -> Result<T> {
+        let saved = self.save().await.context("save sandbox state");
+        match (step, saved) {
+            (Ok(value), saved) => saved.map(|_| value),
+            (Err(e), Err(save_err)) => {
+                warn!(sl!(), "failed to save the sandbox state: {save_err:#}");
+                Err(e)
+            }
+            (Err(e), Ok(_)) => Err(e),
         }
     }
 
@@ -1242,15 +1285,6 @@ impl VirtSandbox {
             .unwrap_or(false)
     }
 
-    fn created_netns(&self) -> Option<&str> {
-        let network_env = &self.sandbox_config.as_ref()?.network_env;
-        if network_env.network_created {
-            network_env.netns.as_deref()
-        } else {
-            None
-        }
-    }
-
     async fn should_defer_network(&self) -> Result<bool> {
         if !self.is_factory_enabled() {
             return Ok(false);
@@ -1369,7 +1403,8 @@ impl Sandbox for VirtSandbox {
                 .and_then(|process| process.selinux_label().clone())
         });
 
-        self.hypervisor
+        let prepared = self
+            .hypervisor
             .prepare_vm(
                 id,
                 sandbox_config.network_env.netns.clone(),
@@ -1377,7 +1412,8 @@ impl Sandbox for VirtSandbox {
                 selinux_label,
             )
             .await
-            .context("prepare vm")?;
+            .context("prepare vm");
+        self.save_after(prepared).await?;
 
         let defer_network = self.should_defer_network().await?;
 
@@ -1385,10 +1421,12 @@ impl Sandbox for VirtSandbox {
         // should after hypervisor.prepare_vm
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
-        self.resource_manager
+        let set_up = self
+            .resource_manager
             .prepare_before_start_vm(resources)
             .await
-            .context("set up device before start vm")?;
+            .context("set up device before start vm");
+        self.save_after(set_up).await?;
 
         // start vm
         inner.vmm_start_attempted = true;
@@ -1397,7 +1435,7 @@ impl Sandbox for VirtSandbox {
         // stop() then needs the identity to confirm the exit, or cleanup
         // never runs.
         self.remember_vmm_process().await;
-        started?;
+        self.save_after(started).await?;
         info!(sl!(), "start vm");
 
         let sandbox = self.clone();
@@ -1451,16 +1489,20 @@ impl Sandbox for VirtSandbox {
                         .network_queues as usize,
                     network_created: sandbox_config.network_env.network_created,
                 });
-                self.resource_manager
+                let set_up = self
+                    .resource_manager
                     .handle_network(network_resource)
                     .await
-                    .context("set up device after start vm")?;
+                    .context("set up device after start vm");
+                self.save_after(set_up).await?;
             }
         }
 
         if defer_network {
-            self.setup_deferred_network_after_start(sandbox_config)
-                .await?;
+            let set_up = self
+                .setup_deferred_network_after_start(sandbox_config)
+                .await;
+            self.save_after(set_up).await?;
         }
 
         // connect agent
@@ -1653,6 +1695,10 @@ impl Sandbox for VirtSandbox {
         })
     }
 
+    async fn save_state(&self) -> Result<()> {
+        self.save().await.map(|_| ())
+    }
+
     async fn wait(&self) -> Result<SandboxExitInfo> {
         info!(sl!(), "wait sandbox");
         {
@@ -1824,7 +1870,7 @@ impl Sandbox for VirtSandbox {
 
         // A mounted rootless namespace prevents removal of the runtime directory.
         if steps.resources && steps.hypervisor && !steps.netns {
-            match self.created_netns() {
+            match self.created_netns.as_deref() {
                 Some(path) => match remove_netns(Path::new(path)) {
                     Ok(()) => steps.netns = true,
                     Err(e) => errors.push(e),
@@ -1848,10 +1894,18 @@ impl Sandbox for VirtSandbox {
         }
 
         if errors.is_empty() {
+            // Everything the state recorded is gone now.
+            if let Err(e) = persist::remove_from_disk(&self.sid) {
+                warn!(sl!(), "failed to remove the sandbox state: {e:#}");
+            }
             Ok(())
         } else {
             for error in &errors {
                 error!(sl!(), "sandbox cleanup step failed: {error:#}");
+            }
+            // A later recovery retries from what the state records.
+            if let Err(e) = self.save().await {
+                warn!(sl!(), "failed to keep the sandbox state for a retry: {e:#}");
             }
             Err(anyhow!("{} sandbox cleanup step(s) failed", errors.len()))
         }
@@ -1863,10 +1917,12 @@ impl Sandbox for VirtSandbox {
                 sl!(),
                 "rescan_network: scanning netns={}", net_cfg.netns_path
             );
-            self.resource_manager
+            let rescanned = self
+                .resource_manager
                 .rescan_network_if_unconfigured(net_cfg)
                 .await
-                .context("network rescan during start")?;
+                .context("network rescan during start");
+            self.save_after(rescanned).await?;
         }
         Ok(())
     }
@@ -2042,11 +2098,14 @@ impl Persist for VirtSandbox {
 
     /// Save a state of Sandbox
     async fn save(&self) -> Result<Self::State> {
+        let _saving = self.saving_state.lock().await;
         let hypervisor_state = self.hypervisor.save_state().await?;
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
+            config_path: self.config_path.clone(),
+            created_netns: self.created_netns.clone(),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -2073,20 +2132,7 @@ impl Persist for VirtSandbox {
                 )),
             }?,
         };
-        // FIXME: properly handle jailed case
-        // eg: Determine if we are running jailed:
-        // let h = sandbox_state.hypervisor.clone().unwrap_or_default();
-        // Figure out the jailed path:
-        // jailed_path = h.<>
-        // and somehow store the sandbox state into the jail:
-        // persist::to_disk(&sandbox_state, &self.sid, jailed_path)?;
-        // Issue is, how to handle restore.
-        let h = sandbox_state.hypervisor.as_ref().unwrap();
-        let vmpath = match h.jailed {
-            true => h.vm_path.clone(),
-            false => "".to_string(),
-        };
-        persist::to_disk(&sandbox_state, &self.sid, vmpath.as_str())?;
+        persist::to_disk(&sandbox_state, &self.sid)?;
         Ok(sandbox_state)
     }
     /// Restore Sandbox
@@ -2096,7 +2142,8 @@ impl Persist for VirtSandbox {
     ) -> Result<Self> {
         let config = sandbox_args.toml_config;
         let r = sandbox_state.resource.unwrap_or_default();
-        let h = sandbox_state.hypervisor.unwrap_or_default();
+        let mut h = sandbox_state.hypervisor.unwrap_or_default();
+        h.id = restored_hypervisor_id(&sandbox_args.sid, &h.id)?;
         let hypervisor = match h.hypervisor_type.as_str() {
             #[cfg(all(
                 feature = "dragonball",
@@ -2179,6 +2226,9 @@ impl Persist for VirtSandbox {
             exit_pending: Arc::new(watch::channel(false).0),
             vmm_exit_confirmed,
             vmm_process: Arc::new(RwLock::new(None)),
+            config_path: sandbox_state.config_path,
+            created_netns: sandbox_state.created_netns,
+            saving_state: Arc::new(Mutex::new(())),
         })
     }
 }
@@ -2186,6 +2236,33 @@ impl Persist for VirtSandbox {
 #[cfg(test)]
 mod pending_exit_tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case::saved_before_prepare_vm("", Some("sid"))]
+    #[case::saved_after_prepare_vm("sid", Some("sid"))]
+    #[case::another_sandbox("other", None)]
+    fn restored_hypervisor_id_is_never_empty(#[case] saved: &str, #[case] expected: Option<&str>) {
+        assert_eq!(
+            restored_hypervisor_id("sid", saved).ok().as_deref(),
+            expected
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::created(Some("/run/netns/cnitest"), true, Some("/run/netns/cnitest"))]
+    #[case::given_by_the_caller(Some("/var/run/netns/cni-1"), false, None)]
+    #[case::none(None, true, None)]
+    fn only_a_netns_the_runtime_created_is_recorded_for_removal(
+        #[case] netns: Option<&str>,
+        #[case] network_created: bool,
+        #[case] expected: Option<&str>,
+    ) {
+        let network_env = SandboxNetworkEnv {
+            netns: netns.map(String::from),
+            network_created,
+        };
+        assert_eq!(created_netns(&network_env).as_deref(), expected);
+    }
 
     #[tokio::test]
     async fn wait_does_not_block_without_a_watched_exit() {

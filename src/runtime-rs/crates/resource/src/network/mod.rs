@@ -10,6 +10,7 @@ mod dan;
 mod endpoint;
 pub use dan::{dan_config_path, Dan, DanNetworkConfig};
 pub use endpoint::endpoint_persist::EndpointState;
+pub(crate) use endpoint::rebind_saved_physical_endpoints;
 pub use endpoint::Endpoint;
 mod network_entity;
 mod network_info;
@@ -29,6 +30,23 @@ use tokio::sync::RwLock;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+
+/// Endpoints attach in order, and an attach that fails can still have done
+/// part of its work. Those that started are the ones to record and detach;
+/// the others were never touched.
+#[derive(Default)]
+pub(crate) struct AttachStarted(std::sync::atomic::AtomicUsize);
+
+impl AttachStarted {
+    pub(crate) fn begin(&self, index: usize) {
+        self.0
+            .fetch_max(index + 1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub(crate) fn includes(&self, index: usize) -> bool {
+        index < self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
 
 #[derive(Debug)]
 pub enum NetworkConfig {

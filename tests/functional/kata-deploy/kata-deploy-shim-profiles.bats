@@ -149,7 +149,7 @@ EOF
 	rm -f "${values_file}"
 
 	[[ "${custom_runtimes}" == \
-		"kata-nvidia-cpu-custom:qemu-nvidia-cpu:::amd64,arm64" ]]
+		"kata-nvidia-cpu-custom:qemu-nvidia-cpu:::amd64,arm64:" ]]
 }
 
 @test "Helm template: a profile sets up every snapshotter its shims are mapped to" {

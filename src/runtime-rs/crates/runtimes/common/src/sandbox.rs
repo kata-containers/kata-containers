@@ -37,6 +37,8 @@ pub trait Sandbox: Send + Sync {
     async fn shutdown(&self) -> Result<()>;
     async fn status(&self) -> Result<SandboxStatus>;
     async fn wait(&self) -> Result<SandboxExitInfo>;
+    // Record what a later recovery has to clean up if this shim goes away.
+    async fn save_state(&self) -> Result<()>;
 
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;

@@ -39,6 +39,7 @@ tokio = { features = ["rt", "rt-multi-thread"], workspace = true }
 unix_socket2 = "0.5.4"
 
 # Local dependencies
+common = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }

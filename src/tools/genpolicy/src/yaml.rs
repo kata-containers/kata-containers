@@ -91,6 +91,10 @@ pub trait K8sResource {
         panic!("Unsupported");
     }
 
+    fn get_pod_spec(&self) -> &pod::PodSpec {
+        panic!("Unsupported");
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
