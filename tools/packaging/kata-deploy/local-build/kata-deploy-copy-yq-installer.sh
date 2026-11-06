@@ -13,15 +13,18 @@ set -o errtrace
 
 script_dir=$(dirname "$(readlink -f "$0")")
 install_yq_script_path="${script_dir}/../../../../ci/install_yq.sh"
+versions_file="${script_dir}/../../../../versions.yaml"
 
 # Parallel targets each stage the docker build context on the host. When the
 # destination does not exist yet (fresh clone), coreutils cp opens it with
 # O_CREAT|O_EXCL, so concurrent copies race and the losers fail with
 # "File exists". Write to a private temp file and rename: rename is atomic,
 # never returns EEXIST, and all writers produce identical content.
-tmp="$(mktemp "${script_dir}/dockerbuild/.install_yq.sh.XXXXXX")"
-cp "${install_yq_script_path}" "${tmp}"
-# mktemp creates 0600 and cp into an existing file keeps it; the docker
-# build RUNs this script, so it must stay executable like the source.
-chmod --reference="${install_yq_script_path}" "${tmp}"
-mv -f "${tmp}" "${script_dir}/dockerbuild/install_yq.sh"
+for source in "${install_yq_script_path}" "${versions_file}"; do
+	name=$(basename "${source}")
+	tmp="$(mktemp "${script_dir}/dockerbuild/.${name}.XXXXXX")"
+	cp "${source}" "${tmp}"
+	# Preserve the executable bit for the installer.
+	chmod --reference="${source}" "${tmp}"
+	mv -f "${tmp}" "${script_dir}/dockerbuild/${name}"
+done
