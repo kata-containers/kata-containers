@@ -1287,6 +1287,23 @@ mod tests {
     }
 
     #[test]
+    fn test_linux_resources_round_trip_keeps_pids() {
+        let pids = oci::LinuxPidsBuilder::default().limit(8).build().unwrap();
+        let resources = oci::LinuxResourcesBuilder::default()
+            .pids(pids)
+            .build()
+            .unwrap();
+
+        let grpc_resources: grpc::LinuxResources = resources.into();
+        assert!(grpc_resources.has_Pids());
+        let back: oci::LinuxResources = grpc_resources.into();
+        assert_eq!(back.pids().as_ref().unwrap().limit(), 8);
+
+        let without: oci::LinuxResources = grpc::LinuxResources::default().into();
+        assert!(without.pids().is_none());
+    }
+
+    #[test]
     fn test_from_vec_len_0() {
         let from: Vec<TestA> = vec![];
         let to: Vec<TestB> = from_vec(from.clone());
