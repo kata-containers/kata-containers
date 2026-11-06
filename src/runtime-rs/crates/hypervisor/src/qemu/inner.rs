@@ -128,7 +128,11 @@ impl QemuInner {
 
         let vm_path =
             Path::new(prefix_with_rootless_dir(KATA_PATH).as_str()).join(self.id.as_str());
-        create_dir_all_with_inherit_owner(vm_path, 0o750)?;
+        create_dir_all_with_inherit_owner(&vm_path, 0o750)?;
+
+        // QEMU's console and debug monitor sockets, the virtiofsd and nydusd
+        // sockets, and the shim management socket all live under vm_path.
+        selinux::apply_sandbox_mcs_level(&self.config, &[&vm_path])?;
 
         Ok(())
     }
