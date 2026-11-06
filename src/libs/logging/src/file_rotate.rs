@@ -29,6 +29,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, LineWriter, Result, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 /// Default rotate size for logger files.
@@ -49,6 +50,7 @@ pub struct FileRotator {
     rotate_size: u64,
     rotate_keep: usize,
     truncate: bool,
+    file_mode: Option<u32>,
     written_size: u64,
     #[cfg(test)]
     fail_rename: bool,
@@ -92,6 +94,7 @@ impl FileRotator {
             rotate_size: DEFAULT_LOG_FILE_SIZE_TO_ROTATE,
             rotate_keep: DEFAULT_HISTORY_LOG_FILES,
             truncate: false,
+            file_mode: None,
             written_size: 0,
             #[cfg(test)]
             fail_rename: false,
@@ -116,10 +119,24 @@ impl FileRotator {
         self
     }
 
+    /// Set the mode used when creating a new log file.
+    ///
+    /// The mode does not alter an existing file.
+    pub fn file_mode(&mut self, mode: u32) -> &mut Self {
+        self.file_mode = Some(mode);
+        self
+    }
+
     /// Ignore all errors and try best effort to log messages but without guarantee.
     pub fn ignore_errors(&mut self, ignore_errors: bool) -> &mut Self {
         self.ignore_errors = ignore_errors;
         self
+    }
+
+    /// Open the log file now instead of waiting for the first write.
+    pub fn open(&mut self) -> Result<&mut Self> {
+        self.reopen_if_needed()?;
+        Ok(self)
     }
 
     /// Open the log file if
@@ -127,12 +144,16 @@ impl FileRotator {
     /// - current log file has been rotated and needs to open a new log file.
     fn reopen_if_needed(&mut self) -> Result<()> {
         if self.file.is_none() || !self.path.exists() {
-            let file = OpenOptions::new()
+            let mut options = OpenOptions::new();
+            options
                 .create(true)
                 .write(true)
                 .truncate(self.truncate)
-                .append(!self.truncate)
-                .open(&self.path)?;
+                .append(!self.truncate);
+            if let Some(mode) = self.file_mode {
+                options.mode(mode);
+            }
+            let file = options.open(&self.path)?;
             match file.metadata() {
                 Ok(md) => self.written_size = md.len(),
                 Err(e) => {
@@ -250,6 +271,18 @@ mod tests {
         FileRotator::new("/proc/self/__does_not_exist__/log.txt").unwrap_err();
 
         let _ = FileRotator::new("log.txt").unwrap();
+    }
+
+    #[test]
+    fn test_rotator_open_creates_file_with_requested_mode() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let path = tmpdir.path().join("log.txt");
+
+        let mut rotator = FileRotator::new(&path).unwrap();
+        rotator.file_mode(0o640).open().unwrap();
+
+        assert!(path.is_file());
+        assert_eq!(path.metadata().unwrap().mode() & 0o777 & !0o640, 0);
     }
 
     #[test]
