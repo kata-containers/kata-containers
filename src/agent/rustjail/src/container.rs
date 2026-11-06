@@ -1232,6 +1232,7 @@ impl BaseContainer for LinuxContainer {
             &st,
             &mut pipe_w,
             &mut pipe_r,
+            self.init_process_pid,
         )
         .await
         .map_err(|e| {
@@ -1587,6 +1588,7 @@ async fn join_namespaces(
     st: &OCIState,
     pipe_w: &mut PipeStream,
     pipe_r: &mut PipeStream,
+    init_pid: pid_t,
 ) -> Result<()> {
     let logger = logger.new(o!("action" => "join-namespaces"));
 
@@ -1642,10 +1644,8 @@ async fn join_namespaces(
     // apply cgroups
     // For FsManger, it's no matter about the order of apply and set.
     // For SystemdManger, apply must be precede set because we can only create a systemd unit with specific processes(pids).
-    if res.is_some() {
-        info!(logger, "apply processes to cgroups!");
-        cm.apply(p.pid)?;
-    }
+    info!(logger, "apply processes to cgroups!");
+    cm.apply(p.pid, init_pid)?;
 
     if p.init {
         if let Some(resource) = res {
