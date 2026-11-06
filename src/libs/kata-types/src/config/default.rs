@@ -63,7 +63,7 @@ pub const MAX_DRAGONBALL_VCPUS: u32 = 256;
 pub const MIN_DRAGONBALL_MEMORY_SIZE_MB: u32 = 64;
 // Default configuration for qemu
 pub const DEFAULT_QEMU_BINARY_PATH: &str = "/usr/bin/qemu-system-x86_64";
-pub const DEFAULT_QEMU_ROOTFS_TYPE: &str = "ext4";
+pub const DEFAULT_QEMU_ROOTFS_TYPE: &str = "erofs";
 pub const DEFAULT_QEMU_CONTROL_PATH: &str = "";
 pub const DEFAULT_QEMU_MACHINE_TYPE: &str = MACHINE_TYPE_Q35_TYPE;
 pub const DEFAULT_QEMU_ENTROPY_SOURCE: &str = "/dev/urandom";
@@ -79,7 +79,7 @@ pub const MIN_QEMU_MEMORY_SIZE_MB: u32 = 64;
 
 // Default configuration for Cloud Hypervisor (CH)
 pub const DEFAULT_CH_BINARY_PATH: &str = "/usr/bin/cloud-hypervisor";
-pub const DEFAULT_CH_ROOTFS_TYPE: &str = "ext4";
+pub const DEFAULT_CH_ROOTFS_TYPE: &str = "erofs";
 pub const DEFAULT_CH_CONTROL_PATH: &str = "";
 pub const DEFAULT_CH_ENTROPY_SOURCE: &str = "/dev/urandom";
 pub const DEFAULT_CH_GUEST_KERNEL_IMAGE: &str = "vmlinuz";

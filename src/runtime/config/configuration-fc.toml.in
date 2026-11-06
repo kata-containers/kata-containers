@@ -17,9 +17,9 @@ kernel = "@KERNELPATH_FC@"
 image = "@IMAGEPATH@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
+#   - erofs (default)
 rootfs_type = @DEFROOTFSTYPE@
 
 # List of valid annotation names for the hypervisor
