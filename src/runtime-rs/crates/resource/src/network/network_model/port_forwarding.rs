@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::net::Ipv4Addr;
+use std::{fs, net::Ipv4Addr};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use tokio::process::Command;
 
 const IPV4_LOOPBACK: &str = "127.0.0.1/32";
@@ -30,6 +30,9 @@ pub(crate) async fn configure_port_forwarding(
 }
 
 async fn configure_ipv4(tap_name: &str, pod_ip: Ipv4Addr, tap_ip: Ipv4Addr) -> Result<()> {
+    fs::write("/proc/sys/net/ipv4/conf/all/route_localnet", "1")
+        .context("enable route localnet")?;
+
     let iptables = detect_iptables_binary().await?;
     let pod_cidr = format!("{pod_ip}/32");
     let tap_ip = tap_ip.to_string();
