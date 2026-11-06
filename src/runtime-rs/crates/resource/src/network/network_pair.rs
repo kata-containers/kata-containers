@@ -187,6 +187,35 @@ impl NetworkPair {
     }
 }
 
+/// The names of the links Kata made in the current network namespace. Every
+/// link Kata creates there is `tap<idx>` or `br<idx>` plus [`TAP_SUFFIX`], a
+/// name fixed before the link exists, in a namespace that belongs to one
+/// live sandbox at a time (two would collide on the names): the names are
+/// the record, and anything else, a user's own `*_kata` interface included,
+/// is not Kata's to touch. The one case the names cannot tell apart is a
+/// caller reusing a namespace across a dead sandbox and a live one; the dead
+/// one's sweep then takes the live one's links, a limit of naming-as-record.
+pub(crate) async fn kata_link_names(handle: &rtnetlink::Handle) -> Result<Vec<String>> {
+    let mut links = handle.link().get().execute();
+    let mut names = vec![];
+    while let Some(msg) = links.try_next().await.context("list links")? {
+        let link = link::get_link_from_message(msg);
+        let name = link.attrs().name.clone();
+        if is_kata_link_name(&name) {
+            names.push(name);
+        }
+    }
+    Ok(names)
+}
+
+/// Whether the name is one [`NetworkPair::new`] generates: `tap<idx>` or
+/// `br<idx>` plus [`TAP_SUFFIX`], nothing looser.
+fn is_kata_link_name(name: &str) -> bool {
+    name.strip_suffix(TAP_SUFFIX)
+        .and_then(|stem| stem.strip_prefix("tap").or_else(|| stem.strip_prefix("br")))
+        .is_some_and(|idx| !idx.is_empty() && idx.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// Delete a link by name, treating an absent link as already deleted.
 pub(crate) async fn delete_link_by_name(handle: &rtnetlink::Handle, name: &str) -> Result<()> {
     let mut links = handle.link().get().match_name(name.to_string()).execute();
@@ -262,6 +291,17 @@ mod tests {
     use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
     use test_utils::skip_if_not_root;
     use utils::link::net_test_utils::delete_link;
+
+    #[test]
+    fn only_generated_names_count_as_kata_links() {
+        for name in ["tap0_kata", "br0_kata", "tap17_kata"] {
+            assert!(is_kata_link_name(name), "{}", name);
+        }
+        // A user's own *_kata interface is not Kata's to sweep.
+        for name in ["vpn_kata", "_kata", "tap_kata", "br1a_kata", "tap0_kata0"] {
+            assert!(!is_kata_link_name(name), "{}", name);
+        }
+    }
 
     #[actix_rt::test]
     async fn a_failed_lookup_is_not_a_deleted_link() {

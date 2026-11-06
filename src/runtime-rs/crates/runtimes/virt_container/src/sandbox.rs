@@ -2250,9 +2250,19 @@ impl Persist for VirtSandbox {
     async fn save(&self) -> Result<Self::State> {
         let _saving = self.saving_state.lock().await;
         let hypervisor_state = self.hypervisor.save_state().await?;
+        let mut resource_state = self.resource_manager.save().await?;
+        if resource_state.netns_path.is_none() {
+            // The network is created late; until then the namespace the
+            // sandbox was given is still the record's to keep, for the TAP
+            // sweep of a death mid-construction.
+            resource_state.netns_path = self
+                .sandbox_config
+                .as_ref()
+                .and_then(|config| config.network_env.netns.clone());
+        }
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: VIRTCONTAINER.to_string(),
-            resource: Some(self.resource_manager.save().await?),
+            resource: Some(resource_state),
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
             config_path: self.config_path.clone(),
             created_netns: self.created_netns.clone(),

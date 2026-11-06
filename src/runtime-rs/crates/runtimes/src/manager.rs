@@ -254,7 +254,7 @@ impl RuntimeHandlerManagerInner {
             &sandbox_config.network_env,
             sandbox_config.config_path.as_deref(),
             Some((hypervisor_name, hypervisor)),
-            Some(cgroup_state),
+            Some(cgroup_state.clone()),
         )?;
 
         // Sandbox sizing information *may* be provided in two scenarios:
@@ -291,6 +291,24 @@ impl RuntimeHandlerManagerInner {
         if config.runtime.disable_new_netns || dan_path.exists() {
             discard_created_netns(&mut sandbox_config.network_env)?;
             sandbox_config.network_env.netns = None;
+            // The record above still names the renounced namespace; rewrite
+            // it, or a death here would have the cleanup sweep a namespace
+            // this sandbox never touches.
+            #[cfg(feature = "virt")]
+            {
+                let hypervisor_name = &config.runtime.hypervisor_name;
+                let hypervisor = config
+                    .hypervisor
+                    .get(hypervisor_name)
+                    .ok_or_else(|| anyhow!("hypervisor {} not found in config", hypervisor_name))?;
+                save_bootstrap_state(
+                    &self.id,
+                    &sandbox_config.network_env,
+                    sandbox_config.config_path.as_deref(),
+                    Some((hypervisor_name, hypervisor)),
+                    Some(cgroup_state),
+                )?;
+            }
         }
 
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
@@ -1092,6 +1110,33 @@ fn save_bootstrap_state(
 /// Remove what the shim made on the host before the sandbox existed.
 #[cfg(feature = "virt")]
 async fn cleanup_bootstrap(sid: &str, state: &SandboxState, toml_config: TomlConfig) -> Result<()> {
+    // A death mid-construction left Kata-named links in the recorded
+    // namespace. A created namespace takes its links with it below, and its
+    // record may name a path that never became a namespace, so only a
+    // caller's namespace, which outlives the sandbox, is swept.
+    if let Some(netns_path) = state
+        .resource
+        .as_ref()
+        .and_then(|r| r.netns_path.as_deref())
+        .filter(|netns_path| state.created_netns.as_deref() != Some(*netns_path))
+    {
+        // The sweep enters the namespace per thread; keep it off the
+        // multi-threaded runtime's workers, as the recovered path does.
+        let netns = netns_path.to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            let sweep = || -> Result<()> {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_io()
+                    .build()?;
+                rt.block_on(resource::network::remove_kata_links(&netns))
+            };
+            let _ = tx.send(sweep());
+        });
+        rx.await
+            .unwrap_or_else(|e| Err(e.into()))
+            .context("remove the kata links")?;
+    }
     if let Some(path) = state.created_netns.as_deref() {
         remove_netns(Path::new(path)).context("remove the network namespace")?;
     }

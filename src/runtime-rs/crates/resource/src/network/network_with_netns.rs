@@ -179,12 +179,8 @@ impl Network for NetworkWithNetns {
     async fn save(&self) -> Option<Vec<EndpointState>> {
         let inner = self.inner.read().await;
         let mut endpoint = vec![];
-        for (index, e) in inner.entity_list.iter().enumerate() {
-            if let Some(mut state) = e.endpoint.save().await {
-                // An endpoint whose attach never started still made its TAP
-                // at construction, so it is recorded too, flagged so cleanup
-                // undoes the construction and nothing else.
-                state.construction_only = !self.attach_started.includes(index);
+        for e in inner.entity_list.iter() {
+            if let Some(state) = e.endpoint.save().await {
                 endpoint.push(state);
             }
         }
@@ -645,11 +641,7 @@ mod cleanup_tests {
         let err = network.setup().await.unwrap_err();
         assert!(err.to_string().contains("could not be built"));
 
-        // What construction made is still recorded, flagged for the cleanup
-        // to undo the construction and nothing else.
-        let saved = network.save().await.unwrap();
-        assert_eq!(saved.len(), 1);
-        assert!(saved[0].construction_only);
+        // What construction made is still there for the cleanup to undo.
         network.remove(&Qemu::new()).await.unwrap();
         assert_eq!(built.undone.load(Ordering::SeqCst), 1);
         assert_eq!(built.calls.load(Ordering::SeqCst), 0);
@@ -684,16 +676,8 @@ mod cleanup_tests {
         let network = network(&[attached.clone(), failed.clone(), untouched.clone()]);
 
         assert!(network.setup().await.is_err());
-        // Every constructed endpoint is recorded; the one whose attach never
-        // started is flagged so cleanup only undoes its construction.
-        let saved = network.save().await.unwrap();
-        assert_eq!(
-            saved
-                .iter()
-                .map(|e| e.construction_only)
-                .collect::<Vec<_>>(),
-            vec![false, false, true]
-        );
+        // The cleanup detaches the endpoints whose attach started and only
+        // undoes the construction of the one whose attach never did.
         network.remove(&Qemu::new()).await.unwrap();
         assert_eq!(attached.calls.load(Ordering::SeqCst), 1);
         assert_eq!(failed.calls.load(Ordering::SeqCst), 1);

@@ -16,20 +16,11 @@ pub struct PhysicalEndpointState {
 }
 
 /// An endpoint, as the recovery of a dead shim needs it. Every field has a
-/// consumer there; an endpoint that leaves nothing on the host for recovery
-/// to act on records nothing.
+/// consumer there, and TAPs need none: recovery removes them from the
+/// recorded namespace by the name suffix every Kata link is created with,
+/// so an endpoint that passes no device through records nothing.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct EndpointState {
     #[serde(default)]
     pub physical_endpoint: Option<PhysicalEndpointState>,
-    /// The TAP interface the endpoint's constructor made in the network
-    /// namespace, which exists whether or not the attach ever ran.
-    #[serde(default)]
-    pub tap_iface_name: Option<String>,
-    /// The endpoint was constructed but its attach never started: nothing
-    /// reached the hypervisor or left the namespace, and only the
-    /// construction artifacts are there to remove. States saved before this
-    /// field existed only recorded endpoints whose attach had started.
-    #[serde(default)]
-    pub construction_only: bool,
 }
