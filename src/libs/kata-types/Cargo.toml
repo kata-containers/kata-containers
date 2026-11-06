@@ -24,7 +24,7 @@ lazy_static = "1.4.0"
 nix = { workspace = true }
 num_cpus = "1.13.1"
 oci-spec = { workspace = true }
-regex = "1.10.5"
+regex = { workspace = true }
 safe-path = { optional = true, path = "../safe-path" }
 scopeguard = "1.0.0"
 serde = { features = ["derive"], version = "1.0.100" }
