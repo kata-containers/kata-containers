@@ -20,8 +20,16 @@ ENV OPT_LIB="/opt/lib"
 
 ENV LIBSECCOMP_LINK_TYPE=static
 ENV LIBSECCOMP_LIB_PATH=${OPT_LIB}
+# On s390x and ppc64le, LIBC=gnu is used instead of musl. Force openssl-sys to
+# link OpenSSL statically (libssl.a/libcrypto.a) so the resulting binaries are
+# fully static with no dynamic runtime dependencies.
+ENV OPENSSL_STATIC=1
 
 ENV PKG_CONFIG_PATH=${OPT_LIB}/pkgconfig:$PKG_CONFIG_PATH
+# When Cargo compiles for explicit target triples (such as s390x-unknown-linux-gnu
+# or powerpc64le-unknown-linux-gnu), pkg-config-rs treats the build as cross-compilation
+# and refuses to invoke un-prefixed host pkg-config unless PKG_CONFIG_ALLOW_CROSS=1 is exported.
+ENV PKG_CONFIG_ALLOW_CROSS=1
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -40,7 +48,9 @@ RUN apt-get update && \
 		libssl-dev \
 		make \
 		musl-tools \
+		openssl \
 		perl \
+		pkg-config \
 		protobuf-compiler && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
@@ -61,21 +71,28 @@ RUN ARCH=$(uname -m) && \
     rm /tmp/oras.tar.gz && \
     oras version
 
-RUN ARCH=$(uname -m) && \
-    case "${ARCH}" in \
-        x86_64) MUSL_TARGET="x86_64-unknown-linux-musl" ;; \
-        aarch64) MUSL_TARGET="aarch64-unknown-linux-musl" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    rustup target add "${MUSL_TARGET}"
+RUN ARCH=$(uname -m); \
+	rust_arch=""; \
+	libc=""; \
+	case "${ARCH}" in \
+		"aarch64") rust_arch="${ARCH}"; libc="musl" ;; \
+		"ppc64le") rust_arch="powerpc64le"; libc="gnu" ;; \
+		"x86_64") rust_arch="${ARCH}"; libc="musl" ;; \
+		"s390x") rust_arch="${ARCH}"; libc="gnu" ;; \
+		*) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+	esac; \
+	rustup target add "${rust_arch}-unknown-linux-${libc}"
 
-RUN ARCH=$(uname -m) && \
-    case "${ARCH}" in \
-        x86_64) GO_ARCH="amd64" ;; \
-        aarch64) GO_ARCH="arm64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    kernelname=$(uname -s | tr '[:upper:]' '[:lower:]') && \
-    curl -fsSOL "https://go.dev/dl/go${GO_TOOLCHAIN}.${kernelname}-${GO_ARCH}.tar.gz" && \
-    tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-${GO_ARCH}.tar.gz" && \
-    rm "go${GO_TOOLCHAIN}.${kernelname}-${GO_ARCH}.tar.gz"
+RUN ARCH=$(uname -m); \
+	goarch=""; \
+	kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	case "${ARCH}" in \
+		"aarch64") goarch="arm64" ;; \
+		"ppc64le") goarch="${ARCH}" ;; \
+		"x86_64") goarch="amd64" ;; \
+		"s390x") goarch="${ARCH}" ;; \
+		*) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+	esac; \
+	curl -fsSOL "https://go.dev/dl/go${GO_TOOLCHAIN}.${kernelname}-${goarch}.tar.gz" && \
+	tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-${goarch}.tar.gz" && \
+	rm "go${GO_TOOLCHAIN}.${kernelname}-${goarch}.tar.gz"
