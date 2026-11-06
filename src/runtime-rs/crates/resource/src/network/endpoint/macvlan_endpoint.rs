@@ -15,7 +15,7 @@ use hypervisor::device::DeviceType;
 use hypervisor::{Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
-use super::endpoint_persist::{EndpointState, MacvlanEndpointState};
+use super::endpoint_persist::EndpointState;
 use super::{attach_network_device, Endpoint};
 use crate::network::{utils, NetworkPair};
 
@@ -112,10 +112,6 @@ impl Endpoint for MacVlanEndpoint {
 
     async fn save(&self) -> Option<EndpointState> {
         Some(EndpointState {
-            macvlan_endpoint: Some(MacvlanEndpointState {
-                if_name: self.net_pair.virt_iface.name.clone(),
-                network_qos: self.net_pair.network_qos,
-            }),
             tap_iface_name: Some(self.net_pair.tap.tap_iface.name.clone()),
             ..Default::default()
         })

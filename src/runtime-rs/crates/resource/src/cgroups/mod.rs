@@ -27,7 +27,6 @@ pub fn preview_cgroup_state(sid: &str, toml_config: &TomlConfig) -> Result<Cgrou
         path: Some(config.path),
         overhead_path: Some(config.overhead_path),
         sandbox_cgroup_only: config.sandbox_cgroup_only,
-        enable_vcpus_pinning: config.enable_vcpus_pinning,
     })
 }
 
@@ -116,7 +115,8 @@ impl CgroupConfig {
             path: path.clone(),
             overhead_path: overhead_path.clone(),
             sandbox_cgroup_only: state.sandbox_cgroup_only,
-            enable_vcpus_pinning: state.enable_vcpus_pinning,
+            // Only a live sandbox pins vCPUs; a restored one just deletes.
+            enable_vcpus_pinning: false,
         })
     }
 }
