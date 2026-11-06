@@ -5,14 +5,16 @@
 
 mod core;
 mod device;
+mod host;
 
 pub use core::{
     discover_vfio_ap_device, discover_vfio_group_device, is_vfio_ap_device, VfioDevice,
     VfioDeviceType,
 };
-pub use device::VfioDeviceBase;
-pub use device::VfioDeviceModern;
-pub use device::VfioDeviceModernHandle;
+pub use device::{
+    VfioDeviceBase, VfioDeviceModern, VfioDeviceModernHandle, VfioDeviceResourceType,
+};
+pub use host::{bind_device_to_host, bind_device_to_vfio, get_vfio_device, get_vfio_iommu_group};
 
 use std::fs;
 use std::path::Path;

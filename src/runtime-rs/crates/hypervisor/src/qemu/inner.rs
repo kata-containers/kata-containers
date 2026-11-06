@@ -279,7 +279,15 @@ impl QemuInner {
                 }
                 DeviceType::VfioModern(vfio_dev) => {
                     // Snapshot parameters under the lock; release before doing cmdline work.
-                    let (vfio_device_id, device_type, ap_sysfs_path, devices, iommufd, bus_port_id) = {
+                    let (
+                        vfio_device_id,
+                        device_type,
+                        resource_type,
+                        ap_sysfs_path,
+                        devices,
+                        iommufd,
+                        bus_port_id,
+                    ) = {
                         let vfio_device = vfio_dev.lock().await;
                         let vfio_device_id = vfio_device.device_id.clone();
                         let device_type = vfio_device.device.device_type.clone();
@@ -297,12 +305,17 @@ impl QemuInner {
                         (
                             vfio_device_id,
                             device_type,
+                            vfio_device.config.resource_type,
                             ap_sysfs_path,
                             devices,
                             vfio_device.device.iommufd.clone(),
                             vfio_device.config.bus_port_id.clone(),
                         )
                     };
+
+                    if device_type != VfioDeviceType::MediatedAp && devices.len() > 8 {
+                        return Err(anyhow!("VFIO group has more than 8 PCI functions"));
+                    }
 
                     if device_type == VfioDeviceType::MediatedAp {
                         // s390x VFIO-AP: -device vfio-ap,sysfsdev=<path>
@@ -312,6 +325,37 @@ impl QemuInner {
                             sl!(),
                             "Completed VFIOModern AP coldplug for sysfsdev: {}", ap_sysfs_path
                         );
+                    } else if resource_type == VfioDeviceResourceType::PhysicalEndpoint {
+                        let port_index = bus_port_id
+                            .0
+                            .strip_prefix("rp")
+                            .and_then(|value| value.parse::<u32>().ok())
+                            .ok_or_else(|| {
+                                anyhow!("physical endpoint has invalid root port {}", bus_port_id.0)
+                            })?;
+                        cmdline.add_physical_endpoint_root_port(&bus_port_id.0, port_index);
+                        for (index, device) in devices.iter().enumerate() {
+                            let qdev_id = if index == 0 {
+                                vfio_device_id.clone()
+                            } else {
+                                format!("{}-{}", vfio_device_id, index)
+                            };
+                            let vfio_config = VfioDeviceConfig {
+                                host_bdf: device.addr.to_string(),
+                                qdev_id: Some(qdev_id),
+                                bus: bus_port_id.0.clone(),
+                                vfio_addr: if devices.len() > 1 {
+                                    format!("0x0.0x{:x}", index)
+                                } else {
+                                    "0x0".to_string()
+                                },
+                                vfio_multifunction: index == 0 && devices.len() > 1,
+                                x_pci_vendor_id: device.vendor_id.clone(),
+                                x_pci_device_id: device.device_id.clone(),
+                                ..Default::default()
+                            };
+                            cmdline.add_physical_vfio_device(&vfio_config)?;
+                        }
                     } else {
                         // PCI cold plug devices
                         for (index, dev) in devices.iter().enumerate() {
@@ -322,7 +366,19 @@ impl QemuInner {
                                 bus_port_id.1 as u16,
                                 bus_port_id.1 + 1,
                             )
-                            .with_vfio_bus(bus_port_id.0.clone());
+                            .with_vfio_bus(bus_port_id.0.clone())
+                            .with_qdev_id(if index == 0 {
+                                vfio_device_id.clone()
+                            } else {
+                                format!("{}-{}", vfio_device_id, index)
+                            })
+                            .with_root_port(index == 0)
+                            .with_vfio_addr(if devices.len() > 1 {
+                                format!("0x0.0x{:x}", index)
+                            } else {
+                                "0x0".to_string()
+                            })
+                            .with_vfio_multifunction(index == 0 && devices.len() > 1);
                             if let (Some(iommufd), Some(cdev)) =
                                 (iommufd.as_ref(), dev.vfio_cdev.as_ref())
                             {
@@ -342,69 +398,18 @@ impl QemuInner {
                         {
                             let mut vfio_device = vfio_dev.lock().await;
                             vfio_device.config.guest_pci_path = Some(pci_path.clone());
+                            vfio_device.device_options = devices
+                                .iter()
+                                .enumerate()
+                                .map(|(index, device)| {
+                                    format!("{}={:02x}/00.{:x}", device.addr, bus_port_id.1, index)
+                                })
+                                .collect();
                         }
                         info!(
                             sl!(),
                             "Completed VFIOModern coldplug with returned guest pci path: {:?}",
                             pci_path
-                        );
-                    }
-                }
-                DeviceType::Vfio(vfio_dev) => {
-                    // Cold-plug physical-endpoint VFs (non-IOMMUFD VFIO) onto
-                    // pre-allocated PCIe root ports.  The bus assignment and
-                    // guest PCI path were computed by do_add_pcie_endpoint()
-                    // at device-registration time.
-                    //
-                    // We must emit BOTH:
-                    //   1. the pcie-root-port for vfio_dev.bus (e.g. "rp1")
-                    //   2. the vfio-pci device on that bus
-                    //
-                    // add_pcie_root_ports() skips allocated ports assuming
-                    // VfioModern already emitted them.  For regular Vfio
-                    // (physical endpoints) we have to emit the root port here.
-                    let port_index = vfio_dev
-                        .bus
-                        .strip_prefix("rp")
-                        .and_then(|s| s.parse::<u32>().ok())
-                        .unwrap_or(0);
-                    cmdline.add_physical_endpoint_root_port(&vfio_dev.bus, port_index);
-
-                    for hostdev in &vfio_dev.devices {
-                        let host_bdf = format!("{}:{}", hostdev.domain, hostdev.bus_slot_func);
-                        let (vendor_id, device_id) =
-                            hostdev
-                                .device_vendor_class
-                                .as_ref()
-                                .map_or((None, None), |dvc| {
-                                    let (dev, vendor) = dvc.get_device_vendor().unwrap_or((0, 0));
-                                    let v = if vendor != 0 {
-                                        Some(format!("0x{:04x}", vendor))
-                                    } else {
-                                        None
-                                    };
-                                    let d = if dev != 0 {
-                                        Some(format!("0x{:04x}", dev))
-                                    } else {
-                                        None
-                                    };
-                                    (v, d)
-                                });
-                        cmdline.add_physical_vfio_device(
-                            &host_bdf,
-                            &hostdev.hostdev_id,
-                            &vfio_dev.bus,
-                            vendor_id.as_deref(),
-                            device_id.as_deref(),
-                        );
-                        info!(
-                            sl!(),
-                            "cold-plug physical VFIO device: host={} id={} bus={} \
-                             guest_pci_path={:?}",
-                            host_bdf,
-                            hostdev.hostdev_id,
-                            vfio_dev.bus,
-                            hostdev.guest_pci_path,
                         );
                     }
                 }
@@ -1195,7 +1200,7 @@ async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> 
 }
 
 use crate::device::DeviceType;
-use crate::vfio_device::VfioDeviceType;
+use crate::vfio_device::{VfioDeviceResourceType, VfioDeviceType};
 
 // device manager part of Hypervisor
 impl QemuInner {
@@ -1228,7 +1233,6 @@ impl QemuInner {
             (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => {
                 !std::sync::Arc::ptr_eq(a, b)
             }
-            (DeviceType::Vfio(a), DeviceType::Vfio(b)) => a.device_id != b.device_id,
             (DeviceType::VfioModern(a), DeviceType::VfioModern(b)) => !std::sync::Arc::ptr_eq(a, b),
             _ => true,
         });
@@ -1254,19 +1258,20 @@ impl QemuInner {
                 qmp.hotunplug_block_device(&driver, index)
                     .context("hotunplug block device")?;
             }
-            DeviceType::Vfio(ref vfio_device) => {
-                let hostdev_id = vfio_device
-                    .devices
-                    .first()
-                    .map(|device| device.hostdev_id.as_str())
-                    .ok_or_else(|| anyhow!("VFIO device has no host device to hotunplug"))?;
-                qmp.hotunplug_vfio_device(hostdev_id)
-                    .context("hotunplug VFIO device")?;
-            }
             DeviceType::VfioModern(ref vfio_device) => {
-                let hostdev_id = vfio_device.lock().await.device_id.clone();
-                qmp.hotunplug_vfio_device(&hostdev_id)
-                    .context("hotunplug VFIO device")?;
+                let (hostdev_id, device_count) = {
+                    let vfio = vfio_device.lock().await;
+                    (vfio.device_id.clone(), vfio.device.devices.len().max(1))
+                };
+                for index in (0..device_count).rev() {
+                    let qdev_id = if index == 0 {
+                        hostdev_id.clone()
+                    } else {
+                        format!("{}-{}", hostdev_id, index)
+                    };
+                    qmp.hotunplug_vfio_device(&qdev_id)
+                        .with_context(|| format!("hotunplug VFIO device {qdev_id}"))?;
+                }
             }
             DeviceType::Network(_)
             | DeviceType::VhostUserBlk(_)
@@ -1313,26 +1318,6 @@ impl QemuInner {
                 }
 
                 return Ok(DeviceType::Network(network_device));
-            }
-            DeviceType::Vfio(mut vfiodev) => {
-                // FIXME: the first one might not the true device we want to passthrough.
-                // The `multifunction=on` is temporarily unsupported.
-                // Tracking issue #11292 has been created to monitor progress towards full multifunction support.
-                let primary_device = vfiodev.devices.first_mut().unwrap();
-                info!(
-                    sl!(),
-                    "qmp hotplug vfio primary_device {:?}", &primary_device
-                );
-
-                primary_device.guest_pci_path = qmp.hotplug_vfio_device(
-                    &primary_device.hostdev_id,
-                    &primary_device.sysfs_path,
-                    &primary_device.bus_slot_func,
-                    &vfiodev.driver_type,
-                    &vfiodev.bus,
-                )?;
-
-                return Ok(DeviceType::Vfio(vfiodev));
             }
             DeviceType::BlockModern(ref block_device) => {
                 info!(sl!(), "Starting QMP hotplug for BlockModern device");
@@ -1484,8 +1469,10 @@ impl QemuInner {
                 {
                     let mut vfio_device = vfiodev.lock().await;
                     if device_type != VfioDeviceType::MediatedAp {
-                        if let Some(p) = guest_pci_path {
-                            vfio_device.config.guest_pci_path = Some(p);
+                        if let Some(pci_path) = guest_pci_path {
+                            vfio_device.config.guest_pci_path = Some(pci_path.clone());
+                            vfio_device.device_options =
+                                vec![format!("{}={}", vfio_device.device.primary.addr, pci_path)];
                         }
                     }
                     info!(
