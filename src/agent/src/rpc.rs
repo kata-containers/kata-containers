@@ -464,17 +464,21 @@ impl AgentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> Result<()> {
         let cid = req.container_id;
-
-        // Drop the host guest mapping for this container so we can reuse the
-        // PCI slots for the next containers
+        kata_sys_util::validate::verify_id(&cid)?;
 
         let mut sandbox = self.sandbox.lock().await;
         sandbox.bind_watcher.remove_container(&cid).await;
-        sandbox
-            .get_container(&cid)
-            .ok_or_else(|| anyhow!("Invalid container id"))?
-            .destroy()
-            .await?;
+        // Creation can fail before registration but after recording guest resources.
+        // Repeated removal must also tolerate an already removed container.
+        if let Some(container) = sandbox.get_container(&cid) {
+            container.destroy().await?;
+        } else {
+            info!(
+                sl(),
+                "container is not registered, cleaning up remaining resources";
+                "container_id" => &cid,
+            );
+        }
         remove_container_resources(&mut sandbox, &cid).await?;
         Ok(())
     }
@@ -2864,6 +2868,122 @@ mod tests {
             .unwrap(),
             dir,
         )
+    }
+
+    #[tokio::test]
+    async fn test_do_remove_container_after_failed_create() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let cid = "failed-create";
+        let other_cid = "other-container";
+        let private_storage = "/test/failed-create/private";
+        let shared_storage = "/test/shared";
+        sandbox.add_sandbox_storage(private_storage, false).await;
+        sandbox.add_sandbox_storage(shared_storage, false).await;
+        let shared_state = sandbox.add_sandbox_storage(shared_storage, false).await;
+        sandbox.container_mounts.insert(
+            cid.to_string(),
+            vec![private_storage.to_string(), shared_storage.to_string()],
+        );
+        sandbox
+            .container_mounts
+            .insert(other_cid.to_string(), vec![shared_storage.to_string()]);
+        let mapping = std::collections::HashMap::from([(
+            "0000:01:00.0".parse().unwrap(),
+            "0000:00:06.0".parse().unwrap(),
+        )]);
+        sandbox.pcimap.insert(cid.to_string(), mapping);
+        sandbox.pcimap.entry(other_cid.to_string()).or_default();
+        sandbox
+            .container_verity_devices
+            .entry(cid.to_string())
+            .or_default();
+        let agent_service = AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        };
+
+        for _ in 0..2 {
+            agent_service
+                .do_remove_container(protocols::agent::RemoveContainerRequest {
+                    container_id: cid.to_string(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            let sandbox = agent_service.sandbox.lock().await;
+            assert!(!sandbox.containers.contains_key(cid));
+            assert!(!sandbox.container_mounts.contains_key(cid));
+            assert!(!sandbox.pcimap.contains_key(cid));
+            assert!(!sandbox.container_verity_devices.contains_key(cid));
+            assert!(!sandbox.storages.contains_key(private_storage));
+            assert!(sandbox.storages.contains_key(shared_storage));
+            assert_eq!(shared_state.ref_count().await, 1);
+            assert_eq!(
+                sandbox.container_mounts[other_cid],
+                vec![shared_storage.to_string()]
+            );
+            assert!(sandbox.pcimap.contains_key(other_cid));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_do_remove_container_rejects_invalid_id() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let agent_service = AgentService {
+            sandbox: Arc::new(Mutex::new(Sandbox::new(&logger).unwrap())),
+            init_mode: true,
+            oma: None,
+        };
+
+        for cid in ["", "../container", "/container"] {
+            let mut sandbox = agent_service.sandbox.lock().await;
+            sandbox.pcimap.entry(cid.to_string()).or_default();
+            drop(sandbox);
+
+            agent_service
+                .do_remove_container(protocols::agent::RemoveContainerRequest {
+                    container_id: cid.to_string(),
+                    ..Default::default()
+                })
+                .await
+                .expect_err("invalid container id was accepted");
+            assert!(agent_service.sandbox.lock().await.pcimap.contains_key(cid));
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_do_remove_container_preserves_destroy_error() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let (mut container, _root) = create_linuxcontainer();
+        let cid = container.id.clone();
+        container.config.spec.as_mut().unwrap().set_root(None);
+        sandbox.add_container(container);
+        sandbox.pcimap.entry(cid.clone()).or_default();
+        let agent_service = AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        };
+
+        let err = agent_service
+            .do_remove_container(protocols::agent::RemoveContainerRequest {
+                container_id: cid.clone(),
+                ..Default::default()
+            })
+            .await
+            .expect_err("container destruction error was hidden");
+        assert!(err.to_string().contains("oci.root is none"));
+        let sandbox = agent_service.sandbox.lock().await;
+        assert!(sandbox.containers.contains_key(&cid));
+        assert!(sandbox.pcimap.contains_key(&cid));
+        sandbox.containers[&cid].cgroup_manager.destroy().unwrap();
     }
 
     #[tokio::test]
