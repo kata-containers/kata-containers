@@ -32,7 +32,10 @@ use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
 use crate::container_manager::is_termination_signal;
 use crate::oom::CrioOomNotifier;
 
-use super::{logger_with_process, Container};
+use super::{
+    hugepages::{is_pod_sized, PodHugePages},
+    logger_with_process, Container,
+};
 
 pub struct VirtContainerManager {
     sid: String,
@@ -43,6 +46,10 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
+    // Serializes updates checked against the pod's huge page budget.
+    hugepage_updates: tokio::sync::Mutex<()>,
+    // The page size the VM was sized on, as hugetlb names it.
+    pod_sized_page_size: String,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -69,6 +76,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
+        pod_sized_page_size: String,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -79,7 +87,31 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
+            hugepage_updates: Default::default(),
+            pod_sized_page_size,
         }
+    }
+
+    // The pod's running containers but except, when pod sized.
+    async fn pod_huge_pages(
+        &self,
+        containers: &HashMap<String, Container>,
+        except: &str,
+    ) -> Option<PodHugePages> {
+        if !is_pod_sized(&*self.resource_manager.config().await) {
+            return None;
+        }
+        let page = self.pod_sized_page_size.clone();
+        let mut others = Vec::new();
+        for (id, c) in containers.iter() {
+            if id == except {
+                continue;
+            }
+            if let Some(r) = c.reservation(&page).await {
+                others.push(r);
+            }
+        }
+        Some(PodHugePages { page, others })
     }
 
     async fn get_vmm_master_tid(&self) -> Result<u32> {
@@ -137,7 +169,8 @@ impl ContainerManager for VirtContainerManager {
             .await;
 
         let mut containers = self.containers.write().await;
-        if let Err(e) = container.create(spec).await {
+        let pod = self.pod_huge_pages(&containers, &config.container_id).await;
+        if let Err(e) = container.create(spec, pod.as_ref()).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }
@@ -476,7 +509,14 @@ impl ContainerManager for VirtContainerManager {
         let c = containers
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
-        c.update(&resource).await.context("update_container")
+        let _serial = match is_pod_sized(&*self.resource_manager.config().await) {
+            true => Some(self.hugepage_updates.lock().await),
+            false => None,
+        };
+        let pod = self.pod_huge_pages(&containers, container_id).await;
+        c.update(&resource, pod.as_ref())
+            .await
+            .context("update_container")
     }
 
     #[instrument]

@@ -136,7 +136,7 @@ func TestKataAgentSendReq(t *testing.T) {
 		assert.Nil(err)
 	}
 
-	sandbox := &Sandbox{}
+	sandbox := &Sandbox{config: &SandboxConfig{}}
 	container := &Container{}
 	execid := "processFooBar"
 

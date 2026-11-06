@@ -180,6 +180,13 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
+	// HugePagesPodSizing sizes a huge page backed VM from the pod's huge page
+	// reservation and bounds its containers by their reservations
+	HugePagesPodSizing bool
+
+	// PodSizedHugePageSize is the size of the huge pages a VM sized from its pod is on
+	PodSizedHugePageSize uint64
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 
@@ -245,8 +252,10 @@ type ContainerConfig struct {
 	Annotations map[string]string
 	// Resources for recoding update
 	Resources specs.LinuxResources
-	ID        string
-	RootFs    string
+	// GuestMemoryCeiling is the memory ceiling a container was given in a guest sized from its pod
+	GuestMemoryCeiling *uint64 `json:",omitempty"`
+	ID                 string
+	RootFs             string
 }
 
 // SandboxConfig is a sandbox configuration.

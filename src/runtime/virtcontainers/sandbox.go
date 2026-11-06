@@ -733,6 +733,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	// After validation, so MemorySize is what the VM would boot with.
+	if err := s.sizeHugepageBackedVMFromPod(&sandboxConfig, factory != nil); err != nil {
+		return nil, err
+	}
+
 	// Start the event loop if not already started when fs sharing is not used
 	if sandboxConfig.HypervisorConfig.SharedFS == config.NoSharedFS {
 		// Start the StartFileEventWatcher method as a goroutine
@@ -847,6 +852,95 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	return coldPlugVFIO, nil
+}
+
+// Variables so tests can stand in for the host.
+var (
+	readPodHugetlbLimit = resCtrl.HugetlbLimitBytes
+	readVMHugepageSize  = func() (uint64, error) {
+		return hugepageSizeBytes(defaultHugepagesMountpoint)
+	}
+)
+
+// Floor for a VM sized from the pod's reservation. default_memory cannot serve:
+// the runtime cannot tell its own substituted default from a configured one.
+const minHugePageBackedVMMiB = 1024
+
+// Sizes the VM from hugetlb.<size>.max on the pod's cgroup, which caps the
+// mapping its RAM comes from. The CRI does not carry it (k/enhancements#4113).
+// With the option set, a sandbox that cannot be sized this way is refused.
+func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig, vmFactory bool) error {
+	hc := &sandboxConfig.HypervisorConfig
+	if !hugePagePodSized(hc) || s.state.State != "" {
+		return nil
+	}
+	if err := CheckHugePagesPodSizing(sandboxConfig.HypervisorType, sandboxConfig.StaticResourceMgmt, sandboxConfig.SandboxCgroupOnly, vmFactory); err != nil {
+		return err
+	}
+
+	spec := s.GetPatchedOCISpec()
+	if spec == nil || spec.Linux == nil || spec.Linux.CgroupsPath == "" {
+		return errors.New("enable_hugepages_pod_sizing needs the sandbox's cgroup path to find its pod's cgroup")
+	}
+	podCgroup, err := resCtrl.PodCgroupPath(spec.Linux.CgroupsPath)
+	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot find the pod's cgroup from %q: %w", spec.Linux.CgroupsPath, err)
+	}
+
+	pageSize, err := readVMHugepageSize()
+	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot tell the VM's huge page size: %w", err)
+	}
+	if _, err := resCtrl.HugetlbSizeName(pageSize); err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot tell the VM's huge page size: %w", err)
+	}
+	podResource := resCtrl.HugepagesResourceName(pageSize)
+
+	reserved, stated, err := readPodHugetlbLimit(podCgroup, pageSize)
+	if errors.Is(err, resCtrl.ErrHugetlbCgroupV1) {
+		return errors.New("enable_hugepages_pod_sizing needs cgroup v2: the pod's huge page reservation is read from the unified hierarchy")
+	}
+	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot read the pod's %s reservation (pod cgroup %s): %w", podResource, podCgroup, err)
+	}
+	// An unlimited cgroup can also read back as a byte count near 2^63.
+	reservedMB := reserved >> utils.MibToBytesShift
+	if !stated || reservedMB > math.MaxUint32 {
+		value := resCtrl.HugetlbUnlimited
+		if stated {
+			value = fmt.Sprint(reserved)
+		}
+		return fmt.Errorf("the pod's cgroup %s has no finite %s limit the VM can be sized from (it reads %s): set a finite %s limit on the pod's cgroup, as the kubelet does", podCgroup, podResource, value, podResource)
+	}
+
+	switch {
+	case reservedMB == 0:
+		return fmt.Errorf("the VM is backed by huge pages but its pod reserved none: request %s on a container of the pod, or give the runtime class a pod overhead of %s (pod cgroup %s)", podResource, podResource, podCgroup)
+	case hc.DefaultMaxMemorySize > 0 && reservedMB > hc.DefaultMaxMemorySize:
+		return fmt.Errorf("the pod reserved %d MiB of %s, more than the %d MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup %s)", reservedMB, podResource, hc.DefaultMaxMemorySize, podCgroup)
+	case reservedMB < minHugePageBackedVMMiB:
+		return fmt.Errorf("the pod reserved %d MiB of %s, less than the %d MiB a guest needs: reserve more on a container of the pod or as the runtime class's pod overhead (pod cgroup %s)", reservedMB, podResource, minHugePageBackedVMMiB, podCgroup)
+	}
+
+	if reservedMB < uint64(hc.MemorySize) {
+		// default_memory sizes only guests that this option leaves alone.
+		s.Logger().WithFields(logrus.Fields{
+			"pod-resource":      podResource,
+			"reserved-mb":       reservedMB,
+			"default-memory-mb": hc.MemorySize,
+		}).Info("the pod reserved fewer huge pages than default_memory: its guest is smaller than the ones this configuration boots by default")
+	}
+
+	s.Logger().WithFields(logrus.Fields{
+		"pod-cgroup":        podCgroup,
+		"pod-resource":      podResource,
+		"reserved-mb":       reservedMB,
+		"default-memory-mb": hc.MemorySize,
+	}).Info("sizing the huge page backed VM from the pod's huge page reservation")
+	hc.MemorySize = uint32(reservedMB)
+	hc.PodSizedHugePageSize = pageSize
+
+	return nil
 }
 
 func (s *Sandbox) createResourceController() error {
@@ -1793,6 +1887,20 @@ func (s *Sandbox) addContainer(c *Container) error {
 	return nil
 }
 
+// The config each container holds, in s.config.Containers order. An entry
+// without a container yet stands for itself.
+func (s *Sandbox) containerConfigs() []*ContainerConfig {
+	cfgs := make([]*ContainerConfig, 0, len(s.config.Containers))
+	for i := range s.config.Containers {
+		if c, ok := s.containers[s.config.Containers[i].ID]; ok {
+			cfgs = append(cfgs, c.config)
+		} else {
+			cfgs = append(cfgs, &s.config.Containers[i])
+		}
+	}
+	return cfgs
+}
+
 // CreateContainer creates a new container in the sandbox
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
@@ -1812,7 +1920,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	}()
 
 	// Create the container object, add devices to the sandbox's device-manager:
-	c, err := newContainer(ctx, s, &s.config.Containers[len(s.config.Containers)-1])
+	c, err := newContainer(ctx, s, contConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -2134,7 +2242,7 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	defer span.End()
 
 	for i := range s.config.Containers {
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, s.config.Containers[i])
 		if err != nil {
 			return err
 		}
@@ -2760,7 +2868,7 @@ func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
 	memorySandbox := uint64(0)
 	needPodSwap := false
 	swapSandbox := int64(0)
-	for _, c := range s.config.Containers {
+	for _, c := range s.containerConfigs() {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
 			s.Logger().WithField("container", c.ID).Debug("Do not taking into account memory resources of not running containers")
@@ -2807,7 +2915,7 @@ func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
 	floatCPU := float32(0)
 	cpusetCount := int(0)
 
-	for _, c := range s.config.Containers {
+	for _, c := range s.containerConfigs() {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
 			s.Logger().WithField("container", c.ID).Debug("Do not taking into account CPU resources of not running containers")
@@ -3059,7 +3167,7 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 
 	cpuResult := cpuset.NewCPUSet()
 	memResult := cpuset.NewCPUSet()
-	for _, ctr := range s.config.Containers {
+	for _, ctr := range s.containerConfigs() {
 		if ctr.Resources.CPU != nil {
 			currCPUSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
 			if err != nil {
@@ -3125,7 +3233,7 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 		contConfig.CustomSpec = &spec
 		s.config.Containers[i] = contConfig
 
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, s.config.Containers[i])
 		if err != nil {
 			return err
 		}

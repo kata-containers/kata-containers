@@ -624,6 +624,7 @@ mod tests {
             rootless_cgroup: false,
             spec: Some(spec),
             container_name: "container1".to_owned(),
+            pod_memory_max_bytes: 0,
         };
 
         validate(&config).unwrap_err();
