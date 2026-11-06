@@ -22,7 +22,9 @@ use hypervisor::utils::{
     is_recorded_vmm_user, remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
     VMM_USER_UID_UNKNOWN,
 };
-use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
+use kata_sys_util::{
+    mount::get_mount_path, netns::remove_netns, spec::load_oci_spec, validate::verify_id,
+};
 use kata_types::{
     config::{
         default::DEFAULT_GUEST_DNS_FILE,
@@ -388,6 +390,21 @@ impl RuntimeHandlerManager {
     /// whether the sandbox's saved state is still the record of something.
     pub async fn cleanup(&self) -> Result<CleanupOutcome> {
         let inner = self.inner.read().await;
+        verify_id(&inner.id).context("verify sandbox id")?;
+        // Pod containers share their sandbox's state and have no runtime directory
+        // of their own. Never restore the parent sandbox to clean up such a task.
+        let runtime_dir = Path::new(KATA_PATH).join(&inner.id);
+        if !runtime_dir
+            .try_exists()
+            .context("inspect sandbox runtime directory")?
+        {
+            debug!(
+                sl!(),
+                "no runtime directory for task, skipping sandbox cleanup";
+                "task_id" => &inner.id,
+            );
+            return Ok(());
+        }
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
@@ -1343,6 +1360,38 @@ mod tests {
     use protobuf::Message as ProtobufMessage;
     use rstest::rstest;
     use tokio::sync::mpsc::channel;
+
+    #[tokio::test]
+    async fn test_cleanup_without_sandbox_runtime_directory() {
+        let id = format!(
+            "absent-task-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        assert!(!Path::new(KATA_PATH).join(&id).try_exists().unwrap());
+        let (sender, _receiver) = channel(1);
+        let handler = RuntimeHandlerManager::new(&id, sender).unwrap();
+
+        handler.cleanup().await.unwrap();
+        handler.cleanup().await.unwrap();
+        assert!(!Path::new(KATA_PATH).join(&id).try_exists().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_rejects_invalid_sandbox_id() {
+        for id in ["", "../sandbox", "/sandbox"] {
+            let (sender, _receiver) = channel(1);
+            let handler = RuntimeHandlerManager::new(id, sender).unwrap();
+            let err = handler
+                .cleanup()
+                .await
+                .expect_err("invalid sandbox id was accepted");
+            assert!(err.to_string().contains("verify sandbox id"));
+        }
+    }
 
     #[rstest]
     #[case::armed_guard_removes_runtime_dir(false, false)]
