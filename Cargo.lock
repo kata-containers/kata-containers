@@ -6725,6 +6725,7 @@ dependencies = [
  "futures",
  "inotify 0.9.6",
  "kata-sys-util",
+ "kata-types",
  "lazy_static",
  "libc",
  "libseccomp",
