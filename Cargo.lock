@@ -960,7 +960,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "cgroups-rs"
 version = "0.5.1"
-source = "git+https://github.com/kata-containers/cgroups-rs?rev=92579a38825864828b1a56ec8711e55b03f4c46f#92579a38825864828b1a56ec8711e55b03f4c46f"
+source = "git+https://github.com/kata-containers/cgroups-rs?rev=4eb91bc293ec27b0ca33c2c796c1a675d5bf1f0a#4eb91bc293ec27b0ca33c2c796c1a675d5bf1f0a"
 dependencies = [
  "async-io 2.6.0",
  "bit-vec 0.6.3",
