@@ -410,7 +410,14 @@ impl RuntimeHandlerManager {
             }
             #[cfg(feature = "virt")]
             name if name == VirtContainer::name() => {
-                if sandbox_args.toml_config.runtime.keep_abnormal {
+                // The state's own record wins: the file can have changed, or
+                // be gone, since the sandbox read it. Only a state saved
+                // before the configuration was read leaves the decision to
+                // the file.
+                let keep_abnormal = sandbox_state
+                    .keep_abnormal
+                    .unwrap_or(sandbox_args.toml_config.runtime.keep_abnormal);
+                if keep_abnormal {
                     info!(sl!(), "skip cleanup for keep_abnormal");
                     return Ok(());
                 }

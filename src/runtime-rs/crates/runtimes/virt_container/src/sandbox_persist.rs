@@ -33,6 +33,13 @@ pub struct SandboxState {
     /// that did not write the field marked that by having no resources.
     #[serde(default)]
     pub bootstrap: bool,
+    /// The runtime's keep_abnormal when the sandbox saved, so the decision
+    /// to leave an abnormal sandbox alone does not hang on the external
+    /// configuration file still saying what it said then. A state saved
+    /// before the configuration was read carries none and falls back to
+    /// the file.
+    #[serde(default)]
+    pub keep_abnormal: Option<bool>,
 }
 
 impl SandboxState {
@@ -69,6 +76,7 @@ impl SandboxState {
             config_path: config_path.map(Path::to_path_buf),
             created_netns: network_env.created_netns(),
             bootstrap: true,
+            keep_abnormal: None,
         }
     }
 
@@ -91,6 +99,10 @@ mod tests {
     #[test]
     fn state_written_by_an_older_shim_still_loads() {
         let state: SandboxState = serde_json::from_str(LEGACY_STATE).unwrap();
+
+        // An old state recorded no keep_abnormal; the decision stays with
+        // the configuration file for it.
+        assert_eq!(state.keep_abnormal, None);
 
         let h = state.hypervisor.unwrap();
         assert_eq!(h.hypervisor_type, "qemu");
@@ -125,6 +137,10 @@ mod tests {
         ("config_path", "cleanup_config() reloads the configuration"),
         ("created_netns", "VirtSandbox::cleanup() removes it"),
         ("bootstrap", "is_bootstrap() picks the cleanup path"),
+        (
+            "keep_abnormal",
+            "cleanup() leaves an abnormal sandbox alone",
+        ),
     ];
     const RESOURCE_FIELDS: &[(&str, &str)] = &[
         ("endpoint", "RestoredNetwork::remove() rebinds the VFs"),
