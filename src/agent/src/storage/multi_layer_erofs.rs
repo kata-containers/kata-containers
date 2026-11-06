@@ -59,6 +59,10 @@ const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
 /// Base directory to mount per-container erofs and ext4 layers
 const MULTI_LAYER_EROFS_BASE: &str = "/run/kata-containers/erofs-multi-layer";
 
+/// Overlay label when guest SELinux is on but the container carries no
+/// `mountLabel` (e.g. the host itself runs without SELinux).
+const DEFAULT_ROOTFS_MOUNT_LABEL: &str = "system_u:object_r:container_file_t:s0";
+
 /// dm-verity related storage options
 #[allow(dead_code)]
 const OPT_DMVERITY_ENABLED: &str = "X-kata.dmverity-enabled=true";
@@ -141,6 +145,7 @@ pub async fn handle_multi_layer_erofs_group(
     trigger: &Storage,
     storages: &[Storage],
     cid: &Option<String>,
+    mount_label: Option<&str>,
     sandbox: &Arc<Mutex<Sandbox>>,
     logger: &Logger,
 ) -> Result<MultiLayerErofsResult> {
@@ -462,15 +467,23 @@ pub async fn handle_multi_layer_erofs_group(
     )
     .context("failed to create overlay mount destination")?;
 
+    let mut options = vec![
+        format!("upperdir={}", upperdir.display()),
+        format!("lowerdir={}", lowerdir),
+        format!("workdir={}", workdir.display()),
+    ];
+    // The erofs layers carry no security.selinux xattrs, so without an
+    // explicit context the whole rootfs would be unlabeled_t and unusable
+    // from container_t.
+    if rustjail::selinux::is_enabled().unwrap_or(false) {
+        options.push(overlay_context_option(mount_label));
+    }
+
     let overlay_mount = kata_types::mount::Mount {
         source: OVERLAY_TYPE.to_string(),
         destination: PathBuf::from(&target_mount_point),
         fs_type: OVERLAY_TYPE.to_string(),
-        options: vec![
-            format!("upperdir={}", upperdir.display()),
-            format!("lowerdir={}", lowerdir),
-            format!("workdir={}", workdir.display()),
-        ],
+        options,
         ..Default::default()
     };
 
@@ -521,6 +534,14 @@ pub async fn handle_multi_layer_erofs_group(
         temp_mount_points,
         verity_devices,
     })
+}
+
+// Quoted because MCS levels contain commas (`s0:c1,c2`).
+fn overlay_context_option(mount_label: Option<&str>) -> String {
+    let label = mount_label
+        .filter(|l| !l.is_empty())
+        .unwrap_or(DEFAULT_ROOTFS_MOUNT_LABEL);
+    format!("context=\"{label}\"")
 }
 
 async fn track_temporary_mount_for_cleanup(
@@ -1167,6 +1188,19 @@ mod tests {
             ..Default::default()
         };
         assert!(is_lower_storage(&s2));
+    }
+
+    // --- overlay_context_option ---
+
+    #[rstest]
+    #[case(None, "context=\"system_u:object_r:container_file_t:s0\"")]
+    #[case(Some(""), "context=\"system_u:object_r:container_file_t:s0\"")]
+    #[case(
+        Some("system_u:object_r:container_file_t:s0:c1,c2"),
+        "context=\"system_u:object_r:container_file_t:s0:c1,c2\""
+    )]
+    fn test_overlay_context_option(#[case] label: Option<&str>, #[case] expected: &str) {
+        assert_eq!(overlay_context_option(label), expected);
     }
 
     // --- is_multi_layer_storage ---
