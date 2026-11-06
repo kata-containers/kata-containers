@@ -907,11 +907,15 @@ pub struct MachineInfo {
     #[serde(default)]
     pub machine_type: String,
 
-    /// Machine accelerators as comma-separated list.
+    /// Comma-separated list of machine properties appended to QEMU's `-machine` option.
     ///
     /// Example: `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
-    #[serde(default)]
-    pub machine_accelerators: String,
+    #[serde(
+        default,
+        alias = "machine_accelerators",
+        rename(serialize = "machine_accelerators")
+    )]
+    pub machine_properties: String,
 
     /// Flash image files for VM.
     ///
@@ -937,12 +941,12 @@ pub struct MachineInfo {
 impl MachineInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
-        let accelerators: Vec<&str> = self
-            .machine_accelerators
+        let properties: Vec<&str> = self
+            .machine_properties
             .split(',')
             .map(|v| v.trim())
             .collect();
-        self.machine_accelerators = accelerators.join(",");
+        self.machine_properties = properties.join(",");
 
         for pflash in self.pflashes.iter_mut() {
             resolve_path!(*pflash, "Flash image file {} is invalid: {}")?;

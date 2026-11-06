@@ -90,9 +90,11 @@ firmware = "@FIRMWARETDVFPATH_NV@"
 # can be customized per each user while UEFI code is kept same.
 firmware_volume = "@FIRMWAREVOLUMEPATH@"
 
-# Machine accelerators
-# comma-separated list of machine accelerators to pass to the hypervisor.
-# For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
+# QEMU machine properties
+# Comma-separated list of properties appended to QEMU's -machine option.
+# Despite its name, machine_accelerators accepts arbitrary machine properties,
+# not just accelerators. This option is QEMU-specific.
+# For example, `machine_accelerators = "smm=off"`
 machine_accelerators = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature
@@ -103,9 +105,10 @@ machine_accelerators = "@MACHINEACCELERATORS@"
 # Recommended value when enabling: "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
 seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM_NV@"
 
-# CPU features
-# comma-separated list of cpu features to pass to the cpu
-# For example, `cpu_features = "pmu=off,vmx=off"
+# QEMU CPU features
+# Comma-separated list of CPU features appended to QEMU's -cpu option.
+# This option is QEMU-specific.
+# For example, `cpu_features = "pmu=off,vmx=off"`
 cpu_features = "@CPUFEATURES@"
 
 # Default number of vCPUs per SB/VM:

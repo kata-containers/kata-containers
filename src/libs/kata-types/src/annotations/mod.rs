@@ -787,7 +787,7 @@ impl Annotation {
                         hv.machine_info.machine_type = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_MACHINE_ACCELERATORS => {
-                        hv.machine_info.machine_accelerators = value.to_string();
+                        hv.machine_info.machine_properties = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_ENTROPY_SOURCE => {
                         hv.machine_info.validate_entropy_source(value)?;
