@@ -111,9 +111,8 @@ impl Endpoint for MacVlanEndpoint {
     }
 
     async fn save(&self) -> Option<EndpointState> {
-        Some(EndpointState {
-            tap_iface_name: Some(self.net_pair.tap.tap_iface.name.clone()),
-            ..Default::default()
-        })
+        // The TAP is removed by its Kata name suffix after a shim death;
+        // nothing else of this endpoint lives on the host for recovery.
+        None
     }
 }

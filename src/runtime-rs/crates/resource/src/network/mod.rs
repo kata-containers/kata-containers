@@ -24,6 +24,7 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod restored;
+pub use restored::remove_kata_links;
 pub(crate) use restored::RestoredNetwork;
 mod utils;
 pub use kata_sys_util::netns::{generate_netns_name, NetnsGuard};

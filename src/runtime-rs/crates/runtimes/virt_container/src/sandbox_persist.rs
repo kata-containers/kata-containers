@@ -46,12 +46,20 @@ impl SandboxState {
         hypervisor: Option<(&str, &HypervisorConfig)>,
         cgroup_state: Option<CgroupState>,
     ) -> Self {
+        // The namespace is recorded before any network is constructed in
+        // it: a death mid-construction leaves TAPs there that only the
+        // recorded path lets the cleanup sweep.
+        let netns_path = network_env.netns.clone();
         Self {
             sandbox_type: VIRTCONTAINER.to_string(),
-            resource: cgroup_state.map(|cgroup_state| ResourceState {
-                cgroup_state: Some(cgroup_state),
-                ..Default::default()
-            }),
+            resource: match (cgroup_state, netns_path) {
+                (None, None) => None,
+                (cgroup_state, netns_path) => Some(ResourceState {
+                    cgroup_state,
+                    netns_path,
+                    ..Default::default()
+                }),
+            },
             hypervisor: hypervisor.map(|(name, config)| HypervisorState {
                 hypervisor_type: name.to_string(),
                 config: config.clone(),
@@ -122,25 +130,15 @@ mod tests {
         ("endpoint", "RestoredNetwork::remove() rebinds the VFs"),
         (
             "netns_path",
-            "RestoredNetwork::remove() reaches unattached TAPs through it",
+            "remove_kata_links() sweeps it, in recovery and bootstrap cleanup",
         ),
         ("cgroup_state", "CgroupsResource::restore(), then deleted"),
         ("ephemeral_disks", "cleanup_ephemeral_disks()"),
     ];
-    const ENDPOINT_FIELDS: &[(&str, &str)] = &[
-        (
-            "physical_endpoint",
-            "rebind_saved_physical_endpoints() gives the NIC back",
-        ),
-        (
-            "tap_iface_name",
-            "RestoredNetwork::remove() deletes the TAP",
-        ),
-        (
-            "construction_only",
-            "limits the TAP removal to never-attached endpoints",
-        ),
-    ];
+    const ENDPOINT_FIELDS: &[(&str, &str)] = &[(
+        "physical_endpoint",
+        "rebind_saved_physical_endpoints() gives the NIC back",
+    )];
     const PHYSICAL_ENDPOINT_FIELDS: &[(&str, &str)] = &[
         ("bdf", "the device the rebind acts on"),
         ("driver", "the host driver it binds back"),
@@ -269,7 +267,12 @@ mod tests {
         let state: SandboxState =
             serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
         assert!(state.is_bootstrap());
-        assert!(state.resource.is_none());
+        // The namespace is recorded before anything is constructed in it,
+        // so a mid-construction death leaves a sweepable record.
+        assert_eq!(
+            state.resource.as_ref().unwrap().netns_path.as_deref(),
+            Some("/run/netns/cni-1")
+        );
         assert_eq!(state.created_netns.as_deref(), Some("/run/netns/cni-1"));
         assert_eq!(state.config_path.as_deref(), Some(path));
         let h = state.hypervisor.unwrap();
@@ -299,13 +302,27 @@ mod tests {
             Some("kubepods/besteffort/pod1/cri-0123")
         );
 
+        // A caller-provided namespace is not recorded as created, but it is
+        // recorded for the sweep: the caller's namespace outlives a dead
+        // sandbox, and so would the TAPs built in it.
         let given = SandboxNetworkEnv {
             network_created: false,
             ..network_env
         };
+        let state = SandboxState::bootstrap(&given, None, None, None);
+        assert_eq!(state.created_netns, None);
         assert_eq!(
-            SandboxState::bootstrap(&given, None, None, None).created_netns,
-            None
+            state.resource.unwrap().netns_path.as_deref(),
+            Some("/run/netns/cni-1")
         );
+
+        // No namespace, no cgroups: nothing for a resource section to say.
+        let none = SandboxNetworkEnv {
+            netns: None,
+            network_created: false,
+        };
+        assert!(SandboxState::bootstrap(&none, None, None, None)
+            .resource
+            .is_none());
     }
 }
