@@ -48,7 +48,7 @@ responsibilities are:
   and non-CC mode (see the
   [NVIDIA/k8s-cc-manager](https://github.com/NVIDIA/k8s-cc-manager)
   repository).
-- **nvidia-sandbox-device-plugin** (see the
+- **nvidia-kata-sandbox-device-plugin** (see the
   [NVIDIA/sandbox-device-plugin](https://github.com/NVIDIA/sandbox-device-plugin)
   repository):
   - Creating host-side CDI specifications for GPU passthrough,
@@ -234,7 +234,7 @@ NVIDIA GPU CI validation jobs. Note that, this setup:
 
 A similar deployment guide and scenario description can be found in NVIDIA resources
 under
-[NVIDIA Confidential Containers Overview (Early Access)](https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/overview.html).
+[NVIDIA Confidential Containers Reference Architecture](https://docs.nvidia.com/confidential-computing/containers/overview).
 
 ### Feature Set
 
