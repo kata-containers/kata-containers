@@ -670,7 +670,7 @@ impl PCIeDevice for VfioDevice {
 
 // binds the device to vfio driver after unbinding from host.
 // Will be called by a network interface or a generic pcie device.
-pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str) -> Result<()> {
+pub fn bind_device_to_vfio(bdf: &str, host_driver: &str) -> Result<()> {
     // modprobe vfio-pci
     if !Path::new(VFIO_PCI_DRIVER_NEW_ID).exists() {
         Command::new("modprobe")
@@ -731,7 +731,7 @@ fn is_equal_driver_in(devices: &Path, bdf: &str, host_driver: &str) -> bool {
 
 // bind_device_to_host binds the device to the host driver, from whatever
 // state a passthrough or an interrupted earlier attempt left it in.
-pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str) -> Result<()> {
+pub fn bind_device_to_host(bdf: &str, host_driver: &str) -> Result<()> {
     bind_device_to_host_in(Path::new("/sys/bus/pci"), bdf, host_driver)
 }
 

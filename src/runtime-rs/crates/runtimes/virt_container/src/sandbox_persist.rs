@@ -127,6 +127,39 @@ mod tests {
         ("cgroup_state", "CgroupsResource::restore(), then deleted"),
         ("ephemeral_disks", "cleanup_ephemeral_disks()"),
     ];
+    const ENDPOINT_FIELDS: &[(&str, &str)] = &[
+        (
+            "physical_endpoint",
+            "rebind_saved_physical_endpoints() gives the NIC back",
+        ),
+        (
+            "tap_iface_name",
+            "RestoredNetwork::remove() deletes the TAP",
+        ),
+        (
+            "construction_only",
+            "limits the TAP removal to never-attached endpoints",
+        ),
+    ];
+    const PHYSICAL_ENDPOINT_FIELDS: &[(&str, &str)] = &[
+        ("bdf", "the device the rebind acts on"),
+        ("driver", "the host driver it binds back"),
+    ];
+    const CGROUP_FIELDS: &[(&str, &str)] = &[
+        ("path", "the sandbox cgroup to destroy"),
+        ("overhead_path", "the overhead cgroup to destroy"),
+        (
+            "sandbox_cgroup_only",
+            "whether an overhead cgroup exists at all",
+        ),
+    ];
+    const DISK_FIELDS: &[(&str, &str)] = &[
+        ("disk_path", "cleanup_ephemeral_disks() removes the disk"),
+        (
+            "source_path",
+            "cleanup_ephemeral_disks() removes the direct-volume record",
+        ),
+    ];
     const HYPERVISOR_FIELDS: &[(&str, &str)] = &[
         (
             "hypervisor_type",
@@ -168,11 +201,33 @@ mod tests {
             "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml",
         ));
         state.created_netns = Some("/run/netns/cnitest".to_string());
+        // The legacy fixture predates disk records; add one so its keys are
+        // pinned like the other nested records'.
+        state.resource.as_mut().unwrap().ephemeral_disks.push(
+            resource::volume::EphemeralDiskInfo {
+                disk_path: PathBuf::from("/run/kata-containers/0123/ephemeral/disk.img"),
+                source_path: "/var/lib/kubelet/pods/p1/volumes/empty-dir/data".to_string(),
+            },
+        );
         let json = serde_json::to_value(&state).unwrap();
 
         assert_eq!(keys(&json), names(SANDBOX_FIELDS));
         assert_eq!(keys(&json["resource"]), names(RESOURCE_FIELDS));
         assert_eq!(keys(&json["hypervisor"]), names(HYPERVISOR_FIELDS));
+        let endpoint = &json["resource"]["endpoint"][0];
+        assert_eq!(keys(endpoint), names(ENDPOINT_FIELDS));
+        assert_eq!(
+            keys(&endpoint["physical_endpoint"]),
+            names(PHYSICAL_ENDPOINT_FIELDS)
+        );
+        assert_eq!(
+            keys(&json["resource"]["cgroup_state"]),
+            names(CGROUP_FIELDS)
+        );
+        assert_eq!(
+            keys(&json["resource"]["ephemeral_disks"][0]),
+            names(DISK_FIELDS)
+        );
 
         let reloaded: SandboxState = serde_json::from_value(json).unwrap();
         assert_eq!(reloaded.config_path, state.config_path);
