@@ -482,7 +482,19 @@ pub fn create_dir_all_with_inherit_owner<P: AsRef<Path>>(path: P, perm: u32) -> 
                 gid = Gid::from_raw(s.st_gid);
             }
             Err(nix::Error::ENOENT) => {
-                std::fs::create_dir(current)?;
+                if let Err(e) = std::fs::create_dir(current) {
+                    if e.kind() != io::ErrorKind::AlreadyExists {
+                        return Err(e);
+                    } else if !current.is_dir() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotADirectory,
+                            format!("{} exists but is not a directory", current.display()),
+                        ));
+                    }
+                }
+
+                // All parallel callers must use the same perm, uid, and gid values - otherwise they
+                // could be running in parallel, with unpredictable set_permissions and/or chown results.
                 set_permissions(current, Permissions::from_mode(perm))?;
                 chown(current, Some(uid), Some(gid))?;
             }
@@ -798,6 +810,8 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::UnixListener;
     use std::path::{Path, PathBuf};
+    use std::sync::Barrier;
+    use std::thread;
 
     use nix::unistd::chown;
     use nix::unistd::geteuid;
@@ -1193,6 +1207,34 @@ mod tests {
         assert!(serialized.contains(r#""type":"#));
         assert!(serialized.contains(r#""cid":"#));
         assert!(serialized.contains(r#""port":"#));
+    }
+
+    #[test]
+    fn test_mkdir_all_with_inherited_owner_concurrent() {
+        const THREADS: usize = 8;
+
+        for _ in 0..500 {
+            let tmp = TempDir::new().expect("create tmp");
+            let target = tmp.path().join("foo").join("bar");
+            let barrier = Barrier::new(THREADS);
+
+            thread::scope(|s| {
+                let handles: Vec<_> = (0..THREADS)
+                    .map(|_| {
+                        s.spawn(|| {
+                            barrier.wait();
+                            create_dir_all_with_inherit_owner(&target, 0o750)
+                        })
+                    })
+                    .collect();
+
+                for handle in handles {
+                    handle.join().unwrap().expect("mkdir -p target");
+                }
+            });
+
+            assert!(target.is_dir());
+        }
     }
 
     #[test]
