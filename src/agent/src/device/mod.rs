@@ -27,7 +27,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::FileTypeExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -235,6 +235,14 @@ pub async fn add_devices(
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
 
+    // Only VFIO devices change the map. It is for metrics only, so a write
+    // error does not fail the container.
+    if container_has_vfio_device(devices) {
+        if let Err(e) = write_pci_map(&sandbox.lock().await.pcimap) {
+            warn!(logger, "failed to write {}: {e:?}", PCI_MAP_PATH);
+        }
+    }
+
     // Expose any RDMA / InfiniBand char devices the guest kernel
     // created for cold-plugged VFs, but only for containers that
     // actually requested at least one VFIO device. Without this gate
@@ -281,6 +289,38 @@ fn add_pci_mappings(
     }
     pcimap.entry(cid.to_string()).or_default().extend(new);
     Ok(())
+}
+
+/// Where the agent publishes the sandbox's host to guest PCI address map:
+/// one `<host> <guest>` pair per line in sysfs spelling, sorted by host
+/// address. A guest service that reports PCI addresses, dcgm-exporter for a
+/// passed-through GPU, reads it to find the host address of a device it knows
+/// by guest address. The file is rewritten on every change, so readers
+/// re-read it.
+pub const PCI_MAP_PATH: &str = "/run/kata-containers/pci-map";
+
+/// The text of the PCI map: the mappings of all containers, each pair once.
+fn pci_map_text(pcimap: &HashMap<String, PciHostGuestMapping>) -> String {
+    let mut lines: Vec<String> = pcimap
+        .values()
+        .flatten()
+        .map(|(host, guest)| format!("{host} {guest}\n"))
+        .collect();
+    lines.sort();
+    lines.dedup();
+    lines.concat()
+}
+
+/// Write the PCI map to [`PCI_MAP_PATH`] in one rename, so a reader never
+/// sees a partial file.
+pub fn write_pci_map(pcimap: &HashMap<String, PciHostGuestMapping>) -> Result<()> {
+    let path = Path::new(PCI_MAP_PATH);
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    }
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, pci_map_text(pcimap)).with_context(|| format!("write {}", tmp.display()))?;
+    fs::rename(&tmp, path).with_context(|| format!("rename to {PCI_MAP_PATH}"))
 }
 
 /// Returns true if `devices` contains at least one entry whose
@@ -2123,6 +2163,30 @@ mod tests {
 
     fn pci_mapping(pairs: &[(&str, &str)]) -> PciHostGuestMapping {
         pci_pairs(pairs).into_iter().collect()
+    }
+
+    #[test]
+    fn test_pci_map_text() {
+        let pcimap = HashMap::from([
+            (
+                "c1".to_string(),
+                pci_mapping(&[
+                    ("0000:1b:00.0", "0000:02:00.0"),
+                    ("0000:1a:00.0", "0000:01:00.0"),
+                ]),
+            ),
+            // c2 holds a device c1 holds too: listed once.
+            (
+                "c2".to_string(),
+                pci_mapping(&[("0000:1b:00.0", "0000:02:00.0")]),
+            ),
+        ]);
+
+        assert_eq!(
+            pci_map_text(&pcimap),
+            "0000:1a:00.0 0000:01:00.0\n0000:1b:00.0 0000:02:00.0\n"
+        );
+        assert_eq!(pci_map_text(&HashMap::new()), "");
     }
 
     #[fixture]
