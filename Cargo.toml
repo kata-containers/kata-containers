@@ -14,7 +14,6 @@ members = [
   "src/libs/pod-resources-rs",
   "src/libs/protocols",
   "src/libs/runtime-spec",
-  "src/libs/safe-path",
   "src/libs/shim-interface",
   "src/libs/test-utils",
 
@@ -138,7 +137,6 @@ pcilibs-rs = { git = "https://github.com/kata-containers/pcilibs-rs", rev = "f68
 pod-resources-rs = { path = "src/libs/pod-resources-rs" }
 protocols = { features = ["async"], path = "src/libs/protocols" }
 runtime-spec = { path = "src/libs/runtime-spec" }
-safe-path = { path = "src/libs/safe-path" }
 shim-interface = { path = "src/libs/shim-interface" }
 test-utils = { path = "src/libs/test-utils" }
 
