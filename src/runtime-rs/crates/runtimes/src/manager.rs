@@ -403,7 +403,7 @@ impl RuntimeHandlerManager {
                 "no runtime directory for task, skipping sandbox cleanup";
                 "task_id" => &inner.id,
             );
-            return Ok(());
+            return Ok(CleanupOutcome::Done);
         }
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
@@ -1375,8 +1375,8 @@ mod tests {
         let (sender, _receiver) = channel(1);
         let handler = RuntimeHandlerManager::new(&id, sender).unwrap();
 
-        handler.cleanup().await.unwrap();
-        handler.cleanup().await.unwrap();
+        assert_eq!(handler.cleanup().await.unwrap(), CleanupOutcome::Done);
+        assert_eq!(handler.cleanup().await.unwrap(), CleanupOutcome::Done);
         assert!(!Path::new(KATA_PATH).join(&id).try_exists().unwrap());
     }
 
