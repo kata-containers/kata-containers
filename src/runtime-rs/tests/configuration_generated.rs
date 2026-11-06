@@ -104,6 +104,42 @@ fn generate_configs(runtime_dir: &Path, output_dir: &Path, arch: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    for name in config_names {
+        assert_guest_apparmor_disabled(&output_dir.join(name), "[agent.kata]");
+    }
+}
+
+fn assert_guest_apparmor_disabled(config: &Path, agent_table: &str) {
+    let content = fs::read_to_string(config).unwrap();
+    let mut agent = content
+        .lines()
+        .skip_while(|line| line.trim() != agent_table);
+    assert!(
+        agent.next().is_some(),
+        "missing agent in {}",
+        config.display()
+    );
+    let settings: Vec<_> = agent
+        .take_while(|line| !line.starts_with('['))
+        .filter(|line| line.starts_with("enable_guest_apparmor = "))
+        .collect();
+    assert_eq!(
+        settings,
+        ["enable_guest_apparmor = false"],
+        "{}",
+        config.display()
+    );
+}
+
+#[test]
+fn all_config_templates_disable_guest_apparmor() {
+    let config_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("config");
+    for entry in fs::read_dir(config_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.to_string_lossy().ends_with(".toml.in") {
+            assert_guest_apparmor_disabled(&path, "[agent.@PROJECT_TYPE@]");
+        }
+    }
 }
 
 #[test]

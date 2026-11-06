@@ -334,6 +334,15 @@ type Cmd struct {
 	Interactive     bool
 	Detach          bool
 	NoNewPrivileges bool
+
+	// ApparmorProfile preserves the OCI exec request for validation against
+	// the container's security binding by the guest agent. Empty means inherit.
+	ApparmorProfile string `json:",omitempty"`
+
+	// SelinuxLabel preserves the OCI exec request for validation against the
+	// container's security binding by the guest agent. Empty means inherit.
+	// The agent, not this field, decides the label the exec process runs as.
+	SelinuxLabel string `json:",omitempty"`
 }
 
 // Resources describes VM resources configuration.

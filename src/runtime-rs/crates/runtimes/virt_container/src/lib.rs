@@ -11,6 +11,7 @@ logging::logger_with_subsystem!(sl, "virt-container");
 
 mod container_manager;
 pub mod factory;
+mod guest_extension;
 pub mod health_check;
 pub mod oom;
 pub mod sandbox;
@@ -238,6 +239,25 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
         .ok_or_else(|| anyhow!("failed to get hypervisor for {}", hypervisor_name))
         .context("get hypervisor")?;
 
+    let enabled = toml_config
+        .agent
+        .get(&toml_config.runtime.agent_name)
+        .is_some_and(|a| a.enable_guest_apparmor);
+    common::config::validate_guest_apparmor_kernel_params(
+        &hypervisor_config.boot_info.kernel_params,
+        enabled,
+    )?;
+    guest_extension::validate_guest_apparmor(
+        enabled,
+        hypervisor_name,
+        &hypervisor_config.boot_info.image,
+        &hypervisor_config.boot_info.initrd,
+        hypervisor_config
+            .guest_extension_images
+            .iter()
+            .map(|e| (e.name.as_str(), e.path.as_str())),
+    )?;
+
     // TODO: support other hypervisor
     // issue: https://github.com/kata-containers/kata-containers/issues/4634
     match hypervisor_name.as_str() {
@@ -355,6 +375,7 @@ agent_name="kata"
 path = "/bin/echo"
 kernel = "/bin/echo"
 image = "/bin/echo"
+kernel_params = "agent.enable_guest_apparmor=false"
 firmware = ""
 
 [runtime]
@@ -366,5 +387,133 @@ hypervisor_name="qemu"
 
         let res = new_hypervisor(&toml_config).await;
         assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_new_hypervisor_apparmor_mode_requirements() {
+        use kata_types::config::{hypervisor::GuestExtensionImage, Agent, Hypervisor};
+
+        for hypervisor in [
+            "qemu",
+            "remote",
+            "clh",
+            "firecracker",
+            "dragonball",
+            "openvmm",
+        ] {
+            for count in 0..=2 {
+                let mut config = TomlConfig::default();
+                config.runtime.hypervisor_name = hypervisor.into();
+                config.runtime.agent_name = "kata".into();
+                config.agent.insert(
+                    "kata".into(),
+                    Agent {
+                        enable_guest_apparmor: true,
+                        ..Default::default()
+                    },
+                );
+                config.hypervisor.insert(
+                    hypervisor.into(),
+                    Hypervisor {
+                        boot_info: kata_types::config::BootInfo {
+                            image: "/bin/echo".into(),
+                            kernel_params: "agent.enable_guest_apparmor=true".into(),
+                            ..Default::default()
+                        },
+                        guest_extension_images: vec![
+                            GuestExtensionImage {
+                                name: "apparmor".into(),
+                                path: "/bin/echo".into(),
+                                ..Default::default()
+                            };
+                            count
+                        ],
+                        ..Default::default()
+                    },
+                );
+                let result = new_hypervisor(&config).await;
+                assert_eq!(result.is_ok(), hypervisor == "qemu" && count == 1);
+                if let Err(err) = result {
+                    assert!(err.to_string().contains(if hypervisor == "qemu" {
+                        "requires exactly one"
+                    } else {
+                        "requires QEMU"
+                    }));
+                }
+            }
+        }
+        // A legacy config remains disabled even with an AppArmor extension.
+        let mut config = TomlConfig::default();
+        config.runtime.hypervisor_name = "qemu".into();
+        config.hypervisor.insert(
+            "qemu".into(),
+            Hypervisor {
+                boot_info: kata_types::config::BootInfo {
+                    kernel_params: "agent.enable_guest_apparmor=false".into(),
+                    ..Default::default()
+                },
+                guest_extension_images: vec![GuestExtensionImage {
+                    name: "apparmor".into(),
+                    path: String::new(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        );
+        assert!(new_hypervisor(&config).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_new_hypervisor_apparmor_extension() {
+        use kata_types::config::hypervisor::{GuestExtensionImage, Hypervisor as HypervisorConfig};
+
+        for (name, path, valid) in [
+            ("apparmor", "", false),
+            ("apparmor", " \t", false),
+            ("apparmor", "/nonexistent/apparmor.img", false),
+            ("apparmor", "/", false),
+            ("apparmor", "/bin/echo", true),
+            ("coco", "", true),
+            ("gpu", "/nonexistent/gpu.img", true),
+        ] {
+            let mut config = TomlConfig::default();
+            config.runtime.hypervisor_name = "qemu".to_owned();
+            config.runtime.agent_name = "kata".to_owned();
+            config.agent.insert(
+                "kata".to_owned(),
+                kata_types::config::Agent {
+                    enable_guest_apparmor: name == "apparmor",
+                    ..Default::default()
+                },
+            );
+            config.hypervisor.insert(
+                "qemu".to_owned(),
+                HypervisorConfig {
+                    boot_info: kata_types::config::BootInfo {
+                        image: "/bin/echo".into(),
+                        kernel_params: format!(
+                            "agent.enable_guest_apparmor={}",
+                            name == "apparmor"
+                        ),
+                        ..Default::default()
+                    },
+                    guest_extension_images: vec![GuestExtensionImage {
+                        name: name.to_owned(),
+                        path: path.to_owned(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            );
+            match new_hypervisor(&config).await {
+                Ok(_) => assert!(valid, "invalid AppArmor path {:?} was accepted", path),
+                Err(err) => {
+                    assert!(!valid, "{} path {:?} was rejected: {}", name, path, err);
+                    assert!(err
+                        .to_string()
+                        .contains("guest_extension_images 'apparmor'"));
+                }
+            }
+        }
     }
 }

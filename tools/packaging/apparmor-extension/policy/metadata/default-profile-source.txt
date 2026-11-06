@@ -1,0 +1,28 @@
+# cri-containerd.apparmor.d provenance
+#
+# Source: containerd/containerd, tag v2.2.1, contrib/apparmor/template.go
+# https://github.com/containerd/containerd/blob/v2.2.1/contrib/apparmor/template.go
+# https://raw.githubusercontent.com/containerd/containerd/v2.2.1/contrib/apparmor/template.go
+# Upstream lineage: docker/docker/profiles/apparmor (see the upstream source note).
+# Copyright The docker Authors.
+# Copyright The Moby Authors.
+# Copyright The containerd Authors.
+# License: Apache-2.0; full text in metadata/LICENSE.containerd.
+# The license is prefixed with AppArmor comments for policy-tree validation.
+# Original license bytes are preserved in upstream/LICENSE in the source tree.
+#
+# Vendored defaultTemplate literal: upstream/containerd-v2.2.1.template
+# SHA256: f6db7bef8b260a9b397b5179539d2d2539b7a176787ffd0a8bfef57d9c8e9ff2
+# Original upstream/LICENSE SHA256:
+# 4bbe3b885e8cd1907ab4cf9a41e862e74e24b5422297a4f2fe524e6a30ada2b4
+#
+# Modifications by Kata Containers contributors (2026):
+# - Name = cri-containerd.apparmor.d
+# - Empty Imports and InnerImports; explicitly prepend @{PROC}=/proc/
+# - DaemonProfile = unconfined; RootlessKit = empty
+# - Add attribution comments; leave all upstream baseline rules unchanged
+# Reproduce offline: python3 tools/packaging/apparmor-extension/render-default-profile.py
+# The renderer reads only the vendored template, never host policy, process state,
+# environment variables, or containerd's host-dependent loadData().
+# This baseline permits broad network, capability and file access subject to
+# explicit denials. It is not a complete defense against container escape.

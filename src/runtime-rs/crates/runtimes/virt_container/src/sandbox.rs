@@ -894,6 +894,14 @@ impl VirtSandbox {
             .await
             .context("failed to store guest details")?;
 
+        crate::guest_extension::validate_guest_apparmor_mode(
+            self.agent.agent_config().await.enable_guest_apparmor,
+            guest_details
+                .agent_details
+                .as_ref()
+                .map(|details| details.guest_apparmor_enabled),
+        )?;
+
         // set memory block size
         self.hypervisor
             .set_guest_memory_block_size(guest_details.mem_block_size_bytes as u32)
@@ -948,6 +956,17 @@ impl VirtSandbox {
     async fn prepare_guest_extension_images_config(&self) -> Result<Vec<BlockConfigModern>> {
         let hv_config = self.hypervisor.hypervisor_config().await;
         let mut configs = Vec::new();
+        let config = self.resource_manager.config().await;
+        crate::guest_extension::validate_guest_apparmor(
+            self.agent.agent_config().await.enable_guest_apparmor,
+            &config.runtime.hypervisor_name,
+            &hv_config.boot_info.image,
+            &hv_config.boot_info.initrd,
+            hv_config
+                .guest_extension_images
+                .iter()
+                .map(|e| (e.name.as_str(), e.path.as_str())),
+        )?;
 
         // Extension images must be cold-plugged as virtio-blk, because the
         // guest discovers each extension by its deterministic serial
@@ -1506,6 +1525,11 @@ impl Sandbox for VirtSandbox {
             kernel_modules,
         };
 
+        // Verify the guest's effective mode before permitting sandbox workloads.
+        self.store_guest_details()
+            .await
+            .context("failed to store guest details")?;
+
         self.agent
             .create_sandbox(req)
             .await
@@ -1513,11 +1537,6 @@ impl Sandbox for VirtSandbox {
 
         inner.state = SandboxState::Running;
         inner.created_at = Some(std::time::SystemTime::now());
-
-        // get and store guest details
-        self.store_guest_details()
-            .await
-            .context("failed to store guest details")?;
 
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();

@@ -117,6 +117,16 @@ pub struct Sandbox {
     pub id: String,
     pub hostname: String,
     pub containers: HashMap<String, LinuxContainer>,
+    /// Fixed at startup by administrator configuration, never by an RPC or annotation.
+    enable_guest_apparmor: bool,
+    /// Protected by the Sandbox mutex. Policy entries live for the whole VM.
+    pub apparmor_profiles: rustjail::apparmor::ProfileRegistry,
+    /// Disabled, explicitly unconfined and confined are distinct from a missing binding.
+    pub container_apparmor_profiles: HashMap<String, rustjail::apparmor::ProfileBinding>,
+    /// SELinux context recorded for each container at create time. Exec must run in this
+    /// identity; it is never taken from the exec request alone. An entry registered as empty is
+    /// an explicitly unlabeled container; a missing entry is a state error and exec refuses.
+    pub container_selinux_labels: HashMap<String, String>,
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
@@ -141,6 +151,20 @@ pub struct Sandbox {
 }
 
 impl Sandbox {
+    pub fn new_with_apparmor(logger: &Logger, enabled: bool, init_mode: bool) -> Result<Self> {
+        rustjail::apparmor::validate_guest_apparmor(enabled, init_mode)?;
+        let mut sandbox = Self::new(logger)?;
+        sandbox.enable_guest_apparmor = enabled;
+        if !enabled {
+            info!(logger, "guest AppArmor disabled by administrator; ignoring OCI AppArmor profiles for CreateContainer and ExecProcess");
+        }
+        Ok(sandbox)
+    }
+
+    pub fn guest_apparmor_enabled(&self) -> bool {
+        self.enable_guest_apparmor
+    }
+
     #[instrument]
     pub fn new(logger: &Logger) -> Result<Self> {
         let fs_type = get_mount_fs_type("/")?;
@@ -154,6 +178,10 @@ impl Sandbox {
             hostname: String::new(),
             network: Network::new(),
             containers: HashMap::new(),
+            enable_guest_apparmor: false,
+            apparmor_profiles: rustjail::apparmor::ProfileRegistry::default(),
+            container_apparmor_profiles: HashMap::new(),
+            container_selinux_labels: HashMap::new(),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             container_verity_devices: HashMap::new(),

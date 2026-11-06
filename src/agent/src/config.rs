@@ -35,6 +35,7 @@ const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
 const SECURE_STORAGE_INTEGRITY_OPTION: &str = "agent.secure_storage_integrity";
+const ENABLE_GUEST_APPARMOR_OPTION: &str = "agent.enable_guest_apparmor";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -125,6 +126,7 @@ pub enum GuestComponentsProcs {
 
 #[derive(Debug)]
 pub struct AgentConfig {
+    pub enable_guest_apparmor: bool,
     pub debug_console: bool,
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
@@ -159,6 +161,7 @@ pub struct MemAgentConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct AgentConfigBuilder {
+    pub enable_guest_apparmor: Option<bool>,
     pub debug_console: Option<bool>,
     pub log_level: Option<String>,
     pub hotplug_timeout: Option<time::Duration>,
@@ -254,6 +257,7 @@ macro_rules! parse_cmdline_param {
 impl Default for AgentConfig {
     fn default() -> Self {
         AgentConfig {
+            enable_guest_apparmor: false,
             debug_console: false,
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
@@ -291,6 +295,7 @@ impl FromStr for AgentConfig {
         let mut agent_config: AgentConfig = Default::default();
 
         // Overwrite default values with the configuration files ones.
+        config_override!(agent_config_builder, agent_config, enable_guest_apparmor);
         config_override!(agent_config_builder, agent_config, debug_console);
         config_override!(
             agent_config_builder,
@@ -416,6 +421,25 @@ impl AgentConfig {
         let mut config: AgentConfig = Default::default();
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
+        // A security mode must not depend on which repeated kernel argument wins.
+        let apparmor_params: Vec<_> = params
+            .iter()
+            .filter(|p| {
+                **p == ENABLE_GUEST_APPARMOR_OPTION
+                    || p.starts_with(&format!("{ENABLE_GUEST_APPARMOR_OPTION}="))
+            })
+            .collect();
+        ensure!(
+            apparmor_params.len() <= 1,
+            "duplicate {ENABLE_GUEST_APPARMOR_OPTION}"
+        );
+        if let Some(param) = apparmor_params.first() {
+            config.enable_guest_apparmor = param
+                .strip_prefix(&format!("{ENABLE_GUEST_APPARMOR_OPTION}="))
+                .context("agent.enable_guest_apparmor requires =true or =false")?
+                .parse::<bool>()
+                .context("agent.enable_guest_apparmor must be true or false")?;
+        }
         let mut mem_agent_enable = false;
         let mut mac = MemAgentConfig::default();
         for param in params.iter() {
@@ -430,6 +454,9 @@ impl AgentConfig {
             }
 
             // parse cmdline flags
+            if param.starts_with(&format!("{ENABLE_GUEST_APPARMOR_OPTION}=")) {
+                continue;
+            }
             parse_cmdline_param!(param, DEBUG_CONSOLE_FLAG, config.debug_console);
 
             // Support "bare" tracing option for backwards compatibility with
@@ -879,9 +906,90 @@ mod tests {
     #[test]
     fn test_new() {
         let config: AgentConfig = Default::default();
+        assert!(!config.enable_guest_apparmor);
         assert!(!config.debug_console);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
+    }
+
+    #[test]
+    #[serial]
+    fn test_guest_apparmor_admin_configuration() {
+        assert!(!AgentConfig::from_str("").unwrap().enable_guest_apparmor);
+        for enabled in [false, true] {
+            let config =
+                AgentConfig::from_str(&format!("enable_guest_apparmor = {enabled}")).unwrap();
+            assert_eq!(config.enable_guest_apparmor, enabled);
+            let dir = tempdir().unwrap();
+            let cmdline = dir.path().join("cmdline");
+            fs::write(&cmdline, format!("agent.enable_guest_apparmor={enabled}")).unwrap();
+            assert_eq!(
+                AgentConfig::from_cmdline(cmdline.to_str().unwrap(), vec![])
+                    .unwrap()
+                    .enable_guest_apparmor,
+                enabled
+            );
+            let config_file = dir.path().join("agent.toml");
+            fs::write(&config_file, format!("enable_guest_apparmor = {enabled}")).unwrap();
+            assert_eq!(
+                AgentConfig::from_cmdline(
+                    "",
+                    vec!["--config".into(), config_file.to_str().unwrap().into()]
+                )
+                .unwrap()
+                .enable_guest_apparmor,
+                enabled
+            );
+            // --config selects the whole administrator config file, even when
+            // the runtime supplied a different mode on the kernel command line.
+            fs::write(
+                &cmdline,
+                format!("agent.enable_guest_apparmor={}", !enabled),
+            )
+            .unwrap();
+            assert_eq!(
+                AgentConfig::from_cmdline(
+                    cmdline.to_str().unwrap(),
+                    vec!["--config".into(), config_file.to_str().unwrap().into()],
+                )
+                .unwrap()
+                .enable_guest_apparmor,
+                enabled
+            );
+            fs::write(
+                &cmdline,
+                format!("agent.config_file={}", config_file.display()),
+            )
+            .unwrap();
+            assert_eq!(
+                AgentConfig::from_cmdline(cmdline.to_str().unwrap(), vec![])
+                    .unwrap()
+                    .enable_guest_apparmor,
+                enabled
+            );
+        }
+        assert!(AgentConfig::from_str("enable_guest_apparmor = 'true'").is_err());
+        assert!(AgentConfig::from_str(
+            "enable_guest_apparmor = true\nenable_guest_apparmor = false"
+        )
+        .is_err());
+        let dir = tempdir().unwrap();
+        let cmdline = dir.path().join("cmdline");
+        for contents in [
+            "agent.enable_guest_apparmor",
+            "agent.enable_guest_apparmor=",
+            "agent.enable_guest_apparmor=invalid",
+            "agent.enable_guest_apparmor=1",
+            "agent.enable_guest_apparmor=true agent.enable_guest_apparmor=false",
+            "agent.enable_guest_apparmor=true agent.enable_guest_apparmor=true",
+        ] {
+            fs::write(&cmdline, contents).unwrap();
+            assert!(
+                AgentConfig::from_cmdline(cmdline.to_str().unwrap(), vec![]).is_err(),
+                "{}",
+                contents
+            );
+        }
     }
 
     #[test]

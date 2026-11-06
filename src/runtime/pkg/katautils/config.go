@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -237,6 +238,7 @@ type agent struct {
 	CdhApiTimeout        uint32   `toml:"cdh_api_timeout"`
 	LaunchProcessTimeout uint32   `toml:"launch_process_timeout"`
 	VisibleCdiDevices    bool     `toml:"visible_cdi_devices"`
+	EnableGuestAppArmor  bool     `toml:"enable_guest_apparmor"`
 }
 
 func (orig *tomlConfig) Clone() tomlConfig {
@@ -1168,6 +1170,13 @@ func toGuestExtensionImages(imgs []guestExtensionImage) ([]vc.GuestExtensionImag
 		if !isValidExtensionName(img.Name) {
 			return nil, fmt.Errorf("guest_extension_images '%s' has an invalid name: only ASCII alphanumerics, '-' and '_' are allowed (the name is used in the virtio-blk serial and in the kata.extension.<name>.verity_params kernel parameter)", img.Name)
 		}
+		// AppArmor is opt-in, but an explicit request must never silently omit
+		// its policy image. Preserve the path semantics of other extensions.
+		if img.Name == "apparmor" {
+			if err := validateAppArmorExtensionPath(img.Path); err != nil {
+				return nil, fmt.Errorf("guest_extension_images '%s' has invalid path %q: %w", img.Name, img.Path, err)
+			}
+		}
 		if strings.TrimSpace(img.VerityParams) != "" {
 			if _, err := vc.ParseKernelVerityParams(img.VerityParams); err != nil {
 				return nil, fmt.Errorf("guest_extension_images '%s' has invalid verity_params: %w", img.Name, err)
@@ -1180,6 +1189,24 @@ func toGuestExtensionImages(imgs []guestExtensionImage) ([]vc.GuestExtensionImag
 		}
 	}
 	return result, nil
+}
+
+func validateAppArmorExtensionPath(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("AppArmor extension requires a non-empty image path")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("AppArmor extension image must be a regular file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
@@ -1542,6 +1569,7 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 			CdhApiTimeout:        agent.cdhApiTimout(),
 			LaunchProcessTimeout: agent.launchProcessTimeout(),
 			VisibleCdiDevices:    agent.visibleCdiDevices(),
+			EnableGuestAppArmor:  agent.EnableGuestAppArmor,
 		}
 	}
 
@@ -1571,6 +1599,19 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 
 	// retrieve the parameters specified in the config file
 	userKernelParams := runtimeConfig.HypervisorConfig.KernelParams
+	filteredKernelParams := make([]vc.Param, 0, len(userKernelParams))
+	seenAppArmor := false
+	for _, p := range userKernelParams {
+		if p.Key == vc.GuestAppArmorKernelParam {
+			if seenAppArmor || p.Value != strconv.FormatBool(runtimeConfig.AgentConfig.EnableGuestAppArmor) {
+				return fmt.Errorf("duplicate or conflicting reserved parameter %s", p.Key)
+			}
+			seenAppArmor = true
+			continue
+		}
+		filteredKernelParams = append(filteredKernelParams, p)
+	}
+	userKernelParams = filteredKernelParams
 
 	// reset
 	runtimeConfig.HypervisorConfig.KernelParams = []vc.Param{}
@@ -1621,8 +1662,14 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
 		return err
 	}
+	if err := rejectGuestAppArmorKernelOverride(config.HypervisorConfig.KernelParams); err != nil {
+		return err
+	}
 
 	if err := updateRuntimeConfigRuntime(configPath, tomlConf, config); err != nil {
+		return err
+	}
+	if err := vc.ValidateGuestAppArmorConfig(config.HypervisorType, config.HypervisorConfig, config.AgentConfig); err != nil {
 		return err
 	}
 
@@ -1637,6 +1684,15 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		return err
 	}
 
+	return nil
+}
+
+func rejectGuestAppArmorKernelOverride(params []vc.Param) error {
+	for _, p := range params {
+		if p.Key == vc.GuestAppArmorKernelParam {
+			return fmt.Errorf("%s is reserved; configure agent.kata.enable_guest_apparmor instead", p.Key)
+		}
+	}
 	return nil
 }
 

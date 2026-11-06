@@ -210,6 +210,7 @@ jobs:
           - rootfs-image
           - rootfs-image-substrate
           - rootfs-image-confidential
+          - rootfs-image-apparmor-extension
           - rootfs-image-coco-extension
           - rootfs-image-devkit-extension
           - rootfs-image-nvidia-gpu

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use nix::unistd::gettid;
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
@@ -45,11 +45,95 @@ pub fn set_exec_label(label: &str) -> Result<()> {
     Ok(())
 }
 
+/// Decide the SELinux context an exec'd process runs in.
+///
+/// The context recorded when the container was created is authoritative: a request with no
+/// label inherits it, a request that repeats it is accepted, and any other request is
+/// rejected rather than allowed to re-bind the process to a different identity.
+///
+/// A container registered with no label (guest SELinux disabled, an unlabeled workload, or a
+/// privileged container) is left as this fix found it: the request is ignored and the child
+/// inherits the caller's domain. That branch preserves existing behaviour rather than
+/// establishing a binding, and the caller's domain is not necessarily the container init's.
+pub fn exec_label(container: Option<&str>, requested: Option<&str>) -> Result<Option<String>> {
+    let clean = |value: Option<&str>| {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
+
+    let bound = match clean(container) {
+        Some(bound) => bound,
+        None => return Ok(None),
+    };
+
+    match clean(requested) {
+        None => Ok(Some(bound)),
+        Some(requested) if requested == bound => Ok(Some(bound)),
+        Some(_) => bail!("ExecProcess cannot change the container SELinux label"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const TEST_LABEL: &str = "system_u:system_r:unconfined_t:s0";
+    #[test]
+    fn exec_label_inherits_the_created_identity() {
+        let bound = "system_u:system_r:container_t:s0:c42,c99";
+        assert_eq!(
+            super::exec_label(Some(bound), None).unwrap().as_deref(),
+            Some(bound)
+        );
+        assert_eq!(
+            super::exec_label(Some(bound), Some("   "))
+                .unwrap()
+                .as_deref(),
+            Some(bound)
+        );
+        assert_eq!(
+            super::exec_label(Some(bound), Some(bound))
+                .unwrap()
+                .as_deref(),
+            Some(bound)
+        );
+    }
+
+    #[test]
+    fn exec_label_rejects_rebinding_to_another_identity() {
+        for requested in [
+            "system_u:system_r:spc_t:s0",
+            "system_u:system_r:container_t:s0",
+            "system_u:system_r:container_kvm_t:s0:c42,c99",
+        ] {
+            let err = super::exec_label(
+                Some("system_u:system_r:container_t:s0:c42,c99"),
+                Some(requested),
+            )
+            .expect_err("a different identity must not be accepted");
+            assert!(
+                err.to_string()
+                    .contains("cannot change the container SELinux label"),
+                "unexpected error: {:#}",
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn exec_label_keeps_unlabeled_containers_inheriting_the_caller() {
+        // Guest SELinux disabled or a privileged container: the agent holds no binding, so
+        // it must neither invent one nor honour a request that tries to supply one.
+        assert_eq!(super::exec_label(None, None).unwrap(), None);
+        assert_eq!(super::exec_label(Some(""), Some("")).unwrap(), None);
+        assert!(super::exec_label(None, Some("system_u:system_r:spc_t:s0")).is_ok());
+        assert_eq!(
+            super::exec_label(None, Some("system_u:system_r:spc_t:s0")).unwrap(),
+            None
+        );
+    }
 
     #[test]
     fn test_is_enabled() {

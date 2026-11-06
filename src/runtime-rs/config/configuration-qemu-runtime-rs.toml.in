@@ -487,6 +487,29 @@ disable_selinux = @DEFDISABLESELINUX@
 # (default: true)
 disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
+# Guest AppArmor policy extension image.
+#
+# AppArmor profiles for workloads ship in a separate extension image rather
+# than in the base image, so policy can be reviewed and versioned on its own
+# without rebuilding the guest image. The image is attached as a virtio-blk
+# device and mounted read-only at /run/kata-extensions/apparmor before the
+# agent starts. It carries policy text only; apparmor_parser comes from the
+# base image.
+#
+# Attaching it does not apply any policy by itself: a workload is only
+# constrained when it asks for a profile through its OCI apparmorProfile, and
+# a workload that asks for nothing is unaffected either way.
+#
+# To enable, set [agent.kata].enable_guest_apparmor = true, uncomment the
+# block below and set the path to the image
+# built as kata-containers-apparmor-extension.img, together with the verity
+# parameters generated for that build. Keep this block after all QEMU scalar
+# settings: TOML assigns subsequent keys to the extension table.
+#[[hypervisor.qemu.guest_extension_images]]
+#name = "apparmor"
+#path = "@APPARMOREXTENSIONPATH@"
+#verity_params = "root_hash=...,salt=...,data_blocks=...,hash_block_size=...,data_block_size=..."
+
 
 [hypervisor.qemu.factory]
 # VM templating support. Once enabled, new VMs are created from template
@@ -508,6 +531,10 @@ enable_template = false
 template_path = "/run/vc/vm/template"
 
 [agent.@PROJECT_TYPE@]
+# Enable guest AppArmor. Requires QEMU, image (no initrd), and one apparmor extension.
+# Attaching an extension alone does not enable this mode.
+enable_guest_apparmor = false
+
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
 enable_debug = false

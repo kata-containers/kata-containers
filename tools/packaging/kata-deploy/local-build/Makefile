@@ -33,6 +33,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-apparmor-extension-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-image-devkit-extension-tarball \
 	rootfs-image-mariner-tarball \
@@ -74,6 +75,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-apparmor-extension-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-image-devkit-extension-tarball \
 	rootfs-image-nvidia-gpu-tarball \
@@ -173,7 +175,7 @@ nvgpu-tarball:
 endif
 
 define BUILD
-	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
+	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1 $(if $(and $(filter rootfs-image-apparmor%,$1),$(APPARMOR_POLICY_DIR)),--apparmor-policy-dir="$(abspath $(APPARMOR_POLICY_DIR))")
 endef
 
 define BUILD_KATA_DEPLOY_COMPONENT
@@ -352,6 +354,16 @@ rootfs-image-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
 rootfs-image-coco-extension-tarball:
+	${MAKE} $@-build
+
+# Policy-only image: no agent tarball or shared Agent builder inputs are needed.
+DEPS :=
+rootfs-image-apparmor-extension-tarball: $(DEPS)
+	${MAKE} $@-build
+
+# Test fixture is opt-in and has a separate image/tarball identity. Do not add
+# this target to BASE_SERIAL_TARBALLS or the production release allowlists.
+rootfs-image-apparmor-test-extension-tarball:
 	${MAKE} $@-build
 
 # Self-contained debug rootfs (no kata-agent, kernel or driver tree), so it has

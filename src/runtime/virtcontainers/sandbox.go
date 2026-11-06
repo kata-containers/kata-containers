@@ -590,6 +590,9 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 		return err
 	}
 
+	if err := validateGuestAppArmorDetails(s.config.AgentConfig.EnableGuestAppArmor, guestDetailRes); err != nil {
+		return err
+	}
 	if guestDetailRes != nil {
 		s.state.GuestMemoryBlockSizeMB = uint32(guestDetailRes.MemBlockSizeBytes >> 20)
 		if guestDetailRes.AgentDetails != nil {
@@ -656,6 +659,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	if !sandboxConfig.valid() {
 		return nil, fmt.Errorf("Invalid sandbox configuration")
+	}
+	if err := ValidateGuestAppArmorConfig(sandboxConfig.HypervisorType, sandboxConfig.HypervisorConfig, sandboxConfig.AgentConfig); err != nil {
+		return nil, err
 	}
 
 	// create agent instance

@@ -257,6 +257,71 @@ pub struct AgentService {
     oma: Option<mem_agent::agent::MemAgent>,
 }
 
+/// The SELinux context the container's init process is configured to run as. It is registered when
+/// the container is created so a later exec can be checked against it; empty means the container
+/// was created unlabeled, which keeps the documented inherit-the-caller behaviour.
+fn created_selinux_label(process: &oci::Process) -> String {
+    process.selinux_label().clone().unwrap_or_default()
+}
+
+/// Select the actual workload process before recording its immutable security identity.
+fn prepare_container_process(
+    sandbox: &mut Sandbox,
+    process: &oci::Process,
+    is_pod_sandbox: bool,
+    storages: &[protocols::agent::Storage],
+) -> Result<(oci::Process, rustjail::apparmor::ProfileBinding)> {
+    let mut process = confidential_data_hub::image::get_process(process, is_pod_sandbox, storages)?;
+    let enabled = sandbox.guest_apparmor_enabled();
+    let binding = sandbox
+        .apparmor_profiles
+        .bind(enabled, process.apparmor_profile().as_deref())
+        .context("prepare container guest AppArmor profile")?;
+    process.set_apparmor_profile(binding.prepared().map(|p| p.name().to_owned()));
+    Ok((process, binding))
+}
+
+fn prepare_exec_apparmor(
+    sandbox: &Sandbox,
+    cid: &str,
+    process: &mut oci::Process,
+) -> Result<Option<rustjail::apparmor::PreparedProfile>> {
+    let binding = sandbox
+        .container_apparmor_profiles
+        .get(cid)
+        .ok_or_else(|| anyhow!("Missing AppArmor container security state for {cid}"))?;
+    let prepared = binding.exec_profile(process.apparmor_profile().as_deref())?;
+    if let Some(profile) = &prepared {
+        sandbox.apparmor_profiles.verify(profile)?;
+    }
+    process.set_apparmor_profile(prepared.as_ref().map(|p| p.name().to_owned()));
+    Ok(prepared)
+}
+
+/// Decide the SELinux context for an exec'd process from the identity registered at creation.
+/// A missing registration is a state error and fails closed, like the adjacent AppArmor binding:
+/// guessing an identity would let an exec fall back to the caller's domain. An explicitly
+/// registered empty label keeps the documented unlabeled behaviour, where the request is neither
+/// adopted nor rejected.
+fn exec_selinux_label(
+    cid: &str,
+    registered: Option<&String>,
+    requested: Option<&str>,
+) -> Result<Option<String>> {
+    let bound = registered.ok_or_else(|| {
+        anyhow!("Missing SELinux container security state for {cid}, refusing to guess the exec identity")
+    })?;
+
+    rustjail::selinux::exec_label(
+        if bound.is_empty() {
+            None
+        } else {
+            Some(bound.as_str())
+        },
+        requested,
+    )
+}
+
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -277,7 +342,7 @@ impl AgentService {
 
         let use_sandbox_pidns = req.sandbox_pidns();
 
-        let mut oci = match req.OCI.into_option() {
+        let mut oci: Spec = match req.OCI.into_option() {
             Some(spec) => spec.into(),
             None => {
                 error!(sl(), "no oci spec in the create container request!");
@@ -353,81 +418,117 @@ impl AgentService {
             .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
 
         let mut s = self.sandbox.lock().await;
+        if s.containers.contains_key(&cid) {
+            return Err(anyhow!("Container {cid} already exists"));
+        }
         s.container_mounts.insert(cid.clone(), m);
 
-        update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
+        let create_storages = &req.storages;
+        let shared_mounts = &req.shared_mounts;
+        // All failures after storage registration, including policy preparation
+        // and process IO setup, must use the same rollback boundary.
+        let result: Result<_> = async {
+            update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
 
-        // Append guest hooks
-        append_guest_hooks(&s, &mut oci)?;
+            // Append guest hooks
+            append_guest_hooks(&s, &mut oci)?;
 
-        // write spec to bundle path, hooks might
-        // read ocispec
-        let olddir = setup_bundle(&cid, &mut oci)?;
-        // restore the cwd for kata-agent process.
-        defer!(unistd::chdir(&olddir).unwrap());
+            let process = oci
+                .process()
+                .as_ref()
+                .context("no process configurations")?;
+            let (new_p, binding) =
+                prepare_container_process(&mut s, process, is_pod_sandbox, create_storages)?;
+            let created_selinux_label = created_selinux_label(&new_p);
+            // Bundle, rustjail config and init setup must all carry the final process.
+            oci.set_process(Some(new_p.clone()));
 
-        // determine which cgroup driver to take and then assign to use_systemd_cgroup
-        // systemd: "[slice]:[prefix]:[name]"
-        // fs: "/path_a/path_b"
-        // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
-        let cgroups_path = &oci
-            .linux()
-            .as_ref()
-            .and_then(|linux| linux.cgroups_path().as_ref())
-            .map(|cgrps_path| cgrps_path.display().to_string())
-            .unwrap_or_default();
+            // write spec to bundle path, hooks might
+            // read ocispec
+            let olddir = setup_bundle(&cid, &mut oci)?;
+            // restore the cwd for kata-agent process.
+            defer!(unistd::chdir(&olddir).unwrap());
 
-        let use_systemd_cgroup = if self.init_mode {
-            false
-        } else {
-            SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
-        };
+            // determine which cgroup driver to take and then assign to use_systemd_cgroup
+            // systemd: "[slice]:[prefix]:[name]"
+            // fs: "/path_a/path_b"
+            // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
+            let cgroups_path = &oci
+                .linux()
+                .as_ref()
+                .and_then(|linux| linux.cgroups_path().as_ref())
+                .map(|cgrps_path| cgrps_path.display().to_string())
+                .unwrap_or_default();
 
-        let opts = CreateOpts {
-            cgroup_name: "".to_string(),
-            use_systemd_cgroup,
-            no_pivot_root: s.no_pivot_root,
-            no_new_keyring: false,
-            spec: Some(oci.clone()),
-            rootless_euid: false,
-            rootless_cgroup: false,
-            container_name,
-        };
+            let use_systemd_cgroup = if self.init_mode {
+                false
+            } else {
+                SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
+            };
 
-        let mut ctr: LinuxContainer = LinuxContainer::new(
-            cid.as_str(),
-            CONTAINER_BASE,
-            Some(s.devcg_info.clone()),
-            opts,
-            &sl(),
-        )?;
+            let opts = CreateOpts {
+                cgroup_name: "".to_string(),
+                use_systemd_cgroup,
+                no_pivot_root: s.no_pivot_root,
+                no_new_keyring: false,
+                spec: Some(oci.clone()),
+                rootless_euid: false,
+                rootless_cgroup: false,
+                container_name,
+            };
 
-        let pipe_size = AGENT_CONFIG.container_pipe_size;
+            let pipe_size = AGENT_CONFIG.container_pipe_size;
 
-        let Some(p) = oci.process() else {
-            info!(sl(), "no process configurations!");
-            return Err(anyhow!(nix::Error::EINVAL));
-        };
+            let mut p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
+            p.apparmor_profile = binding.prepared().cloned();
 
-        let new_p = confidential_data_hub::image::get_process(p, is_pod_sandbox, &req.storages)?;
-        let p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
+            // Policy preparation and IO setup can fail. Do both before
+            // allocating a cgroup, so those errors need only bundle/storage
+            // rollback and cannot leave an unregistered container cgroup.
+            let mut ctr: LinuxContainer = LinuxContainer::new(
+                cid.as_str(),
+                CONTAINER_BASE,
+                Some(s.devcg_info.clone()),
+                opts,
+                &sl(),
+            )?;
 
-        // if starting container failed, we will do some rollback work
-        // to ensure no resources are leaked.
-        if let Err(err) = ctr.start(p).await {
-            error!(sl(), "failed to start container: {:?}", err);
-            if let Err(e) = ctr.destroy().await {
-                error!(sl(), "failed to destroy container: {:?}", e);
+            // if starting container failed, we will do some rollback work
+            // to ensure no resources are leaked.
+            let started: Result<()> = async {
+                ctr.start(p).await?;
+                s.update_shared_pidns(&ctr)?;
+                s.setup_shared_mounts(&ctr, shared_mounts)?;
+                Ok(())
             }
-            if let Err(e) = remove_container_resources(&mut s, &cid).await {
-                error!(sl(), "failed to remove container resources: {:?}", e);
+            .await;
+            if let Err(err) = started {
+                error!(sl(), "failed to start container: {:?}", err);
+                if let Err(e) = ctr.destroy().await {
+                    error!(sl(), "failed to destroy container: {:?}", e);
+                }
+                return Err(err);
             }
-            return Err(err);
+
+            Ok((ctr, binding, created_selinux_label))
         }
+        .await;
 
-        s.update_shared_pidns(&ctr)?;
-        s.setup_shared_mounts(&ctr, &req.shared_mounts)?;
+        let (ctr, binding, created_selinux_label) = match result {
+            Ok(created) => created,
+            Err(err) => {
+                if let Err(cleanup) = rollback_failed_container(&mut s, &cid).await {
+                    return Err(
+                        err.context(format!("container creation rollback failed: {cleanup:#}"))
+                    );
+                }
+                return Err(err);
+            }
+        };
         s.add_container(ctr);
+        s.container_apparmor_profiles.insert(cid.clone(), binding);
+        s.container_selinux_labels
+            .insert(cid, created_selinux_label);
         info!(sl(), "created container!");
 
         Ok(())
@@ -508,8 +609,17 @@ impl AgentService {
         }
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
-        let ocip = process.into();
-        let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
+        let mut ocip: oci::Process = process.into();
+
+        let exec_selinux = exec_selinux_label(
+            &cid,
+            sandbox.container_selinux_labels.get(&cid),
+            ocip.selinux_label().as_deref(),
+        )?;
+        ocip.set_selinux_label(exec_selinux);
+        let prepared = prepare_exec_apparmor(&sandbox, &cid, &mut ocip)?;
+        let mut p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
+        p.apparmor_profile = prepared;
 
         let ctr = sandbox
             .get_container(&cid)
@@ -1692,7 +1802,7 @@ impl agent_ttrpc::AgentService for AgentService {
         resp.support_mem_hotplug_probe = v;
 
         // to get agent details
-        let detail = get_agent_details();
+        let detail = get_agent_details(self.sandbox.lock().await.guest_apparmor_enabled());
         resp.agent_details = MessageField::some(detail);
 
         Ok(resp)
@@ -2060,11 +2170,12 @@ pub fn have_seccomp() -> bool {
     false
 }
 
-fn get_agent_details() -> AgentDetails {
+fn get_agent_details(guest_apparmor_enabled: bool) -> AgentDetails {
     let mut detail = AgentDetails::new();
 
     detail.set_version(AGENT_VERSION.to_string());
     detail.set_supports_seccomp(have_seccomp());
+    detail.set_guest_apparmor_enabled(guest_apparmor_enabled);
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = Vec::new();
@@ -2175,6 +2286,45 @@ fn update_container_namespaces(
     Ok(())
 }
 
+async fn rollback_failed_container(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+    rollback_failed_container_at(sandbox, cid, Path::new(CONTAINER_BASE)).await
+}
+
+async fn rollback_failed_container_at(sandbox: &mut Sandbox, cid: &str, base: &Path) -> Result<()> {
+    kata_sys_util::validate::verify_id(cid)?;
+    let bundle = base.join(cid);
+    let rootfs = bundle.join("rootfs");
+    if let Ok(metadata) = fs::symlink_metadata(&bundle) {
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(anyhow!(
+                "refusing to clean unsafe container bundle {}",
+                bundle.display()
+            ));
+        }
+    }
+    // Never remove_dir_all through a still-mounted workload rootfs. Detach the
+    // bind first, and refuse directory removal if any nested mount survives.
+    match nix::mount::umount2(&rootfs, nix::mount::MntFlags::MNT_DETACH) {
+        Ok(()) | Err(Errno::EINVAL | Errno::ENOENT) => (),
+        Err(err) => return Err(err).context("detach failed container rootfs"),
+    }
+    if parse_mount_table("/proc/self/mountinfo")?
+        .iter()
+        .any(|mount| Path::new(&mount.mount_point).starts_with(&bundle))
+    {
+        return Err(anyhow!(
+            "refusing to remove mounted container bundle {}",
+            bundle.display()
+        ));
+    }
+    remove_container_resources(sandbox, cid).await?;
+    match fs::remove_dir_all(&bundle) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err).context("remove failed container bundle"),
+    }
+}
+
 async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
     let mut cmounts: Vec<String> = vec![];
 
@@ -2210,6 +2360,8 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
 
     sandbox.container_mounts.remove(cid);
     sandbox.containers.remove(cid);
+    sandbox.container_apparmor_profiles.remove(cid);
+    sandbox.container_selinux_labels.remove(cid);
     // Remove any host -> guest mappings for this container
     sandbox.pcimap.remove(cid);
     Ok(())
@@ -2522,13 +2674,17 @@ async fn do_add_swap_path(req: &AddSwapPathRequest) -> Result<()> {
 // - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
 // - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
 pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
+    setup_bundle_at(Path::new(CONTAINER_BASE), cid, spec)
+}
+
+fn setup_bundle_at(base: &Path, cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let spec_root = if let Some(sr) = &spec.root() {
         sr
     } else {
         return Err(anyhow!(nix::Error::EINVAL));
     };
 
-    let bundle_path = Path::new(CONTAINER_BASE).join(cid);
+    let bundle_path = base.join(cid);
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
     let spec_root_path = spec_root.path();
@@ -2979,6 +3135,421 @@ mod tests {
         let mut oci = Spec::default();
         append_guest_hooks(&s, &mut oci).unwrap();
         assert_eq!(s.hooks, oci.hooks().clone());
+    }
+
+    #[tokio::test]
+    async fn test_apparmor_container_binding_is_removed_before_id_reuse() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let profile: rustjail::apparmor::PreparedProfile =
+            serde_json::from_value(serde_json::json!({
+                "name": "old-policy",
+                "source": { "mount": "test-mount", "sha256": "test-source" },
+                "kernel": { "algorithm": "sha256", "digest": "test-kernel" }
+            }))
+            .unwrap();
+        let cid = "reused-id";
+        sandbox.container_apparmor_profiles.insert(
+            cid.into(),
+            rustjail::apparmor::ProfileBinding::Confined(profile),
+        );
+        remove_container_resources(&mut sandbox, cid).await.unwrap();
+        assert!(!sandbox.container_apparmor_profiles.contains_key(cid));
+        sandbox
+            .container_apparmor_profiles
+            .insert(cid.into(), rustjail::apparmor::ProfileBinding::Unconfined);
+        assert!(sandbox.container_apparmor_profiles[cid]
+            .exec_profile(Some("old-policy"))
+            .is_err());
+        assert!(sandbox.container_apparmor_profiles[cid]
+            .exec_profile(None)
+            .unwrap()
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn test_apparmor_disabled_create_and_exec_clear_host_profiles() {
+        use rustjail::apparmor::ProfileBinding;
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new_with_apparmor(&logger, false, true).unwrap();
+        assert!(!sandbox.guest_apparmor_enabled());
+        for requested in [
+            "docker-default",
+            "localhost/host-only",
+            "runtime/default",
+            "../invalid",
+        ] {
+            let mut inbound = oci::Process::default();
+            inbound.set_apparmor_profile(Some(requested.into()));
+            let (created, binding) =
+                prepare_container_process(&mut sandbox, &inbound, false, &[]).unwrap();
+            assert_eq!(binding, ProfileBinding::Disabled);
+            assert!(created.apparmor_profile().is_none());
+            let child = Process::new(&logger, &created, "init", true, 0, None).unwrap();
+            assert!(child.oci.apparmor_profile().is_none());
+            assert!(child.apparmor_profile.is_none());
+            sandbox
+                .container_apparmor_profiles
+                .insert("disabled".into(), binding);
+            assert!(prepare_exec_apparmor(&sandbox, "disabled", &mut inbound)
+                .unwrap()
+                .is_none());
+            assert!(inbound.apparmor_profile().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_apparmor_rejected_exec_does_not_spawn() {
+        // The real LinuxContainer fixture queries the cgroup device manager.
+        // Exercise this RPC path in the root test leg rather than failing the
+        // non-root leg before it reaches the security checks.
+        skip_if_not_root!();
+        use rustjail::apparmor::ProfileBinding;
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut state = Sandbox::new(&logger).unwrap();
+        let (mut container, _root) = create_linuxcontainer();
+        container.id = "test".into();
+        state.add_container(container);
+        let sandbox = Arc::new(Mutex::new(state));
+        let service = AgentService {
+            sandbox: sandbox.clone(),
+            init_mode: true,
+            oma: None,
+        };
+        let dir = tempdir().unwrap();
+        let marker = dir.path().join("must-not-spawn");
+        let profile: rustjail::apparmor::PreparedProfile =
+            serde_json::from_value(serde_json::json!({
+                "name": "bound", "source": {"mount": "test", "sha256": "test"},
+                "kernel": {"algorithm": "sha256", "digest": "test"}
+            }))
+            .unwrap();
+        for (binding, requested, error) in [
+            (
+                None,
+                "host-only",
+                "Missing AppArmor container security state",
+            ),
+            (Some(ProfileBinding::Unconfined), "bound", "cannot change"),
+            (
+                Some(ProfileBinding::Confined(profile.clone())),
+                "other",
+                "cannot change",
+            ),
+            (
+                Some(ProfileBinding::Confined(profile.clone())),
+                "unconfined",
+                "cannot change",
+            ),
+            (
+                Some(ProfileBinding::Confined(profile)),
+                "bound",
+                "not owned by this agent",
+            ),
+        ] {
+            let mut state = sandbox.lock().await;
+            state.container_apparmor_profiles.clear();
+            if let Some(binding) = binding {
+                state
+                    .container_apparmor_profiles
+                    .insert("test".into(), binding);
+            }
+            state
+                .container_selinux_labels
+                .insert("test".into(), String::new());
+            drop(state);
+            let mut process = protocols::oci::Process::new();
+            process.ApparmorProfile = requested.into();
+            process.Args = vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                format!("touch {}", marker.display()),
+            ];
+            let request = protocols::agent::ExecProcessRequest {
+                container_id: "test".into(),
+                exec_id: "rejected".into(),
+                process: MessageField::some(process),
+                ..Default::default()
+            };
+            let err = service.do_exec_process(request).await.unwrap_err();
+            assert!(format!("{err:#}").contains(error), "{:#}", err);
+            assert!(!marker.exists());
+            let state = sandbox.lock().await;
+            assert!(state.containers["test"].processes.is_empty());
+            assert_eq!(state.containers["test"].init_process_pid, -1);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_apparmor_guest_pull_uses_actual_replacement_process() {
+        skip_if_not_root!();
+        // Keep test mounts and the namespace change off the async executor threads.
+        std::thread::spawn(|| {
+            unshare(CloneFlags::CLONE_NEWNS).unwrap();
+            mount::mount(
+                None::<&str>,
+                "/",
+                None::<&str>,
+                MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+                None::<&str>,
+            )
+            .unwrap();
+            let fixture = tempdir().unwrap();
+            let extensions = fixture.path().join("extensions");
+            let coco = extensions.join("coco");
+            let bundle = coco.join("pause_bundle");
+            fs::create_dir_all(coco.join("etc/kata-extensions")).unwrap();
+            fs::create_dir_all(&bundle).unwrap();
+            fs::write(
+                coco.join("etc/kata-extensions/components.toml"),
+                "schema_version = 1\n[paths]\npause-bundle = 'pause_bundle'\n",
+            )
+            .unwrap();
+            let mut pause = oci::Process::default();
+            pause.set_args(Some(vec!["/pause-from-guest-image".into()]));
+            pause.set_apparmor_profile(Some("guest-pause-policy".into()));
+            pause.set_selinux_label(Some("system_u:system_r:container_t:s0:c9,c8".into()));
+            let mut spec = Spec::default();
+            spec.set_process(Some(pause.clone()));
+            spec.save(bundle.join("config.json")).unwrap();
+            let target = Path::new("/run/kata-extensions");
+            let created_target = !target.exists();
+            fs::create_dir_all(target).unwrap();
+            defer!({
+                let _ = mount::umount2(target, mount::MntFlags::MNT_DETACH);
+                if created_target {
+                    let _ = fs::remove_dir(target);
+                }
+            });
+            mount::mount(
+                Some(extensions.as_path()),
+                target,
+                None::<&str>,
+                MsFlags::MS_BIND,
+                None::<&str>,
+            )
+            .unwrap();
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(async {
+                let logger = slog::Logger::root(slog::Discard, o!());
+                let mut sandbox = Sandbox::new(&logger).unwrap();
+                let mut inbound = oci::Process::default();
+                inbound.set_args(Some(vec!["/host-process".into()]));
+                inbound.set_apparmor_profile(Some("localhost/host-only".into()));
+                inbound.set_selinux_label(Some("system_u:system_r:container_t:s0:c1,c2".into()));
+                let storage = protocols::agent::Storage {
+                    driver: kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL.into(),
+                    ..Default::default()
+                };
+                let (final_process, binding) =
+                    prepare_container_process(&mut sandbox, &inbound, true, &[storage]).unwrap();
+                assert_eq!(binding, rustjail::apparmor::ProfileBinding::Disabled);
+                assert_eq!(final_process.args(), pause.args());
+                assert_eq!(
+                    created_selinux_label(&final_process),
+                    created_selinux_label(&pause)
+                );
+                assert_ne!(
+                    created_selinux_label(&final_process),
+                    created_selinux_label(&inbound)
+                );
+                assert!(final_process.apparmor_profile().is_none());
+                let child = Process::new(&logger, &final_process, "pause", true, 0, None).unwrap();
+                assert_eq!(child.oci, final_process);
+                sandbox
+                    .container_apparmor_profiles
+                    .insert("pause".into(), binding);
+                sandbox
+                    .container_selinux_labels
+                    .insert("pause".into(), created_selinux_label(&final_process));
+                let mut exec = oci::Process::default();
+                exec.set_apparmor_profile(Some("arbitrary-host-name".into()));
+                assert!(prepare_exec_apparmor(&sandbox, "pause", &mut exec)
+                    .unwrap()
+                    .is_none());
+                assert!(exec.apparmor_profile().is_none());
+                assert_eq!(
+                    exec_selinux_label(
+                        "pause",
+                        sandbox.container_selinux_labels.get("pause"),
+                        None
+                    )
+                    .unwrap(),
+                    pause.selinux_label().clone()
+                );
+            });
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn test_agent_details_reports_effective_apparmor_mode() {
+        assert!(!AgentDetails::new().guest_apparmor_enabled());
+        for enabled in [false, true] {
+            assert_eq!(get_agent_details(enabled).guest_apparmor_enabled(), enabled);
+        }
+    }
+
+    #[test]
+    fn test_apparmor_explicit_enable_rejects_agent_pid_one() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let err = Sandbox::new_with_apparmor(&logger, true, true).unwrap_err();
+        assert!(format!("{err:#}").contains("PID 1 mode is unsupported"));
+    }
+
+    #[tokio::test]
+    async fn test_selinux_container_binding_is_removed_before_id_reuse() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let cid = "reused-selinux-id";
+        let label = "system_u:system_r:container_t:s0:c42,c99";
+        sandbox
+            .container_selinux_labels
+            .insert(cid.into(), label.into());
+        remove_container_resources(&mut sandbox, cid).await.unwrap();
+        assert!(!sandbox.container_selinux_labels.contains_key(cid));
+        // Once the registration is gone, exec refuses: it must neither fall back to the caller's
+        // domain nor adopt the identity the request happens to carry for the reused id.
+        for requested in [None, Some(label)] {
+            let err = exec_selinux_label(cid, sandbox.container_selinux_labels.get(cid), requested)
+                .expect_err("an unregistered container must not exec");
+            assert!(err
+                .to_string()
+                .contains("Missing SELinux container security state"));
+        }
+    }
+
+    #[test]
+    fn test_exec_selinux_label_distinguishes_missing_from_unlabeled() {
+        let bound = "system_u:system_r:container_t:s0:c42,c99".to_string();
+        let other = "system_u:system_r:spc_t:s0";
+
+        // Absent registration is a state error, whether or not the request carries a label.
+        assert!(exec_selinux_label("absent", None, None).is_err());
+        assert!(exec_selinux_label("absent", None, Some(other)).is_err());
+
+        // Explicitly registered unlabeled container: existing behaviour is preserved, and the
+        // request is ignored rather than adopted or rejected.
+        assert_eq!(
+            exec_selinux_label("void", Some(&String::new()), None).unwrap(),
+            None
+        );
+        assert_eq!(
+            exec_selinux_label("void", Some(&String::new()), Some(other)).unwrap(),
+            None
+        );
+
+        // Registered identity: inherited, accepted when repeated, refused when different,
+        // including a same-type context with another MCS scope.
+        assert_eq!(
+            exec_selinux_label("bound", Some(&bound), None)
+                .unwrap()
+                .as_deref(),
+            Some(bound.as_str())
+        );
+        assert_eq!(
+            exec_selinux_label("bound", Some(&bound), Some(&bound))
+                .unwrap()
+                .as_deref(),
+            Some(bound.as_str())
+        );
+        assert!(exec_selinux_label("bound", Some(&bound), Some(other)).is_err());
+        assert!(exec_selinux_label(
+            "bound",
+            Some(&bound),
+            Some("system_u:system_r:container_t:s0")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_created_selinux_label_is_read_from_the_final_process() {
+        let mut inbound = oci::Process::default();
+        inbound.set_selinux_label(Some("system_u:system_r:container_t:s0:c1,c2".to_string()));
+        let mut pause = oci::Process::default();
+        pause.set_selinux_label(Some("system_u:system_r:container_t:s0:c9,c8".to_string()));
+
+        assert_eq!(
+            created_selinux_label(&inbound),
+            "system_u:system_r:container_t:s0:c1,c2"
+        );
+        // The process guest pull would install can carry a different context, and the
+        // registration must follow that final process instead of the inbound one.
+        assert_eq!(
+            created_selinux_label(&pause),
+            "system_u:system_r:container_t:s0:c9,c8"
+        );
+        assert_ne!(
+            created_selinux_label(&pause),
+            created_selinux_label(&inbound)
+        );
+        // Unlabeled registers an explicit empty state, which is not a missing registration.
+        assert_eq!(created_selinux_label(&oci::Process::default()), "");
+
+        // Without a guest-pull volume, get_process keeps the inbound process, so the normal
+        // path registers the identity the request asked for.
+        let kept = confidential_data_hub::image::get_process(&inbound, true, &[]).unwrap();
+        assert_eq!(
+            created_selinux_label(&kept),
+            "system_u:system_r:container_t:s0:c1,c2"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_apparmor_failed_prepare_rolls_back_bundle_before_id_reuse() {
+        skip_if_not_root!();
+        unshare(CloneFlags::CLONE_NEWNS).unwrap();
+        mount::mount(
+            None::<&str>,
+            "/",
+            None::<&str>,
+            MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+            None::<&str>,
+        )
+        .unwrap();
+        let base = tempdir().unwrap();
+        let original = tempdir().unwrap();
+        let replacement = tempdir().unwrap();
+        fs::write(original.path().join("marker"), "original").unwrap();
+        fs::write(replacement.path().join("marker"), "replacement").unwrap();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let cid = "failed-create-reuse";
+        let rootfs = base.path().join(cid).join("rootfs");
+        // Keep all temporary bind mounts private and detached on assertion
+        // failure as well, so TempDir never traverses a mounted workload tree.
+        defer!({
+            let _ = mount::umount2(&rootfs, mount::MntFlags::MNT_DETACH);
+        });
+        for source in [original.path(), replacement.path()] {
+            let mut root = Root::default();
+            root.set_path(source.to_owned());
+            let mut spec = Spec::default();
+            spec.set_root(Some(root));
+            let cwd = setup_bundle_at(base.path(), cid, &mut spec).unwrap();
+            unistd::chdir(&cwd).unwrap();
+            assert_eq!(
+                fs::read_to_string(rootfs.join("marker")).unwrap(),
+                fs::read_to_string(source.join("marker")).unwrap()
+            );
+            sandbox.container_mounts.insert(cid.into(), vec![]);
+            assert!(sandbox
+                .apparmor_profiles
+                .prepare(Some("../invalid"))
+                .is_err());
+            rollback_failed_container_at(&mut sandbox, cid, base.path())
+                .await
+                .unwrap();
+            assert!(!base.path().join(cid).exists());
+            assert!(!sandbox.container_mounts.contains_key(cid));
+            assert!(source.join("marker").exists());
+        }
     }
 
     #[tokio::test]

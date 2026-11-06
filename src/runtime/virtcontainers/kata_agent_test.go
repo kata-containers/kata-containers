@@ -1185,6 +1185,7 @@ func TestKataAgentKernelParams(t *testing.T) {
 			}
 
 			params := KataAgentKernelParams(config)
+			d.expectedParams = append(d.expectedParams, Param{Key: GuestAppArmorKernelParam, Value: "false"})
 
 			if len(d.expectedParams) == 0 {
 				assert.Empty(params)
