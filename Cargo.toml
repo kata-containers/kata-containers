@@ -276,4 +276,4 @@ opt-level = "z"
 # Until a cgroups-rs release has these changes, also for the crates that
 # depend on it, such as containerd-shim.
 [patch.crates-io]
-cgroups-rs = { git = "https://github.com/kata-containers/cgroups-rs", rev = "92579a38825864828b1a56ec8711e55b03f4c46f" }
+cgroups-rs = { git = "https://github.com/kata-containers/cgroups-rs", rev = "4eb91bc293ec27b0ca33c2c796c1a675d5bf1f0a" }
