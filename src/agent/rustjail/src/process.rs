@@ -27,6 +27,9 @@ use tokio::io::{split, ReadHalf, WriteHalf};
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
 
+#[cfg(feature = "cc-op")]
+use kata_agent_cc_op::{processors::StreamProcessor, CryptoRunData as OtherCryptoRunData};
+
 macro_rules! close_process_stream {
     ($self: ident, $stream:ident, $stream_type: ident) => {
         if $self.$stream.is_some() {
@@ -104,6 +107,10 @@ pub struct Process {
     writers: HashMap<StreamType, Writer>,
 
     pub proc_io: Option<ProcessIo>,
+    pub crypto_run_data: Option<CryptoRunData>,
+
+    #[cfg(feature = "cc-op")]
+    pub stream_processor: Option<Arc<Mutex<Box<dyn StreamProcessor>>>>,
 }
 
 pub trait ProcessOperations {
@@ -125,6 +132,113 @@ impl ProcessOperations for Process {
         let res = unsafe { libc::kill(self.pid().into(), sig) };
 
         Errno::result(res).map(drop)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct StreamCrypto {
+    pub args: Vec<String>,
+    pub enabled: bool,
+    pub key: Vec<u8>,
+    pub iv_in: Vec<u8>,
+    pub iv_out: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub has_sandbox_id: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum CryptoRunData {
+    AttachLogsMode {
+        enabled: bool,
+        has_sandbox_id: bool,
+        in_key: Vec<u8>,
+        out_key: Vec<u8>,
+    },
+    ExecMode {
+        args: Vec<String>,
+        enabled: bool,
+        in_key: Vec<u8>,
+        out_key: Vec<u8>,
+    },
+}
+
+#[cfg(feature = "cc-op")]
+impl From<&OtherCryptoRunData> for CryptoRunData {
+    fn from(external: &OtherCryptoRunData) -> Self {
+        match external {
+            OtherCryptoRunData::AttachLogsMode {
+                enabled,
+                has_sandbox_id,
+                in_key,
+                out_key,
+            } => CryptoRunData::AttachLogsMode {
+                enabled: enabled.clone(),
+                has_sandbox_id: has_sandbox_id.clone(),
+                in_key: in_key.clone(),
+                out_key: out_key.clone(),
+            },
+            OtherCryptoRunData::ExecMode {
+                args,
+                enabled,
+                in_key,
+                out_key,
+            } => CryptoRunData::ExecMode {
+                args: args.clone(),
+                enabled: enabled.clone(),
+                in_key: in_key.clone(),
+                out_key: out_key.clone(),
+            },
+        }
+    }
+}
+impl CryptoRunData {
+    pub fn enabled(&self) -> bool {
+        match self {
+            CryptoRunData::AttachLogsMode { enabled, .. } => *enabled,
+            CryptoRunData::ExecMode { enabled, .. } => *enabled,
+        }
+    }
+
+    pub fn has_sandbox_id(&self) -> bool {
+        match self {
+            CryptoRunData::AttachLogsMode { has_sandbox_id, .. } => *has_sandbox_id,
+            CryptoRunData::ExecMode { .. } => false,
+        }
+    }
+
+    pub fn set_has_sandbox_id(&mut self, value: bool) {
+        match self {
+            CryptoRunData::AttachLogsMode { has_sandbox_id, .. } => {
+                *has_sandbox_id = value;
+            }
+            _ => {
+                // optionally ignore or panic
+            }
+        }
+    }
+
+    pub fn as_attachlogs_mode(&self) -> Option<(&bool, &bool, &Vec<u8>, &Vec<u8>)> {
+        match self {
+            CryptoRunData::AttachLogsMode {
+                enabled,
+                has_sandbox_id,
+                in_key,
+                out_key,
+            } => Some((enabled, has_sandbox_id, in_key, out_key)),
+            _ => None,
+        }
+    }
+
+    pub fn as_exec_mode(&self) -> Option<(&Vec<String>, &bool, &Vec<u8>, &Vec<u8>)> {
+        match self {
+            CryptoRunData::ExecMode {
+                args,
+                enabled,
+                in_key,
+                out_key,
+            } => Some((args, enabled, in_key, out_key)),
+            _ => None,
+        }
     }
 }
 
@@ -163,6 +277,9 @@ impl Process {
             readers: HashMap::new(),
             writers: HashMap::new(),
             proc_io,
+            crypto_run_data: None,
+            #[cfg(feature = "cc-op")]
+            stream_processor: None,
         };
 
         info!(logger, "before create console socket!");

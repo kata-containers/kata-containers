@@ -27,6 +27,7 @@ pub const INITDATA_PATH: &str = "/run/confidential-containers/initdata";
 const AA_CONFIG_KEY: &str = "aa.toml";
 const CDH_CONFIG_KEY: &str = "cdh.toml";
 const POLICY_KEY: &str = "policy.rego";
+const CCOP_CONFIG_KEY: &str = "ccop.toml";
 
 /// The path of initdata toml
 pub const INITDATA_TOML_PATH: &str = concatcp!(INITDATA_PATH, "/initdata.toml");
@@ -36,6 +37,9 @@ pub const AA_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/aa.toml");
 
 /// The path of CDH's config file
 pub const CDH_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/cdh.toml");
+
+/// The path of CCOP's config file
+pub const CCOP_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/ccop.toml");
 
 /// Magic number of initdata device
 #[cfg(feature = "init-data")]
@@ -171,6 +175,13 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
             .await
             .context("write cdh config failed")?;
         info!(logger, "write CDH config from initdata");
+    }
+
+    if let Some(config) = initdata.get_coco_data(CCOP_CONFIG_KEY) {
+        tokio::fs::write(CCOP_CONFIG_PATH, config)
+            .await
+            .context("write ccop config failed")?;
+        info!(logger, "write CCOP config from initdata");
     }
 
     debug!(logger, "Initdata digest: {}", STANDARD.encode(&_digest));

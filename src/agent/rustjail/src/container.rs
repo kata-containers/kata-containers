@@ -73,6 +73,17 @@ use tokio::sync::Mutex;
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::validate::valid_env;
 
+#[cfg(feature = "cc-op")]
+use crate::process::CryptoRunData;
+
+#[cfg(feature = "cc-op")]
+use kata_agent_cc_op::processors::{
+    aesgcm::AesGcmProcessor, aesgcmtty::AesGcmTtyProcessor, StreamProcessor,
+};
+
+#[cfg(feature = "cc-op")]
+use std::io::{self, ErrorKind};
+
 pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
 const INIT: &str = "INIT";
@@ -750,6 +761,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let default_vec = Vec::new();
     let args = oci_process.args().as_ref().unwrap_or(&default_vec).to_vec();
+
     let env = oci_process.env().as_ref().unwrap_or(&default_vec).to_vec();
 
     let mut fifofd = -1;
@@ -840,7 +852,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             seccomp::init_seccomp(scmp)?;
         }
     }
-
     do_exec(&args);
 }
 
@@ -1099,6 +1110,8 @@ impl BaseContainer for LinuxContainer {
                         drop(term_closer);
                     });
                 }
+            } else {
+                //
             }
         } else {
             // not using a terminal
@@ -1154,6 +1167,8 @@ impl BaseContainer for LinuxContainer {
                         wgw_output.done();
                     });
                 }
+            } else {
+                //
             }
         }
 
@@ -1168,6 +1183,56 @@ impl BaseContainer for LinuxContainer {
 
         let exec_path = std::env::current_exe()?;
         let mut child = std::process::Command::new(exec_path);
+
+        let ccop_enabled = p
+            .crypto_run_data
+            .as_ref()
+            .map(|d| d.enabled())
+            .unwrap_or(false);
+
+        let has_sandbox_id = p
+            .crypto_run_data
+            .as_ref()
+            .map(|d| d.has_sandbox_id())
+            .unwrap_or(false);
+
+        debug!(
+            logger,
+            "container: cc-op p.init: {}; pid {}; tty: {}; exec_id {}; CCOP: {}; has_container: {};",
+            p.init,
+            p.pid,
+            tty,
+            p.exec_id,
+            ccop_enabled,
+            has_sandbox_id,
+        );
+
+        #[cfg(feature = "cc-op")]
+        if !p.init && ccop_enabled {
+            if let Some((_, _, in_key, out_key)) = p
+                .crypto_run_data
+                .as_ref()
+                .and_then(CryptoRunData::as_exec_mode)
+            {
+                if tty {
+                    info!(logger, "container; stream_processor: gcmtty setup TTY");
+                    let processor = AesGcmTtyProcessor::new(in_key.clone(), out_key.clone())
+                        .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+
+                    p.stream_processor = Some(Arc::new(Mutex::new(
+                        Box::new(processor) as Box<dyn StreamProcessor>
+                    )));
+                } else {
+                    info!(logger, "container; stream_processor: gcm setup NON TTY");
+                    let processor = AesGcmProcessor::new(in_key.clone(), out_key.clone())
+                        .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+
+                    p.stream_processor = Some(Arc::new(Mutex::new(
+                        Box::new(processor) as Box<dyn StreamProcessor>
+                    )));
+                }
+            }
+        }
 
         let mut child = child
             .arg("init")
