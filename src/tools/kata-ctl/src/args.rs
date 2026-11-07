@@ -212,7 +212,10 @@ pub struct DirectVolResizeArgs {
 #[derive(Debug, Args)]
 pub struct ExecArguments {
     /// pod sandbox ID.
-    pub sandbox_id: String,
+    pub sandbox_id: Option<String>,
+    #[clap(long = "server-url")]
+   /// Kata agent server url`.
+    pub server_url: Option<String>,
     #[clap(short = 'p', long = "kata-debug-port", default_value_t = 1026)]
     /// kata debug console vport same as configuration, default is 1026.
     pub vport: u32,

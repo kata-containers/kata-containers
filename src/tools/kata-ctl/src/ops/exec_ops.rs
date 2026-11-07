@@ -211,7 +211,15 @@ fn do_run_command(sock_stream: UnixStream, argv: &[String]) -> anyhow::Result<i3
 
 // kata-ctl handle exec command starts here.
 pub fn handle_exec(exec_args: ExecArguments) -> anyhow::Result<i32> {
-    let sock_stream = debug_console::connect(&exec_args.sandbox_id, exec_args.vport)?;
+    if exec_args.server_url.is_none() && exec_args.sandbox_id.is_none() {
+        anyhow::bail!("must specify either sandbox-id positional argument or --server-url");
+    }
+    let sock_stream = if let Some(server_url) = &exec_args.server_url {
+        debug_console::setup_client(server_url.to_string(), exec_args.vport)?
+    } else {
+        let sid = exec_args.sandbox_id.as_ref().unwrap();
+        debug_console::connect(sid, exec_args.vport)?
+    };
 
     if exec_args.command.is_empty() {
         do_run_exec(sock_stream)?;
