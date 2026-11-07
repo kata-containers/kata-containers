@@ -17,6 +17,7 @@ paths:
   # CI
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
+  - "^\\.github/workflows/kata-dan-cni-tests\\.yaml$": ["static"]
   - "^\\.github/workflows/": []
   - "^docs/": ["static"]
   - "^mkdocs\\.yaml$": ["static"]
@@ -115,12 +116,15 @@ mapping:
     # Checks that static checks are passing
     names:
       - Cargo Deny Check / cargo-deny (bans licenses sources)
+      # kata-dan-cni-tests.yaml
+      - Kata DAN CNI tests / test-integration
       # static-checks.yaml (build-checks.yaml)
       - Static checks / build-checks / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang, ubuntu-24.04)
       - Static checks / build-checks / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ub...
       - Static checks / build-checks / check (make check, dragonball, src/dragonball, rust, ubuntu-24.04)
       # - Static checks / build-checks / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-24.04)
       - Static checks / build-checks / check (make check, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-24.04)
+      - Static checks / build-checks / check (make check, kata-dan-cni, src/tools/kata-dan-cni, rust, ubuntu-24.04)
       - Static checks / build-checks / check (make check, libs, src/libs, rust, libdevmapper, protobuf-compiler, ubuntu-24.04)
       - Static checks / build-checks / check (make check, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-24.04)
       - Static checks / build-checks / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.04)
@@ -130,6 +134,7 @@ mapping:
       - Static checks / build-checks / check (make test, dragonball, src/dragonball, rust, ubuntu-24.04)
       # - Static checks / build-checks / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-24.04)
       - Static checks / build-checks / check (make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-24.04)
+      - Static checks / build-checks / check (make test, kata-dan-cni, src/tools/kata-dan-cni, rust, ubuntu-24.04)
       # - Static checks / build-checks / check (make test, libs, src/libs, rust, libdevmapper, protobuf-compiler)
       - Static checks / build-checks / check (make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-24.04)
       - Static checks / build-checks / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.04)
@@ -139,6 +144,7 @@ mapping:
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust, ubuntu-24.04)
       # - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, u...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubu...
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-dan-cni, src/tools/kata-dan-cni, rust, ubuntu-24.04)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, libs, src/libs, rust, libdevmapper, protobuf-compiler, ubu...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubunt...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.04)

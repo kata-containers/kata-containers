@@ -72,6 +72,10 @@ jobs:
             needs:
               - rust
               - protobuf-compiler
+          - name: kata-dan-cni
+            path: src/tools/kata-dan-cni
+            needs:
+              - rust
           - name: trace-forwarder
             path: src/tools/trace-forwarder
             needs:
