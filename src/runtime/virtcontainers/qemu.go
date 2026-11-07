@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -3395,12 +3396,30 @@ func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConf
 		}
 	}
 
-	// Create a pxb-pcie + root ports per NUMA node that has devices.
-	var rpIndex uint32
+	// Group the host nodes by the guest NUMA node backing them.  A single
+	// guest node may span several host nodes (HostNodes == "0-1"), so one
+	// pxb-pcie per host node would emit the same device ID more than once.
+	guestHostNodes := make(map[uint32][]int)
+	for hostNode := range numaDevCount {
+		guestNode := coveredHostNodes[hostNode]
+		guestHostNodes[guestNode] = append(guestHostNodes[guestNode], hostNode)
+	}
+
+	guestNodes := make([]uint32, 0, len(guestHostNodes))
+	for guestNode := range guestHostNodes {
+		guestNodes = append(guestNodes, guestNode)
+	}
+	sort.Slice(guestNodes, func(i, j int) bool { return guestNodes[i] < guestNodes[j] })
+
+	// Create a pxb-pcie per guest NUMA node that has devices, and one root
+	// port per device.  Root ports are partitioned per host node so that the
+	// per-host-node round-robin assignment in the VFIO driver never maps two
+	// devices from different host nodes to the same root port.
 	const busNrSpacing uint8 = 0x20
 
-	for hostNode, devCount := range numaDevCount {
-		guestNode := coveredHostNodes[hostNode]
+	for _, guestNode := range guestNodes {
+		hostNodes := guestHostNodes[guestNode]
+		sort.Ints(hostNodes)
 
 		pxbID := fmt.Sprintf("pxb-numa%d", guestNode)
 		busNr := busNrSpacing * uint8(guestNode+1)
@@ -3412,28 +3431,31 @@ func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConf
 		})
 
 		// Create root ports on this pxb bus for the VFIO devices.
-		var rpIDs []string
-		for i := 0; i < devCount; i++ {
-			rpID := fmt.Sprintf("rp-numa%d-%d", guestNode, i)
-			rpIDs = append(rpIDs, rpID)
-			devices = append(devices, govmmQemu.PCIeRootPortDevice{
-				ID:      rpID,
-				Bus:     pxbID,
-				Chassis: fmt.Sprintf("%d", 10+guestNode),
-				Slot:    fmt.Sprintf("%d", i),
-			})
-			rpIndex++
+		var rpIdx int
+		for _, hostNode := range hostNodes {
+			var rpIDs []string
+			for i := 0; i < numaDevCount[hostNode]; i++ {
+				rpID := fmt.Sprintf("rp-numa%d-%d", guestNode, rpIdx)
+				rpIDs = append(rpIDs, rpID)
+				devices = append(devices, govmmQemu.PCIeRootPortDevice{
+					ID:      rpID,
+					Bus:     pxbID,
+					Chassis: fmt.Sprintf("%d", 10+guestNode),
+					Slot:    fmt.Sprintf("%d", rpIdx),
+				})
+				rpIdx++
+			}
+
+			config.NUMARootPorts[hostNode] = rpIDs
+
+			q.Logger().WithFields(logrus.Fields{
+				"pxb-id":     pxbID,
+				"bus-nr":     busNr,
+				"guest-numa": guestNode,
+				"host-numa":  hostNode,
+				"root-ports": rpIDs,
+			}).Info("Created pxb-pcie with root ports for NUMA VFIO placement")
 		}
-
-		config.NUMARootPorts[hostNode] = rpIDs
-
-		q.Logger().WithFields(logrus.Fields{
-			"pxb-id":     pxbID,
-			"bus-nr":     busNr,
-			"guest-numa": guestNode,
-			"host-numa":  hostNode,
-			"root-ports": rpIDs,
-		}).Info("Created pxb-pcie with root ports for NUMA VFIO placement")
 	}
 
 	return devices
