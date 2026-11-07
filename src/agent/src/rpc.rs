@@ -548,8 +548,14 @@ impl AgentService {
             // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
             // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
             // instead of "SIGTERM" to terminate it.
+            // An init that waits for SIGTERM in sigwait(3) and friends (tini, docker's
+            // --init) handles it too, but that is not visible in its status file.
             let proc_status_file = format!("/proc/{}/status", p.pid);
-            if p.init && sig == libc::SIGTERM && !is_signal_handled(&proc_status_file, sig as u32) {
+            if p.init
+                && sig == libc::SIGTERM
+                && !is_signal_handled(&proc_status_file, sig as u32)
+                && !is_signal_awaited(Path::new(&format!("/proc/{}", p.pid)), sig as u32)
+            {
                 sig = libc::SIGKILL;
             }
 
@@ -2284,6 +2290,108 @@ fn is_signal_handled(proc_status_file: &str, signum: u32) -> bool {
         })
 }
 
+// Check if the process is waiting for a specific signal in
+// rt_sigtimedwait(2), which backs sigwait(3), sigwaitinfo(2) and
+// sigtimedwait(2).
+//
+// While a task waits there, the kernel keeps its blocked mask aside (in
+// real_blocked, which /proc does not show) and removes the awaited
+// signals from the blocked mask. The signal is then neither blocked nor
+// caught nor ignored in the status file, although the kernel delivers it
+// to the waiting task. An init that blocks every signal and waits for them
+// this way, like tini, would otherwise be taken for one that ignores
+// SIGTERM, and be killed without being asked to stop.
+//
+// The awaited set is the first argument of the call; it is read from the
+// process's memory. The status file and the kernel's decision both concern
+// the task the pid names, so only that task is looked at.
+//
+// Returns false when the process is not in rt_sigtimedwait or the set does
+// not hold the signal. Returns true when the set holds it, and also when the
+// process is known to be waiting but its set cannot be read: that errs
+// towards a graceful stop, which the caller still follows with SIGKILL
+// once its grace period ends.
+fn is_signal_awaited(proc_dir: &Path, signum: u32) -> bool {
+    if signum == 0 || signum > 64 {
+        return false;
+    }
+
+    let syscall = match fs::read_to_string(proc_dir.join("syscall")) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    let (set_addr, set_size) = match parse_sigtimedwait_call(&syscall) {
+        Some(call) => call,
+        None => return false,
+    };
+
+    let mut set = vec![0u8; set_size];
+    let read = File::open(proc_dir.join("mem")).and_then(|f| f.read_exact_at(&mut set, set_addr));
+    if let Err(e) = read {
+        warn!(
+            sl(),
+            "failed to read the signal set a process waits for, assuming it waits for {}: {}",
+            signum,
+            e
+        );
+        return true;
+    }
+
+    sigset_contains(&set, signum)
+}
+
+// The size of the kernel's sigset_t: 64 signals, in bytes.
+const KERNEL_SIGSET_SIZE: usize = 8;
+
+// Parse a line of /proc/<pid>/syscall. For a task inside rt_sigtimedwait(2),
+// return the address and size of the signal set it waits for.
+//
+// The line is "running" for a running task, or the syscall number, its six
+// arguments, the stack pointer and the program counter, in hexadecimal
+// except for the number.
+fn parse_sigtimedwait_call(line: &str) -> Option<(u64, usize)> {
+    let fields: Vec<&str> = line.split_whitespace().collect();
+    let nr: libc::c_long = fields.first()?.parse().ok()?;
+    if nr != libc::SYS_rt_sigtimedwait || fields.len() < 5 {
+        return None;
+    }
+
+    let hex = |s: &str| u64::from_str_radix(s.trim_start_matches("0x"), 16).ok();
+    let set_addr = hex(fields[1])?;
+    let set_size = usize::try_from(hex(fields[4])?).ok()?;
+
+    // The kernel rejects any size but that of its own sigset_t before
+    // waiting, so a call with another size is not a wait.
+    if set_addr == 0 || set_size != KERNEL_SIGSET_SIZE {
+        return None;
+    }
+
+    Some((set_addr, set_size))
+}
+
+// Check if a kernel sigset_t, as raw bytes, holds a signal. The set is an
+// array of native unsigned longs; signal n is bit n - 1, counting from the
+// low bit of the first word.
+fn sigset_contains(set: &[u8], signum: u32) -> bool {
+    if signum == 0 || signum > 64 {
+        return false;
+    }
+
+    let word_size = std::mem::size_of::<libc::c_ulong>();
+    let bit = (signum - 1) as usize;
+    let word_bits = word_size * 8;
+
+    match set.chunks_exact(word_size).nth(bit / word_bits) {
+        Some(bytes) => {
+            let mut word = [0u8; std::mem::size_of::<libc::c_ulong>()];
+            word.copy_from_slice(bytes);
+            libc::c_ulong::from_ne_bytes(word) >> (bit % word_bits) & 1 == 1
+        }
+        None => false,
+    }
+}
+
 fn do_mem_hotplug_by_probe(addrs: &[u64]) -> Result<()> {
     for addr in addrs.iter() {
         fs::write(SYSFS_MEMORY_HOTPLUG_PROBE_PATH, format!("{:#X}", *addr))?;
@@ -3549,6 +3657,235 @@ OtherField:other
             let msg = format!("{msg}, result: {result:?}");
 
             assert_eq!(d.result, result, "{msg}");
+        }
+    }
+
+    // A sigset_t holding the given signals, as the kernel lays it out.
+    fn sigset_bytes(signals: &[u32]) -> Vec<u8> {
+        let word_size = std::mem::size_of::<libc::c_ulong>();
+        let mut words = vec![0 as libc::c_ulong; KERNEL_SIGSET_SIZE / word_size];
+        for s in signals {
+            let bit = (s - 1) as usize;
+            words[bit / (word_size * 8)] |= 1 << (bit % (word_size * 8));
+        }
+        words.iter().flat_map(|w| w.to_ne_bytes()).collect()
+    }
+
+    #[test]
+    fn test_sigset_contains() {
+        let set = sigset_bytes(&[libc::SIGTERM as u32, libc::SIGINT as u32, 64]);
+
+        assert!(sigset_contains(&set, libc::SIGTERM as u32));
+        assert!(sigset_contains(&set, libc::SIGINT as u32));
+        assert!(sigset_contains(&set, 64));
+        assert!(!sigset_contains(&set, libc::SIGKILL as u32));
+        assert!(!sigset_contains(&set, 1));
+        assert!(!sigset_contains(&set, 0));
+        assert!(!sigset_contains(&set, 65));
+        assert!(!sigset_contains(&set[..4], 64));
+    }
+
+    #[test]
+    fn test_parse_sigtimedwait_call() {
+        let nr = libc::SYS_rt_sigtimedwait;
+        let other = libc::SYS_nanosleep;
+
+        #[derive(Debug)]
+        struct TestData {
+            line: String,
+            result: Option<(u64, usize)>,
+        }
+
+        let tests = &[
+            TestData {
+                line: format!("{nr} 0x7fff5b962570 0x7fff5b962470 0x7fff5b962460 0x8 0x0 0x0 0x7fff5b962448 0x4a3c1e\n"),
+                result: Some((0x7fff5b962570, 8)),
+            },
+            TestData {
+                line: "running\n".to_string(),
+                result: None,
+            },
+            TestData {
+                line: format!("{other} 0x7fff4e8eb368 0x7fff4e8eb368 0x0 0x0 0x0 0x0 0x7fff4e8eb358 0x4a3c1e\n"),
+                result: None,
+            },
+            // A task blocked outside a syscall.
+            TestData {
+                line: "-1 0x7fff4e8eb358 0x4a3c1e\n".to_string(),
+                result: None,
+            },
+            // A size the kernel would have refused.
+            TestData {
+                line: format!("{nr} 0x7fff5b962570 0x0 0x0 0x4 0x0 0x0 0x7fff5b962448 0x4a3c1e"),
+                result: None,
+            },
+            TestData {
+                line: format!("{nr} 0x0 0x0 0x0 0x8 0x0 0x0 0x7fff5b962448 0x4a3c1e"),
+                result: None,
+            },
+            TestData {
+                line: format!("{nr} zz 0x0 0x0 0x8"),
+                result: None,
+            },
+            TestData {
+                line: format!("{nr} 0x7fff5b962570"),
+                result: None,
+            },
+            TestData {
+                line: String::new(),
+                result: None,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let result = parse_sigtimedwait_call(&d.line);
+            assert_eq!(d.result, result, "test[{i}]: {d:?}");
+        }
+    }
+
+    #[test]
+    fn test_is_signal_awaited() {
+        const SET_ADDR: u64 = 0x1000;
+        let term = libc::SIGTERM as u32;
+        let waiting = format!(
+            "{} {SET_ADDR:#x} 0x0 0x0 0x8 0x0 0x0 0x7fff5b962448 0x4a3c1e\n",
+            libc::SYS_rt_sigtimedwait
+        );
+
+        #[derive(Debug)]
+        struct TestData<'a> {
+            syscall: Option<&'a str>,
+            // The signals in the awaited set, or None for an unreadable set.
+            awaited: Option<&'a [u32]>,
+            signum: u32,
+            result: bool,
+        }
+
+        let everything_but_kill_and_stop: Vec<u32> = (1..=64)
+            .filter(|s| *s != libc::SIGKILL as u32 && *s != libc::SIGSTOP as u32)
+            .collect();
+
+        let tests = &[
+            // tini: every signal awaited.
+            TestData {
+                syscall: Some(&waiting),
+                awaited: Some(&everything_but_kill_and_stop),
+                signum: term,
+                result: true,
+            },
+            TestData {
+                syscall: Some(&waiting),
+                awaited: Some(&[libc::SIGCHLD as u32]),
+                signum: term,
+                result: false,
+            },
+            // Waiting, but for what cannot be read.
+            TestData {
+                syscall: Some(&waiting),
+                awaited: None,
+                signum: term,
+                result: true,
+            },
+            TestData {
+                syscall: Some("running\n"),
+                awaited: Some(&everything_but_kill_and_stop),
+                signum: term,
+                result: false,
+            },
+            TestData {
+                syscall: None,
+                awaited: Some(&everything_but_kill_and_stop),
+                signum: term,
+                result: false,
+            },
+            TestData {
+                syscall: Some(&waiting),
+                awaited: Some(&everything_but_kill_and_stop),
+                signum: 0,
+                result: false,
+            },
+            TestData {
+                syscall: Some(&waiting),
+                awaited: Some(&everything_but_kill_and_stop),
+                signum: 65,
+                result: false,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{i}]: {d:?}");
+
+            let dir = tempdir().expect("failed to make tempdir");
+            if let Some(syscall) = d.syscall {
+                fs::write(dir.path().join("syscall"), syscall).unwrap();
+            }
+            if let Some(awaited) = d.awaited {
+                // Stands in for the process's memory: the set at its address.
+                let mem = File::create(dir.path().join("mem")).unwrap();
+                mem.write_all_at(&sigset_bytes(awaited), SET_ADDR).unwrap();
+            }
+
+            let result = is_signal_awaited(dir.path(), d.signum);
+
+            assert_eq!(d.result, result, "{msg}, result: {result:?}");
+        }
+    }
+
+    // The case the check exists for, on the running kernel: a process that
+    // blocks every signal and waits for them in sigwait(3), as tini does.
+    #[test]
+    fn test_is_signal_awaited_in_sigwait() {
+        use nix::sys::signal::{kill, sigprocmask, SigSet, SigmaskHow, Signal};
+        use nix::sys::wait::waitpid;
+        use nix::unistd::{fork, ForkResult};
+
+        // SAFETY: the child only calls async-signal-safe functions before
+        // it exits.
+        match unsafe { fork() }.expect("fork") {
+            ForkResult::Child => {
+                let mut awaited = SigSet::all();
+                awaited.remove(Signal::SIGUSR1);
+                let _ = sigprocmask(SigmaskHow::SIG_BLOCK, Some(&SigSet::all()), None);
+                let _ = awaited.wait();
+                unsafe { libc::_exit(0) };
+            }
+            ForkResult::Parent { child } => {
+                let dir = PathBuf::from(format!("/proc/{child}"));
+                let term = libc::SIGTERM as u32;
+
+                let mut waiting = false;
+                for _ in 0..500 {
+                    if let Ok(line) = fs::read_to_string(dir.join("syscall")) {
+                        waiting = parse_sigtimedwait_call(&line).is_some();
+                    }
+                    if waiting {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                let readable = File::open(dir.join("mem")).is_ok();
+
+                let handled = is_signal_handled(dir.join("status").to_str().unwrap(), term);
+                let awaited_term = is_signal_awaited(&dir, term);
+                let awaited_usr1 = is_signal_awaited(&dir, libc::SIGUSR1 as u32);
+
+                kill(child, Signal::SIGTERM).unwrap();
+                waitpid(child, None).unwrap();
+
+                if !waiting || !readable {
+                    // /proc/<pid>/syscall and mem need ptrace access to
+                    // the child, which some sandboxes do not grant.
+                    println!("INFO: skipping: cannot inspect the child's syscall");
+                    return;
+                }
+                // The status file shows SIGTERM neither blocked, caught
+                // nor ignored while the child waits for it...
+                assert!(!handled, "SIGTERM shows as handled in the status file");
+                // ...which is what is_signal_awaited makes up for.
+                assert!(awaited_term, "SIGTERM is not seen as awaited");
+                // The set is read, not assumed: SIGUSR1 is blocked, not awaited.
+                assert!(!awaited_usr1, "SIGUSR1 is seen as awaited");
+            }
         }
     }
 
