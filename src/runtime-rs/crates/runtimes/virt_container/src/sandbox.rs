@@ -61,7 +61,7 @@ use hypervisor::{
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
-use kata_sys_util::netns::remove_netns;
+use kata_sys_util::netns::{pin_netns, remove_netns};
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
@@ -172,6 +172,9 @@ pub struct VirtSandbox {
     oom_notifier: Arc<CrioOomNotifier>,
     // Held for the whole teardown, so a second caller waits instead of racing.
     stopping: Arc<Mutex<()>>,
+    // One network rescan at a time: every container start triggers one, and
+    // two interleaved would race the netns pin and the create.
+    rescan_lock: Arc<Mutex<()>>,
     cleanup_steps: Arc<Mutex<CleanupSteps>>,
     shutdown_started: Arc<AtomicBool>,
     teardown_started: Arc<AtomicBool>,
@@ -319,6 +322,15 @@ where
         )))
 }
 
+/// Where a rescan pins the VMM's network namespace for recovery: under the
+/// sandbox's state directory, which outlives everything but the final
+/// cleanup. remove_netns() releases it after the links are swept.
+fn netns_pin_path(sid: &str) -> PathBuf {
+    Path::new(kata_types::config::KATA_PATH)
+        .join(sid)
+        .join("netns-pin")
+}
+
 /// A state saved before prepare_vm() has no hypervisor id yet. QEMU builds the
 /// directory its cleanup removes from the id, so an empty one would remove
 /// all of /run/kata.
@@ -392,6 +404,7 @@ impl VirtSandbox {
             cancel_token,
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
+            rescan_lock: Arc::new(Mutex::new(())),
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             teardown_started: Arc::new(AtomicBool::new(false)),
@@ -1368,6 +1381,9 @@ impl VirtSandbox {
                 return None;
             }
         };
+        // The /proc reference dies with the VMM; rescan_network() pins the
+        // namespace before it creates a network from this config, so the
+        // recorded path outlives the VMM.
         let netns_path = format!("/proc/{}/ns/net", vmm_pid);
 
         let queues = self
@@ -1920,7 +1936,16 @@ impl Sandbox for VirtSandbox {
                 .await
                 .context("resource clean up")
             {
-                Ok(()) => steps.resources = true,
+                // The rescanned namespace's pin was entered by the sweep
+                // just now; release it before the hypervisor step removes
+                // the VM directory it lives in, and retry the step until it
+                // is released. A sandbox that never pinned has nothing here.
+                Ok(()) => match remove_netns(&netns_pin_path(&self.sid))
+                    .context("release the netns pin")
+                {
+                    Ok(()) => steps.resources = true,
+                    Err(e) => errors.push(e),
+                },
                 Err(e) => errors.push(e),
             }
         }
@@ -1989,7 +2014,10 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn rescan_network(&self) -> Result<()> {
-        let Some(net_cfg) = self.netns_rescan_config().await else {
+        // One rescan at a time: every container start triggers one, and two
+        // interleaved would race the netns pin below and the create.
+        let _rescan = self.rescan_lock.lock().await;
+        let Some(mut net_cfg) = self.netns_rescan_config().await else {
             return Ok(());
         };
 
@@ -2023,6 +2051,23 @@ impl Sandbox for VirtSandbox {
                         sl!(),
                         "rescan_network: scanning netns={}", net_cfg.netns_path
                     );
+                    // The /proc reference dies with the VMM, and reused, its
+                    // pid can name an unrelated process: recovery refuses to
+                    // enter it. Pin the namespace under the state directory,
+                    // the way `ip netns` would, so the recorded path
+                    // outlives the VMM; cleanup releases the pin after the
+                    // sweep. Pinned only here, where a network is created
+                    // from it: nothing else records the path.
+                    let pin = netns_pin_path(&self.sid);
+                    match pin_netns(Path::new(&net_cfg.netns_path), &pin) {
+                        Ok(()) => net_cfg.netns_path = pin.to_string_lossy().into_owned(),
+                        Err(e) => warn!(
+                            sl!(),
+                            "could not pin {}: {e:#}; a recovery after a \
+                             shim death will not reach these links",
+                            net_cfg.netns_path
+                        ),
+                    }
                     rescan = self
                         .resource_manager
                         .create_network(NetworkConfig::NetNs(net_cfg))
@@ -2371,6 +2416,7 @@ impl Persist for VirtSandbox {
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
+            rescan_lock: Arc::new(Mutex::new(())),
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             teardown_started: Arc::new(AtomicBool::new(false)),
