@@ -45,7 +45,6 @@ kata-types.workspace = true
 # hypervisor crate from runtime-rs
 hypervisor.workspace = true
 kata-sys-util.workspace = true
-safe-path.workspace = true
 
 tokio.workspace = true
 

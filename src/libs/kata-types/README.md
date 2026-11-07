@@ -26,6 +26,7 @@ This crate provides common constants, data types, and configuration structures u
 | `k8s` | Kubernetes-specific paths and utilities (empty-dir, configmap, secret, projected volumes) |
 | `machine_type` | Machine type definitions |
 | `mount` | Mount point structures and validation |
+| `path` | Linux path resolution through `libpathrs` (optional) |
 | `rootless` | Rootless VMM support utilities |
 
 ## Configuration
@@ -42,7 +43,14 @@ The `config` module supports:
 ## Features
 
 - `enable-vendor`: Enable vendor-specific extensions
-- `safe-path`: Enable safe path resolution (platform-specific)
+- `pathrs`: Enable Linux path resolution through `libpathrs`
+
+With `pathrs` enabled, `path::scoped_join()` resolves existing path components
+through `libpathrs` and permits missing components without creating them. Symlink
+loops, magic links, and non-directory intermediate components return errors.
+The returned pathname is not pinned: callers must prevent changes
+to the tree between resolution and use. Use `pathrs::Root` operations directly
+when the tree can change concurrently.
 
 ## Platform Support
 

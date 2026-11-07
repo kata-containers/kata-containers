@@ -5,8 +5,8 @@
 // Description: Image client to manage container images for testing container creation
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::path::scoped_join;
 use nix::mount::umount;
-use safe_path::scoped_join;
 use slog::{debug, warn};
 use std::fs;
 use std::process::Command;

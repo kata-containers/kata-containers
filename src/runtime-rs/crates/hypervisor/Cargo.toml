@@ -49,7 +49,6 @@ kata-types = { workspace = true }
 logging = { workspace = true }
 persist = { workspace = true }
 protocols = { features = ["async"], workspace = true }
-safe-path = { workspace = true }
 tempfile = { workspace = true }
 tests_utils = { workspace = true }
 

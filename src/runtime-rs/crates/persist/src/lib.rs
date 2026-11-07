@@ -12,7 +12,7 @@ use std::{fs::File, io::BufReader};
 
 pub const PERSIST_FILE: &str = "state.json";
 use kata_sys_util::validate::verify_id;
-use safe_path::scoped_join;
+use kata_types::path::scoped_join;
 
 pub fn to_disk<T: serde::Serialize>(value: &T, sid: &str, jailer_path: &str) -> Result<()> {
     verify_id(sid).context("failed to verify sid")?;

@@ -36,6 +36,10 @@ pub mod k8s;
 /// Constants and data types related to mount point.
 pub mod mount;
 
+/// Linux path resolution through libpathrs.
+#[cfg(feature = "pathrs")]
+pub mod path;
+
 pub(crate) mod utils;
 
 /// hypervisor capabilities

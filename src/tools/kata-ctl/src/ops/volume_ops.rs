@@ -171,7 +171,7 @@ mod tests {
         // this test has to run as root, so has to manually cleanup afterwards
         skip_if_not_root!();
 
-        // create kata_direct_volume_root_path() first as safe_path::scoped_join
+        // create kata_direct_volume_root_path() first as kata_types::path::scoped_join
         // requires prefix dir to exist
         fs::create_dir_all(kata_direct_volume_root_path())
             .expect("create kata direct volume root path failed");
