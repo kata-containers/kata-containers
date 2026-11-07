@@ -1,0 +1,110 @@
+# Tests of the csi-kata-directvolume CSI driver: unit tests, golangci-lint and
+# the CSI sanity suite.
+name: csi-kata-directvolume
+
+on:
+  pull_request:
+    paths:
+      - src/tools/csi-kata-directvolume/**
+      - .github/workflows/csi-kata-directvolume.yaml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DRIVER_DIR: src/tools/csi-kata-directvolume
+
+jobs:
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install yq
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Read properties from versions.yaml
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          linter_version="$(yq '.languages.golangci-lint.version' versions.yaml)"
+          [[ -n "${go_version}" && -n "${linter_version}" ]]
+          echo "GO_VERSION=${go_version}" >> "${GITHUB_ENV}"
+          echo "GOLANGCI_LINT_VERSION=${linter_version}" >> "${GITHUB_ENV}"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.DRIVER_DIR }}/go.sum
+
+      - name: Run the unit tests
+        working-directory: ${{ env.DRIVER_DIR }}
+        run: go test -race -count=1 -v ./...
+
+      - name: Check formatting and run golangci-lint
+        working-directory: ${{ env.DRIVER_DIR }}
+        run: |
+          make test-fmt
+          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${GOLANGCI_LINT_VERSION}"
+          "$(go env GOPATH)/bin/golangci-lint" run -c "${GITHUB_WORKSPACE}/tests/.golangci.yml" ./...
+
+  csi-sanity:
+    name: csi-sanity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install yq
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Read properties from versions.yaml
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          csi_test_version="$(yq '.externals.csi-test.version' versions.yaml)"
+          [[ -n "${go_version}" && -n "${csi_test_version}" ]]
+          echo "GO_VERSION=${go_version}" >> "${GITHUB_ENV}"
+          echo "CSI_TEST_VERSION=${csi_test_version}" >> "${GITHUB_ENV}"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.DRIVER_DIR }}/go.sum
+
+      - name: Install csi-sanity ${{ env.CSI_TEST_VERSION }}
+        run: go install "github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity@${CSI_TEST_VERSION}"
+
+      - name: Run csi-sanity
+        run: |
+          sudo -E env "PATH=${PATH}" "ARTIFACTS=${RUNNER_TEMP}/csi-sanity" \
+            "${DRIVER_DIR}/test/sanity/run-csi-sanity.sh"
+
+      - name: Upload the driver log
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: csi-sanity
+          path: ${{ runner.temp }}/csi-sanity
+          if-no-files-found: ignore
+
