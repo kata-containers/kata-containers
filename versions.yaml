@@ -348,7 +348,7 @@ externals:
   runc:
     description: "CLI tool for spawning and running containers"
     url: "https://github.com/opencontainers/runc"
-    latest: "v1.2"
+    latest: "v1.5"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
