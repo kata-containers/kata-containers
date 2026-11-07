@@ -1645,16 +1645,39 @@ pub struct VmTemplateInfo {
     /// device_state_path is the VM device state file path.
     #[serde(default)]
     pub device_state_path: String,
+
+    /// Memory restore mode used when restoring a VM from a template.
+    ///
+    /// This option is only supported by Cloud Hypervisor. Valid values are:
+    /// - `copy`: copy the snapshot memory into guest memory (default)
+    /// - `ondemand`: populate guest memory on demand from the snapshot using userfaultfd
+    /// - `copyonwrite`: map the snapshot memory copy-on-write instead of copying it
+    #[serde(default)]
+    pub memory_restore_mode: String,
 }
 
 impl VmTemplateInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
+        self.memory_restore_mode = self.memory_restore_mode.trim().to_string();
         Ok(())
     }
 
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
+        if !self.memory_restore_mode.is_empty() {
+            let mode = self.memory_restore_mode.trim().to_ascii_lowercase();
+            if !matches!(mode.as_str(), "copy" | "ondemand" | "copyonwrite") {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "invalid memory_restore_mode {:?}: valid values are \"copy\", \"ondemand\" and \"copyonwrite\"",
+                        self.memory_restore_mode
+                    ),
+                ));
+            }
+        }
+
         Ok(())
     }
 }
@@ -1991,6 +2014,47 @@ use crate::config::validate_path_pattern;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_vm_template_info_memory_restore_mode() {
+        let mut info = VmTemplateInfo::default();
+        assert!(info.validate().is_ok());
+
+        for mode in [
+            "Copy",
+            "OnDemand",
+            "CopyOnWrite",
+            "COPY",
+            "ONDEMAND",
+            "COPYONWRITE",
+            "ondemand",
+            "copyonwrite",
+        ] {
+            info.memory_restore_mode = mode.to_string();
+            assert!(
+                info.validate().is_ok(),
+                "memory_restore_mode {:?} should be accepted",
+                mode
+            );
+        }
+
+        for mode in [
+            "PreFault",
+            "copy-on-demand",
+            "copy_on_write",
+            "copy-on-write",
+            "on_demand",
+            "on-demand",
+            "userfaultfd",
+        ] {
+            info.memory_restore_mode = mode.to_string();
+            assert!(
+                info.validate().is_err(),
+                "memory_restore_mode {:?} should be rejected",
+                mode
+            );
+        }
+    }
 
     #[test]
     fn test_register_plugin() {
