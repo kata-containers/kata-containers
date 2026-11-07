@@ -49,11 +49,11 @@ setup() {
         # that the container had time to execute:
         wait_time=5
         sleep_time=1
-        cmd="kubectl logs $pod_name | grep -q $expected"
+        cmd="kubectl logs $pod_name | grep $expected > /dev/null"
         waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
         # Verify expected capabilities from exec context:
-        kubectl exec "$pod_name" -- "${exec_command[@]}" | grep -q "$expected"
+        kubectl exec "$pod_name" -- "${exec_command[@]}" | grep "$expected" > /dev/null
 }
 
 teardown() {

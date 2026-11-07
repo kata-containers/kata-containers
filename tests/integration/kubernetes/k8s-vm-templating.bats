@@ -130,7 +130,7 @@ DROPIN
 	# pipes the remote output through `tr`, so the pipeline's exit status is not
 	# the remote command's; assert on the output instead. Check inside PID 1's
 	# mount namespace, where the template tmpfs was actually mounted.
-	exec_host "$node" "nsenter --mount=/proc/1/ns/mnt test -f /run/vc/vm/template/memory && echo present" | grep -q present
+	exec_host "$node" "nsenter --mount=/proc/1/ns/mnt test -f /run/vc/vm/template/memory && echo present" | grep present > /dev/null
 
 	pod_name="test-templated-pod"
 	ctr_name="test-container"
@@ -156,8 +156,8 @@ DROPIN
 		# src/runtime/virtcontainers/vm.go). Inspect PID 1's mount namespace, where
 		# the shim creates these entries alongside the template tmpfs.
 		exec_host "$node" \
-			"nsenter --mount=/proc/1/ns/mnt find /run/vc/vm -maxdepth 1 -mindepth 1 -type l ! -name template | grep -q . && echo symlink" \
-			| grep -q symlink
+			"nsenter --mount=/proc/1/ns/mnt find /run/vc/vm -maxdepth 1 -mindepth 1 -type l ! -name template | grep . > /dev/null && echo symlink" \
+			| grep symlink > /dev/null
 	fi
 }
 

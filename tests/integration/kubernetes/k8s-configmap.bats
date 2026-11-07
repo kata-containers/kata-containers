@@ -41,7 +41,7 @@ setup() {
 	kubectl create -f "${configmap_yaml_file}"
 
 	# View the values of the keys
-	kubectl get configmaps "${config_name}" -o yaml | grep -q "data-"
+	kubectl get configmaps "${config_name}" -o yaml | grep "data-" > /dev/null
 
 	# Create a pod that consumes the ConfigMap
 	kubectl create -f "${pod_yaml_file}"
@@ -77,7 +77,7 @@ setup() {
 
 	# Define check function for waitForProcess
 	check_configmap_propagated() {
-		pod_exec "${pod_volume_name}" "${check_config_exec_command[@]}" | grep -q "${updated_value}"
+		pod_exec "${pod_volume_name}" "${check_config_exec_command[@]}" | grep "${updated_value}" > /dev/null
 	}
 
 	if waitForProcess "${propagation_wait_time}" "${sleep_time}" check_configmap_propagated; then

@@ -62,7 +62,7 @@ setup() {
 		mkfs.ext4 -F -q '${disk_path}'; \
 		/opt/kata/bin/kata-ctl direct-volume add '${volume_path}' '${mount_info}'; \
 		sync; \
-		echo direct-volume-ready" | grep -qx direct-volume-ready
+		echo direct-volume-ready" | grep -x direct-volume-ready > /dev/null
 
 	apparent_size="$(exec_host "${node}" "stat -c %s '${disk_path}'")"
 	allocated_before="$(host_allocated_bytes "${disk_path}")"

@@ -49,7 +49,7 @@ wait_for_handler() {
 
 	while [[ ${retries} -lt 60 ]]; do
 		local found="no"
-		node_runtime_handlers | grep -qx "${handler}" && found="yes"
+		node_runtime_handlers | grep -x "${handler}" > /dev/null && found="yes"
 		[[ "${found}" == "${want}" ]] && return 0
 		retries=$((retries + 1))
 		sleep 2

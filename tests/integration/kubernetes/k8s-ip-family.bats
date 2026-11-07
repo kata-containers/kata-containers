@@ -33,7 +33,7 @@ client_fetch() {
 	local host="$1"
 
 	[[ "${host}" == *:* ]] && host="[${host}]"
-	kubectl exec "${client_pod}" -- wget -T 5 -O- "http://${host}/" | grep -q "Welcome to nginx"
+	kubectl exec "${client_pod}" -- wget -T 5 -O- "http://${host}/" | grep "Welcome to nginx" > /dev/null
 }
 
 setup() {

@@ -97,7 +97,7 @@ install_regorus()
             sed 's/v//'
     ) || die "Failed to get regorus version from cargo.toml"
 
-    if regorus --version 2>/dev/null | grep -q "${version}"; then
+    if regorus --version 2>/dev/null | grep "${version}" > /dev/null; then
         info "regorus version ${version} is already installed"
         return 0
     fi
@@ -111,7 +111,7 @@ install_regorus()
         die "Failed to install regorus"
     fi
 
-    if ! echo "${PATH}" | grep -q "${HOME}/.cargo/bin"; then
+    if ! grep -q "${HOME}/.cargo/bin" <<< "${PATH}"; then
         export PATH="${PATH}:${HOME}/.cargo/bin"
     fi
 

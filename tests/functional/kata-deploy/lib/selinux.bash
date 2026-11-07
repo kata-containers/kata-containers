@@ -107,7 +107,7 @@ assert_artifacts_installed() {
 
 # The kubelet owns the mount point, so it outlives what was installed under it.
 assert_artifacts_removed() {
-	run run_on_host "test -d ${KATA_INSTALL_DIR} && ls -A ${KATA_INSTALL_DIR} | grep -q . && echo LEFTOVERS || echo CLEAN"
+	run run_on_host "test -d ${KATA_INSTALL_DIR} && ls -A ${KATA_INSTALL_DIR} | grep . > /dev/null && echo LEFTOVERS || echo CLEAN"
 	echo "# ${KATA_INSTALL_DIR} after uninstall: ${output}" >&3
 	[[ "${output}" == *"CLEAN"* ]]
 }

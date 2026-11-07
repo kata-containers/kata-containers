@@ -116,7 +116,7 @@ enabled_shims() {
 		}
 
 		while read -r shim; do
-			echo "${classes}" | grep -qx "kata-${shim}" || {
+			grep -qx "kata-${shim}" <<< "${classes}" || {
 				echo "${profile} enables ${shim} but renders no kata-${shim}" >&2
 				return 1
 			}
@@ -169,7 +169,7 @@ EOF
 
 			while read -r snapshotter; do
 				[[ "${snapshotter}" == "devmapper" ]] && continue
-				echo "${setup}" | tr ',' '\n' | grep -qx "${snapshotter}" || {
+				echo "${setup}" | tr ',' '\n' | grep -x "${snapshotter}" > /dev/null || {
 					echo "${profile} maps a shim to ${snapshotter} on ${arch}" \
 						"but does not set it up (setup: '${setup}')" >&2
 					return 1

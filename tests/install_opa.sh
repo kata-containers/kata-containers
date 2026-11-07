@@ -19,7 +19,7 @@ install_opa()
     url=$(get_test_version "externals.opa.url")
     version=$(get_test_version "externals.opa.version")
 
-    if opa version 2>/dev/null | grep -q "${version}"; then
+    if opa version 2>/dev/null | grep "${version}" > /dev/null; then
         info "OPA version ${version} is already installed"
         return 0
     fi

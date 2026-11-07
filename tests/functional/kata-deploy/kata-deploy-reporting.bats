@@ -23,7 +23,7 @@ render_job_mode() {
 
 refute_match() {
 	local rendered="${1}" pattern="${2}"
-	if echo "${rendered}" | grep -q -- "${pattern}"; then
+	if grep -q -- "${pattern}" <<< "${rendered}"; then
 		echo "unexpected in rendered output: ${pattern}" >&2
 		return 1
 	fi
@@ -50,7 +50,7 @@ rbac_doc() {
 	daemonset=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=daemonset \
 		--show-only templates/kata-deploy.yaml)
-	echo "${daemonset}" | grep -q 'terminationMessagePolicy: FallbackToLogsOnError'
+	grep -q 'terminationMessagePolicy: FallbackToLogsOnError' <<< "${daemonset}"
 }
 
 @test "Helm template (job mode): the dispatcher's own summary survives its pod" {
@@ -59,11 +59,11 @@ rbac_doc() {
 	# says "Error" and nothing else.
 	for template in kata-deploy-install-job.yaml kata-deploy-cleanup-job.yaml; do
 		rendered=$(render_job_mode "${template}")
-		echo "${rendered}" | grep -q 'terminationMessagePolicy: FallbackToLogsOnError'
+		grep -q 'terminationMessagePolicy: FallbackToLogsOnError' <<< "${rendered}"
 	done
 
 	rendered=$(render_job_mode kata-deploy-reconcile.yaml --set job.reconcile.enabled=true)
-	echo "${rendered}" | grep -q 'terminationMessagePolicy: FallbackToLogsOnError'
+	grep -q 'terminationMessagePolicy: FallbackToLogsOnError' <<< "${rendered}"
 }
 
 @test "Helm template (job mode): the dispatcher may read the pods it has to explain" {
@@ -74,14 +74,14 @@ rbac_doc() {
 
 	# A Job's status says that it failed and nothing else; its pod holds the
 	# stage, the exit code and the termination message.
-	echo "${role}" | grep -q 'resources: \["pods"\]'
+	grep -q 'resources: \["pods"\]' <<< "${role}"
 	# Namespaced: reading pods cluster-wide is a different thing to ask for.
-	echo "${role}" | grep -q '^kind: Role$'
+	grep -q '^kind: Role$' <<< "${role}"
 
 	noderole=$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-noderole')
 	refute_match "${noderole}" 'pods'
 	# The node's own copy of the result rides on the runtime label's patch.
-	echo "${noderole}" | grep -q 'verbs: \[.*"patch".*\]'
+	grep -q 'verbs: \[.*"patch".*\]' <<< "${noderole}"
 
 	refute_match "${role}" '"update"'
 	refute_match "${role}" 'pods/exec'
@@ -98,9 +98,9 @@ rbac_doc() {
 	# only, so asking in the release namespace grants nothing.
 	events=$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-events-role')
 	[[ -n "${events}" ]]
-	echo "${events}" | grep -q 'namespace: default'
-	echo "${events}" | grep -q 'resources: \["events"\]'
-	echo "${events}" | grep -q 'verbs: \["create"\]'
+	grep -q 'namespace: default' <<< "${events}"
+	grep -q 'resources: \["events"\]' <<< "${events}"
+	grep -q 'verbs: \["create"\]' <<< "${events}"
 	refute_match "$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-role')" 'events'
 
 	# Reading or deleting somebody else's events is not part of reporting.
@@ -108,15 +108,15 @@ rbac_doc() {
 	refute_match "${events}" '"delete"'
 
 	binding=$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-events-rb')
-	echo "${binding}" | grep -q 'namespace: default'
-	echo "${binding}" | grep -q 'name: kata-deploy-dispatcher-sa'
+	grep -q 'namespace: default' <<< "${binding}"
+	grep -q 'name: kata-deploy-dispatcher-sa' <<< "${binding}"
 }
 
 @test "Helm template (job mode): a failed hook prints the dispatcher's summary" {
 	local template rendered
 	for template in kata-deploy-install-job.yaml kata-deploy-cleanup-job.yaml; do
 		rendered=$(render_job_mode "${template}")
-		echo "${rendered}" | grep -q '"helm.sh/hook-output-log-policy": hook-failed'
+		grep -q '"helm.sh/hook-output-log-policy": hook-failed' <<< "${rendered}"
 	done
 
 	# Only on failure: a successful rollout's log is pages of per-node progress,
