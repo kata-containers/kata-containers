@@ -363,7 +363,7 @@ externals:
   libseccomp:
     description: "High level interface to Linux seccomp filter"
     url: "https://github.com/seccomp/libseccomp"
-    version: "2.6.0"
+    version: "2.6.1"
 
   pause:
     description: "Kubernetes pause container image"
