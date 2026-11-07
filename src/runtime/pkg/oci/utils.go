@@ -1527,6 +1527,47 @@ func (a *annotationConfiguration) setFloat32WithCheck(f func(float32) error) err
 	return nil
 }
 
+// CRI-O annotation keys for sandbox resource sizing.
+// The value is a JSON-encoded LinuxContainerResources object.
+// https://github.com/cri-o/cri-o/pull/6913
+// https://github.com/cri-o/cri-o/blob/main/ANNOTATION_MIGRATION.md
+const (
+	crioPodLinuxResourcesKey           = "pod-linux-resources.crio.io"
+	crioPodLinuxResourcesKeyDeprecated = "io.kubernetes.cri-o.PodLinuxResources"
+)
+
+// crioPodLinuxResources is the JSON structure of the PodLinuxResources annotation.
+type crioPodLinuxResources struct {
+	CPUPeriod        int64 `json:"cpu_period"`
+	CPUQuota         int64 `json:"cpu_quota"`
+	CPUShares        int64 `json:"cpu_shares"`
+	MemoryLimitBytes int64 `json:"memory_limit_in_bytes"`
+}
+
+// crioSandboxSizing returns the sizing CRI-O states in its PodLinuxResources
+// annotation, or zeros if it is absent or unparsable.
+func crioSandboxSizing(annotations map[string]string) (period uint64, quota int64, shares uint64, memory int64) {
+	for _, key := range []string{crioPodLinuxResourcesKey, crioPodLinuxResourcesKeyDeprecated} {
+		value, ok := annotations[key]
+		if !ok {
+			continue
+		}
+		var res crioPodLinuxResources
+		if err := json.Unmarshal([]byte(value), &res); err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse CRI-O %s: %s", key, err)
+			return 0, 0, 0, 0
+		}
+		if res.CPUPeriod > 0 {
+			period = uint64(res.CPUPeriod)
+		}
+		if res.CPUShares > 0 {
+			shares = uint64(res.CPUShares)
+		}
+		return period, res.CPUQuota, shares, res.MemoryLimitBytes
+	}
+	return 0, 0, 0, 0
+}
+
 // CalculateSandboxSizing will calculate the number of CPUs and amount of Memory that should
 // be added to the VM if sandbox annotations are provided with this sizing details
 func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
@@ -1578,6 +1619,12 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 			ociLog.Warningf("sandbox-sizing: failure to parse SandboxMem: %s", annotation)
 			memory = 0
 		}
+	}
+
+	// Fall back to CRI-O PodLinuxResources annotation if containerd annotations
+	// are not set.
+	if period == 0 && quota == 0 && memory == 0 {
+		period, quota, shares, memory = crioSandboxSizing(spec.Annotations)
 	}
 
 	numCPU, memSizeMB = calculateVMResources(period, quota, memory)
