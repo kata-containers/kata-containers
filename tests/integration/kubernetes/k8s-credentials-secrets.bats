@@ -40,8 +40,11 @@ setup() {
 	set_node "${pod_env_yaml_file}" "${node}"
 	pod_env_cmd="printenv"
 	pod_env_exec_command=(sh -c "${pod_env_cmd}")
+	check_secret_env_cmd='printf %s "$SECRET_TRAILING_NEWLINE" | wc -c'
+	check_secret_env_exec_command=(sh -c "${check_secret_env_cmd}")
 	pod_env_policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	add_exec_to_policy_settings "${pod_env_policy_settings_dir}" "${pod_env_exec_command[@]}"
+	add_exec_to_policy_settings "${pod_env_policy_settings_dir}" "${check_secret_env_exec_command[@]}"
 	add_requests_to_policy_settings "${pod_env_policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${pod_env_policy_settings_dir}" "${pod_env_yaml_file}" "${pod_config_dir}/inject_secret.yaml"
 }
@@ -72,6 +75,9 @@ setup() {
 	# Display environment variables
 	pod_exec "${second_pod_name}" "${pod_env_exec_command[@]}" | grep -w "SECRET_USERNAME"
 	pod_exec "${second_pod_name}" "${pod_env_exec_command[@]}" | grep -w "SECRET_PASSWORD"
+
+	# Verify that Secret-backed environment values are delivered byte-for-byte.
+	grep_pod_exec_output "${second_pod_name}" "^9$" "${check_secret_env_exec_command[@]}"
 }
 
 @test "Secret propagation to volume-mounted pod" {
