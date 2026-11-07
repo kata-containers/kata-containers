@@ -325,16 +325,15 @@ impl ResourceManagerInner {
         //    In Rust Async, if the current thread is taken over by other task, the netns is dropped on another thread,
         //    but it is not in netns. So, the previous thread would still remain in the pod netns.
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
-        // tokio runtime, and block the task on it.
+        // tokio runtime, and block the task on it. The caller awaits that
+        // thread's result instead of joining it; see on_network_thread().
         let device_manager = self.device_manager.clone();
-        let network = thread::spawn(move || -> Result<_> {
+        let network = on_network_thread(move || {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
             rt.block_on(network::new(&network_config, device_manager))
                 .context("new network")
         })
-        .join()
-        .map_err(|e| anyhow!("{:?}", e))
-        .context("Couldn't join on the associated thread")??;
+        .await?;
         self.network = Some(network);
         self.network_applied = false;
         Ok(())
@@ -352,13 +351,11 @@ impl ResourceManagerInner {
             .as_ref()
             .ok_or_else(|| anyhow!("no network was created"))?
             .clone();
-        thread::spawn(move || -> Result<()> {
+        on_network_thread(move || {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
             rt.block_on(network.setup()).context("setup network")
         })
-        .join()
-        .map_err(|e| anyhow!("{:?}", e))
-        .context("Couldn't join on the associated thread")?
+        .await
         .context("failed to set up network")?;
         self.network_applied = true;
         Ok(())
@@ -1097,21 +1094,14 @@ impl ResourceManagerInner {
                 // a dedicated thread so the netns never leaks onto Tokio workers.
                 let network = network.clone();
                 let hypervisor = self.hypervisor.clone();
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                thread::spawn(move || {
-                    let remove = || -> Result<()> {
-                        let rt = runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()?;
-                        rt.block_on(network.remove(hypervisor.as_ref()))
-                    };
-                    let _ = tx.send(remove());
-                });
-                match rx
-                    .await
-                    .unwrap_or_else(|e| Err(e.into()))
-                    .context("remove network")
-                {
+                let removed = on_network_thread(move || {
+                    let rt = runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()?;
+                    rt.block_on(network.remove(hypervisor.as_ref()))
+                })
+                .await;
+                match removed.context("remove network") {
                     Ok(()) => steps.network = true,
                     Err(e) => errors.push(e),
                 }
@@ -1536,6 +1526,24 @@ fn device_cgroup_access_is_readonly(
     }
 
     false
+}
+
+/// Run `f` on its own OS thread, for the netns reasons create_network()
+/// explains, and await its result instead of joining the thread: a parked
+/// executor thread can stall every task scheduled on it, or deadlock the
+/// runtime under contention. A caller cancelled mid-wait leaves the thread
+/// to finish on its own and drop the unclaimed result.
+async fn on_network_thread<T, F>(f: F) -> Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T> + Send + 'static,
+{
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.await
+        .context("the network thread exited without a result")?
 }
 
 /// block_device_node_is_readonly reports whether the host block device

@@ -45,7 +45,17 @@ pub struct Dan {
     inner: Arc<RwLock<DanInner>>,
     /// The endpoints setup() got to attaching; see `AttachProgress`.
     attach_progress: AttachProgress,
-    detached: Mutex<HashSet<usize>>,
+    cleanup: Mutex<DanCleanup>,
+}
+
+#[derive(Default)]
+struct DanCleanup {
+    /// Once a removal has begun, nothing may attach any more: setup() runs
+    /// on a thread the caller may have been cancelled away from, and an
+    /// attach after (or interleaved with) the removal would leave devices
+    /// attached with their records gone.
+    removal_started: bool,
+    detached: HashSet<usize>,
 }
 
 pub struct DanInner {
@@ -61,7 +71,7 @@ impl Dan {
         Ok(Self {
             inner: Arc::new(RwLock::new(DanInner::new(config, &dev_mgr).await?)),
             attach_progress: AttachProgress::default(),
-            detached: Mutex::new(HashSet::new()),
+            cleanup: Mutex::new(DanCleanup::default()),
         })
     }
 }
@@ -134,6 +144,13 @@ impl DanInner {
 #[async_trait]
 impl Network for Dan {
     async fn setup(&self) -> Result<()> {
+        // Held for the whole attach, so the removal of a sandbox whose
+        // attach_network() caller was cancelled waits for this thread
+        // instead of racing it, and an attach can never follow a removal.
+        let cleanup = self.cleanup.lock().await;
+        if cleanup.removal_started {
+            return Err(anyhow!("the network is being removed, nothing may attach"));
+        }
         let inner = self.inner.read().await;
         let _netns_guard;
         if let Some(netns) = inner.netns.as_ref() {
@@ -201,7 +218,9 @@ impl Network for Dan {
     }
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
-        let mut detached = self.detached.lock().await;
+        let mut cleanup = self.cleanup.lock().await;
+        cleanup.removal_started = true;
+        let detached = &mut cleanup.detached;
         let inner = self.inner.read().await;
         if (0..inner.entity_list.len())
             .filter(|index| self.attach_progress.includes(*index))
