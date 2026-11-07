@@ -88,9 +88,10 @@ impl ResourceManager {
         inner.create_network(network_config).await
     }
 
-    /// Attach the created network's endpoints. One shot per created network;
-    /// nothing here keeps a concurrent cleanup from detaching endpoints
-    /// mid-attach, so callers must not race it against one.
+    /// Attach the created network's endpoints. A retry after a failure
+    /// resumes after the endpoints that attached; nothing here keeps a
+    /// concurrent cleanup from detaching endpoints mid-attach, so callers
+    /// must not race it against one.
     pub async fn attach_network(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.attach_network().await

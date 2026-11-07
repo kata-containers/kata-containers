@@ -42,29 +42,50 @@ use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 /// steps of its attach, and nothing rolls that back. The endpoints after it
 /// were never touched.
 ///
-/// So the network keeps the index past the last endpoint whose attach
-/// started. `save()` records exactly those endpoints in state.json, and
-/// `remove()` detaches exactly those, whether the setup succeeded, failed
-/// half way, or the shim died before it got to the rest. Without this, a
-/// failed setup either dropped the network (and the VF stayed on vfio-pci),
-/// or detached endpoints that were never attached.
+/// So the network keeps two watermarks over the endpoint list. The index
+/// past the last endpoint whose attach *started*: `remove()` detaches
+/// exactly those, whether the setup succeeded, failed half way, or the shim
+/// died before it got to the rest, and `Dan::save()` records exactly those.
+/// (`NetworkWithNetns::save()` records every *constructed* endpoint instead:
+/// its construction already made TAPs on the host, and recording a physical
+/// endpoint whose attach never started only costs a no-op rebind.) Without
+/// this, a failed setup either dropped the network (and the VF stayed on
+/// vfio-pci), or detached endpoints that were never attached. And the index
+/// past the last endpoint whose attach *finished*: a retried setup resumes
+/// after those, instead of replaying an attach that succeeded and
+/// hotplugging its device a second time.
 ///
-/// An atomic rather than a lock: `setup()` holds the inner read lock while
+/// Atomics rather than a lock: `setup()` holds the inner read lock while
 /// it runs, and `save()` can be called concurrently by a sandbox state save.
 #[derive(Default)]
-pub(crate) struct AttachStarted(std::sync::atomic::AtomicUsize);
+pub(crate) struct AttachProgress {
+    started: std::sync::atomic::AtomicUsize,
+    finished: std::sync::atomic::AtomicUsize,
+}
 
-impl AttachStarted {
+impl AttachProgress {
     /// Record that the attach of the endpoint at `index` is starting. Called
     /// before the attach, so an attach that fails part way is still recorded.
     pub(crate) fn begin(&self, index: usize) {
-        self.0
+        self.started
             .fetch_max(index + 1, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Whether the attach of the endpoint at `index` has started.
     pub(crate) fn includes(&self, index: usize) -> bool {
-        index < self.0.load(std::sync::atomic::Ordering::SeqCst)
+        index < self.started.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Record that the attach of the endpoint at `index` succeeded, so a
+    /// retried setup resumes after it instead of attaching it again.
+    pub(crate) fn finish(&self, index: usize) {
+        self.finished
+            .fetch_max(index + 1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Whether the attach of the endpoint at `index` succeeded.
+    pub(crate) fn is_finished(&self, index: usize) -> bool {
+        index < self.finished.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

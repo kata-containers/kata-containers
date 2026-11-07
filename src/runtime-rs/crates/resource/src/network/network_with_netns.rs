@@ -31,7 +31,7 @@ use super::{
     utils::link,
     Network,
 };
-use crate::network::{AttachStarted, NetworkInfo};
+use crate::network::{AttachProgress, NetworkInfo};
 
 #[derive(Clone, Debug)]
 pub struct NetworkWithNetNsConfig {
@@ -80,8 +80,8 @@ impl NetworkWithNetnsInner {
 
 pub(crate) struct NetworkWithNetns {
     inner: Arc<RwLock<NetworkWithNetnsInner>>,
-    /// The endpoints setup() got to attaching; see `AttachStarted`.
-    attach_started: AttachStarted,
+    /// The endpoints setup() got to attaching; see `AttachProgress`.
+    attach_progress: AttachProgress,
     cleanup: Mutex<NetworkCleanup>,
     /// Why construction stopped early, when it did. The endpoints built
     /// before the failure are kept, so what they created reaches the saved
@@ -106,7 +106,7 @@ impl NetworkWithNetns {
         let (inner, construction_error) = NetworkWithNetnsInner::new(config, d).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
-            attach_started: AttachStarted::default(),
+            attach_progress: AttachProgress::default(),
             cleanup: Mutex::new(NetworkCleanup::default()),
             construction_error: construction_error.map(|e| format!("{e:#}")),
         })
@@ -125,13 +125,19 @@ impl Network for NetworkWithNetns {
         let inner = self.inner.read().await;
         let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
         for (index, e) in inner.entity_list.iter().enumerate() {
-            self.attach_started.begin(index);
+            // A retried setup resumes after the endpoints it finished:
+            // replaying an attach would hotplug its device a second time.
+            if self.attach_progress.is_finished(index) {
+                continue;
+            }
+            self.attach_progress.begin(index);
             if let Some(device_path) = e.endpoint.attach().await.context("attach")? {
                 e.network_info
                     .set_device_path(device_path)
                     .await
                     .context("set device path")?;
             }
+            self.attach_progress.finish(index);
         }
         Ok(())
     }
@@ -202,7 +208,7 @@ impl Network for NetworkWithNetns {
         // physical endpoint's constructor changes nothing on the host.
         let mut unattempted = HashSet::new();
         for (index, e) in inner.entity_list.iter().enumerate() {
-            if self.attach_started.includes(index) {
+            if self.attach_progress.includes(index) {
                 continue;
             }
             unattempted.insert(index);
@@ -545,9 +551,11 @@ mod cleanup_tests {
     #[derive(Debug, Default)]
     struct TestEndpoint {
         calls: AtomicUsize,
+        attaches: AtomicUsize,
         undone: AtomicUsize,
         fail_once: bool,
         attach_fails: bool,
+        attach_fails_once: bool,
         /// A pair-based endpoint: no host BDF, and a TAP made at
         /// construction for undo_construction() to remove.
         pair_based: bool,
@@ -562,7 +570,8 @@ mod cleanup_tests {
             String::new()
         }
         async fn attach(&self) -> Result<Option<String>> {
-            if self.attach_fails {
+            let call = self.attaches.fetch_add(1, Ordering::SeqCst);
+            if self.attach_fails || (self.attach_fails_once && call == 0) {
                 Err(anyhow!("no room for the device"))
             } else {
                 Ok(None)
@@ -618,7 +627,7 @@ mod cleanup_tests {
                     .collect(),
                 network_created: false,
             })),
-            attach_started: AttachStarted::default(),
+            attach_progress: AttachProgress::default(),
             cleanup: Mutex::new(NetworkCleanup::default()),
             construction_error: None,
         }
@@ -663,6 +672,25 @@ mod cleanup_tests {
         network.remove(&hypervisor).await.unwrap();
         assert_eq!(done.calls.load(Ordering::SeqCst), 1);
         assert_eq!(retry.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn a_retried_setup_resumes_after_the_attached_endpoints() {
+        let done = Arc::new(TestEndpoint::default());
+        let retry = Arc::new(TestEndpoint {
+            attach_fails_once: true,
+            ..Default::default()
+        });
+        let untouched = Arc::new(TestEndpoint::default());
+        let network = network(&[done.clone(), retry.clone(), untouched.clone()]);
+
+        assert!(network.setup().await.is_err());
+        network.setup().await.unwrap();
+        // The endpoint that attached is not attached again; the failed one
+        // is retried and the rest follow.
+        assert_eq!(done.attaches.load(Ordering::SeqCst), 1);
+        assert_eq!(retry.attaches.load(Ordering::SeqCst), 2);
+        assert_eq!(untouched.attaches.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
