@@ -18,8 +18,7 @@ use async_trait::async_trait;
 use byteorder::{ByteOrder, NetworkEndian};
 use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use opentelemetry::sdk::export::ExportError;
-use slog::{error, info, o, Logger};
-use std::io::ErrorKind;
+use slog::{error, o, Logger};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -110,27 +109,26 @@ async fn handle_batch(
 #[async_trait]
 impl SpanExporter for Exporter {
     async fn export(&mut self, batch: Vec<SpanData>) -> ExportResult {
-        if self.conn.is_none() {
-            let conn = connect_vsock(self.cid, self.port).await.map(|e| {
-                error!(self.logger, "failed to obtain connection"; "error" => format!("{:?}", e));
-                e
-            })?;
+        // Only cache streams after a complete batch. An error or cancellation
+        // must drop the stream: the next export cannot resume a partial frame.
+        let conn = match self.conn.take() {
+            Some(conn) => conn,
+            None => {
+                let conn = connect_vsock(self.cid, self.port).await.map(|e| {
+                    error!(self.logger, "failed to obtain connection"; "error" => format!("{:?}", e));
+                    e
+                })?;
 
-            self.conn = Some(Arc::new(Mutex::new(conn)));
-        }
+                Arc::new(Mutex::new(conn))
+            }
+        };
 
-        handle_batch(self.conn.as_ref().unwrap().clone(), batch)
-            .await
-            .map_err(|e| {
-                error!(self.logger, "handle_batch error: {:?}", e);
-                if e.kind() == ErrorKind::NotConnected {
-                    info!(self.logger, "drop connection");
-                    self.conn.take();
-                }
+        handle_batch(conn.clone(), batch).await.map_err(|e| {
+            error!(self.logger, "handle_batch error: {:?}", e);
+            Error::IOError(e)
+        })?;
 
-                Error::IOError(e)
-            })?;
-
+        self.conn = Some(conn);
         Ok(())
     }
 
