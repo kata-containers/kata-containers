@@ -33,7 +33,9 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig, DEFAULT_KATA_GUEST_SHARE_DIR};
+use crate::share_fs::{
+    MountedInfo, ShareFs, ShareFsVolumeConfig, SharedVolumeKey, DEFAULT_KATA_GUEST_SHARE_DIR,
+};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
     mount,
@@ -521,7 +523,8 @@ impl ShareFsVolume {
                 let share_fs_mount = share_fs.get_share_fs_mount();
                 let mounted_info_set = share_fs.mounted_info_set();
                 let mut mounted_info_set = mounted_info_set.lock().await;
-                if let Some(mut mounted_info) = mounted_info_set.get(&source_path).cloned() {
+                let volume_key = SharedVolumeKey::new(source_path.clone(), cid);
+                if let Some(mut mounted_info) = mounted_info_set.get(&volume_key).cloned() {
                     // Mounted at least once
                     let guest_path = mounted_info
                         .guest_path
@@ -550,7 +553,7 @@ impl ShareFsVolume {
                     } else {
                         mounted_info.rw_ref_count += 1;
                     }
-                    mounted_info_set.insert(source_path.clone(), mounted_info);
+                    mounted_info_set.insert(volume_key, mounted_info);
 
                     let mut oci_mount = oci::Mount::default();
                     oci_mount.set_destination(m.destination().clone());
@@ -563,7 +566,7 @@ impl ShareFsVolume {
                     // Not mounted ever
                     let mount_result = share_fs_mount
                         .share_volume(&ShareFsVolumeConfig {
-                            // The scope of shared volume is sandbox
+                            // Targets are unique; volume_key controls reuse across containers.
                             cid: String::from(""),
                             source: source_path.clone(),
                             target: file_name.clone(),
@@ -579,7 +582,7 @@ impl ShareFsVolume {
                             .context("convert guest path")?,
                         readonly,
                     );
-                    mounted_info_set.insert(source_path.clone(), mounted_info);
+                    mounted_info_set.insert(volume_key, mounted_info);
                     // set storages for the volume
                     volume.storages = mount_result.storages;
 
@@ -748,7 +751,7 @@ impl Volume for ShareFsVolume {
         }
 
         let guest_path = get_mount_path(m.source());
-        let (host_source, mut mounted_info) = match mounted_info_set
+        let (volume_key, mut mounted_info) = match mounted_info_set
             .iter()
             .find(|entry| entry.1.guest_path.as_os_str().to_str().unwrap() == guest_path)
             .map(|entry| (entry.0.to_owned(), entry.1.clone()))
@@ -773,7 +776,7 @@ impl Volume for ShareFsVolume {
         debug!(
             sl!(),
             "Ref count for {} was updated to {} due to volume cleanup",
-            host_source,
+            volume_key.source,
             mounted_info.ref_count()
         );
         let file_name = mounted_info.file_name()?;
@@ -784,22 +787,23 @@ impl Volume for ShareFsVolume {
                 info!(
                     sl!(),
                     "Downgrade {} to readonly due to no container that needs readwrite permission",
-                    host_source
+                    volume_key.source
                 );
                 share_fs_mount
                     .downgrade_to_ro(&file_name)
                     .await
                     .context("Downgrade volume")?;
             }
-            mounted_info_set.insert(host_source.clone(), mounted_info);
+            mounted_info_set.insert(volume_key, mounted_info);
             *released = Some(Release::Done);
         } else {
             info!(
                 sl!(),
-                "The path will be umounted due to no references, host_source = {}", host_source
+                "The path will be umounted due to no references, host_source = {}",
+                volume_key.source
             );
             // Remove the entry before awaiting unmount so new users get a fresh share.
-            mounted_info_set.remove(&host_source);
+            mounted_info_set.remove(&volume_key);
             *released = Some(Release::Umount(file_name.clone()));
             // Umount the volume
             share_fs_mount
@@ -1073,6 +1077,7 @@ mod test {
     struct FakeShareFsMount {
         calls: std::sync::Mutex<Vec<&'static str>>,
         fail_once: std::sync::Mutex<Option<&'static str>>,
+        mounts: std::sync::Mutex<HashSet<String>>,
     }
 
     impl FakeShareFsMount {
@@ -1102,9 +1107,20 @@ mod test {
         }
         async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult> {
             self.record("share")?;
+            self.mounts.lock().unwrap().insert(config.target.clone());
+            let guest_path = format!("/guest/{}", config.target);
+            let storages = if kata_types::k8s::is_watchable_mount(&config.source) {
+                vec![agent::Storage {
+                    driver: "watchable-bind".to_owned(),
+                    mount_point: guest_path.clone(),
+                    ..Default::default()
+                }]
+            } else {
+                vec![]
+            };
             Ok(ShareFsMountResult {
-                guest_path: format!("/guest/{}", config.target),
-                storages: vec![],
+                guest_path,
+                storages,
             })
         }
         async fn upgrade_to_rw(&self, _: &str) -> Result<()> {
@@ -1113,8 +1129,10 @@ mod test {
         async fn downgrade_to_ro(&self, _: &str) -> Result<()> {
             self.record("downgrade")
         }
-        async fn umount_volume(&self, _: &str) -> Result<()> {
-            self.record("umount")
+        async fn umount_volume(&self, file_name: &str) -> Result<()> {
+            self.record("umount")?;
+            assert!(self.mounts.lock().unwrap().remove(file_name));
+            Ok(())
         }
         async fn umount_rootfs(&self, _: &ShareFsRootfsConfig) -> Result<()> {
             unimplemented!()
@@ -1127,7 +1145,7 @@ mod test {
     #[derive(Default)]
     struct FakeShareFs {
         mount: Arc<FakeShareFsMount>,
-        mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
+        mounted_info_set: Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>>,
     }
 
     #[async_trait]
@@ -1152,7 +1170,7 @@ mod test {
         async fn get_storages(&self) -> Result<Vec<agent::Storage>> {
             unimplemented!()
         }
-        fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+        fn mounted_info_set(&self) -> Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>> {
             self.mounted_info_set.clone()
         }
     }
@@ -1186,8 +1204,104 @@ mod test {
             .mounted_info_set
             .lock()
             .await
-            .get("/host/volume")
+            .get(&SharedVolumeKey::new("/host/volume".to_owned(), ""))
             .map(|info| (info.ro_ref_count, info.rw_ref_count))
+    }
+
+    async fn check_config_volume_lifecycle(kind: &str) {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join(format!("kubernetes.io~{kind}/config"));
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("key"), "value").unwrap();
+        let share_fs = Arc::new(FakeShareFs::default());
+        let device_manager = crate::test_utils::device_manager().await;
+
+        let first = share_volume(share_fs.clone(), &source, "first", true).await;
+        let second = share_volume(share_fs.clone(), &source, "second", true).await;
+        let alias = share_volume(share_fs.clone(), &source, "first", true).await;
+        assert_eq!(first.get_storage().unwrap().len(), 1);
+        assert_eq!(second.get_storage().unwrap().len(), 1);
+        assert!(alias.get_storage().unwrap().is_empty());
+        assert_eq!(first.mount, alias.mount);
+        assert_ne!(first.mount, second.mount);
+        assert_eq!(share_fs.mount.count("share"), 2);
+
+        first.cleanup(&device_manager).await.unwrap();
+        first.cleanup(&device_manager).await.unwrap();
+        assert_eq!(share_fs.mount.count("umount"), 0);
+        alias.cleanup(&device_manager).await.unwrap();
+        assert_eq!(share_fs.mount.count("umount"), 1);
+
+        let second_path = second.get_storage().unwrap()[0].mount_point.clone();
+        let second_name = Path::new(&second_path)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(
+            *share_fs.mount.mounts.lock().unwrap(),
+            HashSet::from([second_name.to_owned()])
+        );
+
+        // Both a reused ID and a new container ID must get a fresh mirror.
+        for cid in ["first", "restarted"] {
+            let restarted = share_volume(share_fs.clone(), &source, cid, true).await;
+            assert_eq!(restarted.get_storage().unwrap().len(), 1);
+            assert_ne!(restarted.mount, first.mount);
+            assert_ne!(restarted.mount, second.mount);
+            first.cleanup(&device_manager).await.unwrap();
+            assert_eq!(share_fs.mount.mounts.lock().unwrap().len(), 2);
+            restarted.cleanup(&device_manager).await.unwrap();
+            assert_eq!(
+                *share_fs.mount.mounts.lock().unwrap(),
+                HashSet::from([second_name.to_owned()])
+            );
+        }
+
+        second.cleanup(&device_manager).await.unwrap();
+        assert!(share_fs.mount.mounts.lock().unwrap().is_empty());
+        assert!(share_fs.mounted_info_set.lock().await.is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn test_configmap_container_lifecycle() {
+        check_config_volume_lifecycle("configmap").await;
+    }
+
+    #[actix_rt::test]
+    async fn test_secret_container_lifecycle() {
+        check_config_volume_lifecycle("secret").await;
+    }
+
+    #[actix_rt::test]
+    async fn test_config_volume_reuse_after_growth() {
+        let device_manager = crate::test_utils::device_manager().await;
+        for kind in ["configmap", "secret"] {
+            let dir = tempfile::tempdir().unwrap();
+            let source = dir.path().join(format!("kubernetes.io~{kind}/config"));
+            std::fs::create_dir_all(&source).unwrap();
+            std::fs::write(source.join("key"), "value").unwrap();
+            assert!(kata_types::k8s::is_watchable_mount(&source));
+            let share_fs = Arc::new(FakeShareFs::default());
+            let first = share_volume(share_fs.clone(), &source, "first", true).await;
+
+            for i in 0..8 {
+                std::fs::write(source.join(format!("key-{i}")), "value").unwrap();
+            }
+            assert!(!kata_types::k8s::is_watchable_mount(&source));
+            let second = share_volume(share_fs.clone(), &source, "second", true).await;
+            let alias = share_volume(share_fs.clone(), &source, "first", true).await;
+            assert_ne!(first.mount, second.mount);
+            assert_eq!(first.mount, alias.mount);
+            assert!(alias.get_storage().unwrap().is_empty());
+            assert_eq!(share_fs.mount.count("share"), 2);
+
+            first.cleanup(&device_manager).await.unwrap();
+            alias.cleanup(&device_manager).await.unwrap();
+            second.cleanup(&device_manager).await.unwrap();
+            assert!(share_fs.mount.mounts.lock().unwrap().is_empty());
+            assert!(share_fs.mounted_info_set.lock().await.is_empty());
+        }
     }
 
     #[actix_rt::test]
@@ -1210,6 +1324,8 @@ mod test {
         let device_manager = crate::test_utils::device_manager().await;
         let a = share_volume(share_fs.clone(), Path::new("/host/volume"), "a", false).await;
         let b = share_volume(share_fs.clone(), Path::new("/host/volume"), "b", false).await;
+        assert_eq!(a.mount, b.mount);
+        assert_eq!(share_fs.mount.count("share"), 1);
         assert_eq!(ref_counts(&share_fs).await, Some((0, 2)));
 
         a.cleanup(&device_manager).await.unwrap();
@@ -1263,7 +1379,8 @@ mod test {
         std::fs::write(source.join("sentinel"), b"volume data").unwrap();
 
         let volume = share_volume(share_fs.clone(), &source, "cid", false).await;
-        let file_name = share_fs.mounted_info_set().lock().await[source.to_str().unwrap()]
+        let volume_key = SharedVolumeKey::new(source.to_str().unwrap().to_owned(), "cid");
+        let file_name = share_fs.mounted_info_set().lock().await[&volume_key]
             .file_name()
             .unwrap();
         let host = do_get_host_path(&file_name, &sid, "", true, false);
