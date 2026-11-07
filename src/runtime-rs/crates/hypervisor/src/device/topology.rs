@@ -301,6 +301,7 @@ pub enum Strategy {
 pub enum AvailableNode {
     TopologyPortDevice(TopologyPortDevice),
     SwitchDownPort(SwitchDownPort),
+    RootBus(PCIeRootPort),
 }
 
 #[derive(Clone, Debug, Default)]
