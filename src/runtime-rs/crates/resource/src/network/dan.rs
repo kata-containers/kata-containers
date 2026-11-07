@@ -34,7 +34,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
-use super::{AttachStarted, EndpointState, Network};
+use super::{AttachProgress, EndpointState, Network};
 use crate::network::endpoint::{TapEndpoint, VhostUserEndpoint};
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;
@@ -43,8 +43,8 @@ use crate::network::Endpoint;
 /// Directly attachable network
 pub struct Dan {
     inner: Arc<RwLock<DanInner>>,
-    /// The endpoints setup() got to attaching; see `AttachStarted`.
-    attach_started: AttachStarted,
+    /// The endpoints setup() got to attaching; see `AttachProgress`.
+    attach_progress: AttachProgress,
     detached: Mutex<HashSet<usize>>,
 }
 
@@ -60,7 +60,7 @@ impl Dan {
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(DanInner::new(config, &dev_mgr).await?)),
-            attach_started: AttachStarted::default(),
+            attach_progress: AttachProgress::default(),
             detached: Mutex::new(HashSet::new()),
         })
     }
@@ -140,13 +140,19 @@ impl Network for Dan {
             _netns_guard = NetnsGuard::new(netns).context("New netns guard")?;
         }
         for (index, e) in inner.entity_list.iter().enumerate() {
-            self.attach_started.begin(index);
+            // A retried setup resumes after the endpoints it finished:
+            // replaying an attach would hotplug its device a second time.
+            if self.attach_progress.is_finished(index) {
+                continue;
+            }
+            self.attach_progress.begin(index);
             if let Some(device_path) = e.endpoint.attach().await.context("Attach")? {
                 e.network_info
                     .set_device_path(device_path)
                     .await
                     .context("set device path")?;
             }
+            self.attach_progress.finish(index);
         }
         Ok(())
     }
@@ -184,7 +190,7 @@ impl Network for Dan {
         let inner = self.inner.read().await;
         let mut ep_states = vec![];
         for (index, e) in inner.entity_list.iter().enumerate() {
-            if !self.attach_started.includes(index) {
+            if !self.attach_progress.includes(index) {
                 break;
             }
             if let Some(state) = e.endpoint.save().await {
@@ -198,7 +204,7 @@ impl Network for Dan {
         let mut detached = self.detached.lock().await;
         let inner = self.inner.read().await;
         if (0..inner.entity_list.len())
-            .filter(|index| self.attach_started.includes(*index))
+            .filter(|index| self.attach_progress.includes(*index))
             .all(|index| detached.contains(&index))
         {
             return Ok(());
@@ -209,7 +215,7 @@ impl Network for Dan {
         }
         let mut errors = Vec::new();
         for (index, e) in inner.entity_list.iter().enumerate() {
-            if detached.contains(&index) || !self.attach_started.includes(index) {
+            if detached.contains(&index) || !self.attach_progress.includes(index) {
                 continue;
             }
             match e.endpoint.detach(h).await {

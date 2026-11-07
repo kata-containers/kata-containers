@@ -343,9 +343,9 @@ impl ResourceManagerInner {
     /// Attach the created network's endpoints. The network stays registered
     /// when attaching fails: the state records how far the attaching got and
     /// the cleanup detaches that much. Runs on its own thread for the netns
-    /// reasons create_network() explains. One shot per created network: a
-    /// construction error is handed out once, and endpoints do not expect a
-    /// second attach.
+    /// reasons create_network() explains. A retried attach resumes after the
+    /// endpoints the failed one finished; a construction error fails every
+    /// attempt, so a partially constructed network is never attached.
     pub async fn attach_network(&mut self) -> Result<()> {
         let network = self
             .network

@@ -695,12 +695,20 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str) -> Result<()> {
     info!(sl!(), "host driver : {}", host_driver);
     override_driver(bdf, VFIO_PCI_DRIVER).context("override driver")?;
 
-    let unbind_path = format!("/sys/bus/pci/devices/{bdf}/driver/unbind");
-    // echo bdf > /sys/bus/pci/drivers/virtio-pci/unbind"
-    fs::write(&unbind_path, bdf)
-        .with_context(|| format!("Failed to echo {} > {}", bdf, unbind_path))?;
+    // Unbind from whichever driver holds the device. A device no driver
+    // holds was left half way by an earlier attempt that failed before its
+    // reprobe, which a retried attach resumes; it cannot be unbound, and
+    // only needs the probe.
+    if Path::new(&format!("/sys/bus/pci/devices/{bdf}/driver")).exists() {
+        let unbind_path = format!("/sys/bus/pci/devices/{bdf}/driver/unbind");
+        // echo bdf > /sys/bus/pci/drivers/virtio-pci/unbind"
+        fs::write(&unbind_path, bdf)
+            .with_context(|| format!("Failed to echo {} > {}", bdf, unbind_path))?;
 
-    info!(sl!(), "{} is unbound from {}", bdf, host_driver);
+        info!(sl!(), "{} is unbound from {}", bdf, host_driver);
+    } else {
+        info!(sl!(), "no driver holds {}, probe only", bdf);
+    }
 
     // echo bdf > /sys/bus/pci/drivers_probe
     fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
