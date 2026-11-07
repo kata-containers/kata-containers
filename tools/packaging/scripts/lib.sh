@@ -207,7 +207,7 @@ get_ovmf_image_name() {
 
 get_busybox_image_name() {
 	busybox_script_dir="${repo_root_dir}/tools/packaging/static-build/busybox"
-	echo "${BUILDER_REGISTRY}:busybox-$(get_last_modification "${busybox_script_dir}")-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:busybox-$(get_last_modification "${busybox_script_dir}")-oras-$(get_from_kata_deps ".externals.oras.version")-$(uname -m)"
 }
 
 get_openvmm_image_name() {
@@ -251,7 +251,7 @@ get_tools_image_name() {
 	libs_dir="${repo_root_dir}/src/libs"
 	agent_dir="${repo_root_dir}/src/agent"
 
-	echo "${BUILDER_REGISTRY}:tools-go-$(get_from_kata_deps ".languages.golang.meta.newest-version")-rust-$(get_from_kata_deps ".languages.rust.meta.newest-version")-$(get_libseccomp_hash)-$(get_last_modification "${tools_dir}")-$(get_last_modification "${libs_dir}")-$(get_last_modification "${agent_dir}")-$(get_last_modification "${tools_script_dir}")-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:tools-go-$(get_from_kata_deps ".languages.golang.meta.newest-version")-rust-$(get_from_kata_deps ".languages.rust.meta.newest-version")-$(get_libseccomp_hash)-$(get_last_modification "${tools_dir}")-$(get_last_modification "${libs_dir}")-$(get_last_modification "${agent_dir}")-$(get_last_modification "${tools_script_dir}")-oras-$(get_from_kata_deps ".externals.oras.version")-$(uname -m)"
 }
 
 get_agent_image_name() {
@@ -259,7 +259,7 @@ get_agent_image_name() {
 	agent_dir="${repo_root_dir}/tools/packaging/static-build/agent"
 	rust_toolchain="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 
-	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification "${agent_dir}")-${rust_toolchain}-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification "${agent_dir}")-${rust_toolchain}-oras-$(get_from_kata_deps ".externals.oras.version")-$(uname -m)"
 }
 
 get_pause_image_name() {
