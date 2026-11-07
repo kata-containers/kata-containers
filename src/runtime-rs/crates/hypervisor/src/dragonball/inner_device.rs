@@ -5,10 +5,13 @@
 //
 
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::fmt::Write as _;
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VhostUserConfig;
 use crate::{device::pci_path::PciPath, KATA_BLK_DEV_TYPE};
 use crate::{
@@ -25,7 +28,7 @@ use dragonball::api::v1::{
 };
 use dragonball::config_manager::{RateLimiterConfigInfo, TokenBucketConfigInfo};
 use dragonball::device_manager::{
-    blk_dev_mgr::BlockDeviceType,
+    blk_dev_mgr::{BlockDeviceType, ImageFormat as DragonballDiskFormat},
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
 };
 use kata_types::config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME;
@@ -37,6 +40,127 @@ const DEFAULT_VIRTIO_FS_QUEUE_SIZE: i32 = 1024;
 
 const VIRTIO_FS: &str = "virtio-fs";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
+
+/// Materialize a structured VMDK layout for Dragonball.
+///
+/// Unlike QEMU, Dragonball does not have an fdset transport. It expects a real
+/// descriptor path and opens the flat extents named by that descriptor. The
+/// EROFS resource layer intentionally supplies only a reserved descriptor path
+/// plus `VmdkConfig`, so create the descriptor immediately before attaching the
+/// device. The container directory owning `path` is removed by the rootfs
+/// resource cleanup path.
+fn prepare_block_source(path: &str, source: &BlockSourceFormat) -> Result<DragonballDiskFormat> {
+    let BlockSourceFormat::Vmdk(vmdk) = source else {
+        return Ok(DragonballDiskFormat::Raw);
+    };
+
+    let total_sectors = vmdk
+        .total_sectors()
+        .ok_or_else(|| anyhow!("VMDK total sector count overflow"))?;
+    if total_sectors == 0 {
+        return Err(anyhow!("VMDK contains no non-empty extents"));
+    }
+
+    let mut descriptor = String::new();
+    writeln!(descriptor, "# Disk DescriptorFile")?;
+    writeln!(descriptor, "version=1")?;
+    writeln!(descriptor, "CID=fffffffe")?;
+    writeln!(descriptor, "parentCID=ffffffff")?;
+    writeln!(descriptor, "createType=\"twoGbMaxExtentFlat\"")?;
+    writeln!(descriptor)?;
+    writeln!(descriptor, "# Extent description")?;
+
+    for extent in &vmdk.extents {
+        if extent.sectors == 0 {
+            return Err(anyhow!(
+                "VMDK extent {} has zero sectors",
+                extent.path_on_host
+            ));
+        }
+        if extent
+            .path_on_host
+            .chars()
+            .any(|character| matches!(character, '\n' | '\r' | '"'))
+        {
+            return Err(anyhow!(
+                "VMDK extent path cannot be represented safely: {}",
+                extent.path_on_host
+            ));
+        }
+
+        let required_sectors = extent
+            .file_offset
+            .checked_add(extent.sectors)
+            .ok_or_else(|| anyhow!("VMDK extent sector count overflow"))?;
+        let metadata = std::fs::metadata(&extent.path_on_host)
+            .with_context(|| format!("stat Dragonball VMDK extent {}", extent.path_on_host))?;
+        if !metadata.is_file() {
+            return Err(anyhow!(
+                "Dragonball VMDK extent {} is not a regular file",
+                extent.path_on_host
+            ));
+        }
+        if metadata.len().div_ceil(512) < required_sectors {
+            return Err(anyhow!(
+                "Dragonball VMDK extent {} is shorter than its declared layout",
+                extent.path_on_host
+            ));
+        }
+
+        writeln!(
+            descriptor,
+            "RW {} FLAT \"{}\" {}",
+            extent.sectors, extent.path_on_host, extent.file_offset
+        )?;
+    }
+
+    let cylinders = total_sectors.div_ceil(63 * 16);
+    writeln!(descriptor)?;
+    writeln!(descriptor, "# The Disk Data Base")?;
+    writeln!(descriptor, "#DDB")?;
+    writeln!(descriptor)?;
+    writeln!(descriptor, "ddb.virtualHWVersion = \"4\"")?;
+    writeln!(descriptor, "ddb.geometry.cylinders = \"{cylinders}\"")?;
+    writeln!(descriptor, "ddb.geometry.heads = \"16\"")?;
+    writeln!(descriptor, "ddb.geometry.sectors = \"63\"")?;
+    writeln!(descriptor, "ddb.adapterType = \"ide\"")?;
+
+    let descriptor_path = Path::new(path);
+    let descriptor_dir = descriptor_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or_else(|| anyhow!("Dragonball VMDK descriptor path has no parent directory"))?;
+    let mut temporary = tempfile::NamedTempFile::new_in(descriptor_dir).with_context(|| {
+        format!(
+            "create temporary Dragonball VMDK descriptor in {}",
+            descriptor_dir.display()
+        )
+    })?;
+    temporary
+        .write_all(descriptor.as_bytes())
+        .context("write Dragonball VMDK descriptor")?;
+    temporary
+        .as_file()
+        .sync_all()
+        .context("sync Dragonball VMDK descriptor")?;
+    temporary.persist(descriptor_path).map_err(|error| {
+        anyhow!(
+            "persist Dragonball VMDK descriptor {}: {}",
+            descriptor_path.display(),
+            error.error
+        )
+    })?;
+
+    info!(
+        sl!(),
+        "Materialized Dragonball VMDK descriptor {} with {} extents ({} sectors)",
+        descriptor_path.display(),
+        vmdk.extents.len(),
+        total_sectors
+    );
+
+    Ok(DragonballDiskFormat::Vmdk)
+}
 
 impl DragonballInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
@@ -73,6 +197,7 @@ impl DragonballInner {
                     driver_option,
                     sparse,
                     serial_override,
+                    format,
                 ) = {
                     let dev = block_device.lock().await;
                     let cfg = &dev.config;
@@ -85,6 +210,7 @@ impl DragonballInner {
                         cfg.driver_option.clone(),
                         cfg.discard_unmap,
                         cfg.serial_override.clone(),
+                        cfg.source.clone(),
                     )
                 };
 
@@ -103,6 +229,9 @@ impl DragonballInner {
                     is_readonly,
                 );
 
+                let format = prepare_block_source(&path_on_host, &format)
+                    .context("prepare Dragonball block source")?;
+
                 let guest_device_id = self
                     .add_block_device(
                         &path_on_host,
@@ -117,6 +246,7 @@ impl DragonballInner {
                         } else {
                             Some(serial_override.as_str())
                         },
+                        Some(format),
                     )
                     .context("add block modern device")?;
 
@@ -145,6 +275,7 @@ impl DragonballInner {
                     None,
                     None,
                     false,
+                    None,
                     None,
                 )
                 .context("add vhost user based block device")?;
@@ -278,6 +409,11 @@ impl DragonballInner {
         use_pci_bus: Option<bool>,
         sparse: bool,
         serial: Option<&str>,
+        // Explicit on-disk image format from the upper layer. `None` lets
+        // dragonball auto-detect (legacy behavior); `Some(_)` pins the
+        // classification so dragonball does not re-probe the file — the
+        // single source of truth lives in runtime-rs.
+        format: Option<DragonballDiskFormat>,
     ) -> Result<Option<i32>> {
         if serial.is_some_and(|serial| serial.len() > VIRTIO_BLK_ID_BYTES as usize) {
             return Err(anyhow!(
@@ -319,6 +455,7 @@ impl DragonballInner {
             use_pci_bus,
             sparse,
             rate_limiter: Some(block_rate_limit),
+            format,
             ..Default::default()
         };
         info!(
@@ -555,9 +692,58 @@ impl DragonballInner {
 #[cfg(test)]
 mod tests {
     use dragonball::api::v1::FsDeviceConfigInfo;
+    use dragonball::device_manager::blk_dev_mgr::ImageFormat as DragonballDiskFormat;
+    use kata_types::vmdk::VmdkConfig;
     use tokio::sync::mpsc;
 
+    use super::prepare_block_source;
     use crate::dragonball::DragonballInner;
+    use crate::virtio_blk_modern::BlockSourceFormat;
+
+    #[test]
+    fn test_prepare_structured_vmdk_descriptor() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first.erofs");
+        let second = dir.path().join("second.erofs");
+        std::fs::write(&first, vec![0x11; 1024]).unwrap();
+        std::fs::write(&second, vec![0x22; 1536]).unwrap();
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(first.to_str().unwrap(), 2, 0);
+        vmdk.push_extent(second.to_str().unwrap(), 3, 0);
+        let descriptor_path = dir.path().join("merged_fs.vmdk");
+
+        let format = prepare_block_source(
+            descriptor_path.to_str().unwrap(),
+            &BlockSourceFormat::Vmdk(vmdk),
+        )
+        .unwrap();
+
+        assert_eq!(format, DragonballDiskFormat::Vmdk);
+        let descriptor = std::fs::read_to_string(descriptor_path).unwrap();
+        assert!(descriptor.contains(&format!("RW 2 FLAT \"{}\" 0", first.display())));
+        assert!(descriptor.contains(&format!("RW 3 FLAT \"{}\" 0", second.display())));
+        assert!(descriptor.contains("createType=\"twoGbMaxExtentFlat\""));
+    }
+
+    #[test]
+    fn test_prepare_structured_vmdk_rejects_short_extent() {
+        let dir = tempfile::tempdir().unwrap();
+        let extent = dir.path().join("short.erofs");
+        std::fs::write(&extent, vec![0u8; 512]).unwrap();
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(extent.to_str().unwrap(), 2, 0);
+        let error = prepare_block_source(
+            dir.path().join("merged_fs.vmdk").to_str().unwrap(),
+            &BlockSourceFormat::Vmdk(vmdk),
+        )
+        .unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("shorter than its declared layout"));
+    }
 
     #[actix_rt::test]
     async fn test_queue_guest_extension_images_before_boot() {
