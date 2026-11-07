@@ -1801,7 +1801,7 @@ func (c *Container) stats(ctx context.Context) (*ContainerStats, error) {
 	if err := c.checkSandboxRunning("stats"); err != nil {
 		return nil, err
 	}
-	return c.sandbox.agent.statsContainer(ctx, c.sandbox, *c)
+	return c.sandbox.agent.statsContainer(ctx, c.id)
 }
 
 func (c *Container) update(ctx context.Context, resources specs.LinuxResources) error {
