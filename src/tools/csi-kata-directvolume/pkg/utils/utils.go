@@ -29,6 +29,11 @@ const (
 	DirectVolumeTypeName           = "directvol"
 	SpdkVolumeTypeName             = "spdkvol"
 	IsDirectVolume                 = "is_directvolume"
+	// StorageKind is the StorageClass parameter which selects the
+	// capacity pool ("kind") that a volume is accounted against. Both
+	// CreateVolume and GetCapacity resolve the pool from it, making it
+	// the single pool-selection contract between StorageClass and driver.
+	StorageKind = "kind"
 )
 
 const (
