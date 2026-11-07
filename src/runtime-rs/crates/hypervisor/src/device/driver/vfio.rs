@@ -21,7 +21,7 @@ use crate::{
     device::{
         pci_path::PciPath,
         topology::{do_add_pcie_endpoint, AvailableNode, PCIePort, PCIeTopology},
-        util::{do_decrease_count, do_increase_count},
+        util::{detach_removed, detach_step, do_decrease_count, do_increase_count, DetachStep},
         Device, DeviceType, PCIeDevice,
     },
     register_pcie_device, unregister_pcie_device, update_pcie_device, Hypervisor as hypervisor,
@@ -557,27 +557,23 @@ impl Device for VfioDevice {
         pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn hypervisor,
     ) -> Result<Option<u64>> {
-        if self
-            .decrease_attach_count()
-            .await
-            .context("failed to decrease attach count")?
-        {
-            return Ok(None);
-        }
-
-        if let Err(e) = h.remove_device(DeviceType::Vfio(self.clone())).await {
-            self.increase_attach_count().await?;
-            return Err(e);
+        match detach_step(&mut self.attach_count) {
+            DetachStep::Release => return Ok(None),
+            DetachStep::Remove => {
+                h.remove_device(DeviceType::Vfio(self.clone())).await?;
+                detach_removed(&mut self.attach_count);
+                unregister_pcie_device!(self, pcie_topo)?;
+            }
+            // The topology entry may already be gone with the device.
+            DetachStep::Finish => {
+                if let Some(topo) = pcie_topo {
+                    topo.remove_device(&self.device_id);
+                }
+            }
         }
 
         // only virt_path is Some, there's a device index
-        let device_index = if let Some(virt_path) = self.config.virt_path.clone() {
-            Some(virt_path.0)
-        } else {
-            None
-        };
-
-        unregister_pcie_device!(self, pcie_topo)?;
+        let device_index = self.config.virt_path.as_ref().map(|virt_path| virt_path.0);
 
         Ok(device_index)
     }

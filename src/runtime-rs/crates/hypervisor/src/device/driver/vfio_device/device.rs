@@ -11,7 +11,9 @@ use tokio::sync::Mutex;
 
 use crate::device::pci_path::PciPath;
 use crate::device::topology::{PCIePort, PCIeTopology};
-use crate::device::util::{do_decrease_count, do_increase_count};
+use crate::device::util::{
+    detach_removed, detach_step, do_decrease_count, do_increase_count, DetachStep,
+};
 use crate::device::{Device, DeviceType, PCIeDevice};
 use crate::vfio_device::core::{
     discover_vfio_ap_device, discover_vfio_device, discover_vfio_group_device, is_vfio_ap_device,
@@ -258,22 +260,15 @@ impl Device for VfioDeviceModernHandle {
         pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn Hypervisor,
     ) -> Result<Option<u64>> {
-        // Only proceed with detachment if reference count reaches zero
-        if self
-            .decrease_attach_count()
-            .await
-            .context("failed to decrease attach count")?
-        {
-            return Ok(None);
-        }
-
-        if let Err(e) = h
-            .remove_device(DeviceType::VfioModern(self.inner.clone()))
-            .await
-        {
-            // Rollback: increment count if hypervisor fails to remove the device
-            self.increase_attach_count().await?;
-            return Err(e);
+        let step = detach_step(&mut self.inner.lock().await.attach_count);
+        match step {
+            DetachStep::Release => return Ok(None),
+            DetachStep::Remove => {
+                h.remove_device(DeviceType::VfioModern(self.inner.clone()))
+                    .await?;
+                detach_removed(&mut self.inner.lock().await.attach_count);
+            }
+            DetachStep::Finish => {}
         }
 
         // Retrieve device index if a virtual path exists

@@ -45,6 +45,7 @@ use crate::{
     },
     manager::ManagerArgs,
     network::{self, dan_config_path, Network, NetworkConfig, NetworkWithNetNsConfig},
+    orphaned_devices::OrphanedDeviceReferences,
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, NydusShareFs, ShareFs},
@@ -69,6 +70,7 @@ pub(crate) struct ResourceManagerInner {
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
     cleanup_steps: Mutex<ResourceCleanupSteps>,
+    orphaned_device_references: OrphanedDeviceReferences,
 }
 
 #[derive(Default)]
@@ -152,7 +154,18 @@ impl ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            orphaned_device_references: OrphanedDeviceReferences::default(),
         })
+    }
+
+    pub async fn adopt_orphaned_device_references(&self, device_ids: Vec<String>) {
+        self.orphaned_device_references.adopt(device_ids).await
+    }
+
+    pub async fn release_orphaned_device_references(&self) -> Result<()> {
+        self.orphaned_device_references
+            .release(&self.device_manager)
+            .await
     }
 
     pub fn config(&self) -> Arc<TomlConfig> {
@@ -533,6 +546,11 @@ impl ResourceManagerInner {
         device_ids: &mut Vec<String>,
     ) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
+
+        // A device a deleted container kept may be the one requested here.
+        if let Err(e) = self.release_orphaned_device_references().await {
+            warn!(sl!(), "{:#}", e);
+        }
 
         // Build a map of host_bdf -> Option<guest_pci_path> for cold-plugged
         // physical (VFIO) network endpoints.  When a VFIO char device in the
@@ -1269,6 +1287,7 @@ impl Persist for ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            orphaned_device_references: OrphanedDeviceReferences::default(),
         })
     }
 }
