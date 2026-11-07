@@ -713,7 +713,8 @@ mod tests {
     use crate::{
         device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
         qemu::Qemu,
-        BlockConfigModern, KATA_BLK_DEV_TYPE,
+        BlockConfigModern, VhostUserConfig, VhostUserType, KATA_BLK_DEV_TYPE,
+        KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
     };
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
@@ -834,6 +835,144 @@ mod tests {
         let device_info = d.read().await.get_device_info(&device_id).await.unwrap();
         assert!(
             matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
+        );
+    }
+
+    fn vhost_user_blk_config(socket_path: &str, driver_option: &str) -> DeviceConfig {
+        DeviceConfig::VhostUserBlkCfg(VhostUserConfig {
+            dev_id: String::new(),
+            socket_path: socket_path.to_string(),
+            device_type: VhostUserType::Blk,
+            driver_option: driver_option.to_string(),
+            ..Default::default()
+        })
+    }
+
+    async fn vhost_user_blk_device(
+        d: &Arc<RwLock<DeviceManager>>,
+        device_id: &str,
+    ) -> crate::device::driver::vhost_user_blk::VhostUserBlkDevice {
+        match d.read().await.get_device_info(device_id).await.unwrap() {
+            DeviceType::VhostUserBlk(device) => device,
+            other => panic!("unexpected device type: {other:?}"),
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_new_vhost_user_blk_device() {
+        let d = new_device_manager().await.unwrap();
+
+        // The virtio-blk-pci and virtio-blk-mmio drivers are the only ones
+        // accepted for vhost-user-blk and both get translated to the kata
+        // device type the agent and the guest kernel expect.
+        for (index, (driver_option, kata_driver_option)) in [
+            (VIRTIO_BLOCK_PCI, KATA_BLK_DEV_TYPE),
+            (VIRTIO_BLOCK_MMIO, KATA_MMIO_BLK_DEV_TYPE),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let socket_path = format!("/run/vhu/vhost-blk-test-{index}.sock");
+            let config = vhost_user_blk_config(&socket_path, *driver_option);
+            let device_id = d.write().await.new_device(&config).await.unwrap();
+
+            let device = vhost_user_blk_device(&d, &device_id).await;
+            assert_eq!(device.device_id, device_id);
+            assert_eq!(device.attach_count, 0);
+            assert_eq!(device.config.socket_path, socket_path);
+            assert_eq!(device.config.driver_option, *kata_driver_option);
+            assert!(matches!(device.config.device_type, VhostUserType::Blk));
+
+            // block indexes and guest device names are allocated by the
+            // device manager, not by the caller.
+            assert_eq!(device.config.index, index as u64);
+            assert_eq!(
+                device.config.virt_path,
+                format!("/dev/vd{}", (b'a' + index as u8) as char)
+            );
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_vhost_user_blk_device_is_reused_for_same_socket() {
+        let d = new_device_manager().await.unwrap();
+        let config = vhost_user_blk_config("/run/vhu/vhost-blk-shared.sock", VIRTIO_BLOCK_PCI);
+
+        let first_id = d.write().await.new_device(&config).await.unwrap();
+        let second_id = d.write().await.new_device(&config).await.unwrap();
+        assert_eq!(first_id, second_id);
+
+        // A shared device must not consume a second block index.
+        let other_id = d
+            .write()
+            .await
+            .new_device(&vhost_user_blk_config(
+                "/run/vhu/vhost-blk-other.sock",
+                VIRTIO_BLOCK_PCI,
+            ))
+            .await
+            .unwrap();
+
+        let other = vhost_user_blk_device(&d, &other_id).await;
+        assert_eq!(other.config.index, 1);
+        assert_eq!(other.config.virt_path, "/dev/vdb");
+    }
+
+    #[actix_rt::test]
+    async fn test_vhost_user_blk_device_rejects_unsupported_driver() {
+        let d = new_device_manager().await.unwrap();
+
+        let err = d
+            .write()
+            .await
+            .new_device(&vhost_user_blk_config(
+                "/run/vhu/vhost-blk-bad-driver.sock",
+                "virtio-scsi-pci",
+            ))
+            .await
+            .unwrap_err();
+        // The context chain is added by the device manager, so print all
+        // causes to check the actual reason.
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("unsupported driver type"),
+            "unexpected error: {message}"
+        );
+        assert!(
+            message.contains("virtio-scsi-pci"),
+            "the rejected driver should be named in the error: {message}"
+        );
+
+        // A rejected configuration must not leak the next block index.
+        let device_id = d
+            .write()
+            .await
+            .new_device(&vhost_user_blk_config(
+                "/run/vhu/vhost-blk-valid.sock",
+                VIRTIO_BLOCK_PCI,
+            ))
+            .await
+            .unwrap();
+        let device = vhost_user_blk_device(&d, &device_id).await;
+        assert_eq!(device.config.index, 0);
+        assert_eq!(device.config.virt_path, "/dev/vda");
+    }
+
+    #[actix_rt::test]
+    async fn test_remove_unknown_vhost_user_blk_device() {
+        let d = new_device_manager().await.unwrap();
+
+        // Removing a device that was never created must report a clear error
+        // instead of panicking or leaving the caller waiting.
+        let err = d
+            .write()
+            .await
+            .try_remove_device("not-a-vhost-user-blk-device")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("hasn't been created"),
+            "unexpected error: {err}"
         );
     }
 }
