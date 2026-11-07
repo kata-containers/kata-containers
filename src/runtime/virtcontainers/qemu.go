@@ -3380,16 +3380,27 @@ func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConf
 		return q.arch.appendPCIeRootPortDevice(devices, totalPorts)
 	}
 
+	// A device on a host NUMA node that is not covered by the guest topology
+	// cannot be placed on a pxb-pcie bus.  Skipping just that node is not safe:
+	// the VFIO driver still assigns the device to one of the flat "rp<N>"
+	// buses, which are only created by appendPCIeRootPortDevice() and hence do
+	// not exist when the NUMA topology is emitted.  QEMU then fails with
+	// "Bus 'rp<N>' not found".  Fall back to the flat topology for all
+	// devices instead.
+	for hostNode := range numaDevCount {
+		if _, ok := coveredHostNodes[hostNode]; !ok {
+			q.Logger().WithField("host-numa", hostNode).
+				Warn("VFIO device on host NUMA node not covered by guest NUMA topology; falling back to flat PCIe root ports")
+			return q.arch.appendPCIeRootPortDevice(devices, totalPorts)
+		}
+	}
+
 	// Create a pxb-pcie + root ports per NUMA node that has devices.
 	var rpIndex uint32
 	const busNrSpacing uint8 = 0x20
 
 	for hostNode, devCount := range numaDevCount {
-		guestNode, ok := coveredHostNodes[hostNode]
-		if !ok {
-			q.Logger().WithField("host-numa", hostNode).Warn("VFIO device on uncovered NUMA node; skipping pxb-pcie")
-			continue
-		}
+		guestNode := coveredHostNodes[hostNode]
 
 		pxbID := fmt.Sprintf("pxb-numa%d", guestNode)
 		busNr := busNrSpacing * uint8(guestNode+1)
