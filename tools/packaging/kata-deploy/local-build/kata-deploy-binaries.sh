@@ -1807,7 +1807,13 @@ install_busybox() {
 }
 
 install_agent() {
-	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/agent)"
+	local agent_source_revision
+	agent_source_revision="$(git log -1 --abbrev=9 --pretty=format:"%h" -- \
+		"${repo_root_dir}"/src/agent \
+		"${repo_root_dir}"/src/libs \
+		"${repo_root_dir}"/Cargo.toml \
+		"${repo_root_dir}"/Cargo.lock)"
+	latest_artefact="$(get_kata_version)-${agent_source_revision}"
 	latest_builder_image="$(get_agent_image_name)"
 	if [[ "${BUILD_VARIANT:-}" == substrate ]]; then
 		latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")"
