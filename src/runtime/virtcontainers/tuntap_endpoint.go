@@ -190,7 +190,8 @@ func tuntapNetwork(endpoint *TuntapEndpoint, numCPUs uint32, disableVhostNet boo
 	}
 	defer netHandle.Close()
 
-	tapLink, _, err := createLink(netHandle, endpoint.TuntapInterface.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
+	multiQueueSupported := true
+	tapLink, _, err := createLink(netHandle, endpoint.TuntapInterface.TAPIface.Name, &netlink.Tuntap{}, multiQueueSupported, int(numCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
 	}
