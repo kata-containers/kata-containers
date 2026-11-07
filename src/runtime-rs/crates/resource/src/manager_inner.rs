@@ -1056,7 +1056,11 @@ impl ResourceManagerInner {
 
     async fn handle_sandbox_bindmounts(&self, setup: bool) -> Result<()> {
         let bindmounts = self.toml_config.runtime.sandbox_bind_mounts.clone();
-        if bindmounts.is_empty() {
+        // Nothing to set up without configured bind mounts. The cleanup
+        // still runs: it sweeps the sandbox's own mounts directory without
+        // consulting the configuration, which may not say what it said when
+        // the sandbox started, and it is a no-op when nothing was mounted.
+        if setup && bindmounts.is_empty() {
             info!(sl!(), "sandbox bindmounts empty, just skip it.");
             return Ok(());
         }
