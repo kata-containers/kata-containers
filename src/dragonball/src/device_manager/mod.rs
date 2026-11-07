@@ -191,6 +191,16 @@ pub enum DeviceMgrError {
     #[error("failed to allocate/free device resources: {0}")]
     ResourceError(#[source] crate::resource_manager::ResourceError),
 
+    /// A failed device operation could not be fully rolled back.
+    #[error("{operation}; device rollback failed: {cleanup}")]
+    Rollback {
+        /// The operation that originally failed.
+        #[source]
+        operation: Box<DeviceMgrError>,
+        /// The failure while cleaning up that operation.
+        cleanup: Box<DeviceMgrError>,
+    },
+
     #[cfg(feature = "host-device")]
     /// Error from Vfio Pci
     #[error("failed to do vfio pci operation: {0:?}")]
@@ -1287,6 +1297,8 @@ impl DeviceManager {
             align: 0,
             size: MMIO_DEFAULT_CFG_SIZE + DRAGONBALL_MMIO_DOORBELL_SIZE,
         };
+        let vm_as = ctx.get_vm_as()?;
+        let address_space = ctx.get_address_space()?;
         let mut requests = vec![MMIO_ADDRESS_DEFAULT];
         device.get_resource_requirements(&mut requests, use_generic_irq);
         let resources = ctx
@@ -1294,20 +1306,31 @@ impl DeviceManager {
             .allocate_device_resources(&requests, use_shared_irq)
             .map_err(|_| DeviceMgrError::GetDeviceResource)?;
 
-        let virtio_dev = match MmioV2Device::new(
+        let result = MmioV2Device::new(
             ctx.vm_fd.clone(),
-            ctx.get_vm_as()?,
-            ctx.get_address_space()?,
+            vm_as,
+            address_space,
             ctx.irq_manager.clone(),
             device,
-            resources,
+            resources.clone(),
             features,
-        ) {
-            Ok(d) => d,
-            Err(e) => return Err(DeviceMgrError::Virtio(e)),
-        };
-
-        Self::register_mmio_virtio_device(Arc::new(virtio_dev), ctx)
+        )
+        .map_err(DeviceMgrError::Virtio)
+        .and_then(|device| Self::register_mmio_virtio_device(Arc::new(device), ctx));
+        match result {
+            Ok(device) => Ok(device),
+            Err(operation) => {
+                // Failed registration cancels its IO transaction. Do not
+                // deregister the range: it may belong to an existing device.
+                match ctx.res_manager.free_device_resources(&resources) {
+                    Ok(()) => Err(operation),
+                    Err(cleanup) => Err(DeviceMgrError::Rollback {
+                        operation: Box::new(operation),
+                        cleanup: Box::new(DeviceMgrError::ResourceError(cleanup)),
+                    }),
+                }
+            }
+        }
     }
 
     fn destroy_mmio_device(
@@ -1315,7 +1338,7 @@ impl DeviceManager {
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), DeviceMgrError> {
         // unregister IoManager
-        Self::deregister_virtio_device(&device, ctx)?;
+        Self::deregister_mmio_virtio_device(&device, ctx)?;
 
         // unregister Resource manager
         let resources = device.get_assigned_resources();
