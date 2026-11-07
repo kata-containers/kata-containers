@@ -53,10 +53,10 @@ pcie.0 bus (Root Complex)
 */
 
 use std::collections::{hash_map::Entry, HashMap};
+use std::convert::TryFrom;
 
 use anyhow::{anyhow, Result};
 
-use crate::device::pci_path::PciSlot;
 use kata_types::config::hypervisor::TopologyConfigInfo;
 
 use super::pci_path::PciPath;
@@ -374,32 +374,23 @@ impl PCIeTopology {
     }
 
     pub fn insert_device(&mut self, ep: &mut PCIeEndpoint) -> Option<PciPath> {
-        let to_pcipath = |v: u32| -> PciPath {
-            PciPath {
-                slots: vec![PciSlot(v as u8)],
-            }
-        };
+        // find the first available slot on the root bus.
+        let pci_path = (0..PCIE_ROOT_BUS_SLOTS_CAPACITY)
+            .filter_map(|slot| PciPath::try_from(slot).ok())
+            .find(|path| {
+                !self
+                    .root_complex
+                    .root_bus_devices
+                    .contains_key(&path.to_string())
+            })?;
 
-        let to_string = |v: u32| -> String { to_pcipath(v).to_string() };
-
-        // find the first available index as the allocated slot.
-        let allocated_slot = (0..PCIE_ROOT_BUS_SLOTS_CAPACITY).find(|&i| {
-            !self
-                .root_complex
-                .root_bus_devices
-                .contains_key(&to_string(i))
-        })?;
-
-        let pcipath = to_string(allocated_slot);
-
-        // update pci_path in Endpoint
-        ep.pci_path = to_pcipath(allocated_slot);
-        // convert the allocated slot to pci path and then insert it with ep
+        // update pci_path in Endpoint and insert it with ep
+        ep.pci_path = pci_path.clone();
         self.root_complex
             .root_bus_devices
-            .insert(pcipath, ep.clone());
+            .insert(pci_path.to_string(), ep.clone());
 
-        Some(to_pcipath(allocated_slot))
+        Some(pci_path)
     }
 
     pub fn remove_device(&mut self, device_id: &str) -> Option<String> {
