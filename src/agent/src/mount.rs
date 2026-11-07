@@ -316,6 +316,18 @@ pub fn remove_mounts<P: AsRef<str> + std::fmt::Debug>(mounts: &[P]) -> Result<()
     Ok(())
 }
 
+/// Ensure debugfs is mounted for features, such as mem-agent's MGLRU support, that consume kernel debug interfaces.
+pub fn mount_debugfs(logger: &Logger) -> Result<()> {
+    let debugfs = InitMount {
+        fstype: "debugfs",
+        src: "debugfs",
+        dest: "/sys/kernel/debug",
+        options: vec!["nosuid", "nodev", "noexec"],
+    };
+
+    mount_to_rootfs(logger, &debugfs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
