@@ -69,6 +69,24 @@ pub fn generate_netns_name() -> String {
     )
 }
 
+/// Bind-mount the network namespace `netns` (for example /proc/<pid>/ns/net)
+/// onto `pin_path`, the way `ip netns` pins namespaces: the namespace stays
+/// reachable there after the process it came from is gone. An earlier pin at
+/// the path is replaced rather than stacked on; remove_netns() releases it.
+pub fn pin_netns(netns: &Path, pin_path: &Path) -> Result<()> {
+    remove_netns(pin_path)?;
+    File::create(pin_path)
+        .with_context(|| format!("create the netns pin {}", pin_path.display()))?;
+    nix::mount::mount(
+        Some(netns),
+        pin_path,
+        None::<&str>,
+        nix::mount::MsFlags::MS_BIND,
+        None::<&str>,
+    )
+    .with_context(|| format!("bind {} onto {}", netns.display(), pin_path.display()))
+}
+
 /// Unmount a network namespace and remove its file, ignoring an absent mount or file.
 ///
 /// The caller must verify that Kata owns the namespace before calling this function;
@@ -112,6 +130,22 @@ mod tests {
         assert_ne!(name1, name2);
         assert_ne!(name2, name3);
         assert_ne!(name1, name3);
+    }
+
+    #[test]
+    fn test_pin_netns() {
+        skip_if_not_root!();
+
+        let dir = tempfile::tempdir().unwrap();
+        let pin = dir.path().join("netns-pin");
+        pin_netns(Path::new("/proc/self/ns/net"), &pin).unwrap();
+
+        // The pin is a namespace of its own to enter, and a second pin
+        // replaces the first instead of stacking a mount on it.
+        drop(NetnsGuard::new(pin.to_str().unwrap()).unwrap());
+        pin_netns(Path::new("/proc/self/ns/net"), &pin).unwrap();
+        remove_netns(&pin).unwrap();
+        assert!(!pin.exists());
     }
 
     #[test]

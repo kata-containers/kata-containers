@@ -397,7 +397,7 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 }
 
 func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxID string) (rollback func(), err error) {
-	userName, err := utils.CreateVmmUser()
+	userName, err := utils.CreateVmmUser(sandboxID)
 	if err != nil {
 		return nil, err
 	}

@@ -181,18 +181,12 @@ impl FcInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         debug!(sl(), "Cleanup");
-        self.cleanup_resource();
+        self.cleanup_resource()?;
 
-        std::fs::remove_dir_all(self.vm_path.as_str())
-            .inspect_err(|err| {
-                error!(
-                    sl(),
-                    "failed to remove dir all for {} with error: {:?}", &self.vm_path, &err
-                )
-            })
-            .ok();
-
-        Ok(())
+        // A removal that failed must fail the step: the state is only kept
+        // for a retry while the cleanup reports what it could not do.
+        crate::utils::remove_vm_dir(&self.id, &self.vm_path)
+            .with_context(|| format!("remove the VM directory {}", self.vm_path))
     }
 
     pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {

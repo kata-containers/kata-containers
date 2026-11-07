@@ -54,13 +54,14 @@ use hypervisor::{
     utils::{
         authorize_rootless_device, authorize_rootless_socket, get_hvsock_path,
         remove_vmm_user_runtime_dir, uses_native_ccw_bus, vmm_user_runtime_dir,
+        vmm_user_runtime_dir_is_recorded,
     },
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
-use kata_sys_util::netns::remove_netns;
+use kata_sys_util::netns::{pin_netns, remove_netns};
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
@@ -171,6 +172,9 @@ pub struct VirtSandbox {
     oom_notifier: Arc<CrioOomNotifier>,
     // Held for the whole teardown, so a second caller waits instead of racing.
     stopping: Arc<Mutex<()>>,
+    // One network rescan at a time: every container start triggers one, and
+    // two interleaved would race the netns pin and the create.
+    rescan_lock: Arc<Mutex<()>>,
     cleanup_steps: Arc<Mutex<CleanupSteps>>,
     shutdown_started: Arc<AtomicBool>,
     teardown_started: Arc<AtomicBool>,
@@ -183,6 +187,17 @@ pub struct VirtSandbox {
     // Resource cleanup waits for this confirmation after VM startup.
     vmm_exit_confirmed: CancellationToken,
     vmm_process: Arc<RwLock<Option<VmmProcessIdentity>>>,
+    config_path: Option<PathBuf>,
+    // Network namespace the runtime created for the sandbox and has to remove.
+    created_netns: Option<String>,
+    // Held from the snapshot to the write, so an older snapshot cannot
+    // replace a newer one.
+    saving_state: Arc<Mutex<()>>,
+    // What the state recorded for keep_abnormal when this sandbox was
+    // restored. A failed cleanup saves the state again for its retry, and
+    // sampling the configuration there would launder the reloaded file's
+    // current value back into the record the cleanup exists to trust.
+    restored_keep_abnormal: Option<bool>,
 }
 
 #[derive(Default)]
@@ -307,6 +322,26 @@ where
         )))
 }
 
+/// Where a rescan pins the VMM's network namespace for recovery: under the
+/// sandbox's state directory, which outlives everything but the final
+/// cleanup. remove_netns() releases it after the links are swept.
+fn netns_pin_path(sid: &str) -> PathBuf {
+    Path::new(kata_types::config::KATA_PATH)
+        .join(sid)
+        .join("netns-pin")
+}
+
+/// A state saved before prepare_vm() has no hypervisor id yet. QEMU builds the
+/// directory its cleanup removes from the id, so an empty one would remove
+/// all of /run/kata.
+fn restored_hypervisor_id(sid: &str, saved: &str) -> Result<String> {
+    if saved.is_empty() || saved == sid {
+        Ok(sid.to_string())
+    } else {
+        Err(anyhow!("state of sandbox {sid} names hypervisor {saved}"))
+    }
+}
+
 async fn wait_for_exit_record(
     wait: impl std::future::Future<Output = Result<SandboxExitInfo>>,
     grace: Duration,
@@ -361,11 +396,15 @@ impl VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             exit_notify_tx,
             shm_size: sandbox_config.shm_size,
+            config_path: sandbox_config.config_path.clone(),
+            created_netns: sandbox_config.network_env.created_netns(),
+            saving_state: Arc::new(Mutex::new(())),
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
+            rescan_lock: Arc::new(Mutex::new(())),
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             teardown_started: Arc::new(AtomicBool::new(false)),
@@ -373,6 +412,7 @@ impl VirtSandbox {
             exit_pending: Arc::new(watch::channel(false).0),
             vmm_exit_confirmed: CancellationToken::new(),
             vmm_process: Arc::new(RwLock::new(None)),
+            restored_keep_abnormal: None,
         })
     }
 
@@ -403,6 +443,21 @@ impl VirtSandbox {
         match identity {
             Ok(identity) => *self.vmm_process.write().await = Some(identity),
             Err(err) => warn!(sl!(), "could not record VMM process identity: {err:#}"),
+        }
+    }
+
+    /// A step can leave host resources behind whether it succeeds or not, so
+    /// save the state after it either way. A later recovery only cleans up
+    /// what the state records.
+    async fn save_after<T>(&self, step: Result<T>) -> Result<T> {
+        let saved = self.save().await.context("save sandbox state");
+        match (step, saved) {
+            (Ok(value), saved) => saved.map(|_| value),
+            (Err(e), Err(save_err)) => {
+                warn!(sl!(), "failed to save the sandbox state: {save_err:#}");
+                Err(e)
+            }
+            (Err(e), Ok(_)) => Err(e),
         }
     }
 
@@ -505,13 +560,9 @@ impl VirtSandbox {
             .context("failed to prepare vm socket config")?;
         resource_configs.push(vm_socket_config);
 
-        let network_env: SandboxNetworkEnv = sandbox_config.network_env.clone();
-        // prepare network config
-        if !network_env.network_created && !self.should_defer_network().await? {
-            if let Some(network_resource) = self.prepare_network_resource(&network_env).await {
-                resource_configs.push(network_resource);
-            }
-        }
+        // The network is not part of this batch: setup_network_before_start_vm()
+        // creates it, saves the state and only then attaches, so recovery
+        // knows the endpoints before the attaching acts on the host.
 
         // prepare sharefs device config
         let shared_fs = self.hypervisor.hypervisor_config().await.shared_fs;
@@ -809,6 +860,33 @@ impl VirtSandbox {
             .into_iter()
             .map(ResourceConfig::VfioDeviceModern)
             .collect())
+    }
+
+    /// Set up the network that must exist before the VM starts: create it,
+    /// save the state so everything construction made is recorded, then
+    /// attach, which acts on the host and primes the cold-plugged devices.
+    async fn setup_network_before_start_vm(&self, sandbox_config: &SandboxConfig) -> Result<()> {
+        let network_env = sandbox_config.network_env.clone();
+        if network_env.network_created || self.should_defer_network().await? {
+            return Ok(());
+        }
+        let Some(ResourceConfig::Network(network_resource)) =
+            self.prepare_network_resource(&network_env).await
+        else {
+            return Ok(());
+        };
+        let created = self
+            .resource_manager
+            .create_network(network_resource)
+            .await
+            .context("create the network");
+        self.save_after(created).await?;
+        let attached = self
+            .resource_manager
+            .attach_network()
+            .await
+            .context("set up the network before start vm");
+        self.save_after(attached).await
     }
 
     async fn prepare_network_resource(
@@ -1242,15 +1320,6 @@ impl VirtSandbox {
             .unwrap_or(false)
     }
 
-    fn created_netns(&self) -> Option<&str> {
-        let network_env = &self.sandbox_config.as_ref()?.network_env;
-        if network_env.network_created {
-            network_env.netns.as_deref()
-        } else {
-            None
-        }
-    }
-
     async fn should_defer_network(&self) -> Result<bool> {
         if !self.is_factory_enabled() {
             return Ok(false);
@@ -1271,8 +1340,16 @@ impl VirtSandbox {
             .prepare_network_resource(&sandbox_config.network_env)
             .await
         {
+            // As on the ordinary path: what creating the network made must
+            // reach the saved state before attaching acts on it.
+            let created = self
+                .resource_manager
+                .create_network(network_resource)
+                .await
+                .context("create the factory network after start vm");
+            self.save_after(created).await?;
             self.resource_manager
-                .handle_network(network_resource)
+                .attach_network()
                 .await
                 .context("set up factory network after start vm")?;
         }
@@ -1304,6 +1381,9 @@ impl VirtSandbox {
                 return None;
             }
         };
+        // The /proc reference dies with the VMM; rescan_network() pins the
+        // namespace before it creates a network from this config, so the
+        // recorded path outlives the VMM.
         let netns_path = format!("/proc/{}/ns/net", vmm_pid);
 
         let queues = self
@@ -1369,7 +1449,8 @@ impl Sandbox for VirtSandbox {
                 .and_then(|process| process.selinux_label().clone())
         });
 
-        self.hypervisor
+        let prepared = self
+            .hypervisor
             .prepare_vm(
                 id,
                 sandbox_config.network_env.netns.clone(),
@@ -1377,18 +1458,22 @@ impl Sandbox for VirtSandbox {
                 selinux_label,
             )
             .await
-            .context("prepare vm")?;
+            .context("prepare vm");
+        self.save_after(prepared).await?;
 
         let defer_network = self.should_defer_network().await?;
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
+        self.setup_network_before_start_vm(sandbox_config).await?;
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
-        self.resource_manager
+        let set_up = self
+            .resource_manager
             .prepare_before_start_vm(resources)
             .await
-            .context("set up device before start vm")?;
+            .context("set up device before start vm");
+        self.save_after(set_up).await?;
 
         // start vm
         inner.vmm_start_attempted = true;
@@ -1397,7 +1482,7 @@ impl Sandbox for VirtSandbox {
         // stop() then needs the identity to confirm the exit, or cleanup
         // never runs.
         self.remember_vmm_process().await;
-        started?;
+        self.save_after(started).await?;
         info!(sl!(), "start vm");
 
         let sandbox = self.clone();
@@ -1451,16 +1536,32 @@ impl Sandbox for VirtSandbox {
                         .network_queues as usize,
                     network_created: sandbox_config.network_env.network_created,
                 });
-                self.resource_manager
-                    .handle_network(network_resource)
+                // Creating the network already makes host artifacts (the
+                // TAPs of pair-based endpoints), and attaching acts on the
+                // host and the VM endpoint by endpoint, so the created
+                // endpoints must reach the saved state before the attaching
+                // starts: recovery undoes a recorded endpoint however far it
+                // got, but cannot undo one it never heard of.
+                let created = self
+                    .resource_manager
+                    .create_network(network_resource)
                     .await
-                    .context("set up device after start vm")?;
+                    .context("create the network");
+                self.save_after(created).await?;
+                let set_up = self
+                    .resource_manager
+                    .attach_network()
+                    .await
+                    .context("set up device after start vm");
+                self.save_after(set_up).await?;
             }
         }
 
         if defer_network {
-            self.setup_deferred_network_after_start(sandbox_config)
-                .await?;
+            let set_up = self
+                .setup_deferred_network_after_start(sandbox_config)
+                .await;
+            self.save_after(set_up).await?;
         }
 
         // connect agent
@@ -1609,6 +1710,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
+        self.setup_network_before_start_vm(sandbox_config).await?;
         let resources = self
             .prepare_for_start_sandbox(id, sandbox_config)
             .await
@@ -1651,6 +1753,31 @@ impl Sandbox for VirtSandbox {
             info: std::collections::HashMap::new(),
             created_at: inner.created_at,
         })
+    }
+
+    async fn save_state(&self) -> Result<()> {
+        self.save().await.map(|_| ())
+    }
+
+    async fn save_container_intents(&self, spec: &oci::Spec) -> Result<()> {
+        let generation = self
+            .resource_manager
+            .register_container_intents(spec)
+            .await
+            .context("register container intents")?;
+        // Only hit the disk when the spec adds something a recovery would
+        // otherwise not know to remove, or an earlier save of such a record
+        // failed. The confirmation is what lets the next registration skip
+        // the save: a record alone could be a save that never happened. It
+        // names the generation this save covers, so creates that overlap
+        // confirm only their own records.
+        if generation > 0 {
+            self.save().await.context("save container intents")?;
+            self.resource_manager
+                .container_intents_saved(generation)
+                .await;
+        }
+        Ok(())
     }
 
     async fn wait(&self) -> Result<SandboxExitInfo> {
@@ -1792,13 +1919,13 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
-        let rootless_uid = self
+        let rootless_user = self
             .hypervisor
             .hypervisor_config()
             .await
             .security_info
             .rootless_user
-            .map(|user| user.uid);
+            .map(|user| (user.uid, user.user_name));
 
         let mut errors = Vec::new();
         info!(sl!(), "resource clean up");
@@ -1809,7 +1936,16 @@ impl Sandbox for VirtSandbox {
                 .await
                 .context("resource clean up")
             {
-                Ok(()) => steps.resources = true,
+                // The rescanned namespace's pin was entered by the sweep
+                // just now; release it before the hypervisor step removes
+                // the VM directory it lives in, and retry the step until it
+                // is released. A sandbox that never pinned has nothing here.
+                Ok(()) => match remove_netns(&netns_pin_path(&self.sid))
+                    .context("release the netns pin")
+                {
+                    Ok(()) => steps.resources = true,
+                    Err(e) => errors.push(e),
+                },
                 Err(e) => errors.push(e),
             }
         }
@@ -1824,7 +1960,7 @@ impl Sandbox for VirtSandbox {
 
         // A mounted rootless namespace prevents removal of the runtime directory.
         if steps.resources && steps.hypervisor && !steps.netns {
-            match self.created_netns() {
+            match self.created_netns.as_deref() {
                 Some(path) => match remove_netns(Path::new(path)) {
                     Ok(()) => steps.netns = true,
                     Err(e) => errors.push(e),
@@ -1834,11 +1970,23 @@ impl Sandbox for VirtSandbox {
         }
 
         if steps.netns && !steps.rootless_runtime_dir {
-            if let Some(uid) = rootless_uid {
+            if let Some((uid, ref user_name)) = rootless_user {
                 let path = vmm_user_runtime_dir(uid);
-                match remove_vmm_user_runtime_dir(uid).with_context(|| {
-                    format!("remove rootless runtime directory {}", path.display())
-                }) {
+                // The hypervisor step removed the user, and a UID another
+                // account holds by now is not ours to clean behind; see
+                // vmm_user_runtime_dir_is_recorded().
+                match vmm_user_runtime_dir_is_recorded(uid, user_name)
+                    .and_then(|recorded| {
+                        if recorded {
+                            remove_vmm_user_runtime_dir(uid)
+                        } else {
+                            info!(sl!(), "uid {uid} was reassigned; {path:?} is not swept");
+                            Ok(())
+                        }
+                    })
+                    .with_context(|| {
+                        format!("remove rootless runtime directory {}", path.display())
+                    }) {
                     Ok(()) => steps.rootless_runtime_dir = true,
                     Err(e) => errors.push(e),
                 }
@@ -1848,25 +1996,113 @@ impl Sandbox for VirtSandbox {
         }
 
         if errors.is_empty() {
+            // Everything the state recorded is gone now.
+            if let Err(e) = persist::remove_from_disk(&self.sid) {
+                warn!(sl!(), "failed to remove the sandbox state: {e:#}");
+            }
             Ok(())
         } else {
             for error in &errors {
                 error!(sl!(), "sandbox cleanup step failed: {error:#}");
+            }
+            // A later recovery retries from what the state records.
+            if let Err(e) = self.save().await {
+                warn!(sl!(), "failed to keep the sandbox state for a retry: {e:#}");
             }
             Err(anyhow!("{} sandbox cleanup step(s) failed", errors.len()))
         }
     }
 
     async fn rescan_network(&self) -> Result<()> {
-        if let Some(net_cfg) = self.netns_rescan_config().await {
-            info!(
-                sl!(),
-                "rescan_network: scanning netns={}", net_cfg.netns_path
-            );
-            self.resource_manager
-                .rescan_network_if_unconfigured(net_cfg)
+        // One rescan at a time: every container start triggers one, and two
+        // interleaved would race the netns pin below and the create.
+        let _rescan = self.rescan_lock.lock().await;
+        let Some(mut net_cfg) = self.netns_rescan_config().await else {
+            return Ok(());
+        };
+
+        // A failed rescan step leaves the container without networking,
+        // which the caller tolerates. The saves are another matter: what
+        // creating the network made must reach the saved state before
+        // attaching acts on the host, nothing is attached without that, and
+        // a save that fails fails the start, since recovery would otherwise
+        // be blind to what the rescan did.
+        let mut rescan: Result<()> = Ok(());
+        let mut created = false;
+        if self.resource_manager.network_pending_attach().await {
+            // An earlier rescan created this network and then could not save
+            // or attach it. It is not replaced, since it holds the only
+            // record of endpoints that may already have acted on the host;
+            // resume it instead, retrying the save and the attach, so a
+            // tolerated failure does not end with a running workload that
+            // silently never gets its network.
+            info!(sl!(), "rescan_network: resuming the created network");
+            created = true;
+        } else {
+            match self
+                .resource_manager
+                .rescan_found_interfaces(&net_cfg)
                 .await
-                .context("network rescan during start")?;
+            {
+                Ok(false) => {}
+                Err(e) => rescan = Err(e.context("network rescan poll")),
+                Ok(true) => {
+                    info!(
+                        sl!(),
+                        "rescan_network: scanning netns={}", net_cfg.netns_path
+                    );
+                    // The /proc reference dies with the VMM, and reused, its
+                    // pid can name an unrelated process: recovery refuses to
+                    // enter it. Pin the namespace under the state directory,
+                    // the way `ip netns` would, so the recorded path
+                    // outlives the VMM; cleanup releases the pin after the
+                    // sweep. Pinned only here, where a network is created
+                    // from it: nothing else records the path.
+                    let pin = netns_pin_path(&self.sid);
+                    match pin_netns(Path::new(&net_cfg.netns_path), &pin) {
+                        Ok(()) => net_cfg.netns_path = pin.to_string_lossy().into_owned(),
+                        Err(e) => warn!(
+                            sl!(),
+                            "could not pin {}: {e:#}; a recovery after a \
+                             shim death will not reach these links",
+                            net_cfg.netns_path
+                        ),
+                    }
+                    rescan = self
+                        .resource_manager
+                        .create_network(NetworkConfig::NetNs(net_cfg))
+                        .await
+                        .context("create the rescanned network");
+                    created = rescan.is_ok();
+                }
+            }
+        }
+
+        self.save().await.context("save sandbox state")?;
+
+        if created {
+            rescan = async {
+                self.resource_manager
+                    .attach_network()
+                    .await
+                    .context("attach the rescanned network")?;
+                self.resource_manager
+                    .apply_rescanned_network()
+                    .await
+                    .context("apply the rescanned network to the agent")
+            }
+            .await;
+        }
+        if let Err(e) = rescan {
+            error!(
+                sl!(),
+                "network rescan failed; container may lack networking: {:?}", e
+            );
+        }
+        if created {
+            // The attach moved the recorded endpoints past construction;
+            // the state must say so, however the attach went.
+            self.save().await.context("save sandbox state")?;
         }
         Ok(())
     }
@@ -2042,11 +2278,31 @@ impl Persist for VirtSandbox {
 
     /// Save a state of Sandbox
     async fn save(&self) -> Result<Self::State> {
+        let _saving = self.saving_state.lock().await;
+        // A restored sandbox re-saves what the state said; see the field.
+        let keep_abnormal = match self.restored_keep_abnormal {
+            Some(recorded) => recorded,
+            None => self.resource_manager.config().await.runtime.keep_abnormal,
+        };
         let hypervisor_state = self.hypervisor.save_state().await?;
+        let mut resource_state = self.resource_manager.save().await?;
+        if resource_state.netns_path.is_none() {
+            // The network is created late; until then the namespace the
+            // sandbox was given is still the record's to keep, for the TAP
+            // sweep of a death mid-construction.
+            resource_state.netns_path = self
+                .sandbox_config
+                .as_ref()
+                .and_then(|config| config.network_env.netns.clone());
+        }
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: VIRTCONTAINER.to_string(),
-            resource: Some(self.resource_manager.save().await?),
+            resource: Some(resource_state),
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
+            config_path: self.config_path.clone(),
+            created_netns: self.created_netns.clone(),
+            bootstrap: false,
+            keep_abnormal: Some(keep_abnormal),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 #[cfg(all(
                     feature = "dragonball",
@@ -2073,20 +2329,7 @@ impl Persist for VirtSandbox {
                 )),
             }?,
         };
-        // FIXME: properly handle jailed case
-        // eg: Determine if we are running jailed:
-        // let h = sandbox_state.hypervisor.clone().unwrap_or_default();
-        // Figure out the jailed path:
-        // jailed_path = h.<>
-        // and somehow store the sandbox state into the jail:
-        // persist::to_disk(&sandbox_state, &self.sid, jailed_path)?;
-        // Issue is, how to handle restore.
-        let h = sandbox_state.hypervisor.as_ref().unwrap();
-        let vmpath = match h.jailed {
-            true => h.vm_path.clone(),
-            false => "".to_string(),
-        };
-        persist::to_disk(&sandbox_state, &self.sid, vmpath.as_str())?;
+        persist::to_disk(&sandbox_state, &self.sid)?;
         Ok(sandbox_state)
     }
     /// Restore Sandbox
@@ -2096,7 +2339,8 @@ impl Persist for VirtSandbox {
     ) -> Result<Self> {
         let config = sandbox_args.toml_config;
         let r = sandbox_state.resource.unwrap_or_default();
-        let h = sandbox_state.hypervisor.unwrap_or_default();
+        let mut h = sandbox_state.hypervisor.unwrap_or_default();
+        h.id = restored_hypervisor_id(&sandbox_args.sid, &h.id)?;
         let hypervisor = match h.hypervisor_type.as_str() {
             #[cfg(all(
                 feature = "dragonball",
@@ -2172,6 +2416,7 @@ impl Persist for VirtSandbox {
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
             stopping: Arc::new(Mutex::new(())),
+            rescan_lock: Arc::new(Mutex::new(())),
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
             teardown_started: Arc::new(AtomicBool::new(false)),
@@ -2179,6 +2424,10 @@ impl Persist for VirtSandbox {
             exit_pending: Arc::new(watch::channel(false).0),
             vmm_exit_confirmed,
             vmm_process: Arc::new(RwLock::new(None)),
+            config_path: sandbox_state.config_path,
+            created_netns: sandbox_state.created_netns,
+            saving_state: Arc::new(Mutex::new(())),
+            restored_keep_abnormal: sandbox_state.keep_abnormal,
         })
     }
 }
@@ -2186,6 +2435,17 @@ impl Persist for VirtSandbox {
 #[cfg(test)]
 mod pending_exit_tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case::saved_before_prepare_vm("", Some("sid"))]
+    #[case::saved_after_prepare_vm("sid", Some("sid"))]
+    #[case::another_sandbox("other", None)]
+    fn restored_hypervisor_id_is_never_empty(#[case] saved: &str, #[case] expected: Option<&str>) {
+        assert_eq!(
+            restored_hypervisor_id("sid", saved).ok().as_deref(),
+            expected
+        );
+    }
 
     #[tokio::test]
     async fn wait_does_not_block_without_a_watched_exit() {

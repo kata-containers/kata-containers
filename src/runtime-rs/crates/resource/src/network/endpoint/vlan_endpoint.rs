@@ -15,7 +15,7 @@ use hypervisor::device::DeviceType;
 use hypervisor::{Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
-use super::endpoint_persist::{EndpointState, VlanEndpointState};
+use super::endpoint_persist::EndpointState;
 use super::{attach_network_device, Endpoint};
 use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
 use crate::network::{utils, NetworkPair};
@@ -105,13 +105,16 @@ impl Endpoint for VlanEndpoint {
         Ok(())
     }
 
+    async fn undo_construction(&self) -> Result<()> {
+        self.net_pair
+            .remove_created_tap()
+            .await
+            .context("remove the created tap")
+    }
+
     async fn save(&self) -> Option<EndpointState> {
-        Some(EndpointState {
-            vlan_endpoint: Some(VlanEndpointState {
-                if_name: self.net_pair.virt_iface.name.clone(),
-                network_qos: self.net_pair.network_qos,
-            }),
-            ..Default::default()
-        })
+        // The TAP is removed by its Kata name suffix after a shim death;
+        // nothing else of this endpoint lives on the host for recovery.
+        None
     }
 }

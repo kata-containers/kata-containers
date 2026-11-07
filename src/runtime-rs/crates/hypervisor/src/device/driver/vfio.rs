@@ -41,7 +41,6 @@ pub const MAX_DEV_ID_SIZE: usize = 31;
 const IOMMU_IGNORE: &[u64] = &[0x0600, 0x403];
 
 const VFIO_PCI_DRIVER_NEW_ID: &str = "/sys/bus/pci/drivers/vfio-pci/new_id";
-const VFIO_PCI_DRIVER_UNBIND: &str = "/sys/bus/pci/drivers/vfio-pci/unbind";
 const SYS_CLASS_IOMMU: &str = "/sys/class/iommu";
 const INTEL_IOMMU_PREFIX: &str = "dmar";
 const AMD_IOMMU_PREFIX: &str = "ivhd";
@@ -671,7 +670,7 @@ impl PCIeDevice for VfioDevice {
 
 // binds the device to vfio driver after unbinding from host.
 // Will be called by a network interface or a generic pcie device.
-pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str) -> Result<()> {
+pub fn bind_device_to_vfio(bdf: &str, host_driver: &str) -> Result<()> {
     // modprobe vfio-pci
     if !Path::new(VFIO_PCI_DRIVER_NEW_ID).exists() {
         Command::new("modprobe")
@@ -696,12 +695,20 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
     info!(sl!(), "host driver : {}", host_driver);
     override_driver(bdf, VFIO_PCI_DRIVER).context("override driver")?;
 
-    let unbind_path = format!("/sys/bus/pci/devices/{bdf}/driver/unbind");
-    // echo bdf > /sys/bus/pci/drivers/virtio-pci/unbind"
-    fs::write(&unbind_path, bdf)
-        .with_context(|| format!("Failed to echo {} > {}", bdf, unbind_path))?;
+    // Unbind from whichever driver holds the device. A device no driver
+    // holds was left half way by an earlier attempt that failed before its
+    // reprobe, which a retried attach resumes; it cannot be unbound, and
+    // only needs the probe.
+    if Path::new(&format!("/sys/bus/pci/devices/{bdf}/driver")).exists() {
+        let unbind_path = format!("/sys/bus/pci/devices/{bdf}/driver/unbind");
+        // echo bdf > /sys/bus/pci/drivers/virtio-pci/unbind"
+        fs::write(&unbind_path, bdf)
+            .with_context(|| format!("Failed to echo {} > {}", bdf, unbind_path))?;
 
-    info!(sl!(), "{} is unbound from {}", bdf, host_driver);
+        info!(sl!(), "{} is unbound from {}", bdf, host_driver);
+    } else {
+        info!(sl!(), "no driver holds {}, probe only", bdf);
+    }
 
     // echo bdf > /sys/bus/pci/drivers_probe
     fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
@@ -713,8 +720,11 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
 }
 
 pub fn is_equal_driver(bdf: &str, host_driver: &str) -> bool {
-    let sys_pci_devices_path = Path::new(SYS_BUS_PCI_DEVICES);
-    let driver_file = sys_pci_devices_path.join(bdf).join("driver");
+    is_equal_driver_in(Path::new(SYS_BUS_PCI_DEVICES), bdf, host_driver)
+}
+
+fn is_equal_driver_in(devices: &Path, bdf: &str, host_driver: &str) -> bool {
+    let driver_file = devices.join(bdf).join("driver");
 
     if driver_file.exists() {
         let driver_path = fs::read_link(driver_file).unwrap_or_default();
@@ -727,31 +737,44 @@ pub fn is_equal_driver(bdf: &str, host_driver: &str) -> bool {
     false
 }
 
-// bind_device_to_host binds the device to the host driver after unbinding from vfio-pci.
-pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str) -> Result<()> {
-    // Unbind from vfio-pci driver to the original host driver
+// bind_device_to_host binds the device to the host driver, from whatever
+// state a passthrough or an interrupted earlier attempt left it in.
+pub fn bind_device_to_host(bdf: &str, host_driver: &str) -> Result<()> {
+    bind_device_to_host_in(Path::new("/sys/bus/pci"), bdf, host_driver)
+}
+
+fn bind_device_to_host_in(pci_root: &Path, bdf: &str, host_driver: &str) -> Result<()> {
     info!(sl!(), "bind {} to {}", bdf, host_driver);
+    let devices = pci_root.join("devices");
 
     // if it's already bound to host_driver
-    if is_equal_driver(bdf, host_driver) {
+    if is_equal_driver_in(&devices, bdf, host_driver) {
         info!(
             sl!(),
-            "bdf {} was already unbound to host driver {}", bdf, host_driver
+            "bdf {} is already bound to host driver {}", bdf, host_driver
         );
         return Ok(());
     }
 
-    override_driver(bdf, host_driver).context("override driver")?;
+    let driver_override = devices.join(bdf).join("driver_override");
+    fs::write(&driver_override, host_driver)
+        .with_context(|| format!("echo {host_driver} > {}", driver_override.display()))?;
 
-    // echo bdf > /sys/bus/pci/drivers/vfio-pci/unbind"
-    std::fs::write(VFIO_PCI_DRIVER_UNBIND, bdf)
-        .with_context(|| format!("echo {bdf}> {VFIO_PCI_DRIVER_UNBIND}"))?;
-    info!(sl!(), "echo {} > {}", bdf, VFIO_PCI_DRIVER_UNBIND);
+    // Unbind from whichever driver holds the device, vfio-pci after a
+    // passthrough. A device no driver holds was left half way by an earlier
+    // attempt that died or failed before its reprobe; it cannot be unbound,
+    // and only needs the probe.
+    let driver_link = devices.join(bdf).join("driver");
+    if driver_link.exists() {
+        let unbind = driver_link.join("unbind");
+        fs::write(&unbind, bdf).with_context(|| format!("echo {bdf} > {}", unbind.display()))?;
+        info!(sl!(), "{} unbound", bdf);
+    }
 
     // echo bdf > /sys/bus/pci/drivers_probe
-    std::fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
-        .with_context(|| format!("echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"))?;
-    info!(sl!(), "echo {} > {}", bdf, SYS_BUS_PCI_DRIVER_PROBE);
+    let probe = pci_root.join("drivers_probe");
+    fs::write(&probe, bdf).with_context(|| format!("echo {bdf} > {}", probe.display()))?;
+    info!(sl!(), "echo {} > {}", bdf, probe.display());
 
     Ok(())
 }
@@ -883,4 +906,72 @@ pub fn get_vfio_device(device: String) -> Result<String> {
     }
 
     Ok(vfio_device)
+}
+
+#[cfg(test)]
+mod bind_to_host_tests {
+    use super::bind_device_to_host_in;
+    use std::fs;
+    use std::path::Path;
+
+    const BDF: &str = "0000:41:00.2";
+
+    /// A pci root with the device bound to `driver`, or to nothing.
+    fn pci_root(dir: &Path, driver: Option<&str>) {
+        fs::create_dir_all(dir.join("devices").join(BDF)).unwrap();
+        fs::write(dir.join("drivers_probe"), "").unwrap();
+        if let Some(driver) = driver {
+            let driver_dir = dir.join("drivers").join(driver);
+            fs::create_dir_all(&driver_dir).unwrap();
+            fs::write(driver_dir.join("unbind"), "").unwrap();
+            std::os::unix::fs::symlink(
+                format!("../../drivers/{driver}"),
+                dir.join("devices").join(BDF).join("driver"),
+            )
+            .unwrap();
+        }
+    }
+
+    fn read(path: &Path) -> String {
+        fs::read_to_string(path).unwrap_or_default()
+    }
+
+    #[test]
+    fn a_device_on_its_host_driver_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        pci_root(dir.path(), Some("mlx5_core"));
+
+        bind_device_to_host_in(dir.path(), BDF, "mlx5_core").unwrap();
+
+        assert_eq!(read(&dir.path().join("drivers_probe")), "");
+        assert_eq!(read(&dir.path().join("drivers/mlx5_core/unbind")), "");
+    }
+
+    #[test]
+    fn a_device_on_vfio_is_unbound_and_reprobed() {
+        let dir = tempfile::tempdir().unwrap();
+        pci_root(dir.path(), Some("vfio-pci"));
+
+        bind_device_to_host_in(dir.path(), BDF, "mlx5_core").unwrap();
+
+        assert_eq!(read(&dir.path().join("drivers/vfio-pci/unbind")), BDF);
+        assert_eq!(read(&dir.path().join("drivers_probe")), BDF);
+        assert_eq!(
+            read(&dir.path().join("devices").join(BDF).join("driver_override")),
+            "mlx5_core"
+        );
+    }
+
+    #[test]
+    fn a_half_rebound_device_only_needs_the_probe() {
+        // An earlier attempt unbound the device and died, or failed, before
+        // its reprobe: no driver holds it. The retry must not fail on the
+        // impossible unbind, and must reach the probe.
+        let dir = tempfile::tempdir().unwrap();
+        pci_root(dir.path(), None);
+
+        bind_device_to_host_in(dir.path(), BDF, "mlx5_core").unwrap();
+
+        assert_eq!(read(&dir.path().join("drivers_probe")), BDF);
+    }
 }

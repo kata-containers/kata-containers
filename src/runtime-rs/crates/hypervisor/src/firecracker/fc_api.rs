@@ -309,26 +309,23 @@ impl FcInner {
             REQUEST_RETRY
         ))
     }
-    pub(crate) fn cleanup_resource(&self) {
+    pub(crate) fn cleanup_resource(&self) -> Result<()> {
         if self.jailed {
-            self.umount_jail_resource(FC_KERNEL).ok();
-            self.umount_jail_resource(FC_ROOT_FS).ok();
+            // A failed unjail must fail the step too: the directory removal
+            // that follows must never walk over something still mounted.
+            self.umount_jail_resource(FC_KERNEL)?;
+            self.umount_jail_resource(FC_ROOT_FS)?;
 
             for i in 1..DISK_POOL_SIZE {
-                self.umount_jail_resource(&[DRIVE_PREFIX, &i.to_string()].concat())
-                    .ok();
+                self.umount_jail_resource(&[DRIVE_PREFIX, &i.to_string()].concat())?;
             }
 
-            self.umount_jail_resource("").ok();
+            self.umount_jail_resource("")?;
         }
-        std::fs::remove_dir_all(self.vm_path.as_str())
-            .inspect_err(|err| {
-                error!(
-                    sl(),
-                    "failed to remove dir all for {} with error: {:?}", &self.vm_path, &err
-                )
-            })
-            .ok();
+        // The VM directory itself is removed by cleanup() through
+        // remove_vm_dir(): an unjailed Firecracker shares it with the
+        // sandbox state, which has to outlive the rest of the cleanup.
+        Ok(())
     }
 
     pub(crate) fn umount_jail_resource(&self, jailed_path: &str) -> Result<()> {
@@ -344,7 +341,11 @@ impl FcInner {
             ]
             .join("/"),
         };
-        nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", path))
+        // Lazy, and tolerant of a resource that is not mounted any more: a
+        // retried cleanup meets its own earlier work.
+        match nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH) {
+            Ok(()) | Err(nix::errno::Errno::EINVAL | nix::errno::Errno::ENOENT) => Ok(()),
+            Err(e) => Err(e).with_context(|| format!("umount path {}", path)),
+        }
     }
 }

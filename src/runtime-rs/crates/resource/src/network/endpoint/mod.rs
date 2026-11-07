@@ -5,6 +5,7 @@
 //
 
 mod physical_endpoint;
+pub(crate) use physical_endpoint::rebind_saved_physical_endpoints;
 pub use physical_endpoint::PhysicalEndpoint;
 mod veth_endpoint;
 pub use veth_endpoint::VethEndpoint;
@@ -49,6 +50,13 @@ pub trait Endpoint: std::fmt::Debug + Send + Sync {
     async fn hardware_addr(&self) -> String;
     async fn attach(&self) -> Result<Option<String>>;
     async fn detach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
+    /// Remove what the constructor made on the host, for an endpoint whose
+    /// attach never started: detach() assumes an attach to undo, while this
+    /// only removes the construction artifacts, such as the persistent TAP.
+    /// The caller must be inside the endpoint's network namespace.
+    async fn undo_construction(&self) -> Result<()> {
+        Ok(())
+    }
     async fn save(&self) -> Option<EndpointState>;
     /// Returns the guest PCI path for this endpoint if it is a cold-plugged
     /// physical (VFIO) device, e.g. `"05/00"`. Used to populate

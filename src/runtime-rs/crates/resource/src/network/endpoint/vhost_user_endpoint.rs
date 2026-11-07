@@ -11,7 +11,6 @@ use hypervisor::device::{DeviceConfig, DeviceType};
 use hypervisor::{Hypervisor, VhostUserConfig, VhostUserNetDevice, VhostUserType};
 use tokio::sync::RwLock;
 
-use super::endpoint_persist::VhostUserEndpointState;
 use super::Endpoint;
 use crate::network::EndpointState;
 
@@ -102,12 +101,8 @@ impl Endpoint for VhostUserEndpoint {
     }
 
     async fn save(&self) -> Option<EndpointState> {
-        Some(EndpointState {
-            vhost_user_endpoint: Some(VhostUserEndpointState {
-                if_name: self.name.clone(),
-                socket_path: self.socket_path.clone(),
-            }),
-            ..Default::default()
-        })
+        // The socket belongs to whoever serves it; recovery has nothing of
+        // this endpoint's on the host to act on.
+        None
     }
 }

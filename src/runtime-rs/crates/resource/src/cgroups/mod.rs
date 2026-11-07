@@ -10,13 +10,44 @@ pub use resource::CgroupsResource;
 mod resource_inner;
 mod utils;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use cgroups::manager::is_systemd_cgroup;
 use hypervisor::HYPERVISOR_DRAGONBALL;
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::config::TomlConfig;
+use persist::sandbox_persist::Persist;
 
 use crate::cgroups::cgroup_persist::CgroupState;
+
+/// The state CgroupsResource::new() will save, computed before the cgroups
+/// exist, so a caller can record them ahead of creating them.
+pub fn preview_cgroup_state(sid: &str, toml_config: &TomlConfig) -> Result<CgroupState> {
+    let config = CgroupConfig::new(sid, toml_config)?;
+    Ok(CgroupState {
+        path: Some(config.path),
+        overhead_path: Some(config.overhead_path),
+        sandbox_cgroup_only: config.sandbox_cgroup_only,
+    })
+}
+
+/// Remove the cgroups a state recorded, for a sandbox that died before it
+/// had a resource manager to do it.
+pub async fn delete_cgroups_from_state(
+    sid: &str,
+    toml_config: TomlConfig,
+    state: CgroupState,
+) -> Result<()> {
+    let resource = CgroupsResource::restore(
+        CgroupArgs {
+            sid: sid.to_string(),
+            config: toml_config,
+        },
+        state,
+    )
+    .await
+    .context("restore the cgroups resource")?;
+    resource.delete().await.context("delete the cgroups")
+}
 
 const SANDBOXED_CGROUP_PATH: &str = "kata_sandboxed_pod";
 
@@ -84,7 +115,8 @@ impl CgroupConfig {
             path: path.clone(),
             overhead_path: overhead_path.clone(),
             sandbox_cgroup_only: state.sandbox_cgroup_only,
-            enable_vcpus_pinning: state.enable_vcpus_pinning,
+            // Only a live sandbox pins vCPUs; a restored one just deletes.
+            enable_vcpus_pinning: false,
         })
     }
 }

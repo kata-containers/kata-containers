@@ -153,8 +153,7 @@ impl DragonballInner {
     }
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
-        self.cleanup_resource();
-        Ok(())
+        self.cleanup_resource()
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
