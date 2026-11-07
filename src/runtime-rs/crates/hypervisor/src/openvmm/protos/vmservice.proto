@@ -51,6 +51,13 @@ service VM {
     // RemovePcieDevice hot-removes the PCIe device behind the named port.
     rpc RemovePcieDevice(RemovePcieDeviceRequest) returns (google.protobuf.Empty);
 
+    // AddVpciDevice hot-adds a PCI device over the Hyper-V VPCI transport.
+    rpc AddVpciDevice(AddVpciDeviceRequest) returns (google.protobuf.Empty);
+
+    // RemoveVpciDevice hot-removes a dynamically added VPCI device. Removing
+    // an unknown or previously removed instance ID returns an error.
+    rpc RemoveVpciDevice(RemoveVpciDeviceRequest) returns (google.protobuf.Empty);
+
     // Quit will shutdown the process hosting the ttrpc server.
     rpc Quit(google.protobuf.Empty) returns (google.protobuf.Empty);
 }
@@ -66,12 +73,79 @@ message DirectBoot {
     string kernel_cmdline = 3;
 }
 
+// Boot from an IGVM file.
+message IgvmBoot {
+    enum Personality {
+        // A personality must be specified.
+        PERSONALITY_UNSPECIFIED = 0;
+        // Linux direct boot with Hyper-V enlightenments.
+        PERSONALITY_LINUX_DIRECT = 1;
+        // Reserved for UEFI IGVM boot.
+        PERSONALITY_UEFI = 2;
+    }
+
+    // Path to the IGVM file on the host.
+    string igvm_path = 1;
+    // Guest boot environment.
+    Personality personality = 2;
+}
+
+// AMD SEV-SNP isolation configuration.
+message SnpIsolationConfig {
+    // Optional 32-byte host data bound to the SNP guest.
+    bytes host_data = 1;
+}
+
+// Confidential-computing isolation configuration.
+message IsolationConfig {
+    // An isolation type must be specified when this configuration is supplied.
+    oneof isolation_type {
+        // No confidential-computing isolation.
+        google.protobuf.Empty none = 1;
+        // AMD SEV-SNP isolation.
+        SnpIsolationConfig snp = 2;
+    }
+}
+
 message UEFI {
+    // Variables used to initialize an empty UEFI variable store. These are
+    // ignored when the store already contains any variables.
+    message InitialVariables {
+        // A predefined set of Secure Boot-related variables. Selecting a
+        // template initializes keys and signature databases but does not
+        // enable Secure Boot enforcement.
+        enum SecureBootTemplate {
+            // Do not initialize Secure Boot-related variables from a template.
+            NONE = 0;
+            // Initialize variables with the Microsoft Windows certificate set.
+            MICROSOFT_WINDOWS = 1;
+            // Initialize variables with the Microsoft UEFI CA certificate set.
+            MICROSOFT_UEFI_CERTIFICATE_AUTHORITY = 2;
+        }
+
+        // The predefined Secure Boot variable set to use for initialization.
+        SecureBootTemplate secure_boot_template = 1;
+
+        // Optional path to a custom UEFI variable delta JSON file on the host.
+        // Applied after the selected template, or without a template when NONE
+        // is selected.
+        optional string custom_uefi_json_path = 2;
+    }
+
+    // Path to the UEFI firmware image on the host.
     string firmware_path = 1;
-    string device_path = 2;
-    // Optional data to include for uefi boot. For Linux this could be used as the kernel
-    // commandline.
-    string optional_data = 3;
+
+    // Fields 2 and 3 were previously `device_path` and `optional_data`. They
+    // had no OpenVMM equivalent and were never honored.
+    reserved 2, 3;
+    reserved "device_path", "optional_data";
+
+    // Variables to inject when initializing an empty UEFI variable store.
+    InitialVariables initial_variables = 4;
+
+    // Whether the firmware enforces Secure Boot policy. This is independent
+    // of whether initial Secure Boot variables are supplied above.
+    bool secure_boot_enabled = 5;
 }
 
 message MemoryConfig {
@@ -90,6 +164,46 @@ message ProcessorConfig {
     uint32 processor_count = 1;
     uint32 processor_weight = 2;
     uint32 processor_limit = 3;
+
+    // Optional arch specific topology overrides.
+    oneof arch_config {
+        ProcessorX86Config x86 = 4;
+        ProcessorAarch64Config aarch64 = 5;
+    }
+}
+
+// Reflects the overrides of the `X86TopologyConfig`.
+message ProcessorX86Config {
+}
+
+// Reflects the overrides of the `Aarch64TopologyConfig`.
+message ProcessorAarch64Config {
+    // MSI controller selection for aarch64 PCIe interrupt delivery.
+    //
+    // Optional.
+    //
+    // If left unset, automatically select the best available MSI controller:
+    // - `GicMsiItsConfig` when the hypervisor supports it,
+    // - otherwise `GicMsiV2mConfig`.
+    oneof gic_msi_config {
+        // Force GICv3 ITS for MSI delivery via LPIs.
+        GicMsiItsConfig msi_its = 5;
+        // Force GICv2m for MSI delivery via SPIs.
+        GicMsiV2mConfig msi_v2m = 6;
+    }
+}
+
+// GICv3-specific MSI delivery overrides.
+message GicMsiItsConfig {}
+
+// GICv2m-specific MSI delivery overrides.
+message GicMsiV2mConfig {
+    // Number of SPIs reserved for PCIe MSIs.
+    //
+    // Optional.
+    //
+    // When unset, will use a platform-specific default.
+    optional uint32 spi_count = 1;
 }
 
 message DevicesConfig {
@@ -100,8 +214,10 @@ message DevicesConfig {
     // have a oneof here named PCIDevice with WindowsPCIDevice and LinuxPCIDevice
     // housed.
     repeated WindowsPCIDevice windows_device = 4;
-    repeated VirtioFSConfig virtiofs_config = 5;
-    VirtioConsoleConfig virtio_console = 6;
+    repeated VirtioFs virtiofs_config = 5;
+    // Single-port console devices, enumerated by the guest as hvc0, hvc1, and
+    // so on in list order.
+    repeated VirtioConsoleConfig virtio_consoles = 6;
 }
 
 // An endpoint PCIe device function. Attached behind a port in the topology
@@ -135,6 +251,10 @@ message VirtioDevice {
         // A virtio device whose datapath is backed by an external vhost-user
         // process (e.g. vhost-user-blk / vhost-user-fs).
         VhostUser     vhost_user = 6;
+        // Built-in virtio-fs filesystem device.
+        VirtioFs       fs        = 7;
+        // virtio-rtc real-time clock device.
+        VirtioRtc      rtc       = 8;
     }
 }
 
@@ -144,13 +264,13 @@ message VirtioConsole {
     SerialBackend backend = 1;
 }
 
-// A serial backend: where a serial/console stream is connected. Modeled as a
-// oneof so more backends (stderr, file, tcp listener, terminal, ...) can be
-// added later. TBD(F): the CLI also accepts console|stderr|file|listen|tcp|term.
+// A serial backend: where a serial/console stream is connected.
 message SerialBackend {
     oneof kind {
         // Relay the stream over a named pipe / Unix domain socket.
         SerialRelay relay = 1;
+        // Write guest output directly to a host file.
+        SerialFile file = 2;
     }
 }
 
@@ -161,6 +281,15 @@ message SerialRelay {
     // When true, connect to an existing pipe/socket as a client instead of
     // creating a new server listener (e.g. the host already created it).
     bool connect = 2;
+}
+
+// A host file receiving guest serial output.
+message SerialFile {
+    // Path to the output file.
+    string path = 1;
+    // Preserve existing contents and append new output. When false, the file
+    // is truncated when the VM configuration is created.
+    bool append = 2;
 }
 
 // Disk backend shared by virtio-blk (and reusable for other disk types).
@@ -187,6 +316,8 @@ message VirtioBlk {
     DiskBackend backend = 1;
     // Expose the disk read-only to the guest.
     bool read_only = 2;
+    // Serial returned by VIRTIO_BLK_T_GET_ID.
+    optional string serial = 3;
 }
 
 // virtio-net network device configuration. An absent backend means "none"
@@ -264,10 +395,16 @@ message VhostUserGeneric {
 message VirtioRng {
 }
 
+// virtio-rtc carries no device-specific configuration.
+message VirtioRtc {
+}
+
 // virtio-vsock socket device configuration.
 message VirtioVsock {
     // Unix socket base path (mirrors --virtio-vsock-path).
     string socket_path = 1;
+    // Context ID assigned to the guest. Defaults to 3 when omitted.
+    optional uint64 guest_cid = 2;
 }
 
 // NVMe controller. Attached behind a PCIe port in the topology, or hot-added
@@ -294,6 +431,36 @@ message NvmeNamespace {
 message VfioDevice {
     // Host PCI address (BDF), e.g. "0000:01:00.0".
     string host_pci_address = 1;
+    // BARs whose initial addresses are pinned. Omitted BARs are assigned by
+    // the guest normally.
+    repeated VfioBarAddress bar_addresses = 2;
+    // Use VFIO cdev + iommufd with the named VMConfig.iommufds context.
+    // Absent => legacy VFIO group/container assignment. A present value must
+    // be non-empty and reference a declared context; invalid references or
+    // unavailable iommufd support are errors, not a fallback to legacy VFIO.
+    // Applies to both boot-time attachment and AddPcieDevice.
+    optional string iommufd_id = 3;
+}
+
+// A host iommufd context for Linux VFIO cdev assignment. This does not
+// configure a guest-visible IOMMU. The server opens /dev/iommu; no client
+// file descriptor or kernel object ID is passed over the protocol.
+message IommufdConfig {
+    // Non-empty identifier, unique within VMConfig.iommufds. Devices using
+    // the same ID share an iommufd context and its DMA address space.
+    string id = 1;
+}
+
+// Initial address configuration for one VFIO device BAR.
+message VfioBarAddress {
+    // BAR index, from 0 through 5.
+    uint32 bar_index = 1;
+    oneof source {
+        // Use the physical BAR address reported by the host.
+        google.protobuf.Empty host = 2;
+        // Use an explicit host physical address.
+        uint64 fixed = 3;
+    }
 }
 
 //
@@ -338,8 +505,9 @@ message NodeMemoryConfig {
     bool prefetch              = 3;
     // Use private anonymous memory instead of shared file-backed memory.
     bool private_memory        = 4;
-    // Mark the memory transparent-hugepage eligible (requires private_memory).
-    bool transparent_hugepages = 5;
+    // Mark this node's RAM as transparent-hugepage eligible. Unset => enabled
+    // by default. Set to false to opt out.
+    optional bool transparent_hugepages = 5;
     // Allocate from explicit hugetlb pages.
     bool hugepages             = 6;
     // Hugetlb page size in bytes (requires hugepages). Absent => default.
@@ -369,6 +537,16 @@ message NumaDistance {
 message PcieTopologyConfig {
     // The PCIe root complexes in the VM.
     repeated PcieRootComplex root_complexes = 1;
+    // Devices that act as initiators for device-only NUMA nodes.
+    repeated PcieGenericInitiator generic_initiators = 2;
+}
+
+// Associates the device behind a PCIe port with a NUMA proximity domain.
+message PcieGenericInitiator {
+    // Port directly upstream of the initiator device.
+    string port_name = 1;
+    // NUMA node for which the device is an initiator.
+    uint32 node = 2;
 }
 
 // A PCIe root complex.
@@ -395,6 +573,32 @@ message PcieRootComplex {
     optional uint32 node = 10;
     // Root ports on this complex.
     repeated PciePort root_ports = 11;
+    // Guest-visible IOMMU covering this root complex. Absent => none.
+    PcieIommuConfig iommu = 12;
+}
+
+// Guest-visible IOMMU selection for a PCIe root complex.
+message PcieIommuConfig {
+    oneof kind {
+        // Arm SMMUv3. Only supported for aarch64 guests.
+        SmmuConfig smmu = 1;
+    }
+}
+
+// Arm SMMUv3 configuration, fixed at VM creation.
+message SmmuConfig {
+    // Enable hardware-accelerated nested translation via Linux iommufd.
+    // Requires ACPI and a nesting-capable host SMMUv3. VFIO devices behind
+    // this SMMU must reference a single shared context via iommufd_id.
+    // False => software emulation; VFIO assignment behind the SMMU is then
+    // unsupported. Unsupported acceleration is an error, not a fallback.
+    bool accel = 1;
+    // Fixed output address size in bits.
+    // Absent => CLI oas=auto: initially 48 bits; with acceleration, device
+    // attachment before VM start adopts the physical SMMU's OAS. VM start
+    // freezes the advertised value; later hot-add must be compatible.
+    // A fixed value cannot exceed the physical SMMU's OAS with acceleration.
+    optional uint32 oas_bits = 2;
 }
 
 // A PCIe port: a root-complex root port or a switch downstream port. Hosts at
@@ -410,6 +614,11 @@ message PciePort {
     // Device/function (`device << 3 | function`) to place this port at on its
     // bus. Absent => lowest available devfn.
     optional uint32 devfn = 4;
+    // ACS capability bits exposed by this port. Absent => default capabilities.
+    optional uint32 acs_capabilities_supported = 5;
+    // Advertise End-to-End TLP Prefix support for downstream PASID use.
+    // Defaults to false. All downstream ports of a switch must agree.
+    bool pasid = 6;
 }
 
 // A PCIe switch: a set of downstream ports, each of which may have its own
@@ -432,6 +641,28 @@ message PcieAttachment {
 }
 
 message VMConfig {
+    // Action for the VMM to take when the guest triggers a power event.
+    enum GuestPowerAction {
+        // Use the default for this event.
+        DEFAULT = 0;
+        // Restart the guest.
+        RESTART = 1;
+        // Leave the virtual machine halted.
+        HALT = 2;
+    }
+
+    // Actions for the VMM to take on guest power events.
+    message GuestPowerActions {
+        // The guest powered off or hibernated. Defaults to HALT.
+        GuestPowerAction shutdown = 1;
+        // The guest requested a reset. Defaults to RESTART.
+        GuestPowerAction reset = 2;
+        // The guest triple faulted. Defaults to HALT.
+        GuestPowerAction crash = 3;
+        // The guest's watchdog timer expired. Defaults to RESTART.
+        GuestPowerAction watchdog = 4;
+    }
+
     MemoryConfig memory_config = 1;
     ProcessorConfig processor_config = 2;
     DevicesConfig devices_config = 3;
@@ -439,6 +670,7 @@ message VMConfig {
     oneof BootConfig {
         DirectBoot direct_boot = 5;
         UEFI uefi = 6;
+        IgvmBoot igvm = 18;
     }
     WindowsOptions windows_options = 7;
     // Field 8 was previously map<string, string> extra_data.
@@ -451,6 +683,30 @@ message VMConfig {
     NumaConfig numa_config = 10;
     // PCIe root complexes / ports / switches.
     PcieTopologyConfig pcie = 11;
+    // Actions to take on guest power events. Each unset action uses its
+    // default.
+    GuestPowerActions guest_power_actions = 12;
+
+    // SMBIOS (DMI) identity overrides. Applied to whichever boot type is
+    // selected; note that PCAT boot honors only the system UUID and serial
+    // number. IGVM boot does not support these overrides.
+    SMBIOSConfig smbios_config = 13;
+
+    optional string crash_dump_path = 14;
+    // Host iommufd contexts to create with the VM. Linux only; a non-empty
+    // list on other hosts is an error. Contexts remain available until VM
+    // teardown, including when unused or after their last device is removed,
+    // so AddPcieDevice can reference them. No runtime context add/remove.
+    repeated IommufdConfig iommufds = 15;
+    // Run without VMBus. Incompatible with VMBus devices and HVSocket.
+    bool disable_vmbus = 16;
+    // Do not expose Hyper-V (HV#1) enlightenments. Requires disable_vmbus.
+    // Unsupported for x86_64 UEFI boot.
+    bool disable_hv = 17;
+    // Confidential-computing isolation mode.
+    IsolationConfig isolation_config = 19;
+    // Expose hardware virtualization extensions to the guest.
+    bool nested_virt = 20;
 }
 
 // WindowsOptions contains virtual machine configurations that are only present on a Windows host.
@@ -472,6 +728,53 @@ message SerialConfig {
 
 message HVSocketConfig {
     string path = 1;
+}
+
+// SMBIOS (DMI) identity overrides, grouped by SMBIOS structure type to mirror
+// the `type=N` grouping of the OpenVMM `--smbios` CLI option. Each unset field
+// falls through to the loader's default identity.
+message SMBIOSConfig {
+    // SMBIOS Type 0 (BIOS Information) overrides.
+    message BIOS {
+        // System BIOS Major/Minor Release (e.g. 4.1). Presence of this message
+        // sets the release; both components are supplied together.
+        message Release {
+            uint32 major = 1;
+            uint32 minor = 2;
+        }
+
+        // BIOS vendor string.
+        optional string vendor = 1;
+        // BIOS version string.
+        optional string version = 2;
+        // BIOS release date string.
+        optional string release_date = 3;
+        // System BIOS Major/Minor Release. Absent => loader default.
+        Release release = 4;
+    }
+
+    // SMBIOS Type 1 (System Information) overrides.
+    message System {
+        // System manufacturer string.
+        optional string manufacturer = 1;
+        // System product name string.
+        optional string product_name = 2;
+        // System version string.
+        optional string version = 3;
+        // System serial number string.
+        optional string serial_number = 4;
+        // System SKU number string.
+        optional string sku_number = 5;
+        // System family string.
+        optional string family = 6;
+        // System UUID (the VM's BIOS GUID).
+        optional string uuid = 7; // GUID
+    }
+
+    // Type 0 (BIOS Information) overrides.
+    BIOS bios = 1;
+    // Type 1 (System Information) overrides.
+    System system = 2;
 }
 
 message CreateVMRequest {
@@ -501,9 +804,19 @@ message PropertiesVMRequest {
     repeated PropertiesType types = 1;
 }
 
+enum VmState {
+    Uninitialized = 0;
+    Paused = 1;
+    Running = 2;
+    Halted = 3;
+}
+
 message PropertiesVMResponse {
     MemoryStats memory_stats = 1;
     ProcessorStats processor_stats = 2;
+    VmState state = 3;
+    // Set when state is Halted.
+    optional string halt_reason = 4;
 }
 
 message CapabilitiesVMResponse {
@@ -581,7 +894,13 @@ message DioBackend {
 }
 
 message TapBackend {
-    string name = 1;
+    oneof source {
+        // Open /dev/net/tun by this device name (existing behavior).
+        string name = 1;
+        // Use the file descriptor registered under this name via the
+        // fd-passing protocol (see fd_passing.md).
+        string fd_name = 2;
+    }
 }
 
 enum IpProtocol {
@@ -596,6 +915,7 @@ message PortConfig {
     uint32 guest_port = 2;
     // The protocol to forward.
     IpProtocol protocol = 3;
+    string host_address = 4;
 }
 
 message ConsommeBackend {
@@ -612,9 +932,10 @@ message WindowsPCIDevice {
     string instance_id = 1;
 }
 
-message VirtioFSConfig {
+message VirtioFs {
     string tag = 1;
     string root_path = 2;
+    bool read_only = 3;
 }
 
 message VirtioConsoleConfig {
@@ -669,4 +990,19 @@ message AddPcieDeviceRequest {
 message RemovePcieDeviceRequest {
     // Name of the PCIe port whose device should be removed.
     string port_name = 1;
+}
+
+// Request to hot-add a PCI device over VPCI.
+message AddVpciDeviceRequest {
+    // The device to attach. VTL assignment is not modeled; this targets VTL0.
+    PcieDeviceKind device = 1;
+    // Guest-visible VPCI instance ID. Pass this to RemoveVpciDevice to remove
+    // the device.
+    string instance_id = 2;
+}
+
+// Request to hot-remove a dynamically added VPCI device.
+message RemoveVpciDeviceRequest {
+    // Instance ID supplied to AddVpciDevice.
+    string instance_id = 1;
 }
