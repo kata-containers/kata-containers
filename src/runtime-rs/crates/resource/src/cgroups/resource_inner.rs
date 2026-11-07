@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error as _;
 use std::fs;
 use std::io::ErrorKind;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::str::FromStr;
@@ -16,13 +17,15 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use cgroups::manager::is_systemd_cgroup;
 use cgroups::{CgroupPid, FreezerState, FsManager, Manager, SystemdManager};
+use futures::StreamExt;
 use hypervisor::{Hypervisor, VcpuThreadIds};
+use inotify::{Inotify, WatchMask};
 use kata_types::cpu::CpuSet;
 use nix::errno::Errno;
 use nix::sched::{sched_setaffinity, CpuSet as NixCpuSet};
-use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use oci_spec::runtime::{LinuxCpu, LinuxCpuBuilder, LinuxResources, LinuxResourcesBuilder};
+use tokio::io::{unix::AsyncFd, Interest};
 use tokio::time::sleep;
 
 use crate::cgroups::utils::get_tgid_from_pid;
@@ -30,8 +33,6 @@ use crate::cgroups::CgroupConfig;
 use crate::ResourceUpdateOp;
 
 pub type CgroupManager = Box<dyn Manager>;
-
-const KILL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 fn procs_dir(cgroup: &dyn Manager) -> Option<PathBuf> {
     // The unified hierarchy ignores the subsystem, while every v1 hierarchy
@@ -75,39 +76,94 @@ fn is_populated(dir: &Path) -> Result<bool> {
         .any(|line| line.split_whitespace().eq(["populated", "1"])))
 }
 
-async fn empty_cgroup(cgroup: &dyn Manager, deadline: tokio::time::Instant) -> Result<()> {
+/// Waits until the cgroup holds no task, exiting ones included: they keep it
+/// populated, and its removal fails with EBUSY, after they have left
+/// cgroup.procs. Returns false on cgroup v1, which has no cgroup.events.
+async fn wait_until_unpopulated(dir: &Path) -> Result<bool> {
+    let events = dir.join("cgroup.events");
+    if !events.exists() {
+        return Ok(false);
+    }
+    // Watch before checking, so a change in between is not missed.
+    let inotify = Inotify::init().context("init inotify")?;
+    inotify
+        .watches()
+        .add(&events, WatchMask::MODIFY)
+        .with_context(|| format!("watch {}", events.display()))?;
+    let mut changes = inotify
+        .into_event_stream([0u8; 1024])
+        .context("stream cgroup events")?;
+    while is_populated(dir)? {
+        changes
+            .next()
+            .await
+            .context("cgroup event stream ended")?
+            .context("read cgroup events")?;
+    }
+    Ok(true)
+}
+
+/// The caller bounds the wait for exiting tasks, as for any cleanup step.
+async fn destroy_cgroup(cgroup: &mut CgroupManager) -> Result<()> {
+    let err = match cgroup.destroy() {
+        Ok(()) => return Ok(()),
+        Err(err) => anyhow::Error::from(err),
+    };
+    let Some(dir) = procs_dir(cgroup.as_ref()) else {
+        return Err(err);
+    };
+    // Live processes are destroy()'s to move out; only exiting ones are waited for.
+    if !dir.exists() || !read_procs(&dir)?.is_empty() || !wait_until_unpopulated(&dir).await? {
+        return Err(err);
+    }
+    cgroup.destroy().map_err(anyhow::Error::from)
+}
+
+/// Kills every process of the cgroup and returns once the kernel reports them
+/// gone. The caller's deadline bounds a process stuck in uninterruptible sleep.
+async fn empty_cgroup(cgroup: &dyn Manager) -> Result<()> {
     let dir = procs_dir(cgroup).context("no cgroup.procs for the sandbox cgroup")?;
     loop {
         let procs = read_procs(&dir)?;
-        if procs.is_empty() {
-            if !is_populated(&dir)? {
-                return Ok(());
-            }
-            if tokio::time::Instant::now() >= deadline {
-                return Err(anyhow!("{} is still populated", dir.display()));
-            }
-            sleep(KILL_POLL_INTERVAL).await;
-            continue;
-        }
         if procs.contains(&(process::id() as i32)) {
             return Err(anyhow!(
                 "refusing to kill {}, the runtime runs in it",
                 dir.display()
             ));
         }
-        if tokio::time::Instant::now() >= deadline {
-            return Err(anyhow!("{} still holds {:?}", dir.display(), procs));
+        if procs.is_empty() {
+            wait_until_unpopulated(&dir).await?;
+            return Ok(());
         }
-        kill_procs(cgroup, &dir)?;
-        sleep(KILL_POLL_INTERVAL).await;
+        match kill_procs(cgroup, &dir)? {
+            Killed::Cgroup => {
+                wait_until_unpopulated(&dir).await?;
+                return Ok(());
+            }
+            // Without cgroup.kill, a process forked before the kill is found
+            // by the next pass.
+            Killed::Processes(pidfds) => {
+                for pidfd in pidfds {
+                    wait_for_exit(pidfd).await?;
+                }
+            }
+        }
     }
 }
 
-fn kill_procs(cgroup: &dyn Manager, dir: &Path) -> Result<()> {
+enum Killed {
+    /// cgroup.kill also takes processes forked during the kill; cgroup.events
+    /// reports when they are gone.
+    Cgroup,
+    /// Pidfds of the signalled processes, which report their exits.
+    Processes(Vec<OwnedFd>),
+}
+
+fn kill_procs(cgroup: &dyn Manager, dir: &Path) -> Result<Killed> {
     let kill_file = dir.join("cgroup.kill");
     if kill_file.exists() {
-        return fs::write(&kill_file, "1")
-            .with_context(|| format!("write {}", kill_file.display()));
+        fs::write(&kill_file, "1").with_context(|| format!("write {}", kill_file.display()))?;
+        return Ok(Killed::Cgroup);
     }
 
     // Like runc without cgroup.kill: a frozen process can neither fork nor
@@ -124,20 +180,65 @@ fn kill_procs(cgroup: &dyn Manager, dir: &Path) -> Result<()> {
         }
     };
     let result = read_procs(dir).and_then(|procs| {
+        let mut pidfds = Vec::with_capacity(procs.len());
         for pid in procs {
-            match kill(Pid::from_raw(pid), Signal::SIGKILL) {
-                Ok(()) | Err(Errno::ESRCH) => {}
-                Err(err) => return Err(err).with_context(|| format!("kill {pid}")),
+            let Some(pidfd) = open_pidfd(pid)? else {
+                continue;
+            };
+            // Unfrozen, the PID may have been reused since cgroup.procs was read.
+            if !frozen && !read_procs(dir)?.contains(&pid) {
+                continue;
             }
+            send_sigkill(&pidfd).with_context(|| format!("kill {pid}"))?;
+            pidfds.push(pidfd);
         }
-        Ok(())
+        Ok(pidfds)
     });
     if frozen {
         cgroup
             .freeze(FreezerState::Thawed)
             .with_context(|| format!("thaw {}", dir.display()))?;
     }
-    result
+    result.map(Killed::Processes)
+}
+
+/// Returns None once the process has exited.
+fn open_pidfd(pid: i32) -> Result<Option<OwnedFd>> {
+    let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
+    if fd < 0 {
+        return match Errno::last() {
+            Errno::ESRCH => Ok(None),
+            err => Err(err).with_context(|| format!("open pidfd of {pid}")),
+        };
+    }
+    Ok(Some(unsafe { OwnedFd::from_raw_fd(fd as RawFd) }))
+}
+
+fn send_sigkill(pidfd: &OwnedFd) -> Result<()> {
+    let rc = unsafe {
+        libc::syscall(
+            libc::SYS_pidfd_send_signal,
+            pidfd.as_raw_fd(),
+            libc::SIGKILL,
+            std::ptr::null::<libc::siginfo_t>(),
+            0,
+        )
+    };
+    match rc {
+        0 => Ok(()),
+        _ if Errno::last() == Errno::ESRCH => Ok(()),
+        _ => Err(Errno::last()).context("pidfd_send_signal"),
+    }
+}
+
+/// A pidfd becomes readable when its process exits.
+async fn wait_for_exit(pidfd: OwnedFd) -> Result<()> {
+    let pidfd = AsyncFd::with_interest(pidfd, Interest::READABLE).context("watch pidfd")?;
+    let _ = pidfd
+        .readable()
+        .await
+        .context("wait for the process exit")?;
+    Ok(())
 }
 
 pub(crate) struct CgroupsResourceInner {
@@ -572,13 +673,12 @@ impl CgroupsResourceInner {
     /// cgroups before it forks the VMM and its daemons, and an in-process VMM
     /// runs in the runtime itself, so an empty cgroup is the kernel's word
     /// that the VMM is gone. Must not run in a shim that lives in them.
-    pub(crate) async fn kill_all_processes(&self, wait: Duration) -> Result<()> {
+    pub(crate) async fn kill_all_processes(&self) -> Result<()> {
         let cgroups: Vec<&dyn Manager> = std::iter::once(self.sandbox_cgroup.as_ref())
             .chain(self.overhead_cgroup.as_deref())
             .collect();
-        let deadline = tokio::time::Instant::now() + wait;
         for cgroup in cgroups {
-            empty_cgroup(cgroup, deadline).await?;
+            empty_cgroup(cgroup).await?;
         }
         Ok(())
     }
@@ -586,9 +686,8 @@ impl CgroupsResourceInner {
     pub(crate) async fn delete(&mut self) -> Result<()> {
         let mut errors = Vec::new();
         if !self.sandbox_cgroup_deleted {
-            match self
-                .sandbox_cgroup
-                .destroy()
+            match destroy_cgroup(&mut self.sandbox_cgroup)
+                .await
                 .context("destroy sandbox cgroup")
             {
                 Ok(()) => self.sandbox_cgroup_deleted = true,
@@ -598,7 +697,10 @@ impl CgroupsResourceInner {
 
         if !self.overhead_cgroup_deleted {
             if let Some(overhead_cgroup) = self.overhead_cgroup.as_mut() {
-                match overhead_cgroup.destroy().context("destroy overhead cgroup") {
+                match destroy_cgroup(overhead_cgroup)
+                    .await
+                    .context("destroy overhead cgroup")
+                {
                     Ok(()) => self.overhead_cgroup_deleted = true,
                     Err(e) => errors.push(e),
                 }
@@ -851,11 +953,7 @@ mod tests {
         fs::write(dir.join("cgroup.procs"), child.id().to_string()).unwrap();
         let cgroup = FsManager::new(&relative).unwrap();
 
-        let result = empty_cgroup(
-            &cgroup,
-            tokio::time::Instant::now() + Duration::from_secs(5),
-        )
-        .await;
+        let result = empty_cgroup(&cgroup).await;
         let status = child.wait().unwrap();
         fs::remove_dir(&dir).unwrap();
 
@@ -911,11 +1009,7 @@ mod tests {
             fs::write(dir.join("cgroup.procs"), child.id().to_string()).unwrap();
             let cgroup = FsManager::new(&relative).unwrap();
 
-            let result = empty_cgroup(
-                &cgroup,
-                tokio::time::Instant::now() + Duration::from_secs(5),
-            )
-            .await;
+            let result = empty_cgroup(&cgroup).await;
             let removed = fs::remove_dir(&dir);
             child.wait().unwrap();
             if removed.is_err() {
@@ -943,9 +1037,58 @@ mod tests {
             .unwrap();
         let cgroup = FsManager::new(own.trim_start_matches('/')).unwrap();
 
-        let err = empty_cgroup(&cgroup, tokio::time::Instant::now())
-            .await
-            .unwrap_err();
+        let err = empty_cgroup(&cgroup).await.unwrap_err();
         assert!(err.to_string().contains("the runtime runs in it"));
+    }
+
+    fn fake_cgroup(procs: &str, events: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("cgroup.procs"), procs).unwrap();
+        if let Some(events) = events {
+            fs::write(dir.path().join("cgroup.events"), events).unwrap();
+        }
+        dir
+    }
+
+    #[tokio::test]
+    async fn unpopulated_wait_ends_when_exiting_tasks_are_gone() {
+        let dir = fake_cgroup("", Some("populated 1\nfrozen 0\n"));
+        let events = dir.path().join("cgroup.events");
+        let (written_tx, written_rx) = tokio::sync::oneshot::channel();
+        let writer = tokio::spawn(async move {
+            fs::write(events, "populated 0\nfrozen 0\n").unwrap();
+            written_tx.send(()).unwrap();
+        });
+
+        let wait = wait_until_unpopulated(dir.path());
+        tokio::pin!(wait);
+        // The wait holds on while the cgroup is populated.
+        tokio::select! {
+            biased;
+            _ = &mut wait => panic!("the wait ended while the cgroup was populated"),
+            _ = std::future::ready(()) => {}
+        }
+        written_rx.await.unwrap();
+        assert!(wait.await.unwrap());
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn killed_process_exit_is_reported_by_its_pidfd() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let pidfd = open_pidfd(child.id() as i32).unwrap().unwrap();
+
+        send_sigkill(&pidfd).unwrap();
+        wait_for_exit(pidfd).await.unwrap();
+        assert!(!child.wait().unwrap().success());
+    }
+
+    #[tokio::test]
+    async fn unpopulated_wait_does_not_apply_to_cgroup_v1() {
+        let dir = fake_cgroup("", None);
+        assert!(!wait_until_unpopulated(dir.path()).await.unwrap());
     }
 }

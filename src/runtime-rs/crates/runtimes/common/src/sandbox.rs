@@ -35,6 +35,9 @@ pub trait Sandbox: Send + Sync {
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
+    // Stops the VM and releases the sandbox host resources. Each call runs
+    // the steps that have not completed yet, so a later call retries them.
+    async fn finish_teardown(&self) -> Result<()>;
     async fn status(&self) -> Result<SandboxStatus>;
     async fn wait(&self) -> Result<SandboxExitInfo>;
 

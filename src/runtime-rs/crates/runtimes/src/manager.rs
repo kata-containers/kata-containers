@@ -70,7 +70,7 @@ use virt_container::{
 use wasm_container::WasmContainer;
 
 use crate::{
-    shim_mgmt::server::MgmtServer,
+    shim_mgmt::server::{ensure_no_leftover_sandbox, MgmtServer},
     tracer::{KataTracer, ROOTSPAN},
 };
 
@@ -99,6 +99,7 @@ struct RuntimeHandlerManagerInner {
     msg_sender: Sender<Message>,
     kata_tracer: Arc<Mutex<KataTracer>>,
     runtime_instance: Option<Arc<RuntimeInstance>>,
+    mgmt_server: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl std::fmt::Debug for RuntimeHandlerManagerInner {
@@ -118,6 +119,7 @@ impl RuntimeHandlerManagerInner {
             msg_sender,
             kata_tracer: Arc::new(Mutex::new(tracer)),
             runtime_instance: None,
+            mgmt_server: None,
         })
     }
 
@@ -178,6 +180,10 @@ impl RuntimeHandlerManagerInner {
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
         init_runtime_handlers()?;
+
+        // Fail before the VM starts, and before recording this sandbox's
+        // config path into a directory a previous shim may still own.
+        ensure_no_leftover_sandbox(&self.id)?;
 
         let (mut config, config_path) =
             load_config_with_path(&sandbox_config.annotations, options).context("load config")?;
@@ -274,7 +280,7 @@ impl RuntimeHandlerManagerInner {
         )
         .context(ERR_NO_SHIM_SERVER)?;
 
-        tokio::task::spawn(Arc::new(shim_mgmt_svr).run());
+        self.mgmt_server = Some(tokio::task::spawn(shim_mgmt_svr.run()));
         info!(sl!(), "shim management http server starts");
 
         Ok(())
@@ -307,6 +313,18 @@ impl RuntimeHandlerManager {
                 id, msg_sender,
             )?)),
         })
+    }
+
+    /// Stops serving the management socket. containerd may run the shim's
+    /// delete as soon as the task server stops, and that delete leaves a
+    /// sandbox whose socket is still served alone, so this has to come first.
+    pub async fn stop_mgmt_server(&self) {
+        let server = self.inner.write().await.mgmt_server.take();
+        if let Some(server) = server {
+            server.abort();
+            // The listener is closed once the aborted task has been dropped.
+            let _ = server.await;
+        }
     }
 
     pub async fn cleanup(&self) -> Result<()> {
@@ -396,6 +414,9 @@ impl RuntimeHandlerManager {
         if inner.runtime_instance.is_some() {
             return Ok(());
         }
+
+        // Before creating a network namespace that a refused start would leak.
+        ensure_no_leftover_sandbox(&inner.id)?;
 
         let mut dns: Vec<String> = vec![];
 
@@ -677,6 +698,18 @@ impl RuntimeHandlerManager {
             }
             TaskRequest::DeleteProcess(process_id) => {
                 let resp = cm.delete_process(&process_id).await.context("do delete")?;
+                // Unlike Shutdown, Delete has no short containerd deadline, and
+                // its caller treats the reply as the end of the task. Release
+                // the sandbox before replying, so a new sandbox with the same ID
+                // cannot start on top of this one's state. The containers'
+                // mounts are gone by now, so the first cleanup attempt can work.
+                if cm.is_sandbox_container(&process_id).await {
+                    if let Err(err) = sandbox.finish_teardown().await {
+                        // Failing Delete would keep containerd from calling
+                        // Shutdown and leave this shim running.
+                        error!(sl!(), "sandbox resources are left on the host: {err:#}");
+                    }
+                }
                 if process_id.process_type == ProcessType::Container {
                     let event = TaskDelete {
                         id: process_id.container_id().to_string(),
@@ -1160,9 +1193,10 @@ mod tests {
         assert!(matches!(msg.action, Action::Shutdown));
     }
 
-    // Records every process a waiter is spawned for.
+    // Records every process a waiter is spawned for, and every teardown.
     struct WaiterRecordingSandbox {
         waiters: tokio::sync::mpsc::UnboundedSender<ContainerProcess>,
+        teardowns: tokio::sync::mpsc::UnboundedSender<()>,
     }
 
     #[async_trait::async_trait]
@@ -1181,6 +1215,10 @@ mod tests {
         }
         async fn shutdown(&self) -> Result<()> {
             unimplemented!()
+        }
+        async fn finish_teardown(&self) -> Result<()> {
+            let _ = self.teardowns.send(());
+            Ok(())
         }
         async fn status(&self) -> Result<common::types::SandboxStatus> {
             unimplemented!()
@@ -1264,9 +1302,21 @@ mod tests {
         }
         async fn delete_process(
             &self,
-            _process_id: &ContainerProcess,
+            process_id: &ContainerProcess,
         ) -> Result<common::types::ProcessStateInfo> {
-            unimplemented!()
+            Ok(common::types::ProcessStateInfo {
+                container_id: process_id.container_id().to_string(),
+                exec_id: process_id.exec_id().to_string(),
+                pid: common::types::PID::new(42),
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: common::types::ProcessStatus::Stopped,
+                exit_status: 0,
+                exited_at: None,
+            })
         }
         async fn exec_process(&self, _req: common::types::ExecProcessRequest) -> Result<()> {
             unimplemented!()
@@ -1301,8 +1351,9 @@ mod tests {
         async fn need_shutdown_sandbox(&self, _req: &ShutdownRequest) -> bool {
             unimplemented!()
         }
-        async fn is_sandbox_container(&self, _process_id: &ContainerProcess) -> bool {
-            false
+        async fn is_sandbox_container(&self, process_id: &ContainerProcess) -> bool {
+            process_id.process_type == ProcessType::Container
+                && process_id.container_id() == "test-sid"
         }
     }
 
@@ -1321,9 +1372,11 @@ mod tests {
         let (sender, _receiver) = channel::<Message>(8);
         let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
         let (waiters_tx, mut waiters_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, _) = tokio::sync::mpsc::unbounded_channel();
         manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
             sandbox: Arc::new(WaiterRecordingSandbox {
                 waiters: waiters_tx,
+                teardowns,
             }),
             container_manager: Arc::new(StartingContainerManager),
         }));
@@ -1347,6 +1400,36 @@ mod tests {
                 exec_id, waiter_expected, waited
             ),
         }
+    }
+
+    // The Delete reply is the end of the task for containerd's caller, so the
+    // sandbox must be released before it, and only for the sandbox container.
+    #[rstest]
+    #[case::sandbox_container("test-sid", "", true)]
+    #[case::other_container("test-cid", "", false)]
+    #[case::sandbox_exec("test-sid", "exec-1", false)]
+    #[tokio::test]
+    async fn test_delete_releases_sandbox_before_reply(
+        #[case] container_id: &str,
+        #[case] exec_id: &str,
+        #[case] teardown_expected: bool,
+    ) {
+        let (sender, _receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+        let (waiters, _) = tokio::sync::mpsc::unbounded_channel();
+        let (teardowns, mut teardowns_rx) = tokio::sync::mpsc::unbounded_channel();
+        manager.inner.write().await.runtime_instance = Some(Arc::new(RuntimeInstance {
+            sandbox: Arc::new(WaiterRecordingSandbox { waiters, teardowns }),
+            container_manager: Arc::new(StartingContainerManager),
+        }));
+
+        let process_id = ContainerProcess::new(container_id, exec_id).unwrap();
+        let resp = manager
+            .handler_task_request(TaskRequest::DeleteProcess(process_id))
+            .await
+            .unwrap();
+        assert!(matches!(resp, TaskResponse::DeleteProcess(_)));
+        assert_eq!(teardowns_rx.try_recv().is_ok(), teardown_expected);
     }
 
     #[test]
