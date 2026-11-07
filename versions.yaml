@@ -275,7 +275,7 @@ externals:
           url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/sbsa/"
           pkg: "cuda-keyring_1.1-1_all.deb"
     ctk:
-      version: "1.19.1-1"
+      version: "1.20.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
     dcgm:
       desc: "NVIDIA Data Center GPU Manager"
