@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"syscall"
 
 	"github.com/containerd/fifo"
@@ -20,36 +21,51 @@ var (
 )
 
 type pipeIO struct {
-	in   io.ReadCloser
-	outw io.WriteCloser
-	errw io.WriteCloser
+	in        io.ReadCloser
+	outw      io.WriteCloser
+	errw      io.WriteCloser
+	closeOnce sync.Once
+	closeErr  error
 }
 
-func newPipeIO(ctx context.Context, stdio *stdio) (*pipeIO, error) {
+func newPipeIO(ctx context.Context, stdio *stdio) (_ *pipeIO, retErr error) {
 	var in io.ReadCloser
 	var outw io.WriteCloser
 	var errw io.WriteCloser
-	var err error
+	defer func() {
+		if retErr != nil {
+			for _, c := range []io.Closer{in, outw, errw} {
+				if c != nil {
+					if err := c.Close(); err != nil {
+						retErr = multierror.Append(retErr, err)
+					}
+				}
+			}
+		}
+	}()
 
 	if stdio.Stdin != "" {
-		in, err = fifo.OpenFifo(ctx, stdio.Stdin, syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+		stdin, err := newStdinFIFO(ctx, stdio.Stdin)
 		if err != nil {
 			return nil, err
 		}
+		in = stdin
 	}
 
 	if stdio.Stdout != "" {
-		outw, err = fifo.OpenFifo(ctx, stdio.Stdout, syscall.O_RDWR, 0)
+		out, err := fifo.OpenFifo(ctx, stdio.Stdout, syscall.O_RDWR, 0)
 		if err != nil {
 			return nil, err
 		}
+		outw = out
 	}
 
 	if !stdio.Console && stdio.Stderr != "" {
-		errw, err = fifo.OpenFifo(ctx, stdio.Stderr, syscall.O_RDWR, 0)
+		out, err := fifo.OpenFifo(ctx, stdio.Stderr, syscall.O_RDWR, 0)
 		if err != nil {
 			return nil, err
 		}
+		errw = out
 	}
 
 	pipeIO := &pipeIO{
@@ -74,13 +90,17 @@ func (pi *pipeIO) Stderr() io.Writer {
 }
 
 func (pi *pipeIO) Close() error {
+	pi.closeOnce.Do(func() { pi.closeErr = pi.close() })
+	return pi.closeErr
+}
+
+func (pi *pipeIO) close() error {
 	var result *multierror.Error
 
 	if pi.in != nil {
 		if err := pi.in.Close(); err != nil {
 			result = multierror.Append(result, fmt.Errorf("failed to close stdin: %w", err))
 		}
-		pi.in = nil
 	}
 
 	if err := wc(pi.outw); err != nil {
