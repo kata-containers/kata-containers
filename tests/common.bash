@@ -1022,6 +1022,65 @@ function configure_containerd_erofs_snapshotter() {
 	fi
 }
 
+# Sets up a devmapper thin-pool and reconfigures standalone containerd to use
+# it as the default snapshotter.  Required for block-device based hypervisors
+# (e.g. Firecracker / fc-runtime-rs) that cannot use the overlayfs snapshotter.
+# Expects containerd to already be installed and /etc/containerd/config.toml
+# to exist (e.g. after `containerd config default | sudo tee ...`).
+function configure_devmapper_for_containerd() {
+	info "Configuring devmapper snapshotter for standalone containerd"
+
+	sudo mkdir -p /var/lib/containerd/devmapper
+	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
+	sudo truncate --size 1G  /var/lib/containerd/devmapper/meta-disk.img
+
+	# Allocate loop devices dynamically to avoid conflicts with pre-existing ones.
+	local loop_data loop_meta
+	loop_data=$(sudo losetup --find --show /var/lib/containerd/devmapper/data-disk.img)
+	loop_meta=$(sudo losetup --find --show /var/lib/containerd/devmapper/meta-disk.img)
+	info "devmapper: data=${loop_data} meta=${loop_meta}"
+
+	local data_sectors
+	data_sectors=$(sudo blockdev --getsz "${loop_data}")
+	sudo dmsetup create contd-thin-pool \
+		--table "0 ${data_sectors} thin-pool ${loop_meta} ${loop_data} 512 32768 1 skip_block_zeroing"
+
+	# Write a complete containerd v2 config combining the kata runtime with the
+	# devmapper snapshotter.  We replace whatever was there before (both the v2
+	# config from overwrite_containerd_config and the v3 default from
+	# 'containerd config default') so the result is always correct regardless of
+	# format or prior content.
+	sudo tee /etc/containerd/config.toml <<'TOML_EOF'
+version = 2
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      snapshotter = "devmapper"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+          runtime_type = "io.containerd.kata.v2"
+
+[plugins."io.containerd.snapshotter.v1.devmapper"]
+  pool_name = "contd-thin-pool"
+  root_path = "/var/lib/containerd/devmapper"
+  base_image_size = "4096MB"
+  discard_blocks = true
+TOML_EOF
+
+	sudo systemctl restart containerd
+
+	# Verify the plugin came up healthy
+	local dm_status
+	dm_status=$(sudo ctr plugins ls | awk '$2 ~ /^devmapper$/ { print $4 }' || true)
+	[[ "${dm_status}" == "ok" ]] || \
+		die "containerd devmapper snapshotter not healthy (status: '${dm_status}')"
+
+	info "devmapper snapshotter configured and healthy"
+}
+
 function check_containerd_config_for_kata() {
 	declare -r containerd_path="/etc/containerd/config.toml"
 	local hv dump

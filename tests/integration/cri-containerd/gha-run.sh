@@ -71,6 +71,18 @@ function install_dependencies() {
 	clone_cri_containerd "$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 }
 
+function install_kata_for_cri_containerd() {
+	install_kata
+
+	# Firecracker (fc-runtime-rs) uses block devices and requires the devmapper
+	# snapshotter; other hypervisors work fine with the default overlayfs.
+	# Must run AFTER install_kata since install_kata may overwrite the
+	# containerd config via overwrite_containerd_config.
+	if [[ "${KATA_HYPERVISOR:-}" == "fc-runtime-rs" ]]; then
+		configure_devmapper_for_containerd
+	fi
+}
+
 function run() {
 	# shellcheck disable=SC2154
 	info "Running cri-containerd tests using ${KATA_HYPERVISOR} hypervisor"
@@ -84,7 +96,8 @@ function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
-		install-kata) install_kata ;;
+		install-kata) install_kata_for_cri_containerd ;;
+		configure-snapshotter) configure_devmapper_for_containerd ;;
 		run) run ;;
 		*) >&2 die "Invalid argument" ;;
 	esac

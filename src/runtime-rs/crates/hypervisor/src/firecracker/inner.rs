@@ -3,6 +3,7 @@
 //
 //SPDX-License-Identifier: Apache-2.0
 
+use crate::device::driver::NetworkConfig;
 use crate::firecracker::{inner_hypervisor::FC_API_SOCKET_NAME, sl};
 use crate::MemoryConfig;
 use crate::HYPERVISOR_FIRECRACKER;
@@ -44,6 +45,9 @@ pub struct FcInner {
     pub(crate) jailed: bool,
     pub(crate) run_dir: String,
     pub(crate) pending_devices: Vec<DeviceType>,
+    /// Network devices buffered until start_vm() so they are always sent to FC
+    /// before InstanceStart, mirroring the Go runtime's batch-configuration approach.
+    pub(crate) pending_net_devices: Vec<(NetworkConfig, String)>,
     pub(crate) capabilities: Capabilities,
     pub(crate) fc_process: Mutex<Option<Child>>,
     pub(crate) exit_notify: Option<mpsc::Sender<()>>,
@@ -52,7 +56,7 @@ pub struct FcInner {
 impl FcInner {
     pub fn new(exit_notify: mpsc::Sender<()>) -> FcInner {
         let mut capabilities = Capabilities::new();
-        capabilities.set(CapabilityBits::BlockDeviceSupport);
+        capabilities.set(CapabilityBits::BlockDeviceSupport | CapabilityBits::HybridVsockSupport);
 
         FcInner {
             id: String::default(),
@@ -67,6 +71,7 @@ impl FcInner {
             jailed: false,
             run_dir: String::default(),
             pending_devices: vec![],
+            pending_net_devices: vec![],
             capabilities,
             fc_process: Mutex::new(None),
             exit_notify: Some(exit_notify),
@@ -81,7 +86,7 @@ impl FcInner {
                 debug!(sl(), "Running Jailed");
                 cmd = Command::new(&self.config.jailer_path);
                 let api_socket = ["/run/", FC_API_SOCKET_NAME].join("/");
-                let args = [
+                let mut args = vec![
                     "--id",
                     &self.id,
                     "--gid",
@@ -92,11 +97,16 @@ impl FcInner {
                     &self.config.path,
                     "--chroot-base-dir",
                     &self.jailer_root,
-                    "--",
-                    "--api-sock",
-                    &api_socket,
                 ];
-                cmd.args(args);
+                // Pass the network namespace to the jailer so that the FC process
+                // is placed in the correct netns. This is the recommended approach
+                // over relying on pre_exec setns inheritance.
+                let netns_path = netns.clone().unwrap_or_default();
+                if !netns_path.is_empty() {
+                    args.extend_from_slice(&["--netns", &netns_path]);
+                }
+                args.extend_from_slice(&["--", "--api-sock", &api_socket]);
+                cmd.args(&args);
             }
             false => {
                 debug!(sl(), "Running non-Jailed");
@@ -115,13 +125,23 @@ impl FcInner {
             "Firecracker",
         )?;
 
-        // Make sure we're in the correct Network Namespace
+        // For the non-jailed case, enter the network namespace via pre_exec so that
+        // the FC process inherits it. For the jailed case, --netns is passed to the
+        // jailer above and pre_exec setns is skipped.
+        let jailed = self.jailed;
         unsafe {
             let _pre = cmd.pre_exec(move || {
-                if let Some(netns_path) = &netns {
-                    debug!(sl(), "set netns for vmm master {:?}", &netns_path);
-                    let netns_fd = std::fs::File::open(netns_path);
-                    let _ = setns(&netns_fd?, CloneFlags::CLONE_NEWNET).context("set netns failed");
+                if !jailed {
+                    if let Some(netns_path) = &netns {
+                        debug!(sl(), "set netns for vmm master {:?}", &netns_path);
+                        let netns_fd = std::fs::File::open(netns_path)?;
+                        setns(&netns_fd, CloneFlags::CLONE_NEWNET).map_err(|e| {
+                            std::io::Error::other(format!(
+                                "setns into {:?} failed: {}",
+                                netns_path, e
+                            ))
+                        })?;
+                    }
                 }
                 Ok(())
             });
@@ -252,6 +272,7 @@ impl Persist for FcInner {
             jailer_root: hypervisor_state.jailer_root,
             client: Client::unix(),
             pending_devices: vec![],
+            pending_net_devices: vec![],
             run_dir: hypervisor_state.run_dir,
             capabilities: Capabilities::new(),
             fc_process: Mutex::new(None),

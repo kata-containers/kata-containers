@@ -43,6 +43,10 @@ function main() {
 
 	clean_env_ctr
 	# shellcheck disable=SC2154
+	# Pull image into the content store.  Do not pass --snapshotter here:
+	# digest-based references fail with "no unpack platforms defined" when
+	# --snapshotter devmapper is given.  'ctr run --snapshotter devmapper'
+	# unpacks into devmapper on demand from the content store.
 	sudo -E "${CTR_EXE}" i pull "${IMAGE}"
 
 	info "Creating ${NUM_CONTAINERS} containers"
@@ -52,7 +56,7 @@ function main() {
 		name=$(random_name)
 		containers+=("${name}")
 		# shellcheck disable=SC2154
-		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
+		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
 		((not_started_count--))
 		info "${not_started_count} remaining containers"
 	done
