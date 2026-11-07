@@ -7,7 +7,6 @@
 
 use crate::arch::arch_specific;
 use crate::args::EnvArgument;
-use crate::ops::version;
 use crate::utils;
 use kata_sys_util::protection;
 use kata_types::config::TomlConfig;
@@ -16,6 +15,7 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::Command;
 use sys_info;
 
@@ -71,7 +71,9 @@ pub struct MemoryInfo {
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const FORMAT_VERSION: &str = "0.0.1-kata-ctl";
+const FORMAT_VERSION: &str = "0.0.2-kata-ctl";
+
+const SHIM_BINARY_NAME: &str = "containerd-shim-kata-v2";
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct MetaInfo {
@@ -97,6 +99,10 @@ pub struct RuntimeConfigInfo {
 pub struct RuntimeInfo {
     #[serde(default)]
     path: String,
+    #[serde(default)]
+    variant: String,
+    #[serde(default)]
+    search_method: String,
     #[serde(default)]
     guest_selinux_label: String,
     #[serde(default)]
@@ -289,10 +295,29 @@ fn get_host_info() -> Result<HostInfo> {
 }
 
 pub fn get_runtime_info(toml_config: &TomlConfig) -> Result<RuntimeInfo> {
-    let version = VersionInfo {
-        semver: String::from(version::VERSION),
-        commit: String::from(version::COMMIT),
-    };
+    let shim = which::which(SHIM_BINARY_NAME).context("locate Kata runtime shim in PATH")?;
+    get_runtime_info_for_shim(toml_config, &shim)
+}
+
+fn get_runtime_info_for_shim(toml_config: &TomlConfig, shim: &Path) -> Result<RuntimeInfo> {
+    let shim = shim
+        .canonicalize()
+        .with_context(|| format!("resolve Kata runtime shim {}", shim.display()))?;
+    let output = Command::new(&shim)
+        .arg("--version")
+        .output()
+        .with_context(|| format!("get Kata runtime version from {}", shim.display()))?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "{} --version failed with {}: {}",
+            shim.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let output = String::from_utf8(output.stdout).context("decode Kata runtime version")?;
+    let (variant, version) = parse_runtime_version(&output)?;
 
     let config_path = TomlConfig::get_default_config_file();
     let mut toml_path = String::new();
@@ -306,8 +331,9 @@ pub fn get_runtime_info(toml_config: &TomlConfig) -> Result<RuntimeInfo> {
     }
 
     Ok(RuntimeInfo {
-        // TODO: Needs to be implemented: https://github.com/kata-containers/kata-containers/issues/6518
-        path: String::from("not implemented yet. See: https://github.com/kata-containers/kata-containers/issues/6518"),
+        path: shim.to_str().context("Kata runtime path is not UTF-8")?.to_owned(),
+        variant: variant.to_owned(),
+        search_method: "path".to_owned(),
         version,
         experimental: toml_config.runtime.experimental.clone(),
         // TODO: See https://github.com/kata-containers/kata-containers/issues/6667
@@ -320,6 +346,36 @@ pub fn get_runtime_info(toml_config: &TomlConfig) -> Result<RuntimeInfo> {
         static_sandbox_resource_mgmt: toml_config.runtime.static_sandbox_resource_mgmt,
         config: RuntimeConfigInfo { path: toml_path },
     })
+}
+
+fn parse_runtime_version(output: &str) -> Result<(&str, VersionInfo)> {
+    let (identity, version) = output
+        .trim()
+        .split_once(", version: ")
+        .context("unexpected Kata runtime version output")?;
+    let variant = if identity.starts_with("Kata Containers containerd shim (Rust): id: ") {
+        "rust"
+    } else if identity.starts_with("Kata Containers containerd shim (Golang): id: ") {
+        "golang"
+    } else {
+        return Err(anyhow!("unrecognized Kata runtime variant: {identity}"));
+    };
+    let (semver, commit) = version
+        .split_once(", commit: ")
+        .context("missing commit in Kata runtime version output")?;
+    if semver.trim().is_empty() || commit.trim().is_empty() {
+        return Err(anyhow!(
+            "missing version or commit in Kata runtime version output"
+        ));
+    }
+
+    Ok((
+        variant,
+        VersionInfo {
+            semver: semver.trim().to_owned(),
+            commit: commit.trim().to_owned(),
+        },
+    ))
 }
 
 pub fn get_agent_info(toml_config: &TomlConfig) -> Result<AgentInfo> {
@@ -487,4 +543,81 @@ pub fn handle_env(env_args: EnvArgument) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    fn shim_fixture(name: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join(name)
+    }
+
+    #[test]
+    fn runtime_info_reports_the_selected_shims_path_variant_and_version() {
+        for (fixture, variant) in [
+            ("shim-version-rust.sh", "rust"),
+            ("shim-version-golang.sh", "golang"),
+        ] {
+            let shim = shim_fixture(fixture);
+            let info = get_runtime_info_for_shim(&TomlConfig::default(), &shim).unwrap();
+
+            assert_eq!(info.path, shim.canonicalize().unwrap().to_str().unwrap());
+            assert_eq!(info.variant, variant);
+            assert_eq!(info.search_method, "path");
+            assert_eq!(info.version.semver, "4.0.0");
+            assert_eq!(info.version.commit, "abc123");
+
+            let json = serde_json::to_value(&info).unwrap();
+            assert_eq!(json["variant"], variant);
+            assert_eq!(json["search_method"], "path");
+
+            let encoded = toml::to_string(&info).unwrap();
+            let decoded: RuntimeInfo = toml::from_str(&encoded).unwrap();
+            assert_eq!(decoded.path, info.path);
+            assert_eq!(decoded.variant, variant);
+            assert_eq!(decoded.search_method, "path");
+        }
+    }
+
+    #[test]
+    fn runtime_info_resolves_shim_symlinks() {
+        let dir = TempDir::new().unwrap();
+        let shim = shim_fixture("shim-version-rust.sh");
+        let link = dir.path().join("shim-link");
+        symlink(&shim, &link).unwrap();
+
+        let info = get_runtime_info_for_shim(&TomlConfig::default(), &link).unwrap();
+        assert_eq!(info.path, shim.canonicalize().unwrap().to_str().unwrap());
+    }
+
+    #[test]
+    fn runtime_info_rejects_missing_or_unsuccessful_shims() {
+        let dir = TempDir::new().unwrap();
+        let shim = dir.path().join(SHIM_BINARY_NAME);
+        assert!(get_runtime_info_for_shim(&TomlConfig::default(), &shim).is_err());
+
+        let shim = shim_fixture("shim-version-failure.sh");
+        let error = get_runtime_info_for_shim(&TomlConfig::default(), &shim).unwrap_err();
+        assert!(error.to_string().contains("--version failed"));
+    }
+
+    #[test]
+    fn runtime_version_rejects_unrecognized_or_incomplete_output() {
+        for output in [
+            "",
+            "a different shim, version: 4.0.0, commit: abc123",
+            "Kata Containers containerd shim (Rust): id: io.containerd.kata.v2",
+            "Kata Containers containerd shim (Rust): id: io.containerd.kata.v2, version: 4.0.0",
+            "Kata Containers containerd shim (Rust): id: io.containerd.kata.v2, version: , commit: abc123",
+            "Kata Containers containerd shim (Rust): id: io.containerd.kata.v2, version: 4.0.0, commit: ",
+        ] {
+            assert!(parse_runtime_version(output).is_err(), "{}", output);
+        }
+    }
 }
