@@ -6,7 +6,7 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::driver, Hypervisor};
-use kata_sys_util::netns::NetnsGuard;
+use kata_sys_util::netns::{is_proc_pid_netns, NetnsGuard};
 use scopeguard::defer;
 
 use super::network_pair::{delete_link_by_name, kata_link_names};
@@ -73,15 +73,6 @@ pub async fn remove_kata_links(netns_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Whether the path names a process's network namespace through /proc: a
-/// reference that holds only while that process lives, never across a shim
-/// death, and that pid reuse can point at somebody else entirely.
-fn is_proc_pid_netns(path: &str) -> bool {
-    path.strip_prefix("/proc/")
-        .and_then(|rest| rest.strip_suffix("/ns/net"))
-        .is_some_and(|pid| !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit()))
-}
-
 #[async_trait]
 impl Network for RestoredNetwork {
     async fn setup(&self) -> Result<()> {
@@ -140,11 +131,6 @@ mod tests {
         // reuse it can be anyone. The sweep must leave it alone.
         let network = RestoredNetwork::new(vec![], Some("/proc/1/ns/net".into()));
         network.remove(&Qemu::new()).await.unwrap();
-
-        assert!(is_proc_pid_netns("/proc/42/ns/net"));
-        assert!(!is_proc_pid_netns("/run/netns/cni-1"));
-        assert!(!is_proc_pid_netns("/proc/self/ns/net"));
-        assert!(!is_proc_pid_netns("/proc//ns/net"));
     }
 
     #[tokio::test]
