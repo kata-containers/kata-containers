@@ -93,6 +93,11 @@ pub(crate) struct NetworkWithNetns {
 
 #[derive(Default)]
 struct NetworkCleanup {
+    /// Once a removal has begun, nothing may attach any more: setup() runs
+    /// on a thread the caller may have been cancelled away from, and an
+    /// attach after (or interleaved with) the removal would leave devices
+    /// attached with their records gone.
+    removal_started: bool,
     detached: HashSet<usize>,
     netns_unmounted: bool,
     path_removed: bool,
@@ -121,6 +126,13 @@ impl Network for NetworkWithNetns {
         // builder's error surfaces.
         if let Some(msg) = self.construction_error.as_deref() {
             return Err(anyhow!("network construction: {msg}"));
+        }
+        // Held for the whole attach, so the removal of a sandbox whose
+        // attach_network() caller was cancelled waits for this thread
+        // instead of racing it, and an attach can never follow a removal.
+        let cleanup = self.cleanup.lock().await;
+        if cleanup.removal_started {
+            return Err(anyhow!("the network is being removed, nothing may attach"));
         }
         let inner = self.inner.read().await;
         let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
@@ -200,6 +212,7 @@ impl Network for NetworkWithNetns {
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let mut cleanup = self.cleanup.lock().await;
+        cleanup.removal_started = true;
         let inner = self.inner.read().await;
         let mut errors = Vec::new();
         // An endpoint whose attach never started has nothing to detach, but
@@ -672,6 +685,20 @@ mod cleanup_tests {
         network.remove(&hypervisor).await.unwrap();
         assert_eq!(done.calls.load(Ordering::SeqCst), 1);
         assert_eq!(retry.calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn no_attach_can_follow_a_removal() {
+        let late = Arc::new(TestEndpoint::default());
+        let network = network(std::slice::from_ref(&late));
+
+        // The attach may run on a thread whose caller was cancelled, so it
+        // can arrive after the sandbox's removal: it must refuse, or the
+        // device would be attached with its record already gone.
+        network.remove(&Qemu::new()).await.unwrap();
+        let err = network.setup().await.unwrap_err();
+        assert!(err.to_string().contains("being removed"));
+        assert_eq!(late.attaches.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
