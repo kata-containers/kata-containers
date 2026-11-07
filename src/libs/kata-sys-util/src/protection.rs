@@ -233,6 +233,13 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
     Ok(GuestProtection::NoProtection)
 }
 
+#[cfg(target_arch = "loongarch64")]
+#[allow(dead_code)]
+// Guest protection is not supported on LoongArch.
+pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
+    Ok(GuestProtection::NoProtection)
+}
+
 #[cfg(target_arch = "x86_64")]
 #[cfg(test)]
 mod tests {
