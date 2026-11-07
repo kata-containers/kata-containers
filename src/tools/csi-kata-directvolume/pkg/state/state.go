@@ -24,9 +24,11 @@ type Volume struct {
 	VolSize int64
 	VolPath string
 	// VolAccessType  AccessType
-	ParentVolID    string
-	ParentSnapID   string
-	NodeID         string
+	ParentVolID  string
+	ParentSnapID string
+	NodeID       string
+	// Kind is the capacity pool the volume is reserved from, empty if the
+	// volume does not belong to a pool.
 	Kind           string
 	ReadOnlyAttach bool
 	Attached       bool
@@ -37,6 +39,10 @@ type Volume struct {
 	// Published contains the target paths where the volume
 	// was published.
 	Published Strings
+
+	// VolumeContext is the volume context returned by CreateVolume. It
+	// is kept so that a repeated CreateVolume returns the same response.
+	VolumeContext map[string]string
 
 	Metadata map[string]string
 }

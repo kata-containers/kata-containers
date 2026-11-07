@@ -1,0 +1,16 @@
+# Capacity pools of each node. Every key is the name of a node, every value
+# lists the pools of that node as <pool>=<size> entries, one per line or
+# separated by commas. The driver reads the entry of its node when it starts:
+# after changing this ConfigMap, restart the driver with
+#   kubectl -n kata-directvolume rollout restart daemonset/csi-kata-directvol-plugin
+# Replace node-a and node-b with the names shown by `kubectl get nodes`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: csi-kata-directvol-capacity
+  namespace: kata-directvolume
+data:
+  node-a: |
+    standard=2Gi
+  node-b: |
+    standard=8Gi
