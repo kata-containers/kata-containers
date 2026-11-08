@@ -449,15 +449,6 @@ podAnnotations: {}
 #               operator: In
 #               values:
 #                 - platform-team
-#   podAntiAffinity:
-#     requiredDuringSchedulingIgnoredDuringExecution:
-#       - labelSelector:
-#           matchExpressions:
-#             - key: app
-#               operator: In
-#               values:
-#                 - gpu-operator
-#         topologyKey: kubernetes.io/hostname
 affinity: {}
 
 # Priority class name for the kata-deploy DaemonSet pods.
