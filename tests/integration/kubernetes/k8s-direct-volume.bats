@@ -5,6 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# This suite exercises the DAV interface independently of a CSI driver.
+# It uses the kata-ctl tool's 'direct-volume add' capability to register
+# the DAV mountInfo.json under /run/kata-containers/shared/direct-volumes/.
+# The suite's pod manifest uses hostPath to create a bind mount for which
+# the shim will find the corresponding mountInfo.json file.
+
 # BATS and the shared Kubernetes helpers provide these test globals.
 # shellcheck disable=SC2154
 
@@ -54,9 +60,9 @@ assert_guest_direct_volume() {
 }
 
 setup() {
-	is_runtime_rs || skip "Direct volumes are tested only with runtime-rs"
-	is_confidential_runtime_class && \
-		skip "Direct volumes are not supported for confidential runtime classes"
+	is_runtime_rs || skip "DAV interface is tested only with runtime-rs"
+	auto_generate_policy_enabled && \
+		skip "genpolicy does not know about how requests change when DAV is used"
 
 	case "$(uname -m)" in
 		x86_64 | aarch64) ;;
@@ -68,8 +74,10 @@ setup() {
 	exec_host "${node}" \
 		"for tool in mkfs.ext4 truncate; do command -v \${tool} >/dev/null || exit 1; done" || \
 		die "Direct-volume filesystem tools are not installed on ${node}"
+	exec_host "${node}" "test -x /opt/kata/bin/kata-ctl" || \
+		die "kata-ctl is not installed on ${node}; install the kata-tools bundle"
 
-	pod_name="direct-volume-sparse"
+	pod_name="direct-volume"
 	mountpoint="/data"
 	volume_id="$(printf '%s' "${BATS_TEST_TMPDIR}" | sha256sum | cut -c1-12)"
 	volume_path="/tmp/kata-direct-volume-${volume_id}"
@@ -83,6 +91,18 @@ setup() {
 	set_node "${yaml_file}" "${node}"
 
 	mount_probe="awk -v mp='${mountpoint}' '\$5 == mp {for (i = 1; i <= NF; i++) if (\$i == \"-\") {print \$(i + 1), \$(i + 2); exit}}' /proc/self/mountinfo"
+}
+
+@test "DAV mounts a registered filesystem read/write in the guest" {
+	local backing_marker="dav-backing-${volume_id}"
+
+	prepare_direct_volume 64M "${backing_marker}"
+	kubectl apply -f "${yaml_file}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	assert_guest_direct_volume "${backing_marker}"
+	pod_exec "${pod_name}" sh -c \
+		"printf '%s\n' direct-volume-ready > '${mountpoint}/probe' && \
+		grep -qx direct-volume-ready '${mountpoint}/probe'"
 }
 
 @test "Direct volume backing file remains sparse" {
