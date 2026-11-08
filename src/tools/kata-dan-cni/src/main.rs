@@ -206,6 +206,7 @@ esac
     fn pod_delegation() {
         let fixture = Fixture::new();
         let mut config = fixture.config();
+        config["runtimeConfig"][ANNOTATIONS] = json!({});
         let output = fixture.call("ADD", &config);
         assert!(output.status.success(), "{:?}", output);
         assert!(output.stderr.is_empty());

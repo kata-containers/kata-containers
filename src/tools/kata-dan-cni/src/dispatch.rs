@@ -6,13 +6,17 @@ use dan_core::{
     AttachmentIdentity, Backend, BackendError, NetworkContext, NetworkSelection, PodIdentity,
     Provider, ProviderError,
 };
+use k8s_openapi::api::core::v1::Pod;
+use kube::Client;
 use serde_json::Value;
 use std::net::IpAddr;
 
 use crate::backend_selection::create_backend;
 use crate::dan_file::{encode_device, DanFile};
 use crate::provider_selection::build_configured_provider;
-use crate::request_selection::{select_request_path, RequestPath};
+use crate::request_selection::{
+    select_dan_annotation, select_request_path, RequestPath, DAN_REQUEST_ANNOTATION,
+};
 use crate::workload::{
     client_from_kubeconfig, identity_from_cni, lookup_pod, supports_dan_runtime,
 };
@@ -38,14 +42,47 @@ pub fn dispatch(environment: CniEnvironment, input: &[u8]) -> Result<CommandOutp
         )
         .with_cni_version(config.cni.cni_version));
     }
-    let result = match select_request_path(&config.runtime_config) {
-        Ok(RequestPath::Delegate) => delegate(&environment, &config),
-        Ok(RequestPath::Dan) => {
-            runtime().and_then(|runtime| runtime.block_on(dan(&environment, &config)))
+    let result = runtime().and_then(|runtime| {
+        let (path, pod) = runtime.block_on(resolve_request_path(&environment, &config))?;
+        match path {
+            RequestPath::Delegate => delegate(&environment, &config),
+            RequestPath::Dan => runtime.block_on(dan(&environment, &config, pod)),
         }
-        Err(error) => Err(error),
-    };
+    });
     result.map_err(|error| error.with_cni_version(config.cni.cni_version))
+}
+
+async fn resolve_request_path(
+    environment: &CniEnvironment,
+    config: &NetConf,
+) -> Result<(RequestPath, Option<(Client, Pod)>), CniError> {
+    if let Some(path) = select_request_path(&config.runtime_config)? {
+        return Ok((path, None));
+    }
+
+    let (client, pod) = load_pod(environment, config).await?;
+    let annotation = pod
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|annotations| annotations.get(DAN_REQUEST_ANNOTATION))
+        .map(String::as_str);
+    let path = select_dan_annotation(annotation)?;
+    Ok((path, Some((client, pod))))
+}
+
+async fn load_pod(
+    environment: &CniEnvironment,
+    config: &NetConf,
+) -> Result<(Client, Pod), CniError> {
+    let kubeconfig = config
+        .kubeconfig
+        .as_deref()
+        .ok_or_else(|| invalid_config("kubeconfig is required to query Pod annotations"))?;
+    let identity = identity_from_cni(environment)?;
+    let client = client_from_kubeconfig(kubeconfig).await?;
+    let pod = lookup_pod(&client, &identity).await?;
+    Ok((client, pod))
 }
 
 fn delegate(environment: &CniEnvironment, config: &NetConf) -> Result<CommandOutput, CniError> {
@@ -85,13 +122,17 @@ fn delegate(environment: &CniEnvironment, config: &NetConf) -> Result<CommandOut
     }
 }
 
-async fn dan(environment: &CniEnvironment, config: &NetConf) -> Result<CommandOutput, CniError> {
+async fn dan(
+    environment: &CniEnvironment,
+    config: &NetConf,
+    pod: Option<(Client, Pod)>,
+) -> Result<CommandOutput, CniError> {
     let attachment = attachment_identity(environment)?;
     let backend = configured_backend(config)?;
     let store = dan_file(config)?;
     match environment.command {
         CniCommand::Del => {
-            // Clean this endpoint without querying the Pod, even if the file is damaged.
+            // Clean this endpoint from its attachment identity, even if the file is damaged.
             // File cleanup preserves damaged data rather than discarding other interfaces.
             backend.del(&attachment).await.map_err(backend_error)?;
             store.remove(&attachment)?;
@@ -112,13 +153,11 @@ async fn dan(environment: &CniEnvironment, config: &NetConf) -> Result<CommandOu
                 .dan_runtime_class
                 .as_deref()
                 .ok_or_else(|| missing_config("danRuntimeClass"))?;
-            let kubeconfig = config
-                .kubeconfig
-                .as_deref()
-                .ok_or_else(|| missing_config("kubeconfig"))?;
             let identity = identity_from_cni(environment)?;
-            let client = client_from_kubeconfig(kubeconfig).await?;
-            let pod = lookup_pod(&client, &identity).await?;
+            let (client, pod) = match pod {
+                Some(pod) => pod,
+                None => load_pod(environment, config).await?,
+            };
             if !supports_dan_runtime(&pod, class) {
                 return Err(invalid_config("Pod RuntimeClass is not eligible for DAN"));
             }

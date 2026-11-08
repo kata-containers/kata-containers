@@ -73,7 +73,7 @@ pub(crate) async fn lookup_pod(client: &Client, identity: &PodIdentity) -> Resul
         Ok(Err(kube::Error::Api(response))) if response.code == 404 => {
             return Err(CniError::new(
                 CniErrorCode::RetryLater,
-                "Pod is not available for DAN ADD",
+                "Pod is not available for network selection",
                 "",
             ));
         }
@@ -103,7 +103,7 @@ pub(crate) async fn lookup_pod(client: &Client, identity: &PodIdentity) -> Resul
         return Err(CniError::new(
             CniErrorCode::InvalidNetworkConfig,
             "invalid CNI configuration",
-            "Pod UID changed during DAN ADD",
+            "Pod UID does not match CNI_ARGS",
         ));
     }
     Ok(pod)

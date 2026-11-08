@@ -13,13 +13,13 @@ pub(crate) enum RequestPath {
     Dan,
 }
 
-/// Select the attachment path from CRI-provided Pod annotations.
-/// DAN requires an explicit `"true"`; malformed values are errors.
+/// Select the attachment path from runtime-provided Pod annotations.
+/// A missing capability requires a Pod lookup; an empty annotation map does not.
 pub(crate) fn select_request_path(
     runtime_config: &Map<String, Value>,
-) -> Result<RequestPath, CniError> {
+) -> Result<Option<RequestPath>, CniError> {
     let Some(raw_annotations) = runtime_config.get(POD_ANNOTATIONS_CAPABILITY) else {
-        return Ok(RequestPath::Delegate);
+        return Ok(None);
     };
     let annotations = raw_annotations.as_object().ok_or_else(|| {
         invalid_selection(format!(
@@ -27,15 +27,26 @@ pub(crate) fn select_request_path(
         ))
     })?;
 
-    match annotations.get(DAN_REQUEST_ANNOTATION) {
-        None => Ok(RequestPath::Delegate),
-        Some(Value::String(value)) if value == "true" => Ok(RequestPath::Dan),
-        Some(Value::String(value)) if value == "false" => Ok(RequestPath::Delegate),
-        Some(Value::String(value)) => Err(invalid_selection(format!(
+    let annotation = annotations
+        .get(DAN_REQUEST_ANNOTATION)
+        .map(|value| {
+            value.as_str().ok_or_else(|| {
+                invalid_selection(format!(
+                    "annotation {DAN_REQUEST_ANNOTATION} must be a string"
+                ))
+            })
+        })
+        .transpose()?;
+    select_dan_annotation(annotation).map(Some)
+}
+
+/// Apply the same annotation rule to runtime input and API-fetched Pods.
+pub(crate) fn select_dan_annotation(annotation: Option<&str>) -> Result<RequestPath, CniError> {
+    match annotation {
+        None | Some("false") => Ok(RequestPath::Delegate),
+        Some("true") => Ok(RequestPath::Dan),
+        Some(value) => Err(invalid_selection(format!(
             "annotation {DAN_REQUEST_ANNOTATION} must be \"true\" or \"false\", got {value:?}"
-        ))),
-        Some(_) => Err(invalid_selection(format!(
-            "annotation {DAN_REQUEST_ANNOTATION} must be a string"
         ))),
     }
 }
