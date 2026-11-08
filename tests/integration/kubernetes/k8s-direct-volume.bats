@@ -19,12 +19,20 @@ host_allocated_bytes() {
 
 prepare_direct_volume() {
 	local size="$1"
+	local marker="${2:-}"
 
 	exec_host "${node}" "set -e; \
-		rm -rf '${volume_path}' '${disk_path}'; \
+		rm -rf '${volume_path}' '${disk_path}' '${seed_path}'; \
 		mkdir -p '${volume_path}'; \
 		truncate -s '${size}' '${disk_path}'; \
-		mkfs.ext4 -F -q '${disk_path}'; \
+		if [ -n '${marker}' ]; then \
+			mkdir -p '${seed_path}'; \
+			printf '%s\n' '${marker}' > '${seed_path}/dav-backing-marker'; \
+			mkfs.ext4 -F -q -d '${seed_path}' '${disk_path}'; \
+			rm -rf '${seed_path}'; \
+		else \
+			mkfs.ext4 -F -q '${disk_path}'; \
+		fi; \
 		/opt/kata/bin/kata-ctl direct-volume add '${volume_path}' '${mount_info}'; \
 		sync; \
 		echo direct-volume-ready" | grep -qx direct-volume-ready
@@ -32,12 +40,17 @@ prepare_direct_volume() {
 
 assert_guest_direct_volume() {
 	local fs_type
+	local marker="${1:-}"
 	local mount_source
 
 	read -r fs_type mount_source < <(pod_exec "${pod_name}" sh -c "${mount_probe}")
 	info "direct-volume guest mount: fs=${fs_type}, source=${mount_source}"
 	[[ "${fs_type}" == "ext4" ]]
 	[[ "${mount_source}" == /dev/* ]]
+	if [[ -n "${marker}" ]]; then
+		pod_exec "${pod_name}" sh -c \
+			"grep -qx '${marker}' '${mountpoint}/dav-backing-marker'"
+	fi
 }
 
 setup() {
@@ -61,6 +74,7 @@ setup() {
 	volume_id="$(printf '%s' "${BATS_TEST_TMPDIR}" | sha256sum | cut -c1-12)"
 	volume_path="/tmp/kata-direct-volume-${volume_id}"
 	disk_path="${volume_path}.img"
+	seed_path="${volume_path}.seed"
 	mount_info="{\"device\":\"${disk_path}\",\"volume-type\":\"directvol\",\"fstype\":\"ext4\",\"metadata\":{},\"options\":[]}"
 
 	yaml_file="$(mktemp --tmpdir pod-direct-volume.XXXXXX.yaml)"
@@ -105,7 +119,7 @@ teardown() {
 	if [[ -n "${node:-}" && -n "${volume_path:-}" ]]; then
 		exec_host "${node}" \
 			"/opt/kata/bin/kata-ctl direct-volume remove '${volume_path}' >/dev/null 2>&1 || true; \
-			rm -rf '${volume_path}' '${disk_path}'"
+			rm -rf '${volume_path}' '${disk_path}' '${seed_path}'"
 	fi
 
 	rm -f "${yaml_file:-}"
