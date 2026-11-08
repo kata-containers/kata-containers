@@ -31,6 +31,11 @@ jobs:
     permissions:
       contents: read
       packages: write # needed to push the kubectl image to ghcr.io
+    strategy:
+      fail-fast: false
+      matrix:
+        # The latest patch of the newest Kubernetes minor (0) and of the two before it
+        minor-offset: [0, 1, 2]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -52,8 +57,12 @@ jobs:
 
       - name: Get kubectl version
         id: kubectl-version
+        env:
+          MINOR_OFFSET: ${{ matrix.minor-offset }}
         run: |
-          KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+          STABLE=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+          MINOR=$(cut -d. -f2 <<< "${STABLE}")
+          KUBECTL_VERSION=$(curl -fsSL "https://dl.k8s.io/release/stable-1.$((MINOR - MINOR_OFFSET)).txt")
           echo "version=${KUBECTL_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Generate image metadata
@@ -62,10 +71,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
-            type=raw,value={{date 'YYYYMMDD'}}
+            type=raw,value=latest,enable=${{ matrix.minor-offset == 0 }}
+            type=raw,value={{date 'YYYYMMDD'}},enable=${{ matrix.minor-offset == 0 }}
             type=raw,value=${{ steps.kubectl-version.outputs.version }}
-            type=sha,prefix=
+            type=sha,prefix=,enable=${{ matrix.minor-offset == 0 }}
 
       - name: Build and push multi-arch image
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
@@ -76,5 +85,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: KUBECTL_VERSION=${{ steps.kubectl-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
