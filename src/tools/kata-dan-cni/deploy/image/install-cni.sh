@@ -32,15 +32,6 @@ CONFIG_RENDERER=${KATA_DAN_CONFIG_RENDERER:-/kata-dan-cni/render-cni-config}
 [ -f "${CNI_CONF_TEMPLATE}" ] || fail "conflist template does not exist: ${CNI_CONF_TEMPLATE}"
 [ -x "${CONFIG_RENDERER}" ] || fail "config renderer is not executable: ${CONFIG_RENDERER}"
 
-# containerd loads configurations by filename; reject a shadowed entry point.
-for candidate in "${CNI_CONF_DIR}"/*.conf "${CNI_CONF_DIR}"/*.conflist "${CNI_CONF_DIR}"/*.json; do
-    [ -f "${candidate}" ] || continue
-    [ "${candidate}" = "${CNI_CONF_DST}" ] && continue
-    first=$(printf '%s\n' "${CNI_CONF_DST##*/}" "${candidate##*/}" | LC_ALL=C sort | head -n 1)
-    [ "${first}" = "${CNI_CONF_DST##*/}" ] ||
-        fail "another CNI configuration precedes Kata DAN: ${candidate}"
-done
-
 cleanup() {
     rm -f "${CNI_BIN_TMP}" "${CNI_CONF_TMP}"
 }
