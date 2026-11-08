@@ -73,8 +73,8 @@ shims:
       # Run nv-hostengine and dcgm-exporter in the guest (nvrc.dcgm=on).
       enableDCGM: false
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
+      # kata-device-provisioner sets this label after successful provisioning.
+      # Override it if you want to use a different label.
       nodeSelector:
         nvidia.com/cc.ready.state: "false"
 
@@ -88,8 +88,8 @@ shims:
     nvrc:
       enableDCGM: false
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
+      # kata-device-provisioner sets this label after successful provisioning.
+      # Override it if you want to use a different label.
       nodeSelector:
         nvidia.com/cc.ready.state: "false"
 
@@ -109,8 +109,8 @@ shims:
     nvrc:
       enableDCGM: false
     runtimeClass:
-      # These labels are automatically added by gpu-operator and NFD
-      # respectively. Override if you want to use a different label.
+      # kata-device-provisioner sets GPU readiness after provisioning; NFD
+      # supplies CPU TEE labels. Override these if you use different labels.
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
@@ -131,8 +131,8 @@ shims:
     nvrc:
       enableDCGM: false
     runtimeClass:
-      # These labels are automatically added by gpu-operator and NFD
-      # respectively. Override if you want to use a different label.
+      # kata-device-provisioner sets GPU readiness after provisioning; NFD
+      # supplies CPU TEE labels. Override these if you use different labels.
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
@@ -153,8 +153,8 @@ shims:
     nvrc:
       enableDCGM: false
     runtimeClass:
-      # These labels are automatically added by gpu-operator and NFD
-      # respectively. Override if you want to use a different label.
+      # kata-device-provisioner sets GPU readiness after provisioning; NFD
+      # supplies CPU TEE labels. Override these if you use different labels.
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
@@ -175,8 +175,8 @@ shims:
     nvrc:
       enableDCGM: false
     runtimeClass:
-      # These labels are automatically added by gpu-operator and NFD
-      # respectively. Override if you want to use a different label.
+      # kata-device-provisioner sets GPU readiness after provisioning; NFD
+      # supplies CPU TEE labels. Override these if you use different labels.
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
