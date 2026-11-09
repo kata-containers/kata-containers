@@ -108,6 +108,8 @@ kubectl apply -f ${BASE_DIR}/csi-pvc.yaml
 kubectl apply -f ${BASE_DIR}/csi-app.yaml
 ```
 
+`/examples/pod-with-capacity/` is the capacity-aware counterpart: a `WaitForFirstConsumer` storage class charging volumes to a `kind` pool, with the pool sizes configured per node — see its `README.md` for a walkthrough of capacity-aware placement.
+
 Let's validate the components are deployed:
 
 ```shell
