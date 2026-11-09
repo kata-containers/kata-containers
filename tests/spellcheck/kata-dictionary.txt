@@ -61,6 +61,7 @@ VPMU
 CUDA
 DCGM
 DGX
+GPUDirect
 Gramine
 Mellanox
 MOFED
