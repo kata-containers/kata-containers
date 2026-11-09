@@ -35,8 +35,16 @@ spec:
             - --strict-topology=true
             - --immediate-topology=false
             - --worker-threads=5
-              #- --enable-capacity
-              #- --capacity-ownerref-level=0 # pod is owner
+            # Publish GetCapacity results as CSIStorageCapacity objects
+            # (#14151). They are owned by the DaemonSet (one level above
+            # the pod), so they survive a pod restart and are garbage
+            # collected with the DaemonSet. Capacity is also refreshed
+            # after each volume creation and deletion. directvol-deploy.sh
+            # can lower the poll interval with CAPACITY_POLL_INTERVAL for
+            # tests.
+            - --enable-capacity
+            - --capacity-ownerref-level=1
+            - --capacity-poll-interval=1m
           env:
           - name: NODE_NAME
             valueFrom:
