@@ -80,7 +80,7 @@ use persist::{self, sandbox_persist::Persist};
 use pod_resources_rs::handle_cdi_devices;
 use protobuf::SpecialFields;
 use resource::coco_data::initdata::{
-    kata_shared_init_data_path, InitDataConfig, KATA_INIT_DATA_IMAGE,
+    kata_shared_init_data_path, remove_initdata_dir, InitDataConfig, KATA_INIT_DATA_IMAGE,
 };
 use resource::coco_data::initdata_block;
 use resource::manager::ManagerArgs;
@@ -1985,11 +1985,9 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
-        let rootless_user = self
-            .hypervisor
-            .hypervisor_config()
-            .await
-            .security_info
+        let security_info = self.hypervisor.hypervisor_config().await.security_info;
+        let has_initdata = !security_info.initdata.is_empty();
+        let rootless_user = security_info
             .rootless_user
             .map(|user| (user.uid, user.user_name));
 
@@ -2023,7 +2021,21 @@ impl Sandbox for VirtSandbox {
 
         if steps.resources && !steps.hypervisor {
             info!(sl!(), "delete hypervisor");
-            match self.hypervisor.cleanup().await.context("delete hypervisor") {
+            // The initdata image was the VM's disk and goes with it: its
+            // directory is named after the sandbox, apart from the VM's own.
+            // Only a sandbox configured with initdata has one.
+            match self
+                .hypervisor
+                .cleanup()
+                .await
+                .context("delete hypervisor")
+                .and_then(|()| {
+                    if has_initdata {
+                        remove_initdata_dir(&self.sid).context("remove the initdata directory")
+                    } else {
+                        Ok(())
+                    }
+                }) {
                 Ok(()) => steps.hypervisor = true,
                 Err(e) => errors.push(e),
             }

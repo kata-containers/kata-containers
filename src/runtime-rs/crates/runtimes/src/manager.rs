@@ -1220,6 +1220,17 @@ async fn cleanup_bootstrap(sid: &str, state: &SandboxState, toml_config: TomlCon
             remove_dir_all_if_exists(path).context("remove the swap directory")?;
         }
     }
+    // The sandbox writes its initdata image while preparing, before its
+    // first save, so a death there leaves the image to this cleanup. Only
+    // a sandbox configured with initdata has one.
+    if state
+        .hypervisor
+        .as_ref()
+        .is_some_and(|h| !h.config.security_info.initdata.is_empty())
+    {
+        resource::coco_data::initdata::remove_initdata_dir(sid)
+            .context("remove the initdata directory")?;
+    }
     let Some(user) = state
         .hypervisor
         .as_ref()
