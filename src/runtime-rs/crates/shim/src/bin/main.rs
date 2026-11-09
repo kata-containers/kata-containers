@@ -6,6 +6,7 @@
 
 use std::{
     ffi::{OsStr, OsString},
+    fs::File,
     io::Write,
     path::PathBuf,
 };
@@ -16,11 +17,21 @@ use containerd_shim_protos::{
     types::introspection::{RuntimeInfo, RuntimeVersion},
 };
 use nix::{
+    errno::Errno,
+    fcntl::{fcntl, FcntlArg},
     mount::{mount, MsFlags},
     sched::{self, CloneFlags},
-    sys::signal::{signal, SigHandler, Signal},
+    sys::{
+        resource::{getrlimit, Resource},
+        signal::{signal, SigHandler, Signal},
+    },
+    unistd::close,
 };
 use shim::{config, Args, Error, ShimExecutor};
+
+// Linux starts with a 64-entry fd table; reserve room for VM initialization.
+const INITIAL_FD_CAPACITY: u64 = 64;
+const SHIM_FD_CAPACITY: u64 = 256;
 
 // default tokio runtime worker threads
 const DEFAULT_TOKIO_RUNTIME_WORKER_THREADS: usize = 2;
@@ -153,6 +164,28 @@ fn show_info() -> Result<()> {
     Ok(())
 }
 
+fn reserve_fd_table() -> Result<()> {
+    let (limit, _) = getrlimit(Resource::RLIMIT_NOFILE).context("get descriptor limit")?;
+    if limit <= INITIAL_FD_CAPACITY {
+        return Ok(());
+    }
+
+    // Grow the fd table before threads share it. Later growth can wait for an
+    // RCU grace period while constructing the VM. Closing the temporary fd
+    // retains table capacity without changing the descriptor limit.
+    let source = File::open("/dev/null").context("open descriptor reservation source")?;
+    match fcntl(
+        &source,
+        FcntlArg::F_DUPFD_CLOEXEC((limit.min(SHIM_FD_CAPACITY) - 1) as i32),
+    ) {
+        Ok(fd) => close(fd).context("close reservation descriptor"),
+        // All slots at or above the requested index are already occupied, so
+        // the table already has the required capacity.
+        Err(Errno::EMFILE) => Ok(()),
+        Err(error) => Err(error).context("reserve descriptor capacity"),
+    }
+}
+
 fn get_tokio_runtime() -> Result<tokio::runtime::Runtime> {
     let worker_threads = std::env::var(ENV_TOKIO_RUNTIME_WORKER_THREADS)
         .unwrap_or_default()
@@ -184,6 +217,7 @@ fn real_main() -> Result<()> {
             rt.block_on(shim.delete())?;
         }
         Action::Run(args) => {
+            reserve_fd_table()?;
             // set mnt namespace
             // need setup before other async call
             setup_mnt().context("setup mnt")?;
@@ -243,4 +277,75 @@ fn setup_mnt() -> Result<()> {
     )
     .context("mount with shared")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nix::sys::resource::setrlimit;
+    use std::{fs, os::fd::FromRawFd, os::unix::fs::MetadataExt, process::Command};
+
+    #[test]
+    fn descriptor_reservation_preserves_limits_and_open_files() {
+        const CASE: &str = "KATA_TEST_DESCRIPTOR_RESERVATION";
+        let Ok(case) = std::env::var(CASE) else {
+            for case in ["64", "128", "256", "1024", "occupied"] {
+                assert!(Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "tests::descriptor_reservation_preserves_limits_and_open_files",
+                    ])
+                    .env(CASE, case)
+                    .status()
+                    .unwrap()
+                    .success());
+            }
+            return;
+        };
+
+        // Each limit change runs in its own test process.
+        let (_, hard) = getrlimit(Resource::RLIMIT_NOFILE).unwrap();
+        assert!(
+            hard >= 1024,
+            "test requires a hard FD limit of at least 1024"
+        );
+        let limit = if case == "occupied" {
+            256
+        } else {
+            case.parse().unwrap()
+        };
+        setrlimit(Resource::RLIMIT_NOFILE, limit, hard).unwrap();
+        let file = File::open(std::env::current_exe().unwrap()).unwrap();
+        let occupied = if case == "occupied" {
+            let fd = fcntl(&file, FcntlArg::F_DUPFD_CLOEXEC((limit - 1) as i32)).unwrap();
+            // SAFETY: the duplicate is owned by this test process.
+            Some(unsafe { File::from_raw_fd(fd) })
+        } else {
+            None
+        };
+        let before = fs::read_dir("/proc/self/fd").unwrap().count();
+        reserve_fd_table().unwrap();
+        assert_eq!(fs::read_dir("/proc/self/fd").unwrap().count(), before);
+        assert_eq!(getrlimit(Resource::RLIMIT_NOFILE).unwrap(), (limit, hard));
+        fcntl(&file, FcntlArg::F_GETFD).unwrap();
+        if let Some(fd) = occupied.as_ref() {
+            let expected = file.metadata().unwrap();
+            let actual = fd.metadata().unwrap();
+            assert_eq!(
+                (actual.dev(), actual.ino()),
+                (expected.dev(), expected.ino())
+            );
+        }
+        if limit > INITIAL_FD_CAPACITY {
+            let status = fs::read_to_string("/proc/self/status").unwrap();
+            let capacity: u64 = status
+                .lines()
+                .find_map(|line| line.strip_prefix("FDSize:"))
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap();
+            assert!(capacity >= limit.min(SHIM_FD_CAPACITY));
+        }
+    }
 }
