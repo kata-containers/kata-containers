@@ -4,7 +4,7 @@
 //
 
 use anyhow::{anyhow, Context, Result};
-use pcilibs_rs::{Sysfs, IOMMUFD_VFIO_DIR};
+use pcilibs_rs::{parse_hex_id, Sysfs, IOMMUFD_VFIO_DIR};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -186,6 +186,19 @@ pub struct DeviceInfo {
     pub vfio_cdev: Option<VfioCdev>,
 }
 
+impl DeviceInfo {
+    /// Returns true if this device is an NVIDIA GPU.
+    pub fn is_nvidia_gpu(&self) -> bool {
+        match (
+            self.vendor_id.as_deref().and_then(parse_hex_id),
+            self.class_code,
+        ) {
+            (Some(vendor), Some(class)) => pcilibs_rs::platform::is_nvidia_gpu(vendor, class),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Health {
     #[default]
@@ -279,7 +292,7 @@ fn discover_group_devices(group_id: u32) -> Result<Vec<DeviceInfo>> {
         let device_id = read_trim(pci_path.join("device"));
         let class_code = read_trim(pci_path.join("class"))
             .as_deref()
-            .and_then(parse_class_code_u32);
+            .and_then(parse_hex_id);
         let driver = driver_name(&pci_path);
 
         let numa_node = parse_i32(pci_path.join("numa_node")).filter(|&n| n >= 0);
@@ -313,16 +326,8 @@ fn build_group_labels(devs: &[DeviceInfo]) -> BTreeMap<String, String> {
             vendor = d.vendor_id.clone();
         }
 
-        // PCI Class Code layout: 0xBBSSPP (Base Class, Sub Class, Programming Interface)
         if let Some(class_code) = d.class_code {
-            let base = ((class_code >> 16) & 0xff) as u8;
-            let sub = ((class_code >> 8) & 0xff) as u8;
-
-            // Base 0x03 = Display controller
-            // Sub 0x00 = VGA compatible, 0x02 = 3D controller (NVIDIA/AMD)
-            if base == 0x03 && (sub == 0x00 || sub == 0x02) {
-                gpu = true;
-            }
+            gpu |= pcilibs_rs::platform::is_gpu_class(class_code);
         }
     }
 
@@ -387,18 +392,13 @@ fn filter_bridge_device(bdf: &str, ignored: &[u16]) -> Option<u16> {
     // The sysfs `class` attribute is a hex string (e.g. "0x040300"), so it must
     // be parsed base-16. Parsing it as decimal always fails, which previously
     // caused every device to be treated as passthrough-capable.
-    let class_code = parse_class_code_u32(&device_class)? >> 8; // drop prog-if byte; yields base+sub class
+    let class_code = parse_hex_id(&device_class)? >> 8; // drop prog-if byte; yields base+sub class
     let class_u16 = class_code as u16;
     if ignored.contains(&class_u16) {
         Some(class_u16)
     } else {
         None
     }
-}
-
-fn parse_class_code_u32(s: &str) -> Option<u32> {
-    let t = s.trim().strip_prefix("0x").unwrap_or(s.trim());
-    u32::from_str_radix(t, 16).ok()
 }
 
 /// Determines device priority for selection as the 'Primary' device of a group.
@@ -534,7 +534,7 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
     let device_id = read_trim(pci_path.join("device"));
     let class_code = read_trim(pci_path.join("class"))
         .as_deref()
-        .and_then(parse_class_code_u32);
+        .and_then(parse_hex_id);
     let driver = driver_name(&pci_path);
     let numa_node = parse_i32(pci_path.join("numa_node")).filter(|&n| n >= 0);
 
@@ -1044,5 +1044,32 @@ mod tests {
     #[test]
     fn test_discover_vfio_ap_device_invalid_group_path_errors() {
         assert!(discover_vfio_ap_device(Path::new("/dev/vfio/vfio")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod nvidia_gpu_tests {
+    use super::*;
+
+    #[test]
+    fn test_device_info_is_nvidia_gpu() {
+        for (vendor, class, expected) in [
+            (Some("0x10de"), Some(0x030200), true),
+            (Some("0x10de"), Some(0x068000), false),
+            (Some("0x15b3"), Some(0x020000), false),
+            (Some("0x10de"), None, false),
+            (None, Some(0x030200), false),
+        ] {
+            let info = DeviceInfo {
+                vendor_id: vendor.map(String::from),
+                class_code: class,
+                ..Default::default()
+            };
+            assert_eq!(
+                info.is_nvidia_gpu(),
+                expected,
+                "vendor {vendor:?} class {class:?}"
+            );
+        }
     }
 }

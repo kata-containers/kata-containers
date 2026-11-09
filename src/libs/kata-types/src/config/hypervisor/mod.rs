@@ -834,6 +834,41 @@ pub struct DeviceInfo {
     /// Enable balloon device reporting.
     #[serde(default)]
     pub reclaim_guest_freed_memory: bool,
+
+    /// NVIDIA GPUDirect P2P clique ID (0-15) for all NVIDIA GPUs in the VM.
+    /// Unset or any negative value disables it. QEMU only.
+    #[serde(default, deserialize_with = "deserialize_nvidia_gpudirect_clique")]
+    pub nvidia_gpudirect_clique: Option<u8>,
+}
+
+/// Highest clique ID QEMU accepts.
+pub const MAX_NVIDIA_GPUDIRECT_CLIQUE: i64 = 15;
+
+/// The clique a configured `nvidia_gpudirect_clique` value stands for:
+/// negative disables it, 0-15 is the clique ID, anything else is an error.
+pub fn parse_nvidia_gpudirect_clique(value: i64) -> Result<Option<u8>> {
+    match value {
+        v if v < 0 => Ok(None),
+        v if v <= MAX_NVIDIA_GPUDIRECT_CLIQUE => Ok(Some(v as u8)),
+        v => Err(std::io::Error::other(format!(
+            "invalid nvidia_gpudirect_clique {v}: must be between 0 and \
+             {MAX_NVIDIA_GPUDIRECT_CLIQUE}, or negative to disable it"
+        ))),
+    }
+}
+
+fn deserialize_nvidia_gpudirect_clique<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<u8>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Accept null as well as an absent key: a disabled clique round-trips
+    // through the persisted JSON sandbox state as `null`.
+    match <Option<i64> as serde::Deserialize>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(value) => parse_nvidia_gpudirect_clique(value).map_err(serde::de::Error::custom),
+    }
 }
 
 impl DeviceInfo {
@@ -860,7 +895,6 @@ impl DeviceInfo {
                 "Root Port and Switch Port set at the same time is forbidden.",
             ));
         }
-
         Ok(())
     }
 }
@@ -2002,6 +2036,42 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_nvidia_gpudirect_clique_from_toml() {
+        for (toml, expected) in [
+            ("nvidia_gpudirect_clique = 0", Some(0)),
+            ("nvidia_gpudirect_clique = 15", Some(15)),
+            ("nvidia_gpudirect_clique = -1", None),
+            ("nvidia_gpudirect_clique = -8", None),
+            ("", None),
+        ] {
+            let info: DeviceInfo = toml::from_str(toml).unwrap();
+            assert_eq!(info.nvidia_gpudirect_clique, expected, "{toml:?}");
+        }
+
+        for toml in [
+            "nvidia_gpudirect_clique = 16",
+            "nvidia_gpudirect_clique = \"3\"",
+        ] {
+            assert!(toml::from_str::<DeviceInfo>(toml).is_err(), "{:?}", toml);
+        }
+    }
+
+    #[test]
+    fn test_nvidia_gpudirect_clique_json_round_trip() {
+        // The sandbox state persists HypervisorConfig as JSON, where a
+        // disabled clique is `null` rather than an absent key.
+        for clique in [None, Some(3)] {
+            let info = DeviceInfo {
+                nvidia_gpudirect_clique: clique,
+                ..Default::default()
+            };
+            let json = serde_json::to_string(&info).unwrap();
+            let back: DeviceInfo = serde_json::from_str(&json).unwrap();
+            assert_eq!(back.nvidia_gpudirect_clique, clique, "{:?}", clique);
+        }
     }
 
     #[test]

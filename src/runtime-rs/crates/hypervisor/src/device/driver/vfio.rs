@@ -141,12 +141,7 @@ impl DeviceVendorClass {
         }
 
         let do_convert = |id: &String| {
-            u32::from_str_radix(
-                id.trim_start_matches("0x")
-                    .trim_matches(char::is_whitespace),
-                16,
-            )
-            .with_context(|| anyhow!("invalid id {:?}", id))
+            pcilibs_rs::parse_hex_id(id).ok_or_else(|| anyhow!("invalid id {:?}", id))
         };
 
         let device = do_convert(&self.0).context("convert device failed")?;
@@ -157,6 +152,11 @@ impl DeviceVendorClass {
 
     pub fn get_vendor_class_id(&self) -> Result<(&str, &str)> {
         Ok((&self.1, &self.2))
+    }
+
+    /// Returns true if this device is an NVIDIA GPU.
+    pub fn is_nvidia_gpu(&self) -> bool {
+        pcilibs_rs::platform::is_nvidia_gpu_sysfs(&self.1, &self.2)
     }
 
     pub fn get_device_vendor_id(&self) -> Result<u32> {

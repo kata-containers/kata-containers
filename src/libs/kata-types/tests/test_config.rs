@@ -16,10 +16,10 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS,
         KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH, KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH,
         KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS,
-        KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
-        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES,
-        KATA_ANNO_CFG_RUNTIME_NAME,
+        KATA_ANNO_CFG_HYPERVISOR_NVIDIA_GPUDIRECT_CLIQUE, KATA_ANNO_CFG_HYPERVISOR_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM,
+        KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -467,6 +467,88 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
         assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_nvidia_gpudirect_clique_annotation() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        for (value, expected) in [
+            ("0", Some(Some(0))),
+            ("15", Some(Some(15))),
+            ("-1", Some(None)),
+            ("-8", Some(None)),
+            ("16", None),
+            ("all", None),
+        ] {
+            let mut anno_hash = HashMap::new();
+            anno_hash.insert(
+                KATA_ANNO_CFG_HYPERVISOR_NVIDIA_GPUDIRECT_CLIQUE.to_string(),
+                value.to_string(),
+            );
+            let anno = Annotation::new(anno_hash);
+            let mut config = TomlConfig::load(content).unwrap();
+            let result = anno.update_config_by_annotation(&mut config);
+            match expected {
+                Some(clique) => {
+                    assert!(
+                        result.is_ok(),
+                        "annotation value {} should be accepted",
+                        value
+                    );
+                    let hv = config.hypervisor.get("qemu").unwrap();
+                    assert_eq!(
+                        hv.device_info.nvidia_gpudirect_clique, clique,
+                        "value {value}"
+                    );
+                }
+                None => assert!(
+                    result.is_err(),
+                    "annotation value {} should be rejected",
+                    value
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_nvidia_gpudirect_clique_rejected_for_confidential_guest() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        // The texture config enables confidential_guest. Clear the jailer
+        // fields it sets for other tests: they fail validation before the
+        // clique check runs.
+        let mut config = TomlConfig::load(content).unwrap();
+        let hv = config.hypervisor.get_mut("qemu").unwrap();
+        hv.jailer_path = String::new();
+        hv.valid_jailer_paths = Vec::new();
+        hv.device_info.nvidia_gpudirect_clique = Some(2);
+        let err = config.validate().unwrap_err();
+        assert!(
+            err.to_string().contains("nvidia_gpudirect_clique"),
+            "{}",
+            err
+        );
+
+        // Without the clique, validation must not trip over it.
+        let hv = config.hypervisor.get_mut("qemu").unwrap();
+        hv.device_info.nvidia_gpudirect_clique = None;
+        if let Err(err) = config.validate() {
+            assert!(
+                !err.to_string().contains("nvidia_gpudirect_clique"),
+                "{}",
+                err
+            );
+        }
     }
 
     #[test]

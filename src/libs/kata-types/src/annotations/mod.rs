@@ -11,7 +11,9 @@ use std::result::{self};
 
 use serde::Deserialize;
 
-use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
+use crate::config::hypervisor::{
+    get_hypervisor_plugin, parse_nvidia_gpudirect_clique, HugePageType,
+};
 
 use crate::config::TomlConfig;
 use crate::initdata::add_hypervisor_initdata_overrides;
@@ -193,6 +195,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT: &str =
 /// PCIeSwitchPort is used to indicate the number of PCIe Switch Port devices
 pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_SWITCH_PORT: &str =
     "io.katacontainers.config.hypervisor.pcie_switch_port";
+/// NVIDIA GPUDirect P2P clique ID (0-15, negative disables).
+pub const KATA_ANNO_CFG_HYPERVISOR_NVIDIA_GPUDIRECT_CLIQUE: &str =
+    "io.katacontainers.config.hypervisor.nvidia_gpudirect_clique";
 /// A sandbox annotation to specify if the VM should have a vIOMMU device.
 pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU: &str = "io.katacontainers.config.hypervisor.enable_iommu";
 /// Enable Hypervisor Devices IOMMU_PLATFORM
@@ -776,6 +781,22 @@ impl Annotation {
                             return Err(u32_err);
                         }
                     },
+                    KATA_ANNO_CFG_HYPERVISOR_NVIDIA_GPUDIRECT_CLIQUE => {
+                        match self.get_value::<i64>(key) {
+                            Ok(r) => {
+                                hv.device_info.nvidia_gpudirect_clique = match r {
+                                    Some(value) => parse_nvidia_gpudirect_clique(value)?,
+                                    None => None,
+                                };
+                            }
+                            Err(_e) => {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!("annotation {key} must be an integer"),
+                                ));
+                            }
+                        }
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_IOMMU => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             hv.device_info.enable_iommu = r.unwrap_or_default();
