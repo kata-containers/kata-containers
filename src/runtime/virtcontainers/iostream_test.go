@@ -46,12 +46,68 @@ func TestIOStream(t *testing.T) {
 	_, err = stdin.Write(buffer)
 	assert.NotNil(t, err, "stdin write closed should fail")
 
+	// Closing stdin must not tear down the output streams: a process can
+	// still write to stdout/stderr long after its input hit EOF. Killing
+	// these readers here truncates `docker exec -i` output.
 	_, err = stdout.Read(buffer)
-	assert.NotNil(t, err, "stdout read closed should fail")
+	assert.Nil(t, err, "stdout read after stdin close should still work: %s", err)
 
 	_, err = stderr.Read(buffer)
-	assert.NotNil(t, err, "stderr read closed should fail")
+	assert.Nil(t, err, "stderr read after stdin close should still work: %s", err)
 
 	err = stdin.Close()
 	assert.NotNil(t, err, "stdin close closed should fail")
+}
+
+// TestIOStreamStdinCloseKeepsOutput does not need root, so it also runs in
+// environments where TestIOStream is skipped.
+//
+// Closing a process' stdin must not disable its stdout/stderr readers: a
+// process keeps writing output long after its input hit EOF. Sharing the
+// closed state between the three streams made CloseIO truncate `docker exec`
+// output as soon as stdin was closed.
+func TestIOStreamStdinCloseKeepsOutput(t *testing.T) {
+	assert := assert.New(t)
+
+	sandbox := &Sandbox{
+		id:     testSandboxID,
+		config: &SandboxConfig{},
+		agent:  &mockAgent{},
+	}
+	contID := "foo"
+	contConfig := newTestContainerConfigNoop(contID)
+	c := &Container{
+		id:      contID,
+		sandbox: sandbox,
+		config:  &contConfig,
+	}
+
+	stream := newIOStream(sandbox, c, "bar")
+	stdin := stream.stdin()
+	stdout := stream.stdout()
+	stderr := stream.stderr()
+
+	buffer := []byte("randombufferdata")
+
+	_, err := stdin.Write(buffer)
+	assert.NoError(err, "stdin write failed: %v", err)
+
+	_, err = stdout.Read(buffer)
+	assert.NoError(err, "stdout read failed: %v", err)
+
+	_, err = stderr.Read(buffer)
+	assert.NoError(err, "stderr read failed: %v", err)
+
+	assert.NoError(stdin.Close(), "stdin close failed")
+
+	_, err = stdin.Write(buffer)
+	assert.Error(err, "stdin write after close should fail")
+
+	_, err = stdout.Read(buffer)
+	assert.NoError(err, "stdout read after stdin close should still work: %v", err)
+
+	_, err = stderr.Read(buffer)
+	assert.NoError(err, "stderr read after stdin close should still work: %v", err)
+
+	assert.Error(stdin.Close(), "stdin double close should fail")
 }
