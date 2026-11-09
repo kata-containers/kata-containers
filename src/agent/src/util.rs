@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use futures::FutureExt;
 use std::io;
 use std::io::ErrorKind;
 use std::os::unix::io::{FromRawFd, RawFd};
@@ -106,6 +107,53 @@ where
     }
 
     Ok(total_bytes)
+}
+
+/// Drain the logger until its writer closes, without waiting for a log client.
+pub async fn drain_log_pipe<R, W>(
+    reader: &mut R,
+    mut writer: Option<&mut W>,
+    pending: &mut Vec<u8>,
+) -> io::Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin + ?Sized,
+    W: tokio::io::AsyncWrite + Unpin + ?Sized,
+{
+    let mut buf = [0_u8; BUF_SIZE];
+    loop {
+        while !pending.is_empty() {
+            let Some(stream) = writer.as_deref_mut() else {
+                break;
+            };
+
+            match stream.write(pending.as_slice()).now_or_never() {
+                Some(Ok(written)) if written > 0 => {
+                    pending.drain(..written);
+                }
+                _ => {
+                    // Shutdown must progress even if the client stops reading.
+                    writer = None;
+                    break;
+                }
+            }
+        }
+
+        pending.clear();
+
+        match reader.read(&mut buf).await {
+            Ok(0) => return Ok(()),
+            Ok(read) => {
+                if writer.is_some() {
+                    pending.extend_from_slice(&buf[..read]);
+                }
+            }
+            Err(err) if err.kind() == ErrorKind::Interrupted => continue,
+            Err(err) => {
+                eprintln!("ERROR: failed to drain agent log pipe: {err}");
+                return Err(err);
+            }
+        }
+    }
 }
 
 #[instrument]
@@ -455,5 +503,47 @@ mod tests {
             _ => panic!("pipe errors must not request a reconnect"),
         }
         assert!(writer.is_empty());
+        assert!(
+            drain_log_pipe(&mut FailedReader, Some(&mut writer), &mut pending)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_log_shutdown_blocked_writer() {
+        let (stop, shutdown) = channel(false);
+        let (mut writer, _peer) = tokio::io::duplex(1);
+        writer.write_all(b"x").await.unwrap();
+        let mut reader = tokio::io::empty();
+        let mut pending = b"pending".to_vec();
+        {
+            let copying = copy_pending_io(&mut reader, &mut writer, shutdown, &mut pending);
+            tokio::pin!(copying);
+            assert!(futures::poll!(copying.as_mut()).is_pending());
+            stop.send(true).unwrap();
+            assert!(matches!(copying.await, LogCopyExit::Shutdown));
+        }
+        assert_eq!(pending, b"pending");
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            drain_log_pipe(&mut reader, Some(&mut writer), &mut pending),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(pending.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_log_drain_writable_output() {
+        let mut reader = Cursor::new(b"tail");
+        let mut writer = Vec::new();
+        let mut pending = b"head".to_vec();
+        drain_log_pipe(&mut reader, Some(&mut writer), &mut pending)
+            .await
+            .unwrap();
+        assert_eq!(writer, b"headtail");
+        assert!(pending.is_empty());
     }
 }

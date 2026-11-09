@@ -182,7 +182,11 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         loop {
             let mut stream = tokio::select! {
                 biased;
-                _ = accept_shutdown.changed() => return Ok(()),
+                _ = accept_shutdown.changed() => {
+                    return util::drain_log_pipe::<_, tokio_vsock::VsockStream>(
+                        &mut reader, None, &mut pending,
+                    ).await.context("drain agent log pipe");
+                },
                 incoming = incoming.next() => incoming
                     .ok_or_else(|| anyhow!("cannot handle incoming vsock log connection"))??,
             };
@@ -196,7 +200,11 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
             .await
             {
                 Eof => return Ok(()),
-                Shutdown => return Ok(()),
+                Shutdown => {
+                    return util::drain_log_pipe(&mut reader, Some(&mut stream), &mut pending)
+                        .await
+                        .context("drain agent log pipe");
+                }
                 ReadFailed(err) => {
                     eprintln!("ERROR: failed to read agent log pipe: {err}");
                     return Err(err).context("read agent log pipe");
@@ -258,11 +266,17 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
 
     let config = &AGENT_CONFIG;
     let log_vport = config.log_vport as u32;
+    let (log_stop, log_shutdown) = if log_vport > 0 {
+        let (tx, rx) = channel(true);
+        (Some(tx), rx)
+    } else {
+        (None, shutdown_rx.clone())
+    };
 
     let log_handle = tokio::spawn(create_logger_task(
         rfd.into_raw_fd(),
         log_vport,
-        shutdown_rx.clone(),
+        log_shutdown,
     ));
 
     tasks.push(log_handle);
@@ -272,6 +286,14 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
     // Recreate a logger with the log level get from "/proc/cmdline".
     let (logger, logger_async_guard) =
         logging::create_logger(NAME, "agent", config.log_level, writer);
+
+    // Declared after the logger guard so early returns notify the log task
+    // before waiting for the logging thread to finish.
+    let log_stop = scopeguard::guard(log_stop, |stop| {
+        if let Some(stop) = stop {
+            let _ = stop.send(true);
+        }
+    });
 
     announce(&logger, config);
 
@@ -316,6 +338,9 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         slog_scope::set_global_logger(slog::Logger::root(slog::Discard, o!()));
     global_logger_guard2.cancel_reset();
 
+    // real_main is the root future of a multi-threaded Runtime::block_on.
+    // Its log task keeps draining on a worker while this thread waits.
+    drop(log_stop);
     drop(logger_async_guard);
 
     drop(ttrpc_log_guard);
@@ -928,6 +953,91 @@ mod tests {
 
             let msg = format!("{msg}, result: {result:?}");
             assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[test]
+    fn test_log_shutdown_full_pipe() {
+        // A separate caller thread bounds this test even if a regression
+        // blocks synchronously while dropping the logging guard.
+        let (done, completed) = std::sync::mpsc::channel();
+        let caller = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(check_log_shutdown());
+            done.send(()).unwrap();
+        });
+        completed
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("log shutdown blocked the runtime caller");
+        caller.join().unwrap();
+    }
+
+    async fn check_log_shutdown() {
+        use nix::fcntl::{fcntl, FcntlArg};
+        use tokio::{
+            io::AsyncWriteExt,
+            time::{timeout, Duration},
+        };
+
+        // Exercise both waiting for a client and a connected client that has
+        // stopped reading. A startup error must still allow this cleanup.
+        for (connected, failed) in [(false, false), (true, false), (false, true), (true, true)] {
+            let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
+            let size = fcntl(&rfd, FcntlArg::F_SETPIPE_SZ(4096)).unwrap() as usize;
+            assert_eq!(unistd::write(&wfd, &vec![b'x'; size]).unwrap(), size);
+            let mut reader = PipeStream::from_fd(rfd.into_raw_fd());
+            let writer = File::from(wfd);
+            let (stop, mut shutdown) = channel(false);
+            let drain = tokio::spawn(async move {
+                let mut pending = b"pending".to_vec();
+                if connected {
+                    let (mut stream, _peer) = tokio::io::duplex(1);
+                    stream.write_all(b"x").await.unwrap();
+                    assert!(matches!(
+                        util::copy_pending_io(&mut reader, &mut stream, shutdown, &mut pending)
+                            .await,
+                        util::LogCopyExit::Shutdown
+                    ));
+                    util::drain_log_pipe(&mut reader, Some(&mut stream), &mut pending).await
+                } else {
+                    shutdown.changed().await.unwrap();
+                    util::drain_log_pipe::<_, tokio::io::DuplexStream>(
+                        &mut reader,
+                        None,
+                        &mut pending,
+                    )
+                    .await
+                }
+            });
+            let result: Result<()> = async {
+                let (logger, guard) =
+                    logging::create_logger("test", "agent", slog::Level::Info, writer);
+                let stop = scopeguard::guard(stop, |stop| {
+                    let _ = stop.send(true);
+                });
+                crit!(logger, "queued before shutdown");
+                if failed {
+                    Err(anyhow!("injected startup failure"))?;
+                }
+                drop(stop);
+                drop(guard);
+                Ok(())
+            }
+            .await;
+            timeout(Duration::from_secs(2), drain)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            if failed {
+                assert_eq!(result.unwrap_err().to_string(), "injected startup failure");
+            } else {
+                result.unwrap();
+            }
         }
     }
 }
