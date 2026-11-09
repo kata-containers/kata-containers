@@ -746,6 +746,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = config.NoPort
 	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "1"
 	ocispec.Annotations[vcAnnotations.PCIeSwitchPort] = "1"
+	ocispec.Annotations[vcAnnotations.NVIDIAGPUDirectClique] = "3"
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
 	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
@@ -789,6 +790,9 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(string(sbConfig.HypervisorConfig.HotPlugVFIO), string(config.NoPort))
 	assert.Equal(sbConfig.HypervisorConfig.PCIeRootPort, uint32(1))
 	assert.Equal(sbConfig.HypervisorConfig.PCIeSwitchPort, uint32(1))
+	if assert.NotNil(sbConfig.HypervisorConfig.NVIDIAGPUDirectClique) {
+		assert.Equal(uint8(3), *sbConfig.HypervisorConfig.NVIDIAGPUDirectClique)
+	}
 	assert.Equal(sbConfig.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(sbConfig.HypervisorConfig.SGXEPCSize, int64(67108864))
 	assert.Equal(sbConfig.HypervisorConfig.LegacySerial, true)
@@ -1636,4 +1640,54 @@ func TestNewMount(t *testing.T) {
 		assert.Equal(tt.out.Options, actualMount.Options, "unexpected mount options")
 		assert.Equal(tt.out.ReadOnly, actualMount.ReadOnly, "unexpected mount ReadOnly")
 	}
+}
+
+func TestAddHypervisorNVIDIAGPUDirectCliqueOverrides(t *testing.T) {
+	clique := uint8(4)
+	for _, tc := range []struct {
+		name       string
+		value      string
+		configured *uint8
+		want       *uint8
+		wantErr    bool
+	}{
+		{name: "lowest clique", value: "0", want: func() *uint8 { c := uint8(0); return &c }()},
+		{name: "highest clique", value: "15", want: func() *uint8 { c := uint8(15); return &c }()},
+		{name: "disable configured clique", value: "-1", configured: &clique, want: nil},
+		{name: "out of range", value: "16", configured: &clique, want: &clique, wantErr: true},
+		{name: "any negative disables configured clique", value: "-8", configured: &clique, want: nil},
+		{name: "not a number", value: "all", configured: &clique, want: &clique, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+			ocispec := specs.Spec{
+				Annotations: map[string]string{vcAnnotations.NVIDIAGPUDirectClique: tc.value},
+			}
+			sbConfig := vc.SandboxConfig{}
+			sbConfig.HypervisorConfig.NVIDIAGPUDirectClique = tc.configured
+
+			err := addHypervisorNVIDIAGPUDirectCliqueOverrides(ocispec, &sbConfig)
+			if tc.wantErr {
+				assert.Error(err)
+			} else {
+				assert.NoError(err)
+			}
+			assert.Equal(tc.want, sbConfig.HypervisorConfig.NVIDIAGPUDirectClique)
+		})
+	}
+}
+
+func TestAddHypervisorNVIDIAGPUDirectCliqueOverridesConfidentialGuest(t *testing.T) {
+	assert := assert.New(t)
+	sbConfig := vc.SandboxConfig{}
+	sbConfig.HypervisorConfig.ConfidentialGuest = true
+
+	ocispec := specs.Spec{Annotations: map[string]string{vcAnnotations.NVIDIAGPUDirectClique: "0"}}
+	assert.Error(addHypervisorNVIDIAGPUDirectCliqueOverrides(ocispec, &sbConfig))
+	assert.Nil(sbConfig.HypervisorConfig.NVIDIAGPUDirectClique)
+
+	// Disabling it is always allowed.
+	ocispec.Annotations[vcAnnotations.NVIDIAGPUDirectClique] = "-1"
+	assert.NoError(addHypervisorNVIDIAGPUDirectCliqueOverrides(ocispec, &sbConfig))
+	assert.Nil(sbConfig.HypervisorConfig.NVIDIAGPUDirectClique)
 }

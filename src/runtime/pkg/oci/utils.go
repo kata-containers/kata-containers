@@ -577,7 +577,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, config); err != nil {
+	if err := addHypervisorVFIOOverrides(ocispec, config); err != nil {
 		return err
 	}
 
@@ -764,6 +764,27 @@ func addHypervisorPCIeRootPortOverrides(ocispec specs.Spec, sbConfig *vc.Sandbox
 		return err
 	}
 	return nil
+}
+
+func addHypervisorVFIOOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, sbConfig); err != nil {
+		return err
+	}
+	return addHypervisorNVIDIAGPUDirectCliqueOverrides(ocispec, sbConfig)
+}
+
+func addHypervisorNVIDIAGPUDirectCliqueOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	return newAnnotationConfiguration(ocispec, vcAnnotations.NVIDIAGPUDirectClique).setIntWithCheck(func(value int64) error {
+		clique, err := vc.ParseNVIDIAGPUDirectClique(value)
+		if err != nil {
+			return fmt.Errorf("Invalid annotation %s: %w", vcAnnotations.NVIDIAGPUDirectClique, err)
+		}
+		if clique != nil && sbConfig.HypervisorConfig.ConfidentialGuest {
+			return fmt.Errorf("Invalid annotation %s: not supported for confidential guests", vcAnnotations.NVIDIAGPUDirectClique)
+		}
+		sbConfig.HypervisorConfig.NVIDIAGPUDirectClique = clique
+		return nil
+	})
 }
 
 func addHypervisorPCIeSwitchPortOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
@@ -1468,6 +1489,7 @@ func IsCRIOContainerManager(spec *specs.Spec) bool {
 const (
 	errAnnotationPositiveNumericKey = "Error parsing annotation for %s: Please specify positive numeric value"
 	errAnnotationBoolKey            = "Error parsing annotation for %s: Please specify boolean value 'true|false'"
+	errAnnotationIntegerKey         = "Error parsing annotation for %s: Please specify integer value"
 	errAnnotationNumericKeyIsTooBig = "Error parsing annotation for %s: The number exceeds the maximum allowed for its type"
 )
 
@@ -1499,6 +1521,17 @@ func (a *annotationConfiguration) setUint(f func(uint64)) error {
 		f(v)
 		return nil
 	})
+}
+
+func (a *annotationConfiguration) setIntWithCheck(f func(int64) error) error {
+	if value, ok := a.ocispec.Annotations[a.key]; ok {
+		intValue, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf(errAnnotationIntegerKey, a.key)
+		}
+		return f(intValue)
+	}
+	return nil
 }
 
 func (a *annotationConfiguration) setUintWithCheck(f func(uint64) error) error {
