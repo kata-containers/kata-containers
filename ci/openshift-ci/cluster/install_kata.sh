@@ -73,7 +73,7 @@ wait_for_reboot() {
 	local sleep_time=60
 	declare -A BOOTIDS
 	local workers
-	mapfile -t workers < <(oc get nodes | awk '{if ($3 == "worker") { print $1 } }')
+	mapfile -t workers < <(oc get nodes -l node-role.kubernetes.io/worker -o custom-columns=NAME:.metadata.name --no-headers)
 	# Get the boot ID to compared it changed over time.
 	for node in "${workers[@]}"; do
 		BOOTIDS[${node}]=$(oc get -o jsonpath='{.status.nodeInfo.bootID}'\
@@ -164,7 +164,7 @@ debug_pod() {
 
 oc config set-context --current --namespace=default
 
-worker_nodes=$(oc get nodes |  awk '{if ($3 == "worker") { print $1 } }')
+worker_nodes=$(oc get nodes -l node-role.kubernetes.io/worker -o custom-columns=NAME:.metadata.name --no-headers)
 num_nodes=$(echo "${worker_nodes}" | wc -w)
 [[ ${num_nodes} -ne 0 ]] || \
 	die "No worker nodes detected. Something is wrong with the cluster"
