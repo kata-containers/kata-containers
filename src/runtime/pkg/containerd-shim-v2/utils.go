@@ -101,6 +101,14 @@ func getAddress(ctx context.Context, bundlePath, address, id string) (string, er
 		if err != nil {
 			return "", err
 		}
+		// This must return the same address the sandbox's own
+		// "shim start" computed (see the matching comment in
+		// shimManager.start): the non-debug hash under the default
+		// state directory. The callers that reach this path — those
+		// that re-run "shim start" for every container joining a
+		// sandbox (CRI-O, and containerd without the podsandbox
+		// sandboxer) — never provide a SocketDir, so they and the
+		// creation side always meet at the default /run/containerd/s.
 		address, err := cdshim.SocketAddress(ctx, address, sandboxID, false)
 		if err != nil {
 			return "", err
