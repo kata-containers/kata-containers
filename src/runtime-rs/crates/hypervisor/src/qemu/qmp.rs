@@ -1601,6 +1601,7 @@ impl Qmp {
         Ok(())
     }
 
+    /// Hotplug a VFIO device. Only set `gpudirect_clique` for NVIDIA GPUs.
     pub fn hotplug_vfio_device(
         &mut self,
         hostdev_id: &str,
@@ -1608,6 +1609,7 @@ impl Qmp {
         bus_slot_func: &str,
         driver: &str,
         bus: &str,
+        gpudirect_clique: Option<u8>,
     ) -> Result<Option<PciPath>> {
         let mut vfio_args = Dictionary::new();
 
@@ -1631,6 +1633,9 @@ impl Qmp {
                 vfio_args.insert("addr".to_owned(), "0x0".into());
                 vfio_args.insert("host".to_owned(), bdf.into());
                 vfio_args.insert("multifunction".to_owned(), "off".into());
+                if let Some(clique) = gpudirect_clique {
+                    vfio_args.insert("x-nv-gpudirect-clique".to_owned(), clique.into());
+                }
                 let device_add = qmp::device_add {
                     driver: driver.to_string(),
                     bus: Some(bus.to_string()),

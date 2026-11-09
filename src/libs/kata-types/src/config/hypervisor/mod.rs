@@ -834,9 +834,38 @@ pub struct DeviceInfo {
     /// Enable balloon device reporting.
     #[serde(default)]
     pub reclaim_guest_freed_memory: bool,
+
+    /// NVIDIA GPUDirect P2P clique ID (0-15) for all NVIDIA GPUs in the VM.
+    /// Unset or `-1` disables it. QEMU only.
+    #[serde(default)]
+    pub gpudirect_clique: Option<i32>,
+}
+
+/// `gpudirect_clique` value that disables it.
+pub const GPUDIRECT_CLIQUE_DISABLED: i32 = -1;
+
+/// Highest clique ID QEMU accepts.
+pub const MAX_GPUDIRECT_CLIQUE: i32 = 15;
+
+/// Check that `clique` is -1 or 0-15.
+pub fn validate_gpudirect_clique(clique: i32) -> Result<()> {
+    if clique != GPUDIRECT_CLIQUE_DISABLED && !(0..=MAX_GPUDIRECT_CLIQUE).contains(&clique) {
+        return Err(std::io::Error::other(format!(
+            "invalid gpudirect_clique {clique}: must be {GPUDIRECT_CLIQUE_DISABLED} (disabled) \
+             or between 0 and {MAX_GPUDIRECT_CLIQUE}"
+        )));
+    }
+    Ok(())
 }
 
 impl DeviceInfo {
+    /// The clique ID for NVIDIA GPUs, or `None` if disabled.
+    pub fn gpudirect_clique(&self) -> Option<u8> {
+        self.gpudirect_clique
+            .filter(|c| (0..=MAX_GPUDIRECT_CLIQUE).contains(c))
+            .map(|c| c as u8)
+    }
+
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
         if self.default_bridges > MAX_BRIDGE_SIZE {
@@ -859,6 +888,9 @@ impl DeviceInfo {
             return Err(std::io::Error::other(
                 "Root Port and Switch Port set at the same time is forbidden.",
             ));
+        }
+        if let Some(clique) = self.gpudirect_clique {
+            validate_gpudirect_clique(clique)?;
         }
 
         Ok(())
@@ -1812,6 +1844,15 @@ fn yes() -> bool {
 }
 
 impl Hypervisor {
+    /// The GPUDirect P2P clique ID for NVIDIA GPUs, or `None` if disabled.
+    /// Always `None` for confidential guests.
+    pub fn gpudirect_clique(&self) -> Option<u8> {
+        if self.security_info.confidential_guest {
+            return None;
+        }
+        self.device_info.gpudirect_clique()
+    }
+
     /// Validates the path of the hypervisor executable against configured patterns.
     pub fn validate_hypervisor_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_hypervisor_paths, path)
@@ -2002,6 +2043,50 @@ mod tests {
 
         assert!(get_hypervisor_plugin("dragonball").is_some());
         assert!(get_hypervisor_plugin("dragonball2").is_none());
+    }
+
+    #[test]
+    fn test_gpudirect_clique() {
+        let mut info = DeviceInfo::default();
+        assert_eq!(info.gpudirect_clique(), None);
+        assert!(info.validate().is_ok());
+
+        for (clique, expected) in [(-1, None), (0, Some(0)), (15, Some(15))] {
+            info.gpudirect_clique = Some(clique);
+            assert!(info.validate().is_ok(), "clique {clique} should be valid");
+            assert_eq!(info.gpudirect_clique(), expected);
+        }
+
+        for clique in [-2, 16, i32::MAX] {
+            info.gpudirect_clique = Some(clique);
+            assert!(
+                info.validate().is_err(),
+                "clique {clique} should be invalid"
+            );
+            assert_eq!(info.gpudirect_clique(), None);
+        }
+    }
+
+    #[test]
+    fn test_gpudirect_clique_confidential_guest() {
+        let mut hv = Hypervisor::default();
+        hv.device_info.gpudirect_clique = Some(2);
+        assert_eq!(hv.gpudirect_clique(), Some(2));
+
+        hv.security_info.confidential_guest = true;
+        assert_eq!(hv.gpudirect_clique(), None);
+    }
+
+    #[test]
+    fn test_gpudirect_clique_from_toml() {
+        let info: DeviceInfo = toml::from_str("gpudirect_clique = 3").unwrap();
+        assert_eq!(info.gpudirect_clique(), Some(3));
+
+        let info: DeviceInfo = toml::from_str("gpudirect_clique = -1").unwrap();
+        assert_eq!(info.gpudirect_clique(), None);
+
+        let info: DeviceInfo = toml::from_str("").unwrap();
+        assert_eq!(info.gpudirect_clique, None);
     }
 
     #[test]
