@@ -84,8 +84,19 @@ impl ResourceManager {
     /// acts on the host and the VM. A created network whose attach did not
     /// finish is never replaced: it holds the only record of its endpoints.
     pub async fn create_network(&self, network_config: NetworkConfig) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        inner.create_network(network_config).await
+        // Construction and registration run detached from this caller. A
+        // caller cancelled at its await would otherwise let the network
+        // thread finish and drop a built network — its host-side links
+        // already made — before anything a cleanup can find had hold of it.
+        // A dropped JoinHandle does not abort the task, so the network is
+        // registered however the caller fares.
+        let inner = self.inner.clone();
+        tokio::spawn(async move {
+            let mut inner = inner.write().await;
+            inner.create_network(network_config).await
+        })
+        .await
+        .context("await the network creation task")?
     }
 
     /// Attach the created network's endpoints. A retry after a failure

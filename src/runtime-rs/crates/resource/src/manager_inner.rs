@@ -73,6 +73,10 @@ pub(crate) struct ResourceManagerInner {
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
     cleanup_steps: Mutex<ResourceCleanupSteps>,
+    /// Whether cleanup has started. The network is created by a task that
+    /// outlives a cancelled caller, so a late creation could otherwise
+    /// register a network after the cleanup that would have removed it.
+    cleaned: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Default)]
@@ -177,6 +181,7 @@ impl ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            cleaned: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -286,6 +291,12 @@ impl ResourceManagerInner {
     /// registered too, with the endpoints it got to build: its error is
     /// surfaced by the attach, after those made it into a save.
     pub async fn create_network(&mut self, network_config: NetworkConfig) -> Result<()> {
+        // A caller that outlived its cancellation must not build a network
+        // the finished cleanup can no longer remove. Refusing here, before
+        // anything is made on the host, is always safe.
+        if self.cleaned.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(anyhow!("the sandbox cleanup has started"));
+        }
         // A created network whose attach did not finish holds the only
         // record of endpoints that may already have acted on the host, a
         // NIC moved to vfio-pci among them. Replacing it would drop them
@@ -1084,6 +1095,11 @@ impl ResourceManagerInner {
         // Hold this lock across the attempt: a concurrent caller can retry
         // failed stages, but cannot run them while the first attempt is active.
         let mut steps = self.cleanup_steps.lock().await;
+        // From here on, creating a network is refused: its detached task
+        // could otherwise register one after the pass that would have
+        // removed it.
+        self.cleaned
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         let mut errors = Vec::new();
         // Detach the network endpoints. A live network detaches them from
         // the VM and binds VFs from vfio-pci back to their host drivers; the
@@ -1368,6 +1384,7 @@ impl Persist for ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            cleaned: std::sync::atomic::AtomicBool::new(false),
         })
     }
 }
