@@ -70,9 +70,11 @@ firmware = "@FIRMWAREPATH@"
 # can be customized per each user while UEFI code is kept same.
 firmware_volume = "@FIRMWAREVOLUMEPATH@"
 
-# Machine accelerators
-# comma-separated list of machine accelerators to pass to the hypervisor.
-# For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
+# QEMU machine properties
+# Comma-separated list of properties appended to QEMU's -machine option.
+# Despite its name, machine_accelerators accepts arbitrary machine properties,
+# not just accelerators. This option is QEMU-specific.
+# For example, `machine_accelerators = "smm=off"`
 machine_accelerators = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature

@@ -95,7 +95,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.kernel_hash` | string | container kernel image SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.kernel_params` | string | additional guest kernel parameters |
 | `io.katacontainers.config.hypervisor.kernel` | string | the kernel used to boot the container VM |
-| `io.katacontainers.config.hypervisor.machine_accelerators` | string | machine specific accelerators for the hypervisor |
+| `io.katacontainers.config.hypervisor.machine_properties` | string | Comma-separated list of arbitrary machine properties appended to QEMU's `-machine` option (QEMU-specific). |
 | `io.katacontainers.config.hypervisor.machine_type` | string | the type of machine being emulated by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_offset` | uint64| the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_slots` | uint32| the memory slots assigned to the VM by the hypervisor |
