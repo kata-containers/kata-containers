@@ -56,6 +56,12 @@ type Config struct {
 	EnableAttach   bool
 	EnableTopology bool
 
+	// CapacityConfigDir names the directory with per-node capacity
+	// pools. main() merges the node's entry into Capacity before the
+	// driver is constructed; the driver itself never re-reads the
+	// directory (startup-merge semantics, #14151).
+	CapacityConfigDir string
+
 	StateDir       string
 	VolumeDevices  map[string]string
 	StoragePath    string

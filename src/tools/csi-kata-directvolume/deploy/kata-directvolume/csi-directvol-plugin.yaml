@@ -106,6 +106,13 @@ spec:
             - --spdk-rawpath=$(RAW_DISKS)
             - --spdk-vhostpath=$(VHU_UDS_PATH)
             - --spdk-rpc-timeout=10s
+            # Per-node capacity pools (#14151): the optional
+            # csi-kata-directvol-capacity ConfigMap is mounted there;
+            # its key named after this node lists this node's pools.
+            # Without the ConfigMap (or without an entry for this
+            # node) volumes are only bounded by the free space of the
+            # backing filesystem.
+            - --capacity-config-dir=/etc/csi-kata-directvolume/capacity
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -164,6 +171,11 @@ spec:
             # spdk socket
             - mountPath: /var/tmp
               name: spdk-dir
+            # per-node capacity pools; optional so the DaemonSet
+            # starts without the ConfigMap
+            - mountPath: /etc/csi-kata-directvolume/capacity
+              name: capacity-config
+              readOnly: true
 
         - name: liveness-probe
           volumeMounts:
@@ -225,5 +237,12 @@ spec:
             path: /var/tmp
             type: Directory
           name: spdk-dir
-
-
+        # Per-node capacity pools (#14151). One key per node, named
+        # after the node, whose value lists that node's pools as
+        # <pool>=<quantity> entries. Optional: without it volumes are
+        # only bounded by the free space of the backing filesystem.
+        # Changes need a daemonset rollout restart to take effect.
+        - configMap:
+            name: csi-kata-directvol-capacity
+            optional: true
+          name: capacity-config
