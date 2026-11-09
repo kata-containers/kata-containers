@@ -9,6 +9,11 @@ extern crate slog;
 
 logging::logger_with_subsystem!(sl, "virt-container");
 
+/// Exit status returned when containerd/shim is unable to determine
+/// the actual exit status of a process. This matches containerd's
+/// UnknownExitStatus constant.
+pub(crate) const UNKNOWN_EXIT_STATUS: i32 = 255;
+
 mod container_manager;
 pub mod factory;
 pub mod health_check;

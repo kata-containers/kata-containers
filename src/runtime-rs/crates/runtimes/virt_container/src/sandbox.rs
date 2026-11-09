@@ -100,6 +100,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::vmm_process::VmmProcessIdentity;
+use crate::UNKNOWN_EXIT_STATUS;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
 
@@ -477,7 +478,8 @@ impl VirtSandbox {
             }
             Err(err) => {
                 warn!(sl!(), "failed waiting for sandbox VM exit: {:?}", err);
-                self.record_stop(255, SystemTime::now(), false).await;
+                self.record_stop(UNKNOWN_EXIT_STATUS as u32, SystemTime::now(), false)
+                    .await;
             }
         }
 
@@ -1706,14 +1708,20 @@ impl Sandbox for VirtSandbox {
 
         if state == SandboxState::Init {
             let confirmed = self.stop_vm(vmm_exit_watched).await;
-            self.record_stop(if confirmed { 0 } else { 255 }, SystemTime::now(), false)
+            let exit_status = if confirmed {
+                0
+            } else {
+                UNKNOWN_EXIT_STATUS as u32
+            };
+            self.record_stop(exit_status, SystemTime::now(), false)
                 .await;
             info!(sl!(), "sandbox stopped during Init");
             return Ok(());
         }
 
         if !self.stop_vm(vmm_exit_watched).await {
-            self.record_stop(255, SystemTime::now(), false).await;
+            self.record_stop(UNKNOWN_EXIT_STATUS as u32, SystemTime::now(), false)
+                .await;
             return Ok(());
         }
 
@@ -1724,10 +1732,12 @@ impl Sandbox for VirtSandbox {
         {
             info!(
                 sl!(),
-                "no exit status from the VMM watcher within {:?}, recording 255",
-                VMM_EXIT_RECORD_GRACE
+                "no exit status from the VMM watcher within {:?}, recording {}",
+                VMM_EXIT_RECORD_GRACE,
+                UNKNOWN_EXIT_STATUS
             );
-            self.record_stop(255, SystemTime::now(), true).await;
+            self.record_stop(UNKNOWN_EXIT_STATUS as u32, SystemTime::now(), true)
+                .await;
         }
         info!(sl!(), "sandbox stopped");
 
