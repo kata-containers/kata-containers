@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -57,7 +58,16 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	// against. It must be propagated so that the same pool is used by
 	// CreateVolume capacity accounting, the persisted volume state,
 	// GetCapacity and later NodeStage/NodePublish calls (#14151, gap 3).
+	//
+	// Parameter names are case-insensitive, so "kind" and "Kind" are
+	// the same parameter and a request may carry both spellings. The
+	// last spelling seen in map iteration would silently win, and map
+	// order is random — the same request could charge one pool and
+	// then another on a retry. Conflicting spellings with different
+	// values are therefore rejected upfront instead of being resolved
+	// nondeterministically.
 	kind := ""
+	var kindKeys []string
 
 	for key, value := range req.GetParameters() {
 		switch strings.ToLower(key) {
@@ -69,11 +79,29 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		case utils.KataContainersDirectFsType:
 			volumeCtx[utils.KataContainersDirectFsType] = value
 		case utils.StorageKind:
-			kind = value
-			volumeCtx[utils.StorageKind] = value
+			kindKeys = append(kindKeys, key)
+			if kind == "" {
+				kind = value
+			}
 		default:
 			continue
 		}
+	}
+
+	// Deterministic conflict detection: the kindKeys are sorted, so the
+	// error message is stable no matter which map entry iterated first.
+	// Equal values under different spellings are fine — they select the
+	// same pool and the canonical (lowercase) key is the one propagated
+	// in volumeCtx.
+	sort.Strings(kindKeys)
+	for _, key := range kindKeys {
+		if value := req.GetParameters()[key]; value != kind {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"parameters %q select different capacity pools %q and %q", kindKeys, kind, value)
+		}
+	}
+	if kind != "" {
+		volumeCtx[utils.StorageKind] = kind
 	}
 
 	// When capacity tracking is configured, the pool must be known:

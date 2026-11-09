@@ -38,6 +38,11 @@ type directVolume struct {
 
 	config Config
 	state  state.State
+
+	// storage backs the free-space accounting of checkQuota. It is a
+	// field instead of a global so tests can inject a fake filesystem;
+	// production always uses the real one.
+	storage backingStorage
 }
 
 type Config struct {
@@ -112,8 +117,9 @@ func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
 		return nil, err
 	}
 	dv := &directVolume{
-		config: cfg,
-		state:  s,
+		config:  cfg,
+		state:   s,
+		storage: hostStorage{},
 	}
 
 	return dv, nil
@@ -134,12 +140,22 @@ func (dv *directVolume) getVolumePath(volID string) string {
 	return filepath.Join(dv.config.StateDir, volID)
 }
 
-// checkQuota enforces the per-volume maximum and, when capacity
-// tracking is enabled, the remaining capacity of the pool for the
-// given kind. It is shared by both volume-creation paths so that
-// directvol and spdkvol get identical quota enforcement (#14151,
-// gap 4).
-func (dv *directVolume) checkQuota(kind string, cap int64) error {
+// checkQuota enforces, in increasing order of hardness, three limits:
+//
+//  1. the per-volume maximum (MaxVolumeSize), regardless of any
+//     tracking configuration;
+//  2. the remaining capacity of the configured pool for the given
+//     kind (only when capacity tracking is enabled);
+//  3. the space the backing filesystem can still provide for volumes
+//     of the given type. Configured pools are a logical limit and
+//     say nothing about the host: without the filesystem check a
+//     pool larger than the disk would let CreateVolume "succeed" and
+//     push the failure to stage time, where it surfaces as a write
+//     error inside the guest.
+//
+// It is shared by both volume-creation paths so that directvol and
+// spdkvol get identical quota enforcement (#14151, gap 4).
+func (dv *directVolume) checkQuota(kind, volumeType string, cap int64) error {
 	// Check for maximum volume size. This applies regardless of
 	// whether capacity tracking is configured.
 	if cap > dv.config.MaxVolumeSize {
@@ -158,14 +174,31 @@ func (dv *directVolume) checkQuota(kind string, cap int64) error {
 		if kind != "" {
 			return status.Error(codes.InvalidArgument, fmt.Sprintf("capacity tracking disabled, specifying kind %q is invalid", kind))
 		}
-		return nil
+	} else {
+		used := dv.sumVolumeSizes(kind)
+		available := dv.config.Capacity[kind]
+		if used+cap > available.Value() {
+			return status.Errorf(codes.ResourceExhausted, "requested capacity %d exceeds remaining capacity for %q, %s out of %s already used",
+				cap, kind, resource.NewQuantity(used, resource.BinarySI).String(), available.String())
+		}
 	}
 
-	used := dv.sumVolumeSizes(kind)
-	available := dv.config.Capacity[kind]
-	if used+cap > available.Value() {
-		return status.Errorf(codes.ResourceExhausted, "requested capacity %d exceeds remaining capacity for %q, %s out of %s already used",
-			cap, kind, resource.NewQuantity(used, resource.BinarySI).String(), available.String())
+	// Filesystem bound. Applies with or without capacity tracking:
+	// even a driver without pools must not promise more than the
+	// backing filesystem holds. When tracking is disabled the volume
+	// is recorded with an empty kind, which sumVolumeSizes does not
+	// attribute to any pool, but its reservation still occupies real
+	// space and therefore still reduces the filesystem remainder
+	// computed in filesystemRemaining.
+	remaining, err := dv.filesystemRemaining(volumeType)
+	if err != nil {
+		return status.Errorf(codes.Internal, "cannot determine space available on the backing filesystem: %v", err)
+	}
+	if cap > remaining {
+		dir := dv.backingDir(volumeType)
+		return status.Errorf(codes.ResourceExhausted,
+			"requested capacity %d exceeds the %d bytes still available on the backing filesystem at %s",
+			cap, remaining, dir)
 	}
 	return nil
 }
@@ -196,7 +229,7 @@ func (dv *directVolume) backfillVolume(volID, name string, cap int64, kind strin
 // adds the volume to the list.
 // It returns the volume path or err if one occurs. That error is suitable as result of a gRPC call.
 func (dv *directVolume) createVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
-	if err := dv.checkQuota(kind, cap); err != nil {
+	if err := dv.checkQuota(kind, utils.DirectVolumeTypeName, cap); err != nil {
 		return nil, err
 	}
 
@@ -279,7 +312,7 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 	if err == nil {
 		klog.Infof("[SPDK] reuse existing backing file %s (size=%d)", backingFile, fi.Size())
 	} else if os.IsNotExist(err) {
-		if err := dv.checkQuota(kind, capacity); err != nil {
+		if err := dv.checkQuota(kind, utils.SpdkVolumeTypeName, capacity); err != nil {
 			return nil, err
 		}
 
