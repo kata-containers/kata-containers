@@ -3,18 +3,69 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
-use futures::StreamExt;
 use std::io;
 use std::io::ErrorKind;
 use std::os::unix::io::{FromRawFd, RawFd};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
-use tokio_vsock::{Incoming, VsockListener, VsockStream};
+use tokio_vsock::{Incoming, VsockListener};
 use tracing::instrument;
 
 // Size of I/O read buffer
 const BUF_SIZE: usize = 8192;
+
+/// Reason the reconnectable agent log copy loop stopped.
+pub enum LogCopyExit {
+    Eof,
+    Shutdown,
+    ReadFailed(io::Error),
+    WriteFailed(io::Error),
+}
+
+/// Preserve bytes not yet written when a log connection fails.
+pub async fn copy_pending_io<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    mut shutdown: Receiver<bool>,
+    pending: &mut Vec<u8>,
+) -> LogCopyExit
+where
+    R: tokio::io::AsyncRead + Unpin + ?Sized,
+    W: tokio::io::AsyncWrite + Unpin + ?Sized,
+{
+    let mut buf = [0_u8; BUF_SIZE];
+
+    loop {
+        while !pending.is_empty() {
+            tokio::select! {
+                biased;
+
+                _ = shutdown.changed() => return LogCopyExit::Shutdown,
+                result = writer.write(pending.as_slice()) => match result {
+                    Ok(0) => return LogCopyExit::WriteFailed(ErrorKind::WriteZero.into()),
+                    Ok(written) => {
+                        pending.drain(..written);
+                    }
+                    Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
+                    Err(err) => return LogCopyExit::WriteFailed(err),
+                },
+            }
+        }
+
+        tokio::select! {
+            biased;
+            _ = shutdown.changed() => return LogCopyExit::Shutdown,
+            result = reader.read(&mut buf) => match result {
+                Ok(0) => return LogCopyExit::Eof,
+                Ok(read) => {
+                    pending.extend_from_slice(&buf[..read]);
+                }
+                Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
+                Err(err) => return LogCopyExit::ReadFailed(err),
+            },
+        }
+    }
+}
 
 // Interruptable I/O copy using readers and writers
 // (an interruptable version of "io::copy()").
@@ -60,16 +111,6 @@ where
 #[instrument]
 pub fn get_vsock_incoming(fd: RawFd) -> Incoming {
     unsafe { VsockListener::from_raw_fd(fd).incoming() }
-}
-
-#[instrument]
-pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
-    let stream = get_vsock_incoming(fd)
-        .next()
-        .await
-        .ok_or_else(|| anyhow!("cannot handle incoming vsock connection"))?;
-
-    Ok(stream?)
 }
 
 pub fn merge<T>(v1: &mut Option<Vec<T>>, v2: &Option<Vec<T>>) -> Option<Vec<T>>
@@ -328,5 +369,91 @@ mod tests {
         remainder.retain(|c| c != REPEAT_CHAR as char);
 
         assert_eq!(remainder.len(), 0);
+    }
+
+    struct ShortWriter {
+        written: Vec<u8>,
+        error: Option<ErrorKind>,
+    }
+
+    impl tokio::io::AsyncWrite for ShortWriter {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            bytes: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            if self.written.is_empty() {
+                let count = bytes.len().min(3);
+                self.written.extend_from_slice(&bytes[..count]);
+                Ready(Ok(count))
+            } else {
+                Ready(match self.error {
+                    Some(kind) => Err(kind.into()),
+                    None => Ok(0),
+                })
+            }
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Ready(Ok(()))
+        }
+    }
+
+    struct FailedReader;
+
+    impl tokio::io::AsyncRead for FailedReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &mut tokio::io::ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Ready(Err(io::Error::from_raw_os_error(libc::EIO)))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_log_copy_reconnect() {
+        for error in [Some(ErrorKind::BrokenPipe), None] {
+            let (_stop, shutdown) = channel(false);
+            let mut reader = Cursor::new(b"abcdef");
+            let mut first = ShortWriter {
+                written: Vec::new(),
+                error,
+            };
+            let mut pending = Vec::new();
+            let exit =
+                copy_pending_io(&mut reader, &mut first, shutdown.clone(), &mut pending).await;
+            match exit {
+                LogCopyExit::WriteFailed(err) => {
+                    assert_eq!(err.kind(), error.unwrap_or(ErrorKind::WriteZero))
+                }
+                _ => panic!("expected a write failure"),
+            }
+            assert_eq!(first.written, b"abc");
+            assert_eq!(pending, b"def");
+            let mut second = Vec::new();
+            assert!(matches!(
+                copy_pending_io(&mut reader, &mut second, shutdown, &mut pending).await,
+                LogCopyExit::Eof
+            ));
+            assert_eq!(second, b"def");
+            assert!(pending.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_log_read_failure() {
+        let (_stop, shutdown) = channel(false);
+        let mut pending = Vec::new();
+        let mut writer = Vec::new();
+        match copy_pending_io(&mut FailedReader, &mut writer, shutdown, &mut pending).await {
+            LogCopyExit::ReadFailed(err) => assert_eq!(err.raw_os_error(), Some(libc::EIO)),
+            _ => panic!("pipe errors must not request a reconnect"),
+        }
+        assert!(writer.is_empty());
     }
 }

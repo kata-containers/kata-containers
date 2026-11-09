@@ -69,7 +69,7 @@ use signal::setup_signal_handler;
 use slog::{debug, error, info, o, warn, Logger};
 use uevent::watch_uevents;
 
-use futures::future::join_all;
+use futures::{future::join_all, StreamExt};
 use rustjail::pipestream::PipeStream;
 use tokio::{
     io::AsyncWrite,
@@ -79,6 +79,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use util::LogCopyExit::{Eof, ReadFailed, Shutdown, WriteFailed};
 
 mod rpc;
 mod tracer;
@@ -163,7 +164,7 @@ fn announce(logger: &Logger, config: &AgentConfig) {
 // output to the vsock port specified, or stdout.
 async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool>) -> Result<()> {
     let mut reader = PipeStream::from_fd(rfd);
-    let mut writer: Box<dyn AsyncWrite + Unpin + Send> = if vsock_port > 0 {
+    if vsock_port > 0 {
         let listenfd = socket::socket(
             AddressFamily::Vsock,
             SockType::Stream,
@@ -175,11 +176,40 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         socket::bind(listenfd.as_raw_fd(), &addr)?;
         socket::listen(&listenfd, nix::sys::socket::Backlog::new(1).unwrap())?;
 
-        Box::new(util::get_vsock_stream(listenfd.into_raw_fd()).await?)
-    } else {
-        Box::new(tokio::io::stdout())
-    };
+        let mut incoming = util::get_vsock_incoming(listenfd.into_raw_fd());
+        let mut accept_shutdown = shutdown.clone();
+        let mut pending = Vec::new();
+        loop {
+            let mut stream = tokio::select! {
+                biased;
+                _ = accept_shutdown.changed() => return Ok(()),
+                incoming = incoming.next() => incoming
+                    .ok_or_else(|| anyhow!("cannot handle incoming vsock log connection"))??,
+            };
 
+            match util::copy_pending_io(
+                &mut reader,
+                &mut stream,
+                shutdown.clone(),
+                &mut pending,
+            )
+            .await
+            {
+                Eof => return Ok(()),
+                Shutdown => return Ok(()),
+                ReadFailed(err) => {
+                    eprintln!("ERROR: failed to read agent log pipe: {err}");
+                    return Err(err).context("read agent log pipe");
+                }
+                WriteFailed(err) => eprintln!(
+                    "WARN: agent log vsock connection ended with {} pending bytes, waiting for reconnect: {err}",
+                    pending.len()
+                ),
+            }
+        }
+    }
+
+    let mut writer: Box<dyn AsyncWrite + Unpin + Send> = Box::new(tokio::io::stdout());
     let _ = util::interruptable_io_copier(&mut reader, &mut writer, shutdown).await;
 
     Ok(())
