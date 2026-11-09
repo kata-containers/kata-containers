@@ -107,10 +107,11 @@ kernel_verity_params = "@KERNELVERITYPARAMS@"
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWARE_SNP_PATH@"
 
-# Machine accelerators
-# comma-separated list of machine accelerators to pass to the hypervisor.
-# For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
-machine_accelerators = "@MACHINEACCELERATORS@"
+# QEMU machine properties
+# Comma-separated list of properties appended to QEMU's -machine option.
+# This option is QEMU-specific.
+# For example, `machine_properties = "smm=off"`
+machine_properties = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature
 # comma-separated list of seccomp sandbox features to control the syscall access.

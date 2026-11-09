@@ -398,7 +398,7 @@ pub fn get_hypervisor_info(
         machine_type: hypervisor_config.machine_info.machine_type.to_string(),
         machine_accelerators: hypervisor_config
             .machine_info
-            .machine_accelerators
+            .machine_properties
             .to_string(),
         version,
         path: hypervisor_config.path.to_string(),
