@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -133,9 +134,106 @@ func NewManager(name string) cdshim.Shim { return &shimManager{name: name} }
 
 func (m *shimManager) Name() string { return m.name }
 
-func (m *shimManager) Start(ctx context.Context, params *bootapi.BootstrapParams) (_ *bootapi.BootstrapResult, retErr error) {
-	id := params.InstanceID
-	containerdAddress := params.ContainerdGrpcAddress
+// legacyBootstrapJSON returns the JSON bytes that legacy callers expect on
+// stdout and a boolean indicating whether the legacy path is active.
+//
+// A caller is legacy when params.ContainerdVersion is empty:
+//   - CRI-O sends no stdin at all; the SDK falls back to deprecated fields and
+//     leaves ContainerdVersion unset.
+//   - containerd <= 2.2.x, and the 2.3.0 pre-releases, send the task/runtime
+//     options types.Any on stdin instead of a BootstrapParams, and never set
+//     ContainerdVersion. The SDK's proto.Unmarshal accepts those bytes as a
+//     BootstrapParams (see resolveBootstrapIdentity), so ContainerdVersion is
+//     the only reliable signal that stdin carried real bootstrap params.
+//   - containerd >= 2.3.6 always sets ContainerdVersion to its own version
+//     string.
+//
+// The version in the JSON is fixed at 2; CRI-O and containerd <= 2.2 reject
+// any value higher than that.
+//
+// TODO: Remove once CRI-O's ParseShimAddress supports protobuf BootstrapResult
+// and the CI CRI-O version includes that fix.
+// Should be helped by: https://github.com/cri-o/cri-o/pulls/10490
+func legacyBootstrapJSON(params *bootapi.BootstrapParams, address string) ([]byte, bool) {
+	if params.GetContainerdVersion() != "" {
+		// Modern containerd (>= 2.3): let the SDK write protobuf as normal.
+		return nil, false
+	}
+
+	type result struct {
+		Version  int    `json:"version"`
+		Address  string `json:"address"`
+		Protocol string `json:"protocol"`
+	}
+	data, err := json.Marshal(result{Version: 2, Address: address, Protocol: "ttrpc"})
+	if err != nil {
+		// json.Marshal on a plain struct with only basic types cannot fail.
+		panic(fmt.Sprintf("legacyBootstrapJSON: unexpected marshal error: %v", err))
+	}
+	return data, true
+}
+
+// writeLegacyBootstrap writes JSON to the real stdout, then swaps os.Stdout to
+// /dev/null so the SDK's unconditional proto.Marshal+Write that follows our
+// return is silently discarded.
+func writeLegacyBootstrap(data []byte) error {
+	if _, err := os.Stdout.Write(data); err != nil {
+		return fmt.Errorf("write legacy bootstrap result: %w", err)
+	}
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("open /dev/null: %w", err)
+	}
+	os.Stdout = devNull
+	return nil
+}
+
+// shimFlagValue returns the value of a flag registered by the shim SDK, or an
+// empty string when the flag is not set.
+func shimFlagValue(name string) string {
+	if f := flag.Lookup(name); f != nil {
+		return f.Value.String()
+	}
+	return ""
+}
+
+// resolveBootstrapIdentity returns the shim instance ID and containerd gRPC
+// address to use for a "shim start" invocation.
+//
+// Modern containerd (>= 2.3.6) supplies both in the BootstrapParams it writes
+// to stdin, and resolveBootstrapIdentity trusts them.
+//
+// Legacy callers do not. CRI-O sends no stdin, so the SDK's deprecated-fields
+// fallback fills both in from the -id/-address flags and the GRPC_ADDRESS
+// environment variable. containerd <= 2.2 and the 2.3.0 pre-releases send the
+// task/runtime options types.Any on stdin instead: field 1 of types.Any is the
+// type URL string and field 2 is the value bytes, so proto.Unmarshal silently
+// succeeds and leaves InstanceID set to the options type URL (for example
+// "runtimeoptions.v1.Options") and containerdAddress empty. In both cases the
+// real values come from the deprecated -id/-address flags, which every caller
+// sets (the SDK's own fallback reads the same flags).
+func resolveBootstrapIdentity(params *bootapi.BootstrapParams, idFlag, addressFlag string) (id, containerdAddress string) {
+	if params.GetContainerdVersion() != "" {
+		return params.InstanceID, params.ContainerdGrpcAddress
+	}
+
+	id = idFlag
+	if id == "" {
+		// CRI-O and containerd <= 2.2 reach the deprecated-fields fallback,
+		// which has already populated InstanceID correctly.
+		id = params.InstanceID
+	}
+
+	containerdAddress = addressFlag
+	if containerdAddress == "" {
+		containerdAddress = params.ContainerdGrpcAddress
+	}
+
+	return id, containerdAddress
+}
+
+func (m *shimManager) start(ctx context.Context, params *bootapi.BootstrapParams) (_ *bootapi.BootstrapResult, retErr error) {
+	id, containerdAddress := resolveBootstrapIdentity(params, shimFlagValue("id"), shimFlagValue("address"))
 
 	bundlePath, err := os.Getwd()
 	if err != nil {
@@ -226,6 +324,28 @@ func (m *shimManager) Start(ctx context.Context, params *bootapi.BootstrapParams
 		return nil, err
 	}
 	return &bootapi.BootstrapResult{Version: shimVersion, Address: address, Protocol: "ttrpc"}, nil
+}
+
+// Start launches the shim daemon and returns its bootstrap result.
+//
+// For modern callers (containerd >= 2.3, ContainerdVersion non-empty) the SDK
+// serialises the returned BootstrapResult as protobuf to stdout unchanged.
+//
+// For legacy callers (CRI-O, containerd <= 2.2.x, ContainerdVersion empty) we
+// write the JSON form of the result directly to the original os.Stdout, then
+// redirect os.Stdout to /dev/null so that the SDK's unconditional protobuf
+// write (pkg/shim/shim.go) is silently discarded.
+func (m *shimManager) Start(ctx context.Context, params *bootapi.BootstrapParams) (*bootapi.BootstrapResult, error) {
+	result, err := m.start(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if jsonData, legacy := legacyBootstrapJSON(params, result.Address); legacy {
+		if err := writeLegacyBootstrap(jsonData); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 // Stop implements the binary "delete" action. The v1 SDK dispatched this to
