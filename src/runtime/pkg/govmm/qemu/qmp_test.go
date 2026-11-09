@@ -1203,7 +1203,7 @@ func TestQMPPCIVFIOPCIeDeviceAdd(t *testing.T) {
 	addr := "0x1"
 	romfile := ""
 	devID := fmt.Sprintf("device_%s", volumeUUID)
-	err := q.ExecutePCIVFIODeviceAdd(context.Background(), devID, bdf, addr, bus, romfile)
+	err := q.ExecutePCIVFIODeviceAdd(context.Background(), devID, bdf, addr, bus, romfile, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -1239,10 +1239,11 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name      string
-		iommufdID string
-		commands  []qmpCommand
-		wantErr   bool
+		name            string
+		iommufdID       string
+		gpuDirectClique *uint8
+		commands        []qmpCommand
+		wantErr         bool
 	}{
 		{
 			name:      "with new IOMMUFD object",
@@ -1290,6 +1291,14 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 				{"device_add", "return", nil},
 			},
 		},
+		{
+			name:            "with GPUDirect clique",
+			iommufdID:       "",
+			gpuDirectClique: func() *uint8 { c := uint8(3); return &c }(),
+			commands: []qmpCommand{
+				{"device_add", "return", nil},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			connectedCh := make(chan *QMPVersion)
@@ -1308,7 +1317,7 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 			q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 			checkVersion(t, connectedCh)
 
-			err := q.ExecuteVFIODeviceAdd(context.Background(), "devID", bdf, "rp1", romfile, tc.iommufdID)
+			err := q.ExecuteVFIODeviceAdd(context.Background(), "devID", bdf, "rp1", romfile, tc.iommufdID, tc.gpuDirectClique)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("Expected error")
@@ -1319,6 +1328,20 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 			q.Shutdown()
 			<-disconnectedCh
 		})
+	}
+}
+
+func TestAddGPUDirectCliqueArg(t *testing.T) {
+	args := map[string]interface{}{}
+	addGPUDirectCliqueArg(args, nil)
+	if _, ok := args["x-nv-gpudirect-clique"]; ok {
+		t.Fatalf("x-nv-gpudirect-clique set without a clique: %v", args)
+	}
+
+	clique := uint8(0)
+	addGPUDirectCliqueArg(args, &clique)
+	if v, ok := args["x-nv-gpudirect-clique"]; !ok || v != uint8(0) {
+		t.Fatalf("expected x-nv-gpudirect-clique=0, got %v", args)
 	}
 }
 

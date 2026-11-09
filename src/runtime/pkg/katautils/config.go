@@ -166,6 +166,7 @@ type hypervisor struct {
 	ColdPlugVFIO                   config.PCIePort           `toml:"cold_plug_vfio"`
 	PCIeRootPort                   uint32                    `toml:"pcie_root_port"`
 	PCIeSwitchPort                 uint32                    `toml:"pcie_switch_port"`
+	GPUDirectClique                *int64                    `toml:"gpudirect_clique"`
 	DisableVhostNet                bool                      `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool                      `toml:"guest_memory_dump_paging"`
 	ConfidentialGuest              bool                      `toml:"confidential_guest"`
@@ -344,6 +345,13 @@ func (h hypervisor) pcieRootPort() uint32 {
 		return maxPCIeRootPorts
 	}
 	return h.PCIeRootPort
+}
+
+func (h hypervisor) gpuDirectClique() (*uint8, error) {
+	if h.GPUDirectClique == nil {
+		return nil, nil
+	}
+	return vc.ParseGPUDirectClique(*h.GPUDirectClique)
 }
 
 func (h hypervisor) pcieSwitchPort() uint32 {
@@ -1048,6 +1056,14 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	gpuDirectClique, err := h.gpuDirectClique()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+	if gpuDirectClique != nil && h.ConfidentialGuest {
+		return vc.HypervisorConfig{}, errors.New("gpudirect_clique is not supported for confidential guests")
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:                hypervisor,
 		HypervisorPathList:            h.HypervisorPathList,
@@ -1107,6 +1123,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ColdPlugVFIO:                  h.coldPlugVFIO(),
 		PCIeRootPort:                  h.pcieRootPort(),
 		PCIeSwitchPort:                h.pcieSwitchPort(),
+		GPUDirectClique:               gpuDirectClique,
 		DisableVhostNet:               h.DisableVhostNet,
 		EnableVhostUserStore:          h.EnableVhostUserStore,
 		VhostUserStorePath:            h.vhostUserStorePath(),

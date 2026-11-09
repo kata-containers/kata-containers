@@ -112,7 +112,7 @@ type qemuArch interface {
 	appendVhostUserDevice(ctx context.Context, devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error)
 
 	// appendVFIODevice appends a VFIO device to devices
-	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev) []govmmQemu.Device
+	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev, gpuDirectClique *uint8) []govmmQemu.Device
 
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
@@ -734,7 +734,7 @@ func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govm
 	return devices, nil
 }
 
-func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
+func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev, gpuDirectClique *uint8) []govmmQemu.Device {
 
 	if vfioDev.BDF == "" {
 		return devices
@@ -742,13 +742,14 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			ID:       vfioDev.ID,
-			BDF:      vfioDev.BDF,
-			VendorID: vfioDev.VendorID,
-			DeviceID: vfioDev.DeviceID,
-			Bus:      vfioDev.Bus,
-			SysfsDev: vfioDev.SysfsDev,
-			DevfsDev: vfioDev.DevfsDev,
+			ID:              vfioDev.ID,
+			BDF:             vfioDev.BDF,
+			VendorID:        vfioDev.VendorID,
+			DeviceID:        vfioDev.DeviceID,
+			Bus:             vfioDev.Bus,
+			SysfsDev:        vfioDev.SysfsDev,
+			DevfsDev:        vfioDev.DevfsDev,
+			GPUDirectClique: gpuDirectClique,
 		},
 	)
 

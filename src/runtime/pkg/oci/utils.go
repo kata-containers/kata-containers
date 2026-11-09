@@ -577,7 +577,7 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, config); err != nil {
+	if err := addHypervisorVFIOOverrides(ocispec, config); err != nil {
 		return err
 	}
 
@@ -763,6 +763,34 @@ func addHypervisorPCIeRootPortOverrides(ocispec specs.Spec, sbConfig *vc.Sandbox
 	}); err != nil {
 		return err
 	}
+	return nil
+}
+
+func addHypervisorVFIOOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, sbConfig); err != nil {
+		return err
+	}
+	return addHypervisorGPUDirectCliqueOverrides(ocispec, sbConfig)
+}
+
+func addHypervisorGPUDirectCliqueOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	value, ok := ocispec.Annotations[vcAnnotations.GPUDirectClique]
+	if !ok {
+		return nil
+	}
+	clique, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fmt.Errorf("Error parsing annotation for %s: Please specify an integer value: %w",
+			vcAnnotations.GPUDirectClique, err)
+	}
+	gpuDirectClique, err := vc.ParseGPUDirectClique(clique)
+	if err != nil {
+		return fmt.Errorf("Invalid annotation %s: %w", vcAnnotations.GPUDirectClique, err)
+	}
+	if gpuDirectClique != nil && sbConfig.HypervisorConfig.ConfidentialGuest {
+		return fmt.Errorf("Invalid annotation %s: not supported for confidential guests", vcAnnotations.GPUDirectClique)
+	}
+	sbConfig.HypervisorConfig.GPUDirectClique = gpuDirectClique
 	return nil
 }
 

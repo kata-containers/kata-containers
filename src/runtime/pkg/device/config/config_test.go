@@ -89,3 +89,26 @@ func TestIOMMUFDID(t *testing.T) {
 		})
 	}
 }
+
+func TestVFIODevIsNVIDIAGPU(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		vendorID string
+		class    string
+		want     bool
+	}{
+		{name: "NVIDIA 3D controller", vendorID: "0x10de", class: "0x030200", want: true},
+		{name: "NVIDIA VGA controller", vendorID: "0x10de", class: "0x030000", want: true},
+		{name: "NVIDIA upper case", vendorID: "0x10DE", class: "0x030200", want: true},
+		{name: "NVIDIA other display controller", vendorID: "0x10de", class: "0x038000", want: false},
+		{name: "NVIDIA NVSwitch", vendorID: "0x10de", class: "0x068000", want: false},
+		{name: "NVIDIA audio function", vendorID: "0x10de", class: "0x040300", want: false},
+		{name: "other vendor GPU", vendorID: "0x1002", class: "0x030000", want: false},
+		{name: "unknown class", vendorID: "0x10de", class: "", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dev := VFIODev{VendorID: tc.vendorID, Class: tc.class}
+			assert.Equal(t, tc.want, dev.IsNVIDIAGPU())
+		})
+	}
+}

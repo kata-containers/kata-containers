@@ -405,6 +405,58 @@ func TestQemuAddDeviceVhostUserBlk(t *testing.T) {
 	testQemuAddDevice(t, vDevice, VhostuserDev, expectedOut)
 }
 
+func TestQemuAddDeviceVFIOGPUDirectClique(t *testing.T) {
+	clique := uint8(5)
+	gpu := config.VFIODev{
+		BDF:      "0000:21:00.0",
+		VendorID: "0x10de",
+		DeviceID: "0x2bb5",
+		Class:    "0x030200",
+	}
+	nvSwitch := config.VFIODev{
+		BDF:      "0000:bd:00.0",
+		VendorID: "0x10de",
+		DeviceID: "0x22a3",
+		Class:    "0x068000",
+	}
+	nic := config.VFIODev{
+		BDF:      "0000:c1:00.0",
+		VendorID: "0x15b3",
+		DeviceID: "0x1021",
+		Class:    "0x020000",
+	}
+
+	for _, tc := range []struct {
+		name       string
+		configured *uint8
+		coco       bool
+		dev        config.VFIODev
+		want       *uint8
+	}{
+		{name: "disabled", configured: nil, dev: gpu, want: nil},
+		{name: "confidential guest", configured: &clique, coco: true, dev: gpu, want: nil},
+		{name: "NVIDIA GPU", configured: &clique, dev: gpu, want: &clique},
+		{name: "NVIDIA NVSwitch", configured: &clique, dev: nvSwitch, want: nil},
+		{name: "non-NVIDIA NIC", configured: &clique, dev: nic, want: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+			q := &qemu{
+				ctx:    context.Background(),
+				arch:   &qemuArchBase{},
+				config: HypervisorConfig{GPUDirectClique: tc.configured, ConfidentialGuest: tc.coco},
+			}
+
+			err := q.AddDevice(context.Background(), tc.dev, VfioDev)
+			assert.NoError(err)
+			assert.Len(q.qemuConfig.Devices, 1)
+			vfioDev, ok := q.qemuConfig.Devices[0].(govmmQemu.VFIODevice)
+			assert.True(ok)
+			assert.Equal(tc.want, vfioDev.GPUDirectClique)
+		})
+	}
+}
+
 func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 	deviceID := "channelTest"
 	id := "charchTest"
