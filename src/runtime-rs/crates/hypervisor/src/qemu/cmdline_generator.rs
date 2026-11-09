@@ -2584,6 +2584,8 @@ pub struct PCIeVfioDevice {
     fd: Option<File>,
     x_pci_vendor_id: Option<String>,
     x_pci_device_id: Option<String>,
+    /// NVIDIA GPUDirect P2P clique ID, emitted as `x-nv-gpudirect-clique`.
+    nvidia_gpudirect_clique: Option<u8>,
 }
 
 impl PCIeVfioDevice {
@@ -2601,6 +2603,7 @@ impl PCIeVfioDevice {
             fd: None,
             x_pci_vendor_id: None,
             x_pci_device_id: None,
+            nvidia_gpudirect_clique: None,
         }
     }
 
@@ -2616,6 +2619,7 @@ impl PCIeVfioDevice {
             fd: None,
             x_pci_vendor_id: None,
             x_pci_device_id: None,
+            nvidia_gpudirect_clique: None,
         }
     }
 
@@ -2642,6 +2646,12 @@ impl PCIeVfioDevice {
 
     pub fn with_device_id(mut self, device_id: impl Into<String>) -> Self {
         self.x_pci_device_id = Some(device_id.into());
+        self
+    }
+
+    /// Sets the NVIDIA GPUDirect P2P clique ID of the device.
+    pub fn with_nvidia_gpudirect_clique(mut self, clique: Option<u8>) -> Self {
+        self.nvidia_gpudirect_clique = clique;
         self
     }
 }
@@ -2710,6 +2720,10 @@ impl ToQemuParams for PCIeVfioDevice {
             write!(params, ",x-pci-device-id={}", device).unwrap();
         }
 
+        if let Some(clique) = self.nvidia_gpudirect_clique {
+            write!(params, ",x-nv-gpudirect-clique={}", clique).unwrap();
+        }
+
         Ok(vec!["-device".to_string(), params])
     }
 }
@@ -2775,6 +2789,9 @@ pub struct VfioDeviceConfig {
     /// Optional PCI Device ID override.
     pub x_pci_device_id: Option<String>,
 
+    /// NVIDIA GPUDirect P2P clique ID of the device.
+    pub nvidia_gpudirect_clique: Option<u8>,
+
     /// Resources for passing an externally opened VFIO device to QEMU.
     pub fd_config: Option<VfioDeviceFdConfig>,
 }
@@ -2795,6 +2812,7 @@ impl VfioDeviceConfig {
             vfio_addr: format!("0x{}", port),
             x_pci_vendor_id: None,
             x_pci_device_id: None,
+            nvidia_gpudirect_clique: None,
             fd_config: None,
         }
     }
@@ -2851,6 +2869,12 @@ impl VfioDeviceConfig {
     #[allow(dead_code)]
     pub fn with_device_id(mut self, device_id: impl Into<String>) -> Self {
         self.x_pci_device_id = Some(device_id.into());
+        self
+    }
+
+    /// Sets the NVIDIA GPUDirect P2P clique ID of the device.
+    pub fn with_nvidia_gpudirect_clique(mut self, clique: Option<u8>) -> Self {
+        self.nvidia_gpudirect_clique = clique;
         self
     }
 
@@ -3632,8 +3656,11 @@ impl<'a> QemuCmdLine<'a> {
         bus: &str,
         x_pci_vendor_id: Option<&str>,
         x_pci_device_id: Option<&str>,
+        nvidia_gpudirect_clique: Option<u8>,
     ) {
-        let mut dev = PCIeVfioDevice::new_without_iommufd(host_bdf, bus).with_id(id);
+        let mut dev = PCIeVfioDevice::new_without_iommufd(host_bdf, bus)
+            .with_id(id)
+            .with_nvidia_gpudirect_clique(nvidia_gpudirect_clique);
         if let Some(vid) = x_pci_vendor_id {
             dev = dev.with_vendor_id(vid);
         }
@@ -3662,6 +3689,8 @@ impl<'a> QemuCmdLine<'a> {
         if let Some(device_id) = &config.x_pci_device_id {
             vfio_device = vfio_device.with_device_id(device_id);
         }
+
+        vfio_device = vfio_device.with_nvidia_gpudirect_clique(config.nvidia_gpudirect_clique);
 
         self.devices.reserve(1);
         self.add_pcie_root_port(root_port);
@@ -3725,6 +3754,8 @@ impl<'a> QemuCmdLine<'a> {
         if let Some(device_id) = &config.x_pci_device_id {
             vfio_device = vfio_device.with_device_id(device_id);
         }
+
+        vfio_device = vfio_device.with_nvidia_gpudirect_clique(config.nvidia_gpudirect_clique);
 
         self.devices.reserve(1);
         self.add_pcie_root_port(root_port);
@@ -4289,6 +4320,57 @@ mod tests {
         assert!(vfio[1].split(',').any(|param| param.starts_with("fd=")));
         assert!(!vfio[1].split(',').any(|param| param.starts_with("host=")));
         assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    async fn test_vfio_nvidia_gpudirect_clique_param() {
+        let dev = PCIeVfioDevice::new("0000:21:00.0", "rp0", "iommufd0")
+            .with_vendor_id("0x10de")
+            .with_device_id("0x2bb5");
+        let params = dev.qemu_params().await.unwrap();
+        assert!(!params[1].contains("x-nv-gpudirect-clique"));
+
+        let dev = PCIeVfioDevice::new("0000:21:00.0", "rp0", "iommufd0")
+            .with_vendor_id("0x10de")
+            .with_device_id("0x2bb5")
+            .with_nvidia_gpudirect_clique(Some(0));
+        let params = dev.qemu_params().await.unwrap();
+        assert!(contains_param(&params, "x-nv-gpudirect-clique=0"));
+
+        let dev = PCIeVfioDevice::new_without_iommufd("0000:45:00.0", "rp1")
+            .with_nvidia_gpudirect_clique(Some(15));
+        let params = dev.qemu_params().await.unwrap();
+        assert!(contains_param(&params, "x-nv-gpudirect-clique=15"));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_nvidia_gpudirect_clique_cold_plug() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-nvidia-gpudirect-clique", &config).unwrap();
+
+        let gpu = VfioDeviceConfig::new("0000:21:00.0", 9, 10)
+            .with_vfio_bus("rp0")
+            .with_nvidia_gpudirect_clique(Some(3));
+        cmdline.add_pcie_vfio_device(gpu).unwrap();
+        let nic = VfioDeviceConfig::new("0000:c1:00.0", 11, 12).with_vfio_bus("rp1");
+        cmdline.add_pcie_vfio_device(nic).unwrap();
+        cmdline.add_physical_vfio_device("0000:45:00.0", "gpu1", "rp2", None, None, Some(3));
+        let params = cmdline.build().await.unwrap();
+
+        let vfio: Vec<&String> = params
+            .windows(2)
+            .filter(|args| args[0] == "-device" && args[1].starts_with("vfio-pci,"))
+            .map(|args| &args[1])
+            .collect();
+        assert_eq!(vfio.len(), 3);
+        for dev in vfio {
+            let has_clique = dev.split(',').any(|p| p == "x-nv-gpudirect-clique=3");
+            let is_nic = dev.contains("host=0000:c1:00.0");
+            assert_eq!(has_clique, !is_nic, "unexpected clique setting: {dev}");
+        }
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 
