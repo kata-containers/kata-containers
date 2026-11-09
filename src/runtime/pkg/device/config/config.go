@@ -463,6 +463,23 @@ func (t VFIODev) IOMMUFDID() string {
 	return strings.TrimPrefix(basename, "vfio")
 }
 
+const (
+	// NVIDIAVendorID is the PCI vendor ID of NVIDIA devices.
+	NVIDIAVendorID = "0x10de"
+
+	// pciClassVGAPrefix and pciClassThreeDPrefix are the PCI class prefixes
+	// of VGA and 3D controllers.
+	pciClassVGAPrefix    = "0x0300"
+	pciClassThreeDPrefix = "0x0302"
+)
+
+// IsNVIDIAGPU returns true if the device is an NVIDIA VGA or 3D controller.
+func (t VFIODev) IsNVIDIAGPU() bool {
+	class := strings.ToLower(t.Class)
+	return strings.EqualFold(t.VendorID, NVIDIAVendorID) &&
+		(strings.HasPrefix(class, pciClassVGAPrefix) || strings.HasPrefix(class, pciClassThreeDPrefix))
+}
+
 // RNGDev represents a random number generator device
 type RNGDev struct {
 	// ID is used to identify the device in the hypervisor options.
