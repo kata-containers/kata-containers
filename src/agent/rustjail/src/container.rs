@@ -1551,6 +1551,12 @@ fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {
         .collect()
 }
 
+#[derive(Deserialize)]
+struct ChildLog {
+    pid: u32,
+    msg: String,
+}
+
 pub fn setup_child_logger(
     log_file_stream: PipeStream,
     child_logger: Logger,
@@ -1565,9 +1571,10 @@ pub fn setup_child_logger(
                     info!(child_logger, "read child process log error: {:?}", e);
                     break;
                 }
-                Ok(Some(line)) => {
-                    info!(child_logger, "{}", line);
-                }
+                Ok(Some(line)) => match serde_json::from_str::<ChildLog>(&line) {
+                    Ok(log) => info!(child_logger, "{}", log.msg; "pid" => log.pid.to_string()),
+                    Err(_) => info!(child_logger, "{}", line),
+                },
                 Ok(None) => {
                     info!(child_logger, "read child process log end",);
                     break;
@@ -1858,6 +1865,97 @@ mod tests {
 
     fn sl() -> slog::Logger {
         slog_scope::logger()
+    }
+
+    #[tokio::test]
+    async fn test_child_logger_pid() {
+        let log_file = tempfile::NamedTempFile::new().unwrap();
+        let (logger, guard) = logging::create_logger(
+            "kata-agent",
+            "agent",
+            slog::Level::Info,
+            log_file.reopen().unwrap(),
+        );
+        let logger = logger.new(o!("pid" => "parent-pid", "cid" => "container-id"));
+        let (reader, writer) = unistd::pipe().unwrap();
+        let handler = setup_child_logger(
+            PipeStream::new(reader.into_raw_fd()).unwrap(),
+            logger.clone(),
+        );
+        let messages = [
+            "child process start run".to_string(),
+            String::new(),
+            "quotes: \"hello\"; newline:\nnext line; carriage return:\r; unicode: 容器".to_string(),
+            "x".repeat(65536),
+        ];
+        let expected = messages.clone();
+        let writer = std::thread::spawn(move || {
+            for message in messages {
+                log_child!(writer.as_raw_fd(), "{}", message);
+            }
+        });
+        handler.await.unwrap();
+        writer.join().unwrap();
+        info!(logger, "parent process log");
+        drop(guard);
+
+        let contents = fs::read_to_string(log_file.path()).unwrap();
+        let records: Vec<serde_json::Value> = contents
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        for (record, message) in records.iter().zip(&expected) {
+            assert_eq!(record["pid"], std::process::id().to_string());
+            assert_eq!(record["msg"], message.as_str());
+            assert_eq!(record["cid"], "container-id");
+        }
+        assert_eq!(records.len(), expected.len() + 2);
+        for record in &records[records.len() - 2..] {
+            assert_eq!(record["pid"], "parent-pid");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_child_logger_mixed_messages() {
+        let log_file = tempfile::NamedTempFile::new().unwrap();
+        let (logger, guard) = logging::create_logger(
+            "kata-agent",
+            "agent",
+            slog::Level::Info,
+            log_file.reopen().unwrap(),
+        );
+        let logger = logger.new(o!("pid" => "parent-pid"));
+        let (reader, writer) = unistd::pipe().unwrap();
+        let handler = setup_child_logger(PipeStream::new(reader.into_raw_fd()).unwrap(), logger);
+        let mut writer = fs::File::from(writer);
+        let tests = [
+            (r#"{"pid":1,"msg":"first"}"#, "first", "1"),
+            (r#"{"pid":1234,"msg":"second"}"#, "second", "1234"),
+            ("plain text", "plain text", "parent-pid"),
+            ("{invalid json", "{invalid json", "parent-pid"),
+            (
+                r#"{"pid":"invalid","msg":"text"}"#,
+                r#"{"pid":"invalid","msg":"text"}"#,
+                "parent-pid",
+            ),
+        ];
+        for (input, _, _) in tests {
+            writeln!(writer, "{}", input).unwrap();
+        }
+        drop(writer);
+        handler.await.unwrap();
+        drop(guard);
+
+        let contents = fs::read_to_string(log_file.path()).unwrap();
+        let records: Vec<serde_json::Value> = contents
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(records.len(), tests.len() + 1);
+        for (record, (_, message, pid)) in records.iter().zip(tests) {
+            assert_eq!(record["msg"], message);
+            assert_eq!(record["pid"], pid);
+        }
     }
 
     #[test]

@@ -21,7 +21,11 @@ pub const MSG_SIZE: usize = mem::size_of::<i32>();
 macro_rules! log_child {
     ($fd:expr, $($arg:tt)+) => ({
         let lfd = $fd;
-        let mut log_str = format_args!($($arg)+).to_string();
+        // The agent forwards these messages, so include the sender's namespace PID.
+        let mut log_str = serde_json::json!({
+            "pid": std::process::id(),
+            "msg": format_args!($($arg)+).to_string(),
+        }).to_string();
         log_str.push('\n');
         // Ignore error writing to the logger, not much we can do
         let _ = write_count(lfd, log_str.as_bytes(), log_str.len());
