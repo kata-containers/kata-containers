@@ -12,11 +12,7 @@ on:
         required: true
         type: string
       target:
-        description: Target release tag or full commit SHA
-        required: true
-        type: string
-      dictionary_words:
-        description: Reviewed dictionary additions, separated by spaces
+        description: Full target commit SHA (defaults to main at dispatch)
         type: string
       certify_dco:
         description: Authorize the notfidencio DCO sign-off for this draft PR
@@ -66,12 +62,12 @@ jobs:
 
           git check-ref-format "refs/tags/$PREVIOUS_TAG"
           base=$(git rev-parse --verify --end-of-options "refs/tags/$PREVIOUS_TAG^{commit}")
-          if [[ "$TARGET" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            target=$(git rev-parse --verify --end-of-options "$TARGET^{commit}")
-          else
-            git check-ref-format "refs/tags/$TARGET"
-            target=$(git rev-parse --verify --end-of-options "refs/tags/$TARGET^{commit}")
+          target=${TARGET:-$GITHUB_SHA}
+          if [[ ! "$target" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::Enter a full target commit SHA or leave it blank to use main"
+            exit 1
           fi
+          target=$(git rev-parse --verify --end-of-options "$target^{commit}")
           if [[ "$base" == "$target" ]] || ! git merge-base --is-ancestor "$base" "$target"; then
             echo "::error::The previous tag must precede the target commit"
             exit 1
@@ -145,13 +141,17 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ inputs.version }}
-          DICTIONARY_WORDS: ${{ inputs.dictionary_words }}
         run: |
           draft="$RUNNER_TEMP/kata-release-notes-draft/release-notes.md"
           [[ -f "$draft" && ! -L "$draft" ]]
           [[ "$(head -n 1 "$draft")" == "# Kata Containers $VERSION" ]]
           grep -Fxq '## Upgrading' "$draft"
-          install -m 0644 "$draft" "docs/releases/$VERSION.md"
+          path="docs/releases/$VERSION.md"
+          install -m 0644 "$draft" "$path"
+
+          make --no-print-directory --silent docs-spellcheck \
+            CSPELL_FLAGS='--words-only --unique --no-progress --no-summary --no-exit-code' \
+            CSPELL_FILES="$path" > "$RUNNER_TEMP/release-notes-words.txt"
 
           python3 - <<'PY'
           import os
@@ -168,13 +168,13 @@ jobs:
           nav.write_text(text.replace(marker, marker + entry, 1))
 
           dictionary = Path("tests/spellcheck/kata-dictionary.txt")
-          current = dictionary.read_text().splitlines()
-          added = []
-          for word in os.environ["DICTIONARY_WORDS"].split():
-              if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", word):
+          current = set(dictionary.read_text().splitlines())
+          detected = Path(os.environ["RUNNER_TEMP"], "release-notes-words.txt")
+          words = detected.read_text().splitlines()
+          for word in words:
+              if not re.fullmatch(r"[^\W\d_][\w'’-]*", word):
                   raise SystemExit(f"Invalid dictionary word: {word!r}")
-              if word not in current and word not in added:
-                  added.append(word)
+          added = sorted(set(words) - current)
           if added:
               with dictionary.open("a") as output:
                   output.write("".join(f"{word}\n" for word in added))

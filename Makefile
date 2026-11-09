@@ -53,8 +53,10 @@ docs-serve: docs-build
 	docker run --rm -p 8000:8000 -v ${PWD}:/docs:ro kata-docs:latest serve --config-file /docs/mkdocs.yaml -a 0.0.0.0:8000
 
 CSPELL_IMAGE ?= ghcr.io/streetsidesoftware/cspell@sha256:f02e91044d7ab4c31aab76e9b87943a1c8a229f30ce684ca1f04f941084cb049
+CSPELL_FLAGS ?=
+CSPELL_FILES ?= "**/*.md" "**/*.rst" "**/*.txt"
 docs-spellcheck:
-	docker run --rm -v ${PWD}:/workdir:ro -w /workdir ${CSPELL_IMAGE} --config .cspell.yaml "**/*.md" "**/*.rst" "**/*.txt"
+	docker run --rm -v ${PWD}:/workdir:ro -w /workdir ${CSPELL_IMAGE} --config .cspell.yaml ${CSPELL_FLAGS} ${CSPELL_FILES}
 
 docs-editorconfig-checker:
 	docker run --rm --volume=${PWD}:/check mstruebing/editorconfig-checker:v3.7
