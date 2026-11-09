@@ -10,6 +10,8 @@ import (
 	"compress/gzip"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -191,7 +193,7 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder, filterFam
 		go func(sandboxID string, sandboxMetadata sandboxCRIMetadata, results chan<- []*dto.MetricFamily) {
 			sandboxMetrics, err := getParsedMetrics(sandboxID, sandboxMetadata)
 			if err != nil {
-				monitorLog.WithError(err).WithField("sandbox_id", sandboxID).Errorf("failed to get metrics for sandbox")
+				logSandboxMetricsError(sandboxID, err, getSandboxFSPaths())
 			}
 
 			results <- sandboxMetrics
@@ -256,6 +258,33 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder, filterFam
 	}
 	return nil
 
+}
+
+func logSandboxMetricsError(sandboxID string, metricsErr error, sandboxPaths []string) {
+	exists, stateErr := sandboxExistsInPaths(sandboxID, sandboxPaths)
+	entry := monitorLog.WithError(metricsErr).WithField("sandbox_id", sandboxID)
+
+	if stateErr == nil && !exists {
+		entry.Debug("sandbox removed while collecting metrics")
+		return
+	}
+	if stateErr != nil {
+		entry = entry.WithField("sandbox_state_error", stateErr.Error())
+	}
+	entry.Error("failed to get metrics for sandbox")
+}
+
+func sandboxExistsInPaths(sandboxID string, sandboxPaths []string) (bool, error) {
+	for _, sandboxPath := range sandboxPaths {
+		_, err := os.Stat(filepath.Join(sandboxPath, sandboxID))
+		if err == nil {
+			return true, nil
+		}
+		if !os.IsNotExist(err) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func getParsedMetrics(sandboxID string, sandboxMetadata sandboxCRIMetadata) ([]*dto.MetricFamily, error) {
