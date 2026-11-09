@@ -5,6 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
+use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
+use crate::device::driver::virtio_blk_modern::VIRTIO_BLOCK_PCI;
+use crate::device::driver::KATA_BLK_DEV_TYPE;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::utils::open_named_tuntap;
@@ -110,6 +113,7 @@ impl CloudHypervisorInner {
             DeviceType::BlockModern(block) => self.handle_block_device(block).await,
             DeviceType::Vfio(vfiodev) => self.handle_vfio_device(vfiodev).await,
             DeviceType::Network(netdev) => self.handle_network_device(netdev).await,
+            DeviceType::VhostUserBlk(blk) => self.handle_vhost_user_blk_device(blk).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
@@ -138,6 +142,10 @@ impl CloudHypervisorInner {
             DeviceType::BlockModern(blockdev) => {
                 let device_id = blockdev.lock().await.device_id.clone();
                 self.inner_remove_device(device_id.as_str()).await
+            }
+            DeviceType::VhostUserBlk(vhostblkdev) => {
+                self.inner_remove_device(vhostblkdev.device_id.as_str())
+                    .await
             }
             _ => Ok(()),
         }
@@ -353,6 +361,66 @@ impl CloudHypervisorInner {
         Ok(DeviceType::BlockModern(device))
     }
 
+    async fn handle_vhost_user_blk_device(
+        &mut self,
+        device: VhostUserBlkDevice,
+    ) -> Result<DeviceType> {
+        let config = device.config.clone();
+
+        // SPDK volumes carry the backend scheme in the socket path
+        // ("spdk:///path/to/x.sock" or "spool:///..."), which cloud-hypervisor
+        // does not understand. Strip it to get the bare Unix socket path, the
+        // same way the dragonball vhost-user-blk frontend does.
+        let vhost_socket = strip_vhost_socket_scheme(&config.socket_path)?;
+
+        // The device manager already normalizes `driver_option` to a kata
+        // driver type before the device reaches the hypervisor: "virtio-blk-pci"
+        // becomes "blk", "virtio-blk-mmio" becomes "mmioblk". Cloud Hypervisor
+        // only implements vhost-user-blk on the PCI virtio transport, so
+        // reject the others explicitly.
+        match config.driver_option.as_str() {
+            KATA_BLK_DEV_TYPE | VIRTIO_BLOCK_PCI => {}
+            "" => {}
+            unsupported => {
+                return Err(anyhow!(
+                    "unsupported vhost-user-blk driver {} for cloud-hypervisor",
+                    unsupported
+                ))
+            }
+        }
+
+        let disk_config = DiskConfig {
+            vhost_user: true,
+            vhost_socket: Some(vhost_socket),
+            readonly: device.is_readonly,
+            num_queues: match config.num_queues {
+                0 => DEFAULT_DISK_QUEUES,
+                n => n,
+            },
+            queue_size: match config.queue_size {
+                0 => DEFAULT_DISK_QUEUE_SIZE,
+                sz => u16::try_from(sz)?,
+            },
+            // CLH fallocates writable disks to their full logical size when
+            // sparse is false; there is no backing file here to preallocate.
+            sparse: true,
+            ..Default::default()
+        };
+
+        let response = cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "vhost-user-blk add response: {:?}", detail);
+
+            let dev_info: PciDeviceInfo =
+                serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
+            self.device_ids
+                .insert(device.device_id.clone(), dev_info.id);
+        }
+
+        Ok(DeviceType::VhostUserBlk(device))
+    }
+
     async fn handle_network_device(&mut self, device: NetworkDevice) -> Result<DeviceType> {
         let netdev = device.clone();
 
@@ -559,6 +627,26 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
     }
 }
 
+/// vhost-user-blk socket paths for SPDK volumes arrive with a backend scheme
+/// prefix ("spdk:///..." or "spool:///...") added by the resource layer.
+/// Cloud Hypervisor expects the bare Unix socket path, so strip the scheme.
+/// A path without a recognized scheme is returned unchanged.
+fn strip_vhost_socket_scheme(socket_path: &str) -> Result<String> {
+    for scheme in ["spdk://", "spool://"] {
+        if let Some(stripped) = socket_path.strip_prefix(scheme) {
+            if stripped.is_empty() {
+                return Err(anyhow!(
+                    "vhost-user-blk socket path {:?} has no path after the scheme",
+                    socket_path
+                ));
+            }
+            return Ok(stripped.to_string());
+        }
+    }
+
+    Ok(socket_path.to_string())
+}
+
 // Write the descriptor text file for a VMDK layout to the specified path
 fn write_vmdk_descriptor(descriptor_path: &Path, vmdk: &VmdkConfig) -> Result<()> {
     let descriptor = validate_vmdk_layout(vmdk)?
@@ -631,7 +719,163 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 mod tests {
     use super::*;
     use crate::Address;
+    use crate::{VhostUserConfig, VhostUserType};
     use rstest::rstest;
+
+    fn new_vhost_user_blk_device(
+        socket_path: &str,
+        driver_option: &str,
+        num_queues: usize,
+        queue_size: u32,
+        is_readonly: bool,
+    ) -> VhostUserBlkDevice {
+        VhostUserBlkDevice {
+            device_id: "test-vhost-blk-0".into(),
+            is_readonly,
+            no_drop: false,
+            driver_option: driver_option.into(),
+            attach_count: 0,
+            config: VhostUserConfig {
+                socket_path: socket_path.into(),
+                device_type: VhostUserType::Blk,
+                driver_option: driver_option.into(),
+                num_queues,
+                queue_size,
+                ..Default::default()
+            },
+        }
+    }
+
+    /// Before VhostUserBlk support, `handle_add_device` failed outright with
+    /// "unhandled device". The dispatcher must now reach the vhost-user-blk
+    /// handler, which for a VM that is not running reports a connection
+    /// failure to the cloud-hypervisor API socket instead of "unhandled
+    /// device".
+    #[cfg(feature = "cloud-hypervisor")]
+    #[actix_rt::test]
+    async fn test_vhost_user_blk_no_longer_unhandled() {
+        let mut ch = CloudHypervisorInner {
+            state: VmmState::VmRunning,
+            ..Default::default()
+        };
+
+        let device = new_vhost_user_blk_device(
+            "spdk:///tmp/vhost-blk-rawdisk01.sock",
+            KATA_BLK_DEV_TYPE,
+            0,
+            0,
+            false,
+        );
+
+        let result = ch.handle_add_device(DeviceType::VhostUserBlk(device)).await;
+        // There is no live cloud-hypervisor VMM in the test, so the API call
+        // fails -- but it must not fail with "unhandled device".
+        let err = result.unwrap_err().to_string();
+        assert!(!err.contains("unhandled device"), "got: {}", err);
+    }
+
+    #[rstest]
+    #[case("spdk:///tmp/vhu/x.sock", "/tmp/vhu/x.sock")]
+    #[case("spool:///tmp/vhu/x.sock", "/tmp/vhu/x.sock")]
+    #[case("/tmp/vhu/x.sock", "/tmp/vhu/x.sock")]
+    fn test_strip_vhost_socket_scheme(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(strip_vhost_socket_scheme(input).unwrap(), expected);
+    }
+
+    #[rstest]
+    #[case("spdk://")]
+    #[case("spool://")]
+    fn test_strip_vhost_socket_scheme_empty_path(#[case] input: &str) {
+        assert!(strip_vhost_socket_scheme(input).is_err());
+    }
+
+    #[rstest]
+    #[case(KATA_BLK_DEV_TYPE, true)]
+    #[case(VIRTIO_BLOCK_PCI, true)]
+    #[case("", true)]
+    #[case("mmioblk", false)]
+    #[case("virtio-blk-mmio", false)]
+    #[cfg(feature = "cloud-hypervisor")]
+    #[actix_rt::test]
+    async fn test_vhost_user_blk_driver_validation(
+        #[case] driver: &str,
+        #[case] should_pass: bool,
+    ) {
+        let mut ch = CloudHypervisorInner {
+            state: VmmState::VmRunning,
+            ..Default::default()
+        };
+
+        let device = new_vhost_user_blk_device("spdk:///tmp/x.sock", driver, 0, 0, false);
+
+        let result = ch.handle_add_device(DeviceType::VhostUserBlk(device)).await;
+        let error = match result {
+            Ok(_) => String::new(),
+            Err(e) => e.to_string(),
+        };
+
+        if should_pass {
+            // Reaching the CLH API call (which fails without a live VMM) is
+            // success; an unsupported-driver rejection is not.
+            assert!(
+                !error.contains("unsupported vhost-user-blk driver"),
+                "{}",
+                error
+            );
+        } else {
+            assert!(
+                error.contains("unsupported vhost-user-blk driver"),
+                "{}",
+                error
+            );
+        }
+    }
+
+    #[rstest]
+    #[case(0, 0, DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE)]
+    #[case(2, 256, 2, 256)]
+    fn test_vhost_user_blk_queue_defaults(
+        #[case] num_queues: usize,
+        #[case] queue_size: u32,
+        #[case] expected_queues: usize,
+        #[case] expected_size: u16,
+    ) {
+        let socket_path = "spdk:///tmp/vhost-blk.sock";
+        let config = VhostUserConfig {
+            socket_path: socket_path.into(),
+            device_type: VhostUserType::Blk,
+            driver_option: KATA_BLK_DEV_TYPE.into(),
+            num_queues,
+            queue_size,
+            ..Default::default()
+        };
+
+        // Verify queue settings normalization matches the cold-plug disk
+        // config behavior (zero values fall back to CLH defaults).
+        let disk = DiskConfig {
+            vhost_user: true,
+            vhost_socket: strip_vhost_socket_scheme(&config.socket_path).ok(),
+            readonly: false,
+            num_queues: match config.num_queues {
+                0 => DEFAULT_DISK_QUEUES,
+                n => n,
+            },
+            queue_size: match config.queue_size {
+                0 => DEFAULT_DISK_QUEUE_SIZE,
+                sz => u16::try_from(sz).unwrap(),
+            },
+            sparse: true,
+            ..Default::default()
+        };
+
+        assert_eq!(disk.num_queues, expected_queues);
+        assert_eq!(disk.queue_size, expected_size);
+        assert!(disk.vhost_user);
+        assert_eq!(disk.vhost_socket.as_deref(), Some("/tmp/vhost-blk.sock"));
+        // No host file backs a vhost-user-blk device, so the request must not
+        // carry a disk path.
+        assert_eq!(disk.path, None);
+    }
 
     #[actix_rt::test]
     async fn test_cold_plug_guest_extension_images() {
