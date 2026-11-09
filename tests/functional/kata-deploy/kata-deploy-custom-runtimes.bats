@@ -91,7 +91,7 @@ fi
 		> /tmp/rendered.yaml
 
 	grep -q "CUSTOM_RUNTIMES_ENABLED" /tmp/rendered.yaml
-	grep -A1 "CUSTOM_RUNTIMES_ENABLED" /tmp/rendered.yaml | grep -q '"true"'
+	grep -A1 "CUSTOM_RUNTIMES_ENABLED" /tmp/rendered.yaml | grep '"true"' > /dev/null
 }
 
 @test "Helm template: custom-configs volume is mounted" {

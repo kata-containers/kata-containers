@@ -79,7 +79,7 @@ skip_paths(){
 	for p in "${paths_to_skip[@]}"; do
 		new_list=()
 		for l in "${list[@]}"; do
-			if echo "${l}" | grep -qv "${p}"; then
+			if grep -qv "${p}" <<< "${l}"; then
 				new_list=("${new_list[@]}" "${l}")
 			fi
 		done
@@ -200,7 +200,7 @@ ensure_func_is_check_func() {
 	func_is_valid "${name}"
 
 	local ret
-	{ echo "${name}" | grep -q "${check_func_regex}"; ret=$?; }
+	{ grep -q "${check_func_regex}" <<< "${name}"; ret=$?; }
 
 	[[ "${ret}" = 0 ]] || die "function '${name}' is not a check function"
 }
@@ -213,7 +213,7 @@ func_is_arch_specific() {
 	ensure_func_is_check_func "${name}"
 
 	local ret
-	{ echo "${name}" | grep -q "${arch_func_regex}"; ret=$?; }
+	{ grep -q "${arch_func_regex}" <<< "${name}"; ret=$?; }
 
 	if [[ "${ret}" = 0 ]]; then
 		echo "yes"
@@ -426,7 +426,7 @@ static_check_license_headers()
 	text_files=()
 	# Filter out non-text files
 	for file in "${files[@]}"; do
-		if [[ -f "${file}" ]] && file --mime-type "${file}" | grep -q "text/"; then
+		if [[ -f "${file}" ]] && file --mime-type "${file}" | grep "text/" > /dev/null; then
 			text_files+=("${file}")
 		else
 			info "Ignoring non-text file: ${file}"
@@ -746,13 +746,13 @@ static_check_files()
 
 		# Don't fail if this script contains the patterns
 		# (as it is guaranteed to ;)
-		echo "${file}" | grep -q "${script_name}$" && info "Ignoring special file ${file}" && continue
+		grep -q "${script_name}$" <<< "${file}" && info "Ignoring special file ${file}" && continue
 
 		# We really only care about comments in code. But to avoid
 		# having to hard-code the list of file extensions to search,
 		# invert the problem by simply ignoring document files and
 		# considering all other file types.
-		echo "${file}" | grep -q ".md$" && info "Ignoring comment tag in document ${file}" && continue
+		grep -q ".md$" <<< "${file}" && info "Ignoring comment tag in document ${file}" && continue
 
 		matches+=" ${match}"
 	done
@@ -1027,7 +1027,7 @@ static_check_dockerfiles()
 
 	local file
 	for file in ${files}; do
-		if echo "${ignore_files[@]}" | grep -q "${file}" ; then
+		if grep -q "${file}" <<< "${ignore_files[*]}" ; then
 			info "Ignoring Dockerfile '${file}'"
 			continue
 		fi

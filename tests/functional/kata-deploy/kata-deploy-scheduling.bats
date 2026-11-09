@@ -65,7 +65,7 @@ dispatcher_selectors() {
 # fail one.
 refute_match() {
 	local rendered="${1}" pattern="${2}"
-	if echo "${rendered}" | grep -q -- "${pattern}"; then
+	if grep -q -- "${pattern}" <<< "${rendered}"; then
 		echo "unexpected in rendered output: ${pattern}" >&2
 		return 1
 	fi
@@ -157,10 +157,10 @@ count_required_node_selector_terms() {
 	ds=$(extract_kata_deploy_ds)
 
 	[[ -n "${ds}" ]]
-	echo "${ds}" | grep -q "name: kata-deploy"
-	echo "${ds}" | grep -A5 "template:" | grep -A3 "labels:" | grep -q "name: kata-deploy"
-	! echo "${ds}" | grep -A10 "template:" | grep -A5 "metadata:" | grep -q "annotations:"
-	! echo "${ds}" | grep -q "affinity:"
+	grep -q "name: kata-deploy" <<< "${ds}"
+	echo "${ds}" | grep -A5 "template:" | grep -A3 "labels:" | grep "name: kata-deploy" > /dev/null
+	! echo "${ds}" | grep -A10 "template:" | grep -A5 "metadata:" | grep "annotations:" > /dev/null
+	! grep -q "affinity:" <<< "${ds}"
 }
 
 @test "Helm template: podLabels are applied to pod template" {
@@ -169,8 +169,8 @@ count_required_node_selector_terms() {
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "name: kata-deploy"
-	echo "${ds}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "team: platform"
+	echo "${ds}" | grep -A5 "template:" | grep -A4 "labels:" | grep "name: kata-deploy" > /dev/null
+	echo "${ds}" | grep -A5 "template:" | grep -A4 "labels:" | grep "team: platform" > /dev/null
 }
 
 @test "Helm template: podLabels cannot override required name selector label" {
@@ -179,9 +179,9 @@ count_required_node_selector_terms() {
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	! echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep -q "name: wrong"
-	echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep -q "name: kata-deploy"
-	! echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep "name:" | grep -qv "name: kata-deploy"
+	! echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep "name: wrong" > /dev/null
+	echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep "name: kata-deploy" > /dev/null
+	! echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep "name:" | grep -v "name: kata-deploy" > /dev/null
 }
 
 @test "Helm template: podAnnotations are applied to pod template" {
@@ -199,9 +199,9 @@ EOF
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -A10 "template:" | grep -A5 "metadata:" | grep -q "annotations:"
-	echo "${ds}" | grep -q "example.com/owner: platform-team"
-	echo "${ds}" | grep -q 'prometheus.io/scrape: "false"'
+	echo "${ds}" | grep -A10 "template:" | grep -A5 "metadata:" | grep "annotations:" > /dev/null
+	grep -q "example.com/owner: platform-team" <<< "${ds}"
+	grep -q 'prometheus.io/scrape: "false"' <<< "${ds}"
 }
 
 @test "Helm template: user affinity is applied to pod spec" {
@@ -234,11 +234,11 @@ EOF
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -q "affinity:"
-	echo "${ds}" | grep -q "node.cloud/reserved"
-	echo "${ds}" | grep -q "platform-team"
-	echo "${ds}" | grep -q "podAntiAffinity:"
-	echo "${ds}" | grep -q "gpu-operator"
+	grep -q "affinity:" <<< "${ds}"
+	grep -q "node.cloud/reserved" <<< "${ds}"
+	grep -q "platform-team" <<< "${ds}"
+	grep -q "podAntiAffinity:" <<< "${ds}"
+	grep -q "gpu-operator" <<< "${ds}"
 }
 
 @test "Helm template: NFD enabled merges virtualization nodeAffinity with user nodeAffinity" {
@@ -264,10 +264,10 @@ EOF
 	term_count=$(count_required_node_selector_terms "${ds}")
 
 	[[ "${term_count}" -eq 6 ]]
-	echo "${ds}" | grep -q "node.cloud/reserved"
-	echo "${ds}" | grep -q "platform-team"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM"
+	grep -q "node.cloud/reserved" <<< "${ds}"
+	grep -q "platform-team" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM" <<< "${ds}"
 }
 
 @test "Helm template: NFD enabled applies virtualization nodeAffinity when user sets no affinity" {
@@ -278,9 +278,9 @@ EOF
 	term_count=$(count_required_node_selector_terms "${ds}")
 
 	[[ "${term_count}" -eq 6 ]]
-	echo "${ds}" | grep -q "affinity:"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM"
+	grep -q "affinity:" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM" <<< "${ds}"
 }
 
 @test "Helm template: NFD merge preserves podAntiAffinity" {
@@ -313,10 +313,10 @@ EOF
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -q "podAntiAffinity:"
-	echo "${ds}" | grep -q "gpu-operator"
-	echo "${ds}" | grep -q "platform-team"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	grep -q "podAntiAffinity:" <<< "${ds}"
+	grep -q "gpu-operator" <<< "${ds}"
+	grep -q "platform-team" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
 }
 
 @test "Helm template: NFD merge preserves matchFields in nodeSelectorTerms" {
@@ -340,10 +340,10 @@ EOF
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -q "matchFields:"
-	echo "${ds}" | grep -q "metadata.name"
-	echo "${ds}" | grep -q "worker-node-1"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	grep -q "matchFields:" <<< "${ds}"
+	grep -q "metadata.name" <<< "${ds}"
+	grep -q "worker-node-1" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
 }
 
 @test "Helm template: NFD merge cross-products multiple user OR terms" {
@@ -374,9 +374,9 @@ EOF
 	term_count=$(count_required_node_selector_terms "${ds}")
 
 	[[ "${term_count}" -eq 12 ]]
-	echo "${ds}" | grep -q "platform-team"
-	echo "${ds}" | grep -q "gpu-team"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	grep -q "platform-team" <<< "${ds}"
+	grep -q "gpu-team" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
 }
 
 @test "Helm template: NFD merge omits empty matchFields" {
@@ -400,9 +400,9 @@ EOF
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -q "node.cloud/reserved"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
-	! echo "${ds}" | grep -q 'matchFields: \[\]'
+	grep -q "node.cloud/reserved" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
+	! grep -q 'matchFields: \[\]' <<< "${ds}"
 }
 
 @test "Helm template: NFD merge preserves preferredDuringSchedulingIgnoredDuringExecution" {
@@ -434,11 +434,11 @@ EOF
 	local ds
 	ds=$(extract_kata_deploy_ds)
 
-	echo "${ds}" | grep -q "preferredDuringSchedulingIgnoredDuringExecution:"
-	echo "${ds}" | grep -q "preferred-team"
-	echo "${ds}" | grep -q "weight: 100"
-	echo "${ds}" | grep -q "platform-team"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	grep -q "preferredDuringSchedulingIgnoredDuringExecution:" <<< "${ds}"
+	grep -q "preferred-team" <<< "${ds}"
+	grep -q "weight: 100" <<< "${ds}"
+	grep -q "platform-team" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
 }
 
 @test "Helm template: NFD required applied when user has no required terms" {
@@ -465,9 +465,9 @@ EOF
 	term_count=$(count_required_node_selector_terms "${ds}")
 
 	[[ "${term_count}" -eq 6 ]]
-	echo "${ds}" | grep -q "preferredDuringSchedulingIgnoredDuringExecution:"
-	echo "${ds}" | grep -q "preferred-team"
-	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	grep -q "preferredDuringSchedulingIgnoredDuringExecution:" <<< "${ds}"
+	grep -q "preferred-team" <<< "${ds}"
+	grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX" <<< "${ds}"
 }
 
 # =============================================================================
@@ -483,11 +483,11 @@ EOF
 
 	[[ -n "${install}" ]]
 	[[ -n "${cleanup}" ]]
-	echo "${install}" | grep -q "kata-deploy/stage: install"
-	echo "${cleanup}" | grep -q "kata-deploy/stage: cleanup"
-	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "app.kubernetes.io/name: kata-deploy"
+	grep -q "kata-deploy/stage: install" <<< "${install}"
+	grep -q "kata-deploy/stage: cleanup" <<< "${cleanup}"
+	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep "app.kubernetes.io/name: kata-deploy" > /dev/null
 	# Affinity is DaemonSet-only; per-node Jobs are pinned via nodeName.
-	! echo "${install}" | grep -q "affinity:"
+	! grep -q "affinity:" <<< "${install}"
 }
 
 @test "Helm template (job mode): podLabels are applied to per-node Job pod templates" {
@@ -497,9 +497,9 @@ EOF
 	install=$(extract_pernode_job install)
 	cleanup=$(extract_pernode_job cleanup)
 
-	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "team: platform"
-	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "app.kubernetes.io/name: kata-deploy"
-	echo "${cleanup}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "team: platform"
+	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep "team: platform" > /dev/null
+	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep "app.kubernetes.io/name: kata-deploy" > /dev/null
+	echo "${cleanup}" | grep -A5 "template:" | grep -A4 "labels:" | grep "team: platform" > /dev/null
 }
 
 @test "Helm template (job mode): podAnnotations are applied to per-node Job pod templates" {
@@ -518,10 +518,10 @@ EOF
 	install=$(extract_pernode_job install)
 	cleanup=$(extract_pernode_job cleanup)
 
-	echo "${install}" | grep -A10 "template:" | grep -A5 "metadata:" | grep -q "annotations:"
-	echo "${install}" | grep -q "example.com/owner: platform-team"
-	echo "${install}" | grep -q 'prometheus.io/scrape: "false"'
-	echo "${cleanup}" | grep -q "example.com/owner: platform-team"
+	echo "${install}" | grep -A10 "template:" | grep -A5 "metadata:" | grep "annotations:" > /dev/null
+	grep -q "example.com/owner: platform-team" <<< "${install}"
+	grep -q 'prometheus.io/scrape: "false"' <<< "${install}"
+	grep -q "example.com/owner: platform-team" <<< "${cleanup}"
 }
 
 @test "Helm template (job mode): node affinity is compiled away, not copied into per-node Jobs" {
@@ -547,8 +547,8 @@ EOF
 	# The per-node Jobs are pinned by nodeName, so affinity would be a no-op
 	# there; the rule is enforced by the dispatcher's node query instead.
 	[[ -n "${install}" ]]
-	! echo "${install}" | grep -q "affinity:"
-	! echo "${install}" | grep -q "node.cloud/reserved"
+	! grep -q "affinity:" <<< "${install}"
+	! grep -q "node.cloud/reserved" <<< "${install}"
 
 	local selectors
 	selectors=$(dispatcher_selectors install -f "${values_file}")
@@ -614,8 +614,8 @@ EOF
 	rm -f "${values_file}"
 
 	[[ "$(echo "${selectors}" | wc -l)" -eq 2 ]]
-	echo "${selectors}" | grep -qx 'kubernetes.io/os in (linux),nvidia.com/gpu.present in (true)'
-	echo "${selectors}" | grep -qx 'tee'
+	grep -qx 'kubernetes.io/os in (linux),nvidia.com/gpu.present in (true)' <<< "${selectors}"
+	grep -qx 'tee' <<< "${selectors}"
 }
 
 @test "Helm template (job mode): preferred node affinity is ignored, not rejected" {
@@ -649,8 +649,8 @@ EOF
 	# DaemonSet is given, so job mode cannot install on a node the DaemonSet
 	# would have refused.
 	[[ "$(echo "${selectors}" | wc -l)" -eq 6 ]]
-	echo "${selectors}" | grep -qx 'feature.node.kubernetes.io/cpu-cpuid.VMX in (true),kubernetes.io/arch in (amd64)'
-	echo "${selectors}" | grep -qx 'feature.node.kubernetes.io/cpu-cpuid.SVM in (true),kubernetes.io/arch in (amd64)'
+	grep -qx 'feature.node.kubernetes.io/cpu-cpuid.VMX in (true),kubernetes.io/arch in (amd64)' <<< "${selectors}"
+	grep -qx 'feature.node.kubernetes.io/cpu-cpuid.SVM in (true),kubernetes.io/arch in (amd64)' <<< "${selectors}"
 }
 
 @test "Helm template (job mode): tolerations reach the per-node Jobs the dispatcher reads" {
@@ -668,7 +668,7 @@ EOF
 	# would silently skip every tainted node. Asserted as whole entries, since a
 	# key on one line says nothing about the operator on another.
 	echo "${install}" | tolerations_of |
-		grep "key: node-role.kubernetes.io/control-plane" | grep -q "operator: Exists"
+		grep "key: node-role.kubernetes.io/control-plane" | grep "operator: Exists" > /dev/null
 
 	# Cleanup tolerates everything instead: a taint added after the install must
 	# not leave a node with Kata on it that no uninstall can reach. A key or an
@@ -687,7 +687,7 @@ EOF
 	install=$(extract_pernode_job install)
 
 	for taint in not-ready unreachable disk-pressure memory-pressure pid-pressure unschedulable; do
-		echo "${install}" | grep -q "key: node.kubernetes.io/${taint}"
+		grep -q "key: node.kubernetes.io/${taint}" <<< "${install}"
 	done
 }
 
@@ -700,9 +700,9 @@ EOF
 
 	# Cleanup must reach every node the install labeled, so it is neither
 	# narrowed by the top-level nodeSelector nor blocked by taints added since.
-	echo "${rendered}" | grep -q -- '--node-selector=katacontainers.io/kata-runtime'
+	grep -q -- '--node-selector=katacontainers.io/kata-runtime' <<< "${rendered}"
 	refute_match "${rendered}" 'kata-containers=enabled'
-	echo "${rendered}" | grep -q -- '--ignore-node-taints'
+	grep -q -- '--ignore-node-taints' <<< "${rendered}"
 }
 
 @test "Helm template (job mode): job.nodes wins over the compiled selection" {
@@ -714,7 +714,7 @@ EOF
 		--set 'job.nodes[1]=worker-2' \
 		--show-only templates/kata-deploy-install-job.yaml)
 
-	echo "${rendered}" | grep -q -- '--nodes=worker-1,worker-2'
+	grep -q -- '--nodes=worker-1,worker-2' <<< "${rendered}"
 	refute_match "${rendered}" '--node-selector='
 
 	# Naming a node is an admission override, so its Job tolerates every taint. A
@@ -734,16 +734,16 @@ EOF
 	# The dispatcher runs once, but eligibility arrives late: the labels the
 	# selection matches are written by NFD, which starts with this very release.
 	# Resolving nodes off the first snapshot would install nowhere and exit 0.
-	echo "${rendered}" | grep -q -- '--wait-for-nodes-secs=120'
-	echo "${rendered}" | grep -q -- '--node-settle-secs=15'
-	echo "${rendered}" | grep -q -- '--cleanup-job-template=/etc/kata-job/cleanup-job.yaml'
+	grep -q -- '--wait-for-nodes-secs=120' <<< "${rendered}"
+	grep -q -- '--node-settle-secs=15' <<< "${rendered}"
+	grep -q -- '--cleanup-job-template=/etc/kata-job/cleanup-job.yaml' <<< "${rendered}"
 
 	rendered=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=job \
 		--set job.waitForNodesSeconds=0 \
 		--show-only templates/kata-deploy-install-job.yaml)
 
-	echo "${rendered}" | grep -q -- '--wait-for-nodes-secs=0'
+	grep -q -- '--wait-for-nodes-secs=0' <<< "${rendered}"
 }
 
 @test "Helm template (job mode): named nodes and uninstall never wait" {
@@ -791,8 +791,8 @@ EOF
 	render_chart -f "${values_file}"
 	local ds
 	ds=$(extract_kata_deploy_ds)
-	echo "${ds}" | grep -q "kata-containers: enabled"
-	echo "${ds}" | grep -q "nodeAffinity:"
+	grep -q "kata-containers: enabled" <<< "${ds}"
+	grep -q "nodeAffinity:" <<< "${ds}"
 
 	# Job mode folds the nodeSelector equalities into EVERY term, which is the
 	# same node set by distribution: eq AND (t1 OR t2) == (eq AND t1) OR (eq AND t2).
@@ -801,8 +801,8 @@ EOF
 	rm -f "${values_file}"
 
 	[[ "$(echo "${selectors}" | wc -l)" -eq 2 ]]
-	echo "${selectors}" | grep -qx 'kata-containers=enabled,kubernetes.io/os in (linux)'
-	echo "${selectors}" | grep -qx 'kata-containers=enabled,tee'
+	grep -qx 'kata-containers=enabled,kubernetes.io/os in (linux)' <<< "${selectors}"
+	grep -qx 'kata-containers=enabled,tee' <<< "${selectors}"
 }
 
 @test "Helm template: nodeSelector combined with podAntiAffinity is allowed" {
@@ -818,19 +818,19 @@ EOF
 	run helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job \
 		--set job.nodeSelector.kata-containers=enabled
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q "job.nodeSelector has been removed"
+	grep -q "job.nodeSelector has been removed" <<< "${output}"
 
 	run helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job \
 		--set 'job.nodeSelectorExpressions[0].key=kata' \
 		--set 'job.nodeSelectorExpressions[0].operator=Exists'
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q "job.nodeSelectorExpressions has been removed"
+	grep -q "job.nodeSelectorExpressions has been removed" <<< "${output}"
 
 	run helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job \
 		--set 'job.cleanup.nodeSelectorExpressions[0].key=kata' \
 		--set 'job.cleanup.nodeSelectorExpressions[0].operator=Exists'
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q "renamed to job.cleanup.nodeAffinity"
+	grep -q "renamed to job.cleanup.nodeAffinity" <<< "${output}"
 }
 
 @test "Helm template (job mode): rules a node query cannot express are rejected" {
@@ -838,13 +838,13 @@ EOF
 		--set 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key=cpus' \
 		--set 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].operator=Gt'
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'unsupported operator "Gt"'
+	grep -q 'unsupported operator "Gt"' <<< "${output}"
 
 	run helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job \
 		--set 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].key=metadata.name' \
 		--set 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].operator=In'
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q "matchFields cannot be used"
+	grep -q "matchFields cannot be used" <<< "${output}"
 }
 
 @test "Helm template (job mode): empty required affinity cannot invert to every node" {
@@ -852,13 +852,13 @@ EOF
 		--set deploymentMode=job \
 		--set-json 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms=[]'
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'nodeSelectorTerms must not be empty'
+	grep -q 'nodeSelectorTerms must not be empty' <<< "${output}"
 
 	run helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=job \
 		--set-json 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms=[{}]'
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'an empty nodeSelectorTerm matches no nodes'
+	grep -q 'an empty nodeSelectorTerm matches no nodes' <<< "${output}"
 }
 
 @test "Helm template (job mode): the dispatcher can be confined to trusted nodes" {
@@ -878,8 +878,8 @@ EOF
 			--set deploymentMode=job \
 			"${args[@]}" \
 			--show-only "templates/kata-deploy-${stage}-job.yaml")
-		echo "${rendered}" | grep -q 'node-role.kubernetes.io/control-plane: ""'
-		echo "${rendered}" | grep -q 'key: node-role.kubernetes.io/control-plane'
+		grep -q 'node-role.kubernetes.io/control-plane: ""' <<< "${rendered}"
+		grep -q 'key: node-role.kubernetes.io/control-plane' <<< "${rendered}"
 	done
 
 	# Where the dispatcher may run says nothing about where Kata is installed: the
@@ -892,7 +892,7 @@ EOF
 		--show-only templates/kata-deploy-job-templates.yaml)
 	# Spelled out rather than `! ... grep`, whose return value bash leaves out of
 	# set -e: as anything but the last line of a test, it cannot fail it.
-	if echo "${jobs}" | grep -q 'node-role.kubernetes.io/control-plane'; then
+	if grep -q 'node-role.kubernetes.io/control-plane' <<< "${jobs}"; then
 		echo "per-node Jobs inherited the dispatcher's placement" >&2
 		return 1
 	fi
@@ -907,8 +907,8 @@ EOF
 
 	# Without this fallback a cluster whose every node is tainted - a single-node
 	# cluster, say - would select nodes it has nowhere to dispatch from.
-	echo "${rendered}" | grep -q 'tolerations:'
-	echo "${rendered}" | grep -q 'operator: Exists'
+	grep -q 'tolerations:' <<< "${rendered}"
+	grep -q 'operator: Exists' <<< "${rendered}"
 }
 
 @test "Helm template (job mode): a per-node Job cannot run forever" {
@@ -918,7 +918,7 @@ EOF
 
 	local install
 	install=$(extract_pernode_job install)
-	echo "${install}" | grep -q "activeDeadlineSeconds: 3600"
+	grep -q "activeDeadlineSeconds: 3600" <<< "${install}"
 }
 
 @test "Helm template (job mode): a Job TTL the dispatcher could not observe is refused" {
@@ -928,7 +928,7 @@ EOF
 		--set deploymentMode=job \
 		--set job.ttlSecondsAfterFinished=30
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q "too short for the dispatcher to observe"
+	grep -q "too short for the dispatcher to observe" <<< "${output}"
 }
 
 @test "Helm template: imagePullSecrets reach every workload the chart renders" {
@@ -952,7 +952,7 @@ EOF
 	render_job_templates --set 'imagePullSecrets[0].name=regcred'
 	local stage
 	for stage in install cleanup; do
-		extract_pernode_job "${stage}" | grep -A1 'imagePullSecrets:' | grep -q -- '- name: regcred'
+		extract_pernode_job "${stage}" | grep -A1 'imagePullSecrets:' | grep -- '- name: regcred' > /dev/null
 	done
 }
 

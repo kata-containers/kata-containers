@@ -358,7 +358,7 @@ EOF
 
 	result=$(kubectl get pod "${pod_name}" \
 		--output="jsonpath={.status.containerStatuses[]}")
-	echo "${result}" | grep -vq Error
+	grep -vq Error <<< "${result}"
 }
 
 teardown() {

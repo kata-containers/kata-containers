@@ -1017,7 +1017,7 @@ function configure_containerd_erofs_snapshotter() {
 
 	# ... and likewise if the drop-in was written but never read.
 	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump)"
-	if ! tr -d " '\"" <<< "${dump}" | grep -q '^default=\[erofs,walking\]$'; then
+	if ! tr -d " '\"" <<< "${dump}" | grep '^default=\[erofs,walking\]$' > /dev/null; then
 		die "the erofs differ is missing from the running containerd configuration"
 	fi
 }
@@ -1034,8 +1034,8 @@ function check_containerd_config_for_kata() {
 		dump="$(sudo cat "${containerd_path}")"
 	fi
 
-	if echo "${dump}" | grep -qE "default_runtime_name[[:space:]]*=[[:space:]]*[\"']kata[\"']" && \
-		echo "${dump}" | grep -qE "runtime_type[[:space:]]*=[[:space:]]*[\"']io\\.containerd\\.kata(-${hv})?\\.v2[\"']"; then
+	if grep -qE "default_runtime_name[[:space:]]*=[[:space:]]*[\"']kata[\"']" <<< "${dump}" && \
+		grep -qE "runtime_type[[:space:]]*=[[:space:]]*[\"']io\\.containerd\\.kata(-${hv})?\\.v2[\"']" <<< "${dump}"; then
 		info "containerd ok"
 	else
 		info "writing Kata overrides for containerd (current schema from containerd config default)"

@@ -69,7 +69,7 @@ setup() {
 	# List all extended attributes - should include the one set on server
 	result=$(kubectl exec "${smb_client_name}" -- getfattr -d /mnt/smb/testfile.txt 2>&1)
 	echo "All xattrs: ${result}"
-	echo "${result}" | grep -q "user.test"
+	grep -q "user.test" <<< "${result}"
 }
 
 teardown() {

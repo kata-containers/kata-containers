@@ -164,11 +164,11 @@ setup() {
 	echo "debug console output:"
 	echo "${output}"
 
-	echo "${output}" | grep -q 'SHELL_OK=42' \
+	grep -q 'SHELL_OK=42' <<< "${output}" \
 		|| die "devkit debug console did not provide a working shell"
-	echo "${output}" | grep -q 'GUEST_ID=ubuntu' \
+	grep -q 'GUEST_ID=ubuntu' <<< "${output}" \
 		|| die "devkit debug console did not report an Ubuntu guest"
-	echo "${output}" | grep -q 'DEVKIT_OVERLAY=yes' \
+	grep -q 'DEVKIT_OVERLAY=yes' <<< "${output}" \
 		|| die "devkit debug console shell lacks /real_root; not the devkit overlay"
 
 	assert_extension_dirs_in_path "${output}"
@@ -202,7 +202,7 @@ setup() {
 	echo "${output}"
 	[[ "${status}" -eq 0 ]] || die "kata-ctl cp round trip failed with status ${status}"
 
-	echo "${output}" | grep -q "${token}" \
+	grep -q "${token}" <<< "${output}" \
 		|| die "kata-ctl cp did not round-trip the payload through the guest"
 }
 

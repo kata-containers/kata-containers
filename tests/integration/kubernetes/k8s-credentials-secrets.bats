@@ -103,7 +103,7 @@ setup() {
 
 	# Define check function for waitForProcess
 	check_secret_propagated() {
-		pod_exec "${pod_name}" "${check_secret_exec_command[@]}" | grep -q "${updated_username}"
+		pod_exec "${pod_name}" "${check_secret_exec_command[@]}" | grep "${updated_username}" > /dev/null
 	}
 
 	if waitForProcess "${propagation_wait_time}" "${sleep_time}" check_secret_propagated; then

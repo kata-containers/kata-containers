@@ -181,7 +181,7 @@ EOF
 	# by the kubelet and impossible to unlink from inside the container, so it
 	# is expected to survive the uninstall as an empty directory.
 	echo "# Checking host filesystem for leftover artifacts..." >&3
-	run run_on_host "test -d /host/opt/kata && ls -A /host/opt/kata | grep -q . && echo LEFTOVERS || echo CLEAN"
+	run run_on_host "test -d /host/opt/kata && ls -A /host/opt/kata | grep . > /dev/null && echo LEFTOVERS || echo CLEAN"
 	echo "# /opt/kata: ${output}" >&3
 	[[ "${output}" == *"CLEAN"* ]]
 

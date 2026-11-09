@@ -256,7 +256,7 @@ kbs_set_resource_from_file() {
 #
 kbs_install_cli() {
 	if command -v kbs-client >/dev/null; then
-		if kbs-client config --help 2>&1 | grep -q -- '--admin-token-file'; then
+		if kbs-client config --help 2>&1 | grep -- '--admin-token-file' > /dev/null; then
 			return
 		fi
 		echo "Existing kbs-client lacks --admin-token-file; rebuilding from ${COCO_KBS_DIR}"
@@ -784,7 +784,7 @@ function kbs_k8s_deploy() {
 		# the host name will take a while to start resolving.
 		timeout=350
 		echo "Trying to connect at ${svc_host}. Timeout=${timeout}"
-		if ! waitForProcess "${timeout}" "30" "curl -s \"${svc_host}/healthz\" -o /dev/null -w '%{http_code}' | grep -q '200'"; then
+		if ! waitForProcess "${timeout}" "30" "curl -s \"${svc_host}/healthz\" -o /dev/null -w '%{http_code}' | grep '200' > /dev/null"; then
 			echo "ERROR: service seems to not respond on ${svc_host} host"
 			curl -I "${svc_host}/healthz"
 			return 1
@@ -798,7 +798,7 @@ function kbs_k8s_deploy() {
 # otherwise the cluster IP.
 #
 kbs_k8s_svc_host() {
-	if kubectl get ingress -n "${KBS_NS}" 2>/dev/null | grep -q kbs; then
+	if kubectl get ingress -n "${KBS_NS}" 2>/dev/null | grep kbs > /dev/null; then
 		local host
 		local timeout=50
 		# The ingress IP address can take a while to show up.
@@ -823,7 +823,7 @@ kbs_k8s_svc_host() {
 # it will return "80", otherwise the pod's service port.
 #
 kbs_k8s_svc_port() {
-	if kubectl get ingress -n "${KBS_NS}" 2>/dev/null | grep -q kbs; then
+	if kubectl get ingress -n "${KBS_NS}" 2>/dev/null | grep kbs > /dev/null; then
 		# Assume served on default HTTP port 80
 		echo "80"
 	elif kubectl get svc "${KBS_NODEPORT_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then

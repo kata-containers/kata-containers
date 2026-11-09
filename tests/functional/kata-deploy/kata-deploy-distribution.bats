@@ -29,8 +29,8 @@ render() {
 	for mode in job daemonset; do
 		rendered=$(render --set "deploymentMode=${mode}" --set k8sDistribution=k3s)
 
-		echo "${rendered}" | grep -q 'name: K8S_DISTRIBUTION'
-		echo "${rendered}" | grep -A1 'name: K8S_DISTRIBUTION' | grep -q 'value: "k3s"'
+		grep -q 'name: K8S_DISTRIBUTION' <<< "${rendered}"
+		echo "${rendered}" | grep -A1 'name: K8S_DISTRIBUTION' | grep 'value: "k3s"' > /dev/null
 	done
 }
 
@@ -44,15 +44,15 @@ render() {
 		--set k8sDistribution=k0s \
 		--set 'containerd.configDir=/etc/my-containerd/')
 
-	echo "${rendered}" | grep -A1 'name: K8S_DISTRIBUTION' | grep -q 'value: "k0s"'
-	echo "${rendered}" | grep -A1 'name: CONTAINERD_CONFIG_DIR' | grep -q 'value: "/etc/my-containerd/"'
+	echo "${rendered}" | grep -A1 'name: K8S_DISTRIBUTION' | grep 'value: "k0s"' > /dev/null
+	echo "${rendered}" | grep -A1 'name: CONTAINERD_CONFIG_DIR' | grep 'value: "/etc/my-containerd/"' > /dev/null
 }
 
 @test "Helm template: the containerd directory is only reported when pinned" {
 	local rendered
 	rendered=$(render --set deploymentMode=job --set k8sDistribution=k0s)
 
-	if echo "${rendered}" | grep -q 'name: CONTAINERD_CONFIG_DIR'; then
+	if grep -q 'name: CONTAINERD_CONFIG_DIR' <<< "${rendered}"; then
 		echo "CONTAINERD_CONFIG_DIR was passed without an explicit containerd.configDir" >&2
 		return 1
 	fi

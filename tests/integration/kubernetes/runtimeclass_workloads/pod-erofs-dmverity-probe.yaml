@@ -45,7 +45,7 @@ spec:
             kata-verity-*)
               verity_count=$((verity_count + 1))
               dm_device=${dm_path##*/}
-              if printf "%s\n" "${erofs_devices}" | grep -qx "${dm_device}"; then
+              if printf "%s\n" "${erofs_devices}" | grep -x "${dm_device}" > /dev/null; then
                 mounted_count=$((mounted_count + 1))
               else
                 echo "dm-verity workload device ${dm_device} was not mounted as EROFS"

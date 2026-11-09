@@ -29,7 +29,7 @@ render_dispatcher() {
 
 refute_match() {
 	local rendered="${1}" pattern="${2}"
-	if echo "${rendered}" | grep -q -- "${pattern}"; then
+	if grep -q -- "${pattern}" <<< "${rendered}"; then
 		echo "unexpected in rendered output: ${pattern}" >&2
 		return 1
 	fi
@@ -39,7 +39,7 @@ refute_match() {
 	local stage rendered
 	for stage in install cleanup; do
 		rendered=$(render_dispatcher "${stage}" --set env.multiInstallSuffix=dev)
-		echo "${rendered}" | grep -q -- '--multi-install-suffix=dev'
+		grep -q -- '--multi-install-suffix=dev' <<< "${rendered}"
 	done
 }
 
@@ -62,9 +62,9 @@ refute_match() {
 		--set env.multiInstallSuffix=dev \
 		--show-only templates/kata-deploy-state.yaml)
 
-	echo "${rendered}" | grep -q 'name: my-release-kata-deploy-state'
-	echo "${rendered}" | grep -q 'multiInstallSuffix: "dev"'
-	echo "${rendered}" | grep -q 'deploymentMode: "job"'
+	grep -q 'name: my-release-kata-deploy-state' <<< "${rendered}"
+	grep -q 'multiInstallSuffix: "dev"' <<< "${rendered}"
+	grep -q 'deploymentMode: "job"' <<< "${rendered}"
 }
 
 @test "Helm template: an unverifiable pre-state upgrade is refused" {
@@ -78,14 +78,14 @@ refute_match() {
 		--show-only templates/kata-deploy-state.yaml
 
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'cannot verify the previous kata-deploy identity'
+	grep -q 'cannot verify the previous kata-deploy identity' <<< "${output}"
 }
 
 @test "Helm template: deployment mode is validated before state is persisted" {
 	run helm template my-release "${CHART_PATH}" --set deploymentMode=bogus
 
 	[ "${status}" -ne 0 ]
-	echo "${output}" | grep -q 'deploymentMode must be one of daemonset or job'
+	grep -q 'deploymentMode must be one of daemonset or job' <<< "${output}"
 }
 
 @test "Helm template: the node label the RuntimeClasses select is never suffixed" {
@@ -97,7 +97,7 @@ refute_match() {
 		--set env.multiInstallSuffix=dev \
 		--show-only templates/runtimeclasses.yaml)
 
-	echo "${rendered}" | grep -q 'katacontainers.io/kata-runtime: "true"'
+	grep -q 'katacontainers.io/kata-runtime: "true"' <<< "${rendered}"
 	refute_match "${rendered}" 'katacontainers.io/kata-runtime-dev'
 }
 
@@ -110,7 +110,7 @@ refute_match() {
 		--set env.multiInstallSuffix=dev \
 		--show-only templates/runtimeclasses.yaml)
 
-	echo "${rendered}" | grep -q 'kata-deploy.katacontainers.io/dev: "true"'
+	grep -q 'kata-deploy.katacontainers.io/dev: "true"' <<< "${rendered}"
 }
 
 @test "Helm template: a shim's own nodeSelector cannot weaken the ownership gate" {
@@ -133,7 +133,7 @@ refute_match() {
 	[ "$(echo "${qemu}" | grep -c 'katacontainers.io/kata-runtime:')" -eq 1 ]
 	[ "$(echo "${qemu}" | grep -c 'kata-deploy.katacontainers.io/dev:')" -eq 1 ]
 	# Everything else the shim asked for is still there.
-	echo "${qemu}" | grep -q 'disktype: "ssd"'
+	grep -q 'disktype: "ssd"' <<< "${qemu}"
 }
 
 @test "Helm template: the default install's RuntimeClasses select its mark too" {
@@ -145,8 +145,8 @@ refute_match() {
 		--set deploymentMode=job \
 		--show-only templates/runtimeclasses.yaml)
 
-	echo "${rendered}" | grep -q 'katacontainers.io/kata-runtime: "true"'
-	echo "${rendered}" | grep -q 'kata-deploy.katacontainers.io/default: "true"'
+	grep -q 'katacontainers.io/kata-runtime: "true"' <<< "${rendered}"
+	grep -q 'kata-deploy.katacontainers.io/default: "true"' <<< "${rendered}"
 }
 
 @test "Helm template: custom RuntimeClasses are gated on the mark too" {
@@ -168,7 +168,7 @@ scheduling:
 ' \
 		--show-only templates/custom-runtimes.yaml)
 
-	echo "${rendered}" | grep -q 'kata-deploy.katacontainers.io/dev: "true"'
+	grep -q 'kata-deploy.katacontainers.io/dev: "true"' <<< "${rendered}"
 	refute_match "${rendered}" 'kata-deploy.katacontainers.io/dev: "false"'
-	echo "${rendered}" | grep -q 'katacontainers.io/kata-runtime: "true"'
+	grep -q 'katacontainers.io/kata-runtime: "true"' <<< "${rendered}"
 }

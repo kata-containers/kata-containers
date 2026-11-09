@@ -55,7 +55,7 @@ setup() {
 	ok="0"
 
 	for _ in $(seq 1 "$retries"); do
-		if sudo -E redis-cli -p 7000 ping | grep -q "PONG" ; then
+		if sudo -E redis-cli -p 7000 ping | grep "PONG" > /dev/null ; then
 			ok="1"
 			break;
 		fi
