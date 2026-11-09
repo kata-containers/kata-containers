@@ -38,6 +38,8 @@ pub struct VolumeContext<'a> {
     pub sid: &'a str,
     pub agent: Arc<dyn Agent>,
     pub emptydir_mode: &'a str,
+    /// Mount block-plain emptyDirs with the ext4 `noinit_itable` option.
+    pub emptydir_noinit_itable: bool,
     pub fs_sharing_supported: bool,
     pub block_device_discard_supported: bool,
 }
@@ -126,6 +128,7 @@ impl VolumeResource {
                     m,
                     sid,
                     emptydir_mode,
+                    ctx.emptydir_noinit_itable,
                     ctx.block_device_discard_supported,
                 )
                 .await
