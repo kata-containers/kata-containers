@@ -23,6 +23,19 @@ CONFIG_IOMMU_SVA=y
 CONFIG_ARM_SMMU_V3=y
 CONFIG_ARM_SMMU_V3_SVA=y
 
+# PCI_PASID selects PCI_ATS, which lets the guest SMMU driver enable ATS on
+# the passthrough GPU behind the accelerated SMMUv3. On Rubin the GSP
+# firmware does its DMA with ATS: without it the host SMMU rejects every
+# translation request (F_BAD_ATS_TREQ) and GSP-RM times out during probe.
+# GB200 falls back to a non-ATS addressing mode without it.
+CONFIG_PCI_PASID=y
+CONFIG_PCI_PRI=y
+
+# NUMA nodes: every Grace GPU passed through brings eight generic-initiator
+# nodes on top of the CPU nodes and the memory hotplug placeholder. The
+# default of 16 fits one GPU; 128 covers 8 GPUs with room for EGM nodes.
+CONFIG_NODES_SHIFT=7
+
 # CC related configs
 CONFIG_CRYPTO_ECC=y
 CONFIG_CRYPTO_ECDH=y
