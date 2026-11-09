@@ -22,10 +22,19 @@ mod tests {
         KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
-    use kata_types::config::{QemuConfig, TomlConfig};
+    use kata_types::config::{hypervisor::Hypervisor, QemuConfig, TomlConfig};
     use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn test_firecracker_vmdk_is_opt_in() {
+        for (input, enabled) in [("", false), ("enable_vmdk = true", true)] {
+            let config: Hypervisor = toml::from_str(input).unwrap();
+            assert_eq!(config.blockdev_info.enable_vmdk, enabled);
+        }
+    }
+
     #[test]
     fn test_change_config_annotation() {
         let content = include_str!("texture/configuration-anno-0.toml");

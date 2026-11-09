@@ -3,6 +3,7 @@
 //
 //SPDX-License-Identifier: Apache-2.0
 
+mod block_source;
 mod fc_api;
 mod inner;
 mod inner_device;

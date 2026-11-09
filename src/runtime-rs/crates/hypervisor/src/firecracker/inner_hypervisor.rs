@@ -181,6 +181,11 @@ impl FcInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         debug!(sl(), "Cleanup");
+        if self.config.blockdev_info.enable_vmdk {
+            for index in 1..super::fc_api::DISK_POOL_SIZE {
+                super::block_source::cleanup_vmdk(&self.vmdk_directory(u64::from(index)))?;
+            }
+        }
         self.cleanup_resource();
 
         std::fs::remove_dir_all(self.vm_path.as_str())

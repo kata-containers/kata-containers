@@ -119,6 +119,10 @@ default_maxmemory = @DEFMAXMEMSZ_FC@
 # FC only supports virtio-blk-mmio.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 
+# Enable read-only VMDK drives for multi-layer EROFS.
+# Requires Firecracker native VMDK support (PR #5741).
+enable_vmdk = false
+
 # Specifies cache-related options will be set to block devices or not.
 # Default false
 block_device_cache_set = false
