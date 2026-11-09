@@ -90,6 +90,7 @@ skip_paths(){
 
 
 long_options=(
+    [agent-features]="Check agent features consistency"
 	[all]="Force checking of all changes, including files in the base branch"
 	[branch]="Specify upstream branch to compare against (default '${branch}')"
 	[docs]="Check document files"
@@ -1099,6 +1100,69 @@ static_check_rego()
 	fi
 }
 
+# Check that agent features defined in src/agent/src/features.rs match
+# the features defined in src/agent/Cargo.toml [features] section.
+static_check_agent_features()
+{
+	local features_file="src/agent/src/features.rs"
+	local cargo_file="src/agent/Cargo.toml"
+
+	pushd "${repo_path}" >/dev/null
+
+	# Check if files exist
+	if [[ ! -f "${features_file}" ]] || [[ ! -f "${cargo_file}" ]]; then
+    	popd 
+		die "Agent feature files not found. Expected to find: ${features_file} and ${cargo_file}"
+	fi
+
+	info "Checking agent features consistency"
+
+	# Extract features from features.rs by matching #[cfg(feature = "...")] attributes
+	local features_from_rs
+	features_from_rs=$(sed -n 's/^[[:space:]]*#\[cfg(feature = "\([^"]*\)".*/\1/p' "${features_file}" | sort -u)
+
+	# Extract features from Cargo.toml [features] section using Python's tomllib
+	local features_from_cargo
+	if ! features_from_cargo=$(python3 -c 'import tomllib, sys; print("\n".join(sorted(tomllib.load(open(sys.argv[1], "rb")).get("features", {}).keys())))' "${cargo_file}"); then
+		die "Failed to parse Cargo.toml using built-in Python tomllib."
+	fi
+
+	# Create temp files for comparison
+	local rs_file
+	local cargo_file_tmp
+	rs_file=$(mktemp)
+	cargo_file_tmp=$(mktemp)
+
+	files_to_remove+=("${rs_file}" "${cargo_file_tmp}")
+
+	echo "${features_from_rs}" > "${rs_file}"
+	echo "${features_from_cargo}" > "${cargo_file_tmp}"
+
+	# Compare the two lists
+	local diff_output
+	diff_output=$(diff "${rs_file}" "${cargo_file_tmp}" || true)
+
+	if [[ -n "${diff_output}" ]]; then
+		cat >&2 <<EOF
+ERROR: Agent features mismatch between src/agent/src/features.rs and src/agent/Cargo.toml
+
+Features in features.rs:
+$(cat "${rs_file}")
+
+Features in Cargo.toml:
+$(cat "${cargo_file_tmp}")
+
+Differences:
+${diff_output}
+
+EOF
+		die "Please ensure the feature list in src/agent/src/features.rs matches the [features] section in src/agent/Cargo.toml"
+	fi
+
+	info "Agent features are consistent"
+	popd
+}
+
 # Run the specified function (after first checking it is compatible with the
 # users architectural preferences), or simply list the function name if list
 # mode is active.
@@ -1230,6 +1294,7 @@ main()
 	while [[ $# -gt 1 ]]
 	do
 		case "$1" in
+            --agent-features) func=static_check_agent_features ;;
 			--all) specific_branch="true" ;;
 			--branch) branch="$2"; shift ;;
 			--commits) func=static_check_commits ;;
