@@ -304,3 +304,121 @@ func TestGetCapacityMaximumVolumeSizeInvariant(t *testing.T) {
 	require.LessOrEqual(t, resp.GetMaximumVolumeSize().GetValue(), resp.GetAvailableCapacity())
 	require.GreaterOrEqual(t, resp.GetMaximumVolumeSize().GetValue(), int64(0))
 }
+
+// getCapacityReqWithTopology is getCapacityReq plus accessibility
+// segments replicating what the external-provisioner forwards after
+// picking a node (#14151, gap 5).
+func getCapacityReqWithTopology(kind string, segments map[string]string) *csi.GetCapacityRequest {
+	req := getCapacityReq(kind)
+	req.AccessibleTopology = &csi.Topology{Segments: segments}
+	return req
+}
+
+// topologyTestDriver is newCapacityTestDriver with a controlled
+// EnableTopology flag.
+func topologyTestDriver(t *testing.T, capacities map[string]string, maxVolumeSize int64, enableTopology bool) *directVolume {
+	t.Helper()
+	old := newCapacityTestDriver(t, capacities, maxVolumeSize)
+	// newCapacityTestDriver leaves EnableTopology at its zero value
+	// (disabled); flip it when the test needs the enabled behavior.
+	if enableTopology {
+		old.config.EnableTopology = true
+	}
+	return old
+}
+
+// A GetCapacity request carrying the topology of another node must
+// report zero, not this node's capacity (#14151, gap 5): a central
+// caller asking "how much can you provision on node-b?" must not get
+// an answer that is only true for node-a.
+func TestGetCapacityForeignTopologyReportsZero(t *testing.T) {
+	dv := topologyTestDriver(t, map[string]string{"fast": "8Gi"}, tiB, true)
+
+	segments := map[string]string{TopologyKeyNode: "some-other-node"}
+	resp, err := dv.GetCapacity(context.TODO(), getCapacityReqWithTopology("fast", segments))
+	require.NoError(t, err)
+	require.EqualValues(t, 0, resp.GetAvailableCapacity())
+	require.EqualValues(t, 0, resp.GetMaximumVolumeSize().GetValue())
+	require.EqualValues(t, 0, resp.GetMinimumVolumeSize().GetValue())
+}
+
+// The local node's own topology still gets the full answer. A caller
+// may forward more keys than the driver publishes (the
+// external-provisioner forwards the full segment set of the node it
+// picked), so extra keys alongside the driver's own must not
+// disqualify an otherwise local request.
+func TestGetCapacityLocalTopologyReportsCapacity(t *testing.T) {
+	dv := topologyTestDriver(t, map[string]string{"fast": "8Gi"}, tiB, true)
+
+	segments := map[string]string{
+		TopologyKeyNode: dv.config.NodeID,
+	}
+	resp, err := dv.GetCapacity(context.TODO(), getCapacityReqWithTopology("fast", segments))
+	require.NoError(t, err)
+	require.EqualValues(t, 8*giB, resp.GetAvailableCapacity())
+
+	// A fortiori: additional keys alongside the driver's own.
+	segments["some.example.com/zone"] = "zone-a"
+	resp, err = dv.GetCapacity(context.TODO(), getCapacityReqWithTopology("fast", segments))
+	require.NoError(t, err)
+	require.EqualValues(t, 8*giB, resp.GetAvailableCapacity())
+}
+
+// Without topology, the caller does not restrict placement and the
+// node answers with its own capacity.
+func TestGetCapacityNoTopologyReportsCapacity(t *testing.T) {
+	dv := topologyTestDriver(t, map[string]string{"fast": "8Gi"}, tiB, true)
+
+	resp, err := dv.GetCapacity(context.TODO(), getCapacityReq("fast"))
+	require.NoError(t, err)
+	require.EqualValues(t, 8*giB, resp.GetAvailableCapacity())
+}
+
+// A topology request on a driver that does not publish topology is
+// unsatisfiable here: the node never announced any segment, so it must
+// not claim capacity for a placement it cannot be selected for.
+func TestGetCapacityTopologyWithoutPublicationReportsZero(t *testing.T) {
+	dv := topologyTestDriver(t, map[string]string{"fast": "8Gi"}, tiB, false)
+
+	segments := map[string]string{TopologyKeyNode: dv.config.NodeID}
+	resp, err := dv.GetCapacity(context.TODO(), getCapacityReqWithTopology("fast", segments))
+	require.NoError(t, err)
+	require.EqualValues(t, 0, resp.GetAvailableCapacity())
+}
+
+// The controller must advertise GET_CAPACITY now that the RPC is
+// implemented and called by the external-provisioner capacity
+// controller (#14151, gap 6).
+func TestControllerGetCapabilitiesIncludesGetCapacity(t *testing.T) {
+	dv := newCapacityTestDriver(t, nil, tiB)
+
+	resp, err := dv.ControllerGetCapabilities(context.TODO(), &csi.ControllerGetCapabilitiesRequest{})
+	require.NoError(t, err)
+
+	var rpcs []csi.ControllerServiceCapability_RPC_Type
+	for _, c := range resp.GetCapabilities() {
+		rpcs = append(rpcs, c.GetRpc().GetType())
+	}
+	require.Contains(t, rpcs, csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME)
+	require.Contains(t, rpcs, csi.ControllerServiceCapability_RPC_GET_CAPACITY)
+}
+
+// GetCapacity validates the advertised capability like the other
+// controller RPCs; it never reached this validation before the
+// capability was advertised.
+func TestGetCapacityValidatesServerCapability(t *testing.T) {
+	dv := newCapacityTestDriver(t, map[string]string{"fast": "8Gi"}, tiB)
+	require.NoError(t, dv.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_GET_CAPACITY))
+}
+
+// Topology zeros out only the capacity of mismatching requests; the
+// pool check itself must still reject an unknown pool with zero (not
+// an error), preserving the semantics from before the topology check
+// existed.
+func TestGetCapacityForeignTopologyUnknownPoolStillZero(t *testing.T) {
+	dv := topologyTestDriver(t, map[string]string{"fast": "8Gi"}, tiB, true)
+
+	resp, err := dv.GetCapacity(context.TODO(), getCapacityReqWithTopology("nosuch", map[string]string{TopologyKeyNode: "other"}))
+	require.NoError(t, err)
+	require.EqualValues(t, 0, resp.GetAvailableCapacity())
+}
