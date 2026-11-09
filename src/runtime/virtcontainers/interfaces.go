@@ -25,6 +25,7 @@ type VC interface {
 
 	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, hookFunc func(context.Context) error) (VCSandbox, error)
 	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
+	FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 }
 
 // VCSandbox is the Sandbox interface
