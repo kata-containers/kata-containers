@@ -11,7 +11,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use common::message::{Action, Message};
 use containerd_shim_protos::shim_async;
-use runtimes::RuntimeHandlerManager;
+use runtimes::{CleanupOutcome, RuntimeHandlerManager};
 use tokio::sync::mpsc::{channel, Receiver};
 use ttrpc::asynchronous::Server;
 
@@ -128,7 +128,19 @@ impl ServiceManager {
         // remove the directory as well. Without a state to begin with there
         // is nothing to retry from, so the directory goes either way.
         let had_state = state_dir.join(persist::PERSIST_FILE).exists();
-        if let Err(e) = handler.cleanup().await {
+        let outcome = handler.cleanup().await;
+        if let Ok(CleanupOutcome::Skipped) = outcome {
+            // keep_abnormal left the sandbox's resources where they are, and
+            // the state is the only record of them: whoever inspects the
+            // sandbox, or cleans it up later, needs it.
+            info!(
+                sl!(),
+                "cleanup skipped, keeping {} as the record of what is left",
+                state_dir.display()
+            );
+            return Ok(());
+        }
+        if let Err(e) = outcome {
             if had_state {
                 // The state is the only record of what is left on the host, so a
                 // later delete can still retry.

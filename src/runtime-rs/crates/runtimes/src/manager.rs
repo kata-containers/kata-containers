@@ -354,6 +354,16 @@ impl RuntimeHandlerManagerInner {
     }
 }
 
+/// What [`RuntimeHandlerManager::cleanup`] did with a dead shim's sandbox.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CleanupOutcome {
+    /// Everything the saved state recorded is gone.
+    Done,
+    /// keep_abnormal left the sandbox's resources in place on purpose, and
+    /// the saved state is the only record of them.
+    Skipped,
+}
+
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
 }
@@ -374,7 +384,9 @@ impl RuntimeHandlerManager {
         })
     }
 
-    pub async fn cleanup(&self) -> Result<()> {
+    /// Clean up after a shim that is gone. The outcome tells the caller
+    /// whether the sandbox's saved state is still the record of something.
+    pub async fn cleanup(&self) -> Result<CleanupOutcome> {
         let inner = self.inner.read().await;
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
@@ -410,12 +422,12 @@ impl RuntimeHandlerManager {
             #[cfg(feature = "linux")]
             name if name == LinuxContainer::name() => {
                 // TODO :support linux container (https://github.com/kata-containers/kata-containers/issues/4905)
-                return Ok(());
+                return Ok(CleanupOutcome::Done);
             }
             #[cfg(feature = "wasm")]
             name if name == WasmContainer::name() => {
                 // TODO :support wasm container (https://github.com/kata-containers/kata-containers/issues/4906)
-                return Ok(());
+                return Ok(CleanupOutcome::Done);
             }
             #[cfg(feature = "virt")]
             name if name == VirtContainer::name() => {
@@ -428,12 +440,13 @@ impl RuntimeHandlerManager {
                     .unwrap_or(sandbox_args.toml_config.runtime.keep_abnormal);
                 if keep_abnormal {
                     info!(sl!(), "skip cleanup for keep_abnormal");
-                    return Ok(());
+                    return Ok(CleanupOutcome::Skipped);
                 }
                 if sandbox_state.is_bootstrap() {
                     return cleanup_bootstrap(&inner.id, &sandbox_state, sandbox_args.toml_config)
                         .await
-                        .context("failed to clean up the sandbox setup");
+                        .context("failed to clean up the sandbox setup")
+                        .map(|()| CleanupOutcome::Done);
                 }
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
@@ -448,11 +461,11 @@ impl RuntimeHandlerManager {
                     .context("failed to cleanup the resource")?;
             }
             _ => {
-                return Ok(());
+                return Ok(CleanupOutcome::Done);
             }
         }
 
-        Ok(())
+        Ok(CleanupOutcome::Done)
     }
 
     async fn get_runtime_instance(&self) -> Result<Arc<RuntimeInstance>> {
