@@ -5,8 +5,8 @@ The mem-agent has been integrated into the kata-agent to reduce memory usage in 
 
 ## Open mem-agent in configuration
 ```bash
-$ config_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
-$ sudo sed -i -e 's/^#mem_agent_enable.*$/mem_agent_enable = true/g' $config_file
+$ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
+$ sudo sed -i -e 's/^#\?mem_agent_enable.*$/mem_agent_enable = true/g' $config_file
 ```
 
 ## Open reclaim_guest_freed_memory in configuration
@@ -18,8 +18,8 @@ When mem-agent reclaim the memory of the guest, this function will reclaim guest
 **To use mem-agent, must open reclaim_guest_freed_memory in configuration.**
 
 ```bash
-$ config_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
-$ sudo sed -i -e 's/^#reclaim_guest_freed_memory.*$/reclaim_guest_freed_memory = true/g' $config_file
+$ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
+$ sudo sed -i -e 's/^#\?reclaim_guest_freed_memory.*$/reclaim_guest_freed_memory = true/g' $config_file
 ```
 
 ## Sub-feature psi
@@ -43,7 +43,7 @@ Control the mem-agent memcg function disable or enable.<br>
 Default to false.
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_disable.*$/memcg_disable = true/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_disable.*$/memcg_disable = true/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -59,7 +59,7 @@ Default to false.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_swap.*$/memcg_swap = true/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_swap.*$/memcg_swap = true/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -72,30 +72,30 @@ $ kata-agent-ctl connect --server-address "unix:///var/run/kata/$PODID/root/kata
 #### setup guest swap
 memcg_swap should use with guest swap function.<br>
 The guest swap function will create a separate swap task that will create and insert swap files into the guest as needed.<br>
-Just dragonball and cloud-hypervisor support guest swap.
+Guest swap is supported by all runtime-rs hypervisors except QEMU (which rejects `enable_guest_swap`).
 
 Use following configuration to enable guest swap.
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#enable_guest_swap.*$/enable_guest_swap = true/g' $config_file
+$ sudo sed -i -e 's/^#\?enable_guest_swap.*$/enable_guest_swap = true/g' $config_file
 ```
 
 By default, swap files are created in the /run/kata-containers/swap directory. You can use the following configuration to create swap files in a different directory.
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#guest_swap_path.*$/guest_swap_path = \"\/run\/kata-containers\/swap\"/g' $config_file
+$ sudo sed -i -e 's/^#\?guest_swap_path.*$/guest_swap_path = \"\/run\/kata-containers\/swap\"/g' $config_file
 ```
 
 By default, the inserted swap file will match the current memory size, which is set to 100%. You can modify the percentage of the swap size relative to the current memory size using the configuration below.
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#guest_swap_size_percent.*$/guest_swap_size_percent = 100/g' $config_file
+$ sudo sed -i -e 's/^#\?guest_swap_size_percent.*$/guest_swap_size_percent = 100/g' $config_file
 ```
 
 The swap task will wait for 60 seconds before determining the memory size and creating swap files. This approach helps prevent interference with the startup performance of the kata container during its initial creation and avoids frequent insertion of swap files when the guest memory size is adjusted frequently. You can configure the waiting time using the option below.
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#guest_swap_create_threshold_secs.*$/guest_swap_create_threshold_secs = 60/g' $config_file
+$ sudo sed -i -e 's/^#\?guest_swap_create_threshold_secs.*$/guest_swap_create_threshold_secs = 60/g' $config_file
 ```
 
 ### memcg_swappiness_max
@@ -106,7 +106,7 @@ Default to 50.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_swappiness_max.*$/memcg_swappiness_max = 50/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_swappiness_max.*$/memcg_swappiness_max = 50/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -122,7 +122,7 @@ Default to 600.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_period_secs.*$/memcg_period_secs = 600/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_period_secs.*$/memcg_period_secs = 600/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -139,7 +139,7 @@ Default to 1
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_period_psi_percent_limit.*$/memcg_period_psi_percent_limit = 1/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_period_psi_percent_limit.*$/memcg_period_psi_percent_limit = 1/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -156,7 +156,7 @@ Default to 1.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_eviction_psi_percent_limit.*$/memcg_eviction_psi_percent_limit = 1/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_eviction_psi_percent_limit.*$/memcg_eviction_psi_percent_limit = 1/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -173,7 +173,7 @@ Default to 3.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#memcg_eviction_run_aging_count_min.*$/memcg_eviction_run_aging_count_min = 3/g' $config_file
+$ sudo sed -i -e 's/^#\?memcg_eviction_run_aging_count_min.*$/memcg_eviction_run_aging_count_min = 3/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -215,7 +215,7 @@ Default to false.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_disable.*$/compact_disable = true/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_disable.*$/compact_disable = true/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -231,7 +231,7 @@ Default to 600.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_period_secs.*$/compact_period_secs = 600/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_period_secs.*$/compact_period_secs = 600/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -248,7 +248,7 @@ Default to 1.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_period_psi_percent_limit.*$/compact_period_psi_percent_limit = 1/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_period_psi_percent_limit.*$/compact_period_psi_percent_limit = 1/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -265,7 +265,7 @@ Default to 5
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_psi_percent_limit.*$/compact_psi_percent_limit = 5/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_psi_percent_limit.*$/compact_psi_percent_limit = 5/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -279,18 +279,18 @@ $ kata-agent-ctl connect --server-address "unix:///var/run/kata/$PODID/root/kata
 Control the maximum number of seconds for each compaction of mem-agent compact function.<br>
 If compaction seconds is bigger than compact_sec_max during compact run period, stop compaction at once.
 
-Default to 180.
+Default to 300.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_sec_max.*$/compact_sec_max = 180/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_sec_max.*$/compact_sec_max = 300/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
 ```bash
 $ PODID="12345"
 $ kata-agent-ctl connect --server-address "unix:///var/run/kata/$PODID/root/kata.hvsock" --hybrid-vsock \
---cmd 'MemAgentCompactSet json://{"compact_sec_max":180}'
+--cmd 'MemAgentCompactSet json://{"compact_sec_max":300}'
 ```
 
 ### compact_order
@@ -302,7 +302,7 @@ Default to 9.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_order.*$/compact_order = 9/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_order.*$/compact_order = 9/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -321,7 +321,7 @@ Default to 1024.
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_threshold.*$/compact_threshold = 1024/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_threshold.*$/compact_threshold = 1024/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
@@ -335,17 +335,17 @@ $ kata-agent-ctl connect --server-address "unix:///var/run/kata/$PODID/root/kata
 Control the mem-agent compaction function force compact times.<br>
 After one compaction during a run period, if there are consecutive instances of compact_force_times run periods where no compaction occurs, a compaction will be forced regardless of the system's memory state.<br>
 If compact_force_times is set to 0, will do force compaction each period.<br>
-If compact_force_times is set to 18446744073709551615, will never do force compaction.<br>
-Default to 18446744073709551615.
+If compact_force_times is set to a very large value (e.g. the default `9223372036854775807`, `i64::MAX`), it will effectively never do force compaction.<br>
+Default to 9223372036854775807 (`i64::MAX`, chosen instead of `u64::MAX` to avoid TOML parser issues).
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml"
-$ sudo sed -i -e 's/^#compact_force_times.*$/compact_force_times = 18446744073709551615/g' $config_file
+$ sudo sed -i -e 's/^#\?compact_force_times.*$/compact_force_times = 9223372036854775807/g' $config_file
 ```
 
 For a running Kata container, this configuration can be dynamically modified using the kata-agent-ctl command.
 ```bash
 $ PODID="12345"
 $ kata-agent-ctl connect --server-address "unix:///var/run/kata/$PODID/root/kata.hvsock" --hybrid-vsock \
---cmd 'MemAgentCompactSet json://{"compact_force_times":18446744073709551615}'
+--cmd 'MemAgentCompactSet json://{"compact_force_times":9223372036854775807}'
 ```
