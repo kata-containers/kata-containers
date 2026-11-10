@@ -451,6 +451,8 @@ setup_selinux() {
 }
 
 setup_systemd() {
+		local mount_dir="$1"
+		local fs_type="${2:-}"
 		# Extension content images (e.g. the gpu extension) carry no /etc and are not
 		# bootable systemd rootfses, so there is nothing to set up here.
 		if [[ ! -d "${mount_dir}/etc" ]]; then
@@ -459,6 +461,32 @@ setup_systemd() {
 		fi
 		info "Creating empty machine-id to allow systemd to bind-mount it"
 		touch "${mount_dir}/etc/machine-id"
+
+		# systemd needs writable state even when the image cannot be remounted
+		# read-write. Set this up when packing the image so -f erofs works with
+		# rootfs directories built without knowing the final filesystem type.
+		# Agent-as-init and extension images do not boot the systemd target.
+		if [[ "${fs_type}" != "erofs" || "${AGENT_INIT}" == "yes" ||
+			! -f "${mount_dir}/usr/lib/systemd/system/kata-containers.target" ||
+			"${BUILD_VARIANT}" == nvidia* ]]; then
+			return 0
+		fi
+
+		mkdir -p "${mount_dir}/var/lib/systemd" \
+			"${mount_dir}/etc/systemd/system/local-fs.target.wants"
+		cat > "${mount_dir}/etc/systemd/system/var-lib-systemd.mount" <<'EOF'
+[Unit]
+Description=Volatile systemd state for the read-only guest rootfs
+Before=systemd-random-seed.service
+
+[Mount]
+What=tmpfs
+Where=/var/lib/systemd
+Type=tmpfs
+Options=mode=0755,nodev,nosuid
+EOF
+		ln -sf ../var-lib-systemd.mount \
+			"${mount_dir}/etc/systemd/system/local-fs.target.wants/var-lib-systemd.mount"
 }
 
 # Parse veritysetup output and format as kernel parameters.
@@ -556,7 +584,7 @@ create_rootfs_image() {
 	OK "rootfs copied"
 
 	info "Setup systemd"
-	setup_systemd "${mount_dir}"
+	setup_systemd "${mount_dir}" "${fs_type}"
 
 	info "Unmounting root partition"
 	umount "${mount_dir}"
@@ -586,16 +614,19 @@ create_erofs_rootfs_image() {
 	mount_dir=$(mktemp -p "${TMPDIR:-/tmp}" -d osbuilder-mount-dir.XXXX)
 
 	info "Copying content from rootfs to root partition"
-	cp -a "${rootfs}"/* "${mount_dir}"
+	# Preserve the root directory's permissions too: mktemp creates a 0700
+	# directory, which would prevent unprivileged services from traversing /.
+	cp -a "${rootfs}/." "${mount_dir}/"
+
+	# Include the generated systemd files when applying SELinux labels.
+	info "Setup systemd"
+	setup_systemd "${mount_dir}" erofs
 
 	info "Setup SELinux"
 	setup_selinux "${mount_dir}" "${agent_bin}"
 
 	sync
 	OK "rootfs copied"
-
-	info "Setup systemd"
-	setup_systemd "${mount_dir}"
 
 	local -r fsimage="$(mktemp)"
 	mkfs.erofs -zlz4hc -Enoinline_data "${fsimage}" "${mount_dir}"

@@ -122,7 +122,8 @@ INITRDCONFIDENTIALPATH := $(PKGDATADIR)/$(INITRDCONFIDENTIALNAME)
 ROOTFSTYPE_EXT4 := \"ext4\"
 ROOTFSTYPE_XFS := \"xfs\"
 ROOTFSTYPE_EROFS := \"erofs\"
-DEFROOTFSTYPE := $(ROOTFSTYPE_EXT4)
+# Guest disk images use compressed EROFS.
+DEFROOTFSTYPE := $(ROOTFSTYPE_EROFS)
 
 FCBINDIR := $(PREFIXDEPS)/bin
 FCPATH = $(FCBINDIR)/$(FCCMD)
@@ -266,7 +267,7 @@ QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT := 0
 DEFCREATECONTAINERTIMEOUT ?= 30
 DEFCREATECONTAINERTIMEOUT_COCO ?= 60
 DEFSTATICRESOURCEMGMT_COCO = true
-DEFDISABLEIMAGENVDIMM ?= false
+DEFDISABLEIMAGENVDIMM ?= true
 
 SED = sed
 CLI_DIR = cmd
@@ -590,8 +591,6 @@ ifeq ($(ARCH), s390x)
     # sandbox resource management to size the VM upfront and bypass hotplug.
     DEFSTATICRESOURCEMGMT_QEMU := true
 else ifeq ($(ARCH), aarch64)
-    # NVDIMM/virtio-pmem has issues on arm64 (cache coherency problems with DAX),
-    # so we use virtio-blk-pci instead.
     VMROOTFSDRIVER_QEMU := virtio-blk-pci
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
     # runtime-rs lacks ARM CPU hotplug support (pflash/UEFI, SMP topology,
@@ -599,7 +598,8 @@ else ifeq ($(ARCH), aarch64)
     # management to size the VM upfront instead.
     DEFSTATICRESOURCEMGMT_QEMU := true
 else
-    VMROOTFSDRIVER_QEMU := virtio-pmem
+    # Compressed EROFS images use a block device rather than a DAX namespace.
+    VMROOTFSDRIVER_QEMU := virtio-blk-pci
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
 endif
     DEFVCPUS_QEMU := 1
