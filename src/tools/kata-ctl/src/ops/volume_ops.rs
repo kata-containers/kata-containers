@@ -5,14 +5,14 @@
 
 use crate::args::{DirectVolSubcommand, DirectVolumeCommand};
 
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{anyhow, Context, Ok, Result};
+use http_body_util::BodyExt;
 use hyper::StatusCode;
 use kata_types::mount::{
     get_volume_mount_info, join_path, kata_direct_volume_root_path, DirectVolumeMountInfo,
     KATA_MOUNT_INFO_FILE_NAME,
 };
 use nix;
-use slog::{info, o};
 use std::fs;
 use url;
 
@@ -25,12 +25,6 @@ use shim_interface::shim_mgmt::{
 use crate::utils::TIMEOUT;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
-
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "volume_ops"))
-    };
-}
 
 fn run_async<T>(future: impl std::future::Future<Output = Result<T>>) -> Result<T> {
     tokio::runtime::Builder::new_current_thread()
@@ -55,7 +49,7 @@ pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
         }
     };
     if let Some(cmd_result) = cmd_result {
-        info!(sl!(), "{:?}", cmd_result);
+        println!("{cmd_result}");
     }
 
     Ok(())
@@ -95,10 +89,7 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
     let req_url = stats_url(&mount_info.device);
     let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT))?;
     let response = shim_client.get(&req_url).await?;
-    // turn body into string
-    let body = format!("{:?}", response.into_body());
-
-    Ok(Some(body))
+    Ok(Some(read_stats_response(response).await?))
 }
 
 fn stats_url(device: &str) -> String {
@@ -106,6 +97,25 @@ fn stats_url(device: &str) -> String {
         .append_pair(DIRECT_VOLUME_PATH_KEY, device)
         .finish();
     format!("{DIRECT_VOLUME_STATS_URL}?{query}")
+}
+
+async fn read_stats_response<B>(response: hyper::Response<B>) -> Result<String>
+where
+    B: hyper::body::Body,
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
+    let status = response.status();
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .context("failed to read volume stats response")?
+        .to_bytes();
+    let body = String::from_utf8(bytes.to_vec()).context("volume stats response is not UTF-8")?;
+    if !status.is_success() {
+        return Err(anyhow!("failed to get volume stats ({status}): {body}"));
+    }
+    Ok(body)
 }
 
 // add writes the mount info (json string) of a direct volume into a filesystem path known to Kata Containers.
@@ -174,6 +184,24 @@ mod tests {
     use std::{collections::HashMap, fs};
     use tempfile::{tempdir, TempDir};
     use test_utils::skip_if_not_root;
+
+    #[tokio::test]
+    async fn test_stats_response() {
+        use bytes::Bytes;
+        use http_body_util::Full;
+
+        let body = r#"{"usage":[],"volume_condition":{"abnormal":false}}"#;
+        let response = hyper::Response::new(Full::new(Bytes::from(body)));
+        assert_eq!(read_stats_response(response).await.unwrap(), body);
+
+        let response = hyper::Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Full::new(Bytes::from("volume not found")))
+            .unwrap();
+        let error = read_stats_response(response).await.unwrap_err().to_string();
+        assert!(error.contains("500 Internal Server Error"));
+        assert!(error.contains("volume not found"));
+    }
 
     #[test]
     fn test_stats_url() {

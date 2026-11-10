@@ -122,11 +122,24 @@ async fn direct_volume_stats_handler(
     sandbox: Arc<dyn Sandbox>,
     req: Request<Incoming>,
 ) -> Result<Response<Full<Bytes>>> {
-    let volume_path = direct_volume_stats_path(req.uri())?;
-    let result = sandbox.direct_volume_stats(&volume_path).await;
-    match result {
+    let volume_path = match direct_volume_stats_path(req.uri()) {
+        Ok(path) => path,
+        Err(error) => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(error.to_string())))
+                .context("build invalid volume path response");
+        }
+    };
+    match sandbox.direct_volume_stats(&volume_path).await {
         Ok(stats) => Ok(Response::new(Full::new(Bytes::from(stats)))),
-        _ => Err(anyhow!("handler: Failed to get volume stats")),
+        Err(error) => {
+            warn!(sl!(), "failed to get direct volume stats: {error:#}");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!("{error:#}"))))
+                .context("build volume stats error response")
+        }
     }
 }
 
