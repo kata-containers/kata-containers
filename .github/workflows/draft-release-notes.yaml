@@ -44,6 +44,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Set up Node.js for CSpell
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install CSpell for draft feedback
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/release-notes-tools" \
+            --ignore-scripts --no-audit --no-fund cspell@10.0.0
+
       - name: Resolve the release range
         shell: bash
         env:
@@ -99,6 +111,16 @@ jobs:
           and flag the gap in a Markdown HTML comment near the relevant section.
           The comment is for maintainers reviewing the source and should say what
           needs verification. Keep all review notes inside the Markdown document.
+
+          Before returning the final document, check your complete candidate by
+          passing it on standard input to this command from the repository root:
+          python3 .github/scripts/check-release-notes-draft.py $VERSION "$RUNNER_TEMP/release-notes-tools/node_modules/.bin/cspell"
+          Use a quoted heredoc to pass the Markdown literally, then revise the draft
+          and repeat the check. Fix structure, whitespace, and spelling mistakes.
+          Use inline code for actual identifiers when appropriate. Keep legitimate
+          names and technical terms as prose where appropriate, even if CSpell
+          reports them. The validation job will add those terms to the dictionary.
+          Do not add CSpell suppression directives. Return only the checked Markdown.
           PROMPT
 
       - name: Draft release notes with Codex
@@ -144,10 +166,21 @@ jobs:
         run: |
           draft="$RUNNER_TEMP/kata-release-notes-draft/release-notes.md"
           [[ -f "$draft" && ! -L "$draft" ]]
-          [[ "$(head -n 1 "$draft")" == "# Kata Containers $VERSION" ]]
-          grep -Fxq '## Upgrading' "$draft"
           path="docs/releases/$VERSION.md"
-          install -m 0644 "$draft" "$path"
+
+          python3 - "$draft" "$path" <<'PY'
+          import sys
+          from pathlib import Path
+
+          source, destination = map(Path, sys.argv[1:])
+          notes = source.read_text(encoding="utf-8-sig")
+          if not notes.endswith("\n"):
+              notes += "\n"
+          destination.write_text(notes, encoding="utf-8", newline="\n")
+          PY
+
+          [[ "$(head -n 1 "$path")" == "# Kata Containers $VERSION" ]]
+          grep -Fxq '## Upgrading' "$path"
 
           make --no-print-directory --silent docs-spellcheck \
             CSPELL_FLAGS='--words-only --unique --no-progress --no-summary --no-exit-code' \
@@ -184,8 +217,22 @@ jobs:
           git diff --cached --check
           git diff --cached --binary > "$RUNNER_TEMP/release-notes.patch"
 
-      - name: Check documentation style
-        run: make docs-lint
+      - name: Check spelling
+        uses: streetsidesoftware/cspell-action@de2a73e963e7443969755b648a1008f77033c5b2 # 8.4.0
+        with:
+          files: |
+            docs/releases/${{ inputs.version }}.md
+            tests/spellcheck/kata-dictionary.txt
+          incremental_files_only: false
+          config: .cspell.yaml
+
+      - name: Set up EditorConfig checker
+        uses: editorconfig-checker/action-editorconfig-checker@840e866d93b8e032123c23bac69dece044d4d84c # v2.2.0
+        with:
+          version: v3.6.1
+
+      - name: Check EditorConfig
+        run: editorconfig-checker
 
       - name: Build the website
         shell: bash
@@ -229,7 +276,7 @@ jobs:
           name: kata-release-notes
           path: ${{ runner.temp }}/kata-release-notes
 
-      - name: Create one signed-off commit
+      - name: Create and validate one signed-off commit
         shell: bash
         env:
           VERSION: ${{ inputs.version }}
@@ -252,7 +299,6 @@ jobs:
           grep -Fxq "    - \"$VERSION\": releases/$VERSION.md" docs/.nav.yml
 
           subject="docs: add release notes for $VERSION"
-          [[ ${#subject} -le 75 ]]
           if grep -Fxq '## Breaking changes' "$path"; then
             printf '%s\n' 'Cover features, breaking changes, fixes, known issues, testing' \
               'coverage and upgrade guidance.' > "$RUNNER_TEMP/commit-body"
@@ -277,6 +323,21 @@ jobs:
           [[ "$(git rev-list --count "$GITHUB_SHA..HEAD")" == 1 ]]
           [[ "$(git log -1 --format='%an <%ae>')" == "$signoff" ]]
           [[ "$(git log -1 --format=%B | git interpret-trailers --parse | tail -1)" == "Signed-off-by: $signoff" ]]
+
+          subject=$(git log -1 --format=%s)
+          if [[ "$subject" != 'docs: '* || ${#subject} -gt 75 ]]; then
+            echo '::error::Expected a docs: subject of at most 75 characters'
+            exit 1
+          fi
+          if ! git log -1 --format=%b | awk '
+            /^Signed-off-by:/ { next }
+            length($0) > 150 { too_long = 1 }
+            !/^Generated-By:/ && /[^[:space:]]/ { has_body = 1 }
+            END { exit (too_long || !has_body) }
+          '; then
+            echo '::error::Expected a commit body with lines of at most 150 characters'
+            exit 1
+          fi
 
       - name: Open the draft documentation PR
         shell: bash
