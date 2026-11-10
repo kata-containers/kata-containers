@@ -194,7 +194,7 @@ index 0000000000000..bab35baa8c167
 +	int ret = 0;
 +
 +	union {
-+		struct sockaddr_unsized sa;
++		struct sockaddr sa;
 +		struct sockaddr_vm svm;
 +	} addr = {
 +		.svm = {
