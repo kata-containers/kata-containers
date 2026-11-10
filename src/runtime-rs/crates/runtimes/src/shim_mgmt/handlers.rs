@@ -15,7 +15,6 @@ use common::Sandbox;
 use http_body_util::{BodyExt, Full};
 use hyper::{body::Incoming, Method, Request, Response, StatusCode};
 use std::{str, sync::Arc};
-use url::Url;
 
 use shim_interface::shim_mgmt::{
     AGENT_POLICY_URL, AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL,
@@ -42,7 +41,7 @@ pub(crate) async fn handler_mux(
         (&Method::PUT, IP6_TABLE_URL) | (&Method::GET, IP6_TABLE_URL) => {
             ipv6_table_handler(sandbox, req).await
         }
-        (&Method::POST, DIRECT_VOLUME_STATS_URL) => direct_volume_stats_handler(sandbox, req).await,
+        (&Method::GET, DIRECT_VOLUME_STATS_URL) => direct_volume_stats_handler(sandbox, req).await,
         (&Method::POST, DIRECT_VOLUME_RESIZE_URL) => {
             direct_volume_resize_handler(sandbox, req).await
         }
@@ -123,19 +122,20 @@ async fn direct_volume_stats_handler(
     sandbox: Arc<dyn Sandbox>,
     req: Request<Incoming>,
 ) -> Result<Response<Full<Bytes>>> {
-    let params = Url::parse(&req.uri().to_string())
-        .map_err(|e| anyhow!(e))?
-        .query_pairs()
-        .into_owned()
-        .collect::<std::collections::HashMap<String, String>>();
-    let volume_path = params
-        .get(DIRECT_VOLUME_PATH_KEY)
-        .context("shim-mgmt: volume path key not found in request params")?;
-    let result = sandbox.direct_volume_stats(volume_path).await;
+    let volume_path = direct_volume_stats_path(req.uri())?;
+    let result = sandbox.direct_volume_stats(&volume_path).await;
     match result {
         Ok(stats) => Ok(Response::new(Full::new(Bytes::from(stats)))),
         _ => Err(anyhow!("handler: Failed to get volume stats")),
     }
+}
+
+fn direct_volume_stats_path(uri: &hyper::Uri) -> Result<String> {
+    url::form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes())
+        .find(|(key, _)| key == DIRECT_VOLUME_PATH_KEY)
+        .map(|(_, value)| value.into_owned())
+        .filter(|path| !path.is_empty())
+        .context("shim-mgmt: volume path key not found in request params")
 }
 
 async fn direct_volume_resize_handler(
@@ -186,5 +186,28 @@ async fn set_agent_policy_handler(
             Ok(Response::new(Full::new(Bytes::from(""))))
         }
         _ => Err(anyhow!("Set agent policy only takes PUT method")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_direct_volume_stats_path() {
+        let uri = "/direct-volume/stats?path=%2Ftmp%2Fimage+with+%2B%26%3F%23%25.img"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            direct_volume_stats_path(&uri).unwrap(),
+            "/tmp/image with +&?#%.img"
+        );
+        for uri in [
+            "/direct-volume/stats",
+            "/direct-volume/stats?other=x",
+            "/direct-volume/stats?path=",
+        ] {
+            assert!(direct_volume_stats_path(&uri.parse().unwrap()).is_err());
+        }
     }
 }

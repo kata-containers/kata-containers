@@ -92,16 +92,20 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
     let sandbox_id = get_sandbox_id_for_volume(volume_path)?;
     let mount_info = get_volume_mount_info(volume_path)?;
 
-    let req_url = url::form_urlencoded::Serializer::new(String::from(DIRECT_VOLUME_STATS_URL))
-        .append_pair(DIRECT_VOLUME_PATH_KEY, &mount_info.device)
-        .finish();
-
+    let req_url = stats_url(&mount_info.device);
     let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT))?;
     let response = shim_client.get(&req_url).await?;
     // turn body into string
     let body = format!("{:?}", response.into_body());
 
     Ok(Some(body))
+}
+
+fn stats_url(device: &str) -> String {
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair(DIRECT_VOLUME_PATH_KEY, device)
+        .finish();
+    format!("{DIRECT_VOLUME_STATS_URL}?{query}")
 }
 
 // add writes the mount info (json string) of a direct volume into a filesystem path known to Kata Containers.
@@ -170,6 +174,18 @@ mod tests {
     use std::{collections::HashMap, fs};
     use tempfile::{tempdir, TempDir};
     use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_stats_url() {
+        let device = "/tmp/image with +&?#%.img";
+        let uri = stats_url(device);
+        let url = url::Url::parse(&format!("http://localhost{uri}")).unwrap();
+        assert_eq!(url.path(), DIRECT_VOLUME_STATS_URL);
+        assert_eq!(
+            url.query_pairs().collect::<Vec<_>>(),
+            vec![("path".into(), device.into())]
+        );
+    }
 
     #[test]
     #[serial]
