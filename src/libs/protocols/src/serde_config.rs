@@ -65,4 +65,14 @@ mod tests {
 
         assert_eq!(from_json, epr);
     }
+
+    #[test]
+    fn test_serde_defaults_for_partial_request() {
+        let request: ExecProcessRequest =
+            serde_json::from_str(r#"{"container_id":"test-container"}"#).unwrap();
+
+        assert_eq!(request.container_id, "test-container");
+        assert_eq!(request.exec_id, "");
+        assert!(request.process.is_none());
+    }
 }
