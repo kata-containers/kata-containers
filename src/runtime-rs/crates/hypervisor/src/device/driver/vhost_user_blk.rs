@@ -63,13 +63,20 @@ impl Device for VhostUserBlkDevice {
             return Ok(());
         }
 
-        if let Err(e) = h.add_device(DeviceType::VhostUserBlk(self.clone())).await {
-            self.decrease_attach_count().await?;
-
-            return Err(e);
+        // The hypervisor returns the device with hypervisor-assigned fields
+        // (e.g. the guest PCI path) filled in; keep them, otherwise the
+        // resource layer would never see the PCI path cloud-hypervisor picked.
+        match h.add_device(DeviceType::VhostUserBlk(self.clone())).await {
+            Ok(DeviceType::VhostUserBlk(blk)) => {
+                self.config = blk.config;
+                Ok(())
+            }
+            Ok(_) => unreachable!("add_device must echo the device type it was given"),
+            Err(e) => {
+                self.decrease_attach_count().await?;
+                Err(e)
+            }
         }
-
-        return Ok(());
     }
 
     async fn detach(

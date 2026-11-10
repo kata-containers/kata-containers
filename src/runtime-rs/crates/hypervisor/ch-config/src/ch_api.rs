@@ -199,6 +199,21 @@ pub async fn cloud_hypervisor_vm_info(api_socket: &ApiSocket) -> Result<VmInfo> 
     serde_json::from_str(&vm_info).with_context(|| format!("failed to serde {vm_info}"))
 }
 
+/// Whether the cloud-hypervisor device tree still contains the given device
+/// id. `vm.remove-device` returns before the removal has completed; the
+/// device tree is the view of devices actually instantiated in the VM, so a
+/// missing entry means the removal is done.
+pub async fn cloud_hypervisor_device_tree_contains(
+    api_socket: &ApiSocket,
+    device_id: &str,
+) -> Result<bool> {
+    let vm_info = cloud_hypervisor_vm_info(api_socket).await?;
+    Ok(vm_info
+        .device_tree
+        .map(|tree| tree.contains_key(device_id))
+        .unwrap_or(false))
+}
+
 pub async fn cloud_hypervisor_vm_resize(
     api_socket: &ApiSocket,
     vmresize: VmResize,

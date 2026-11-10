@@ -580,6 +580,20 @@ pub struct VmInfo {
     pub state: State,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_actual_size: Option<u64>,
+    /// device_tree is keyed by cloud-hypervisor device id. It is the view of
+    /// devices that are actually instantiated in the VM, so it is the way to
+    /// observe that an asynchronous `vm.remove-device` has completed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_tree: Option<std::collections::BTreeMap<String, DeviceNode>>,
+}
+
+/// DeviceNode : entry of the cloud-hypervisor device tree
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct DeviceNode {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub pci_bdf: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
@@ -630,5 +644,45 @@ mod tests {
                 })
             );
         }
+    }
+
+    #[test]
+    fn test_vm_info_parses_device_tree() {
+        // vm.remove-device is asynchronous; the device tree in vm.info is the
+        // view of devices actually instantiated in the VM, so it is the way
+        // to observe that a removal has completed.
+        let vm_info: VmInfo = serde_json::from_str(
+            r#"{
+                "config": {"serial": {"file": null, "mode": "Null"},
+                           "console": {"file": null, "mode": "Null"}},
+                "state": "Running",
+                "device_tree": {
+                    "__disk0": {
+                        "id": "__disk0",
+                        "pci_bdf": "0000:00:05.0",
+                        "resources": [],
+                        "children": []
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let tree = vm_info.device_tree.unwrap();
+        assert!(tree.contains_key("__disk0"));
+        assert_eq!(tree["__disk0"].pci_bdf.as_deref(), Some("0000:00:05.0"));
+    }
+
+    #[test]
+    fn test_vm_info_without_device_tree_is_valid() {
+        // Older cloud-hypervisor versions do not expose device_tree; the
+        // response must still parse.
+        let vm_info: VmInfo = serde_json::from_str(
+            r#"{"config": {"serial": {"file": null, "mode": "Null"},
+                           "console": {"file": null, "mode": "Null"}},
+                "state": "Running"}"#,
+        )
+        .unwrap();
+        assert!(vm_info.device_tree.is_none());
     }
 }

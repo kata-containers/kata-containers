@@ -123,9 +123,19 @@ impl SPDKVolume {
         let mut device_id = String::new();
         if let DeviceType::VhostUserBlk(device) = device_info {
             // blk, mmioblk
-            storage.driver = device.config.driver_option;
-            // /dev/vdX
-            storage.source = device.config.virt_path;
+            storage.driver = device.config.driver_option.clone();
+            // The guest PCI path (when known) locates the disk without
+            // trusting a /dev/vdX name derived from the kata-internal device
+            // index: for a hot-plugged disk the guest assigns node names in
+            // its own order, and the agent resolves the PCI path to the real
+            // device node through sysfs. Fall back to virt_path for
+            // non-PCI transports.
+            storage.source = device
+                .config
+                .pci_path
+                .as_ref()
+                .map(|pci_path| pci_path.to_string())
+                .unwrap_or_else(|| device.config.virt_path.clone());
             device_id = device.device_id;
         }
 
