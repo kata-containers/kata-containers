@@ -172,3 +172,6 @@ libc
 Ziyue
 fdisk
 fsprogs
+ORAS
+PYSEC
+chrony
