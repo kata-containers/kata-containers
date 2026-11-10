@@ -27,6 +27,7 @@ const ALL_SHIMS: &[&str] = &[
     "dragonball",
     "fc",
     "firecracker",
+    "rs-fc",
     "openvmm-azure-runtime-rs",
     "remote",
     // QEMU shims
@@ -92,7 +93,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
     match shim {
         "clh" | "clh-azure" | "clh-runtime-rs" | "clh-azure-runtime-rs" => Ok("clh"),
         "dragonball" => Ok("dragonball"),
-        "fc" | "firecracker" => Ok("firecracker"),
+        "fc" | "firecracker" | "rs-fc" => Ok("firecracker"),
         "openvmm-azure-runtime-rs" => Ok("openvmm"),
         "remote" => Ok("remote"),
         _ => anyhow::bail!(
@@ -2155,6 +2156,7 @@ pub(crate) mod tests {
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
     #[case("firecracker", "firecracker")]
+    #[case("rs-fc", "firecracker")]
     #[case("openvmm-azure-runtime-rs", "openvmm")]
     #[case("remote", "remote")]
     fn test_get_hypervisor_name_other_hypervisors(#[case] shim: &str, #[case] expected: &str) {

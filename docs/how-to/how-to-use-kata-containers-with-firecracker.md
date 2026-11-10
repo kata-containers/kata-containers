@@ -216,6 +216,25 @@ $ sudo systemctl start devmapper_reload.service
 
 ## Configure Kata Containers with AWS Firecracker
 
+### Rust runtime on Kubernetes
+
+On amd64, deploy the Rust Firecracker shim using the
+`tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-rs-fc.values.yaml`
+profile and select `runtimeClassName: kata-rs-fc` for workloads. This profile
+uses `configuration-rs-fc.toml` and the Rust shim under
+`/opt/kata/runtime-rs/bin`. The `fc` profile continues to use the Go shim.
+Configure containerd's devmapper snapshotter on the node before deploying
+either profile, as described above.
+
+The Kubernetes CI workflow on free runners tests `rs-fc` with the latest
+containerd version and devmapper. It runs a focused suite covering Rust shim
+selection, Firecracker shutdown, environment variables, exec, completed jobs,
+and pod networking. It runs through the normal nightly, manual, and
+`ok-to-test` pull request pipelines. Volume sharing and hotplug tests are not
+part of this initial suite.
+
+### Go runtime
+
 To configure Kata Containers with AWS Firecracker, copy the generated `configuration-fc.toml` file when building the `kata-runtime` to either `/etc/kata-containers/configuration-fc.toml` or `/usr/share/defaults/kata-containers/configuration-fc.toml`.
 
 The following command shows full paths to the `configuration.toml` files that the runtime loads. It will use the first path that exists. (Please make sure the kernel and image paths are set correctly in the `configuration.toml` file)

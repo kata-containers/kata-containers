@@ -69,7 +69,7 @@ enabled_shims() {
 	# the chart cannot arrange on its own, so they come from a profile.
 	local class
 	while read -r class; do
-		if [[ "${class}" =~ (snp|tdx|-se(-|$)|coco|nvidia|^kata-fc|^kata-remote) ]]; then
+		if [[ "${class}" =~ (snp|tdx|-se(-|$)|coco|nvidia|^kata-fc|^kata-rs-fc|^kata-remote) ]]; then
 			echo "the chart defaults render ${class}, which needs a snapshotter" \
 				"or hardware a default install cannot promise" >&2
 			return 1
@@ -122,6 +122,16 @@ enabled_shims() {
 			}
 		done < <(enabled_shims "${profile}")
 	done
+}
+
+@test "Helm template: Rust Firecracker uses devmapper on amd64 only" {
+	local rendered
+	rendered=$(render -f "${CHART_PATH}/try-kata-rs-fc.values.yaml")
+	[[ "$(runtime_classes -f "${CHART_PATH}/try-kata-rs-fc.values.yaml")" == "kata-rs-fc" ]]
+	[[ "$(env_value "${rendered}" SHIMS_X86_64)" == "rs-fc" ]]
+	[[ "$(env_value "${rendered}" SNAPSHOTTER_HANDLER_MAPPING_X86_64)" == "rs-fc:devmapper" ]]
+	[[ -z "$(env_value "${rendered}" SHIMS_AARCH64)" ]]
+	[[ -z "$(env_value "${rendered}" EXPERIMENTAL_SETUP_SNAPSHOTTER)" ]]
 }
 
 @test "Helm template: custom runtimes inherit every architecture of their base shim" {

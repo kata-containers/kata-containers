@@ -334,7 +334,7 @@ remove_kata_runtime_config_dropin_file() {
 }
 
 is_runtime_rs() {
-	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]]
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]] || [[ "${KATA_HYPERVISOR}" == "rs-fc" ]]
 }
 
 # True for hypervisors that run the guest in a separate VMM process (i.e. not

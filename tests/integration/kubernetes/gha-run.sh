@@ -39,6 +39,7 @@ export TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
 function configure_devmapper() {
+	sudo modprobe -a loop dm_thin_pool
 	sudo mkdir -p /var/lib/containerd/devmapper
 	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
 	sudo truncate --size 10G /var/lib/containerd/devmapper/meta-disk.img
@@ -53,14 +54,18 @@ Wants=systemd-udev-settle.service
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=-/sbin/losetup /dev/loop20 /var/lib/containerd/devmapper/data-disk.img
-ExecStart=-/sbin/losetup /dev/loop21 /var/lib/containerd/devmapper/meta-disk.img
+ExecStart=/sbin/losetup --find /var/lib/containerd/devmapper/data-disk.img
+ExecStart=/sbin/losetup --find /var/lib/containerd/devmapper/meta-disk.img
 [Install]
 WantedBy=local-fs.target
 EOF
 
 	sudo systemctl daemon-reload
 	sudo systemctl enable --now containerd-devmapper
+	local data_loop meta_loop
+	data_loop=$(sudo losetup --list --associated /var/lib/containerd/devmapper/data-disk.img --noheadings --output NAME)
+	meta_loop=$(sudo losetup --list --associated /var/lib/containerd/devmapper/meta-disk.img --noheadings --output NAME)
+	[[ -n "${data_loop}" && -n "${meta_loop}" ]] || die "devmapper loop devices were not attached"
 
 	# Time to setup the thin pool for consumption.
 	# The table arguments are such.
@@ -73,14 +78,14 @@ EOF
 	# no. of feature arguments
 	# Skip zeroing blocks for new volumes.
 	sudo dmsetup create contd-thin-pool \
-		--table "0 20971520 thin-pool /dev/loop21 /dev/loop20 512 32768 1 skip_block_zeroing"
+		--table "0 20971520 thin-pool ${meta_loop} ${data_loop} 512 32768 1 skip_block_zeroing"
 
 	case "${KUBERNETES}" in
 		k3s)
 			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
 			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
 			;;
-		kubeadm)
+		kubeadm|vanilla)
 			containerd_config_file="/etc/containerd/config.toml"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
@@ -121,7 +126,7 @@ EOF
 	case "${KUBERNETES}" in
 		k3s)
 			sudo systemctl restart k3s ;;
-		kubeadm)
+		kubeadm|vanilla)
 			sudo systemctl restart containerd ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
@@ -129,20 +134,13 @@ EOF
 	sleep 60s
 	sudo cat "${containerd_config_file}"
 
-	if [[ "${KUBERNETES}" = 'k3s' ]]
-	then
-		local ctr_dm_status
-		local result
-
-		ctr_dm_status=$(sudo ctr \
-			--address '/run/k3s/containerd/containerd.sock' \
-			plugins ls |\
-			awk '$2 ~ /^devmapper$/ { print $0 }' || true)
-
-		result=$(echo "${ctr_dm_status}" | awk '{print $4}' || true)
-
-		[[ "${result}" = 'ok' ]] || die "k3s containerd device mapper not configured: '${ctr_dm_status}'"
-	fi
+	local containerd_socket="/run/containerd/containerd.sock"
+	[[ "${KUBERNETES}" != 'k3s' ]] || containerd_socket="/run/k3s/containerd/containerd.sock"
+	local ctr_dm_status result
+	ctr_dm_status=$(sudo ctr --address "${containerd_socket}" plugins ls |
+		awk '$2 == "devmapper" { print $0 }')
+	result=$(echo "${ctr_dm_status}" | awk '{print $4}')
+	[[ "${result}" = 'ok' ]] || die "containerd device mapper not configured: '${ctr_dm_status}'"
 
 	info "devicemapper (DM) devices"
 	sudo dmsetup ls --tree

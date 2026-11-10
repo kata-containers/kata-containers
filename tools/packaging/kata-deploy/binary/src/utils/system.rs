@@ -12,6 +12,7 @@ pub const RUST_SHIMS: &[&str] = &[
     "clh-azure-runtime-rs",
     "clh-runtime-rs",
     "dragonball",
+    "rs-fc",
     "openvmm-azure-runtime-rs",
     "qemu-runtime-rs",
     "qemu-nvidia-cpu-runtime-rs",
@@ -174,6 +175,11 @@ mod tests {
     #[case("qemu", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("qemu-tdx", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case(
+        "rs-fc",
+        "/opt/kata",
+        "/opt/kata/share/defaults/kata-containers/runtime-rs"
+    )]
     #[case("clh", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case(
         "clh-runtime-rs",
