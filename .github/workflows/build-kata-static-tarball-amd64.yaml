@@ -489,7 +489,7 @@ jobs:
     with:
       arch: amd64
       runner: ubuntu-24.04
-      assets: '["agent-ctl","genpolicy","kata-ctl","kata-manager","trace-forwarder"]'
+      assets: '["agent-ctl","genpolicy","kata-ctl","trace-forwarder"]'
       stage: ${{ inputs.stage }}
       tarball-suffix: ${{ inputs.tarball-suffix }}
       push-to-registry: ${{ inputs.push-to-registry }}
