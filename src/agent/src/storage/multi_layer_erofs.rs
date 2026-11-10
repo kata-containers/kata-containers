@@ -20,7 +20,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
-use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
+use crate::device::block_device_handler::{
+    get_virtio_blk_mmio_device_name, get_virtio_blk_pci_device_name,
+};
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::linux_abi::pcipath_from_dev_tree_path;
 use crate::mount::baremount;
@@ -29,7 +31,7 @@ use crate::sandbox::Sandbox;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, Mounter};
-use kata_types::device::{DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
+use kata_types::device::{DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
 #[cfg(feature = "devicemapper")]
 use kata_types::dmverity::{cleanup_dmverity_devices, create_dmverity_device, DmVerityInfo};
 use kata_types::mount::StorageDevice;
@@ -946,6 +948,14 @@ async fn resolve_base_device_path(
         DRIVER_BLK_PCI_TYPE => {
             let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
             get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
+        }
+        DRIVER_BLK_MMIO_TYPE => {
+            if !Path::new(&layer.source).exists() {
+                get_virtio_blk_mmio_device_name(sandbox, &layer.source)
+                    .await
+                    .context("failed to get virtio-mmio block device")?;
+            }
+            layer.source.clone()
         }
         _ => {
             // For non-SCSI devices, we can assume the source is directly mountable.
