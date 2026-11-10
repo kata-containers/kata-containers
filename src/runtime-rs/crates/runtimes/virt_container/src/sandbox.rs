@@ -2276,10 +2276,12 @@ impl Sandbox for VirtSandbox {
         self.agent.agent_sock().await
     }
 
-    async fn direct_volume_stats(&self, volume_guest_path: &str) -> Result<String> {
-        let req: agent::VolumeStatsRequest = VolumeStatsRequest {
-            volume_guest_path: volume_guest_path.to_string(),
-        };
+    async fn direct_volume_stats(&self, volume_host_path: &str) -> Result<String> {
+        let volume_guest_path = self
+            .resource_manager
+            .direct_volume_guest_path(volume_host_path)
+            .await?;
+        let req = VolumeStatsRequest { volume_guest_path };
         let result = self
             .agent
             .get_volume_stats(req)
