@@ -129,6 +129,12 @@ pub enum VfioDeviceType {
     MediatedAp,
 }
 
+/// Parses a sysfs style hexadecimal PCI ID, e.g. `0x10de`.
+pub fn parse_pci_hex_id(id: &str) -> Option<u32> {
+    let id = id.trim();
+    u32::from_str_radix(id.strip_prefix("0x").unwrap_or(id), 16).ok()
+}
+
 // DeviceVendorClass represents a PCI device's deviceID, vendorID and classID
 // DeviceVendorClass: (device, vendor, class)
 #[derive(Clone, Debug)]
@@ -158,6 +164,14 @@ impl DeviceVendorClass {
 
     pub fn get_vendor_class_id(&self) -> Result<(&str, &str)> {
         Ok((&self.1, &self.2))
+    }
+
+    /// Returns true if this device is an NVIDIA GPU.
+    pub fn is_nvidia_gpu(&self) -> bool {
+        match (parse_pci_hex_id(&self.1), parse_pci_hex_id(&self.2)) {
+            (Some(vendor), Some(class)) => pcilibs_rs::platform::is_nvidia_gpu(vendor, class),
+            _ => false,
+        }
     }
 
     pub fn get_device_vendor_id(&self) -> Result<u32> {
@@ -883,4 +897,32 @@ pub fn get_vfio_device(device: String) -> Result<String> {
     }
 
     Ok(vfio_device)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_nvidia_gpu() {
+        for (vendor, class, expected) in [
+            ("0x10de", "0x030200", true),  // 3D controller
+            ("0x10de", "0x030000", true),  // VGA controller
+            ("0x10de", "0x038000", false), // other display controller
+            ("0x10DE", "0x030200", true),  // upper case
+            ("0x10de", "0x068000", false), // NVSwitch
+            ("0x10de", "0x040300", false), // audio function
+            ("0x15b3", "0x020000", false), // Mellanox NIC
+            ("0x1002", "0x030000", false), // other vendor GPU
+            ("0x10de", "", false),         // unknown class
+            ("", "0x030200", false),       // unknown vendor
+        ] {
+            let dvc = DeviceVendorClass("0x2bb5".into(), vendor.into(), class.into());
+            assert_eq!(
+                dvc.is_nvidia_gpu(),
+                expected,
+                "vendor {vendor} class {class}"
+            );
+        }
+    }
 }

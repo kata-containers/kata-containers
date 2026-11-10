@@ -288,7 +288,7 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 	case config.BlockDrive:
 		devices, err = qemuArchBase.appendBlockDevice(context.Background(), devices, s)
 	case config.VFIODev:
-		devices = qemuArchBase.appendVFIODevice(devices, s)
+		devices = qemuArchBase.appendVFIODevice(devices, s, nil)
 	case config.VhostUserDeviceAttrs:
 		devices, err = qemuArchBase.appendVhostUserDevice(context.Background(), devices, s)
 	}
@@ -710,4 +710,29 @@ func TestQemuArchBaseAppendIOMMU(t *testing.T) {
 	devices, err = qemuArchBase.appendIOMMU(devices)
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
+}
+
+func TestQemuArchBaseAppendVFIODeviceWithGPUDirectClique(t *testing.T) {
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+	clique := uint8(2)
+
+	vfDevice := config.VFIODev{
+		BDF:      "0000:21:00.0",
+		VendorID: "0x10de",
+		DeviceID: "0x2bb5",
+		Class:    "0x030200",
+		Bus:      "rp0",
+	}
+
+	devices := qemuArchBase.appendVFIODevice(nil, vfDevice, &clique)
+	assert.Equal([]govmmQemu.Device{
+		govmmQemu.VFIODevice{
+			BDF:             vfDevice.BDF,
+			VendorID:        vfDevice.VendorID,
+			DeviceID:        vfDevice.DeviceID,
+			Bus:             vfDevice.Bus,
+			GPUDirectClique: &clique,
+		},
+	}, devices)
 }

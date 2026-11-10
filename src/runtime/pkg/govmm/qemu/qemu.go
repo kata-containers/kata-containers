@@ -2077,7 +2077,13 @@ type VFIODevice struct {
 
 	// DevfsDev is used to identify a VFIO Group device or IOMMMUFD VFIO device
 	DevfsDev string
+
+	// GPUDirectClique is the NVIDIA GPUDirect P2P clique ID, or nil for none.
+	GPUDirectClique *uint8
 }
+
+// MaxGPUDirectClique is the highest clique ID QEMU accepts.
+const MaxGPUDirectClique = 15
 
 // IommufdObjectID is the ID of the iommufd object shared by all VFIO devices.
 const IommufdObjectID = "iommufd0"
@@ -2132,6 +2138,9 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 		}
 		if vfioDev.ROMFile != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vfioDev.ROMFile))
+		}
+		if vfioDev.GPUDirectClique != nil {
+			deviceParams = append(deviceParams, fmt.Sprintf("x-nv-gpudirect-clique=%d", *vfioDev.GPUDirectClique))
 		}
 	}
 

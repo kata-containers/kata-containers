@@ -380,6 +380,37 @@ func TestAppendDeviceVFIO(t *testing.T) {
 	testAppend(vfioDevice, deviceVFIOString, t)
 }
 
+func TestAppendDeviceVFIOGPUDirectClique(t *testing.T) {
+	clique := uint8(7)
+	for _, tc := range []struct {
+		name   string
+		clique *uint8
+		want   bool
+	}{
+		{name: "unset", clique: nil, want: false},
+		{name: "set", clique: &clique, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			vfioDevice := VFIODevice{
+				BDF:             "0000:21:00.0",
+				VendorID:        "0x10de",
+				DeviceID:        "0x2bb5",
+				Bus:             "rp0",
+				Transport:       TransportPCI,
+				GPUDirectClique: tc.clique,
+			}
+			params := strings.Join(vfioDevice.QemuParams(&Config{}), " ")
+			got := strings.Contains(params, ",x-nv-gpudirect-clique=7")
+			if got != tc.want {
+				t.Fatalf("x-nv-gpudirect-clique present = %v, want %v: %s", got, tc.want, params)
+			}
+			if !tc.want && strings.Contains(params, "x-nv-gpudirect-clique") {
+				t.Fatalf("unexpected x-nv-gpudirect-clique: %s", params)
+			}
+		})
+	}
+}
+
 func TestAppendDeviceVFIOSharedIommufd(t *testing.T) {
 	// e.g. NVSwitches that share one IOMMU group
 	var config Config

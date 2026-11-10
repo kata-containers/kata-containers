@@ -386,6 +386,11 @@ pcie_root_port = 0
 # Default 0
 pcie_switch_port = 0
 
+# NVIDIA GPUDirect P2P clique ID (0-15) for all NVIDIA GPUs in the VM, which
+# lets the guest driver enable P2P between them. Only enable it if all GPUs on
+# the host can do P2P with each other. -1 or unset disables it (default).
+gpudirect_clique = -1
+
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance.
 disable_vhost_net = false

@@ -706,6 +706,42 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		t.Errorf("Expected value for BlockDeviceAIO  %v, got %v", blockDeviceAIO, config.BlockDeviceAIO)
 	}
 
+	// gpudirect_clique is rejected for confidential guests.
+	clique := int64(0)
+	hypervisor.GPUDirectClique = &clique
+	hypervisor.ConfidentialGuest = true
+	_, err = newQemuHypervisorConfig(hypervisor)
+	if err == nil || !strings.Contains(err.Error(), "gpudirect_clique") {
+		t.Errorf("Expected gpudirect_clique to be rejected for confidential guests, got %v", err)
+	}
+}
+
+func TestHypervisorGPUDirectClique(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   *int64
+		want    *uint8
+		wantErr bool
+	}{
+		{name: "unset", value: nil, want: nil},
+		{name: "disabled", value: func() *int64 { v := int64(-1); return &v }(), want: nil},
+		{name: "lowest clique", value: func() *int64 { v := int64(0); return &v }(), want: func() *uint8 { c := uint8(0); return &c }()},
+		{name: "highest clique", value: func() *int64 { v := int64(15); return &v }(), want: func() *uint8 { c := uint8(15); return &c }()},
+		{name: "too high", value: func() *int64 { v := int64(16); return &v }(), wantErr: true},
+		{name: "too low", value: func() *int64 { v := int64(-2); return &v }(), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+			h := hypervisor{GPUDirectClique: tc.value}
+			got, err := h.gpuDirectClique()
+			if tc.wantErr {
+				assert.Error(err)
+				return
+			}
+			assert.NoError(err)
+			assert.Equal(tc.want, got)
+		})
+	}
 }
 
 func TestValidateBlockDeviceSectorSize(t *testing.T) {

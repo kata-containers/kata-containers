@@ -83,6 +83,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.firmware_volume_hash` | string | container firmware volume SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.firmware_volume` | string | the guest firmware volume that will be passed to the container VM |
 | `io.katacontainers.config.hypervisor.guest_hook_path` | string | the path within the VM that will be used for drop in hooks |
+| `io.katacontainers.config.hypervisor.gpudirect_clique` | int | NVIDIA GPUDirect peer-to-peer clique ID (`0`-`15`) given to every NVIDIA GPU passed through to the VM, or `-1` to disable it. Only set it when all of the GPUs can do peer-to-peer with each other (QEMU) |
 | `io.katacontainers.config.hypervisor.cold_plug_vfio` | string | VFIO cold-plug mode; valid values are `no-port`, `bridge-port` (Go runtime only), `root-port`, `switch-port` (Go runtime only) |
 | `io.katacontainers.config.hypervisor.hot_plug_vfio` | string | VFIO hot-plug mode (Go runtime only); valid values are `no-port`, `bridge-port`, `root-port`, `switch-port` |
 | `io.katacontainers.config.hypervisor.hypervisor_hash` | string | container hypervisor binary SHA-512 hash value |

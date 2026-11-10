@@ -363,7 +363,7 @@ func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 	}
 }
 
-func (q *qemuS390x) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
+func (q *qemuS390x) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev, _ *uint8) []govmmQemu.Device {
 	if vfioDev.SysfsDev == "" {
 		return devices
 	}

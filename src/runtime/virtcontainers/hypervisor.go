@@ -732,6 +732,10 @@ type HypervisorConfig struct {
 	// PCIeSwitchPort is the number of switch-port to create for the VM
 	PCIeSwitchPort uint32
 
+	// GPUDirectClique is the NVIDIA GPUDirect P2P clique ID for all NVIDIA
+	// GPUs in the VM, or nil if disabled. QEMU only.
+	GPUDirectClique *uint8
+
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUsF float32
 
@@ -1513,4 +1517,20 @@ func prepareInitdataImage(initdata string, imagePath string) error {
 	}
 
 	return nil
+}
+
+// GPUDirectCliqueDisabled disables gpudirect_clique in config and annotations.
+const GPUDirectCliqueDisabled = -1
+
+// ParseGPUDirectClique validates a configured clique ID. -1 yields nil.
+func ParseGPUDirectClique(clique int64) (*uint8, error) {
+	if clique == GPUDirectCliqueDisabled {
+		return nil, nil
+	}
+	if clique < 0 || clique > govmmQemu.MaxGPUDirectClique {
+		return nil, fmt.Errorf("invalid GPUDirect clique %d: must be %d (disabled) or between 0 and %d",
+			clique, GPUDirectCliqueDisabled, govmmQemu.MaxGPUDirectClique)
+	}
+	c := uint8(clique)
+	return &c, nil
 }

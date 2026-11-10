@@ -149,6 +149,8 @@ impl QemuInner {
         // open until spawn() is called to launch qemu later in this function,
         // 'cmdline' has to live at least until spawn() is called
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
+        // GPUDirect P2P clique for cold-plugged NVIDIA GPUs.
+        let gpudirect_clique = self.config.gpudirect_clique();
 
         for device in &mut self.devices {
             match device {
@@ -322,7 +324,10 @@ impl QemuInner {
                                 bus_port_id.1 as u16,
                                 bus_port_id.1 + 1,
                             )
-                            .with_vfio_bus(bus_port_id.0.clone());
+                            .with_vfio_bus(bus_port_id.0.clone())
+                            .with_gpudirect_clique(
+                                gpudirect_clique.filter(|_| dev.is_nvidia_gpu()),
+                            );
                             if let (Some(iommufd), Some(cdev)) =
                                 (iommufd.as_ref(), dev.vfio_cdev.as_ref())
                             {
@@ -390,12 +395,19 @@ impl QemuInner {
                                     };
                                     (v, d)
                                 });
+                        let clique = gpudirect_clique.filter(|_| {
+                            hostdev
+                                .device_vendor_class
+                                .as_ref()
+                                .is_some_and(|dvc| dvc.is_nvidia_gpu())
+                        });
                         cmdline.add_physical_vfio_device(
                             &host_bdf,
                             &hostdev.hostdev_id,
                             &vfio_dev.bus,
                             vendor_id.as_deref(),
                             device_id.as_deref(),
+                            clique,
                         );
                         info!(
                             sl!(),
@@ -1324,12 +1336,19 @@ impl QemuInner {
                     "qmp hotplug vfio primary_device {:?}", &primary_device
                 );
 
+                let gpudirect_clique = self.config.gpudirect_clique().filter(|_| {
+                    primary_device
+                        .device_vendor_class
+                        .as_ref()
+                        .is_some_and(|dvc| dvc.is_nvidia_gpu())
+                });
                 primary_device.guest_pci_path = qmp.hotplug_vfio_device(
                     &primary_device.hostdev_id,
                     &primary_device.sysfs_path,
                     &primary_device.bus_slot_func,
                     &vfiodev.driver_type,
                     &vfiodev.bus,
+                    gpudirect_clique,
                 )?;
 
                 return Ok(DeviceType::Vfio(vfiodev));
@@ -1425,7 +1444,7 @@ impl QemuInner {
             }
             DeviceType::VfioModern(ref vfiodev) => {
                 // Snapshot VFIO parameters inside the lock.
-                let (hostdev_id, device_type, sysfs_path, address, driver_type, bus) = {
+                let (hostdev_id, device_type, sysfs_path, address, driver_type, bus, is_nvidia_gpu) = {
                     let vfio_device = vfiodev.lock().await;
                     let hostdev_id = vfio_device.device_id.clone();
                     let device = &vfio_device.device;
@@ -1434,8 +1453,10 @@ impl QemuInner {
                     let sysfs_path = device.primary.sysfs_path.display().to_string();
 
                     // For AP devices there is no IOMMU group or BDF; use empty strings.
-                    let (address, driver_type, bus) = if device_type == VfioDeviceType::MediatedAp {
-                        (String::new(), "vfio-ap".to_string(), String::new())
+                    let (address, driver_type, bus, is_nvidia_gpu) = if device_type
+                        == VfioDeviceType::MediatedAp
+                    {
+                        (String::new(), "vfio-ap".to_string(), String::new(), false)
                     } else {
                         // Legacy path: primary comes from the IOMMU group.
                         // IOMMUFD path: iommu_group is None; use VfioDevice::primary
@@ -1458,7 +1479,7 @@ impl QemuInner {
                             .ok_or_else(|| anyhow!("Driver type missing for primary device"))?;
                         let address = format!("{}", primary_device.addr);
                         let bus = vfio_device.config.bus_port_id.0.clone();
-                        (address, driver_type, bus)
+                        (address, driver_type, bus, primary_device.is_nvidia_gpu())
                     };
 
                     (
@@ -1468,16 +1489,19 @@ impl QemuInner {
                         address,
                         driver_type,
                         bus,
+                        is_nvidia_gpu,
                     )
                 };
 
                 // Execute hotplug outside the lock.
+                let gpudirect_clique = self.config.gpudirect_clique().filter(|_| is_nvidia_gpu);
                 let guest_pci_path = qmp.hotplug_vfio_device(
                     &hostdev_id,
                     &sysfs_path,
                     &address,
                     &driver_type,
                     &bus,
+                    gpudirect_clique,
                 )?;
 
                 // Write the resulting Guest PCI Path back within the lock (PCI only).

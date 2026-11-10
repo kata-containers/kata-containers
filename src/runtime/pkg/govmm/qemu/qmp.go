@@ -1220,7 +1220,8 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 // iommufdID is the ID of the iommufd object used by this device. The object is
 // created if it does not exist yet, so all devices can share one object. If
 // empty, the device does not use iommufd.
-func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string, iommufdID string) error {
+// gpuDirectClique is an optional NVIDIA GPUDirect P2P clique ID.
+func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string, iommufdID string, gpuDirectClique *uint8) error {
 	var driver string
 	var transport VirtioTransport
 
@@ -1247,7 +1248,15 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 		}
 		args["iommufd"] = iommufdID
 	}
+	addGPUDirectCliqueArg(args, gpuDirectClique)
 	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// addGPUDirectCliqueArg sets x-nv-gpudirect-clique if a clique is given.
+func addGPUDirectCliqueArg(args map[string]interface{}, gpuDirectClique *uint8) {
+	if gpuDirectClique != nil {
+		args["x-nv-gpudirect-clique"] = *gpuDirectClique
+	}
 }
 
 // ensureIommufdObject creates the iommufd object id unless it already exists.
@@ -1277,8 +1286,9 @@ func (q *QMP) ensureIommufdObject(ctx context.Context, id string) error {
 // This function can be used to hot plug VFIO devices on PCI(E) bridges, unlike
 // ExecuteVFIODeviceAdd this function receives the bus and the device address on its parent bus.
 // bus is optional. devID is the id of the device to add.Must be valid QMP identifier. bdf is the
-// PCI bus-device-function of the pci device.
-func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus, romfile string) error {
+// PCI bus-device-function of the pci device. gpuDirectClique is an optional
+// NVIDIA GPUDirect P2P clique ID.
+func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus, romfile string, gpuDirectClique *uint8) error {
 	args := map[string]interface{}{
 		"id":      devID,
 		"driver":  VfioPCI,
@@ -1290,6 +1300,7 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 	if bus != "" {
 		args["bus"] = bus
 	}
+	addGPUDirectCliqueArg(args, gpuDirectClique)
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 

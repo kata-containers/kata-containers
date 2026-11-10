@@ -2493,10 +2493,19 @@ func (q *qemu) hotplugVFIODeviceBridgePort(ctx context.Context, device *config.V
 	return q.executePCIVFIODeviceAdd(device, addr, bridge.ID)
 }
 
+// gpuDirectClique returns the configured clique if device is an NVIDIA GPU.
+// Confidential guests never get one.
+func (q *qemu) gpuDirectClique(device config.VFIODev) *uint8 {
+	if q.config.GPUDirectClique == nil || q.config.ConfidentialGuest || !device.IsNVIDIAGPU() {
+		return nil
+	}
+	return q.config.GPUDirectClique
+}
+
 func (q *qemu) executePCIVFIODeviceAdd(device *config.VFIODev, addr string, bridgeID string) error {
 	switch device.Type {
 	case config.VFIOPCIDeviceNormalType:
-		return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.BDF, addr, bridgeID, romFile)
+		return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.BDF, addr, bridgeID, romFile, q.gpuDirectClique(*device))
 	case config.VFIOPCIDeviceMediatedType:
 		return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.SysfsDev, addr, bridgeID, romFile)
 	case config.VFIOAPDeviceMediatedType:
@@ -2513,7 +2522,7 @@ func (q *qemu) executeVFIODeviceAdd(device *config.VFIODev) error {
 		if device.IOMMUFDID() != "" {
 			iommufdID = govmmQemu.IommufdObjectID
 		}
-		return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.BDF, device.Bus, romFile, iommufdID)
+		return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.BDF, device.Bus, romFile, iommufdID, q.gpuDirectClique(*device))
 	case config.VFIOPCIDeviceMediatedType:
 		return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.SysfsDev, "", device.Bus, romFile)
 	case config.VFIOAPDeviceMediatedType:
@@ -3006,7 +3015,7 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	case config.VhostUserDeviceAttrs:
 		q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(ctx, q.qemuConfig.Devices, v)
 	case config.VFIODev:
-		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v, q.gpuDirectClique(v))
 	default:
 		q.Logger().WithField("dev-type", v).Warn("Could not append device: unsupported device type")
 	}
