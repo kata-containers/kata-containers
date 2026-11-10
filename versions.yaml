@@ -358,7 +358,7 @@ externals:
   hadolint:
     description: "the dockerfile linter used by static-checks"
     url: "https://github.com/hadolint/hadolint"
-    version: "2.12.0"
+    version: "2.15.1"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"
