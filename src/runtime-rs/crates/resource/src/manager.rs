@@ -68,6 +68,15 @@ impl ResourceManager {
         inner.config()
     }
 
+    pub async fn direct_volume_guest_path(&self, host_path: &str) -> Result<String> {
+        self.inner
+            .read()
+            .await
+            .volume_resource
+            .direct_volume_guest_path(host_path)
+            .await
+    }
+
     pub async fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
         let inner = self.inner.read().await;
         inner.get_device_manager()

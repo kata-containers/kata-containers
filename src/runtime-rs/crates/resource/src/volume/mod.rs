@@ -15,16 +15,22 @@ mod shm_volume;
 pub mod utils;
 
 pub mod direct_volume;
-use crate::volume::{direct_volume::is_direct_volume, share_fs_volume::VolumeManager};
+use crate::volume::{
+    direct_volume::{is_direct_volume, DirectVolume},
+    share_fs_volume::VolumeManager,
+};
 pub mod direct_volumes;
 pub use block_emptydir_volume::EphemeralDiskInfo;
 
-use std::{sync::Arc, vec::Vec};
+use std::{
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 use agent::Agent;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::{k8s::is_disk_empty_dir, mount::get_mount_options};
@@ -54,6 +60,7 @@ pub trait Volume: Send + Sync {
 #[derive(Default)]
 pub struct VolumeResourceInner {
     volumes: Vec<Arc<dyn Volume>>,
+    direct_volumes: Vec<Weak<DirectVolume>>,
     ephemeral_disks: block_emptydir_volume::EphemeralDisks,
 }
 
@@ -110,6 +117,7 @@ impl VolumeResource {
         info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
         // handle mounts
         for m in oci_mounts {
+            let mut direct_volume_ref = None;
             let read_only = get_mount_options(m.options()).iter().any(|opt| opt == "ro");
             let volume: Arc<dyn Volume> = if shm_volume::is_shm_volume(m) {
                 Arc::new(
@@ -163,7 +171,10 @@ impl VolumeResource {
                     .await
                     .context("handle direct volume")?
                 {
-                    Some(directvol) => directvol,
+                    Some(directvol) => {
+                        direct_volume_ref = Some(Arc::downgrade(&directvol));
+                        directvol
+                    }
                     None => continue,
                 }
             } else if let Some(options) =
@@ -202,6 +213,9 @@ impl VolumeResource {
 
             volumes.push(volume.clone());
             let mut inner = self.inner.write().await;
+            if let Some(direct_volume) = direct_volume_ref {
+                inner.direct_volumes.push(direct_volume);
+            }
             inner.volumes.push(volume);
         }
 
@@ -247,10 +261,21 @@ impl VolumeResource {
         Self {
             inner: Arc::new(RwLock::new(VolumeResourceInner {
                 volumes: Vec::new(),
+                direct_volumes: Vec::new(),
                 ephemeral_disks: block_emptydir_volume::EphemeralDisks::restore(ephemeral_disks),
             })),
             volume_manager: Arc::new(VolumeManager::new()),
         }
+    }
+
+    pub async fn direct_volume_guest_path(&self, host_path: &str) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner
+            .direct_volumes
+            .iter()
+            .filter_map(Weak::upgrade)
+            .find_map(|volume| volume.get_guest_mount_path(host_path).map(str::to_owned))
+            .ok_or_else(|| anyhow!("direct volume {host_path} not found in sandbox"))
     }
 
     pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
