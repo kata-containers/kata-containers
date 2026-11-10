@@ -119,10 +119,13 @@ jobs:
           echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
-      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+      - name: Install ORAS from versions.yaml
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
-        with:
-          version: "1.2.0"
+        run: |
+          ./ci/install_yq.sh
+          ./tools/packaging/kata-deploy/local-build/dockerbuild/install_oras.sh
+        env:
+          INSTALL_IN_GOPATH: "false"
 
       # for pushing attestations to the registry
       - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0

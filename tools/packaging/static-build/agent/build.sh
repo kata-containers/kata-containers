@@ -19,6 +19,7 @@ container_image="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
 	(docker build \
+		--build-arg ORAS_VERSION="$(get_from_kata_deps ".externals.oras.version")" \
 	    	--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
