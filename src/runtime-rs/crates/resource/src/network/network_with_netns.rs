@@ -401,7 +401,8 @@ async fn create_endpoint(
             // netdevs that is_physical_iface() cannot classify via
             // ethtool BusInfo. Handle them the same way as veth
             // endpoints, using the configured network model.
-            "veth" | "device" => {
+            // A netkit device in L2 mode is bridged to the TAP like a veth.
+            "veth" | "device" | "netkit" => {
                 let ret =
                     VethEndpoint::new(&d, handle, &attrs.name, idx, &config.network_model, queues)
                         .await
