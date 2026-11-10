@@ -43,6 +43,7 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
+    use_guest_resolv_conf: bool,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -69,6 +70,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
+        use_guest_resolv_conf: bool,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -79,6 +81,7 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
+            use_guest_resolv_conf,
         }
     }
 
@@ -102,6 +105,7 @@ impl ContainerManager for VirtContainerManager {
             spec.clone(),
             self.agent.clone(),
             self.resource_manager.clone(),
+            self.use_guest_resolv_conf,
             self.hypervisor.get_passfd_listener_addr().await.ok(),
         )
         .await

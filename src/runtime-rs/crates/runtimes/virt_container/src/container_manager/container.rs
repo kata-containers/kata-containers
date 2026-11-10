@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
+use std::path::Path;
+use std::{collections::HashMap, path::PathBuf};
 use std::sync::Arc;
 
 use agent::Agent;
@@ -51,6 +52,7 @@ pub struct Container {
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
+    use_guest_resolv_conf: bool,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
 }
 
@@ -74,6 +76,7 @@ impl Container {
         spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
+        use_guest_resolv_conf: bool,
         passfd_listener_addr: Option<(String, u32)>,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
@@ -107,6 +110,7 @@ impl Container {
             agent,
             resource_manager,
             logger,
+            use_guest_resolv_conf,
             passfd_listener_addr,
         })
     }
@@ -197,6 +201,10 @@ impl Container {
             }
             inner.volumes.push(v);
         }
+
+        // Ensure guest resolve config is mounted into container
+        ensure_resolv_mount(&mut oci_mounts, self.use_guest_resolv_conf)?;
+
         spec.set_mounts(Some(oci_mounts));
 
         let linux = spec
@@ -942,6 +950,32 @@ fn filter_vfio_devices(linux: &mut oci::Linux, vfio_mode: &str) {
     });
 }
 
+/// When the sandbox has a DNS configuration, workload containers should use that configuration
+/// unless their OCI specification already contains an explicit /etc/resolv.conf mount.
+fn ensure_resolv_mount(mounts: &mut Vec<oci::Mount>, use_guest_resolv_conf: bool) -> Result<()> {
+    const RESOLV_CONF: &str = "/etc/resolv.conf";
+    if !use_guest_resolv_conf {
+        return Ok(());
+    }
+
+    if mounts
+        .iter()
+        .any(|mount| mount.destination() == Path::new(RESOLV_CONF))
+    {
+        return Ok(());
+    }
+
+    // Expose guest's /etc/resolv.conf in the container by bind mount
+    let mut mount = oci::Mount::default();
+    mount.set_destination(PathBuf::from(RESOLV_CONF));
+    mount.set_typ(Some("bind".to_string()));
+    mount.set_source(Some(PathBuf::from(RESOLV_CONF)));
+    mount.set_options(Some(vec!["rbind".to_string(), "ro".to_string()]));
+    mounts.push(mount);
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::amend_spec;
@@ -1253,6 +1287,39 @@ mod tests {
         assert!(
             linux.devices().is_none(),
             "Should remain None when no devices"
+        );
+    }
+
+    #[test]
+    fn guest_resolv_conf_mount_preserves_an_explicit_mount() {
+        let explicit = oci::MountBuilder::default()
+            .destination("/etc/resolv.conf")
+            .typ("bind")
+            .source("/run/custom-resolv.conf")
+            .build()
+            .expect("build explicit resolv.conf mount");
+        let mut mounts = vec![explicit];
+
+        ensure_resolv_mount(&mut mounts, true).unwrap();
+
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(
+            mounts[0].source().as_deref(),
+            Some(std::path::Path::new("/run/custom-resolv.conf"))
+        );
+    }
+
+    #[test]
+    fn guest_resolv_conf_mount_is_added_only_for_sandbox_dns() {
+        let mut mounts = Vec::new();
+        ensure_resolv_mount(&mut mounts, false).unwrap();
+        assert!(mounts.is_empty());
+
+        ensure_resolv_mount(&mut mounts, true).unwrap();
+        assert_eq!(mounts.len(), 1);
+        assert_eq!(
+            mounts[0].destination(),
+            std::path::Path::new("/etc/resolv.conf")
         );
     }
 }
