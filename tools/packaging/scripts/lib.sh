@@ -240,9 +240,11 @@ get_virtiofsd_image_name() {
 }
 
 get_libseccomp_hash() {
-	merge_two_hashes \
+	local installer_hash
+	installer_hash=$(merge_two_hashes \
 		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
-		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")"
+		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")")
+	merge_two_hashes "${installer_hash}" "$(get_from_kata_deps ".externals.libseccomp.version")"
 }
 
 get_tools_image_name() {
