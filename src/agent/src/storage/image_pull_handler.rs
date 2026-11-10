@@ -11,8 +11,8 @@ use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Result};
 use kata_types::mount::StorageDevice;
 use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
+use kata_types::path::scoped_join;
 use protocols::agent::Storage;
-use safe_path::scoped_join;
 use std::sync::Arc;
 use tracing::instrument;
 

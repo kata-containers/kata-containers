@@ -11,6 +11,7 @@
 use crate::AGENT_CONFIG;
 use anyhow::{bail, Context, Result};
 use derivative::Derivative;
+use kata_types::path::scoped_join;
 use protocols::{
     confidential_data_hub,
     confidential_data_hub::GetResourceRequest,
@@ -20,7 +21,6 @@ use protocols::{
         SecureMountServiceClient,
     },
 };
-use safe_path::scoped_join;
 use std::fs;
 use std::fs::File;
 use std::io::{self, Read};

@@ -35,8 +35,8 @@ use kata_types::device::{DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_
 #[cfg(feature = "devicemapper")]
 use kata_types::dmverity::{cleanup_dmverity_devices, create_dmverity_device, DmVerityInfo};
 use kata_types::mount::StorageDevice;
+use kata_types::path::scoped_join;
 use protocols::agent::Storage;
-use safe_path::scoped_join;
 use slog::Logger;
 use tokio::sync::Mutex;
 
@@ -748,7 +748,7 @@ fn parse_mkdir_directive(spec: &str) -> Result<MkdirDirective> {
 /// Resolve a mkdir path template and ensure it is safely scoped under the given root.
 ///
 /// Templates may contain `{{ mount 0 }}` (upper layer) and `{{ mount 1 }}` (first lower layer)
-/// placeholders. After substitution, the resolved path is validated using `safe_path::scoped_join`
+/// placeholders. After substitution, the resolved path is validated using `kata_types::path::scoped_join`
 /// to prevent path traversal attacks.
 fn resolve_mkdir_path(
     raw_path: &str,

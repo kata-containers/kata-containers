@@ -68,7 +68,7 @@ pub fn get_child_threads(pid: u32) -> HashSet<u32> {
 }
 
 // Return the path for a _hypothetical_ sandbox: the path does *not* exist
-// yet, and for this reason safe-path cannot be used.
+// yet, so no root handle is available for path resolution.
 pub fn get_sandbox_path(sid: &str) -> String {
     Path::new(prefix_with_rootless_dir(KATA_PATH).as_str())
         .join(sid)

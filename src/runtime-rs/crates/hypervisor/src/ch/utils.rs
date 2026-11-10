@@ -14,8 +14,7 @@ const CH_API_SOCKET_NAME: &str = "ch-api.sock";
 const CH_VM_SOCKET_NAME: &str = "ch-vm.sock";
 
 // Return the path for a _hypothetical_ API socket path:
-// the path does *not* exist yet, and for this reason safe-path cannot be
-// used.
+// The sandbox directory may not exist yet, so no root handle is available.
 pub fn get_api_socket_path(id: &str) -> Result<String> {
     let sandbox_path = get_sandbox_path(id);
 
@@ -25,8 +24,7 @@ pub fn get_api_socket_path(id: &str) -> Result<String> {
 }
 
 // Return the path for a _hypothetical_ sandbox specific VSOCK socket path:
-// the path does *not* exist yet, and for this reason safe-path cannot be
-// used.
+// The sandbox directory may not exist yet, so no root handle is available.
 pub fn get_vsock_path(id: &str) -> Result<String> {
     let sandbox_path = get_sandbox_path(id);
 

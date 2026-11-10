@@ -14,7 +14,6 @@ members = [
   "src/libs/pod-resources-rs",
   "src/libs/protocols",
   "src/libs/runtime-spec",
-  "src/libs/safe-path",
   "src/libs/shim-interface",
   "src/libs/test-utils",
 
@@ -131,14 +130,13 @@ wasm_container = { path = "src/runtime-rs/crates/runtimes/wasm_container" }
 
 # Local dependencies from `src/lib`
 kata-sys-util = { path = "src/libs/kata-sys-util" }
-kata-types = { features = ["safe-path"], path = "src/libs/kata-types" }
+kata-types = { features = ["pathrs"], path = "src/libs/kata-types" }
 logging = { path = "src/libs/logging" }
 mem-agent = { path = "src/libs/mem-agent" }
 pcilibs-rs = { git = "https://github.com/kata-containers/pcilibs-rs", rev = "f6831fa878ec315ab477ccb88fbf8ec6cbd4cdca" }
 pod-resources-rs = { path = "src/libs/pod-resources-rs" }
 protocols = { features = ["async"], path = "src/libs/protocols" }
 runtime-spec = { path = "src/libs/runtime-spec" }
-safe-path = { path = "src/libs/safe-path" }
 shim-interface = { path = "src/libs/shim-interface" }
 test-utils = { path = "src/libs/test-utils" }
 

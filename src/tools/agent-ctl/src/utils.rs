@@ -7,6 +7,7 @@ use crate::image;
 use crate::types::*;
 use crate::vm::vm_utils;
 use anyhow::{anyhow, Result};
+use kata_types::path::scoped_join;
 use oci::{Root as ociRoot, Spec as ociSpec};
 use oci_spec::runtime as oci;
 use protocols::agent::{CopyFileRequest, CreateContainerRequest, SetPolicyRequest};
@@ -14,7 +15,6 @@ use protocols::oci::{
     Mount as ttrpcMount, Process as ttrpcProcess, Root as ttrpcRoot, Spec as ttrpcSpec,
 };
 use rand::RngExt;
-use safe_path::scoped_join;
 use serde::de::DeserializeOwned;
 use slog::{debug, warn};
 use std::collections::HashMap;

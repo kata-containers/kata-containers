@@ -508,8 +508,8 @@ pub trait StorageDevice: Send + Sync {
 /// Joins a user-provided volume path with the Kata direct-volume root path.
 ///
 /// The `volume_path` is base64-url-encoded and then safely joined to the `prefix`.
-/// `safe_path` is OS-specific.
-#[cfg(feature = "safe-path")]
+/// Path resolution requires Linux.
+#[cfg(feature = "pathrs")]
 pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!(std::io::ErrorKind::NotFound));
@@ -517,12 +517,12 @@ pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     let b64_url_encoded_path =
         base64::engine::general_purpose::URL_SAFE.encode(volume_path.as_bytes());
 
-    Ok(safe_path::scoped_join(prefix, b64_url_encoded_path)?)
+    crate::path::scoped_join(prefix, b64_url_encoded_path)
 }
 
 /// Gets `DirectVolumeMountInfo` from `mountinfo.json`.
-/// `safe_path` is OS-specific.
-#[cfg(feature = "safe-path")]
+/// Path resolution requires Linux.
+#[cfg(feature = "pathrs")]
 pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
     let volume_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     let mount_info_file_path = volume_path.join(KATA_MOUNT_INFO_FILE_NAME);
@@ -534,10 +534,10 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
 
 /// Writes a `DirectVolumeMountInfo` as `mountInfo.json` under the direct-volume root
 /// for the given `volume_path`.
-#[cfg(feature = "safe-path")]
+#[cfg(feature = "pathrs")]
 pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountInfo) -> Result<()> {
     let root = kata_direct_volume_root_path();
-    // safe_path::scoped_join requires the root to exist; ensure it does before
+    // crate::path::scoped_join requires the root to exist; ensure it does before
     // calling join_path (mirrors Go's os.MkdirAll behaviour in AddMountInfo).
     std::fs::create_dir_all(&root)
         .with_context(|| format!("failed to create direct-volume root {:?}", root))?;
@@ -553,13 +553,13 @@ pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountIn
 }
 
 /// Returns `true` if a `mountInfo.json` exists for the given `volume_path`.
-#[cfg(feature = "safe-path")]
+#[cfg(feature = "pathrs")]
 pub fn is_volume_mounted(volume_path: &str) -> bool {
     get_volume_mount_info(volume_path).is_ok()
 }
 
 /// Removes the direct-volume metadata directory for the given `volume_path`.
-#[cfg(feature = "safe-path")]
+#[cfg(feature = "pathrs")]
 pub fn remove_volume_path(volume_path: &str) -> Result<()> {
     let dir = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     if dir.exists() {

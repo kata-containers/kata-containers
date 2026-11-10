@@ -13,7 +13,6 @@ The `src/libs` directory hosts library crates shared by multiple Kata Containers
 | [runtime-spec](runtime-spec/) | OCI runtime spec data structures and constants |
 | [shim-interface](shim-interface/) | Shim management interface with RESTful API over Unix domain socket |
 | [logging](logging/) | Slog-based logging with JSON output and systemd journal support |
-| [safe-path](safe-path/) | Safe path resolution to prevent symlink and TOCTOU attacks |
 | [mem-agent](mem-agent/) | Memory management agent: memcg, compact, PSI monitoring |
 | [test-utils](test-utils/) | Test macros for root/non-root privileges and KVM accessibility |
 
@@ -81,15 +80,6 @@ Slog-based logging framework:
 - systemd journal support
 - Runtime log level filtering per component/subsystem
 - Async drain for thread safety
-
-### safe-path
-
-Secure filesystem path handling:
-
-- `scoped_join()`: Safely join paths under a root directory
-- `scoped_resolve()`: Resolve paths constrained by root
-- `PinnedPathBuf`: TOCTOU-safe path reference
-- `ScopedDirBuilder`: Safe directory creation
 
 ### mem-agent
 

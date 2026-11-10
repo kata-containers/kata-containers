@@ -34,7 +34,7 @@ use std::string::ToString;
 
 use crate::cgroups_rs as cgroups;
 use crate::log_child;
-use safe_path::scoped_join;
+use kata_types::path::scoped_join;
 
 // Info reveals information about a particular mounted filesystem. This
 // struct is populated from the content in the /proc/<pid>/mountinfo file.

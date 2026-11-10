@@ -23,7 +23,6 @@ path-absolutize = "3.1.1"
 protobuf.workspace = true
 regex.workspace = true
 rlimit = "0.5.3"
-safe-path.workspace = true
 scan_fmt.workspace = true
 scopeguard.workspace = true
 slog.workspace = true
@@ -49,6 +48,7 @@ zbus = "3.12.0"
 
 # Local dependencies
 kata-sys-util.workspace = true
+kata-types.workspace = true
 protocols.workspace = true
 runtime-spec.workspace = true
 
