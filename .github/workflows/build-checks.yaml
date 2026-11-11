@@ -85,6 +85,7 @@ jobs:
             path: src/tools/csi-kata-directvolume
             needs:
               - golang
+              - golangci-lint
         instance:
           - ${{ inputs.instance }}
     concurrency:
@@ -121,6 +122,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           # Setup-go doesn't work properly with ppc64le: https://github.com/actions/setup-go/issues/648
           architecture: ${{ contains(inputs.instance, 'ppc64le') && 'ppc64le' || '' }}
+      - name: Install golangci-lint
+        if: contains(matrix.component.needs, 'golangci-lint') && matrix.command == 'make check'
+        run: |
+          # Same pinned version and install path as tests/static-checks.sh uses.
+          go_version="$(yq '.languages.golangci-lint.version' versions.yaml)"
+          [ -n "${go_version}" ]
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" "v${go_version}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Setup rust
         if: contains(matrix.component.needs, 'rust')
         run: |
