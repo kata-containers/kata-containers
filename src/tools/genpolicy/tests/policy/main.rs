@@ -168,6 +168,10 @@ mod tests {
         }
     }
 
+    fn json_patch(value: serde_json::Value) -> Patch {
+        serde_json::from_value(value).unwrap()
+    }
+
     /// Run tests from the given directory.
     /// The directory is searched under `src/tools/genpolicy/tests/testdata`, and
     /// it must contain a `pod.yaml` file as well as a `testcases.json` file.
@@ -491,6 +495,29 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_cgroup_mount_extras() {
         runtests("createcontainer/cgroup_mount_extras").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_sandboxapi_resolver() {
+        // Variants sharing a case file share a work directory, so run them
+        // sequentially.
+        let dir = "createcontainer/sandboxapi_resolver";
+        runtests(dir).await;
+        runtests_variant(
+            dir,
+            &Variant {
+                pod_patch: json_patch(serde_json::json!([
+                    {"op": "add", "path": "/spec/containers/0/securityContext/readOnlyRootFilesystem", "value": true}
+                ])),
+                request_patch: json_patch(serde_json::json!([
+                    {"op": "replace", "path": "/OCI/Root/Readonly", "value": true},
+                    {"op": "replace", "path": "/OCI/Mounts/8/options/2", "value": "ro"},
+                    {"op": "replace", "path": "/OCI/Mounts/9/options/2", "value": "ro"}
+                ])),
+                ..Default::default()
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
