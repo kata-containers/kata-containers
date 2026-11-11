@@ -33,6 +33,17 @@ struct ContainerdRuntimeParams {
 #[derive(Default)]
 struct SandboxApiConfig {
     enabled: bool,
+    disable_pause_image_pull: bool,
+}
+
+fn containerd_supports_disable_pause_image_pull(version: &str) -> bool {
+    let Some(version) = version.strip_prefix("containerd://") else {
+        return false;
+    };
+    let mut components = version.split('.');
+    let major = components.next().and_then(|v| v.parse::<u32>().ok());
+    let minor = components.next().and_then(|v| v.parse::<u32>().ok());
+    matches!((major, minor), (Some(major), Some(minor)) if (major, minor) >= (2, 4))
 }
 
 const DEFAULT_CONTAINER_ANNOTATIONS: &str = "[\"io.kubernetes.container.terminationMessage*\"]";
@@ -96,7 +107,11 @@ async fn effective_sandbox_api(
         return Ok(SandboxApiConfig::default());
     };
     match utils::containerd::sandbox_api_available(&socket).await {
-        Ok(true) => Ok(SandboxApiConfig { enabled: true }),
+        Ok(true) => Ok(SandboxApiConfig {
+            enabled: true,
+            disable_pause_image_pull: version
+                .is_some_and(containerd_supports_disable_pause_image_pull),
+        }),
         Ok(false) => {
             log::warn!("Using sandboxer=podsandbox for {base}: the shim sandbox controller is missing, disabled, or failed initialization");
             Ok(SandboxApiConfig::default())
@@ -472,6 +487,14 @@ fn write_containerd_runtime_config(
             "\"podsandbox\""
         },
     )?;
+    let pause_image_pull_key = format!("{runtime_table}.disable_pause_image_pull");
+    if params.sandbox_api.enabled && params.sandbox_api.disable_pause_image_pull {
+        toml_utils::set_toml_value(config_file, &pause_image_pull_key, "true")?;
+    } else {
+        // A downgrade or fallback must not retain a stale request to skip the
+        // pause image required by podsandbox, or an unsupported config key.
+        toml_utils::delete_toml_value(config_file, &pause_image_pull_key)?;
+    }
     toml_utils::set_toml_value(
         config_file,
         &format!("{runtime_table}.privileged_without_host_devices"),
@@ -1243,6 +1266,67 @@ pub fn snapshotter_handler_mapping_validation_check(config: &Config) -> Result<(
 mod tests {
     use super::*;
 
+    #[rstest::rstest]
+    #[case("containerd://1.7.30", false)]
+    #[case("containerd://2.0.0", false)]
+    #[case("containerd://2.3.3", false)]
+    #[case("containerd://2.4.0", true)]
+    #[case("containerd://2.4.2-k3s1", true)]
+    #[case("containerd://2.5.0", true)]
+    #[case("containerd://3.0.0", true)]
+    #[case("unknown", false)]
+    #[case("", false)]
+    #[case("containerd://two.4.0", false)]
+    #[case("containerd://2.invalid.0", false)]
+    fn pause_image_pull_requires_containerd_2_4(#[case] version: &str, #[case] supported: bool) {
+        assert_eq!(
+            containerd_supports_disable_pause_image_pull(version),
+            supported
+        );
+    }
+
+    #[test]
+    fn pause_image_pull_setting_tracks_sandboxer_and_version() {
+        for plugin in [CONTAINERD_V2_CRI_PLUGIN_ID, CONTAINERD_V3_RUNTIME_PLUGIN_ID] {
+            for handler in [
+                "kata-qemu-runtime-rs",
+                "kata-custom",
+                "kata-qemu-runtime-rs-debug",
+            ] {
+                let dir = tempfile::tempdir().unwrap();
+                let file = dir.path().join("containerd.toml");
+                fs::write(&file, "").unwrap();
+                let mut params = make_params(handler, None);
+                params.sandbox_api.enabled = true;
+                let key = format!(
+                    "{}.{}.disable_pause_image_pull",
+                    containerd_runtimes_table(plugin),
+                    handler
+                );
+                // Exercise upgrades and downgrades on an existing handler.
+                for (version, expected) in [
+                    ("containerd://2.4.0", true),
+                    ("containerd://2.3.3", false),
+                    ("unknown", false),
+                    ("containerd://2.4.2-k3s1", true),
+                ] {
+                    params.sandbox_api.disable_pause_image_pull =
+                        containerd_supports_disable_pause_image_pull(version);
+                    write_containerd_runtime_config(&file, plugin, &params).unwrap();
+                    let value = toml_utils::get_toml_value(&file, &key);
+                    if expected {
+                        assert_eq!(value.unwrap(), "true");
+                    } else {
+                        assert!(value.is_err(), "unsupported key retained for {version}");
+                    }
+                }
+                params.sandbox_api.enabled = false;
+                write_containerd_runtime_config(&file, plugin, &params).unwrap();
+                assert!(toml_utils::get_toml_value(&file, &key).is_err());
+            }
+        }
+    }
+
     #[tokio::test]
     #[serial_test::serial]
     async fn sandbox_api_effective_selection_falls_back_on_unreachable_probe() {
@@ -1259,6 +1343,7 @@ mod tests {
             config.container_runtime_version = Some(version.into());
             let unavailable = effective_sandbox_api(&config, base, None).await.unwrap();
             assert!(!unavailable.enabled);
+            assert!(!unavailable.disable_pause_image_pull);
         }
         if let Some(original) = original_socket {
             std::env::set_var("CONTAINERD_SANDBOXER_SOCKET", original);
