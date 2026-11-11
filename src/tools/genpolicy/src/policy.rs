@@ -333,6 +333,19 @@ pub struct CreateContainerRequestDefaults {
     allow_env_regex: Vec<String>,
 }
 
+/// CreateSandboxRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CreateSandboxRequestDefaults {
+    /// Syntax of a host name accepted where the policy cannot derive the
+    /// exact value from the pod spec. Unanchored, so it can be composed.
+    #[serde(skip_serializing)]
+    pub hostname_regex: String,
+
+    /// Each line of the sandbox resolver configuration must match one of
+    /// these regexes.
+    allow_dns_regex: Vec<String>,
+}
+
 /// ExecProcessRequest settings from genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecProcessRequestDefaults {
@@ -389,6 +402,9 @@ pub struct AddARPNeighborsRequestDefaults {
 pub struct RequestDefaults {
     /// Settings for CreateContainerRequest.
     pub CreateContainerRequest: CreateContainerRequestDefaults,
+
+    /// Settings for CreateSandboxRequest.
+    pub CreateSandboxRequest: CreateSandboxRequestDefaults,
 
     /// Guest file paths matching these regular expressions can be copied by the Host.
     pub CopyFileRequest: Vec<String>,
@@ -504,6 +520,23 @@ pub struct Devices {
 pub struct SandboxData {
     /// Expected value of the CreateSandboxRequest storages field.
     pub storages: Vec<agent::Storage>,
+
+    /// Expected value of the CreateSandboxRequest hostname field, derived
+    /// from each pod spec.
+    #[serde(default)]
+    pub hostname: SandboxHostname,
+}
+
+/// Host name kubelet assigns to the pod sandbox.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct SandboxHostname {
+    /// Anchored regex the CreateSandboxRequest hostname must match.
+    pub regex: String,
+
+    /// The hostname must also equal the pod name, truncated the way kubelet
+    /// truncates it. Checked once the pod name is known from a
+    /// CreateContainerRequest.
+    pub from_sandbox_name: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -646,17 +679,26 @@ impl AgentPolicy {
     pub fn generate_initdata_anno(&self, resource: &dyn yaml::K8sResource) -> String {
         let yaml_containers = resource.get_containers();
         let mut policy_containers = Vec::new();
+        let settings = &self.config.settings;
 
         for (i, yaml_container) in yaml_containers.iter().enumerate() {
             debug!("generate_initdata_anno: ========================= Container {i}");
             policy_containers.push(self.get_container_policy(resource, yaml_container, i == 0));
         }
 
+        let mut sandbox = settings.sandbox.clone();
+        sandbox.hostname = resource.get_pod_spec().sandbox_hostname(
+            &settings
+                .request_defaults
+                .CreateSandboxRequest
+                .hostname_regex,
+        );
+
         let policy_data = policy::PolicyData {
             containers: policy_containers,
-            request_defaults: self.config.settings.request_defaults.clone(),
-            common: self.config.settings.common.clone(),
-            sandbox: self.config.settings.sandbox.clone(),
+            request_defaults: settings.request_defaults.clone(),
+            common: settings.common.clone(),
+            sandbox,
             devices: self.config.settings.devices.clone(),
             cluster_config: self.config.settings.cluster_config.clone(),
         };

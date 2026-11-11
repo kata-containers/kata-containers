@@ -521,6 +521,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_sandbox_hostname() {
+        let dir = "createcontainer/sandboxapi_resolver";
+        for cases in [
+            "testcases-hostname-match.json",
+            "testcases-hostname-sandbox-first.json",
+            "testcases-hostname-container-first.json",
+        ] {
+            runtests_variant(
+                dir,
+                &Variant {
+                    cases,
+                    ..Default::default()
+                },
+            )
+            .await;
+        }
+        runtests_variant(
+            dir,
+            &Variant {
+                pod_patch: json_patch(serde_json::json!([
+                    {"op": "add", "path": "/spec/hostname", "value": "web"}
+                ])),
+                cases: "testcases-hostname-spec.json",
+                ..Default::default()
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn test_state_create_container() {
         runtests("state/createcontainer").await;
     }
