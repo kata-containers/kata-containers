@@ -56,6 +56,18 @@ pub fn get_policy_mounts(
                 }
             }
 
+            if !is_pause_container {
+                if let Some(guest_source) =
+                    settings.sandbox_api_mount_sources.get(&mount.destination)
+                {
+                    mount.source = match settings.cluster_config.runtime_api {
+                        policy::RuntimeApi::Task => mount.source,
+                        policy::RuntimeApi::Sandbox => guest_source.clone(),
+                        policy::RuntimeApi::Any => format!("{}|{guest_source}", mount.source),
+                    };
+                }
+            }
+
             if let Some(policy_mount) = p_mounts
                 .iter_mut()
                 .find(|m| m.destination.eq(&s_mount.destination))

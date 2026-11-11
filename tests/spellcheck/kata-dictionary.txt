@@ -140,6 +140,7 @@ memcg
 nydus
 patchset
 prestart
+sandboxer
 snapshotters
 StratoVirt
 TOCTOU

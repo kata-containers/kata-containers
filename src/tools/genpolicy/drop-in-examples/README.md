@@ -16,7 +16,7 @@ genpolicy -j my-settings/ ...
 
 Each drop-in is an [RFC 6902 JSON Patch](https://datatracker.ietf.org/doc/html/rfc6902): a JSON array of operations (`add`, `remove`, `replace`, `move`, `copy`, `test`). Use `replace` for existing paths, `add` for new keys or array append (path ending in `/-`), and optional `test` to assert values before changing them.
 
-Drop-ins are layered: `10-*` files set the platform base, `20-*` files overlay OCI version and other adjustments. You can combine multiple drop-ins (e.g. `10-non-coco-drop-in.json` + `20-oci-1.2.1-drop-in.json`).
+Drop-ins are layered: `10-*` files set the platform base, `20-*` files overlay OCI version and other adjustments, and `30-*` files select the runtime API. You can combine multiple drop-ins (e.g. `10-non-coco-drop-in.json` + `20-oci-1.2.1-drop-in.json`).
 
 | Drop-in file | Use case |
 |--------------|----------|
@@ -26,5 +26,9 @@ Drop-ins are layered: `10-*` files set the platform base, `20-*` files overlay O
 | `20-oci-1.2.0-drop-in.json` | OCI bundle version 1.2.0 |
 | `20-oci-1.2.1-drop-in.json` | OCI bundle version 1.2.1 (e.g. k3s, rke2, NVIDIA GPU) |
 | `20-oci-1.3.0-drop-in.json` | OCI bundle version 1.3.0 (e.g. containerd 2.2.x, CBL-Mariner) |
+| `30-sandbox-api-drop-in.json` | Pods created only through the Sandbox API (containerd `shim` sandboxer) |
+| `30-task-api-drop-in.json` | Pods created only through the Task API (containerd `podsandbox` sandboxer, CRI-O) |
+
+By default, `cluster_config.runtime_api` is `any`: the policy admits pods created through either API, because kata-deploy falls back to `podsandbox` on hosts without a usable `shim` sandboxer. It then allows both the host-shared and the guest-local sources for `/etc/hostname` and `/etc/resolv.conf`, and keeps the pause container entry that the Sandbox API never uses. Select `sandbox` or `task` when the API is known, to allow only what that API needs.
 
 Request/exec overrides (e.g. allowing `kubectl exec` or specific ttRPC requests) are not shipped as drop-in examples; build your own drop-in or merge the needed `request_defaults` into a local file in `genpolicy-settings.d/`.
