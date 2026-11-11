@@ -89,6 +89,37 @@ unix:///run/containerd/containerd.sock
 {{- end -}}
 {{- end -}}
 
+{{/* Probe only when a base or custom runtime requests SandboxAPI. */}}
+{{- define "kata-deploy.requestsSandboxAPI" -}}
+{{- $requested := false -}}
+{{- range $arch := list "amd64" "arm64" "s390x" "ppc64le" -}}
+{{- if contains ":shim" (include "kata-deploy.getSandboxerHandlerMappingForArch" (dict "root" $ "arch" $arch)) -}}
+{{- $requested = true -}}
+{{- end -}}
+{{- end -}}
+{{- if .Values.customRuntimes.enabled -}}
+{{- range $runtime := .Values.customRuntimes.runtimes -}}
+{{- if eq (dig "containerd" "sandboxer" "" $runtime) "shim" -}}{{- $requested = true -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $requested -}}true{{- end -}}
+{{- end -}}
+
+{{/* A directory mount permits a missing socket to reach the bounded fallback. */}}
+{{- define "kata-deploy.sandboxerHostSocket" -}}
+{{- $socket := trimPrefix "unix://" (include "containerdRuntimeSocket" .Values | trim) -}}
+{{- if and (eq (include "kata-deploy.requestsSandboxAPI" . | trim) "true") (hasPrefix "/" $socket) -}}
+{{- $socket -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kata-deploy.sandboxerSocketMount" -}}
+{{- if include "kata-deploy.sandboxerHostSocket" . | trim -}}
+- name: containerd-sandboxer-runtime-dir
+  mountPath: /run/kata-containerd-probe
+  readOnly: true
+{{- end -}}
+{{- end -}}
 
 {{/*
 Resolve the kata-monitor CRI runtime endpoint.
@@ -861,6 +892,11 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if $sandboxers }}
 - name: SANDBOXER_HANDLER_MAPPING_PPC64LE
   value: {{ $sandboxers | quote }}
+{{- end }}
+{{- $sandboxerSocket := include "kata-deploy.sandboxerHostSocket" . | trim -}}
+{{- if $sandboxerSocket }}
+- name: CONTAINERD_SANDBOXER_SOCKET
+  value: {{ printf "/run/kata-containerd-probe/%s" (base $sandboxerSocket) | quote }}
 {{- end }}
 {{- $agentHttpsProxy := include "kata-deploy.getAgentHttpsProxy" . | trim -}}
 {{- if $agentHttpsProxy }}
@@ -1837,6 +1873,9 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- $seLinux | nindent 4 }}
 {{- end }}
   volumeMounts:
+{{- if eq .action "install-stage-cri" }}
+{{- include "kata-deploy.sandboxerSocketMount" .root | nindent 4 }}
+{{- end }}
 {{- if .mountHost }}
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
 {{- else }}
@@ -1935,6 +1974,13 @@ indent with `nindent` at the call site.
 */}}
 {{- define "kata-deploy.commonVolumes" -}}
 {{ include "kata-deploy.tmpVolume" . }}
+{{- $sandboxerSocket := include "kata-deploy.sandboxerHostSocket" . | trim -}}
+{{- if $sandboxerSocket }}
+- name: containerd-sandboxer-runtime-dir
+  hostPath:
+    path: {{ dir $sandboxerSocket | quote }}
+    type: DirectoryOrCreate
+{{- end }}
 - name: crio-conf
   hostPath:
     path: /etc/crio/

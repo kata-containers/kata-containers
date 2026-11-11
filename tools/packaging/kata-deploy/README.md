@@ -20,3 +20,17 @@ containerd's sandbox controller does not use the CRI `runtime_path` override
 when starting the shim. This supports custom installation directories and
 handler names without adding shim aliases to the containerd service's PATH.
 Each handler retains its own `options.ConfigPath`.
+
+Availability requires a supported Rust implementation, containerd 2 or newer,
+and a successful native query confirming the running daemon's `shim` sandbox
+controller initialized successfully. Version lookup and the socket probe are
+bounded. Missing, disabled, failed, unreachable, or unknown controllers cause a
+logged fallback to `podsandbox`; no `ctr` installation is required. A workload
+failure does not trigger a controller change or retry.
+
+When SandboxAPI is requested, the install CRI stage mounts the socket's parent
+directory read-only and probes the distro-aware `containerd.runtimeSocket`.
+Missing sockets do not prevent the install pod from starting. SELinux denial
+of the probe also logs a fallback; this change does not broaden SELinux policy.
+Explicitly empty custom-runtime settings select `podsandbox`; omission inherits
+the base setting.

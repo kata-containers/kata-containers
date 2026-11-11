@@ -40,3 +40,10 @@ YAML
     [ "$status" -eq 0 ]
     [[ "$output" == *"kata-custom-example:qemu-nvidia-cpu-runtime-rs:::amd64,arm64:podsandbox"* ]]
 }
+
+@test "Helm omits availability socket mounts without SandboxAPI requests" {
+    run helm template kata-deploy "${CHART_PATH}" --set deploymentMode=job
+    [ "$status" -eq 0 ]
+    ! [[ "$output" == *containerd-sandboxer-runtime-dir* ]]
+    ! [[ "$output" == *CONTAINERD_SANDBOXER_SOCKET* ]]
+}
