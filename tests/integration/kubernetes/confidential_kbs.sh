@@ -85,7 +85,7 @@ kbs_set_gpu0_resource_policy() {
 		import rego.v1
 		default allow = false
 		allow if {
-		    input["submods"]["gpu0"]["ear.status"] == "affirming"
+		    input["submods"]["gpu0"]["ear_status"] == "affirming"
 		}
 	EOF
 
@@ -106,7 +106,7 @@ kbs_set_cpu0_resource_policy() {
 		import rego.v1
 		default allow = false
 		allow if {
-		    input["submods"]["cpu0"]["ear.status"] == "affirming"
+		    input["submods"]["cpu0"]["ear_status"] == "affirming"
 		}
 	EOF
 

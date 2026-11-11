@@ -330,13 +330,13 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "512fed65642015b849f38fb13bfdec7806639987"
-    toolchain: "1.90.0"
+    version: "v0.23.0"
+    toolchain: "1.95.0"
     # Helm chart deploys three separate images; tags match version.
     images:
-      kbs: "ghcr.io/confidential-containers/staged-images/kbs-grpc-as"
-      as: "ghcr.io/confidential-containers/staged-images/coco-as-grpc"
-      rvps: "ghcr.io/confidential-containers/staged-images/rvps"
+      kbs: "ghcr.io/confidential-containers/key-broker-service"
+      as: "ghcr.io/confidential-containers/attestation-service"
+      rvps: "ghcr.io/confidential-containers/reference-value-provider-service"
 
   containerd:
     description: |
