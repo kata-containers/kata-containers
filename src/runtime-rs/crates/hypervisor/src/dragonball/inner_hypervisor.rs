@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
 use anyhow::{anyhow, Context, Ok, Result};
-use dragonball::ALL_THREADS;
+use dragonball::{api::v1::SnapshotMemoryMode, ALL_THREADS};
 use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
@@ -106,8 +106,12 @@ impl DragonballInner {
                 .save_microvm(
                     template.device_state_path.clone(),
                     template.memory_path.clone(),
+                    SnapshotMemoryMode::PersistentPath,
+                    false,
                 )
-                .context("save microvm")
+                .context("save microvm")?;
+
+            Ok(())
         }
         #[cfg(not(target_arch = "x86_64"))]
         Err(anyhow!("save_vm is not supported on this architecture"))

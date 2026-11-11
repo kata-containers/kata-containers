@@ -18,8 +18,9 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
-        InstanceInfo, InstanceState, NetworkInterfaceConfig, VcpuResizeInfo, VmmAction,
-        VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
+        InstanceInfo, InstanceState, NetworkInterfaceConfig, SnapshotMemory, SnapshotMemoryMode,
+        VcpuResizeInfo, VmmAction, VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService,
+        VsockDeviceConfigInfo,
     },
     device_manager::{
         balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
@@ -193,11 +194,16 @@ impl VmmInstance {
     /// Start the microVM by restoring it from a snapshot (VM template)
     /// instead of cold booting.
     #[cfg(target_arch = "x86_64")]
-    pub fn instance_start_from_snapshot(&self, state_path: String, mem_path: String) -> Result<()> {
+    pub fn instance_start_from_snapshot(
+        &self,
+        state_path: String,
+        mem_path: String,
+        reset_vsock_pending: bool,
+    ) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::StartMicroVmFromSnapshot {
             state_path,
             mem_path,
-            reset_vsock_pending: false,
+            reset_vsock_pending,
         }))
         .context("Failed to start MicroVm from snapshot")?;
         Ok(())
@@ -385,15 +391,35 @@ impl VmmInstance {
     /// metadata, JSON) plus a guest memory contents file. Preserves whether
     /// the VM was running or already paused.
     #[cfg(target_arch = "x86_64")]
-    pub fn save_microvm(&self, state_path: String, mem_path: String) -> Result<()> {
-        self.handle_request(Request::Sync(VmmAction::SaveMicrovm {
-            state_path,
-            mem_path,
-            memory_mode: dragonball::api::v1::SnapshotMemoryMode::PersistentPath,
-            reset_vsock_transport: false,
-        }))
-        .context("Failed to save microvm")?;
-        Ok(())
+    pub fn save_microvm(
+        &self,
+        state_path: String,
+        mem_path: String,
+        memory_mode: SnapshotMemoryMode,
+        reset_vsock_transport: bool,
+    ) -> Result<Option<SnapshotMemory>> {
+        let response = self
+            .handle_request(Request::Sync(VmmAction::SaveMicrovm {
+                state_path,
+                mem_path,
+                memory_mode,
+                reset_vsock_transport,
+            }))
+            .context("Failed to save microvm")?;
+        match (memory_mode, response) {
+            (SnapshotMemoryMode::PersistentPath, VmmData::Empty) => Ok(None),
+            (SnapshotMemoryMode::TransientUnlinked, VmmData::SnapshotMemoryFile(file)) => {
+                if file.base.is_some() != file.delta_ranges.is_some() {
+                    return Err(anyhow!(
+                        "snapshot memory base and delta ranges must be supplied together"
+                    ));
+                }
+                Ok(Some(file))
+            }
+            (mode, response) => Err(anyhow!(
+                "unexpected save microvm response {response:?} for mode {mode:?}"
+            )),
+        }
     }
 
     pub fn pid(&self) -> u32 {
