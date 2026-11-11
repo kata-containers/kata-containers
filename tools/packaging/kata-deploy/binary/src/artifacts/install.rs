@@ -26,6 +26,7 @@ const ALL_SHIMS: &[&str] = &[
     "clh-runtime-rs",
     "dragonball",
     "fc",
+    "fc-runtime-rs",
     "firecracker",
     "openvmm-azure-runtime-rs",
     "remote",
@@ -92,7 +93,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
     match shim {
         "clh" | "clh-azure" | "clh-runtime-rs" | "clh-azure-runtime-rs" => Ok("clh"),
         "dragonball" => Ok("dragonball"),
-        "fc" | "firecracker" => Ok("firecracker"),
+        "fc" | "fc-runtime-rs" | "firecracker" => Ok("firecracker"),
         "openvmm-azure-runtime-rs" => Ok("openvmm"),
         "remote" => Ok("remote"),
         _ => anyhow::bail!(
@@ -2154,6 +2155,7 @@ pub(crate) mod tests {
     #[case("clh-runtime-rs", "clh")]
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
+    #[case("fc-runtime-rs", "firecracker")]
     #[case("firecracker", "firecracker")]
     #[case("openvmm-azure-runtime-rs", "openvmm")]
     #[case("remote", "remote")]
