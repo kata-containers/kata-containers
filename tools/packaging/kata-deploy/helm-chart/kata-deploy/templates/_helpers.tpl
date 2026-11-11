@@ -89,6 +89,7 @@ unix:///run/containerd/containerd.sock
 {{- end -}}
 {{- end -}}
 
+
 {{/*
 Resolve the kata-monitor CRI runtime endpoint.
 When monitor.runtimeEndpoint is empty, inherit containerd.runtimeSocket or
@@ -305,6 +306,50 @@ Format: shim1:snapshotter1,shim2:snapshotter2
 {{- $snapshotter := $shimConfig.containerd.snapshotter -}}
 {{- if $snapshotter -}}
 {{- $mappings = append $mappings (printf "%s:%s" $shimName $snapshotter) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $mappings -}}
+{{- end -}}
+
+{{- define "kata-deploy.getSandboxerHandlerMappingForArch" -}}
+{{- $arch := .arch -}}
+{{- $root := .root -}}
+{{- $disableAll := .root.Values.shims.disableAll | default false -}}
+{{- $mappings := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- if $root.Values.customRuntimes.enabled -}}
+{{- range $runtime := $root.Values.customRuntimes.runtimes -}}
+{{- if eq ($runtime.baseConfig | default "") $shimName -}}{{- $shimEnabled = true -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $shimEnabled -}}
+{{- $archSupported := false -}}
+{{- range $shimConfig.supportedArches -}}
+{{- if eq . $arch -}}
+{{- $archSupported = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $archSupported -}}
+{{- if $shimConfig.containerd -}}
+{{- $sandboxer := $shimConfig.containerd.sandboxer -}}
+{{- if $sandboxer -}}
+{{- if not (has $sandboxer (list "shim" "podsandbox")) -}}
+{{- fail (printf "Invalid containerd sandboxer %q for shim %q; expected shim or podsandbox" $sandboxer $shimName) -}}
+{{- end -}}
+{{- $mappings = append $mappings (printf "%s:%s" $shimName $sandboxer) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -796,6 +841,26 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if $snapshotterHandlerMappingPpc64le }}
 - name: SNAPSHOTTER_HANDLER_MAPPING_PPC64LE
   value: {{ $snapshotterHandlerMappingPpc64le | quote }}
+{{- end }}
+{{- $sandboxers := include "kata-deploy.getSandboxerHandlerMappingForArch" (dict "root" . "arch" "amd64") | trim -}}
+{{- if $sandboxers }}
+- name: SANDBOXER_HANDLER_MAPPING_X86_64
+  value: {{ $sandboxers | quote }}
+{{- end }}
+{{- $sandboxers := include "kata-deploy.getSandboxerHandlerMappingForArch" (dict "root" . "arch" "arm64") | trim -}}
+{{- if $sandboxers }}
+- name: SANDBOXER_HANDLER_MAPPING_AARCH64
+  value: {{ $sandboxers | quote }}
+{{- end }}
+{{- $sandboxers := include "kata-deploy.getSandboxerHandlerMappingForArch" (dict "root" . "arch" "s390x") | trim -}}
+{{- if $sandboxers }}
+- name: SANDBOXER_HANDLER_MAPPING_S390X
+  value: {{ $sandboxers | quote }}
+{{- end }}
+{{- $sandboxers := include "kata-deploy.getSandboxerHandlerMappingForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+{{- if $sandboxers }}
+- name: SANDBOXER_HANDLER_MAPPING_PPC64LE
+  value: {{ $sandboxers | quote }}
 {{- end }}
 {{- $agentHttpsProxy := include "kata-deploy.getAgentHttpsProxy" . | trim -}}
 {{- if $agentHttpsProxy }}
@@ -2107,7 +2172,14 @@ data:
 {{- if $handler }}
 {{- $baseShim := index $.Values.shims ($runtime.baseConfig | default "") | default dict }}
 {{- $supportedArches := join "," ($baseShim.supportedArches | default list) }}
-    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}:{{ $supportedArches }}
+{{- $sandboxer := "" -}}
+{{- if hasKey ($runtime.containerd | default dict) "sandboxer" -}}
+{{- $sandboxer = $runtime.containerd.sandboxer | default "podsandbox" -}}
+{{- if not (has $sandboxer (list "shim" "podsandbox")) -}}
+{{- fail (printf "Invalid containerd sandboxer %q for custom runtime %q" $sandboxer $handler) -}}
+{{- end -}}
+{{- end }}
+    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}:{{ $supportedArches }}:{{ $sandboxer }}
 {{- end }}
 {{- end }}
 {{- range $name := keys .Values.customRuntimes.runtimes | sortAlpha }}
