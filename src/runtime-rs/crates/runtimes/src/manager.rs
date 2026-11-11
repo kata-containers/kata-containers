@@ -18,14 +18,16 @@ use common::{
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::utils::{
-    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user,
-    remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
+    authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user, find_user,
+    is_recorded_vmm_user, remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
+    VMM_USER_UID_UNKNOWN,
 };
 use kata_sys_util::{mount::get_mount_path, netns::remove_netns, spec::load_oci_spec};
 use kata_types::{
     config::{
-        default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig,
-        KATA_PATH,
+        default::DEFAULT_GUEST_DNS_FILE,
+        hypervisor::{RootlessUser, SecurityInfo},
+        Hypervisor, TomlConfig, KATA_PATH,
     },
     mount::SHM_DEVICE,
     prefix_with_rootless_dir,
@@ -34,7 +36,7 @@ use kata_types::{
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
-use netns_rs::{Env, NetNs};
+use netns_rs::{DefaultEnv, Env, NetNs};
 use nix::{sys::statfs, unistd::User};
 use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
@@ -47,12 +49,8 @@ use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use std::{
     collections::HashMap,
     env,
-    ffi::OsString,
     ops::Deref,
-    os::unix::{
-        ffi::{OsStrExt, OsStringExt},
-        fs::chown,
-    },
+    os::unix::fs::chown,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -179,11 +177,18 @@ impl RuntimeHandlerManagerInner {
     ) -> Result<()> {
         init_runtime_handlers()?;
 
+        // The namespace already exists. Hold it across config loading so a
+        // failure here still removes it.
+        let created_netns = CreatedNetnsGuard::new(&sandbox_config.network_env);
         let (mut config, config_path) =
             load_config_with_path(&sandbox_config.annotations, options).context("load config")?;
-        record_sandbox_config_path(&sandbox_config_path_file(&self.id), &config_path)
-            .await
-            .context("record sandbox config path")?;
+        sandbox_config.config_path = Some(config_path);
+
+        // Computed before the hypervisor config is borrowed: it only reads
+        // the runtime section and the OCI spec.
+        #[cfg(feature = "virt")]
+        let cgroup_state = resource::cgroups::preview_cgroup_state(&self.id, &config)
+            .context("preview the cgroup state")?;
 
         let hypervisor_name = &config.runtime.hypervisor_name;
         let hypervisor = config
@@ -193,9 +198,27 @@ impl RuntimeHandlerManagerInner {
 
         set_rootless(hypervisor.security_info.rootless);
         let mut rootless_setup_guard = if is_rootless() {
+            // Record each candidate user before useradd may create it: a
+            // crash in between leaves a user only that record names.
+            let sid = self.id.clone();
+            let network_env = sandbox_config.network_env.clone();
+            let cfg_path = sandbox_config.config_path.clone();
+            let hv_name = hypervisor_name.clone();
             Some(
-                configure_non_root_hypervisor(hypervisor)
-                    .context("configure non-root hypervisor")?,
+                configure_non_root_hypervisor(&self.id, hypervisor, &mut |candidate| {
+                    #[cfg(feature = "virt")]
+                    save_bootstrap_state(
+                        &sid,
+                        &network_env,
+                        cfg_path.as_deref(),
+                        Some((&hv_name, candidate)),
+                        None,
+                    )?;
+                    #[cfg(not(feature = "virt"))]
+                    let _ = candidate;
+                    Ok(())
+                })
+                .context("configure non-root hypervisor")?,
             )
         } else {
             None
@@ -209,15 +232,37 @@ impl RuntimeHandlerManagerInner {
             if sandbox_config.network_env.network_created {
                 discard_created_netns(&mut sandbox_config.network_env)?;
                 let ns_name = generate_netns_name();
-                let rootless_raw_netns = NetNs::new_with_env(ns_name, RootlessEnv)?;
-                let path = Some(
-                    PathBuf::from(rootless_raw_netns.path())
-                        .display()
-                        .to_string(),
-                );
-                sandbox_config.network_env.netns = path;
+                let path = RootlessEnv.persist_dir().join(&ns_name);
+                sandbox_config.network_env.netns = Some(path.display().to_string());
+                // Record the namespace before making it: removing one that
+                // never came to exist is tolerated, while one no record
+                // names is never removed.
+                #[cfg(feature = "virt")]
+                save_bootstrap_state(
+                    &self.id,
+                    &sandbox_config.network_env,
+                    sandbox_config.config_path.as_deref(),
+                    Some((hypervisor_name, hypervisor)),
+                    None,
+                )?;
+                NetNs::new_with_env(ns_name, RootlessEnv)?;
             }
         }
+        // Declare after rootless_setup_guard so this guard drops first and unmounts
+        // the namespace before the runtime directory is removed.
+        let mut created_netns = created_netns;
+        created_netns.track(&sandbox_config.network_env);
+        // The full record: the resource manager will create the cgroups and
+        // the swap directory before the sandbox first saves for itself, so
+        // they have to be named here already.
+        #[cfg(feature = "virt")]
+        save_bootstrap_state(
+            &self.id,
+            &sandbox_config.network_env,
+            sandbox_config.config_path.as_deref(),
+            Some((hypervisor_name, hypervisor)),
+            Some(cgroup_state.clone()),
+        )?;
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -253,11 +298,31 @@ impl RuntimeHandlerManagerInner {
         if config.runtime.disable_new_netns || dan_path.exists() {
             discard_created_netns(&mut sandbox_config.network_env)?;
             sandbox_config.network_env.netns = None;
+            created_netns.track(&sandbox_config.network_env);
+            // The record above still names the renounced namespace; rewrite
+            // it, or a death here would have the cleanup sweep a namespace
+            // this sandbox never touches.
+            #[cfg(feature = "virt")]
+            {
+                let hypervisor_name = &config.runtime.hypervisor_name;
+                let hypervisor = config
+                    .hypervisor
+                    .get(hypervisor_name)
+                    .ok_or_else(|| anyhow!("hypervisor {} not found in config", hypervisor_name))?;
+                save_bootstrap_state(
+                    &self.id,
+                    &sandbox_config.network_env,
+                    sandbox_config.config_path.as_deref(),
+                    Some((hypervisor_name, hypervisor)),
+                    Some(cgroup_state),
+                )?;
+            }
         }
 
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
             .await
             .context("init runtime handler")?;
+        created_netns.disarm();
 
         // Rootless resource ownership now passes to the runtime instance and
         // its normal teardown paths.
@@ -289,6 +354,16 @@ impl RuntimeHandlerManagerInner {
     }
 }
 
+/// What [`RuntimeHandlerManager::cleanup`] did with a dead shim's sandbox.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CleanupOutcome {
+    /// Everything the saved state recorded is gone.
+    Done,
+    /// keep_abnormal left the sandbox's resources in place on purpose, and
+    /// the saved state is the only record of them.
+    Skipped,
+}
+
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
 }
@@ -309,23 +384,34 @@ impl RuntimeHandlerManager {
         })
     }
 
-    pub async fn cleanup(&self) -> Result<()> {
+    /// Clean up after a shim that is gone. The outcome tells the caller
+    /// whether the sandbox's saved state is still the record of something.
+    pub async fn cleanup(&self) -> Result<CleanupOutcome> {
         let inner = self.inner.read().await;
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
+
+        // Only try_init() turns rootless mode on, and this process never runs
+        // it. Without it, every rootless path resolves to the rootful one, and
+        // the VMM user and its runtime directory are left behind.
+        if let Some(h) = sandbox_state.hypervisor.as_ref() {
+            if let Some(dir) = rootless_runtime_dir(&h.config.security_info)? {
+                env::set_var("XDG_RUNTIME_DIR", dir);
+                set_rootless(true);
+            }
+        }
 
         // After the shim disconnects, containerd invokes the shim binary's `delete`
         // subcommand in a separate process. This path bypasses try_init(), so register
         // the config plugins here before loading the sandbox configuration.
         init_runtime_handlers()?;
 
-        let config = if let Ok(spec) = load_oci_spec() {
-            let annotations = spec.annotations().clone().unwrap_or_default();
-            cleanup_config(&sandbox_config_path_file(&inner.id), &annotations).await
-        } else {
-            TomlConfig::default()
-        };
+        let annotations = load_oci_spec()
+            .ok()
+            .and_then(|spec| spec.annotations().clone())
+            .unwrap_or_default();
+        let config = cleanup_config(sandbox_state.config_path.as_deref(), &annotations);
 
         let sandbox_args = SandboxRestoreArgs {
             sid: inner.id.clone(),
@@ -336,18 +422,31 @@ impl RuntimeHandlerManager {
             #[cfg(feature = "linux")]
             name if name == LinuxContainer::name() => {
                 // TODO :support linux container (https://github.com/kata-containers/kata-containers/issues/4905)
-                return Ok(());
+                return Ok(CleanupOutcome::Done);
             }
             #[cfg(feature = "wasm")]
             name if name == WasmContainer::name() => {
                 // TODO :support wasm container (https://github.com/kata-containers/kata-containers/issues/4906)
-                return Ok(());
+                return Ok(CleanupOutcome::Done);
             }
             #[cfg(feature = "virt")]
             name if name == VirtContainer::name() => {
-                if sandbox_args.toml_config.runtime.keep_abnormal {
+                // The state's own record wins: the file can have changed, or
+                // be gone, since the sandbox read it. Only a state saved
+                // before the configuration was read leaves the decision to
+                // the file.
+                let keep_abnormal = sandbox_state
+                    .keep_abnormal
+                    .unwrap_or(sandbox_args.toml_config.runtime.keep_abnormal);
+                if keep_abnormal {
                     info!(sl!(), "skip cleanup for keep_abnormal");
-                    return Ok(());
+                    return Ok(CleanupOutcome::Skipped);
+                }
+                if sandbox_state.is_bootstrap() {
+                    return cleanup_bootstrap(&inner.id, &sandbox_state, sandbox_args.toml_config)
+                        .await
+                        .context("failed to clean up the sandbox setup")
+                        .map(|()| CleanupOutcome::Done);
                 }
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
@@ -362,11 +461,11 @@ impl RuntimeHandlerManager {
                     .context("failed to cleanup the resource")?;
             }
             _ => {
-                return Ok(());
+                return Ok(CleanupOutcome::Done);
             }
         }
 
-        Ok(())
+        Ok(CleanupOutcome::Done)
     }
 
     async fn get_runtime_instance(&self) -> Result<Arc<RuntimeInstance>> {
@@ -422,10 +521,24 @@ impl RuntimeHandlerManager {
                 // if we get empty netns from oci spec, we need to create netns for the VM
                 else {
                     let ns_name = generate_netns_name();
-                    let raw_netns = NetNs::new(ns_name)?;
-                    let path = Some(PathBuf::from(raw_netns.path()).display().to_string());
-                    netns = path;
+                    let path = DefaultEnv.persist_dir().join(&ns_name);
+                    netns = Some(path.display().to_string());
                     network_created = true;
+                    // Record the namespace before making it: removing one
+                    // that never came to exist is tolerated, while one no
+                    // record names is never removed.
+                    #[cfg(feature = "virt")]
+                    save_bootstrap_state(
+                        &inner.id,
+                        &SandboxNetworkEnv {
+                            netns: netns.clone(),
+                            network_created,
+                        },
+                        None,
+                        None,
+                        None,
+                    )?;
+                    NetNs::new(ns_name)?;
                 }
                 break;
             }
@@ -474,6 +587,7 @@ impl RuntimeHandlerManager {
             hooks: spec.hooks().clone(),
             state: state.clone(),
             shm_size,
+            config_path: None,
         };
 
         inner.try_init(sandbox_config, Some(spec), options).await
@@ -542,11 +656,27 @@ impl RuntimeHandlerManager {
 
             let bundle = container_config.bundle.clone();
             let container_id = container_config.container_id.clone();
-            let shim_pid = instance
+            // Creating the container makes host artifacts (block emptyDir
+            // disks) that recovery only removes when the saved state names
+            // them, so the state must name them before they can exist.
+            instance
+                .sandbox
+                .save_container_intents(&spec)
+                .await
+                .context("save container intents")?;
+            let created = instance
                 .container_manager
                 .create_container(container_config, spec)
-                .await
-                .context("create container")?;
+                .await;
+            // Creating a container changes what the sandbox owns on the host,
+            // whether the create succeeded or not, and recovery only cleans up
+            // what the saved state records. Save it after every create.
+            let saved = instance.sandbox.save_state().await;
+            if let (Err(_), Err(e)) = (&created, &saved) {
+                warn!(sl!(), "failed to save the sandbox state: {:#}", e);
+            }
+            let shim_pid = created.context("create container")?;
+            saved.context("save the sandbox state")?;
 
             let container_manager = instance.container_manager.clone();
             let process_id =
@@ -730,13 +860,15 @@ impl RuntimeHandlerManager {
                 // starts.  The rescan uses a lightweight netlink probe during
                 // polling and only does the expensive endpoint setup once
                 // interfaces are detected.
+                // A rescan that finds no network is tolerated inside
+                // rescan_network(); an error out of it means the sandbox
+                // state could not be saved, and starting a workload on
+                // stale recovery state is worse than failing the start.
                 if process_id.process_type == ProcessType::Container {
-                    if let Err(e) = sandbox.rescan_network().await {
-                        error!(
-                            sl!(),
-                            "network rescan failed; container may lack networking: {:?}", e
-                        );
-                    }
+                    sandbox
+                        .rescan_network()
+                        .await
+                        .context("record the network rescan")?;
                 }
 
                 let shim_pid = cm
@@ -822,13 +954,43 @@ impl RuntimeHandlerManager {
 
 // Remove before replacing the path: no other owner can clean up the old namespace.
 fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
-    if network_env.network_created {
-        if let Some(path) = network_env.netns.as_deref() {
-            remove_netns(Path::new(path)).context("remove unused network namespace")?;
-            network_env.netns = None;
-        }
+    if let Some(path) = network_env.created_netns() {
+        remove_netns(Path::new(&path)).context("remove unused network namespace")?;
+        network_env.netns = None;
     }
     Ok(())
+}
+
+/// Setup failures occur before a sandbox can take ownership of namespace cleanup.
+struct CreatedNetnsGuard(Option<String>);
+
+impl CreatedNetnsGuard {
+    fn new(network_env: &SandboxNetworkEnv) -> Self {
+        let mut guard = Self(None);
+        guard.track(network_env);
+        guard
+    }
+
+    fn track(&mut self, network_env: &SandboxNetworkEnv) {
+        self.0 = network_env.created_netns();
+    }
+
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for CreatedNetnsGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            if let Err(err) = remove_netns(Path::new(&path)) {
+                warn!(
+                    sl!(),
+                    "failed to remove network namespace {}: {:#}", path, err
+                );
+            }
+        }
+    }
 }
 
 // RootlessEnv implements netns_rs::Env trait to provide the rootless directory path
@@ -859,59 +1021,25 @@ fn init_runtime_handlers() -> Result<()> {
     Ok(())
 }
 
-/// File recording which configuration the sandbox was created with. The shim
-/// `delete` subcommand gets no shimv2 options, so without it cleanup would
-/// fall back to the default configuration, which may name another hypervisor.
-fn sandbox_config_path_file(sid: &str) -> PathBuf {
-    Path::new(KATA_PATH)
-        .join(sid)
-        .join(SANDBOX_CONFIG_PATH_FILE)
-}
-
-const SANDBOX_CONFIG_PATH_FILE: &str = "config_path";
-
+/// The shim `delete` subcommand gets no shimv2 options, so it reloads the
+/// configuration the sandbox was created with from its state. A state saved
+/// before the path was recorded falls back to the default configuration.
+///
 /// A config that no longer loads (removed file, missing hypervisor binary)
 /// fails the same way on every retry, while the persisted state alone is
 /// enough to stop the VMM and release resources.
-async fn cleanup_config(path_file: &Path, an: &HashMap<String, String>) -> TomlConfig {
-    load_sandbox_config(path_file, an)
-        .await
-        .unwrap_or_else(|e| {
-            warn!(
-                sl!(),
-                "failed to load the sandbox config, cleaning up with the default: {:#}", e
-            );
-            TomlConfig::default()
-        })
-}
-
-async fn load_sandbox_config(path_file: &Path, an: &HashMap<String, String>) -> Result<TomlConfig> {
-    match fs::read(path_file).await {
-        Ok(config_path) => {
-            let config_path = PathBuf::from(OsString::from_vec(config_path));
-            Ok(load_config_from(an, &config_path)
-                .context("load sandbox config")?
-                .0)
-        }
-        // Sandboxes created before the path was recorded.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            load_config(an, &None).context("load config")
-        }
-        Err(e) => Err(e).context("read sandbox config path"),
-    }
-}
-
-/// Cleanup of a sandbox whose config path is not recorded is known to use
-/// the wrong configuration, so failing to record it fails the sandbox start.
-async fn record_sandbox_config_path(path_file: &Path, config_path: &Path) -> Result<()> {
-    if let Some(dir) = path_file.parent() {
-        fs::create_dir_all(dir)
-            .await
-            .with_context(|| format!("create {}", dir.display()))?;
-    }
-    fs::write(path_file, config_path.as_os_str().as_bytes())
-        .await
-        .with_context(|| format!("write {}", path_file.display()))
+fn cleanup_config(config_path: Option<&Path>, an: &HashMap<String, String>) -> TomlConfig {
+    let loaded = match config_path {
+        Some(path) => load_config_from(an, path).map(|(config, _)| config),
+        None => load_config(an, &None),
+    };
+    loaded.unwrap_or_else(|e| {
+        warn!(
+            sl!(),
+            "failed to load the sandbox config, cleaning up with the default: {:#}", e
+        );
+        TomlConfig::default()
+    })
 }
 
 // this update the log_level of three component: agent, hypervisor, runtime
@@ -1026,8 +1154,134 @@ impl Drop for RootlessSetupGuard {
     }
 }
 
-fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
-    let vmm_user_name = create_vmm_user().context("failed to create vmm user")?;
+/// Until the sandbox saves its state, this is the only record of what the
+/// shim made on the host for it.
+#[cfg(feature = "virt")]
+fn save_bootstrap_state(
+    sid: &str,
+    network_env: &SandboxNetworkEnv,
+    config_path: Option<&Path>,
+    hypervisor: Option<(&str, &Hypervisor)>,
+    cgroup_state: Option<resource::cgroups::cgroup_persist::CgroupState>,
+) -> Result<()> {
+    let state = SandboxState::bootstrap(network_env, config_path, hypervisor, cgroup_state);
+    persist::to_disk(&state, sid).context("save the sandbox setup state")
+}
+
+/// Remove what the shim made on the host before the sandbox existed.
+#[cfg(feature = "virt")]
+async fn cleanup_bootstrap(sid: &str, state: &SandboxState, toml_config: TomlConfig) -> Result<()> {
+    // A death mid-construction left Kata-named links in the recorded
+    // namespace. A created namespace takes its links with it below, and its
+    // record may name a path that never became a namespace, so only a
+    // caller's namespace, which outlives the sandbox, is swept.
+    if let Some(netns_path) = state
+        .resource
+        .as_ref()
+        .and_then(|r| r.netns_path.as_deref())
+        .filter(|netns_path| state.created_netns.as_deref() != Some(*netns_path))
+    {
+        // The sweep enters the namespace per thread; keep it off the
+        // multi-threaded runtime's workers, as the recovered path does.
+        let netns = netns_path.to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            let sweep = || -> Result<()> {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_io()
+                    .build()?;
+                rt.block_on(resource::network::remove_kata_links(&netns))
+            };
+            let _ = tx.send(sweep());
+        });
+        rx.await
+            .unwrap_or_else(|e| Err(e.into()))
+            .context("remove the kata links")?;
+    }
+    if let Some(path) = state.created_netns.as_deref() {
+        remove_netns(Path::new(path)).context("remove the network namespace")?;
+    }
+    // What the resource manager created before the sandbox could save for
+    // itself: the cgroups the record named ahead of time, and the swap
+    // directory, whose path the recorded hypervisor config determines.
+    if let Some(cgroup_state) = state
+        .resource
+        .as_ref()
+        .and_then(|r| r.cgroup_state.as_ref())
+    {
+        resource::cgroups::delete_cgroups_from_state(sid, toml_config, cgroup_state.clone())
+            .await
+            .context("remove the cgroups")?;
+    }
+    if let Some(h) = state.hypervisor.as_ref() {
+        if h.config.memory_info.enable_guest_swap {
+            let mut path = PathBuf::from(&h.config.memory_info.guest_swap_path);
+            path.push(sid);
+            remove_dir_all_if_exists(path).context("remove the swap directory")?;
+        }
+    }
+    // The sandbox writes its initdata image while preparing, before its
+    // first save, so a death there leaves the image to this cleanup. Only
+    // a sandbox configured with initdata has one.
+    if state
+        .hypervisor
+        .as_ref()
+        .is_some_and(|h| !h.config.security_info.initdata.is_empty())
+    {
+        resource::coco_data::initdata::remove_initdata_dir(sid)
+            .context("remove the initdata directory")?;
+    }
+    let Some(user) = state
+        .hypervisor
+        .as_ref()
+        .and_then(|h| h.config.security_info.rootless_user.as_ref())
+    else {
+        return Ok(());
+    };
+    // Once the user is gone its UID can belong to another sandbox's, and so
+    // can the runtime directory named after it.
+    match find_user(&user.user_name)? {
+        Some(found) if is_recorded_vmm_user(user.uid, &found, sid) => {
+            remove_dir_all_if_exists(vmm_user_runtime_dir(found.uid.as_raw()))
+                .context("remove the rootless runtime directory")?;
+            remove_vmm_user(&user.user_name).context("remove the VMM user")
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Runtime directory configure_non_root_hypervisor() gave the VMM user of a
+/// rootless sandbox. The user comes from the root-owned state.json, which
+/// the VMM user cannot replace.
+fn rootless_runtime_dir(security: &SecurityInfo) -> Result<Option<PathBuf>> {
+    if !security.rootless {
+        return Ok(None);
+    }
+    let user = security
+        .rootless_user
+        .as_ref()
+        .ok_or_else(|| anyhow!("rootless sandbox state has no VMM user"))?;
+    Ok(Some(vmm_user_runtime_dir(user.uid)))
+}
+
+fn configure_non_root_hypervisor(
+    sid: &str,
+    config: &mut Hypervisor,
+    record_candidate_user: &mut dyn FnMut(&Hypervisor) -> Result<()>,
+) -> Result<RootlessSetupGuard> {
+    let vmm_user_name = {
+        let mut record = |name: &str| {
+            let mut candidate = config.clone();
+            candidate.security_info.rootless_user = Some(RootlessUser {
+                uid: VMM_USER_UID_UNKNOWN,
+                gid: VMM_USER_UID_UNKNOWN,
+                groups: Vec::new(),
+                user_name: name.to_string(),
+            });
+            record_candidate_user(&candidate)
+        };
+        create_vmm_user(sid, &mut record).context("failed to create vmm user")?
+    };
     let mut guard = RootlessSetupGuard::new(vmm_user_name.clone());
 
     let user = User::from_name(&vmm_user_name)?.ok_or_else(|| {
@@ -1115,6 +1369,32 @@ mod tests {
     }
 
     #[test]
+    fn test_created_netns_guard() {
+        let created = |netns: Option<&str>| SandboxNetworkEnv {
+            netns: netns.map(String::from),
+            network_created: true,
+        };
+
+        let mut guard = CreatedNetnsGuard::new(&SandboxNetworkEnv {
+            netns: Some("/run/netns/from-spec".to_string()),
+            network_created: false,
+        });
+        assert_eq!(guard.0, None);
+
+        guard.track(&created(Some("/run/netns/created")));
+        assert_eq!(guard.0.as_deref(), Some("/run/netns/created"));
+
+        guard.track(&created(Some("/run/user/1001/netns/created")));
+        assert_eq!(guard.0.as_deref(), Some("/run/user/1001/netns/created"));
+        guard.track(&created(None));
+        assert_eq!(guard.0, None);
+
+        guard.track(&created(Some("/run/netns/created")));
+        guard.disarm();
+        assert_eq!(guard.0, None);
+    }
+
+    #[test]
     fn test_discard_created_netns_keeps_path_on_failure() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().display().to_string();
@@ -1188,6 +1468,9 @@ mod tests {
         async fn wait(&self) -> Result<common::types::SandboxExitInfo> {
             unimplemented!()
         }
+        async fn save_state(&self) -> Result<()> {
+            unimplemented!()
+        }
         async fn set_iptables(&self, _is_ipv6: bool, _data: Vec<u8>) -> Result<Vec<u8>> {
             unimplemented!()
         }
@@ -1214,6 +1497,9 @@ mod tests {
         }
         async fn wait_exit_published(&self) {}
         async fn rescan_network(&self) -> Result<()> {
+            Ok(())
+        }
+        async fn save_container_intents(&self, _spec: &oci::Spec) -> Result<()> {
             Ok(())
         }
         async fn agent_metrics(&self) -> Result<String> {
@@ -1393,7 +1679,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_config_reports_loaded_path() {
+    fn test_cleanup_uses_the_config_the_sandbox_was_created_with() {
         let tmpdir = tempfile::tempdir().unwrap();
         let path = tmpdir.path().join("configuration-qemu.toml");
         write_qemu_config(&path, "/bin/sh");
@@ -1407,90 +1693,122 @@ mod tests {
         let (_, loaded_path) = load_config_with_path(&HashMap::new(), &options).unwrap();
         assert_eq!(loaded_path, std::fs::canonicalize(&path).unwrap());
 
-        // The shim `delete` subcommand reloads the sandbox config from the
-        // recorded path, without the shimv2 options.
-        let (config, _) = load_config_from(&HashMap::new(), &loaded_path).unwrap();
+        // The shim `delete` subcommand gets no shimv2 options, only the path
+        // saved in the sandbox state.
+        let config = cleanup_config(Some(&loaded_path), &HashMap::new());
         assert_eq!(config.runtime.hypervisor_name, "qemu");
-    }
-
-    #[tokio::test]
-    async fn test_cleanup_uses_recorded_config() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let config_path = tmpdir.path().join("configuration-qemu.toml");
-        write_qemu_config(&config_path, "/bin/sh");
-        let path_file = tmpdir.path().join("sid").join(SANDBOX_CONFIG_PATH_FILE);
-
-        init_runtime_handlers().unwrap();
-        record_sandbox_config_path(&path_file, &config_path)
-            .await
-            .unwrap();
-
-        let config = cleanup_config(&path_file, &HashMap::new()).await;
-        assert_eq!(config.runtime.hypervisor_name, "qemu");
-    }
-
-    #[tokio::test]
-    async fn test_record_config_path_reports_failure() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let not_a_dir = tmpdir.path().join("sid");
-        std::fs::write(&not_a_dir, b"").unwrap();
-        let path_file = not_a_dir.join(SANDBOX_CONFIG_PATH_FILE);
-
-        let err = record_sandbox_config_path(&path_file, Path::new("/configuration.toml"))
-            .await
-            .unwrap_err();
-        assert!(
-            format!("{:#}", err).contains(&not_a_dir.display().to_string()),
-            "error does not name the path: {:#}",
-            err
-        );
-    }
-
-    #[derive(Debug)]
-    enum UnloadableConfig {
-        MissingHypervisorBinary,
-        RemovedConfigFile,
-        UnreadablePathFile,
     }
 
     #[rstest]
-    #[case::missing_hypervisor_binary(UnloadableConfig::MissingHypervisorBinary)]
-    #[case::removed_config_file(UnloadableConfig::RemovedConfigFile)]
-    #[case::unreadable_path_file(UnloadableConfig::UnreadablePathFile)]
-    #[tokio::test]
-    async fn test_cleanup_falls_back_to_default_config(#[case] case: UnloadableConfig) {
+    #[case::missing_hypervisor_binary(true)]
+    #[case::removed_config_file(false)]
+    fn test_cleanup_falls_back_to_default_config(#[case] config_file_exists: bool) {
         let tmpdir = tempfile::tempdir().unwrap();
-        let config_path = tmpdir.path().join("configuration-qemu.toml");
-        let path_file = tmpdir.path().join("sid").join(SANDBOX_CONFIG_PATH_FILE);
-
-        init_runtime_handlers().unwrap();
-        match case {
-            UnloadableConfig::MissingHypervisorBinary => {
-                write_qemu_config(&config_path, "/nonexistent/qemu-system");
-                record_sandbox_config_path(&path_file, &config_path)
-                    .await
-                    .unwrap();
-            }
-            UnloadableConfig::RemovedConfigFile => {
-                write_qemu_config(&config_path, "/bin/sh");
-                record_sandbox_config_path(&path_file, &config_path)
-                    .await
-                    .unwrap();
-                std::fs::remove_file(&config_path).unwrap();
-            }
-            // Reading a directory fails with an error other than NotFound.
-            UnloadableConfig::UnreadablePathFile => std::fs::create_dir_all(&path_file).unwrap(),
+        let path = tmpdir.path().join("configuration-qemu.toml");
+        if config_file_exists {
+            write_qemu_config(&path, "/nonexistent/qemu-system");
         }
 
-        assert!(
-            load_sandbox_config(&path_file, &HashMap::new())
-                .await
-                .is_err(),
-            "case {:?}: config unexpectedly loaded",
-            case
+        init_runtime_handlers().unwrap();
+        assert!(load_config_from(&HashMap::new(), &path).is_err());
+        let config = cleanup_config(Some(&path), &HashMap::new());
+        assert!(config.runtime.hypervisor_name.is_empty());
+        assert!(!config.runtime.keep_abnormal);
+    }
+
+    #[rstest]
+    #[case::rootful(false, None, Some(None))]
+    #[case::rootless(true, Some(1001), Some(Some("/run/user/1001")))]
+    #[case::rootless_without_user(true, None, None)]
+    fn test_rootless_runtime_dir_comes_from_the_saved_user(
+        #[case] rootless: bool,
+        #[case] uid: Option<u32>,
+        #[case] expected: Option<Option<&str>>,
+    ) {
+        let security = SecurityInfo {
+            rootless,
+            rootless_user: uid.map(|uid| RootlessUser {
+                uid,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let dir = rootless_runtime_dir(&security).ok();
+        assert_eq!(dir, expected.map(|d| d.map(PathBuf::from)));
+    }
+
+    #[test]
+    fn test_rootless_runtime_dir_from_a_state_saved_before_this_change() {
+        let state: SandboxState =
+            serde_json::from_str(include_str!("../virt_container/testdata/legacy-state.json"))
+                .unwrap();
+        let security = state.hypervisor.unwrap().config.security_info;
+        assert_eq!(
+            rootless_runtime_dir(&security).unwrap(),
+            Some(PathBuf::from("/run/user/1001"))
         );
-        let config = cleanup_config(&path_file, &HashMap::new()).await;
-        assert!(config.runtime.hypervisor_name.is_empty(), "case {:?}", case);
-        assert!(!config.runtime.keep_abnormal, "case {:?}", case);
+    }
+
+    #[tokio::test]
+    async fn a_setup_whose_vmm_user_is_gone_cleans_up_without_touching_its_uid() {
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: 0,
+            user_name: "kata-no-such-user".to_string(),
+            ..Default::default()
+        });
+        let state = SandboxState::bootstrap(
+            &SandboxNetworkEnv::default(),
+            None,
+            Some(("qemu", &config)),
+            None,
+        );
+        cleanup_bootstrap("test-sid", &state, TomlConfig::default())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_setup_recorded_before_useradd_cleans_up_by_name() {
+        // The record of a user that was never created carries no UID; the
+        // cleanup must match it by name and find nothing to remove.
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: VMM_USER_UID_UNKNOWN,
+            user_name: "kata-0123abcd-9999".to_string(),
+            ..Default::default()
+        });
+        let state = SandboxState::bootstrap(
+            &SandboxNetworkEnv::default(),
+            None,
+            Some(("qemu", &config)),
+            None,
+        );
+        cleanup_bootstrap("test-sid", &state, TomlConfig::default())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_recorded_name_belonging_to_someone_else_is_left_alone() {
+        // A candidate record carries no UID. When its name matches an
+        // account that does not carry the VMM user comment, the recorded
+        // useradd did not create that account, so it must survive.
+        let mut config = Hypervisor::default();
+        config.security_info.rootless_user = Some(RootlessUser {
+            uid: VMM_USER_UID_UNKNOWN,
+            user_name: "root".to_string(),
+            ..Default::default()
+        });
+        let state = SandboxState::bootstrap(
+            &SandboxNetworkEnv::default(),
+            None,
+            Some(("qemu", &config)),
+            None,
+        );
+        cleanup_bootstrap("test-sid", &state, TomlConfig::default())
+            .await
+            .unwrap();
+        assert!(find_user("root").unwrap().is_some());
     }
 }

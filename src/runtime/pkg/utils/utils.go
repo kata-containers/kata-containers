@@ -105,8 +105,11 @@ func FirstValidExecutable(paths []string) (string, error) {
 	return "", fmt.Errorf("all the executables are invalid")
 }
 
-// CreateVmmUser create a temp user for running Kata Containers under rootless mode.
-func CreateVmmUser() (string, error) {
+// CreateVmmUser create a temp user for running sandbox sid's VMM under
+// rootless mode. The user name carries the first eight characters of the
+// sandbox id and the comment the whole of it, so the account says whose it
+// is, to an admin and to the runtime-rs shim alike.
+func CreateVmmUser(sid string) (string, error) {
 	var (
 		err      error
 		userName string
@@ -121,12 +124,17 @@ func CreateVmmUser() (string, error) {
 		return "", err
 	}
 
+	sidTag := sid
+	if len(sidTag) > 8 {
+		sidTag = sidTag[:8]
+	}
+
 	// Add retries to mitigate temporary errors and race conditions. For example, the user already exists
 	// or another instance of the runtime is also creating a user.
 	maxAttempt := 5
 	for i := 0; i < maxAttempt; i++ {
-		userName = fmt.Sprintf("kata-%v", rand.Intn(100000))
-		_, err = RunCommand([]string{useraddPath, "-M", "-s", nologinPath, userName, "-c", "\"Kata Containers temporary hypervisor user\""})
+		userName = fmt.Sprintf("kata-%s-%v", sidTag, rand.Intn(100000))
+		_, err = RunCommand([]string{useraddPath, "-M", "-s", nologinPath, userName, "-c", fmt.Sprintf("Kata Containers temporary hypervisor user for %s", sid)})
 		if err == nil {
 			return userName, nil
 		}

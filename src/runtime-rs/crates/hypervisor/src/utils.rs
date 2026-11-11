@@ -47,6 +47,43 @@ pub fn remove_dir_all_if_exists(path: impl AsRef<Path>) -> Result<()> {
     }
 }
 
+/// Remove the VM directory of a sandbox. A rootful VMM shares it with the
+/// sandbox state, which has to outlive the rest of the cleanup for a failure
+/// to be retried; the sandbox removes it last.
+pub fn remove_vm_dir(sid: &str, vm_path: &str) -> Result<()> {
+    remove_vm_dir_in(Path::new(KATA_PATH), sid, Path::new(vm_path))
+}
+
+fn remove_vm_dir_in(state_root: &Path, sid: &str, vm_path: &Path) -> Result<()> {
+    if vm_path != state_root.join(sid) {
+        return remove_dir_all_if_exists(vm_path);
+    }
+    let entries = match std::fs::read_dir(vm_path) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if entry.file_name() == persist::PERSIST_FILE {
+            continue;
+        }
+        let path = entry.path();
+        let removed = if entry.file_type()?.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match removed {
+            Err(err) if err.kind() != io::ErrorKind::NotFound => {
+                return Err(err).with_context(|| format!("remove {}", path.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 pub fn get_child_threads(pid: u32) -> HashSet<u32> {
     let mut result = HashSet::new();
     let path_name = format!("/proc/{pid}/task");
@@ -532,22 +569,75 @@ pub fn remove_vmm_user_runtime_dir(uid: u32) -> Result<()> {
     remove_dir_all_if_exists(vmm_user_runtime_dir(uid))
 }
 
-pub fn create_vmm_user() -> Result<String> {
+/// Whether the recorded VMM user's runtime directory is still the recorded
+/// user's to remove. Once the user is gone its UID can be reassigned, and
+/// /run/user/<uid> with it: the directory may only be removed while the UID
+/// maps to nothing (the leftover is the record's) or still to the recorded
+/// account (a cleanup retry that has not removed the user yet).
+pub fn vmm_user_runtime_dir_is_recorded(uid: u32, user_name: &str) -> Result<bool> {
+    match nix::unistd::User::from_uid(nix::unistd::Uid::from_raw(uid)) {
+        Ok(None) | Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ESRCH) => Ok(true),
+        Ok(Some(found)) => Ok(found.name == user_name),
+        Err(e) => Err(e).with_context(|| format!("look up uid {uid}")),
+    }
+}
+
+/// The UID recorded for a VMM user that may not exist yet. The record has
+/// to land before useradd runs, and the real UID only exists after it did.
+/// Cleanup matches such a record by name and by [`VMM_USER_COMMENT`]: the
+/// name carries the sandbox id, and the comment keeps a record whose
+/// useradd never ran from matching an account someone else created.
+pub const VMM_USER_UID_UNKNOWN: u32 = u32::MAX;
+
+/// The comment useradd stores for every VMM user, before the sandbox id is
+/// appended. Cleanup of a record with no UID accepts only an account that
+/// carries its own sandbox's comment.
+pub const VMM_USER_COMMENT: &str = "Kata Containers temporary hypervisor user";
+
+/// The comment useradd stores for sandbox `sid`'s VMM user. It carries the
+/// whole sandbox id: the user name only holds a prefix of it, so the name
+/// alone cannot say whose account it is.
+pub fn vmm_user_comment(sid: &str) -> String {
+    format!("{VMM_USER_COMMENT} for {sid}")
+}
+
+/// Whether `found` is the account sandbox `sid`'s record names. A record
+/// made once useradd ran carries the UID, which no other account holds
+/// while the user exists. One made before useradd carries none, and is only
+/// trusted when the account also carries this sandbox's creation comment:
+/// an account the recorded useradd never created is somebody else's, another
+/// Kata sandbox's included.
+pub fn is_recorded_vmm_user(recorded_uid: u32, found: &nix::unistd::User, sid: &str) -> bool {
+    if recorded_uid == VMM_USER_UID_UNKNOWN {
+        found.gecos.to_str() == Ok(vmm_user_comment(sid).as_str())
+    } else {
+        found.uid.as_raw() == recorded_uid
+    }
+}
+
+/// Create the VMM user, telling `record` each candidate name before useradd
+/// may create it: a crash between the two must not leave a user no record
+/// names.
+pub fn create_vmm_user(sid: &str, record: &mut dyn FnMut(&str) -> Result<()>) -> Result<String> {
     let useradd_path =
         first_valid_executable_path(&["/usr/sbin/useradd", "/sbin/useradd", "/bin/useradd"])?;
     let nologin_path =
         first_valid_executable_path(&["/usr/sbin/nologin", "/sbin/nologin", "/bin/nologin"])?;
 
+    // Enough of the sandbox id to make the name this sandbox's own: a record
+    // left by a crash must never name another sandbox's user.
+    let sid_tag: String = sid.chars().take(8).collect();
     let max_attempt = 5;
     for _ in 0..max_attempt {
-        let user_name = format!("kata-{}", rng().random_range(0..10000));
+        let user_name = format!("kata-{}-{}", sid_tag, rng().random_range(0..10000));
+        record(&user_name)?;
         let status = Command::new(&useradd_path)
             .arg("-M")
             .arg("-s")
             .arg(&nologin_path)
             .arg(&user_name)
             .arg("-c")
-            .arg("\"Kata Containers temporary hypervisor user\"")
+            .arg(vmm_user_comment(sid))
             .status()?;
         if status.success() {
             return Ok(user_name);
@@ -569,24 +659,40 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
     Err(anyhow!("failed to remove VMM user"))
 }
 
+/// getpwnam_r() may report a missing user as an error rather than no entry.
+pub fn find_user(name: &str) -> Result<Option<nix::unistd::User>> {
+    match nix::unistd::User::from_name(name) {
+        Ok(user) => Ok(user),
+        Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ESRCH) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("look up user {name}")),
+    }
+}
+
 pub fn vm_cleanup(config: &Hypervisor, sid: &str, vm_path: &str) -> Result<()> {
-    let path_result = remove_dir_all_if_exists(vm_path);
+    let path_result = remove_vm_dir(sid, vm_path);
     if kata_types::rootless::is_rootless() {
         let symlink_result = remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(sid));
-        let user = &config
+        let user = config
             .security_info
             .rootless_user
             .as_ref()
-            .ok_or_else(|| anyhow!("rootless user not specified in security_info"))?
-            .user_name;
-        match nix::unistd::User::from_name(user)? {
+            .ok_or_else(|| anyhow!("rootless user not specified in security_info"))?;
+        match find_user(&user.user_name)? {
+            Some(found) if is_recorded_vmm_user(user.uid, &found, sid) => {
+                remove_vmm_user(&user.user_name)?;
+            }
             Some(_) => {
-                remove_vmm_user(user)?;
+                // The recorded user is already gone and the name was taken
+                // again: the account is not the sandbox's to remove.
+                warn!(
+                    sl!(),
+                    "user {} is not the one this sandbox created, leaving it", user.user_name
+                );
             }
             None => {
                 error!(
                     sl!(),
-                    "failed to find user: {}, it might have been removed", user
+                    "failed to find user: {}, it might have been removed", user.user_name
                 );
             }
         }
@@ -811,9 +917,39 @@ mod tests {
     use crate::utils::first_valid_executable_path;
 
     use super::create_fds;
+    use super::is_recorded_vmm_user;
     use super::remove_dir_all_if_exists;
     use super::set_process_credentials_with;
     use super::vmm_user_runtime_dir;
+    use super::VMM_USER_UID_UNKNOWN;
+
+    #[test]
+    fn a_recorded_vmm_user_is_matched_back_carefully() {
+        let sid = "0123456789abcdef";
+        let found = nix::unistd::User::from_uid(nix::unistd::getuid())
+            .unwrap()
+            .unwrap();
+        // A record made once useradd ran is matched by UID alone.
+        assert!(is_recorded_vmm_user(found.uid.as_raw(), &found, sid));
+        assert!(!is_recorded_vmm_user(
+            found.uid.as_raw().wrapping_add(1),
+            &found,
+            sid
+        ));
+        // One made before useradd is only trusted with this sandbox's
+        // creation comment.
+        assert!(!is_recorded_vmm_user(VMM_USER_UID_UNKNOWN, &found, sid));
+        let mut ours = found;
+        ours.gecos = std::ffi::CString::new(super::vmm_user_comment(sid)).unwrap();
+        assert!(is_recorded_vmm_user(VMM_USER_UID_UNKNOWN, &ours, sid));
+        // Another Kata sandbox's account carries its own id in the comment,
+        // even when the user names collide.
+        assert!(!is_recorded_vmm_user(
+            VMM_USER_UID_UNKNOWN,
+            &ours,
+            "0123456789abcdee"
+        ));
+    }
     use super::SocketAddress;
     use super::{
         authorize_rootless_resource_access, authorize_rootless_socket, select_rootless_access_group,
@@ -1131,6 +1267,28 @@ mod tests {
         assert!(!runtime_dir.exists());
 
         remove_dir_all_if_exists(&runtime_dir).unwrap();
+    }
+
+    #[rstest]
+    #[case::shared_with_the_state("sid", true)]
+    #[case::of_its_own("other", false)]
+    fn the_vm_dir_goes_but_the_state_stays(#[case] dir: &str, #[case] state_stays: bool) {
+        let root = TempDir::new().unwrap();
+        let vm_path = root.path().join(dir);
+        fs::create_dir_all(vm_path.join("vhost-fs")).unwrap();
+        fs::write(vm_path.join("qmp.sock"), b"").unwrap();
+        fs::write(vm_path.join(persist::PERSIST_FILE), b"{}").unwrap();
+
+        super::remove_vm_dir_in(root.path(), "sid", &vm_path).unwrap();
+        let left: Vec<_> = fs::read_dir(&vm_path)
+            .map(|d| d.map(|e| e.unwrap().file_name()).collect())
+            .unwrap_or_default();
+        if state_stays {
+            assert_eq!(left, vec![persist::PERSIST_FILE]);
+        } else {
+            assert!(!vm_path.exists());
+        }
+        super::remove_vm_dir_in(root.path(), "sid", &vm_path).unwrap();
     }
 
     #[test]

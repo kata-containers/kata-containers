@@ -29,38 +29,11 @@ use crate::network::utils::{self, link};
 pub const SYS_PCI_DEVICES_PATH: &str = "/sys/bus/pci/devices";
 
 #[derive(Debug)]
-pub struct VendorDevice {
-    vendor_id: String,
-    device_id: String,
-}
-
-impl VendorDevice {
-    pub fn new(vendor_id: &str, device_id: &str) -> Result<Self> {
-        if vendor_id.is_empty() || device_id.is_empty() {
-            return Err(anyhow!(
-                "invalid parameters vendor_id {} device_id {}",
-                vendor_id,
-                device_id
-            ));
-        }
-        Ok(Self {
-            vendor_id: vendor_id.to_string(),
-            device_id: device_id.to_string(),
-        })
-    }
-
-    pub fn vendor_device_id(&self) -> String {
-        format!("{}_{}", self.vendor_id, self.device_id)
-    }
-}
-
-#[derive(Debug)]
 pub struct PhysicalEndpoint {
     iface_name: String,
     hard_addr: String,
     bdf: String,
     driver: String,
-    vendor_device_id: VendorDevice,
     d: Arc<RwLock<DeviceManager>>,
     /// Guest PCI path — populated after QMP resolution in setup_after_start_vm.
     /// The pre-computed topology path from attach() is WRONG for physical
@@ -84,20 +57,9 @@ impl PhysicalEndpoint {
             .file_name()
             .map_or(String::new(), |v| v.to_str().unwrap().to_owned());
 
-        // get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
-        let iface_device_path = sys_pci_devices_path.join(&bdf).join("device");
-        let device_id = std::fs::read_to_string(&iface_device_path)
-            .with_context(|| format!("read device path {:?}", iface_device_path))?;
-
-        let iface_vendor_path = sys_pci_devices_path.join(&bdf).join("vendor");
-        let vendor_id = std::fs::read_to_string(&iface_vendor_path)
-            .with_context(|| format!("read vendor path {:?}", iface_vendor_path))?;
-
         Ok(Self {
             iface_name: name.to_string(),
             hard_addr: utils::get_mac_addr(hardware_addr).context("get mac addr")?,
-            vendor_device_id: VendorDevice::new(&vendor_id, &device_id)
-                .context("new vendor device")?,
             driver,
             bdf,
             d,
@@ -146,12 +108,8 @@ impl Endpoint for PhysicalEndpoint {
         }
 
         // bind physical interface from host driver and bind to vfio
-        driver::bind_device_to_vfio(
-            &self.bdf,
-            &self.driver,
-            &self.vendor_device_id.vendor_device_id(),
-        )
-        .with_context(|| format!("bind physical endpoint from {} to vfio", self.driver))?;
+        driver::bind_device_to_vfio(&self.bdf, &self.driver)
+            .with_context(|| format!("bind physical endpoint from {} to vfio", self.driver))?;
 
         let vfio_device = get_vfio_device(self.bdf.clone()).context("get vfio device failed.")?;
         let vfio_dev_config = &mut VfioConfig {
@@ -193,12 +151,9 @@ impl Endpoint for PhysicalEndpoint {
 
         // we do not need to enter the network namespace to bind back the
         // physical interface to host driver.
-        driver::bind_device_to_host(
-            &self.bdf,
-            &self.driver,
-            &self.vendor_device_id.vendor_device_id(),
-        )
-        .with_context(|| format!("bind physical endpoint device from vfio to {}", self.driver))?;
+        driver::bind_device_to_host(&self.bdf, &self.driver).with_context(|| {
+            format!("bind physical endpoint device from vfio to {}", self.driver)
+        })?;
         Ok(())
     }
 
@@ -207,11 +162,7 @@ impl Endpoint for PhysicalEndpoint {
             physical_endpoint: Some(PhysicalEndpointState {
                 bdf: self.bdf.clone(),
                 driver: self.driver.clone(),
-                vendor_id: self.vendor_device_id.vendor_id.clone(),
-                device_id: self.vendor_device_id.device_id.clone(),
-                hard_addr: self.hard_addr.clone(),
             }),
-            ..Default::default()
         })
     }
 
@@ -365,5 +316,79 @@ fn pf_netdev_name(pf_bdf: &str) -> Result<String> {
             );
             Ok(names.remove(0))
         }
+    }
+}
+
+/// A shim that went away left its passed-through network devices bound to
+/// vfio-pci. Hand them back to their host drivers, as detach() would have.
+/// Every device is tried, so one failure does not strand the others.
+pub(crate) fn rebind_saved_physical_endpoints(
+    endpoints: &[EndpointState],
+    bind: impl Fn(&str, &str) -> Result<()>,
+) -> Result<()> {
+    let mut failures = 0;
+    for p in endpoints
+        .iter()
+        // Every recorded device is tried, however far its attach got:
+        // binding back one that never left its host driver is a no-op.
+        .filter_map(|e| e.physical_endpoint.as_ref())
+    {
+        if let Err(e) = bind(&p.bdf, &p.driver) {
+            failures += 1;
+            warn!(
+                sl!(),
+                "failed to bind physical endpoint {} back to {}: {:#}", p.bdf, p.driver, e
+            );
+        }
+    }
+    if failures == 0 {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "{failures} physical endpoint(s) not bound back to the host"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod rebind_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    fn physical(bdf: &str) -> EndpointState {
+        EndpointState {
+            physical_endpoint: Some(PhysicalEndpointState {
+                bdf: bdf.to_string(),
+                driver: "mlx5_core".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn only_physical_endpoints_are_bound_back_and_all_are_tried() {
+        let endpoints = vec![
+            physical("0000:41:00.2"),
+            EndpointState::default(),
+            physical("0000:41:00.3"),
+            physical("0000:41:00.4"),
+        ];
+        let bound = Mutex::new(Vec::new());
+        let result = rebind_saved_physical_endpoints(&endpoints, |bdf, driver| {
+            bound.lock().unwrap().push(format!("{bdf} {driver}"));
+            if bdf.ends_with(".2") {
+                return Err(anyhow!("busy"));
+            }
+            Ok(())
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            *bound.lock().unwrap(),
+            vec![
+                "0000:41:00.2 mlx5_core",
+                "0000:41:00.3 mlx5_core",
+                "0000:41:00.4 mlx5_core"
+            ]
+        );
     }
 }
