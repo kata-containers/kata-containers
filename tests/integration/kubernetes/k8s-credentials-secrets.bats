@@ -10,8 +10,7 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: ${fc_limitations}"
 
 	secret_name="test-secret"
 	pod_name="secret-test-pod"
@@ -115,8 +114,7 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: ${fc_limitations}"
 
 	kubectl delete pod "${pod_name}" --ignore-not-found=true
 	kubectl delete pod "${second_pod_name}" --ignore-not-found=true

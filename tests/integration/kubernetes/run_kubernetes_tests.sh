@@ -17,12 +17,21 @@ source "${kubernetes_dir}/tests_common.sh"
 source "${kubernetes_dir}/k8s_bats_runner.sh"
 
 cleanup() {
+	local namespace="${KATA_TEST_DEBUGGER_NAMESPACE:-kube-system}"
+	# An explicitly selected node may belong to a shared cluster.
+	# Leave debugger pods for other nodes alone.
+	if [[ -n "${KATA_TEST_NODE:-}" ]]; then
+		local debugger_pod
+		debugger_pod="custom-node-debugger-$(echo -n "${KATA_TEST_NODE}" | sha1sum | cut -c1-7)"
+		kubectl delete pod -n "${namespace}" "${debugger_pod}" --ignore-not-found=true || true
+		return
+	fi
 	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
-	pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
+	pods_to_be_deleted=$(kubectl get pods -n "${namespace}" --no-headers -o custom-columns=:metadata.name \
 		| grep '^custom-node-debugger' || true)
 	if [[ -n "${pods_to_be_deleted}" ]]; then
 		# shellcheck disable=SC2086
-		kubectl delete pod -n kube-system ${pods_to_be_deleted} || true
+		kubectl delete pod -n "${namespace}" ${pods_to_be_deleted} || true
 	fi
 }
 
@@ -156,6 +165,9 @@ else
 			exit 1
 			;;
 	esac
+	if is_firecracker_hypervisor "${KATA_HYPERVISOR}"; then
+		K8S_TEST_UNION=("k8s-firecracker.bats" "${K8S_TEST_UNION[@]}")
+	fi
 fi
 
 # we may need to skip a few test cases when running on non-x86_64 arch

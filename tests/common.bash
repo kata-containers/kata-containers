@@ -13,6 +13,8 @@ export repo_root_dir
 
 # shellcheck source=/dev/null
 source "${this_script_dir}/error.sh"
+# shellcheck source=/dev/null
+source "${this_script_dir}/hypervisor_helpers.sh"
 
 # Kata tests directory used for storing various test-related artifacts.
 KATA_TESTS_BASEDIR="${KATA_TESTS_BASEDIR:-/var/log/kata-tests}"
@@ -834,14 +836,10 @@ function install_kata() {
 	declare -r local_bin_dir="/usr/local/bin"
 	local tarball="kata-static.tar.zst"
 
-	case "${KATA_HYPERVISOR:-qemu-runtime-rs}" in
-		dragonball|*-runtime-rs) ;;
-		*)
-			if [[ -f "${tarballdir}/kata-go-static.tar.zst" ]]; then
-				tarball="kata-go-static.tar.zst"
-			fi
-			;;
-	esac
+	if ! is_rust_hypervisor "${KATA_HYPERVISOR:-qemu-runtime-rs}" && \
+		[[ -f "${tarballdir}/kata-go-static.tar.zst" ]]; then
+		tarball="kata-go-static.tar.zst"
+	fi
 
 	install_tarball "${katadir}" "${tarballdir}" "${tarball}" true
 
@@ -865,19 +863,16 @@ function enabling_hypervisor() {
 	declare -r KATA_DIR="/opt/kata"
 	declare -r CONTAINERD_SHIM_KATA="/usr/local/bin/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
 
-	case "${KATA_HYPERVISOR}" in
-		dragonball|*-runtime-rs)
-			sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
-			declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers/runtime-rs"
-			;;
-		*)
-			sudo ln -sf "${KATA_DIR}/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
-			declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers"
-			;;
-	esac
+	local config_dir="${KATA_DIR}/share/defaults/kata-containers"
+	local shim_dir="${KATA_DIR}/bin"
+	if is_rust_hypervisor "${KATA_HYPERVISOR}"; then
+		config_dir+="/runtime-rs"
+		shim_dir="${KATA_DIR}/runtime-rs/bin"
+	fi
+	sudo ln -sf "${shim_dir}/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
 
-	declare -r SRC_HYPERVISOR_CONFIG="${CONFIG_DIR}/configuration-${KATA_HYPERVISOR}.toml"
-	declare -r DEST_KATA_CONFIG="${CONFIG_DIR}/configuration.toml"
+	declare -r SRC_HYPERVISOR_CONFIG="${config_dir}/configuration-${KATA_HYPERVISOR}.toml"
+	declare -r DEST_KATA_CONFIG="${config_dir}/configuration.toml"
 
 	sudo ln -sf "${SRC_HYPERVISOR_CONFIG}" "${DEST_KATA_CONFIG}"
 

@@ -83,6 +83,14 @@ function is_firecracker_hypervisor() {
 	return 1
 }
 
+# Some Rust runtime names predate the -runtime-rs suffix.
+function is_rust_hypervisor() {
+	case "${1:-${KATA_HYPERVISOR:-}}" in
+		dragonball|rs-fc|*-runtime-rs) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
 # Common check for the non-confidential NVIDIA runtime classes (CPU-only and
 # plain GPU passthrough).  The confidential GPU classes are matched by
 # is_confidential_gpu_hypervisor instead.

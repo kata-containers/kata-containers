@@ -11,8 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: ${fc_limitations}"
 	setup_common || die "setup_common failed"
 	pod_name="test-file-volume"
 	container_name="busybox-file-volume-container"
@@ -57,8 +56,7 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: ${fc_limitations}"
 
 	kubectl describe pod "$pod_name"
 

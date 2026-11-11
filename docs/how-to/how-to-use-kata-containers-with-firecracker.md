@@ -226,12 +226,24 @@ uses `configuration-rs-fc.toml` and the Rust shim under
 Configure containerd's devmapper snapshotter on the node before deploying
 either profile, as described above.
 
-The Kubernetes CI workflow on free runners tests `rs-fc` with the latest
-containerd version and devmapper. It runs a focused suite covering Rust shim
-selection, Firecracker shutdown, environment variables, exec, completed jobs,
-and pod networking. It runs through the normal nightly, manual, and
-`ok-to-test` pull request pipelines. Volume sharing and hotplug tests are not
-part of this initial suite.
+The Rust profile reuses the Go profile's Firecracker binary, guest kernel,
+guest image, and devmapper setup. Its additional deployment requirements are
+the Rust shim, its configuration, and the `kata-rs-fc` runtime handler.
+
+The Kubernetes CI workflow on free runners tests both `fc` and `rs-fc` with
+the latest containerd version and devmapper. Both use the normal Kubernetes
+test selection, with an additional check for the selected shim and VMM
+shutdown. The existing tests select or skip cases according to runtime and
+hypervisor support. `KATA_TEST_NODE` can select a node explicitly when running
+the suites on an existing cluster; otherwise the suites discover a node with
+the `katacontainers.io/kata-runtime=true` label. Set
+`KATA_TEST_DEBUGGER_NAMESPACE` to keep the host debugger pods in a dedicated
+namespace on a shared cluster; the default is `kube-system`.
+
+For workflow changes, validate the branch with the manually triggered
+`ci-devel.yaml` workflow. Pull request workflows use `pull_request_target`
+and load their reusable workflows from the trusted base revision. Add the
+new job to Gatekeeper's required tests after the matrix is available there.
 
 ### Go runtime
 

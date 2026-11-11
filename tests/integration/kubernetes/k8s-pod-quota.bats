@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
 	setup_common || die "setup_common failed"
 
 	deployment_yaml="${pod_config_dir}/pod-quota-deployment.yaml"
@@ -36,7 +36,7 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
 
 	# Debugging information
 	kubectl describe deployment ${deployment_name}

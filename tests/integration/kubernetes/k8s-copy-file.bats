@@ -86,14 +86,14 @@ setup() {
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true
-	kubectl get pods --all-namespaces
+	kubectl get pods
 
 	# Create a file in the pod
 	kubectl exec "$pod_name" -- "${exec_command[@]}"
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true
-	kubectl get pods --all-namespaces
+	kubectl get pods
 
 	# Copy file from pod to host
 	kubectl cp "$pod_name":/tmp/"$file_name" "$file_name"

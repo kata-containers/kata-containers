@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[[ "${KATA_HYPERVISOR}" == "rs-fc" ]] || skip "requires Rust Firecracker"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" || skip "requires Firecracker"
 	setup_common || die "setup_common failed"
 	pod_name="besteffort-test"
 	yaml_file="${pod_config_dir}/pod-besteffort.yaml"
@@ -19,7 +19,7 @@ setup() {
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }
 
-@test "Firecracker pod uses the Rust shim and shuts down its VMM" {
+@test "Firecracker pod uses the selected runtime and shuts down its VMM" {
 	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
 
@@ -28,8 +28,12 @@ setup() {
 	shim_pid="$(shim_pid_for_pod "${node}" "${pod_uid}")"
 	[[ "${shim_pid}" =~ ^[0-9]+$ ]]
 	shim_binary="$(exec_host "${node}" "readlink -f /proc/${shim_pid}/exe")"
-	[[ "${shim_binary}" == "/opt/kata/runtime-rs/bin/containerd-shim-kata-v2" ]]
-	vmm_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} -x firecracker")"
+	local expected_shim="${KATA_INSTALL_DIR:-/opt/kata}/bin/containerd-shim-kata-v2"
+	if is_rust_hypervisor "${KATA_HYPERVISOR}"; then
+		expected_shim="${KATA_INSTALL_DIR:-/opt/kata}/runtime-rs/bin/containerd-shim-kata-v2"
+	fi
+	[[ "${shim_binary}" == "${expected_shim}" ]]
+	vmm_pid="$(get_vmm_pid_for_pod "${pod_name}")"
 	[[ "${vmm_pid}" =~ ^[0-9]+$ ]]
 
 	kubectl delete pod "${pod_name}" --wait=true --timeout="${timeout}"
@@ -39,7 +43,7 @@ setup() {
 }
 
 teardown() {
-	[[ "${KATA_HYPERVISOR}" == "rs-fc" ]] || return 0
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" || return 0
 	kubectl describe pod "${pod_name}" || true
 	kubectl delete pod "${pod_name}" --ignore-not-found=true --wait=true --timeout="${timeout}"
 	teardown_common "${node}" "${node_start_time:-}"

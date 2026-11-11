@@ -300,8 +300,13 @@ kernel_modules = []
 debug_console_enabled = false
 
 # Sleep between agent connection retries, in milliseconds.
-# (default: 45000)
-dial_timeout_ms = 45000
+# (default: 10)
+dial_timeout_ms = 10
+
+# Overall agent connection retry budget, in milliseconds.
+# Must be greater than or equal to dial_timeout_ms.
+# (default: 3000)
+reconnect_timeout_ms = 3000
 
 # Confidential Data Hub API timeout value in milliseconds
 # (default: 50000)

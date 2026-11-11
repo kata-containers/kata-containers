@@ -8,6 +8,8 @@ kind: Pod
 metadata:
   name: ${POD_NAME}
 spec:
+  tolerations:
+  - operator: Exists
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

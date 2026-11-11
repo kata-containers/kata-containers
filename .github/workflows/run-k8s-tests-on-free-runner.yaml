@@ -53,6 +53,7 @@ jobs:
           { vmm: clh-runtime-rs, containerd_version: latest },
           { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: clh-runtime-rs, containerd_version: minimum },
+          { vmm: fc, containerd_version: latest, snapshotter: devmapper },
           { vmm: rs-fc, containerd_version: latest, snapshotter: devmapper },
           { vmm: qemu-nvidia-cpu, containerd_version: latest },
           { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity, ip_family: ipv4, cni: bridge },
@@ -98,12 +99,11 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: Select Firecracker smoke tests
-        if: matrix.environment.vmm == 'rs-fc'
+      - name: Check Firecracker prerequisites
+        if: matrix.environment.vmm == 'fc' || matrix.environment.vmm == 'rs-fc'
         run: |
           sudo test -c /dev/kvm
           echo "start_time=$(date '+%Y-%m-%d %H:%M:%S')" >> "${GITHUB_ENV}"
-          echo 'K8S_TEST_UNION=k8s-firecracker.bats k8s-env.bats k8s-exec.bats k8s-job.bats k8s-nginx-connectivity.bats' >> "${GITHUB_ENV}"
 
       - name: get-kata-tools-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -138,6 +138,10 @@ jobs:
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
+      - name: Test runtime selection helpers
+        if: matrix.environment.vmm == 'fc' || matrix.environment.vmm == 'rs-fc'
+        run: bats tests/functional/runtime-selection.bats
+
       - name: Configure devmapper
         if: matrix.environment.snapshotter == 'devmapper'
         run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
@@ -155,14 +159,14 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
       - name: Collect Firecracker artifacts
-        if: always() && matrix.environment.vmm == 'rs-fc'
+        if: always() && (matrix.environment.vmm == 'fc' || matrix.environment.vmm == 'rs-fc')
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
 
       - name: Upload Firecracker artifacts
-        if: always() && matrix.environment.vmm == 'rs-fc'
+        if: always() && (matrix.environment.vmm == 'fc' || matrix.environment.vmm == 'rs-fc')
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: firecracker-k8s-${{ inputs.tag }}
+          name: firecracker-k8s-${{ matrix.environment.vmm }}-${{ inputs.tag }}
           path: |
             /tmp/artifacts
             tests/integration/kubernetes/reports

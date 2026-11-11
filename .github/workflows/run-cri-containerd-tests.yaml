@@ -87,7 +87,7 @@ jobs:
       - name: get-kata-tarball for ${{ inputs.arch }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ${{ (inputs.vmm == 'dragonball' || endsWith(inputs.vmm, '-runtime-rs')) && format('kata-static-tarball-{0}{1}', inputs.arch, inputs.tarball-suffix) || format('kata-go-static-tarball-{0}{1}', inputs.arch, inputs.tarball-suffix) }}
+          name: ${{ (inputs.vmm == 'dragonball' || inputs.vmm == 'rs-fc' || endsWith(inputs.vmm, '-runtime-rs')) && format('kata-static-tarball-{0}{1}', inputs.arch, inputs.tarball-suffix) || format('kata-go-static-tarball-{0}{1}', inputs.arch, inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata

@@ -178,7 +178,11 @@ apply_test_runtime_class_mode() {
 # Return the first worker found that is kata-runtime labeled.
 get_one_kata_node() {
 	local resource_name
-	resource_name="$(kubectl get node -l katacontainers.io/kata-runtime=true -o name | head -1)"
+	if [[ -n "${KATA_TEST_NODE:-}" ]]; then
+		resource_name="$(kubectl get node "${KATA_TEST_NODE}" -o name)"
+	else
+		resource_name="$(kubectl get node -l katacontainers.io/kata-runtime=true -o name | head -1)"
+	fi
 	# Remove leading "/node"
 	echo "${resource_name/"node/"}"
 }
@@ -334,7 +338,7 @@ remove_kata_runtime_config_dropin_file() {
 }
 
 is_runtime_rs() {
-	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]] || [[ "${KATA_HYPERVISOR}" == "rs-fc" ]]
+	is_rust_hypervisor "${KATA_HYPERVISOR}"
 }
 
 # True for hypervisors that run the guest in a separate VMM process (i.e. not
@@ -351,9 +355,16 @@ has_separate_vmm() {
 # The pgrep pattern is bracketed ("[c]ontainerd") so it doesn't also match the
 # `bash -c` wrapper exec_host runs, whose command line contains the pattern.
 shim_pid_for_pod() {
-	local node_name="$1" uid_dashed="$2" uid_underscored pid
+	local node_name="$1" uid_dashed="$2" uid_underscored pid sandbox_id
 	uid_underscored="${uid_dashed//-/_}"
 	pid="$(exec_host "${node_name}" "for p in \$(pgrep -f '[c]ontainerd-shim-kata-v2'); do grep -qE 'pod(${uid_dashed}|${uid_underscored})' /proc/\$p/cgroup 2>/dev/null && echo \$p && break; done; true")"
+	# The Go shim can remain outside the pod's cgroup. Resolve its sandbox
+	# through CRI's UID label, then match the shim's sandbox argument.
+	if [[ -z "${pid}" ]]; then
+		sandbox_id="$(exec_host "${node_name}" "crictl pods --label io.kubernetes.pod.uid=${uid_dashed} --state ready -q")"
+		[[ "${sandbox_id}" =~ ^[[:xdigit:]]{64}$ ]] || return 1
+		pid="$(exec_host "${node_name}" "pgrep -f '[c]ontainerd-shim-kata-v2.* -id ${sandbox_id}([[:space:]]|$)'")"
+	fi
 	[[ -n "${pid}" ]] || return 1
 	echo "${pid}"
 }

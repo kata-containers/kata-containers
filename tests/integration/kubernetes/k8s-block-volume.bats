@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
+	( is_firecracker_hypervisor "${KATA_HYPERVISOR}" || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
 	setup_common || die "setup_common failed"
 
@@ -90,7 +90,7 @@ setup() {
 }
 
 teardown() {
-	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
+	( is_firecracker_hypervisor "${KATA_HYPERVISOR}" || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
 	 # Debugging information
 	kubectl describe "pod/$pod_name"

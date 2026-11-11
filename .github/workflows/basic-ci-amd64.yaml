@@ -74,7 +74,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
+          name: ${{ (matrix.vmm == 'dragonball' || matrix.vmm == 'rs-fc' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -122,7 +122,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
+          name: ${{ (matrix.vmm == 'dragonball' || matrix.vmm == 'rs-fc' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: get-kata-tools-tarball
@@ -182,7 +182,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
+          name: ${{ (matrix.vmm == 'dragonball' || matrix.vmm == 'rs-fc' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: get-kata-tools-tarball
@@ -242,7 +242,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
+          name: ${{ (matrix.vmm == 'dragonball' || matrix.vmm == 'rs-fc' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -300,7 +300,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
+          name: ${{ (matrix.vmm == 'dragonball' || matrix.vmm == 'rs-fc' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata

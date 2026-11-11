@@ -10,8 +10,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: ${fc_limitations}"
 	setup_common || die "setup_common failed"
 
 	pod_name="nested-configmap-secret-pod"
@@ -43,8 +42,7 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	is_firecracker_hypervisor "${KATA_HYPERVISOR}" && skip "test not working see: ${fc_limitations}"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"

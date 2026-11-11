@@ -109,15 +109,16 @@ k8s_create_pod() {
 create_debugger_pod() {
 	local node="$1"
 	local pod_name
+	local namespace="${KATA_TEST_DEBUGGER_NAMESPACE:-kube-system}"
 	pod_name="custom-node-debugger-$(echo -n "${node}" | sha1sum | cut -c1-7)"
 
 	# Check if there is an existing node debugger pod and reuse it
 	# Otherwise, create a new one
-	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
+	if ! kubectl get pod -n "${namespace}" "${pod_name}" > /dev/null 2>&1; then
 		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
-			kubectl apply -n kube-system -f - > /dev/null
+			kubectl apply -n "${namespace}" -f - > /dev/null
 		# Wait for the newly created pod to be ready
-		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
+		kubectl wait pod -n "${namespace}" --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
 	fi
 
 	echo "${pod_name}"
@@ -136,7 +137,7 @@ copy_file_to_host() {
 	local destination="$3"
 
 	debugger_pod="$(create_debugger_pod "${node}")"
-	kubectl cp -n kube-system "${source}" "${debugger_pod}:/host/${destination}"
+	kubectl cp -n "${KATA_TEST_DEBUGGER_NAMESPACE:-kube-system}" "${source}" "${debugger_pod}:/host/${destination}"
 }
 
 # Runs a command in the host filesystem.
@@ -165,7 +166,7 @@ exec_host() {
 	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
 	# bash: line 1: $'\r': command not found
 	# ```
-	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
+	kubectl exec -qi -n "${KATA_TEST_DEBUGGER_NAMESPACE:-kube-system}" "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
 }
 
 # Return the sandbox id of a pod, as the container runtime knows it. For Kata
@@ -179,10 +180,12 @@ exec_host() {
 get_pod_sandbox_id() {
 	local pod_name="$1"
 	local node
+	local pod_uid
 	local runtime
 	local runtime_endpoint
 
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
+	pod_uid="$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.uid}')"
 	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
 	exec_host "${node}" "command -v crictl >/dev/null" || \
 		die "crictl is required on Kubernetes node ${node}"
@@ -195,7 +198,7 @@ get_pod_sandbox_id() {
 	fi
 	exec_host "${node}" \
 		"crictl --runtime-endpoint ${runtime_endpoint} \
-		pods --name \"${pod_name}\" --state ready -q | head -1"
+		pods --label io.kubernetes.pod.uid=${pod_uid} --state ready -q | head -1"
 }
 
 # Return the VMM PID for a running pod.
@@ -213,8 +216,9 @@ get_vmm_pid_for_pod() {
 	case "${KATA_HYPERVISOR}" in
 		qemu*) vmm_pattern="[q]emu" ;;
 		clh*) vmm_pattern="[c]loud-hypervisor" ;;
+		fc|firecracker|rs-fc) vmm_pattern="[f]irecracker" ;;
 		*)
-			die "VMM PID lookup is only tested for QEMU and Cloud Hypervisor"
+			die "VMM PID lookup is only tested for QEMU, Cloud Hypervisor and Firecracker"
 			;;
 	esac
 
@@ -224,8 +228,16 @@ get_vmm_pid_for_pod() {
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
 	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
 
-	vmm_pid="$(exec_host "${node}" \
-		"pgrep -f \"${vmm_pattern}.*${sandbox_id}\" | head -1")"
+	if is_firecracker_hypervisor "${KATA_HYPERVISOR}"; then
+		# The Go jailer daemonizes, so its VMM is not a direct shim child.
+		# Go also truncates the instance ID to 32 characters; Rust keeps it
+		# in full. Both command lines contain this sandbox-specific prefix.
+		vmm_pid="$(exec_host "${node}" \
+			"for p in \$(pgrep -x firecracker); do grep -aqF '${sandbox_id:0:32}' /proc/\$p/cmdline && { echo \$p; break; }; done; true")"
+	else
+		vmm_pid="$(exec_host "${node}" \
+			"pgrep -f \"${vmm_pattern}.*${sandbox_id}\" | head -1")"
+	fi
 	[[ -n "${vmm_pid}" ]] || die "No VMM PID found for sandbox ${sandbox_id}"
 
 	echo "${vmm_pid}"
