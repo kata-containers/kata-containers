@@ -389,6 +389,7 @@ impl VmmInstance {
         self.handle_request(Request::Sync(VmmAction::SaveMicrovm {
             state_path,
             mem_path,
+            memory_mode: dragonball::api::v1::SnapshotMemoryMode::PersistentPath,
             reset_vsock_transport: false,
         }))
         .context("Failed to save microvm")?;

@@ -14,6 +14,7 @@ use log::{debug, info, warn};
 use std::sync::mpsc;
 use tracing::instrument;
 
+use crate::address_space_manager::GuestMemoryDeltaRange;
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
@@ -173,6 +174,17 @@ pub enum VmmActionError {
     RemoveHostDevice(#[source] VcpuManagerError),
 }
 
+/// Selects the lifetime of snapshot memory storage.
+/// The returned SnapshotMemory::delta_ranges determines whether transient
+/// storage contains full memory or a delta.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SnapshotMemoryMode {
+    /// Preserve the named memory file and close it before resuming the VM.
+    PersistentPath,
+    /// Create a memfd and return its owned handle without closing it.
+    TransientUnlinked,
+}
+
 /// This enum represents the public interface of the VMM. Each action contains various
 /// bits of information (ids, paths, etc.).
 #[derive(Clone, Debug, PartialEq)]
@@ -210,6 +222,9 @@ pub enum VmmAction {
         state_path: String,
         /// Path of the guest memory file to write.
         mem_path: String,
+        /// Whether memory remains path-backed or is returned as an unlinked
+        /// owned file for post-resume processing.
+        memory_mode: SnapshotMemoryMode,
         /// Whether the saved guest must acknowledge a vsock transport reset.
         reset_vsock_transport: bool,
     },
@@ -339,12 +354,31 @@ pub enum VmmAction {
     RemoveHostDevice(String),
 }
 
+/// Guest-memory staging data and the backing from which its delta was captured.
+///
+/// Full memory has neither a base nor delta ranges and can be restored alone.
+/// A delta has both: apply exactly the listed ranges over the base, including
+/// zero bytes. An empty range list inherits the entire base. A delta file
+/// cannot be passed directly to the full-memory restore path.
+#[derive(Debug)]
+pub struct SnapshotMemory {
+    /// Unlinked staging file containing full memory or exact delta ranges.
+    pub file: File,
+    /// The actual restored mapping's backing; present exactly when delta_ranges is Some.
+    pub base: Option<Arc<File>>,
+    /// None for full memory; Some (possibly empty) for a delta with a base.
+    /// Ranges include pages overwritten with zeros; file holes do not identify them.
+    pub delta_ranges: Option<Vec<GuestMemoryDeltaRange>>,
+}
+
 /// The enum represents the response sent by the VMM in case of success. The response is either
 /// empty, when no data needs to be sent, or an internal VMM structure.
 #[derive(Debug)]
 pub enum VmmData {
     /// No data is sent on the channel.
     Empty,
+    /// Unlinked guest-memory staging file owned by the response receiver.
+    SnapshotMemoryFile(SnapshotMemory),
     /// The microVM configuration represented by `VmConfigInfo`.
     MachineConfiguration(Box<VmConfigInfo>),
     /// Prometheus Metrics represented by String.
@@ -416,8 +450,15 @@ impl VmmService {
             VmmAction::SaveMicrovm {
                 state_path,
                 mem_path,
+                memory_mode,
                 reset_vsock_transport,
-            } => self.save_microvm(vmm, state_path, mem_path, reset_vsock_transport),
+            } => self.save_microvm(
+                vmm,
+                state_path,
+                mem_path,
+                memory_mode,
+                reset_vsock_transport,
+            ),
             #[cfg(target_arch = "x86_64")]
             VmmAction::StartMicroVmFromSnapshot {
                 state_path,
@@ -633,15 +674,20 @@ impl VmmService {
         vmm: &mut Vmm,
         state_path: String,
         mem_path: String,
+        memory_mode: SnapshotMemoryMode,
         reset_vsock_transport: bool,
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         vm.save_microvm(
             std::path::Path::new(&state_path),
             std::path::Path::new(&mem_path),
+            memory_mode,
             reset_vsock_transport,
         )
-        .map(|_| VmmData::Empty)
+        .map(|memory| match memory {
+            Some(file) => VmmData::SnapshotMemoryFile(file),
+            None => VmmData::Empty,
+        })
         .map_err(VmmActionError::SaveMicrovm)
     }
 
