@@ -1376,8 +1376,14 @@ impl agent_ttrpc::AgentService for AgentService {
         }
         .to_string();
 
-        let output = Command::new(cmd.clone())
-            .output()
+        // Command::output() spawns a child and synchronously waits for it to exit while
+        // draining stdout/stderr; run it on the blocking thread pool so a slow/stuck
+        // iptables-save invocation cannot park an async reactor worker (see stats_container
+        // above for the same pattern).
+        let cmd_for_blocking = cmd.clone();
+        let output = tokio::task::spawn_blocking(move || Command::new(cmd_for_blocking).output())
+            .await
+            .map_ttrpc_err(same)?
             .map_ttrpc_err_do(|e| warn!(sl(), "failed to run {}: {:?}", cmd, e.kind()))?;
         Ok(GetIPTablesResponse {
             data: output.stdout,
@@ -1412,56 +1418,44 @@ impl agent_ttrpc::AgentService for AgentService {
         }
         .to_string();
 
-        let mut child = Command::new(cmd.clone())
-            .arg("--wait")
-            .arg(IPTABLES_RESTORE_WAIT_SEC.to_string())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_ttrpc_err_do(|e| warn!(sl(), "failure to spawn {}: {:?}", cmd, e.kind()))?;
+        // Spawning the child, writing its stdin, and waiting for it to exit are all
+        // blocking syscalls; run the whole sequence on the blocking thread pool so a
+        // slow/stuck iptables-restore invocation cannot park an async reactor worker
+        // (see stats_container above for the same pattern). Bound the overall operation
+        // with a timeout, as before; tokio cannot cancel an already-running blocking task,
+        // so on timeout the spawned thread may keep running in the background until
+        // iptables-restore exits.
+        let cmd_for_blocking = cmd.clone();
+        let data = req.data;
+        let blocking_result = tokio::time::timeout(
+            Duration::from_secs(IPTABLES_RESTORE_WAIT_SEC),
+            tokio::task::spawn_blocking(move || -> std::io::Result<std::process::Output> {
+                let mut child = Command::new(&cmd_for_blocking)
+                    .arg("--wait")
+                    .arg(IPTABLES_RESTORE_WAIT_SEC.to_string())
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()?;
 
-        let mut stdin = match child.stdin.take() {
-            Some(si) => si,
-            None => {
-                println!("failed to get stdin from child");
-                return Err(ttrpc_error(
-                    ttrpc::Code::INTERNAL,
-                    "failed to take stdin from child",
-                ));
-            }
-        };
+                let mut stdin = child.stdin.take().ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        "failed to take stdin from child",
+                    )
+                })?;
+                stdin.write_all(&data)?;
+                drop(stdin);
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
-        let handle = tokio::spawn(async move {
-            let _ = match stdin.write_all(&req.data) {
-                Ok(o) => o,
-                Err(e) => {
-                    warn!(sl(), "error writing stdin: {:?}", e.kind());
-                    return;
-                }
-            };
-            if tx.send(1).is_err() {
-                warn!(sl(), "stdin writer thread receiver dropped");
-            };
-        });
+                child.wait_with_output()
+            }),
+        )
+        .await
+        .map_ttrpc_err(same)?;
 
-        let _ = tokio::time::timeout(Duration::from_secs(IPTABLES_RESTORE_WAIT_SEC), rx)
-            .await
-            .map_ttrpc_err(|_| "timeout waiting for stdin writer to complete")?;
-
-        handle
-            .await
-            .map_ttrpc_err(|_| "stdin writer thread failure")?;
-
-        let output = child.wait_with_output().map_ttrpc_err_do(|e| {
-            warn!(
-                sl(),
-                "failure waiting for spawned {} to complete: {:?}",
-                cmd,
-                e.kind()
-            )
-        })?;
+        let output = blocking_result
+            .map_ttrpc_err(same)?
+            .map_ttrpc_err_do(|e| warn!(sl(), "failed to run {}: {:?}", cmd, e.kind()))?;
 
         if !output.status.success() {
             warn!(sl(), "{} failed: {:?}", cmd, output.stderr);
