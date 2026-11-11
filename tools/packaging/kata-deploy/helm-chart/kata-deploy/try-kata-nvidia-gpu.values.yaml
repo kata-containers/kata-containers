@@ -84,6 +84,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
+      sandboxer: "shim"
       snapshotter: "erofs"
     nvrc:
       enableDCGM: false
@@ -121,6 +122,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
+      sandboxer: "shim"
       snapshotter: "nydus"
       forceGuestPull: false
     crio:
@@ -165,6 +167,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
+      sandboxer: "shim"
       snapshotter: "nydus"
       forceGuestPull: false
     crio:

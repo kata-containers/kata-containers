@@ -78,6 +78,7 @@ shims:
       - arm64
     allowedHypervisorAnnotations: []
     containerd:
+      sandboxer: "shim"
       snapshotter: "erofs"
 
 # Default shim per architecture.
