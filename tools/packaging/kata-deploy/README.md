@@ -21,6 +21,12 @@ when starting the shim. This supports custom installation directories and
 handler names without adding shim aliases to the containerd service's PATH.
 Each handler retains its own `options.ConfigPath`.
 
+With containerd 2.4 or newer, handlers using SandboxAPI also set
+`disable_pause_image_pull = true`, avoiding the unused pause image download.
+The setting is omitted for older or unknown versions and removed when a
+handler falls back to `podsandbox`, which still needs that image. Custom,
+debug and devkit handlers follow the same selection.
+
 Availability requires a supported Rust implementation, containerd 2 or newer,
 and a successful native query confirming the running daemon's `shim` sandbox
 controller initialized successfully. Version lookup and the socket probe are
