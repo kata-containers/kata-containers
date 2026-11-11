@@ -15,6 +15,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -304,12 +305,21 @@ pub async fn handle_multi_layer_erofs_group(
     let mut base_device_cache: HashMap<String, String> = HashMap::with_capacity(erofs_count);
     for erofs in &erofs_storages {
         let base_dev = if is_gpt_partitioned(erofs) {
-            Some(
-                base_device_cache
-                    .entry(erofs.source.clone())
-                    .or_insert(resolve_base_device_path(erofs, sandbox).await?)
-                    .clone(),
-            )
+            let path = if let Some(path) = base_device_cache.get(&erofs.source) {
+                path.clone()
+            } else {
+                let path = resolve_base_device_path(erofs, sandbox).await?;
+                if erofs.driver == DRIVER_BLK_MMIO_TYPE {
+                    // PATCH reuses the disk; scan its GPT before mounting any partitions.
+                    nix::ioctl_none!(reread_partitions, 0x12, 95);
+                    let device = fs::File::open(&path).context("open MMIO disk")?;
+                    unsafe { reread_partitions(device.as_raw_fd()) }
+                        .context("reread MMIO partition table")?;
+                }
+                base_device_cache.insert(erofs.source.clone(), path.clone());
+                path
+            };
+            Some(path)
         } else {
             None
         };
@@ -821,6 +831,13 @@ async fn wait_and_mount_layer(
         Some(path) => path,
         None => resolve_base_device_path(layer, sandbox).await?,
     };
+
+    if layer.driver == DRIVER_BLK_MMIO_TYPE && !is_gpt {
+        // PATCH leaves cached blocks from the previous backing file.
+        nix::ioctl_none!(flush_buffers, 0x12, 97);
+        let device = fs::File::open(&base_dev_path).context("open MMIO disk")?;
+        unsafe { flush_buffers(device.as_raw_fd()) }.context("invalidate MMIO block cache")?;
+    }
 
     // For GPT-partitioned disks, use the partition device path
     let partition_path = if is_gpt {

@@ -228,6 +228,10 @@ pub fn get_hypervisor_plugin(name: &str) -> Option<Arc<dyn ConfigPlugin>> {
 /// Configuration information for block device.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BlockDeviceInfo {
+    /// Reserve read-only VMDK drives for Firecracker. Requires VMDK support in the VMM.
+    #[serde(default)]
+    pub enable_vmdk: bool,
+
     /// Block storage driver to be used for the hypervisor in case the container rootfs is backed
     /// by a block device. Options include:
     /// - `virtio-scsi`

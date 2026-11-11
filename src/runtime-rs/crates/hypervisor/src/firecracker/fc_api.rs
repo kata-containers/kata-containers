@@ -23,11 +23,13 @@ use nix::mount::MsFlags;
 use serde_json::json;
 use tokio::{fs, fs::File};
 
+use super::block_source::{create_vmdk_placeholder, VMDK_DESCRIPTOR, VMDK_PLACEHOLDER};
+
 const REQUEST_RETRY: u32 = 500;
 const FC_KERNEL: &str = "vmlinux";
 const FC_ROOT_FS: &str = "rootfs";
 const DRIVE_PREFIX: &str = "drive";
-const DISK_POOL_SIZE: u32 = 6;
+pub(super) const DISK_POOL_SIZE: u32 = 6;
 
 impl FcInner {
     pub(crate) fn get_resource(&self, src: &str, dst: &str) -> Result<String> {
@@ -170,6 +172,30 @@ impl FcInner {
                 .await?;
         }
 
+        // PATCH cannot change format or read-only flags, so VMDK needs its own slots.
+        if self.config.blockdev_info.enable_vmdk {
+            let directory = std::path::Path::new(&abs_path).join(VMDK_PLACEHOLDER);
+            create_vmdk_placeholder(&directory)?;
+            let path = if self.jailed {
+                format!("/{VMDK_PLACEHOLDER}/{VMDK_DESCRIPTOR}")
+            } else {
+                directory.join(VMDK_DESCRIPTOR).display().to_string()
+            };
+            for i in 1..DISK_POOL_SIZE {
+                let body = json!({
+                    "drive_id": format!("vmdk{i}"),
+                    "path_on_host": path,
+                    "is_root_device": false,
+                    "is_read_only": true,
+                    "image_format": "Vmdk",
+                    "io_engine": "Sync",
+                });
+                self.request_with_retry(Method::PUT, &format!("/drives/vmdk{i}"), body.to_string())
+                    .await
+                    .context("reserve VMDK drive; Firecracker must support native VMDK")?;
+            }
+        }
+
         Ok(())
     }
     pub(crate) async fn patch_container_rootfs(
@@ -205,6 +231,29 @@ impl FcInner {
             body,
         )
         .await?;
+        Ok(())
+    }
+
+    pub(super) async fn patch_drive(&self, drive_id: &str, path: &str) -> Result<()> {
+        let block_rate_limit = RateLimiterConfig::new(
+            self.config.blockdev_info.disk_rate_limiter_bw_max_rate,
+            self.config.blockdev_info.disk_rate_limiter_ops_max_rate,
+            self.config
+                .blockdev_info
+                .disk_rate_limiter_bw_one_time_burst,
+            self.config
+                .blockdev_info
+                .disk_rate_limiter_ops_one_time_burst,
+        );
+
+        let body: String = json!({
+            "drive_id": drive_id,
+            "path_on_host": path,
+            "rate_limiter": block_rate_limit,
+        })
+        .to_string();
+        self.request_with_retry(Method::PATCH, &format!("/drives/{drive_id}"), body)
+            .await?;
         Ok(())
     }
 
