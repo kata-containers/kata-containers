@@ -75,10 +75,8 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 			s.monitor <- nil
 		}
 
-		// Register the teardown before publishing the exit below.  Otherwise
-		// containerd could react to the early TaskExit, call Delete() then
-		// Shutdown(), and Shutdown()'s teardownWg.Wait() could observe a zero
-		// counter and let the shim exit before the teardown even started.
+		// Register waiter cleanup before publishing the exit so Shutdown()
+		// cannot exit while the waiter still has container resources to release.
 		s.teardownWg.Add(1)
 		defer s.teardownWg.Done()
 		s.mu.Unlock()
@@ -97,28 +95,8 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 
 		go cReap(s, int(ret), c.id, execID, timeStamp)
 
-		// Tear the sandbox down synchronously but *without* holding s.mu.
-		// Holding s.mu across the (slow) guest shutdown blocks the Delete()
-		// RPC that containerd issues right after the early TaskExit above;
-		// containerd then gives up on a clean Delete/Shutdown and runs the
-		// `shim delete` binary, which re-connects to the now-dead agent and
-		// hangs until killed -- surfacing as a failed `docker run --rm`.
-		//
-		// Shutdown() waits on teardownWg instead, so the sandbox run
-		// directory (watched by kata-monitor) is still removed before the
-		// shim exits.  teardownOnce serializes with watchSandbox()'s
-		// killed-VMM teardown so the (not internally synchronized)
-		// Sandbox.Stop/Delete never run concurrently.
 		if c.cType.IsSandbox() {
-			s.teardownOnce.Do(func() {
-				if err = s.sandbox.Stop(ctx, true); err != nil {
-					shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
-				}
-
-				if err = s.sandbox.Delete(ctx); err != nil {
-					shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
-				}
-			})
+			s.teardownSandbox(ctx)
 		} else {
 			if _, err = s.sandbox.StopContainer(ctx, c.id, true); err != nil {
 				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
@@ -158,18 +136,8 @@ func watchSandbox(ctx context.Context, s *service) {
 
 	s.monitor = nil
 
-	// sandbox malfunctioning, cleanup as much as we can.
-	// teardownOnce serializes with wait()'s teardown so the (not internally
-	// synchronized) Sandbox.Stop/Delete never run concurrently.
 	shimLog.WithError(err).Warn("sandbox stopped unexpectedly")
-	s.teardownOnce.Do(func() {
-		if serr := s.sandbox.Stop(ctx, true); serr != nil {
-			shimLog.WithError(serr).Warn("stop sandbox failed")
-		}
-		if derr := s.sandbox.Delete(ctx); derr != nil {
-			shimLog.WithError(derr).Warn("delete sandbox failed")
-		}
-	})
+	s.teardownSandbox(ctx)
 
 	for _, c := range s.containers {
 		if !c.mounted {

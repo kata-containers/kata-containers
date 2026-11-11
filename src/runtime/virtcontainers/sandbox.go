@@ -2871,8 +2871,8 @@ func (s *Sandbox) resourceControllerUpdate(ctx context.Context) error {
 	return nil
 }
 
-// resourceControllerDelete will move the running processes in the sandbox resource
-// cvontroller to the parent and then delete the sandbox controller.
+// resourceControllerDelete stops systemd sandbox scopes asynchronously, or moves
+// remaining processes to the parent before deleting cgroupfs controllers.
 func (s *Sandbox) resourceControllerDelete() error {
 	s.Logger().Debugf("Deleting sandbox %s resource controler", s.sandboxController)
 	if s.state.SandboxCgroupPath == "" {
@@ -2885,10 +2885,9 @@ func (s *Sandbox) resourceControllerDelete() error {
 		return err
 	}
 
-	// When sandbox_cgroup_only is enabled, all Kata threads live in the
-	// sandbox controller and systemd can move tasks as part of unit deletion.
-	// In that mode, a systemd-formatted cgroup path is not a filesystem path,
-	// so MoveTo would fail with "invalid group path".
+	// Systemd-managed sandbox scopes stop asynchronously so their resident shim
+	// can finish cleanup before exiting. Their systemd-formatted cgroup path is
+	// not a filesystem path, so MoveTo would fail with "invalid group path".
 	// Keep MoveTo for the case of using cgroupfs paths and for the
 	// non-sandbox_cgroup_only mode. In that mode, Kata may use an overhead
 	// cgroup in which case an explicit MoveTo is used to drain tasks.
@@ -2909,7 +2908,7 @@ func (s *Sandbox) resourceControllerDelete() error {
 			return err
 		}
 
-		// See comment at above MoveTo: Avoid this action as systemd moves tasks on unit deletion.
+		// Systemd-managed sandbox scopes finish stopping after their tasks exit.
 		if !resCtrl.IsSystemdCgroup(s.state.OverheadCgroupPath) || !s.config.SandboxCgroupOnly {
 			resCtrlParent := overheadController.Parent()
 			if err := s.overheadController.MoveTo(resCtrlParent); err != nil {

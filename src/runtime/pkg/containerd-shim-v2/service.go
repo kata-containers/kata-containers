@@ -150,7 +150,7 @@ type service struct {
 	// state local to this sandbox.
 	agentMetrics agentMetricsState
 
-	// teardownWg tracks in-flight sandbox teardown started from wait().
+	// teardownWg tracks in-flight container and sandbox cleanup from wait().
 	// Shutdown() waits on it so the sandbox run directory (watched by
 	// kata-monitor) is removed before the shim exits, without having to
 	// hold s.mu across the slow guest shutdown (which would block the
@@ -158,11 +158,8 @@ type service struct {
 	// binary).
 	teardownWg sync.WaitGroup
 
-	// teardownOnce guarantees the sandbox Stop/Delete runs exactly once even
-	// when both wait() (normal/early exit) and watchSandbox() (killed-VMM)
-	// try to tear the sandbox down.  Sandbox.Stop/Delete are not internally
-	// synchronized, so this serializes the two paths without holding s.mu
-	// across the teardown.
+	// teardownOnce serializes sandbox Stop/Delete across wait(), Shutdown(),
+	// and watchSandbox(), and makes concurrent callers wait for completion.
 	teardownOnce sync.Once
 
 	// hypervisor pid, Since this shimv2 cannot get the container processes pid from VM,
@@ -1005,6 +1002,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	// with it.  Blocking here guarantees the sandbox run directory (watched
 	// by kata-monitor) and the CRI state are gone before the shim exits.
 	s.teardownWg.Wait()
+	s.teardownSandbox(ctx)
 
 	span.End()
 	katatrace.StopTracing(s.rootCtx)
