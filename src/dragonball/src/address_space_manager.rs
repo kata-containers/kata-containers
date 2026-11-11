@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
+use std::os::unix::fs::FileExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -86,6 +87,13 @@ const MINIMAL_SPLIT_SPACE: u64 = 128 << 20;
 // holes; the chunk size is a performance choice, not part of the snapshot
 // format or restore contract.
 const SNAPSHOT_CHUNK_SIZE: usize = 1024 * 1024;
+const PAGEMAP_PRESENT: u64 = 1 << 63;
+const PAGEMAP_SWAPPED: u64 = 1 << 62;
+
+fn pagemap_entry_materialized(entry: u64) -> bool {
+    entry & (PAGEMAP_PRESENT | PAGEMAP_SWAPPED) != 0
+}
+
 fn contains_non_zero(bytes: &[u8]) -> bool {
     let mut words = bytes.chunks_exact(std::mem::size_of::<u64>());
     words
@@ -372,9 +380,146 @@ pub struct AddressSpaceMgr {
     prealloc_exit: Arc<AtomicBool>,
     numa_nodes: BTreeMap<u32, NumaNode>,
     cold_extent_eligible: bool,
+    restore_pagemap: Option<File>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+/// One exact byte range written to a restored VM's memory delta.
+pub struct GuestMemoryDeltaRange {
+    /// Offset in the flat guest-memory snapshot file.
+    pub file_offset: u64,
+    /// Length in bytes.
+    pub length: u64,
 }
 
 impl AddressSpaceMgr {
+    /// Capture materialized pages only when restored-memory delta support is available.
+    /// Returns None before modifying the output when pagemap is unavailable.
+    pub(crate) fn save_delta(
+        &mut self,
+        file: &mut File,
+    ) -> Result<Option<(GuestMemoryState, Vec<GuestMemoryDeltaRange>)>> {
+        let Some(pagemap) = self.restore_pagemap.as_ref() else {
+            return Ok(None);
+        };
+        let vm_as = self
+            .get_vm_as()
+            .ok_or(AddressManagerError::GuestMemoryNotInitialized)?;
+        let guard = vm_as.memory();
+        file.seek(SeekFrom::Start(0))
+            .map_err(AddressManagerError::SnapshotFile)?;
+        file.set_len(0).map_err(AddressManagerError::SnapshotFile)?;
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if page_size <= 0 {
+            return Err(AddressManagerError::InvalidOperation);
+        }
+        let page_size = page_size as u64;
+        let mut regions = Vec::new();
+        let mut delta_ranges = Vec::new();
+        let mut file_offset = 0u64;
+        let mut buffer = vec![0u8; SNAPSHOT_CHUNK_SIZE];
+        let mut written_bytes = 0u64;
+
+        for region in guard.iter() {
+            let size = region.len();
+            let host_addr = region
+                .get_host_address(MemoryRegionAddress(0))
+                .map_err(|e| {
+                    AddressManagerError::AccessGuestMemory(region.start_addr().raw_value(), e)
+                })? as u64;
+            if !host_addr.is_multiple_of(page_size) || size % page_size != 0 {
+                return Err(AddressManagerError::InvalidOperation);
+            }
+            let pages = size / page_size;
+            let mut entries = vec![0u8; pages as usize * std::mem::size_of::<u64>()];
+            let pagemap_offset = (host_addr / page_size)
+                .checked_mul(std::mem::size_of::<u64>() as u64)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+            let mut read = 0usize;
+            while read < entries.len() {
+                let count = pagemap
+                    .read_at(&mut entries[read..], pagemap_offset + read as u64)
+                    .map_err(AddressManagerError::SnapshotFile)?;
+                if count == 0 {
+                    return Err(AddressManagerError::SnapshotFile(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "short read from /proc/self/pagemap",
+                    )));
+                }
+                read += count;
+            }
+
+            let materialized = |page: u64| {
+                let start = page as usize * std::mem::size_of::<u64>();
+                let entry = u64::from_le_bytes(
+                    entries[start..start + std::mem::size_of::<u64>()]
+                        .try_into()
+                        .unwrap(),
+                );
+                pagemap_entry_materialized(entry)
+            };
+            let mut page = 0u64;
+            while page < pages {
+                if !materialized(page) {
+                    page += 1;
+                    continue;
+                }
+                let first = page;
+                while page < pages && materialized(page) {
+                    page += 1;
+                }
+                let range_offset = first * page_size;
+                let range_length = (page - first) * page_size;
+                let mut done = 0u64;
+                while done < range_length {
+                    let length = (range_length - done).min(buffer.len() as u64) as usize;
+                    let guest_addr = region
+                        .start_addr()
+                        .raw_value()
+                        .checked_add(range_offset + done)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                    region
+                        .read_slice(
+                            &mut buffer[..length],
+                            MemoryRegionAddress(range_offset + done),
+                        )
+                        .map_err(|e| AddressManagerError::AccessGuestMemory(guest_addr, e))?;
+                    file.seek(SeekFrom::Start(file_offset + range_offset + done))
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    file.write_all(&buffer[..length])
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    done += length as u64;
+                }
+                delta_ranges.push(GuestMemoryDeltaRange {
+                    file_offset: file_offset + range_offset,
+                    length: range_length,
+                });
+                written_bytes = written_bytes
+                    .checked_add(range_length)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+            }
+
+            regions.push(GuestMemoryRegionState {
+                guest_addr: region.start_addr().raw_value(),
+                size,
+                file_offset,
+            });
+            file_offset = file_offset
+                .checked_add(size)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+        }
+        file.set_len(file_offset)
+            .map_err(AddressManagerError::SnapshotFile)?;
+        info!(
+            "Dragonball guest memory delta completed: ranges={} logical_bytes={} written_bytes={}",
+            delta_ranges.len(),
+            file_offset,
+            written_bytes,
+        );
+
+        Ok(Some((GuestMemoryState { regions }, delta_ranges)))
+    }
+
     /// Query address space manager is initialized or not
     pub fn is_initialized(&self) -> bool {
         self.address_space.is_some()
@@ -1085,6 +1230,41 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             }
         }
 
+        let pagemap = (|| -> Result<File> {
+            let pagemap =
+                File::open("/proc/self/pagemap").map_err(AddressManagerError::SnapshotFile)?;
+            let first_region = guard
+                .iter()
+                .next()
+                .ok_or(AddressManagerError::GuestMemoryNotInitialized)?;
+            let first_host_addr = first_region
+                .get_host_address(MemoryRegionAddress(0))
+                .map_err(|e| {
+                    AddressManagerError::AccessGuestMemory(first_region.start_addr().raw_value(), e)
+                })? as u64;
+            let mut probe = [0u8; std::mem::size_of::<u64>()];
+            let probe_offset = (first_host_addr / page_size)
+                .checked_mul(probe.len() as u64)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+            let count = pagemap
+                .read_at(&mut probe, probe_offset)
+                .map_err(AddressManagerError::SnapshotFile)?;
+            if count != probe.len() {
+                return Err(AddressManagerError::SnapshotFile(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "cannot read /proc/self/pagemap",
+                )));
+            }
+
+            Ok(pagemap)
+        })();
+        let pagemap = match pagemap {
+            Ok(file) => Some(file),
+            Err(err) => {
+                warn!("restored-memory delta unavailable, using full snapshots: {err}");
+                None
+            }
+        };
         // Restored MAP_PRIVATE mappings no longer match the original backing extents.
         self.cold_extent_eligible = false;
 
@@ -1121,6 +1301,8 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             }
         }
 
+        self.restore_pagemap = pagemap;
+
         Ok(())
     }
 }
@@ -1136,6 +1318,7 @@ impl Default for AddressSpaceMgr {
             prealloc_exit: Arc::new(AtomicBool::new(false)),
             numa_nodes: BTreeMap::new(),
             cold_extent_eligible: false,
+            restore_pagemap: None,
         }
     }
 }
@@ -1145,12 +1328,22 @@ mod tests {
     use dbs_boot::layout::GUEST_MEM_START;
     use std::ops::Deref;
     use std::os::fd::AsRawFd;
-    use std::os::unix::fs::{FileExt, MetadataExt};
+    use std::os::unix::fs::MetadataExt;
 
     use vm_memory::{Bytes, GuestAddressSpace, GuestMemory, GuestMemoryRegion};
     use vmm_sys_util::tempfile::TempFile;
 
     use super::*;
+
+    #[test]
+    fn pagemap_present_or_swapped_is_materialized() {
+        assert!(pagemap_entry_materialized(PAGEMAP_PRESENT));
+        assert!(pagemap_entry_materialized(PAGEMAP_SWAPPED));
+        assert!(pagemap_entry_materialized(
+            PAGEMAP_PRESENT | PAGEMAP_SWAPPED
+        ));
+        assert!(!pagemap_entry_materialized(0));
+    }
 
     #[test]
     fn backing_extents_skip_holes() {
@@ -1536,10 +1729,18 @@ mod tests {
             .unwrap();
         let mut base = TempFile::new().unwrap().into_file();
         let state = source.save_state(&mut base).unwrap();
-        {
+        // Exercise full saves both with pagemap available and with it disabled.
+        for disable_pagemap in [false, true] {
             let mut restored = create();
             restored.restore_state(&state, &mut base).unwrap();
             assert!(!restored.cold_extent_eligible);
+            if disable_pagemap {
+                restored.restore_pagemap = None;
+                let mut untouched = TempFile::new().unwrap().into_file();
+                untouched.write_all(b"unchanged").unwrap();
+                assert!(restored.save_delta(&mut untouched).unwrap().is_none());
+                assert_eq!(untouched.metadata().unwrap().len(), 9);
+            }
             // Do not read the nonzero base page before saving. Write into a base hole.
             restored
                 .vm_memory()
@@ -1567,5 +1768,72 @@ mod tests {
                 0xcd
             );
         }
+    }
+
+    #[test]
+    fn restored_delta_reconstructs_full_memory() {
+        use dbs_snapshot::Persist;
+        let create = || {
+            AddressSpaceMgrBuilder::new("shmem", "")
+                .unwrap()
+                .build(
+                    &ResourceManager::new(None),
+                    &[NumaRegionInfo {
+                        size: 8,
+                        host_numa_node_id: None,
+                        guest_numa_node_id: Some(0),
+                        vcpu_ids: vec![0],
+                    }],
+                )
+                .unwrap()
+        };
+        let mut source = create();
+        for offset in [0, 2 << 20] {
+            source
+                .vm_memory()
+                .unwrap()
+                .write_obj(0xabu8, GuestAddress(GUEST_MEM_START + offset))
+                .unwrap();
+        }
+        let mut base = TempFile::new().unwrap().into_file();
+        let state = source.save_state(&mut base).unwrap();
+        let mut restored = create();
+        restored.restore_state(&state, &mut base).unwrap();
+        assert!(
+            restored.restore_pagemap.is_some(),
+            "delta test requires readable pagemap"
+        );
+        restored
+            .vm_memory()
+            .unwrap()
+            .write_obj(0u8, GuestAddress(GUEST_MEM_START))
+            .unwrap();
+        restored
+            .vm_memory()
+            .unwrap()
+            .write_obj(0xcdu8, GuestAddress(GUEST_MEM_START + (4 << 20)))
+            .unwrap();
+        let mut delta = TempFile::new().unwrap().into_file();
+        let (_, ranges) = restored.save_delta(&mut delta).unwrap().unwrap();
+        let size = base.metadata().unwrap().len() as usize;
+        let mut rebuilt = vec![0; size];
+        base.read_exact_at(&mut rebuilt, 0).unwrap();
+        for range in ranges {
+            let start = range.file_offset as usize;
+            delta
+                .read_exact_at(
+                    &mut rebuilt[start..start + range.length as usize],
+                    range.file_offset,
+                )
+                .unwrap();
+        }
+        // Read the full mapping only after capturing the delta.
+        let mut expected = vec![0; size];
+        restored
+            .vm_memory()
+            .unwrap()
+            .read_slice(&mut expected, GuestAddress(GUEST_MEM_START))
+            .unwrap();
+        assert_eq!(rebuilt, expected);
     }
 }
