@@ -1,0 +1,37 @@
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "hostname": "gid-experiment",
+        "sandbox_pidns": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "workload before the sandbox records the pod name",
+      "base": "sandbox-rw",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "sandbox hostname must match the recorded pod name",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": "attacker"
+        }
+      ]
+    },
+    {
+      "description": "sandbox hostname matching the recorded pod name",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": []
+    }
+  ]
+}

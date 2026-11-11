@@ -82,6 +82,15 @@ pub struct PodSpec {
     hostname: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    hostnameOverride: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subdomain: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    setHostnameAsFQDN: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hostNetwork: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -692,6 +701,120 @@ struct TopologySpreadConstraint {
     nodeTaintsPolicy: Option<String>,
 }
 
+// Same truncation as kubelet's truncatePodHostnameIfNeeded(). Keep in sync
+// with pod_hostname() in rules.rego.
+fn truncate_pod_hostname(hostname: &str) -> &str {
+    const HOSTNAME_MAX_LEN: usize = 63;
+    match hostname.get(..HOSTNAME_MAX_LEN) {
+        Some(truncated) if hostname.len() > HOSTNAME_MAX_LEN => {
+            truncated.trim_end_matches(['-', '.'])
+        }
+        _ => hostname,
+    }
+}
+
+const DNS_LABEL_REGEX: &str = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+
+/// Some controllers replace the hostname fields of the pod template in the
+/// pods they create, so the template alone does not tell what kubelet sees.
+pub enum ControllerHostname {
+    Template,
+    /// StatefulSet: the hostname is the pod name, and the subdomain is the
+    /// governing service.
+    PodName {
+        subdomain: String,
+    },
+    /// Indexed Job: an unanchored regex, as the index is not known here.
+    IndexedJob(String),
+}
+
+impl PodSpec {
+    /// Host name kubelet sends for this pod in the CRI sandbox config, which
+    /// the runtime forwards in CreateSandboxRequest. `any_hostname` is the
+    /// unanchored syntax accepted for parts that are unknown at policy
+    /// generation time.
+    pub fn sandbox_hostname(
+        &self,
+        any_hostname: &str,
+        controller: ControllerHostname,
+        namespace: Option<&str>,
+    ) -> policy::SandboxHostname {
+        let exact = |hostname: &str| regex::escape(truncate_pod_hostname(hostname));
+        // any_hostname comes from the settings and may have alternatives of
+        // its own, which must stay inside the anchors added here.
+        let any_hostname = format!("(?:{any_hostname})");
+
+        // The runtime falls back to the node host name.
+        if self.hostNetwork == Some(true) {
+            return policy::SandboxHostname {
+                regex: format!("^{any_hostname}?$"),
+                sandbox_name: policy::SandboxNameBinding::None,
+            };
+        }
+
+        if let Some(hostname) = &self.hostnameOverride {
+            return policy::SandboxHostname {
+                regex: format!("^{}$", exact(hostname)),
+                sandbox_name: policy::SandboxNameBinding::None,
+            };
+        }
+
+        let template_hostname = || {
+            self.hostname
+                .as_deref()
+                .filter(|h| !h.is_empty())
+                .map(exact)
+        };
+        let (hostname, subdomain, set_hostname) = match controller {
+            ControllerHostname::Template => (
+                template_hostname(),
+                self.subdomain.clone(),
+                policy::SandboxNameBinding::None,
+            ),
+            ControllerHostname::PodName { subdomain } => {
+                (None, Some(subdomain), policy::SandboxNameBinding::None)
+            }
+            ControllerHostname::IndexedJob(hostname) => (
+                Some(hostname),
+                self.subdomain.clone(),
+                policy::SandboxNameBinding::IndexedJob,
+            ),
+        };
+        if let Some(subdomain) = subdomain.as_deref().filter(|s| !s.is_empty()) {
+            if self.setHostnameAsFQDN == Some(true) {
+                // <hostname>.<subdomain>.<namespace>.svc.<cluster domain>
+                let sandbox_name = match hostname {
+                    Some(_) => policy::SandboxNameBinding::None,
+                    None => policy::SandboxNameBinding::FirstLabel,
+                };
+                let hostname = hostname.unwrap_or_else(|| any_hostname.clone());
+                // The namespace is only known when the manifest sets it.
+                let namespace = namespace
+                    .filter(|n| !n.is_empty())
+                    .map_or_else(|| DNS_LABEL_REGEX.to_string(), regex::escape);
+                return policy::SandboxHostname {
+                    regex: format!(
+                        "^{hostname}\\.{}\\.{namespace}\\.svc\\.{any_hostname}$",
+                        regex::escape(subdomain)
+                    ),
+                    sandbox_name,
+                };
+            }
+        }
+
+        match hostname {
+            Some(hostname) => policy::SandboxHostname {
+                regex: format!("^{hostname}$"),
+                sandbox_name: set_hostname,
+            },
+            None => policy::SandboxHostname {
+                regex: format!("^{any_hostname}$"),
+                sandbox_name: policy::SandboxNameBinding::Equal,
+            },
+        }
+    }
+}
+
 impl Container {
     pub async fn init(&mut self, config: &Config) {
         // Load container image properties from the registry.
@@ -1058,6 +1181,10 @@ impl yaml::K8sResource for Pod {
 
     fn get_containers(&self) -> &Vec<Container> {
         &self.spec.containers
+    }
+
+    fn get_pod_spec(&self) -> &PodSpec {
+        &self.spec
     }
 
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
@@ -1537,5 +1664,146 @@ mod tests {
 
         assert!(emitted.contains("port: 8080"), "{emitted}");
         assert!(!emitted.contains("\"8080\""), "{emitted}");
+    }
+
+    fn sandbox_hostname(spec: serde_json::Value) -> policy::SandboxHostname {
+        controller_sandbox_hostname(spec, ControllerHostname::Template)
+    }
+
+    fn controller_sandbox_hostname(
+        spec: serde_json::Value,
+        controller: ControllerHostname,
+    ) -> policy::SandboxHostname {
+        let mut spec = spec;
+        spec["containers"] = serde_json::json!([]);
+        serde_json::from_value::<PodSpec>(spec)
+            .unwrap()
+            .sandbox_hostname("[a-z]+", controller, None)
+    }
+
+    #[test]
+    fn sandbox_hostname_fqdn_names_the_namespace() {
+        let mut spec = serde_json::json!({
+            "hostname": "web",
+            "subdomain": "db",
+            "setHostnameAsFQDN": true
+        });
+        spec["containers"] = serde_json::json!([]);
+        let hostname = serde_json::from_value::<PodSpec>(spec)
+            .unwrap()
+            .sandbox_hostname("[a-z]+", ControllerHostname::Template, Some("prod"));
+        assert_eq!(hostname.regex, "^web\\.db\\.prod\\.svc\\.(?:[a-z]+)$");
+    }
+
+    #[test]
+    fn sandbox_hostname_of_a_stateful_set_is_the_pod_name() {
+        let stateful_set = || ControllerHostname::PodName {
+            subdomain: "svc".to_string(),
+        };
+
+        let hostname =
+            controller_sandbox_hostname(serde_json::json!({"hostname": "web"}), stateful_set());
+        assert_eq!(hostname.regex, "^(?:[a-z]+)$");
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::Equal);
+
+        let hostname = controller_sandbox_hostname(
+            serde_json::json!({"hostname": "web", "setHostnameAsFQDN": true}),
+            stateful_set(),
+        );
+        assert_eq!(
+            hostname.regex,
+            "^(?:[a-z]+)\\.svc\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.svc\\.(?:[a-z]+)$"
+        );
+        assert_eq!(
+            hostname.sandbox_name,
+            policy::SandboxNameBinding::FirstLabel
+        );
+
+        let hostname = controller_sandbox_hostname(
+            serde_json::json!({"setHostnameAsFQDN": true}),
+            ControllerHostname::PodName {
+                subdomain: String::new(),
+            },
+        );
+        assert_eq!(hostname.regex, "^(?:[a-z]+)$");
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::Equal);
+    }
+
+    #[test]
+    fn sandbox_hostname_of_an_indexed_job_has_no_pod_name_suffix() {
+        let indexed_job = || ControllerHostname::IndexedJob("worker-[0-9]+".to_string());
+
+        let hostname =
+            controller_sandbox_hostname(serde_json::json!({"hostname": "web"}), indexed_job());
+        assert_eq!(hostname.regex, "^worker-[0-9]+$");
+        assert_eq!(
+            hostname.sandbox_name,
+            policy::SandboxNameBinding::IndexedJob
+        );
+
+        let hostname = controller_sandbox_hostname(
+            serde_json::json!({"subdomain": "svc", "setHostnameAsFQDN": true}),
+            indexed_job(),
+        );
+        assert_eq!(
+            hostname.regex,
+            "^worker-[0-9]+\\.svc\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.svc\\.(?:[a-z]+)$"
+        );
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::None);
+    }
+
+    #[test]
+    fn sandbox_hostname_defaults_to_the_pod_name() {
+        let hostname = sandbox_hostname(serde_json::json!({}));
+        assert_eq!(hostname.regex, "^(?:[a-z]+)$");
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::Equal);
+    }
+
+    #[test]
+    fn sandbox_hostname_uses_the_truncated_spec_hostname() {
+        let hostname = sandbox_hostname(serde_json::json!({"hostname": "web.0"}));
+        assert_eq!(hostname.regex, "^web\\.0$");
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::None);
+
+        let long = format!("{}-.x", "a".repeat(61));
+        let hostname = sandbox_hostname(serde_json::json!({ "hostname": long }));
+        assert_eq!(hostname.regex, format!("^{}$", "a".repeat(61)));
+    }
+
+    #[test]
+    fn sandbox_hostname_override_wins() {
+        let hostname = sandbox_hostname(serde_json::json!({
+            "hostname": "web",
+            "hostnameOverride": "custom",
+            "subdomain": "svc",
+            "setHostnameAsFQDN": true
+        }));
+        assert_eq!(hostname.regex, "^custom$");
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::None);
+    }
+
+    #[test]
+    fn sandbox_hostname_fqdn_needs_a_subdomain() {
+        let hostname = sandbox_hostname(serde_json::json!({
+            "hostname": "web",
+            "subdomain": "svc",
+            "setHostnameAsFQDN": true
+        }));
+        assert_eq!(
+            hostname.regex,
+            "^web\\.svc\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.svc\\.(?:[a-z]+)$"
+        );
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::None);
+
+        let hostname = sandbox_hostname(serde_json::json!({ "setHostnameAsFQDN": true }));
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::Equal);
+    }
+
+    #[test]
+    fn sandbox_hostname_with_host_network_may_be_empty() {
+        let hostname =
+            sandbox_hostname(serde_json::json!({"hostNetwork": true, "hostname": "web"}));
+        assert_eq!(hostname.regex, "^(?:[a-z]+)?$");
+        assert_eq!(hostname.sandbox_name, policy::SandboxNameBinding::None);
     }
 }

@@ -129,6 +129,15 @@ impl yaml::K8sResource for Job {
         &self.spec.template.spec.containers
     }
 
+    fn get_pod_spec(&self) -> &pod::PodSpec {
+        &self.spec.template.spec
+    }
+
+    fn get_controller_hostname(&self) -> pod::ControllerHostname {
+        self.spec
+            .controller_hostname(yaml::name_regex_from_meta(&self.metadata))
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         if let Some(metadata) = &self.spec.template.metadata {
             return &metadata.annotations;
@@ -177,6 +186,19 @@ impl yaml::K8sResource for Job {
             return &metadata.labels;
         }
         &None
+    }
+}
+
+impl JobSpec {
+    // The Job controller names the pods of an Indexed Job <job>-<index>-<suffix>,
+    // but gives them the hostname <job>-<index>.
+    pub fn controller_hostname(&self, job_name: Option<String>) -> pod::ControllerHostname {
+        match job_name {
+            Some(job_name) if self.completionMode.as_deref() == Some("Indexed") => {
+                pod::ControllerHostname::IndexedJob(format!("{job_name}-[0-9]+"))
+            }
+            _ => pod::ControllerHostname::Template,
+        }
     }
 }
 

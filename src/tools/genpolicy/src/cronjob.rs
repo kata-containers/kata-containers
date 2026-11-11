@@ -121,6 +121,16 @@ impl yaml::K8sResource for CronJob {
         &self.spec.jobTemplate.spec.template.spec.containers
     }
 
+    fn get_pod_spec(&self) -> &pod::PodSpec {
+        &self.spec.jobTemplate.spec.template.spec
+    }
+
+    fn get_controller_hostname(&self) -> pod::ControllerHostname {
+        let job_name =
+            yaml::name_regex_from_meta(&self.metadata).map(|prefix| format!("{prefix}-[0-9]+"));
+        self.spec.jobTemplate.spec.controller_hostname(job_name)
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         if let Some(metadata) = &self.spec.jobTemplate.spec.template.metadata {
             return &metadata.annotations;
