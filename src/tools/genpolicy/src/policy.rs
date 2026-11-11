@@ -493,6 +493,27 @@ pub struct ClusterConfig {
     /// (e.g. "nsdelegate", "memory_recursiveprot" on newer kernels).
     #[serde(default)]
     pub cgroup_mount_extras_allowed: Vec<String>,
+
+    /// Runtime API used to create the pod sandbox. The generated policy only
+    /// allows the requests and mount sources of that API, unless set to
+    /// "any", which allows both.
+    #[serde(default, skip_serializing)]
+    pub runtime_api: RuntimeApi,
+}
+
+/// How the runtime creates the pod sandbox.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuntimeApi {
+    /// Either API: the containerd sandboxer may fall back to podsandbox.
+    #[default]
+    Any,
+    /// Task API (containerd podsandbox, CRI-O): a pause container is
+    /// created and system files are shared from the host.
+    Task,
+    /// Sandbox API (containerd shim sandboxer): no pause container, and
+    /// system files are written by the agent in the guest.
+    Sandbox,
 }
 
 /// Describes patterns for supported VFIO devices.
@@ -680,9 +701,13 @@ impl AgentPolicy {
         let yaml_containers = resource.get_containers();
         let mut policy_containers = Vec::new();
         let settings = &self.config.settings;
+        let skip_pause = settings.cluster_config.runtime_api == RuntimeApi::Sandbox;
 
         for (i, yaml_container) in yaml_containers.iter().enumerate() {
             debug!("generate_initdata_anno: ========================= Container {i}");
+            if i == 0 && skip_pause {
+                continue;
+            }
             policy_containers.push(self.get_container_policy(resource, yaml_container, i == 0));
         }
 

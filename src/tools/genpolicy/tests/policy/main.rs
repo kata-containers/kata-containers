@@ -172,6 +172,12 @@ mod tests {
         serde_json::from_value(value).unwrap()
     }
 
+    fn runtime_api_patch(runtime_api: &str) -> Patch {
+        json_patch(serde_json::json!([
+            {"op": "replace", "path": "/cluster_config/runtime_api", "value": runtime_api}
+        ]))
+    }
+
     /// Run tests from the given directory.
     /// The directory is searched under `src/tools/genpolicy/tests/testdata`, and
     /// it must contain a `pod.yaml` file as well as a `testcases.json` file.
@@ -518,6 +524,20 @@ mod tests {
             },
         )
         .await;
+        for (runtime_api, cases) in [
+            ("sandbox", "testcases-sandbox-api.json"),
+            ("task", "testcases-task-api.json"),
+        ] {
+            runtests_variant(
+                dir,
+                &Variant {
+                    settings_patch: runtime_api_patch(runtime_api),
+                    cases,
+                    ..Default::default()
+                },
+            )
+            .await;
+        }
     }
 
     #[tokio::test]
@@ -553,6 +573,15 @@ mod tests {
     #[tokio::test]
     async fn test_state_create_container() {
         runtests("state/createcontainer").await;
+        runtests_variant(
+            "state/createcontainer",
+            &Variant {
+                settings_patch: runtime_api_patch("sandbox"),
+                cases: "testcases-sandbox-api.json",
+                ..Default::default()
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
