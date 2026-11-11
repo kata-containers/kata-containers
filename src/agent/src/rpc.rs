@@ -2582,7 +2582,15 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         "load_kernel_module {}: {:?}", module.name, module.parameters
     );
 
-    let mut args = vec!["-v", &module.name];
+    if !module
+        .name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        || module.name.starts_with('-')
+    {
+        return Err(anyhow!("invalid kernel module name: {}", module.name));
+    }
+    let mut args = vec!["-v", "--", &module.name];
 
     if !module.parameters.is_empty() {
         args.extend(module.parameters.iter().map(String::as_str));
