@@ -57,12 +57,57 @@ where
     Ok(total_bytes)
 }
 
+/// Copy logs across reconnecting writers without dropping a partially written record.
+pub async fn copy_pending_io<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    mut shutdown: Receiver<bool>,
+    pending: &mut Vec<u8>,
+) -> io::Result<u64>
+where
+    R: tokio::io::AsyncRead + Unpin + ?Sized,
+    W: tokio::io::AsyncWrite + Unpin + ?Sized,
+{
+    let mut total_bytes = 0;
+    let mut buf = [0_u8; BUF_SIZE];
+
+    loop {
+        while !pending.is_empty() {
+            tokio::select! {
+                _ = shutdown.changed() => return Ok(total_bytes),
+                result = writer.write(pending.as_slice()) => match result {
+                    Ok(0) => return Err(io::Error::from(ErrorKind::WriteZero)),
+                    Ok(written) => {
+                        pending.drain(..written);
+                    }
+                    Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
+                    Err(err) => return Err(err),
+                },
+            }
+        }
+
+        tokio::select! {
+            _ = shutdown.changed() => return Ok(total_bytes),
+            result = reader.read(&mut buf) => match result {
+                Ok(0) => return Ok(total_bytes),
+                Ok(read) => {
+                    total_bytes += read as u64;
+                    pending.extend_from_slice(&buf[..read]);
+                }
+                Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
+                Err(err) => return Err(err),
+            },
+        }
+    }
+}
+
 #[instrument]
 pub fn get_vsock_incoming(fd: RawFd) -> Incoming {
     unsafe { VsockListener::from_raw_fd(fd).incoming() }
 }
 
 #[instrument]
+#[allow(dead_code)]
 pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
     let stream = get_vsock_incoming(fd)
         .next()
