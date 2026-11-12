@@ -29,22 +29,53 @@ async fn passfd_connect(uds: &str, port: u32, fd: OwnedFd) -> Result<u32> {
 
     let mut reads = BufReader::new(&mut stream);
     let mut response = String::new();
-    reads.read_line(&mut response).await.context("read line")?;
 
-    // parse response like "OK port"
-    let mut iter = response.split_whitespace();
-    if iter.next() != Some("OK") {
-        return Err(anyhow!(
-            "handshake error: malformed response code: {:?}",
-            response
-        ));
-    }
-    let hostport = iter
-        .next()
-        .ok_or_else(|| anyhow!("handshake error: malformed response code: {:?}", response))?
-        .parse::<u32>()
-        .context("handshake error: malformed response code")?;
+    // The agent listener echoes the host port back on the connection
+    // (agent/src/passfd_io.rs). In the Dragonball recv-fd path the VMM also
+    // replies with an "OK <port>" line. Skip any non-"OK" line (e.g. the
+    // echoed host port) and wait for the authoritative "OK <port>" response.
+    let hostport = loop {
+        response.clear();
+        reads.read_line(&mut response).await.context("read line")?;
+        let mut iter = response.split_whitespace();
+        if iter.next() == Some("OK") {
+            break iter
+                .next()
+                .ok_or_else(|| anyhow!("handshake error: malformed response code: {:?}", response))?
+                .parse::<u32>()
+                .context("handshake error: malformed response code")?;
+        }
+    };
     Ok(hostport)
+}
+
+/// Connect to the agent's passfd/io listener over a hybrid-vsock UDS and
+/// return the established stream along with the host port assigned to it.
+/// The host port is echoed back by the agent listener (agent/src/passfd_io.rs)
+/// and is later used to correlate this connection with a process stdio in the
+/// CreateContainer/ExecProcess RPC.
+async fn connect_io(uds: &str, port: u32) -> Result<(UnixStream, u32)> {
+    info!(sl!(), "connect io uds {:?} port {}", &uds, port);
+    let mut stream = UnixStream::connect(&uds).await.context("connect")?;
+    stream
+        .write_all(format!("connect {port}\n").as_bytes())
+        .await
+        .context("write all")?;
+
+    // The VMM replies with "OK" (plain hybrid-vsock, e.g. CLH), then the agent
+    // listener echoes the host port. Skip any non-numeric line and parse the
+    // host port so the connection can be correlated in the RPC.
+    let mut reads = BufReader::new(&mut stream);
+    let mut line = String::new();
+    let hostport = loop {
+        line.clear();
+        reads.read_line(&mut line).await.context("read line")?;
+        if let Ok(p) = line.trim().parse::<u32>() {
+            break p;
+        }
+    };
+    drop(reads);
+    Ok((stream, hostport))
 }
 
 #[derive(Debug, Default)]
@@ -56,6 +87,14 @@ pub struct PassfdIo {
     pub stdin_port: Option<u32>,
     pub stdout_port: Option<u32>,
     pub stderr_port: Option<u32>,
+
+    // UDS streams kept on the runtime-rs side for the "UDS pull" mode (used by
+    // hypervisors without recv-fd support, e.g. CLH). The agent binds the
+    // process stdio to these connections and runtime-rs actively copies data
+    // to/from the containerd FIFOs.
+    pub stdin_stream: Option<UnixStream>,
+    pub stdout_stream: Option<UnixStream>,
+    pub stderr_stream: Option<UnixStream>,
 }
 
 impl PassfdIo {
@@ -124,5 +163,55 @@ impl PassfdIo {
         }
 
         Ok(())
+    }
+
+    /// Establish the process stdio connections by connecting to the agent's
+    /// passfd/io listener over the hybrid-vsock UDS, without transferring any
+    /// host fd. This is used by hypervisors that do not support recv-fd (e.g.
+    /// CLH): runtime-rs keeps the streams and actively pulls stdout/stderr and
+    /// pushes stdin over them.
+    pub async fn open_and_connect(
+        &mut self,
+        uds_path: &str,
+        passfd_port: u32,
+        terminal: bool,
+    ) -> Result<()> {
+        if self.stdin.is_some() {
+            let (stream, hostport) = connect_io(uds_path, passfd_port)
+                .await
+                .context("connect io stdin")?;
+            self.stdin_stream = Some(stream);
+            self.stdin_port = Some(hostport);
+        }
+
+        if self.stdout.is_some() {
+            let (stream, hostport) = connect_io(uds_path, passfd_port)
+                .await
+                .context("connect io stdout")?;
+            self.stdout_stream = Some(stream);
+            self.stdout_port = Some(hostport);
+        }
+
+        if !terminal {
+            // stderr is not used in terminal mode
+            if self.stderr.is_some() {
+                let (stream, hostport) = connect_io(uds_path, passfd_port)
+                    .await
+                    .context("connect io stderr")?;
+                self.stderr_stream = Some(stream);
+                self.stderr_port = Some(hostport);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Take the UDS streams kept on the runtime-rs side (UDS pull mode).
+    pub fn take_streams(&mut self) -> (Option<UnixStream>, Option<UnixStream>, Option<UnixStream>) {
+        (
+            self.stdin_stream.take(),
+            self.stdout_stream.take(),
+            self.stderr_stream.take(),
+        )
     }
 }
