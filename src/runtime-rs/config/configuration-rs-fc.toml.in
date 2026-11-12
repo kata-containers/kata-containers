@@ -60,6 +60,10 @@ kernel_params = "@KERNELPARAMS_FC@"
 # > number of physical cores      --> will be set to the actual number of physical cores
 default_vcpus = 1
 
+# Guest-side vCPU overhead added to workload limits with static resource management.
+# The total is rounded up when the VM starts.
+overhead_vcpus = @DEFOVERHEADVCPUS_FC@
+
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
 #                                     of vCPUs supported by KVM if that number is exceeded
