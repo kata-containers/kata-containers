@@ -539,7 +539,11 @@ impl DeviceManager {
     fn new_device_id(&self) -> Result<String> {
         for _ in 0..5 {
             let rand_bytes = RandomBytes::new(8);
-            let id = format!("{rand_bytes:x}");
+            // Keep the "dev_" prefix so the ID always starts with an alphabetic
+            // character. Some hypervisors, e.g. QEMU (see id_wellformed() in
+            // util/id.c), reject IDs starting with a digit, which would make
+            // device_add intermittently fail with "Invalid qdev ID '<id>'".
+            let id = format!("dev_{rand_bytes:x}");
 
             // check collision in devices
             if !self.devices.contains_key(&id) {
@@ -835,5 +839,19 @@ mod tests {
         assert!(
             matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
         );
+    }
+
+    #[tokio::test]
+    async fn test_new_device_id_format() {
+        let dm = new_device_manager().await.unwrap();
+        let guard = dm.read().await;
+        for _ in 0..100 {
+            let id = guard.new_device_id().unwrap();
+            assert!(id.starts_with("dev_"));
+            assert!(
+                id.chars().next().unwrap().is_ascii_alphabetic(),
+                "qdev ID must start with an ASCII alphabetic character for QEMU"
+            );
+        }
     }
 }

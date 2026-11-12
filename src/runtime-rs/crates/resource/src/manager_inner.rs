@@ -18,18 +18,18 @@ use hypervisor::{
         DeviceConfig, DeviceType,
     },
     utils::uses_native_ccw_bus,
-    vfio_device::is_vfio_ap_device,
+    vfio_device::{is_iommufd_devices_cdev_path, is_vfio_ap_device, VfioDeviceBase},
     BlockConfigModern, BlockDeviceAio, Hypervisor, VfioConfig,
 };
 use kata_types::mount::{kata_guest_sandbox_dir, Mount, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR};
 use kata_types::{
     config::{hypervisor::TopologyConfigInfo, TomlConfig},
-    device::DRIVER_VFIO_AP_COLD_TYPE,
+    device::{DRIVER_VFIO_AP_COLD_TYPE, DRIVER_VFIO_AP_TYPE},
     mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
 };
 use libc::NUD_PERMANENT;
 use oci::{Linux, LinuxCpu, LinuxResources};
-use oci_spec::runtime::{self as oci, LinuxDeviceType};
+use oci_spec::runtime::{self as oci, LinuxDevice, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
 use std::path::{Path, PathBuf};
 use tokio::{
@@ -793,41 +793,12 @@ impl ResourceManagerInner {
                         continue;
                     }
 
-                    // VFIO-AP devices have no PCIe BDF, so cold_plug_bdfs above
-                    // cannot catch them.  If this device was registered in the
-                    // device manager during cold-plug (prepare_coldplug_raw_vfio_devices
-                    // or CDI), retrieve its APQN list and build the agent device
-                    // directly — calling do_handle_device on an already-present
-                    // device would attempt a QMP device_add and fail.
-                    if is_vfio_ap_device(Path::new(&host_path)) {
-                        if let Some(ap_devs) =
-                            find_cold_plugged_vfio_ap(&self.device_manager, &host_path).await
-                        {
-                            let container_path = d.path().display().to_string();
-                            let group_num = d
-                                .path()
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or_default()
-                                .to_string();
-                            let agent_device = Device {
-                                id: group_num,
-                                container_path,
-                                field_type: DRIVER_VFIO_AP_COLD_TYPE.to_string(),
-                                options: ap_devs,
-                                ..Default::default()
-                            };
-                            info!(
-                                sl!(),
-                                "vfio-ap cold-plugged agent device: {:?}", agent_device
-                            );
-                            devices.push(ContainerDevice {
-                                device_info: None,
-                                device: agent_device,
-                            });
-                            continue;
-                        }
-                        // Not registered as cold-plugged — fall through to do_handle_device.
+                    if let Some(container_device) = self
+                        .handle_vfio_ap_device(&host_path, d, device_ids)
+                        .await?
+                    {
+                        devices.push(container_device);
+                        continue;
                     }
 
                     let bus_type = if uses_native_ccw_bus() {
@@ -1060,6 +1031,108 @@ impl ResourceManagerInner {
         }
 
         Ok(devices)
+    }
+
+    /// Handles VFIO-AP (s390x Crypto Adapter) devices.
+    ///
+    /// Returns `Ok(Some(ContainerDevice))` if the device is a VFIO-AP cold-plugged
+    /// device or an IOMMUFD cdev hot-plugged device, or `Ok(None)` if the device
+    /// is not an AP device or is a legacy group node that should fall through
+    /// to the standard `VfioCfg` hot-plug handler.
+    async fn handle_vfio_ap_device(
+        &self,
+        host_path: &str,
+        d: &LinuxDevice,
+        device_ids: &mut Vec<String>,
+    ) -> Result<Option<ContainerDevice>> {
+        if !is_vfio_ap_device(Path::new(host_path)) {
+            return Ok(None);
+        }
+
+        // VFIO-AP devices have no PCIe BDF, so cold_plug_bdfs cannot catch them.
+        // If this device was registered in the device manager during cold-plug
+        // (prepare_coldplug_raw_vfio_devices or CDI), retrieve its APQN list and
+        // build the agent device directly — calling do_handle_device on an
+        // already-present device would attempt a QMP device_add and fail.
+        if let Some(ap_devs) = find_cold_plugged_vfio_ap(&self.device_manager, host_path).await {
+            let container_path = d.path().display().to_string();
+            let group_num = d
+                .path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            let agent_device = Device {
+                id: group_num,
+                container_path,
+                field_type: DRIVER_VFIO_AP_COLD_TYPE.to_string(),
+                options: ap_devs,
+                ..Default::default()
+            };
+            info!(
+                sl!(),
+                "vfio-ap cold-plugged agent device: {:?}", agent_device
+            );
+            return Ok(Some(ContainerDevice {
+                device_info: None,
+                device: agent_device,
+            }));
+        }
+
+        // Not registered as cold-plugged: hot-plug it.
+        //
+        // An IOMMUFD cdev (/dev/vfio/devices/vfioN) has no IOMMU group
+        // number, which the legacy VfioCfg path requires, so hot-plug it
+        // through the modern VFIO device instead.
+        //
+        // Only the cdev node is passed here; the AP mdev sysfs path is not
+        // known at this point. VfioDeviceModern::new() resolves the cdev to
+        // its mdev sysfs directory (and reads the APQNs from its `matrix`
+        // file), and the hypervisor passes that path to QEMU as `sysfsdev`
+        // in device_add. No iommufd object or fds are sent over QMP.
+        if is_iommufd_devices_cdev_path(Path::new(host_path)) {
+            let dev_info = DeviceConfig::VfioModernCfg(VfioDeviceBase {
+                host_path: host_path.to_string(),
+                iommu_group_devnode: PathBuf::from(host_path),
+                dev_type: "c".to_string(),
+                bus_type: "ccw".to_string(),
+                hostdev_prefix: "vfio_device".to_owned(),
+                ..Default::default()
+            });
+            let device_info = do_handle_device(&self.device_manager, &dev_info)
+                .await
+                .context("do handle vfio-ap cdev device")?;
+            if let DeviceType::VfioModern(vfio_dev) = device_info {
+                let vfio_dev_locked = vfio_dev.lock().await;
+                device_ids.push(vfio_dev_locked.device_id.clone());
+                let ap_devs = vfio_dev_locked.config.ap_devices.clone();
+                drop(vfio_dev_locked);
+                let group_num = d
+                    .path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let agent_device = Device {
+                    id: group_num,
+                    container_path: d.path().display().to_string(),
+                    field_type: DRIVER_VFIO_AP_TYPE.to_string(),
+                    options: ap_devs,
+                    ..Default::default()
+                };
+                info!(
+                    sl!(),
+                    "vfio-ap hot-plugged cdev agent device: {:?}", agent_device
+                );
+                return Ok(Some(ContainerDevice {
+                    device_info: None,
+                    device: agent_device,
+                }));
+            }
+        }
+
+        // Legacy group node — fall through to caller's do_handle_device.
+        Ok(None)
     }
 
     async fn handle_sandbox_bindmounts(&self, setup: bool) -> Result<()> {
@@ -1420,7 +1493,7 @@ fn bdf_to_vfio_group_path(bdf: &str) -> Option<String> {
 ///   Reads `/sys/kernel/iommu_groups/343/devices/` and returns every BDF in
 ///   the group (a group may contain more than one device).
 /// - iommufd cdev interface: `/dev/vfio/devices/vfio1`
-///   Reads `/sys/class/vfio_device/vfio1/device` symlink to find the BDF.
+///   Reads `/sys/class/vfio-dev/vfio1/device` symlink to find the BDF.
 ///
 /// Returns an empty vector if the path cannot be resolved.  Returning all
 /// BDFs (rather than just the first) makes cold-plug endpoint matching
@@ -1437,8 +1510,10 @@ fn vfio_path_to_bdfs(vfio_path: &str) -> Vec<String> {
     // iommufd cdev path: /dev/vfio/devices/vfioN — file name starts with "vfio"
     // and cannot be parsed as a plain integer.
     if file_name.parse::<u32>().is_err() {
-        // /sys/class/vfio_device/<name>/device -> ../../../../bus/pci/devices/<bdf>
-        let dev_link = format!("/sys/class/vfio_device/{}/device", file_name);
+        // /sys/class/vfio-dev/<name>/device -> ../../../../bus/pci/devices/<bdf>
+        // (for a VFIO-AP cdev this resolves to the mdev uuid, which is not a BDF and
+        // therefore never matches a cold-plugged physical endpoint)
+        let dev_link = format!("/sys/class/vfio-dev/{}/device", file_name);
         match std::fs::read_link(&dev_link)
             .ok()
             .and_then(|t| t.file_name().and_then(|n| n.to_str()).map(String::from))
