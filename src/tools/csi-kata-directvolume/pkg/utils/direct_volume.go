@@ -5,6 +5,7 @@
 package utils
 
 import (
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -35,9 +36,20 @@ type MountInfo struct {
 	Options []string `json:"options,omitempty"`
 }
 
+// volumeDir mirrors the encoding used by the Kata runtime
+// (src/runtime/pkg/direct-volume/utils.go).
+func volumeDir(volumePath string) string {
+	name := b64.URLEncoding.EncodeToString([]byte(volumePath))
+	if len(name) > 255 {
+		sum := sha256.Sum256([]byte(volumePath))
+		name = "sha256-" + b64.URLEncoding.EncodeToString(sum[:])
+	}
+	return filepath.Join(kataDirectVolumeRootPath, name)
+}
+
 // Add writes the mount info of a direct volume into a filesystem path known to Kata Container.
 func Add(volumePath string, mountInfo string) error {
-	volumeDir := filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath)))
+	volumeDir := volumeDir(volumePath)
 	stat, err := os.Stat(volumeDir)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -61,5 +73,5 @@ func Add(volumePath string, mountInfo string) error {
 
 // Remove deletes the direct volume path including all the files inside it.
 func Remove(volumePath string) error {
-	return os.RemoveAll(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	return os.RemoveAll(volumeDir(volumePath))
 }

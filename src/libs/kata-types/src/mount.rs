@@ -508,16 +508,25 @@ pub trait StorageDevice: Send + Sync {
 /// Joins a user-provided volume path with the Kata direct-volume root path.
 ///
 /// The `volume_path` is base64-url-encoded and then safely joined to the `prefix`.
+/// When the encoding would exceed NAME_MAX (255 bytes) it is replaced by
+/// "sha256-" + the base64url-encoded SHA-256 digest of the path, so the
+/// metadata directory can always be created and read.
 /// `safe_path` is OS-specific.
 #[cfg(feature = "safe-path")]
 pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!(std::io::ErrorKind::NotFound));
     }
-    let b64_url_encoded_path =
-        base64::engine::general_purpose::URL_SAFE.encode(volume_path.as_bytes());
-
-    Ok(safe_path::scoped_join(prefix, b64_url_encoded_path)?)
+    let mut name = base64::engine::general_purpose::URL_SAFE.encode(volume_path.as_bytes());
+    if name.len() > 255 {
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(volume_path.as_bytes());
+        name = format!(
+            "sha256-{}",
+            base64::engine::general_purpose::URL_SAFE.encode(digest.as_slice())
+        );
+    }
+    Ok(safe_path::scoped_join(prefix, name)?)
 }
 
 /// Gets `DirectVolumeMountInfo` from `mountinfo.json`.
