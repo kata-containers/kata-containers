@@ -11,7 +11,7 @@ use tokio_vsock::VsockStream;
 
 use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
-use nix::sys::wait::{self, WaitStatus};
+use nix::sys::wait::{self, WaitPidFlag, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
 
@@ -93,6 +93,8 @@ pub struct Process {
     // pid of the init/exec process. since we have no command
     // struct to store pid, we must store pid here.
     pub pid: pid_t,
+    // Keep the process identity independent of the numeric PID.
+    pidfd: Option<crate::pidfd::PidFd>,
 
     pub exit_code: i32,
     pub exit_watchers: Vec<Sender<i32>>,
@@ -118,10 +120,19 @@ impl ProcessOperations for Process {
     }
 
     fn wait(&self) -> Result<WaitStatus> {
-        wait::waitpid(Some(self.pid()), None)
+        self.wait_with_flags(WaitPidFlag::WEXITED)
     }
 
     fn signal(&self, sig: libc::c_int) -> Result<()> {
+        if self.pid <= 0 {
+            return Err(Errno::EINVAL);
+        }
+        if self.exit_tx.is_none() {
+            return Err(Errno::ESRCH);
+        }
+        if let Some(fd) = &self.pidfd {
+            return fd.signal(sig);
+        }
         let res = unsafe { libc::kill(self.pid().into(), sig) };
 
         Errno::result(res).map(drop)
@@ -129,6 +140,43 @@ impl ProcessOperations for Process {
 }
 
 impl Process {
+    /// Bind once while the child is blocked in the startup handshake.
+    pub fn bind_pid(&mut self, pid: pid_t) -> Result<()> {
+        if self.pid != -1 {
+            return Err(Errno::EINVAL);
+        }
+        let fd = crate::pidfd::PidFd::open(pid)?;
+        self.pid = pid;
+        self.pidfd = fd;
+        Ok(())
+    }
+
+    pub fn has_pidfd(&self) -> bool {
+        self.pidfd.is_some()
+    }
+
+    /// Complete a consumed terminal status while the owner excludes signals.
+    pub fn complete_exit(&mut self, exit_code: i32) {
+        self.exit_code = exit_code;
+        // Keep the exited marker after closing the handle: signals must not
+        // fall back to a numeric PID that may already have been reused.
+        self.pidfd.take();
+        self.exit_tx.take();
+    }
+
+    /// Wait through pidfd, or retain waitpid semantics on unsupported kernels.
+    pub fn wait_with_flags(&self, flags: WaitPidFlag) -> Result<WaitStatus> {
+        if self.pid <= 0 {
+            return Err(Errno::EINVAL);
+        }
+        if let Some(fd) = &self.pidfd {
+            fd.wait(flags)
+        } else {
+            // WEXITED is a waitid flag; waitpid accepts WNOHANG / __WALL.
+            wait::waitpid(Some(self.pid()), Some(flags & !WaitPidFlag::WEXITED))
+        }
+    }
+
     pub fn new(
         logger: &Logger,
         ocip: &OCIProcess,
@@ -155,6 +203,7 @@ impl Process {
             parent_stderr: None,
             init,
             pid: -1,
+            pidfd: None,
             exit_code: 0,
             exit_watchers: Vec::new(),
             oci: ocip.clone(),
@@ -186,10 +235,17 @@ impl Process {
             let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
             p.parent_stdout = Some(pstdout);
             p.stdout = Some(stdout);
+            if p.proc_io.is_none() {
+                // Own the parent end even if startup fails before an IO RPC.
+                let _ = p.get_reader(StreamType::ParentStdout);
+            }
 
             let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
             p.parent_stderr = Some(pstderr);
             p.stderr = Some(stderr);
+            if p.proc_io.is_none() {
+                let _ = p.get_reader(StreamType::ParentStderr);
+            }
         }
         Ok(p)
     }
@@ -283,6 +339,103 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[tokio::test]
+    async fn test_pidfd_process_identity_after_reaping() {
+        if !crate::pidfd::PidFd::supported().unwrap() {
+            eprintln!("skipping pidfd identity test: kernel lacks pidfd support");
+            return;
+        }
+        let mut p = Process::new(
+            &Logger::root(slog::Discard, o!()),
+            &oci::ProcessBuilder::default()
+                .terminal(true)
+                .build()
+                .unwrap(),
+            "pidfd-exit",
+            false,
+            0,
+            None,
+        )
+        .unwrap();
+        let child = scopeguard::guard(
+            std::process::Command::new("/bin/sh")
+                .args(["-c", "exit 23"])
+                .spawn()
+                .unwrap(),
+            |mut child| {
+                if matches!(child.try_wait(), Ok(None)) {
+                    let _ = child.kill();
+                }
+                let _ = child.wait();
+            },
+        );
+        let pid = child.id() as i32;
+        p.bind_pid(pid).unwrap();
+        assert!(p.pidfd.is_some());
+        assert_eq!(
+            p.wait().unwrap(),
+            WaitStatus::Exited(Pid::from_raw(pid), 23)
+        );
+        let mut exit_rx = p.exit_rx.clone().unwrap();
+        p.complete_exit(23);
+        assert!(!p.has_pidfd());
+        assert_eq!(p.exit_code, 23);
+        assert!(exit_rx.changed().await.is_err());
+        assert!(p.exit_rx.as_ref().unwrap().same_channel(&exit_rx));
+        // Deliberately change the numeric field to a live PID: all signals
+        // must still address the exited process via its original descriptor.
+        p.pid = std::process::id() as i32;
+        assert_eq!(p.signal(0), Err(Errno::ESRCH));
+        assert_eq!(p.bind_pid(pid), Err(Errno::EINVAL));
+        p.cleanup_process_stream();
+    }
+
+    #[tokio::test]
+    async fn test_process_pid_fallback() {
+        let mut p = Process::new(
+            &Logger::root(slog::Discard, o!()),
+            &oci::ProcessBuilder::default()
+                .terminal(true)
+                .build()
+                .unwrap(),
+            "pid-fallback",
+            false,
+            0,
+            None,
+        )
+        .unwrap();
+        let child = scopeguard::guard(
+            std::process::Command::new("/bin/sleep")
+                .arg("30")
+                .spawn()
+                .unwrap(),
+            |mut child| {
+                if matches!(child.try_wait(), Ok(None)) {
+                    let _ = child.kill();
+                }
+                let _ = child.wait();
+            },
+        );
+        // Select the legacy backend even on a pidfd-capable test kernel.
+        p.pid = child.id() as i32;
+        assert!(!p.has_pidfd());
+        assert_eq!(
+            p.wait_with_flags(WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG)
+                .unwrap(),
+            WaitStatus::StillAlive
+        );
+        p.signal(libc::SIGTERM).unwrap();
+        assert_eq!(
+            p.wait().unwrap(),
+            WaitStatus::Signaled(p.pid(), nix::sys::signal::Signal::SIGTERM, false)
+        );
+        p.exit_tx.take();
+        // A retained, reaped Process must not address a newly reused PID.
+        p.pid = std::process::id() as i32;
+        assert_eq!(p.signal(0), Err(Errno::ESRCH));
+        p.cleanup_process_stream();
+    }
+
     fn get_pipe_max_size() -> i32 {
         fs::read_to_string("/proc/sys/fs/pipe-max-size")
             .unwrap()
@@ -310,6 +463,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_legacy_parent_output_ownership() {
+        for passfd in [false, true] {
+            let mut process = Process::new(
+                &Logger::root(slog::Discard, o!()),
+                &OCIProcess::default(),
+                "output-ownership",
+                false,
+                0,
+                passfd.then(|| ProcessIo::new(None, None, None)),
+            )
+            .unwrap();
+            let stdout = process.parent_stdout.unwrap();
+            let stderr = process.parent_stderr.unwrap();
+            // The startup command normally owns these child ends.
+            for fd in [
+                process.stdin.take(),
+                process.stdout.take(),
+                process.stderr.take(),
+            ]
+            .iter()
+            .copied()
+            .flatten()
+            {
+                unistd::close(fd).unwrap();
+            }
+            if passfd {
+                // passfd copy tasks must remain the sole output owners.
+                assert!(!process.readers.contains_key(&StreamType::ParentStdout));
+                assert!(!process.readers.contains_key(&StreamType::ParentStderr));
+                unistd::close(stdout).unwrap();
+                unistd::close(stderr).unwrap();
+            }
+            drop(process);
+            for fd in [stdout, stderr] {
+                assert_eq!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, -1);
+                assert_eq!(Errno::last(), Errno::EBADF);
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_process() {
         let id = "abc123rgb";
         let init = true;
@@ -328,9 +522,8 @@ mod tests {
 
         // -1 by default
         assert_eq!(process.pid, -1);
-        // signal to every process in the process
-        // group of the calling process.
+        // Unbound processes must never signal process groups.
         process.pid = 0;
-        assert!(process.signal(libc::SIGCONT).is_ok());
+        assert_eq!(process.signal(libc::SIGCONT), Err(Errno::EINVAL));
     }
 }
