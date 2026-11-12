@@ -148,7 +148,9 @@ impl FcInner {
     }
     pub(crate) async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
         debug!(sl(), "Get Thread IDs");
-        Ok(VcpuThreadIds::default())
+        let pid = self.get_vmm_master_tid().await?;
+        let vcpus = crate::utils::get_vcpu_tids(&format!("/proc/{pid}"), "fc_vcpu")?;
+        Ok(VcpuThreadIds { vcpus })
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
@@ -224,7 +226,62 @@ impl FcInner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        collections::HashMap,
+        io::{BufRead, BufReader},
+        process::{Command, Stdio},
+    };
     use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_get_thread_ids_maps_firecracker_vcpus() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let mut firecracker = FcInner::new(exit_notify);
+        for (vcpu, name) in [
+            (Some(0), "fc_vcpu 0"),
+            (Some(1), "fc_vcpu 1"),
+            (None, "fc_api"),
+        ] {
+            // Keep the scanned task list independent of other parallel tests.
+            let mut child = Command::new("/bin/sh")
+                .args([
+                    "-c",
+                    "printf '%s\\n' \"$1\" > /proc/self/comm; printf 'ready\\n'; read -r _ || :",
+                    "sh",
+                    name,
+                ])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let mut ready = String::new();
+            BufReader::new(child.stdout.take().unwrap())
+                .read_line(&mut ready)
+                .unwrap();
+            assert_eq!(ready, "ready\n");
+
+            firecracker.pid = Some(child.id());
+            let result = firecracker.get_thread_ids().await;
+            drop(child.stdin.take());
+            child.wait().unwrap();
+
+            let expected = vcpu
+                .map(|vcpu| HashMap::from([(vcpu, child.id())]))
+                .unwrap_or_default();
+            assert_eq!(result.unwrap().vcpus, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_thread_ids_rejects_missing_process() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let mut firecracker = FcInner::new(exit_notify);
+
+        for pid in [None, Some(u32::MAX)] {
+            firecracker.pid = pid;
+            assert!(firecracker.get_thread_ids().await.is_err());
+        }
+    }
 
     #[tokio::test]
     async fn test_unsupported_hypervisor_metrics_are_empty() {
