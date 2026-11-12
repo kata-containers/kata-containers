@@ -7,16 +7,17 @@
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Result};
 use capctl::prctl::set_subreaper;
+use nix::errno::Errno;
 use nix::sys::wait::WaitPidFlag;
-use nix::sys::wait::{self, WaitStatus};
-use nix::unistd;
+use nix::sys::wait::{self, Id, WaitStatus};
+#[cfg(test)]
+use nix::unistd::Pid;
 use slog::{error, info, o, Logger};
 use std::sync::Arc;
 use tokio::select;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
-use unistd::Pid;
 
 // Offset added to a signal number to derive the exit code of a process that
 // was terminated by that signal, following the conventional shell semantics
@@ -41,42 +42,64 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
     info!(logger, "handling signal"; "signal" => "SIGCHLD");
 
     loop {
-        // Avoid reaping the undesirable child's signal, e.g., execute_hook's
-        // The lock should be released immediately.
-        let _locker = rustjail::container::WAIT_PID_LOCKER.lock().await;
-        let result = wait::waitpid(
-            Some(Pid::from_raw(-1)),
-            Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
-        );
-
-        let wait_status = match result {
+        // Match before reaping: a zombie still owns its numeric PID. Use the
+        // same sandbox -> wait lock order as RPC/storage paths.
+        let mut sandbox = sandbox.lock().await;
+        // Hook executors also wait for children. Exclude them during peek/reap,
+        // but release this lock before waiting for output to drain.
+        let locker = rustjail::container::WAIT_PID_LOCKER.lock().await;
+        let pending = loop {
+            let result = wait::waitid(
+                Id::All,
+                WaitPidFlag::WEXITED
+                    | WaitPidFlag::WNOHANG
+                    | WaitPidFlag::WNOWAIT
+                    | WaitPidFlag::__WALL,
+            );
+            if result != Err(Errno::EINTR) {
+                break result;
+            }
+        };
+        let pending = match pending {
             Ok(s) => {
                 if s == WaitStatus::StillAlive {
                     return Ok(());
                 }
                 s
             }
-            Err(e) => return Err(anyhow!(e).context("waitpid reaper failed")),
+            Err(Errno::ECHILD) => return Ok(()),
+            Err(e) => return Err(anyhow!(e).context("waitid reaper peek failed")),
         };
 
-        info!(logger, "wait_status"; "wait_status result" => format!("{:?}", wait_status));
-
-        if let Some(pid) = wait_status.pid() {
+        if let Some(pid) = pending.pid() {
             let raw_pid = pid.as_raw();
             let child_pid = format!("{raw_pid}");
 
             let logger = logger.new(o!("child-pid" => child_pid));
-
-            let sandbox_ref = sandbox.clone();
-            let mut sandbox = sandbox_ref.lock().await;
-
             let process = sandbox.find_process(raw_pid);
             if process.is_none() {
+                // Helpers and reparented descendants have no Process handle.
+                // Their PID is still reserved by the peeked zombie.
+                loop {
+                    match wait::waitpid(Some(pid), Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL))
+                    {
+                        Err(Errno::EINTR) => continue,
+                        Err(Errno::ECHILD) | Ok(_) => break,
+                        Err(e) => return Err(anyhow!(e).context("reap untracked child")),
+                    }
+                }
                 info!(logger, "child exited unexpectedly");
                 continue;
             }
 
             let p = process.unwrap();
+            let wait_status = p
+                .wait_with_flags(WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG | WaitPidFlag::__WALL)
+                .map_err(|e| anyhow!(e).context("reap process handle"))?;
+            // Do not hold the wait lock during potentially slow output drain.
+            drop(locker);
+            info!(logger, "wait_status"; "wait_status result" => format!("{:?}", wait_status),
+                  "pidfd" => p.has_pidfd());
 
             let ret: i32 = match exit_code_from_wait_status(wait_status) {
                 Some(code) => code,
@@ -92,8 +115,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                 proc_io.wg_output.wait().await;
             }
 
-            p.exit_code = ret;
-            let _ = p.exit_tx.take();
+            p.complete_exit(ret);
 
             info!(logger, "notify term to close");
             // close the socket file to notify readStdio to close terminal specifically
