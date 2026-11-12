@@ -82,6 +82,7 @@ shims:
     enabled: true
     supportedArches:
       - amd64
+      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: "erofs"

@@ -67,6 +67,7 @@ BASE_TARBALLS = serial-targets \
 	kernel-tarball \
 	nydus-tarball \
 	ovmf-tarball \
+	qemu-cca-experimental-tarball \
 	qemu-no-shared-fs-tarball \
 	qemu-tarball \
 	shim-v2-go-tarball \
@@ -130,6 +131,7 @@ NVGPU_BASE_TARBALLS = \
 	kernel-nvidia-gpu-tarball \
 	ovmf-tarball \
 	pause-image-tarball \
+	qemu-cca-experimental-tarball \
 	qemu-no-shared-fs-tarball \
 	qemu-tarball \
 	virtiofsd-tarball \
@@ -142,13 +144,9 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst \
 	kata-static-kata-ctl.tar.zst \
 	kata-static-kernel-nvidia-gpu.tar.zst \
-	kata-static-ovmf-sev.tar.zst \
-	kata-static-ovmf-tdx.tar.zst \
 	kata-static-ovmf.tar.zst \
 	kata-static-pause-image.tar.zst \
 	kata-static-qemu-no-shared-fs.tar.zst \
-	kata-static-qemu-snp-experimental.tar.zst \
-	kata-static-qemu-tdx-experimental.tar.zst \
 	kata-static-qemu.tar.zst \
 	kata-static-virtiofsd.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu.tar.zst \
@@ -158,7 +156,19 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-rootfs-image-coco-extension.tar.zst \
 	kata-static-shim-v2-go.tar.zst \
 	kata-static-shim-v2-rust.tar.zst
-
+# merge-builds treats FINAL_TARBALL_INPUTS as an allowlist and fails on a
+# missing entry, so a flavour joins the list only on the architecture whose
+# NVGPU_BASE_TARBALLS builds it.
+ifeq ($(ARCH), x86_64)
+NVGPU_FINAL_TARBALL_INPUTS += \
+	kata-static-ovmf-sev.tar.zst \
+	kata-static-ovmf-tdx.tar.zst \
+	kata-static-qemu-snp-experimental.tar.zst \
+	kata-static-qemu-tdx-experimental.tar.zst
+else ifeq ($(ARCH), aarch64)
+NVGPU_FINAL_TARBALL_INPUTS += \
+	kata-static-qemu-cca-experimental.tar.zst
+endif
 
 ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
@@ -318,6 +328,9 @@ qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tdx-experimental-tarball:
+	${MAKE} $@-build
+
+qemu-cca-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
