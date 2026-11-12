@@ -6,8 +6,9 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::driver, Hypervisor};
-use kata_sys_util::netns::{is_proc_pid_netns, NetnsGuard};
+use kata_sys_util::netns::{is_pinned_netns, is_proc_pid_netns, NetnsGuard};
 use scopeguard::defer;
+use std::path::Path;
 
 use super::network_pair::{delete_link_by_name, kata_link_names};
 use super::{rebind_saved_physical_endpoints, EndpointState, Network};
@@ -53,13 +54,15 @@ pub async fn remove_kata_links(netns_path: &str) -> Result<()> {
         );
         return Ok(());
     }
-    if matches!(
-        std::fs::metadata(netns_path),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound
-    ) {
+    // Whoever owns the namespace may be tearing it down as recovery runs:
+    // once unmounted, and until the file is removed, the path is a plain
+    // file that cannot be entered.
+    if !is_pinned_netns(Path::new(netns_path)) {
         return Ok(());
     }
-    let _netns_guard = NetnsGuard::new(netns_path).context("net netns guard")?;
+    let Some(_netns_guard) = enter_cleanup_netns(netns_path)? else {
+        return Ok(());
+    };
     let (connection, handle, _) = rtnetlink::new_connection().context("new netlink connection")?;
     let thread_handler = tokio::spawn(connection);
     defer!({
@@ -71,6 +74,16 @@ pub async fn remove_kata_links(netns_path: &str) -> Result<()> {
             .with_context(|| format!("remove the kata link {name}"))?;
     }
     Ok(())
+}
+
+fn enter_cleanup_netns(netns_path: &str) -> Result<Option<NetnsGuard>> {
+    match NetnsGuard::new(netns_path) {
+        Ok(guard) => Ok(Some(guard)),
+        // The owner can unmount or remove the namespace after the initial
+        // check. Its links are gone too; never fall back to the shim's netns.
+        Err(_) if !is_pinned_netns(Path::new(netns_path)) => Ok(None),
+        Err(err) => Err(err).context("net netns guard"),
+    }
 }
 
 #[async_trait]
@@ -131,6 +144,37 @@ mod tests {
         // reuse it can be anyone. The sweep must leave it alone.
         let network = RestoredNetwork::new(vec![], Some("/proc/1/ns/net".into()));
         network.remove(&Qemu::new()).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn an_unmounted_netns_file_is_not_entered() {
+        // What the owner of the namespace leaves between unmounting it and
+        // removing its file: a plain file where the namespace was.
+        let leftover = tempfile::NamedTempFile::new().unwrap();
+        let path = leftover.path().to_str().unwrap().to_string();
+        let network = RestoredNetwork::new(vec![], Some(path));
+        network.remove(&Qemu::new()).await.unwrap();
+    }
+
+    #[test]
+    fn a_netns_unmounted_after_the_initial_check_is_not_entered() {
+        test_utils::skip_if_not_root!();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("netns");
+        kata_sys_util::netns::pin_netns(Path::new("/proc/self/ns/net"), &path).unwrap();
+        assert!(is_pinned_netns(&path));
+
+        nix::mount::umount2(&path, nix::mount::MntFlags::MNT_DETACH).unwrap();
+        assert!(path.exists());
+        assert!(enter_cleanup_netns(path.to_str().unwrap())
+            .unwrap()
+            .is_none());
+
+        std::fs::remove_file(&path).unwrap();
+        assert!(enter_cleanup_netns(path.to_str().unwrap())
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]

@@ -106,8 +106,11 @@ async fn empty_cgroup(cgroup: &dyn Manager, deadline: tokio::time::Instant) -> R
 fn kill_procs(cgroup: &dyn Manager, dir: &Path) -> Result<()> {
     let kill_file = dir.join("cgroup.kill");
     if kill_file.exists() {
-        return fs::write(&kill_file, "1")
-            .with_context(|| format!("write {}", kill_file.display()));
+        return match fs::write(&kill_file, "1") {
+            // The cgroup went away with its last process.
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            written => written.with_context(|| format!("write {}", kill_file.display())),
+        };
     }
 
     // Like runc without cgroup.kill: a frozen process can neither fork nor
