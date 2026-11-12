@@ -45,7 +45,7 @@ tokio = { features = [
 ], workspace = true }
 tokio-vsock.workspace = true
 xattr = "0.2.3"
-zbus = "3.12.0"
+zbus = "5"
 
 # Local dependencies
 kata-sys-util.workspace = true
