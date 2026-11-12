@@ -280,6 +280,12 @@ impl Template {
         self.state_path.join(TEMPLATE_IDENTITY_FILE)
     }
 
+    pub(crate) fn identity(&self) -> Result<&TemplateIdentity> {
+        self.identity
+            .as_ref()
+            .ok_or_else(|| anyhow!("VM template identity is unavailable"))
+    }
+
     fn file_integrity(path: &std::path::Path) -> Result<(u64, String)> {
         let metadata = std::fs::symlink_metadata(path)
             .with_context(|| format!("inspect template artifact {}", path.display()))?;
@@ -499,11 +505,11 @@ mod tests {
         let mut template = test_template();
         let identity = template.publish_identity().unwrap();
         template.identity = Some(identity.clone());
-        assert_eq!(template.identity.as_ref().unwrap(), &identity);
+        assert_eq!(template.identity().unwrap(), &identity);
 
         let fetched =
             Template::fetch(template.config.clone(), template.state_path.clone()).unwrap();
-        assert_eq!(fetched.identity.as_ref().unwrap(), &identity);
+        assert_eq!(fetched.identity().unwrap(), &identity);
 
         std::fs::write(template.memory_path(), b"modified template memory").unwrap();
         let error = Template::fetch(template.config.clone(), template.state_path.clone())

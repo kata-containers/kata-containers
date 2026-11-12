@@ -23,13 +23,16 @@ pub mod sandbox;
 pub mod sandbox_persist;
 pub mod vmm_process;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use agent::{kata::KataAgent, Agent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use common::{message::Message, types::SandboxConfig, RuntimeHandler, RuntimeInstance};
+use common::{
+    message::Message, types::SandboxConfig, CheckpointRestoreRuntime, RuntimeHandler,
+    RuntimeInstance,
+};
 use hypervisor::Hypervisor;
 #[cfg(all(
     feature = "dragonball",
@@ -72,7 +75,12 @@ use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 ))]
 use kata_types::config::OpenVmmConfig;
 
-use crate::factory::{check_template_vm_config, template_device_state_path};
+use crate::factory::{
+    check_template_vm_config,
+    template::{Template, TemplateIdentity},
+    template_device_state_path,
+    vm::VmConfig,
+};
 use persist::sandbox_persist::Persist;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
@@ -85,52 +93,54 @@ unsafe impl Sync for VirtContainer {}
 #[derive(Debug)]
 pub struct VirtContainer {}
 
+/// Registers the hypervisor configuration plugins compiled into this runtime.
+pub fn register_hypervisor_plugins() {
+    #[cfg(all(
+        feature = "dragonball",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    {
+        let dragonball_config = Arc::new(DragonballConfig::new());
+        register_hypervisor_plugin("dragonball", dragonball_config);
+    }
+
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    {
+        let firecracker_config = Arc::new(FirecrackerConfig::new());
+        register_hypervisor_plugin("firecracker", firecracker_config);
+    }
+
+    let qemu_config = Arc::new(QemuConfig::new());
+    register_hypervisor_plugin("qemu", qemu_config);
+
+    #[cfg(all(
+        feature = "cloud-hypervisor",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    {
+        let ch_config = Arc::new(CloudHypervisorConfig::new());
+        register_hypervisor_plugin(HYPERVISOR_NAME_CH, ch_config);
+    }
+
+    let remote_config = Arc::new(RemoteConfig::new());
+    register_hypervisor_plugin("remote", remote_config);
+
+    #[cfg(all(
+        feature = "openvmm",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    {
+        let openvmm_config = Arc::new(OpenVmmConfig::new());
+        register_hypervisor_plugin(HYPERVISOR_NAME_OPENVMM, openvmm_config);
+    }
+}
+
 #[async_trait]
 impl RuntimeHandler for VirtContainer {
     fn init() -> Result<()> {
-        // Before start logging with virt-container, regist it
         logging::register_subsystem_logger("runtimes", "virt-container");
 
-        // register
-        #[cfg(all(
-            feature = "dragonball",
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
-        {
-            let dragonball_config = Arc::new(DragonballConfig::new());
-            register_hypervisor_plugin("dragonball", dragonball_config);
-        }
-
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-        {
-            let firecracker_config = Arc::new(FirecrackerConfig::new());
-            register_hypervisor_plugin("firecracker", firecracker_config);
-        }
-
-        let qemu_config = Arc::new(QemuConfig::new());
-        register_hypervisor_plugin("qemu", qemu_config);
-
-        #[cfg(all(
-            feature = "cloud-hypervisor",
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
-        {
-            let ch_config = Arc::new(CloudHypervisorConfig::new());
-            register_hypervisor_plugin(HYPERVISOR_NAME_CH, ch_config);
-        }
-
-        let remote_config = Arc::new(RemoteConfig::new());
-        register_hypervisor_plugin("remote", remote_config);
-
-        #[cfg(all(
-            feature = "openvmm",
-            any(target_arch = "x86_64", target_arch = "aarch64")
-        ))]
-        {
-            let openvmm_config = Arc::new(OpenVmmConfig::new());
-            register_hypervisor_plugin(HYPERVISOR_NAME_OPENVMM, openvmm_config);
-        }
-
+        register_hypervisor_plugins();
         Ok(())
     }
 
@@ -151,23 +161,26 @@ impl RuntimeHandler for VirtContainer {
         init_size_manager: InitialSizeManager,
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
-        let use_guest_resolv_conf = !sandbox_config.dns.is_empty();
         let mut factory = config.get_factory();
         if factory.enable_template {
-            if let Err(e) = check_template_vm_config(&config) {
-                info!(sl!(), "cannot use VM template, booting normally: {:#}", e);
+            if let Err(error) = check_template_vm_config(&config) {
+                info!(
+                    sl!(),
+                    "cannot use VM template, booting normally: {:#}", error
+                );
                 factory.enable_template = false;
             }
         }
-
-        let (hypervisor, agent) = if factory.enable_template {
-            build_vm_from_template(&config)
+        let use_guest_resolv_conf = !sandbox_config.dns.is_empty();
+        let (hypervisor, agent, template_identity) = if factory.enable_template {
+            build_vm_from_template(config.clone())
                 .await
                 .context("build vm from template")?
         } else {
             (
                 new_hypervisor(&config).await.context("new hypervisor")?,
                 new_agent(&config).context("new agent")? as Arc<dyn agent::Agent>,
+                None,
             )
         };
 
@@ -192,7 +205,7 @@ impl RuntimeHandler for VirtContainer {
             resource_manager.clone(),
             sandbox_config,
             factory,
-            None,
+            template_identity,
         )
         .await
         .context("new virt sandbox")?;
@@ -202,7 +215,8 @@ impl RuntimeHandler for VirtContainer {
             .save()
             .await
             .context("save the initial sandbox state")?;
-        let container_manager = container_manager::VirtContainerManager::new(
+        let sandbox = Arc::new(sandbox);
+        let container_manager = Arc::new(container_manager::VirtContainerManager::new(
             sid,
             pid,
             agent,
@@ -211,11 +225,15 @@ impl RuntimeHandler for VirtContainer {
             sandbox.oom_notifier(),
             sandbox_annotations,
             use_guest_resolv_conf,
-        );
+        ));
+
         Ok(RuntimeInstance {
-            sandbox: Arc::new(sandbox),
-            container_manager: Arc::new(container_manager),
-            checkpoint_restore: None,
+            sandbox: sandbox.clone(),
+            container_manager: container_manager.clone(),
+            checkpoint_restore: Some(CheckpointRestoreRuntime {
+                sandbox,
+                container_manager,
+            }),
         })
     }
 
@@ -226,8 +244,28 @@ impl RuntimeHandler for VirtContainer {
 }
 
 async fn build_vm_from_template(
-    config: &TomlConfig,
-) -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>)> {
+    config: Arc<TomlConfig>,
+) -> Result<(
+    Arc<dyn Hypervisor>,
+    Arc<dyn Agent>,
+    Option<TemplateIdentity>,
+)> {
+    let template = Template::fetch(
+        VmConfig::new(&config),
+        PathBuf::from(config.get_factory().template_path),
+    )
+    .context("validate VM template metadata")?;
+    let template_identity = template.identity()?.clone();
+    let toml_config = config_for_template(&config)?;
+    let hypervisor = new_hypervisor(&toml_config)
+        .await
+        .context("new hypervisor")?;
+    let agent = new_agent(&toml_config).context("new agent")? as Arc<dyn agent::Agent>;
+
+    Ok((hypervisor, agent, Some(template_identity)))
+}
+
+fn config_for_template(config: &TomlConfig) -> Result<TomlConfig> {
     let mut toml_config = config.clone();
     let hypervisor_name = toml_config.runtime.hypervisor_name.clone();
     if let Some(h) = toml_config.hypervisor.get_mut(&hypervisor_name) {
@@ -241,12 +279,8 @@ async fn build_vm_from_template(
     } else {
         return Err(anyhow!("hypervisor '{}' not found", hypervisor_name));
     }
-    let hypervisor = new_hypervisor(&toml_config)
-        .await
-        .context("new hypervisor")?;
-    let agent = new_agent(&toml_config).context("new agent")? as Arc<dyn agent::Agent>;
 
-    Ok((hypervisor, agent))
+    Ok(toml_config)
 }
 
 async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
@@ -362,6 +396,38 @@ agent_name="kata"
 
         let res = new_agent(&toml_config);
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_config_for_template_uses_supplied_config() {
+        let mut config = TomlConfig::default();
+        config.runtime.hypervisor_name = HYPERVISOR_QEMU.to_string();
+
+        let mut hypervisor = kata_types::config::Hypervisor::default();
+        hypervisor.factory.template_path = "/tmp/canonical-template".to_string();
+        hypervisor.device_info.default_bridges = 7;
+        hypervisor.vm_template.boot_to_be_template = true;
+        config
+            .hypervisor
+            .insert(HYPERVISOR_QEMU.to_string(), hypervisor);
+
+        let template_config = config_for_template(&config).unwrap();
+        let original = &config.hypervisor[HYPERVISOR_QEMU];
+        let derived = &template_config.hypervisor[HYPERVISOR_QEMU];
+
+        assert!(original.vm_template.boot_to_be_template);
+        assert!(!original.vm_template.boot_from_template);
+        assert!(derived.vm_template.boot_from_template);
+        assert!(!derived.vm_template.boot_to_be_template);
+        assert_eq!(derived.device_info.default_bridges, 7);
+        assert_eq!(
+            derived.vm_template.memory_path,
+            "/tmp/canonical-template/memory"
+        );
+        assert_eq!(
+            derived.vm_template.device_state_path,
+            "/tmp/canonical-template/state"
+        );
     }
 
     #[tokio::test]
