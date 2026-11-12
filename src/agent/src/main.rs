@@ -63,7 +63,7 @@ mod version;
 mod watcher;
 
 use config::GuestComponentsProcs;
-use mount::{cgroups_mount, general_mount};
+use mount::{cgroups_mount, general_mount, mount_debugfs};
 use sandbox::Sandbox;
 use signal::setup_signal_handler;
 use slog::{debug, error, info, o, warn, Logger};
@@ -442,13 +442,19 @@ async fn start_sandbox(
     let mut oma = None;
     let mut _ort = None;
     if let Some(c) = &config.mem_agent {
-        let (ma, rt) =
-            mem_agent::agent::MemAgent::new(c.memcg_config.clone(), c.compact_config.clone())
-                .map_err(|e| {
-                    error!(logger, "MemAgent::new fail: {}", e);
-                    e
-                })
-                .context("start mem-agent")?;
+        let mount_logger = logger.clone();
+        let (ma, rt) = mem_agent::agent::MemAgent::new(
+            c.memcg_config.clone(),
+            c.compact_config.clone(),
+            move || {
+                mount_debugfs(&mount_logger).context("mount debugfs required by mem-agent memcg")
+            },
+        )
+        .map_err(|e| {
+            error!(logger, "MemAgent::new fail: {}", e);
+            e
+        })
+        .context("start mem-agent")?;
         oma = Some(ma);
         _ort = Some(rt);
     }
