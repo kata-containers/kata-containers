@@ -276,6 +276,7 @@ enable_hugepages = false
 # The pod or the runtime class's pod overhead declares the guest's own room in pages:
 # VM/64 + 128 MiB + min(768 MiB + MemTotal/512 + 24 MiB per vCPU, MemTotal/4),
 # and the overhead's memory covers the host processes.
+# Under containerd, the ceilings need disable_hugetlb_controller = false.
 # Default false
 enable_hugepages_pod_sizing = false
 
