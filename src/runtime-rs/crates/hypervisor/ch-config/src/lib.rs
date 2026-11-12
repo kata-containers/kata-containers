@@ -580,6 +580,13 @@ pub struct VmInfo {
     pub state: State,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_actual_size: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_tree: Option<std::collections::HashMap<String, PciDeviceNode>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PciDeviceNode {
+    pub pci_bdf: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
@@ -595,6 +602,29 @@ pub enum State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_vm_info_vfio_pci_mapping() {
+        let mut config = VmConfig::default();
+        config.cpus.max_phys_bits = 46;
+        let info: VmInfo = serde_json::from_value(serde_json::json!({
+            "config": config,
+            "state": "Running",
+            "device_tree": {
+                "vfio-0": {"id": "vfio-0", "pci_bdf": "0000:00:05.0", "resources": []},
+                "root": {"id": "root", "children": ["vfio-0"]}
+            }
+        }))
+        .unwrap();
+        let tree = info.device_tree.unwrap();
+        assert_eq!(tree["vfio-0"].pci_bdf.as_deref(), Some("0000:00:05.0"));
+        assert!(tree["root"].pci_bdf.is_none());
+        let old_info: VmInfo = serde_json::from_value(serde_json::json!({
+            "config": config, "state": "Created"
+        }))
+        .unwrap();
+        assert!(old_info.device_tree.is_none());
+    }
 
     #[test]
     fn test_device_iommu_api_values() {

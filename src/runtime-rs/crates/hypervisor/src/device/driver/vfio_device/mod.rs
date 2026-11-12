@@ -9,7 +9,7 @@ mod host;
 
 pub use core::{
     discover_vfio_ap_device, discover_vfio_group_device, is_iommufd_devices_cdev_path,
-    is_vfio_ap_device, VfioDevice, VfioDeviceType,
+    is_vfio_ap_device, DeviceAddress, VfioDevice, VfioDeviceType,
 };
 pub use device::{VfioDeviceBase, VfioDeviceModern, VfioDeviceModernHandle};
 pub use host::{bind_device_to_host, bind_device_to_vfio, get_vfio_device, get_vfio_iommu_group};
