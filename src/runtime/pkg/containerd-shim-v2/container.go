@@ -29,6 +29,8 @@ type container struct {
 	stdinPipe   io.WriteCloser
 	stdinCloser chan struct{}
 	exitCh      chan uint32
+	cleanupDone chan struct{}
+	cleanupErr  error
 	id          string
 	stdin       string
 	stdout      string
