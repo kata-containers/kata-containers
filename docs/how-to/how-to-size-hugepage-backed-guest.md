@@ -52,6 +52,10 @@ outgrows the guest. An agent older than the runtime ignores that bound.
 The option works with QEMU and Cloud Hypervisor in the Go runtime and with
 Dragonball in runtime-rs.
 
+In runtime-rs this replaces the memory sizing described in
+[How to size sandbox overhead in runtime-rs](how-to-size-sandbox-overhead-runtime-rs.md).
+vCPU sizing is unchanged.
+
 ## What is refused
 
 Refused when the configuration loads:
