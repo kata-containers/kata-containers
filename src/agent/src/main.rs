@@ -61,6 +61,7 @@ mod uevent;
 mod util;
 mod version;
 mod watcher;
+mod zram;
 
 use config::GuestComponentsProcs;
 use mount::{cgroups_mount, general_mount, mount_debugfs};
@@ -436,6 +437,12 @@ async fn start_sandbox(
                 .set_policy(policy)
                 .await
                 .context("Failed to set policy from initdata")?;
+        }
+    }
+
+    if let Some(zram_config) = &config.zram {
+        if let Err(e) = zram::setup_zram(logger, zram_config) {
+            warn!(logger, "failed to setup zram swap: {}", e);
         }
     }
 
