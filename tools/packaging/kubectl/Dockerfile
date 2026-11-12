@@ -8,6 +8,8 @@
 ARG ALPINE_VERSION=3.23
 FROM alpine:${ALPINE_VERSION}
 
+ARG KUBECTL_VERSION
+
 # Install bash, curl, and download kubectl
 # hadolint ignore=DL3018
 RUN apk add --no-cache bash curl ca-certificates && \
@@ -19,9 +21,8 @@ RUN apk add --no-cache bash curl ca-certificates && \
         s390x)   KUBECTL_ARCH=s390x ;; \
         *)       echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
     esac && \
-    KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt) && \
     curl -fL --progress-bar -o /usr/local/bin/kubectl \
-        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl" && \
+        "https://dl.k8s.io/release/${KUBECTL_VERSION:?}/bin/linux/${KUBECTL_ARCH}/kubectl" && \
     chmod +x /usr/local/bin/kubectl && \
     kubectl version --client
 
