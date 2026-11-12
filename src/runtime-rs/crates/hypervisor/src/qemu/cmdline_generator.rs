@@ -4496,6 +4496,7 @@ mod tests {
         std::fs::write(&image, vec![0u8; 4096]).unwrap();
 
         let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
         let mut cmdline = QemuCmdLine::new("rootless-block-fd", &config).unwrap();
         let result = cmdline.add_block_device(
             "rootfs",
@@ -4528,6 +4529,7 @@ mod tests {
             cmdline.take_block_fdsets(),
             HashMap::from([("rootfs".to_string(), vec![1])])
         );
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 
     #[actix_rt::test]
