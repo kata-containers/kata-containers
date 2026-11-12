@@ -903,9 +903,11 @@ func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig, vmFa
 	if err != nil {
 		return fmt.Errorf("enable_hugepages_pod_sizing cannot read the pod's %s reservation (pod cgroup %s): %w", podResource, podCgroup, err)
 	}
-	// An unlimited cgroup can also read back as a byte count near 2^63.
+	// An unlimited cgroup can also read back as a byte count near 2^63. The bound
+	// is a shift because the s390x compiler drops a compare of a shifted value
+	// with math.MaxUint32.
 	reservedMB := reserved >> utils.MibToBytesShift
-	if !stated || reservedMB > math.MaxUint32 {
+	if !stated || reservedMB>>32 != 0 {
 		value := resCtrl.HugetlbUnlimited
 		if stated {
 			value = fmt.Sprint(reserved)
