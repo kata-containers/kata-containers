@@ -902,7 +902,7 @@ dependencies = [
  "nix 0.31.3",
  "oci-spec 0.10.0",
  "thiserror 1.0.69",
- "zbus",
+ "zbus 5.18.0",
 ]
 
 [[package]]
@@ -3640,8 +3640,8 @@ dependencies = [
  "tokio",
  "toml_edit 0.22.27",
  "walkdir",
+ "zbus 6.2.1",
  "zstd 0.13.4",
- "zvariant",
 ]
 
 [[package]]
@@ -6570,7 +6570,7 @@ dependencies = [
  "tokio",
  "tokio-vsock 0.3.4",
  "xattr 0.2.3",
- "zbus",
+ "zbus 5.18.0",
 ]
 
 [[package]]
@@ -9392,9 +9392,23 @@ dependencies = [
  "uuid 1.23.1",
  "windows-sys 0.61.2",
  "winnow 1.0.2",
- "zbus_macros",
+ "zbus_macros 5.18.0",
  "zbus_names",
  "zvariant",
+]
+
+[[package]]
+name = "zbus"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ddb2961d9587ef9f24ad14cde1c3bc4c5edc9f1525932a8cffdd5bd98886eb9"
+dependencies = [
+ "endi",
+ "serde",
+ "winnow 1.0.2",
+ "zbus_macros 6.2.1",
+ "zbus_utils",
+ "zcheapstr",
 ]
 
 [[package]]
@@ -9413,6 +9427,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zbus_macros"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "083b38add47c340fc12ec560124fb1d9c23acb584f7021099f85ec6587a03c54"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+ "zbus_utils",
+]
+
+[[package]]
 name = "zbus_names"
 version = "4.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9421,6 +9447,28 @@ dependencies = [
  "serde",
  "winnow 1.0.2",
  "zvariant",
+]
+
+[[package]]
+name = "zbus_utils"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af55e52da295311b368c45bcae221f020e28e97a2420360170ce389218e76ec7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 3.0.10",
+ "winnow 1.0.2",
+]
+
+[[package]]
+name = "zcheapstr"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "939f186d9ecebe044315a5cb6d6f78568bbc21152adc954d5a0c2f58bdbc9920"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
