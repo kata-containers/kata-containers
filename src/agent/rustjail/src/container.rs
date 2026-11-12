@@ -981,19 +981,18 @@ impl BaseContainer for LinuxContainer {
         let tty = p.tty;
         let fifo_file = format!("{}/{}", self.root, EXEC_FIFO_FILENAME);
         info!(logger, "enter container.start!");
-        let mut fifofd: RawFd = -1;
+        let mut fifofd: Option<OwnedFd> = None;
         if p.init {
             if stat::stat(fifo_file.as_str()).is_ok() {
                 return Err(anyhow!("exec fifo exists"));
             }
             unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o644).unwrap())?;
 
-            let fd = fcntl::open(
+            fifofd = Some(fcntl::open(
                 fifo_file.as_str(),
                 OFlag::O_PATH,
                 Mode::from_bits(0).unwrap(),
-            )?;
-            fifofd = fd.into_raw_fd();
+            )?);
         }
         info!(logger, "exec fifo opened!");
 
@@ -1056,6 +1055,10 @@ impl BaseContainer for LinuxContainer {
             // Transfer ownership of master to raw fd for multiple uses
             let master_raw = pseudo.master.into_raw_fd();
             p.term_master = Some(master_raw);
+            if p.proc_io.is_none() {
+                // Own the legacy master before any remaining startup can fail.
+                let _ = p.get_reader(crate::process::StreamType::TermMaster);
+            }
 
             let slave_raw = pseudo.slave.into_raw_fd();
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(slave_raw) };
@@ -1182,7 +1185,8 @@ impl BaseContainer for LinuxContainer {
             .env(PIDNS_ENABLED, format!("{}", pidns.enabled));
 
         if p.init {
-            child = child.env(FIFO_FD, format!("{fifofd}"));
+            let fd = fifofd.as_ref().context("missing init process FIFO")?;
+            child = child.env(FIFO_FD, format!("{}", fd.as_raw_fd()));
         }
 
         if let Some(fd) = pidns.fd {
@@ -1208,15 +1212,24 @@ impl BaseContainer for LinuxContainer {
                 )));
             }
         };
+        if pid <= 0 {
+            return Err(anyhow!("invalid container process pid: {pid}"));
+        }
 
-        p.pid = pid;
+        // The final child is blocked on the namespace handshake, and the
+        // caller owns the sandbox lock, excluding the agent reaper.
+        if let Err(e) = p.bind_pid(pid) {
+            let _ = signal::kill(Pid::from_raw(pid), Signal::SIGKILL);
+            return Err(anyhow!(e).context("bind container process pidfd"));
+        }
+        debug!(logger, "bound process handle"; "pid" => pid, "pidfd" => p.has_pidfd());
 
         if p.init {
             self.init_process_pid = p.pid;
         }
 
         if p.init {
-            let _ = unistd::close(fifofd).map_err(|e| warn!(logger, "close fifofd {:?}", e));
+            drop(fifofd);
         }
 
         info!(logger, "child pid: {}", p.pid);
@@ -1237,7 +1250,8 @@ impl BaseContainer for LinuxContainer {
         .map_err(|e| {
             error!(logger, "create container process error {:?}", e);
             // kill the child process.
-            let _ = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL))
+            let _ = p
+                .signal(libc::SIGKILL)
                 .map_err(|e| warn!(logger, "signal::kill joining namespaces {:?}", e));
 
             e
@@ -1252,9 +1266,9 @@ impl BaseContainer for LinuxContainer {
             {
                 // Pinning failed before the init process was added to self.processes.
                 // Kill it so an untracked child is not left blocked on the exec FIFO.
-                let _ = signal::kill(Pid::from_raw(p.pid), Some(Signal::SIGKILL)).map_err(
-                    |kill_error| warn!(logger, "failed to kill process: {:?}", kill_error),
-                );
+                let _ = p.signal(libc::SIGKILL).map_err(|kill_error| {
+                    warn!(logger, "failed to kill process: {:?}", kill_error)
+                });
                 return Err(e);
             }
         }
@@ -1285,7 +1299,7 @@ impl BaseContainer for LinuxContainer {
         let st = self.oci_state()?;
 
         for process in self.processes.values() {
-            match signal::kill(process.pid(), Some(Signal::SIGKILL)) {
+            match process.signal(libc::SIGKILL) {
                 Err(Errno::ESRCH) => {
                     info!(
                         self.logger,
@@ -2084,6 +2098,39 @@ mod tests {
     ) -> Result<U, anyhow::Error> {
         let (container, _dir) = new_linux_container();
         container.and_then(op)
+    }
+
+    #[tokio::test]
+    async fn test_start_failure_closes_exec_fifo() {
+        let (container, _dir) = new_linux_container();
+        let mut container = container.unwrap();
+        container.config.spec = None;
+        let oci_process = oci::ProcessBuilder::default()
+            .terminal(true)
+            .build()
+            .unwrap();
+        let process = Process::new(&sl(), &oci_process, "init", true, 0, None).unwrap();
+        let fifo = Path::new(&container.root).join(EXEC_FIFO_FILENAME);
+        assert!(container
+            .start(process)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("no spec"));
+        assert!(
+            fifo.exists(),
+            "the failure must happen after opening the FIFO"
+        );
+        let open_fifos: Vec<_> = fs::read_dir("/proc/self/fd")
+            .unwrap()
+            .filter_map(|entry| fs::read_link(entry.ok()?.path()).ok())
+            .filter(|target| target == &fifo)
+            .collect();
+        assert!(
+            open_fifos.is_empty(),
+            "leaked FIFO descriptors: {:?}",
+            open_fifos
+        );
     }
 
     #[test]

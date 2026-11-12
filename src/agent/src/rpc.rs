@@ -107,7 +107,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use tracing::instrument;
 
-use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
+use libc::{self, c_char, c_ushort, winsize, TIOCSWINSZ};
 use std::fs;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
@@ -655,7 +655,6 @@ impl AgentService {
             "exec-id" => &eid
         );
 
-        let pid: pid_t;
         let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
         let exit_rx = {
             let mut sandbox = self.sandbox.lock().await;
@@ -664,10 +663,12 @@ impl AgentService {
                 .map_err(sandbox_err_to_ttrpc)?;
 
             p.exit_watchers.push(exit_send);
-            pid = p.pid;
-
+            eid = p.exec_id.clone();
             p.exit_rx.clone()
         };
+        let original_exit_rx = exit_rx
+            .clone()
+            .ok_or_else(|| anyhow!("Missing process exit channel"))?;
 
         if let Some(mut exit_rx) = exit_rx {
             info!(sl(), "cid {} eid {} waiting for exit signal", &cid, &eid);
@@ -680,7 +681,14 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        let p = match ctr.processes.values_mut().find(|p| p.pid == pid) {
+        // An exec_id or numeric PID may be reused while a concurrent waiter
+        // resumes. The exit channel belongs to the original Process even after
+        // its sender is dropped, so it also identifies the process we waited for.
+        let p = match ctr.processes.get_mut(&eid).filter(|p| {
+            p.exit_rx
+                .as_ref()
+                .is_some_and(|rx| rx.same_channel(&original_exit_rx))
+        }) {
             Some(p) => p,
             None => {
                 // Lost race, pick up exit code from channel
@@ -2864,6 +2872,74 @@ mod tests {
             .unwrap(),
             dir,
         )
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_wait_process_preserves_identity_when_exec_id_is_reused() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let (mut container, _root) = create_linuxcontainer();
+        let cleanup = scopeguard::guard(container.cgroup_manager.clone(), |manager| {
+            let _ = manager.destroy();
+        });
+        let cid = container.id.clone();
+        let oci_process = oci::ProcessBuilder::default()
+            .terminal(true)
+            .build()
+            .unwrap();
+        let mut process = Process::new(&logger, &oci_process, "exec", false, 0, None).unwrap();
+        process.pid = 42;
+        container.processes.insert(process.exec_id.clone(), process);
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        sandbox.add_container(container);
+        let service = AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        };
+        let request = protocols::agent::WaitProcessRequest {
+            container_id: cid.clone(),
+            exec_id: "exec".into(),
+            ..Default::default()
+        };
+        let first = service.do_wait_process(request.clone());
+        let second = service.do_wait_process(request);
+        tokio::pin!(first, second);
+        // Register both waiters without sleeps or scheduler timing assumptions.
+        assert!(futures::poll!(first.as_mut()).is_pending());
+        assert!(futures::poll!(second.as_mut()).is_pending());
+        {
+            let mut sandbox = service.sandbox.lock().await;
+            let process = sandbox.find_container_process(&cid, "exec").unwrap();
+            process.exit_code = 23;
+            process.exit_tx.take();
+        }
+        assert_eq!(first.await.unwrap().status, 23);
+        {
+            let mut replacement =
+                Process::new(&logger, &oci_process, "exec", false, 0, None).unwrap();
+            replacement.pid = 42;
+            replacement.exit_code = 99;
+            service
+                .sandbox
+                .lock()
+                .await
+                .containers
+                .get_mut(&cid)
+                .unwrap()
+                .processes
+                .insert("exec".into(), replacement);
+        }
+        // The late waiter consumes the old status and must leave the new task alone.
+        assert_eq!(second.await.unwrap().status, 23);
+        let mut sandbox = service.sandbox.lock().await;
+        let replacement = sandbox.find_container_process(&cid, "exec").unwrap();
+        assert_eq!(replacement.exit_code, 99);
+        assert!(replacement.exit_tx.is_some());
+        cleanup.destroy().unwrap();
+        drop(scopeguard::ScopeGuard::into_inner(cleanup));
     }
 
     #[tokio::test]

@@ -306,7 +306,9 @@ impl Sandbox {
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for c in self.containers.values_mut() {
             for p in c.processes.values_mut() {
-                if p.pid == pid {
+                // Reaped entries remain until WaitProcess collects their exit
+                // status. Their numeric PID may already belong to a new child.
+                if p.pid == pid && p.exit_tx.is_some() {
                     return Some(p);
                 }
             }
@@ -1159,6 +1161,50 @@ mod tests {
             find_result.is_none(),
             "Shouldn't find a process for non existent pid"
         );
+    }
+
+    #[tokio::test]
+    #[cfg(not(target_arch = "powerpc64"))]
+    async fn test_find_process_ignores_reaped_pid() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let (mut container, _root) = create_linuxcontainer();
+        let cleanup = scopeguard::guard(container.cgroup_manager.clone(), |manager| {
+            let _ = manager.destroy();
+        });
+        let oci_process = oci::ProcessBuilder::default()
+            .terminal(true)
+            .build()
+            .unwrap();
+        let mut reaped = Process::new(&logger, &oci_process, "reaped", false, 0, None).unwrap();
+        reaped.pid = 42;
+        reaped.exit_tx.take();
+        container.processes.insert(reaped.exec_id.clone(), reaped);
+        sandbox.add_container(container);
+        assert!(sandbox.find_process(42).is_none());
+
+        let mut replacement =
+            Process::new(&logger, &oci_process, "replacement", false, 0, None).unwrap();
+        replacement.pid = 42;
+        let container = sandbox.containers.values_mut().next().unwrap();
+        container
+            .processes
+            .insert(replacement.exec_id.clone(), replacement);
+        assert_eq!(sandbox.find_process(42).unwrap().exec_id, "replacement");
+        for process in sandbox
+            .containers
+            .values_mut()
+            .next()
+            .unwrap()
+            .processes
+            .values_mut()
+        {
+            process.cleanup_process_stream();
+        }
+        cleanup.destroy().unwrap();
+        drop(scopeguard::ScopeGuard::into_inner(cleanup));
     }
 
     #[tokio::test]

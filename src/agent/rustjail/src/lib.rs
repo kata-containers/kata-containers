@@ -30,6 +30,7 @@ pub mod cgroups;
 pub mod cgroups_rs;
 pub mod container;
 pub mod mount;
+pub mod pidfd;
 pub mod pipestream;
 pub mod process;
 #[cfg(feature = "seccomp")]
