@@ -517,7 +517,8 @@ key = "value"
         assert!(add_hypervisor_initdata_overrides("invalid_base64!!").is_err());
 
         // Invalid compression format
-        let invalid_data = base64::encode("raw uncompressed data");
+        let invalid_data =
+            base64::engine::general_purpose::STANDARD.encode("raw uncompressed data");
         assert!(add_hypervisor_initdata_overrides(&invalid_data).is_err());
     }
 

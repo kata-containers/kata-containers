@@ -9,7 +9,7 @@ import (
 	"fmt"
 )
 
-func validateHypervisorConfig(conf *HypervisorConfig) error {
+func validateHypervisorConfig(conf *HypervisorConfig, hypervisorType HypervisorType) error {
 
 	if conf.RemoteHypervisorSocket != "" {
 		return nil

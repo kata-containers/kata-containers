@@ -27,8 +27,7 @@ service AgentService {
 	// all processes running inside that container and releasing all internal
 	// resources associated with it.
 	// RemoveContainer will wait for all processes termination before returning.
-	// If any process can not be killed or if it can not be killed after
-	// the RemoveContainerRequest timeout, RemoveContainer will return an error.
+	// If any process cannot be killed, RemoveContainer will return an error.
 	rpc RemoveContainer(RemoveContainerRequest) returns (google.protobuf.Empty);
 	rpc ExecProcess(ExecProcessRequest) returns (google.protobuf.Empty);
 	rpc SignalProcess(SignalProcessRequest) returns (google.protobuf.Empty);
@@ -114,14 +113,11 @@ message StartContainerRequest {
 }
 
 message RemoveContainerRequest {
-	string container_id = 1;
+	// Avoid accidental reuse of the former field: uint32 timeout = 2;
+	reserved 2;
+	reserved "timeout";
 
-	// RemoveContainer will return an error if
-	// it could not kill some container processes
-	// after timeout seconds.
-	// Setting timeout to 0 means RemoveContainer will
-	// wait for ever.
-	uint32 timeout = 2;
+	string container_id = 1;
 }
 
 message ExecProcessRequest {

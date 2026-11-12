@@ -62,12 +62,11 @@ pushd "${tarball_content_dir}"
 	if [[ "${merge_mode}" == "passthrough" ]]; then
 		[[ -n "${kata_versions_yaml_file}" ]] && cp "${kata_versions_yaml_file}" .
 	else
-		any_binary=$(find . -path "*/opt/kata/bin/*" -type f | head -1)
-		if [[ -z "${any_binary}" ]]; then
-			echo "Error: No binaries found in opt/kata/bin/" >&2
+		prefix=$(find . -type d -path "*/opt/kata" -print -quit)
+		if [[ -z "${prefix}" ]]; then
+			echo "Error: No opt/kata directory found" >&2
 			exit 1
 		fi
-		prefix=${any_binary%bin/*}
 
 		if [[ "${RELEASE:-no}" == "yes" ]] && [[ -f "${repo_root_dir}/VERSION" ]]; then
 			# In this case the tag was not published yet,

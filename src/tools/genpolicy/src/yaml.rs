@@ -452,20 +452,14 @@ pub fn get_process_fields(
                 process.User.UID, process.User
             );
 
-            // Changing the UID can break the GID mapping
-            // if a /etc/passwd file is present.
-            // The proper GID is determined, in order of preference:
-            // 1. The securityContext runAsGroup field - applied below.
-            // 2. /etc/passwd - parsed in policy::get_container_process().
-            // 3. From the container image configuration - read from registry::get_process().
-            //
-            // This behavior comes from the containerd runtime implementation:
-            // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
-            //
-            // We can't parse the /etc/passwd file here because
-            // we are in the resource context. Defer execution to outside
-            // the resource context, in policy::get_container_process()
-            // IFF the UID is changed by the resource securityContext but not the GID.
+            // A pod-level runAsUser override requires resolving a new primary GID
+            // unless pod-level runAsGroup supplies one below. Since this resource-level
+            // function cannot inspect the image's /etc/passwd, set must_check_passwd so
+            // policy::get_container_process() performs the lookup later.
+            // Note that policy::get_container_process() subsequently calls
+            // pod::Container::get_process_fields() to apply container-level overrides,
+            // matching Kubernetes' container-over-pod precedence. The container method
+            // documents the complete GID resolution order and related runtime behavior.
             *must_check_passwd = true;
         }
 

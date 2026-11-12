@@ -1872,9 +1872,9 @@ GetDiagnosticDataRequest if {
 }
 
 RemoveContainerRequest := {"ops": ops, "allowed": true} if {
-    print("RemoveContainerRequest: input =", input)
+    print("RemoveContainerRequest 1: input =", input)
 
-    # Delete input.container_id from p_state
+    # Delete input.container_id from policy state.
     ops_builder1 := []
 
     ret = get_state_container(input.container_id)
@@ -1884,5 +1884,10 @@ RemoveContainerRequest := {"ops": ops, "allowed": true} if {
 
     ops := concat_op_if_not_null(ops_builder1, del_container)
 
-    print("RemoveContainerRequest: true")
+    print("RemoveContainerRequest 1: true")
+}
+RemoveContainerRequest := {"ops": [], "allowed": true} if {
+    print("RemoveContainerRequest 2: input =", input)
+    not get_state_container(input.container_id)
+    print("RemoveContainerRequest 2: true")
 }

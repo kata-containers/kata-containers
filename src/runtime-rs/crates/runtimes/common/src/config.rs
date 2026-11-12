@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, Context, Result};
 use hypervisor::Param;
@@ -21,10 +24,22 @@ use tracing::instrument;
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
 #[instrument]
 pub fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
+    Ok(load_config_with_path(an, option)?.0)
+}
+
+/// Like `load_config`, also returning the configuration file that was loaded.
+pub fn load_config_with_path(
+    an: &HashMap<String, String>,
+    option: &Option<Vec<u8>>,
+) -> Result<(TomlConfig, PathBuf)> {
+    let config_path = requested_config_path(option)?;
+    load_config_from(an, &config_path)
+}
+
+/// Configuration file requested by the environment or the shimv2 options. An
+/// empty path selects the first existing default configuration file.
+fn requested_config_path(option: &Option<Vec<u8>>) -> Result<String> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
-    let annotation = Annotation::new(an.clone());
-    // Clone a logger from global logger to ensure the logs in this function get flushed when drop
-    let logger = slog::Logger::clone(&slog_scope::logger());
 
     let config_path = if let Ok(path) = std::env::var(KATA_CONF_FILE) {
         if is_shipped_kata_config_path(&path) {
@@ -55,12 +70,25 @@ pub fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Re
     } else {
         String::from("")
     };
+    Ok(config_path)
+}
+
+/// Load `config_path`, or the first existing default configuration file when
+/// it is empty, returning the configuration and the file that was loaded.
+pub fn load_config_from<P: AsRef<Path> + std::fmt::Debug>(
+    an: &HashMap<String, String>,
+    config_path: P,
+) -> Result<(TomlConfig, PathBuf)> {
+    let annotation = Annotation::new(an.clone());
+    // Clone a logger from global logger to ensure the logs in this function get flushed when drop
+    let logger = slog::Logger::clone(&slog_scope::logger());
 
     info!(logger, "get config path {:?}", &config_path);
-    let (mut toml_config, _) = TomlConfig::load_from_file(&config_path).context(format!(
-        "load TOML config failed (tried {:?})",
-        TomlConfig::get_default_config_file_list()
-    ))?;
+    let (mut toml_config, loaded_path) =
+        TomlConfig::load_from_file(&config_path).context(format!(
+            "load TOML config failed (tried {:?})",
+            TomlConfig::get_default_config_file_list()
+        ))?;
     annotation.update_config_by_annotation(&mut toml_config)?;
     update_agent_kernel_params(&mut toml_config)?;
 
@@ -68,7 +96,7 @@ pub fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Re
     toml_config.validate()?;
 
     info!(logger, "get config content {:?}", &toml_config);
-    Ok(toml_config)
+    Ok((toml_config, loaded_path))
 }
 
 fn is_shipped_kata_config_path(config_path: &str) -> bool {

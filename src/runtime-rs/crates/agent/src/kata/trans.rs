@@ -293,7 +293,6 @@ impl From<RemoveContainerRequest> for agent::RemoveContainerRequest {
     fn from(from: RemoveContainerRequest) -> Self {
         Self {
             container_id: from.container_id,
-            timeout: from.timeout,
             ..Default::default()
         }
     }

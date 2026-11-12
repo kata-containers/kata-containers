@@ -531,6 +531,18 @@ enum K8sEnvFromSource {
 }
 
 impl AgentPolicy {
+    pub(crate) fn exit_if_invalid_pod_security_context(resource: &dyn yaml::K8sResource) {
+        // Kubernetes passes Pod-level UID and GID directly to the sandbox. CRI requires a sandbox
+        // UID when a GID is set, so the runtime must reject this before consulting the pause image.
+        if resource
+            .get_pod_security_context()
+            .is_some_and(|context| context.runAsGroup.is_some() && context.runAsUser.is_none())
+        {
+            eprintln!("ERROR: pod securityContext.runAsGroup requires securityContext.runAsUser.");
+            exit(1);
+        }
+    }
+
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
         let mut secrets = Vec::new();
@@ -559,6 +571,7 @@ impl AgentPolicy {
                     }
                 }
 
+                Self::exit_if_invalid_pod_security_context(&*resource);
                 resource.init(config, &doc_mapping, silent).await;
 
                 // ConfigMap and Secret documents contain additional input for policy generation.
@@ -1044,7 +1057,7 @@ impl AgentPolicy {
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
-        // Resource-level settings from user's YAML - e.g., pod-level or deployment-level.
+        // First, apply pod-level UID and GID values.
         let mut must_check_passwd = false;
         resource.get_process_fields(&mut process, &mut must_check_passwd, is_pause_container);
         debug!(
@@ -1082,6 +1095,19 @@ impl AgentPolicy {
             );
         }
 
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Next, apply container-level UID and GID overrides.
+        let pod_run_as_group_is_set = resource
+            .get_pod_security_context()
+            .is_some_and(|context| context.runAsGroup.is_some());
+        yaml_container.get_process_fields(&mut process, pod_run_as_group_is_set);
+        debug!(
+            "get_container_process: after yaml_container.get_process_fields: User = {:?}",
+            process.User
+        );
+
+        // Finally, apply pod-level fsGroup and supplementalGroups after container-level ID
+        // overrides.
         apply_pod_groups_to_process(
             &mut process,
             resource.get_pod_security_context(),
@@ -1090,14 +1116,6 @@ impl AgentPolicy {
         );
         debug!(
             "get_container_process: after apply_pod_fs_group_and_supplemental_groups: User = {:?}",
-            process.User
-        );
-
-        ///////////////////////////////////////////////////////////////////////////////////////
-        // Container-level settings from user's YAML.
-        yaml_container.get_process_fields(&mut process);
-        debug!(
-            "get_container_process: after yaml_container.get_process_fields: User = {:?}",
             process.User
         );
 

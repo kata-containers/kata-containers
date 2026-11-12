@@ -83,6 +83,12 @@ impl ShimExecutor {
     }
 }
 
+/// Path of the socket file of a `unix://` address.
+pub(crate) fn socket_path(address: &Path) -> Result<PathBuf> {
+    let trim_path = address.strip_prefix("unix:").context("trim path")?;
+    Ok(Path::new("/").join(trim_path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

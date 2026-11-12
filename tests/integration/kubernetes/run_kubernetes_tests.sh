@@ -89,6 +89,7 @@ else
 		"k8s-hostname.bats" \
 		"k8s-hostpath-volume.bats" \
 		"k8s-inotify.bats" \
+		"k8s-ip-family.bats" \
 		"k8s-ip6tables.bats" \
 		"k8s-job.bats" \
 		"k8s-kill-all-process-in-container.bats" \
@@ -112,6 +113,7 @@ else
 		"k8s-sandbox-cgroup.bats" \
 		"k8s-sandbox-cgroup-placement.bats" \
 		"k8s-seccomp.bats" \
+		"k8s-shim-kill-cleanup.bats" \
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \

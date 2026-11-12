@@ -468,37 +468,15 @@ impl AgentService {
         // Drop the host guest mapping for this container so we can reuse the
         // PCI slots for the next containers
 
-        if req.timeout == 0 {
-            let mut sandbox = self.sandbox.lock().await;
-            sandbox.bind_watcher.remove_container(&cid).await;
-            sandbox
-                .get_container(&cid)
-                .ok_or_else(|| anyhow!("Invalid container id"))?
-                .destroy()
-                .await?;
-            remove_container_resources(&mut sandbox, &cid).await?;
-            return Ok(());
-        }
-
-        // timeout != 0
-        let s = self.sandbox.clone();
-        let cid2 = cid.clone();
-        let handle = tokio::spawn(async move {
-            let mut sandbox = s.lock().await;
-            sandbox.bind_watcher.remove_container(&cid2).await;
-            sandbox
-                .get_container(&cid2)
-                .ok_or_else(|| anyhow!("Invalid container id"))?
-                .destroy()
-                .await
-        });
-
-        let to = Duration::from_secs(req.timeout.into());
-        tokio::time::timeout(to, handle)
-            .await
-            .map_err(|_| anyhow!(nix::Error::ETIME))???;
-
-        remove_container_resources(&mut *self.sandbox.lock().await, &cid).await
+        let mut sandbox = self.sandbox.lock().await;
+        sandbox.bind_watcher.remove_container(&cid).await;
+        sandbox
+            .get_container(&cid)
+            .ok_or_else(|| anyhow!("Invalid container id"))?
+            .destroy()
+            .await?;
+        remove_container_resources(&mut sandbox, &cid).await?;
+        Ok(())
     }
 
     #[instrument]
@@ -992,24 +970,8 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
         let policy_state = is_allowed_stateful(&req).await?;
-        let result = self.do_remove_container(req).await;
-        let should_commit = match &result {
-            Ok(()) => true,
-            Err(err) => {
-                // When ETIME gets returned, the container might have not been
-                // removed from the guest VM completely yet. The policy state
-                // change will be committed here, and that might allow another
-                // container matching the same policy data to start. This is a
-                // reasonable policy behavior while the possibility of removing
-                // this timeout is being discussed in:
-                // https://github.com/kata-containers/kata-containers/issues/13920.
-                err.downcast_ref::<Errno>() == Some(&Errno::ETIME)
-            }
-        };
-        if should_commit {
-            policy_state.commit().await?;
-        }
-        result.map_ttrpc_err(same)?;
+        self.do_remove_container(req).await.map_ttrpc_err(same)?;
+        policy_state.commit().await?;
         Ok(Empty::new())
     }
 

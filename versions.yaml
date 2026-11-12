@@ -73,7 +73,7 @@ assets:
     cloud_hypervisor:
       description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
-      version: "v54.0"
+      version: "v54.1"
 
     openvmm:
       description: >-
@@ -90,7 +90,7 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v11.0.1"
+      version: "v11.1.3"
 
     qemu-snp-experimental:
       description: "QEMU with GPU+SNP support"
@@ -115,6 +115,9 @@ assets:
       aarch64:
         name: "ubuntu"
         version: "resolute"  # 26.04 LTS
+        substrate:
+          name: "debian"
+          version: "trixie-slim"
         confidential:
           name: "ubuntu"
           version: "resolute"  # 26.04 LTS
@@ -142,6 +145,9 @@ assets:
       x86_64:
         name: "ubuntu"
         version: "resolute"  # 26.04 LTS
+        substrate:
+          name: "debian"
+          version: "trixie-slim"
         confidential:
           name: "ubuntu"
           version: "resolute"  # 26.04 LTS
@@ -205,15 +211,15 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.56"
+    version: "v6.18.62"
     nvidia:
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.18.56"
+      version: "v6.18.62"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.56"
+    version: "v6.18.62"
 
 externals:
   description: "Third-party projects used by the system"
@@ -269,7 +275,7 @@ externals:
           url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/sbsa/"
           pkg: "cuda-keyring_1.1-1_all.deb"
     ctk:
-      version: "1.19.1-1"
+      version: "1.20.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
     dcgm:
       desc: "NVIDIA Data Center GPU Manager"
@@ -286,7 +292,7 @@ externals:
 
   upx:
     desc: "Executable packer used to shrink the NVIDIA GPU rootfs"
-    version: "5.2.1"
+    version: "5.3.0"
     url: "https://github.com/upx/upx"
 
   busybox:
@@ -336,7 +342,7 @@ externals:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
     url: "github.com/containerd/containerd"
-    minimum: "v2.2"
+    minimum: "v2.3"
     latest: "v2.4"
 
   runc:
@@ -352,12 +358,12 @@ externals:
   hadolint:
     description: "the dockerfile linter used by static-checks"
     url: "https://github.com/hadolint/hadolint"
-    version: "2.12.0"
+    version: "2.15.1"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"
     url: "https://github.com/seccomp/libseccomp"
-    version: "2.6.0"
+    version: "2.6.1"
 
   pause:
     description: "Kubernetes pause container image"
@@ -366,18 +372,18 @@ externals:
 
   nydus:
     description: "Nydus image acceleration service"
-    url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.3"
+    url: "https://github.com/dragonflyoss/nydus"
+    version: "v2.4.5"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.15.15"
+    version: "v0.16.1"
 
   oras:
     description: "OCI Registry As Storage CLI"
     url: "https://github.com/oras-project/oras"
-    version: "1.3.3"
+    version: "1.3.6"
 
   opa:
     description: "Open Policy Agent"
@@ -389,13 +395,13 @@ externals:
     url: "https://github.com/tianocore/edk2"
     x86_64:
       description: "Vanilla firmware build"
-      version: "edk2-stable202508"
+      version: "edk2-stable202608"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
     sev:
       # Used by AMD SEV-SNP for measured direct boot
       description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202508"
+      version: "edk2-stable202608"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
     tdx:
@@ -405,9 +411,9 @@ externals:
       package_output_dir: "IntelTdx"
     arm64:
       description: "UEFI for arm64 virtual machines."
-      version: "edk2-stable202508"
+      version: "edk2-stable202608"
       package: "ArmVirtPkg/ArmVirtQemu.dsc"
-      package_output_dir: "ArmVirtQemu-AARCH64"
+      package_output_dir: "ArmVirtQemu-AArch64"
 
   protoc:
     description: "Protobuf compiler"
@@ -418,6 +424,12 @@ externals:
     description: "Protobuf Go compiler"
     url: "https://github.com/protocolbuffers/protobuf-go/releases"
     version: "v1.28.1"
+
+  td-shim:
+    description: "A simplified TDX virtual firmware for TD containers"
+    url: "https://github.com/confidential-containers/td-shim"
+    version: "0362d0bc6d784170af28551e0b9bc6fd5ad414d2"
+    toolchain: "1.88.0"
 
   ttrpc:
     description: "ttRPC libary and code generation utilities"

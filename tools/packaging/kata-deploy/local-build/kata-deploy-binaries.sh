@@ -34,6 +34,7 @@ readonly openvmm_builder="${static_build_dir}/openvmm/build.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
+readonly tdshim_builder="${static_build_dir}/td-shim/build.sh"
 readonly pause_image_builder="${static_build_dir}/pause-image/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_flavour_builder="${static_build_dir}/qemu/build-static-qemu-flavour.sh"
@@ -127,6 +128,7 @@ options:
 --build=<asset>       :
 	all
 	agent
+	agent-substrate
 	agent-ctl
 	boot-image-se
 	boot-image-se-runtime-rs
@@ -152,10 +154,12 @@ options:
 	qemu-snp-experimental
 	qemu-tdx-experimental
 	stratovirt
+	td-shim
 	rootfs-image
 	rootfs-image-confidential
 	rootfs-image-coco-extension
 	rootfs-image-mariner
+	rootfs-image-substrate
 	rootfs-initrd
 	rootfs-initrd-confidential
 	shim-v2-go
@@ -797,6 +801,8 @@ install_image() {
 
 	info "Create image"
 
+	export FS_TYPE="erofs"
+
 	if [[ -n "${variant}" ]]; then
 		# Both the standard confidential image and the NVIDIA confidential
 		# image bake the CoCo guest components (including the pause bundle)
@@ -1231,6 +1237,28 @@ install_image_nvidia() {
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
 	install_image "nvidia"
+}
+
+install_image_substrate() {
+	case "${ARCH}" in
+		x86_64|aarch64) ;;
+		*) die "The substrate image is not supported on ${ARCH}" ;;
+	esac
+	local agent_tarball base_image base_digest
+	agent_tarball="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-agent-substrate.tar.zst"
+	[[ -f "${agent_tarball}" ]] || die "Substrate agent tarball not found: ${agent_tarball}"
+	base_image=$(get_from_kata_deps \
+		".assets.image.architecture.${ARCH}.substrate | .name + \":\" + .version")
+	base_digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${base_image}" | jq -er '.digest')
+	latest_builder_image="${base_image}@${base_digest}"
+	latest_artefact="$(get_kata_version)-$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	latest_artefact+="-$(sha256sum "${agent_tarball}" | cut -d' ' -f1)"
+	install_cached_tarball_component \
+		"${build_target}" "${latest_artefact}" "${latest_builder_image}" \
+		"${final_tarball_name}" "${final_tarball_path}" && return 0
+	DESTDIR="${destdir}" AGENT_TARBALL="${agent_tarball}" SUBSTRATE_BASE_IMAGE="${latest_builder_image}" \
+		"${repo_root_dir}/tools/packaging/guest-image/build_substrate_image.sh"
 }
 
 # Install the gpu extension image: driver userspace selected directly from the
@@ -1766,6 +1794,27 @@ install_ovmf_tdx() {
 	install_ovmf "tdx" "edk2-tdx.tar.gz"
 }
 
+# Install the td-shim TDX firmware asset.
+#
+# td-shim publishes no released binaries, so it is always built from source
+# (see static-build/td-shim/build.sh); repeat builds are short-circuited by
+# the cached-artefact tarball via install_cached_tarball_component.
+install_td_shim() {
+	latest_artefact="$(get_from_kata_deps ".externals.td-shim.version")"
+	latest_builder_image="$(get_td_shim_image_name)"
+
+	install_cached_tarball_component \
+		"td-shim" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static td-shim"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${tdshim_builder}"
+}
+
 install_busybox() {
 	latest_artefact="$(get_from_kata_deps ".externals.busybox.version")"
 	latest_builder_image="$(get_busybox_image_name)"
@@ -1783,8 +1832,18 @@ install_busybox() {
 }
 
 install_agent() {
-	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/agent)"
+	local agent_source_revision
+	agent_source_revision="$(git log -1 --abbrev=9 --pretty=format:"%h" -- \
+		"${repo_root_dir}"/src/agent \
+		"${repo_root_dir}"/src/libs \
+		"${repo_root_dir}"/Cargo.toml \
+		"${repo_root_dir}"/Cargo.lock)"
+	latest_artefact="$(get_kata_version)-${agent_source_revision}"
 	latest_builder_image="$(get_agent_image_name)"
+	if [[ "${BUILD_VARIANT:-}" == substrate ]]; then
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/libs")"
+	fi
 
 	install_cached_tarball_component \
 		"${build_target}" \
@@ -2032,11 +2091,13 @@ handle_build() {
 		install_stratovirt
 		install_shim_v2_go
 		install_shim_v2_rust
+		install_td_shim
 		install_trace_forwarder
 		install_virtiofsd
 		;;
 
 	agent) install_agent ;;
+	agent-substrate) BUILD_VARIANT=substrate install_agent ;;
 
 	agent-ctl) install_agent_ctl ;;
 
@@ -2090,6 +2151,8 @@ handle_build() {
 
 	stratovirt) install_stratovirt ;;
 
+	td-shim) install_td_shim ;;
+
 	rootfs-image) install_image_base ;;
 
 	rootfs-image-confidential) install_image_confidential ;;
@@ -2109,6 +2172,8 @@ handle_build() {
 	rootfs-image-nvidia-gpu-confidential) install_image_nvidia_gpu_confidential ;;
 
 	rootfs-image-nvidia) install_image_nvidia ;;
+
+	rootfs-image-substrate) install_image_substrate ;;
 
 	rootfs-image-nvidia-gpu-extension) install_image_nvidia_gpu_extension ;;
 

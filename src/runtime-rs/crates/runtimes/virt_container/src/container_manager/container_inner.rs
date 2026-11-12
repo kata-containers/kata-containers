@@ -200,7 +200,6 @@ impl ContainerInner {
         if !self.removed_from_agent {
             let remove_request = agent::RemoveContainerRequest {
                 container_id: cid.to_string(),
-                ..Default::default()
             };
             match self.agent.remove_container(remove_request).await {
                 Ok(_) => self.removed_from_agent = true,
@@ -698,7 +697,7 @@ mod tests {
         async fn cleanup(&self, _: &RwLock<DeviceManager>) -> Result<()> {
             FakeResource::cleanup(self).await
         }
-        async fn get_device_id(&self) -> Result<Option<String>> {
+        async fn get_device_ids(&self) -> Result<Vec<String>> {
             unimplemented!()
         }
     }

@@ -45,28 +45,6 @@ wait_for_rootless_host_resources() {
 	return 1
 }
 
-# Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
-# by default. Until then, explicitly request a GPU so this test exercises the
-# runtime-rs VFIO file-descriptor path.
-nvidia_gpu_request_supported() {
-	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
-	is_runtime_rs || return 1
-	is_nvidia_gpu_platform || return 1
-}
-
-request_gpu_for_nvidia_gpu_runtime_rs() {
-	local available_gpus
-	local config="$1"
-
-	available_gpus="$(kubectl get node "${node}" \
-		-o jsonpath='{.status.allocatable.nvidia\.com/gpu}')"
-	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
-		die "${node} has no allocatable nvidia.com/gpu resource"
-
-	yq -i '.spec.containers[0].resources.limits."nvidia.com/gpu" = "1"' \
-		"${config}"
-}
-
 # Print why the current runtime cannot run this rootless VMM smoke test. A
 # non-zero return means the runtime is supported.
 rootless_vmm_skip_reason() {
@@ -253,7 +231,13 @@ setup() {
 			}]
 		' "${pod_config}"
 	fi
-	set_container_command "${pod_config}" 0 sleep 30
+	# The kill test must find the shim alive whenever it gets to the
+	# SIGKILL, not just in the first half minute of the pod's life, and
+	# the command has to be set before the policy is generated from it.
+	set_container_command "${pod_config}" 0 sleep infinity
+	# Drop this request once the NVIDIA GPU runtime-rs configurations enable
+	# rootless by default. Until then, ask for a GPU explicitly so this test
+	# exercises the runtime-rs VFIO file-descriptor path.
 	if nvidia_gpu_request_supported; then
 		request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
 	fi
@@ -306,7 +290,7 @@ EOF
 	(( vmm_uid != 0 ))
 	(( vmm_gid != 0 ))
 	vmm_user="$(exec_host "${node}" "getent passwd ${vmm_uid} | cut -d: -f1")"
-	[[ "${vmm_user}" =~ ^kata-[0-9]+$ ]]
+	[[ "${vmm_user}" =~ ^kata-[a-f0-9]{8}-[0-9]+$ ]]
 
 	if [[ "${KATA_HYPERVISOR}" == qemu* ]]; then
 		cmdline="$(exec_host "${node}" "tr '\\0' ' ' < /proc/${vmm_pid}/cmdline")"
@@ -325,6 +309,35 @@ EOF
 
 	kubectl delete -f "${pod_config}" --ignore-not-found=true
 	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
+}
+
+@test "Nothing of a rootless sandbox is left once its shim was killed" {
+	local sandbox_id
+	local vmm_pid
+	local vmm_uid
+	local vmm_user
+
+	is_runtime_rs || skip "cleanup after a killed shim is tested for runtime-rs only"
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "CRI-O does not run the shim's delete command after a shim died"
+
+	# A replacement sandbox could get the UID about to be freed and either
+	# leave its own resources under it or remove a leak along with them.
+	yq -i '.spec.restartPolicy = "Never"' "${pod_config}"
+	retry_kubectl_apply "${pod_config}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
+
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
+	vmm_pid="$(get_vmm_pid_for_pod "${pod_name}")"
+	vmm_uid="$(exec_host "${node}" "awk '/^Uid:/ {print \$2}' /proc/${vmm_pid}/status")"
+	[[ "${vmm_uid}" =~ ^[0-9]+$ ]]
+	(( vmm_uid != 0 ))
+	vmm_user="$(exec_host "${node}" "getent passwd ${vmm_uid} | cut -d: -f1")"
+	[[ "${vmm_user}" =~ ^kata-[a-f0-9]{8}-[0-9]+$ ]]
+
+	kill_shim_and_wait_for_cleanup "${node}" "${sandbox_id}"
+	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
+	kubectl delete -f "${pod_config}" --ignore-not-found=true --wait=true
 }
 
 @test "VMM propagates ConfigMap updates while rootless" {

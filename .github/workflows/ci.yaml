@@ -51,6 +51,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  run-substrate-tests:
+    needs: [build-kata-static-tarball-amd64, build-kata-static-tarball-arm64]
+    if: ${{ inputs.skip-test != 'yes' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/run-substrate-tests.yaml
+    with:
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      tarball-suffix: -${{ inputs.tag }}
+
   build-kata-static-tarball-amd64:
     permissions:
       contents: read
@@ -192,7 +203,7 @@ jobs:
       tag: ${{ inputs.tag }}-s390x
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-s390x
+      runner: ubuntu-26.04-s390x
       arch: s390x
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
@@ -210,7 +221,7 @@ jobs:
       tag: ${{ inputs.tag }}-s390x
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-s390x
+      runner: ubuntu-26.04-s390x
       arch: s390x
       image-kind: monitor
     secrets:
@@ -262,9 +273,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.commit-hash }}
+          allow-unsafe-pr-checkout: true
           fetch-depth: 0
           persist-credentials: false
 

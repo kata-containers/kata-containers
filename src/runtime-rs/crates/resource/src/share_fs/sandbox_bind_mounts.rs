@@ -130,31 +130,35 @@ impl SandboxBindMounts {
     }
 
     pub fn cleanup_sandbox_bind_mounts(&self) -> Result<()> {
-        for src in &self.sandbox_bindmounts {
-            let parsed_mnts = self
-                .parse_sandbox_bind_mounts(src)
-                .context("parse sandbox bind mounts")?;
-
-            let mnt_name = get_base_name(parsed_mnts.1)?
-                .into_string()
-                .map_err(|e| anyhow!("failed to convert to string{:?}", e))?;
-
-            // /run/kata-containers/shared/sandboxes/<sid>/passthrough/rw/sandbox-mounts/dir
-            let mnt_dest = self.host_mounts_path.join(mnt_name.as_str());
+        // Deriving the mount names from the configured sources again would
+        // canonicalize them, and a source may be gone by cleanup time. The
+        // mounts to undo all sit under the sandbox's own directory, so undo
+        // what is there instead.
+        let entries = match fs::read_dir(&self.host_mounts_path) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(e).context(format!(
+                    "read sandbox bindmount point {:?}",
+                    self.host_mounts_path
+                ))
+            }
+        };
+        for entry in entries {
+            // /run/kata-containers/shared/sandboxes/<sid>/rw/passthrough/sandbox-mounts/dir
+            let mnt_dest = entry
+                .context(format!(
+                    "read sandbox bindmount point {:?}",
+                    self.host_mounts_path
+                ))?
+                .path();
             mount::umount_timeout(mnt_dest, 0).context("umount bindmount failed")?;
         }
 
-        let is_dir = match fs::metadata(&self.host_mounts_path) {
-            Ok(md) => md.is_dir(),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-            Err(e) => return Err(e.into()),
-        };
-        if is_dir {
-            fs::remove_dir_all(self.host_mounts_path.clone()).context(format!(
-                "remove sandbox bindmount point {:?}.",
-                self.host_mounts_path.clone()
-            ))?;
-        }
+        fs::remove_dir_all(&self.host_mounts_path).context(format!(
+            "remove sandbox bindmount point {:?}.",
+            self.host_mounts_path
+        ))?;
 
         Ok(())
     }
@@ -205,6 +209,45 @@ mod tests {
         for source in &sources {
             assert!(source.join("sentinel").exists());
         }
+
+        bind_mounts.cleanup_sandbox_bind_mounts().unwrap();
+    }
+
+    // Needs no root and runs everywhere: a sandbox that never set its bind
+    // mounts up has nothing to sweep, and its configured source may never
+    // have existed at all. Cleanup must not care; deriving the mount names
+    // from the sources again (which canonicalizes them) would fail here.
+    #[test]
+    fn cleanup_without_mounts_ignores_a_vanished_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let bind_mounts = SandboxBindMounts {
+            sid: "bindmnt-cleanup-noop-test".to_string(),
+            host_mounts_path: dir.path().join("sandbox-mounts"),
+            sandbox_bindmounts: vec!["/does/not/exist/bindmnt-src".to_string()],
+        };
+        bind_mounts.cleanup_sandbox_bind_mounts().unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires root and mount namespace capabilities"]
+    fn cleanup_outlives_the_configured_sources() {
+        if !in_private_mount_namespace(
+            "share_fs::sandbox_bind_mounts::tests::cleanup_outlives_the_configured_sources",
+        ) {
+            return;
+        }
+        let tmpfs = SharedTmpfs::new();
+        let sid = tmpfs.sandbox();
+        let source = tmpfs.path().join("gone-src");
+        fs::create_dir(&source).unwrap();
+        let bind_mounts = SandboxBindMounts::new(sid, vec![source.display().to_string()]).unwrap();
+        bind_mounts.setup_sandbox_bind_mounts().unwrap();
+        assert!(is_mounted(bind_mounts.host_mounts_path.join("gone-src")));
+
+        // The source is gone by the time a dead sandbox is cleaned up.
+        fs::remove_dir_all(&source).unwrap();
+        bind_mounts.cleanup_sandbox_bind_mounts().unwrap();
+        assert!(!bind_mounts.host_mounts_path.exists());
 
         bind_mounts.cleanup_sandbox_bind_mounts().unwrap();
     }

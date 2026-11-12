@@ -15,14 +15,22 @@ use crate::sl;
 
 // nix filesystem_type for different libc and architectures
 #[cfg(all(target_os = "linux", target_env = "musl"))]
-type FsType = libc::c_ulong;
+pub(crate) type FsType = libc::c_ulong;
 #[cfg(all(
     target_os = "linux",
     not(any(target_env = "musl", target_arch = "s390x"))
 ))]
-type FsType = libc::__fsword_t;
+pub(crate) type FsType = libc::__fsword_t;
 #[cfg(all(target_os = "linux", not(target_env = "musl"), target_arch = "s390x"))]
-type FsType = libc::c_uint;
+pub(crate) type FsType = libc::c_uint;
+
+/// Whether the filesystem holding `path` reports the given magic number; a
+/// path that cannot be statted does not.
+pub(crate) fn has_fs_magic(path: &Path, magic: FsType) -> bool {
+    nix::sys::statfs::statfs(path)
+        .map(|fs| fs.filesystem_type().0 == magic)
+        .unwrap_or(false)
+}
 
 // from linux.git/fs/fuse/inode.c: #define FUSE_SUPER_MAGIC 0x65735546
 const FUSE_SUPER_MAGIC: FsType = 0x65735546;
@@ -42,22 +50,12 @@ pub fn get_base_name<P: AsRef<Path>>(src: P) -> Result<OsString> {
 
 /// Check whether `path` is on a fuse filesystem.
 pub fn is_fuse_fs<P: AsRef<Path>>(path: P) -> bool {
-    if let Ok(st) = nix::sys::statfs::statfs(path.as_ref()) {
-        if st.filesystem_type().0 == FUSE_SUPER_MAGIC {
-            return true;
-        }
-    }
-    false
+    has_fs_magic(path.as_ref(), FUSE_SUPER_MAGIC)
 }
 
 /// Check whether `path` is on a overlay filesystem.
 pub fn is_overlay_fs<P: AsRef<Path>>(path: P) -> bool {
-    if let Ok(st) = nix::sys::statfs::statfs(path.as_ref()) {
-        if st.filesystem_type().0 == OVERLAYFS_SUPER_MAGIC {
-            return true;
-        }
-    }
-    false
+    has_fs_magic(path.as_ref(), OVERLAYFS_SUPER_MAGIC)
 }
 
 /// Check whether the given path is a symlink.

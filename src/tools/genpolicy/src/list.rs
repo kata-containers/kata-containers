@@ -44,6 +44,7 @@ impl yaml::K8sResource for List {
         for item in &self.items {
             let yaml_string = serde_yaml::to_string(&item).unwrap();
             let (mut resource, _kind) = yaml::new_k8s_resource(&yaml_string, silent).unwrap();
+            policy::AgentPolicy::exit_if_invalid_pod_security_context(&*resource);
             resource.init(config, item, silent).await;
             self.resources.push(resource);
         }

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::future::Future;
 use std::sync::Arc;
 
 use agent::Agent;
@@ -37,7 +38,11 @@ impl HealthCheck {
         }
     }
 
-    pub fn start(&self, id: &str, agent: Arc<dyn Agent>) {
+    pub fn start<F, Fut>(&self, id: &str, agent: Arc<dyn Agent>, on_failure: F)
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send + 'static,
+    {
         if !self.keep_alive {
             return;
         }
@@ -88,7 +93,13 @@ impl HealthCheck {
                                 if let Err(mpsc::error::TryRecvError::Empty) = stop_rx.try_recv() {
                                     error!(sl!(), "failed to receive stop monitor signal");
                                     if !keep_abnormal {
-                                        ::std::process::exit(1);
+                                        // Exiting the shim here would leave an external VMM running.
+                                        warn!(sl!(), "stopping the VM of sandbox {}", id);
+                                        if !on_failure().await {
+                                            error!(sl!(), "VM exit was not confirmed, exiting");
+                                            ::std::process::exit(1);
+                                        }
+                                        break;
                                     }
                                 } else {
                                     info!(sl!(), "wait to exit {}", id);

@@ -651,7 +651,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     }
 
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
-        mount::finish_rootfs(cfd_log, &spec, &oci_process)?;
+        mount::finish_rootfs(cfd_log, &spec, &oci_process, selinux_enabled)?;
     }
 
     if !oci_process.cwd().as_os_str().is_empty() {

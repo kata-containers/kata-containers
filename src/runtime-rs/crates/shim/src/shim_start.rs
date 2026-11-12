@@ -7,7 +7,7 @@
 use std::{
     fs,
     io::Write,
-    os::unix::{io::IntoRawFd, prelude::OsStrExt},
+    os::unix::{io::IntoRawFd, net::UnixStream, prelude::OsStrExt},
     path::{Path, PathBuf},
 };
 
@@ -17,7 +17,7 @@ use kata_types::{container::ContainerType, k8s};
 use unix_socket::UnixListener;
 
 use crate::{
-    shim::{ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
+    shim::{socket_path, ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
     Error,
 };
 
@@ -112,14 +112,25 @@ impl ShimExecutor {
 }
 
 fn new_listener(address: &Path) -> Result<UnixListener> {
-    let trim_path = address.strip_prefix("unix:").context("trim path")?;
-    let file_path = Path::new("/").join(trim_path);
+    let file_path = socket_path(address)?;
     let file_path = file_path.as_path();
     if let Some(parent_dir) = file_path.parent() {
         fs::create_dir_all(parent_dir).context("create parent dir")?;
     }
 
-    UnixListener::bind(file_path).context("bind address")
+    match UnixListener::bind(file_path) {
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            // The socket file of a shim that exited without cleaning up stays
+            // at the address and makes every later start of the same sandbox
+            // fail. Only a live shim accepts connections, so leave it alone.
+            if UnixStream::connect(file_path).is_ok() {
+                return Err(e).context("bind address: socket in use by a running shim");
+            }
+            fs::remove_file(file_path).context("remove stale socket")?;
+            UnixListener::bind(file_path).context("bind address after removing stale socket")
+        }
+        res => res.context("bind address"),
+    }
 }
 
 #[cfg(test)]
@@ -169,5 +180,31 @@ mod tests {
 
         let _ = new_listener(Path::new(&uds_path)).unwrap();
         std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_new_listener_stale_socket() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stale.sock");
+        let uds_path = format!("unix://{}", path.display());
+
+        // A listener that is dropped leaves its socket file behind, like a shim
+        // that exited without cleaning up.
+        drop(new_listener(Path::new(&uds_path)).unwrap());
+        assert!(path.exists());
+
+        let _listener = new_listener(Path::new(&uds_path)).unwrap();
+    }
+
+    #[test]
+    fn test_new_listener_live_socket() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("live.sock");
+        let uds_path = format!("unix://{}", path.display());
+
+        let _live = new_listener(Path::new(&uds_path)).unwrap();
+
+        assert!(new_listener(Path::new(&uds_path)).is_err());
+        assert!(path.exists());
     }
 }

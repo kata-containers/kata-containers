@@ -17,9 +17,9 @@ kernel = "@KERNELPATH_CLH@"
 image = "@IMAGEPATH@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
+#   - erofs (default)
 rootfs_type = @DEFROOTFSTYPE@
 
 # Enable running clh VMM as a non-root user.

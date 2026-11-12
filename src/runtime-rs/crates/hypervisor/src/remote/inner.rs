@@ -377,7 +377,6 @@ impl Persist for RemoteInner {
             hypervisor_type: HYPERVISOR_REMOTE.to_string(),
             id: self.id.clone(),
             config: self.config.clone(),
-            netns: self.netns.clone(),
             ..Default::default()
         })
     }
@@ -391,7 +390,7 @@ impl Persist for RemoteInner {
             id: hypervisor_state.id,
             config: hypervisor_state.config,
             agent_socket_path: "".to_string(),
-            netns: hypervisor_state.netns,
+            netns: None,
             client: None,
             exit_notify: Some(exit_notify),
         })

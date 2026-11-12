@@ -111,9 +111,10 @@ create_debugger_pod() {
 	local pod_name
 	pod_name="custom-node-debugger-$(echo -n "${node}" | sha1sum | cut -c1-7)"
 
-	# Check if there is an existing node debugger pod and reuse it
-	# Otherwise, create a new one
-	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
+	# Reuse an existing node debugger pod, unless it predates hostPID: a
+	# persistent cluster can keep one from an earlier run.
+	if [[ "$(kubectl get pod -n kube-system "${pod_name}" -o jsonpath='{.spec.hostPID}' 2>/dev/null)" != "true" ]]; then
+		kubectl delete pod -n kube-system "${pod_name}" --ignore-not-found=true --wait=true > /dev/null
 		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
 			kubectl apply -n kube-system -f - > /dev/null
 		# Wait for the newly created pod to be ready

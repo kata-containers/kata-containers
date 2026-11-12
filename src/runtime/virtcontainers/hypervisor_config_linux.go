@@ -11,7 +11,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 )
 
-func validateHypervisorConfig(conf *HypervisorConfig) error {
+func validateHypervisorConfig(conf *HypervisorConfig, hypervisorType HypervisorType) error {
 
 	if conf.RemoteHypervisorSocket != "" {
 		return nil
@@ -59,8 +59,9 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		return fmt.Errorf("confidential guests must not use virtio-mmio (use virtio-blk-pci); virtio-mmio is not hardened for CoCo")
 	}
 
-	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxVCPUs {
-		conf.DefaultMaxVCPUs = defaultMaxVCPUs
+	maxVCPUs := MaxVCPUs(hypervisorType)
+	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > maxVCPUs {
+		conf.DefaultMaxVCPUs = maxVCPUs
 	}
 
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {

@@ -140,15 +140,25 @@ At VM creation time, for each entry in `guest_extension_images`, the runtime:
    entry renders as a bare `kata.extension.<name>.verity_params` (no `=`), which
    the unit condition and generator both handle.
 
-Both the Go runtime and the Rust runtime-rs implement this logic in their
-respective QEMU hypervisor backends. The extension devices are **cold-plugged** —
-they are present on the QEMU command line at VM start, not hot-plugged later.
+The Go runtime's QEMU backend and the runtime-rs QEMU, Cloud Hypervisor, and
+Dragonball backends implement this logic. The extension devices are
+**cold-plugged** — they are present when the VM starts, not hot-plugged later.
 
-Other hypervisor backends (Cloud Hypervisor, Firecracker) do not implement
-extension cold-plugging yet, but the mechanism is straightforward to add: each
-backend only needs to translate the `GuestExtensionImage` entries into its native
+For runtime-rs QEMU, Cloud Hypervisor, and Dragonball guests that boot a
+virtio-blk rootfs image, a shared helper reads the image's partition table and
+selects the root partition with
+`root=PARTUUID=<partition-1-id> rootwait`. Virtio-blk devices probe asynchronously,
+so attaching the rootfs first does not guarantee that it becomes `/dev/vda`.
+For measured rootfs images, the dm-verity table uses the `PARTUUID` values of both the
+data and hash partitions, with `dm-mod.waitfor` waiting for those devices.
+DOS images require a nonzero disk signature; GPT images use partition GUIDs.
+The rootfs and extension images must have distinct partition identities.
+Initrd and pmem rootfs boot paths retain their existing device selection.
+
+Firecracker does not implement extension cold-plugging yet. Each additional
+backend needs to translate the `GuestExtensionImage` entries into its native
 block device attachment API. The runtime configuration, guest-side mounting,
-and agent path resolution are completely hypervisor-independent.
+and agent path resolution are shared across hypervisors.
 
 ### Guest-side: mounting extensions
 

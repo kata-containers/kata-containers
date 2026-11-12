@@ -12,6 +12,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	# The l3forwarding network model is only implemented in runtime-rs.
 	is_runtime_rs || skip "l3forwarding is only supported by runtime-rs"
+	[[ "${K8S_IP_FAMILY:-ipv4}" == "ipv4" ]] || skip "l3forwarding only supports IPv4 pod networking"
 
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
 
@@ -61,6 +62,7 @@ EOF
 
 teardown() {
 	is_runtime_rs || skip "l3forwarding is only supported by runtime-rs"
+	[[ "${K8S_IP_FAMILY:-ipv4}" == "ipv4" ]] || skip "l3forwarding only supports IPv4 pod networking"
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
 
 	# Debugging information
