@@ -28,7 +28,7 @@ type capacityTestNode struct {
 	driver *directVolume
 }
 
-func newCapacityTestDriver(t *testing.T, nodeID string, poolCapacity, maxVolumeSize int64, volumes ...state.Volume) *directVolume {
+func newSchedulingTestDriver(t *testing.T, nodeID string, poolCapacity, maxVolumeSize int64, volumes ...state.Volume) *directVolume {
 	t.Helper()
 
 	tmp := t.TempDir()
@@ -118,11 +118,11 @@ func TestCapacityAwareSchedulingFiltersNodes(t *testing.T) {
 	nodes := []capacityTestNode{
 		{
 			name:   "node-small",
-			driver: newCapacityTestDriver(t, "node-small", 2*utils.GiB, 8*utils.GiB),
+			driver: newSchedulingTestDriver(t, "node-small", 2*utils.GiB, 8*utils.GiB),
 		},
 		{
 			name: "node-large",
-			driver: newCapacityTestDriver(t, "node-large", 10*utils.GiB, 8*utils.GiB,
+			driver: newSchedulingTestDriver(t, "node-large", 10*utils.GiB, 8*utils.GiB,
 				state.Volume{VolID: "pv-one", Kind: capacityTestPool, VolSize: 2 * utils.GiB},
 				state.Volume{VolID: "pv-two", Kind: capacityTestPool, VolSize: 3 * utils.GiB},
 				state.Volume{VolID: "pv-other-pool", Kind: "archive", VolSize: 7 * utils.GiB}),
@@ -163,7 +163,7 @@ func capacityTestSchedulingFits(response *csi.GetCapacityResponse, requiredBytes
 
 func TestCapacityAwareSchedulingMissingInformation(t *testing.T) {
 	t.Run("unknown pool is not eligible", func(t *testing.T) {
-		dv := newCapacityTestDriver(t, "node-unknown-pool", 8*utils.GiB, 8*utils.GiB)
+		dv := newSchedulingTestDriver(t, "node-unknown-pool", 8*utils.GiB, 8*utils.GiB)
 		response, err := dv.GetCapacity(context.Background(), &csi.GetCapacityRequest{
 			Parameters: map[string]string{storageKind: "missing"},
 		})
@@ -174,19 +174,21 @@ func TestCapacityAwareSchedulingMissingInformation(t *testing.T) {
 	})
 
 	t.Run("missing pool parameter is not eligible", func(t *testing.T) {
-		dv := newCapacityTestDriver(t, "node-missing-pool", 8*utils.GiB, 8*utils.GiB)
+		dv := newSchedulingTestDriver(t, "node-missing-pool", 8*utils.GiB, 8*utils.GiB)
 		response := getCapacityForTest(t, dv, "")
 		require.Zero(t, response.AvailableCapacity)
 		require.False(t, capacityTestSchedulingFits(response, utils.GiB))
 	})
 
 	t.Run("unconfigured capacity uses explicit per-volume fallback", func(t *testing.T) {
-		dv := newCapacityTestDriver(t, "node-unconfigured", -1, 4*utils.GiB)
+		dv := newSchedulingTestDriver(t, "node-unconfigured", -1, 4*utils.GiB)
 		response := getCapacityForTest(t, dv, capacityTestPool)
 
 		// This fallback is the configured per-volume maximum, not measured free
 		// disk space. Keep the behavior explicit so it is not mistaken for a
 		// physical-capacity report when capacity scheduling is enabled.
+		// TODO(#14253): After #14253 is merged, this subtest must expect zero
+		// available capacity and zero maximum volume size instead.
 		require.Equal(t, int64(4*utils.GiB), response.AvailableCapacity)
 		require.Equal(t, int64(4*utils.GiB), response.MaximumVolumeSize.GetValue())
 		require.True(t, capacityTestSchedulingFits(response, 4*utils.GiB))
@@ -195,8 +197,8 @@ func TestCapacityAwareSchedulingMissingInformation(t *testing.T) {
 }
 
 func TestCapacityAwareSchedulingStaleReportFallback(t *testing.T) {
-	nodeA := newCapacityTestDriver(t, "node-a", 4*utils.GiB, 8*utils.GiB)
-	nodeB := newCapacityTestDriver(t, "node-b", 8*utils.GiB, 8*utils.GiB)
+	nodeA := newSchedulingTestDriver(t, "node-a", 4*utils.GiB, 8*utils.GiB)
+	nodeB := newSchedulingTestDriver(t, "node-b", 8*utils.GiB, 8*utils.GiB)
 
 	// Take the snapshot which a scheduler could have observed before another
 	// provisioner consumed the remaining capacity on node A.

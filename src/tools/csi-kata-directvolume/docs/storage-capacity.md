@@ -4,6 +4,9 @@ Direct volumes use node-local backing storage. Kubernetes therefore needs both
 node topology and a current capacity report to avoid placing a Pod where its
 PVC cannot be provisioned.
 
+> These notes describe the current `main` and must be reviewed after #14253
+> and #14254 are merged.
+>
 > **Current status:** the checked-in deployment does not yet enable this path.
 > `CSIDriver.spec.storageCapacity` is `false`, the provisioner's
 > `--enable-capacity` argument is commented out, and the example StorageClasses
@@ -41,12 +44,15 @@ There are two important fallback cases in the current implementation:
 - If no `--capacity` pool is configured, `GetCapacity` reports
   `--max-volume-size` as both values. This is only a per-volume limit fallback;
   it is **not** the node's free disk space and must not be treated as a safe
-  physical-capacity report.
+  physical-capacity report. TODO(#14253): After #14253 is merged, this
+  fallback will report zero instead; update this description and the
+  corresponding scheduling test.
 
-The current multi-pool provisioning path is still preliminary: `CreateVolume`
-does not propagate `kind` into `VolumeContext`, and an omitted pool can be
-selected from the configured map. Use a single explicit pool when exercising
-the existing code. The issue #14151 core work must make pool selection and SPDK
+These notes describe the current `main` and must be reviewed after #14253 and
+#14254 are merged. The current multi-pool provisioning path is still
+preliminary: `CreateVolume` does not propagate `kind` into `VolumeContext`,
+and an omitted pool can be selected from the configured map. Use a single
+explicit pool when exercising the existing code. The issue #14151 core work must make pool selection and SPDK
 quota enforcement consistent before capacity publication is enabled by
 default.
 
