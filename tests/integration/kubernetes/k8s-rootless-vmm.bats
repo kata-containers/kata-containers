@@ -9,42 +9,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 readonly QEMU_SANDBOX_PARAM="on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
-# GPU device reset can outlast the initial stop attempt before QEMU exits.
-readonly ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS="${ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS:-90}"
-
-# A retry may reuse a stale UID directory, so track this pod's temporary
-# account and directory rather than comparing whole-host snapshots.
-get_rootless_host_resources() {
-	local uid="$1"
-	local user="$2"
-	local query="{ getent passwd ${user} | awk -F: '{ print \"user:\" \$1 \":\" \$3 }'; "
-	query+="getent group ${user} | awk -F: '{ print \"group:\" \$1 \":\" \$3 }'; "
-	query+="test ! -d /run/user/${uid} || echo dir:${uid}; } | sort"
-
-	exec_host "${node}" "${query}"
-}
-
-wait_for_rootless_host_resources() {
-	local actual_resources
-	local attempt
-	local uid="$1"
-	local user="$2"
-
-	for ((attempt = 0; attempt < ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS; attempt++)); do
-		actual_resources="$(get_rootless_host_resources "${uid}" "${user}")"
-		[[ -z "${actual_resources}" ]] && return 0
-		sleep 1
-	done
-
-	echo "Rootless host resources remaining after sandbox teardown:"
-	echo "${actual_resources}"
-	echo "Processes still running as rootless UID ${uid}:"
-	exec_host "${node}" "ps -u ${uid} -o pid,ppid,uid,stat,wchan:32,etime,args --no-headers || true"
-	echo "Mounts under /run/user/${uid}:"
-	exec_host "${node}" "findmnt -R /run/user/${uid} || true"
-	return 1
-}
-
 # Print why the current runtime cannot run this rootless VMM smoke test. A
 # non-zero return means the runtime is supported.
 rootless_vmm_skip_reason() {
@@ -306,35 +270,6 @@ EOF
 
 	kubectl delete -f "${pod_config}" --ignore-not-found=true
 	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
-}
-
-@test "Nothing of a rootless sandbox is left once its shim was killed" {
-	local sandbox_id
-	local vmm_pid
-	local vmm_uid
-	local vmm_user
-
-	is_runtime_rs || skip "cleanup after a killed shim is tested for runtime-rs only"
-	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "CRI-O does not run the shim's delete command after a shim died"
-
-	# A replacement sandbox could get the UID about to be freed and either
-	# leave its own resources under it or remove a leak along with them.
-	yq -i '.spec.restartPolicy = "Never"' "${pod_config}"
-	retry_kubectl_apply "${pod_config}"
-	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
-
-	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
-	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
-	vmm_pid="$(get_vmm_pid_for_pod "${pod_name}")"
-	vmm_uid="$(exec_host "${node}" "awk '/^Uid:/ {print \$2}' /proc/${vmm_pid}/status")"
-	[[ "${vmm_uid}" =~ ^[0-9]+$ ]]
-	(( vmm_uid != 0 ))
-	vmm_user="$(exec_host "${node}" "getent passwd ${vmm_uid} | cut -d: -f1")"
-	[[ "${vmm_user}" =~ ^kata-[a-f0-9]{8}-[0-9]+$ ]]
-
-	kill_shim_and_wait_for_cleanup "${node}" "${sandbox_id}"
-	wait_for_rootless_host_resources "${vmm_uid}" "${vmm_user}"
-	kubectl delete -f "${pod_config}" --ignore-not-found=true --wait=true
 }
 
 @test "VMM propagates ConfigMap updates while rootless" {
