@@ -22,6 +22,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 
@@ -1913,4 +1914,136 @@ func TestHotplugVfioNetworkDevicePortConfigured(t *testing.T) {
 	err := s.hotplugVfioNetworkDevice(context.Background(), ep)
 	assert.Error(err)
 	assert.Contains(err.Error(), "failed to resolve VFIO device path")
+}
+
+type fakeResourceController struct {
+	id        string
+	parent    string
+	movedTo   []string
+	deleted   bool
+	moveErr   error
+	deleteErr error
+}
+
+func (f *fakeResourceController) Type() resCtrl.ResourceControllerType { return resCtrl.LinuxCgroups }
+func (f *fakeResourceController) ID() string                           { return f.id }
+func (f *fakeResourceController) Parent() string                       { return f.parent }
+func (f *fakeResourceController) Delete() error                        { f.deleted = true; return f.deleteErr }
+func (f *fakeResourceController) Stat() (interface{}, error)           { return nil, nil }
+func (f *fakeResourceController) AddProcess(int, ...string) error      { return nil }
+func (f *fakeResourceController) AddThread(int, ...string) error       { return nil }
+func (f *fakeResourceController) Update(*specs.LinuxResources) error   { return nil }
+func (f *fakeResourceController) MoveTo(p string) error {
+	f.movedTo = append(f.movedTo, p)
+	return f.moveErr
+}
+func (f *fakeResourceController) AddDevice(string) error            { return nil }
+func (f *fakeResourceController) RemoveDevice(string) error         { return nil }
+func (f *fakeResourceController) UpdateCpuSet(string, string) error { return nil }
+
+func TestResourceControllerDeleteRestoredOverhead(t *testing.T) {
+	assert := assert.New(t)
+
+	sbCtrl := &fakeResourceController{id: "/kubepods/pod1/kata_sb1", parent: "/kubepods/pod1"}
+	ovCtrl := &fakeResourceController{id: "/kata_overhead/sb1", parent: "/kata_overhead"}
+
+	origLoad := loadResourceController
+	defer func() { loadResourceController = origLoad }()
+	loadResourceController = func(path string, sandboxCgroupOnly bool) (resCtrl.ResourceController, error) {
+		switch path {
+		case sbCtrl.id:
+			return sbCtrl, nil
+		case ovCtrl.id:
+			return ovCtrl, nil
+		default:
+			return nil, fmt.Errorf("unexpected cgroup path %q", path)
+		}
+	}
+
+	// Simulate a restored sandbox where s.sandboxController and s.overheadController
+	// are nil and only state paths are populated from disk.
+	s := &Sandbox{
+		id:     "sb1",
+		config: &SandboxConfig{SandboxCgroupOnly: false},
+		state: types.SandboxState{
+			SandboxCgroupPath:  sbCtrl.id,
+			OverheadCgroupPath: ovCtrl.id,
+		},
+	}
+
+	assert.NotPanics(func() {
+		err := s.resourceControllerDelete()
+		assert.NoError(err)
+	})
+	assert.Equal([]string{"/kubepods/pod1"}, sbCtrl.movedTo)
+	assert.True(sbCtrl.deleted)
+	assert.Equal([]string{"/kata_overhead"}, ovCtrl.movedTo)
+	assert.True(ovCtrl.deleted)
+}
+
+func TestResourceControllerDeleteCleansOverheadWhenSandboxDeleteFails(t *testing.T) {
+	assert := assert.New(t)
+
+	sbCtrl := &fakeResourceController{
+		id:        "/kubepods/pod1/kata_sb1",
+		parent:    "/kubepods/pod1",
+		deleteErr: fmt.Errorf("sandbox cgroup delete failed"),
+	}
+	ovCtrl := &fakeResourceController{id: "/kata_overhead/sb1", parent: "/kata_overhead"}
+
+	origLoad := loadResourceController
+	defer func() { loadResourceController = origLoad }()
+	loadResourceController = func(path string, sandboxCgroupOnly bool) (resCtrl.ResourceController, error) {
+		switch path {
+		case sbCtrl.id:
+			return sbCtrl, nil
+		case ovCtrl.id:
+			return ovCtrl, nil
+		default:
+			return nil, fmt.Errorf("unexpected cgroup path %q", path)
+		}
+	}
+
+	s := &Sandbox{
+		id:     "sb1",
+		config: &SandboxConfig{SandboxCgroupOnly: false},
+		state: types.SandboxState{
+			SandboxCgroupPath:  sbCtrl.id,
+			OverheadCgroupPath: ovCtrl.id,
+		},
+	}
+
+	err := s.resourceControllerDelete()
+	assert.Error(err)
+	assert.Contains(err.Error(), "sandbox cgroup delete failed")
+	assert.Equal([]string{"/kata_overhead"}, ovCtrl.movedTo)
+	assert.True(ovCtrl.deleted)
+}
+
+func TestResourceControllerDeleteOverheadOnlyWhenSandboxPathEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	ovCtrl := &fakeResourceController{id: "/kata_overhead/sb1", parent: "/kata_overhead"}
+
+	origLoad := loadResourceController
+	defer func() { loadResourceController = origLoad }()
+	loadResourceController = func(path string, sandboxCgroupOnly bool) (resCtrl.ResourceController, error) {
+		if path == ovCtrl.id {
+			return ovCtrl, nil
+		}
+		return nil, fmt.Errorf("unexpected cgroup path %q", path)
+	}
+
+	s := &Sandbox{
+		id:     "sb1",
+		config: &SandboxConfig{SandboxCgroupOnly: false},
+		state: types.SandboxState{
+			SandboxCgroupPath:  "",
+			OverheadCgroupPath: ovCtrl.id,
+		},
+	}
+
+	assert.NoError(s.resourceControllerDelete())
+	assert.Equal([]string{"/kata_overhead"}, ovCtrl.movedTo)
+	assert.True(ovCtrl.deleted)
 }
