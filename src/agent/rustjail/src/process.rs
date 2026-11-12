@@ -131,7 +131,12 @@ impl ProcessOperations for Process {
             return Err(Errno::ESRCH);
         }
         if let Some(fd) = &self.pidfd {
-            return fd.signal(sig);
+            match fd.signal(sig) {
+                // The owner excludes the reaper while signalling this child.
+                // If the syscall is unavailable, retain the legacy kill path.
+                Err(Errno::ENOSYS) => {}
+                result => return result,
+            }
         }
         let res = unsafe { libc::kill(self.pid().into(), sig) };
 
@@ -339,6 +344,76 @@ mod tests {
     use super::*;
     use std::fs;
 
+    fn restrict_pidfd_syscall(syscall: u32, errno: u32) {
+        let mut filter = vec![
+            libc::sock_filter {
+                code: 0x20, // BPF_LD | BPF_W | BPF_ABS: syscall number
+                jt: 0,
+                jf: 0,
+                k: 0,
+            },
+            libc::sock_filter {
+                code: 0x15, // BPF_JMP | BPF_JEQ | BPF_K
+                jt: 0,
+                jf: if syscall == libc::SYS_waitid as u32 {
+                    3
+                } else {
+                    1
+                },
+                k: syscall,
+            },
+        ];
+        if syscall == libc::SYS_waitid as u32 {
+            // Keep waitid(P_ALL/P_PID) available, as an old kernel would.
+            filter.extend([
+                libc::sock_filter {
+                    code: 0x20,
+                    jt: 0,
+                    jf: 0,
+                    // Low word of seccomp_data.args[0].
+                    k: if cfg!(target_endian = "little") {
+                        16
+                    } else {
+                        20
+                    },
+                },
+                libc::sock_filter {
+                    code: 0x15,
+                    jt: 0,
+                    jf: 1,
+                    k: libc::P_PIDFD,
+                },
+            ]);
+        }
+        filter.extend([
+            libc::sock_filter {
+                code: 0x06, // BPF_RET | BPF_K
+                jt: 0,
+                jf: 0,
+                k: libc::SECCOMP_RET_ERRNO | errno,
+            },
+            libc::sock_filter {
+                code: 0x06,
+                jt: 0,
+                jf: 0,
+                k: libc::SECCOMP_RET_ALLOW,
+            },
+        ]);
+        let program = libc::sock_fprog {
+            len: filter.len() as u16,
+            filter: filter.as_mut_ptr(),
+        };
+        // SAFETY: the filter buffer remains alive during prctl. This only
+        // restricts the isolated test subprocess and its descendants.
+        unsafe {
+            assert_eq!(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0), 0);
+            assert_eq!(
+                libc::prctl(libc::PR_SET_SECCOMP, libc::SECCOMP_MODE_FILTER, &program),
+                0
+            );
+        }
+    }
+
     #[tokio::test]
     async fn test_pidfd_process_identity_after_reaping() {
         if !crate::pidfd::PidFd::supported().unwrap() {
@@ -392,6 +467,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_pid_fallback() {
+        let restricted = std::env::var("KATA_TEST_PIDFD_UNAVAILABLE").ok();
+        if let Some(value) = &restricted {
+            let (syscall, errno) = value.split_once(':').unwrap();
+            restrict_pidfd_syscall(syscall.parse().unwrap(), errno.parse().unwrap());
+        }
         let mut p = Process::new(
             &Logger::root(slog::Discard, o!()),
             &oci::ProcessBuilder::default()
@@ -416,8 +496,13 @@ mod tests {
                 let _ = child.wait();
             },
         );
-        // Select the legacy backend even on a pidfd-capable test kernel.
-        p.pid = child.id() as i32;
+        if restricted.is_some() {
+            // Exercise production binding with actual syscall restrictions.
+            p.bind_pid(child.id() as i32).unwrap();
+        } else {
+            // Select the legacy backend even on a pidfd-capable test kernel.
+            p.pid = child.id() as i32;
+        }
         assert!(!p.has_pidfd());
         assert_eq!(
             p.wait_with_flags(WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG)
@@ -431,6 +516,125 @@ mod tests {
         );
         p.exit_tx.take();
         // A retained, reaped Process must not address a newly reused PID.
+        p.pid = std::process::id() as i32;
+        assert_eq!(p.signal(0), Err(Errno::ESRCH));
+        p.cleanup_process_stream();
+    }
+
+    #[test]
+    fn test_process_fallback_for_unavailable_pidfd_syscalls() {
+        for syscall in [
+            libc::SYS_pidfd_open,
+            libc::SYS_pidfd_send_signal,
+            libc::SYS_waitid,
+        ] {
+            for errno in [Errno::ENOSYS, Errno::EINVAL, Errno::EPERM, Errno::EACCES] {
+                // A fresh process also isolates the capability cache and filter.
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "process::tests::test_process_pid_fallback",
+                        "--nocapture",
+                        "--test-threads=1",
+                    ])
+                    .env(
+                        "KATA_TEST_PIDFD_UNAVAILABLE",
+                        format!("{syscall}:{}", errno as i32),
+                    )
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "syscall {syscall}, errno {errno}: {}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_signal_pidfd_failure() {
+        let injected = std::env::var("KATA_TEST_PIDFD_SIGNAL_ERRNO").ok();
+        let Some(errno) = injected else {
+            for errno in [
+                Errno::ENOSYS,
+                Errno::EPERM,
+                Errno::EACCES,
+                Errno::EINVAL,
+                Errno::ESRCH,
+            ] {
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "process::tests::test_process_signal_pidfd_failure",
+                        "--nocapture",
+                        "--test-threads=1",
+                    ])
+                    .env("KATA_TEST_PIDFD_SIGNAL_ERRNO", (errno as i32).to_string())
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "errno {errno}: {}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            return;
+        };
+        if !crate::pidfd::PidFd::supported().unwrap() {
+            eprintln!("skipping pidfd signal test: kernel lacks pidfd support");
+            return;
+        }
+        let errno = Errno::from_raw(errno.parse().unwrap());
+        let mut p = Process::new(
+            &Logger::root(slog::Discard, o!()),
+            &oci::ProcessBuilder::default()
+                .terminal(true)
+                .build()
+                .unwrap(),
+            "pidfd-signal-fallback",
+            false,
+            0,
+            None,
+        )
+        .unwrap();
+        let child = scopeguard::guard(
+            std::process::Command::new("/bin/sleep")
+                .arg("30")
+                .spawn()
+                .unwrap(),
+            |mut child| {
+                if matches!(child.try_wait(), Ok(None)) {
+                    let _ = child.kill();
+                }
+                let _ = child.wait();
+            },
+        );
+        p.bind_pid(child.id() as i32).unwrap();
+        assert!(p.has_pidfd());
+        // Restrict only after acquiring a real pidfd and probing support.
+        restrict_pidfd_syscall(libc::SYS_pidfd_send_signal as u32, errno as u32);
+        assert_eq!(p.pidfd.as_ref().unwrap().signal(libc::SIGTERM), Err(errno));
+        let expected_signal = if errno == Errno::ENOSYS {
+            p.signal(libc::SIGTERM).unwrap();
+            nix::sys::signal::Signal::SIGTERM
+        } else {
+            assert_eq!(p.signal(libc::SIGTERM), Err(errno));
+            assert_eq!(
+                p.wait_with_flags(WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG)
+                    .unwrap(),
+                WaitStatus::StillAlive
+            );
+            nix::sys::signal::kill(p.pid(), nix::sys::signal::Signal::SIGKILL).unwrap();
+            nix::sys::signal::Signal::SIGKILL
+        };
+        assert_eq!(
+            p.wait().unwrap(),
+            WaitStatus::Signaled(p.pid(), expected_signal, false)
+        );
+        p.exit_tx.take();
         p.pid = std::process::id() as i32;
         assert_eq!(p.signal(0), Err(Errno::ESRCH));
         p.cleanup_process_stream();

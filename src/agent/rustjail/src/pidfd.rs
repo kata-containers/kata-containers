@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-//! Stable process handles. Only kernels lacking the required syscalls fall back
-//! to numeric PIDs; operational errors must never silently lose PID identity.
+//! Stable process handles. Unavailable or restricted pidfd syscalls fall back
+//! to numeric PIDs; resource errors must never silently lose PID identity.
 
 use nix::errno::Errno;
 use nix::sys::wait::{waitid, Id, WaitPidFlag, WaitStatus};
@@ -18,7 +18,9 @@ pub struct PidFd(OwnedFd);
 fn probe_result(result: nix::Result<()>) -> nix::Result<bool> {
     match result {
         Ok(()) => Ok(true),
-        Err(Errno::ENOSYS | Errno::EINVAL) => Ok(false),
+        // Probe only our own process with valid arguments. Permission errors
+        // here also mean pidfd is unavailable, for example under seccomp.
+        Err(Errno::ENOSYS | Errno::EINVAL | Errno::EPERM | Errno::EACCES) => Ok(false),
         Err(e) => Err(e),
     }
 }
@@ -30,7 +32,7 @@ fn cached_support(
     if let Some(supported) = cache.get() {
         return Ok(*supported);
     }
-    // Resource or permission errors must not poison the process-wide cache.
+    // Resource errors must not poison the process-wide cache.
     let supported = probe()?;
     Ok(*cache.get_or_init(|| supported))
 }
@@ -149,8 +151,8 @@ mod tests {
             (Ok(()), Ok(true)),
             (Err(Errno::ENOSYS), Ok(false)),
             (Err(Errno::EINVAL), Ok(false)),
-            (Err(Errno::EPERM), Err(Errno::EPERM)),
-            (Err(Errno::EACCES), Err(Errno::EACCES)),
+            (Err(Errno::EPERM), Ok(false)),
+            (Err(Errno::EACCES), Ok(false)),
             (Err(Errno::EMFILE), Err(Errno::EMFILE)),
             (Err(Errno::ENFILE), Err(Errno::ENFILE)),
             (Err(Errno::ESRCH), Err(Errno::ESRCH)),

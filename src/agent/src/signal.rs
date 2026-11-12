@@ -48,6 +48,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
         // Hook executors also wait for children. Exclude them during peek/reap,
         // but release this lock before waiting for output to drain.
         let locker = rustjail::container::WAIT_PID_LOCKER.lock().await;
+        let mut already_reaped = false;
         let pending = loop {
             let result = wait::waitid(
                 Id::All,
@@ -56,8 +57,21 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                     | WaitPidFlag::WNOWAIT
                     | WaitPidFlag::__WALL,
             );
-            if result != Err(Errno::EINTR) {
-                break result;
+            match result {
+                Err(Errno::EINTR) => continue,
+                Err(Errno::ENOSYS | Errno::EINVAL | Errno::EPERM | Errno::EACCES) => {
+                    // The whole waitid syscall can be unavailable, not only
+                    // P_PIDFD. Keep the legacy reaper working in that case.
+                    already_reaped = true;
+                    break loop {
+                        match wait::waitpid(None, Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL))
+                        {
+                            Err(Errno::EINTR) => continue,
+                            result => break result,
+                        }
+                    };
+                }
+                result => break result,
             }
         };
         let pending = match pending {
@@ -68,7 +82,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                 s
             }
             Err(Errno::ECHILD) => return Ok(()),
-            Err(e) => return Err(anyhow!(e).context("waitid reaper peek failed")),
+            Err(e) => return Err(anyhow!(e).context("find exited child")),
         };
 
         if let Some(pid) = pending.pid() {
@@ -79,13 +93,18 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
             let process = sandbox.find_process(raw_pid);
             if process.is_none() {
                 // Helpers and reparented descendants have no Process handle.
-                // Their PID is still reserved by the peeked zombie.
-                loop {
-                    match wait::waitpid(Some(pid), Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL))
-                    {
-                        Err(Errno::EINTR) => continue,
-                        Err(Errno::ECHILD) | Ok(_) => break,
-                        Err(e) => return Err(anyhow!(e).context("reap untracked child")),
+                // Unless the legacy wait already consumed its status, the
+                // helper's PID is still reserved by the peeked zombie.
+                if !already_reaped {
+                    loop {
+                        match wait::waitpid(
+                            Some(pid),
+                            Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
+                        ) {
+                            Err(Errno::EINTR) => continue,
+                            Err(Errno::ECHILD) | Ok(_) => break,
+                            Err(e) => return Err(anyhow!(e).context("reap untracked child")),
+                        }
                     }
                 }
                 info!(logger, "child exited unexpectedly");
@@ -93,9 +112,35 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
             }
 
             let p = process.unwrap();
-            let wait_status = p
-                .wait_with_flags(WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG | WaitPidFlag::__WALL)
-                .map_err(|e| anyhow!(e).context("reap process handle"))?;
+            let wait_status = if already_reaped {
+                pending
+            } else {
+                loop {
+                    match p.wait_with_flags(
+                        WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG | WaitPidFlag::__WALL,
+                    ) {
+                        Err(Errno::EINTR) => continue,
+                        Err(Errno::ENOSYS | Errno::EINVAL | Errno::EPERM | Errno::EACCES)
+                            if p.has_pidfd() =>
+                        {
+                            // P_ALL peek succeeded and both locks still exclude
+                            // competing reapers. This zombie still owns pid,
+                            // even if P_PIDFD became unavailable after binding.
+                            break loop {
+                                match wait::waitpid(
+                                    Some(pid),
+                                    Some(WaitPidFlag::WNOHANG | WaitPidFlag::__WALL),
+                                ) {
+                                    Err(Errno::EINTR) => continue,
+                                    result => break result,
+                                }
+                            };
+                        }
+                        result => break result,
+                    }
+                }
+                .map_err(|e| anyhow!(e).context("reap process handle"))?
+            };
             // Do not hold the wait lock during potentially slow output drain.
             drop(locker);
             info!(logger, "wait_status"; "wait_status result" => format!("{:?}", wait_status),
@@ -168,6 +213,271 @@ mod tests {
     use tokio::pin;
     use tokio::sync::watch::channel;
     use tokio::time::Duration;
+
+    #[tokio::test]
+    async fn test_reaper_when_waitid_is_unavailable() {
+        use oci_spec::runtime::{LinuxBuilder, ProcessBuilder, RootBuilder, SpecBuilder};
+        use rustjail::container::LinuxContainer;
+        use rustjail::process::Process;
+        use rustjail::process::ProcessOperations;
+        use rustjail::specconv::CreateOpts;
+        use std::process::Command;
+
+        if !nix::unistd::Uid::effective().is_root() {
+            return;
+        }
+        const SCENARIO: &str = "KATA_REAPER_WAITID_ERRNO";
+        let scenario = match std::env::var(SCENARIO) {
+            Ok(scenario) => scenario,
+            Err(_) => {
+                // A fresh process isolates both seccomp and the pidfd support cache.
+                for (backend, errno) in [
+                    ("all", 0),
+                    ("all", libc::ENOSYS),
+                    ("all", libc::EINVAL),
+                    ("all", libc::EPERM),
+                    ("all", libc::EACCES),
+                    ("pidfd", libc::ENOSYS),
+                    ("pidfd", libc::EINVAL),
+                    ("pidfd", libc::EPERM),
+                    ("pidfd", libc::EACCES),
+                    ("pidfd", libc::ESRCH),
+                    ("pidfd", libc::EMFILE),
+                ] {
+                    let scenario = format!("{backend}:{errno}");
+                    let output = Command::new(std::env::current_exe().unwrap())
+                        .args([
+                            "--exact",
+                            "signal::tests::test_reaper_when_waitid_is_unavailable",
+                            "--test-threads=1",
+                            "--nocapture",
+                        ])
+                        .env(SCENARIO, &scenario)
+                        .output()
+                        .unwrap();
+                    assert!(
+                        output.status.success(),
+                        "waitid scenario {scenario}: {}{}",
+                        String::from_utf8_lossy(&output.stdout),
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+                return;
+            }
+        };
+        let (backend, errno) = scenario.split_once(':').unwrap();
+        let pidfd_only = backend == "pidfd";
+        let errno: u32 = errno.parse().unwrap();
+        if pidfd_only && !rustjail::pidfd::PidFd::supported().unwrap() {
+            eprintln!("skipping late P_PIDFD restriction: kernel lacks pidfd");
+            return;
+        }
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let dir = tempfile::tempdir().unwrap();
+        let spec = SpecBuilder::default()
+            .root(RootBuilder::default().path("/").build().unwrap())
+            .linux(
+                LinuxBuilder::default()
+                    .cgroups_path(format!(
+                        "/kata.agent.test.k8s.io/dummycontainer-reaper-{}",
+                        std::process::id()
+                    ))
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+        let mut container = LinuxContainer::new(
+            "reaper",
+            dir.path().join("rootfs").to_str().unwrap(),
+            None,
+            CreateOpts {
+                spec: Some(spec),
+                ..Default::default()
+            },
+            &logger,
+        )
+        .unwrap();
+        let _cleanup = scopeguard::guard(container.cgroup_manager.clone(), |manager| {
+            let _ = manager.destroy();
+        });
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+
+        if errno != 0 && !pidfd_only {
+            // Deny the entire waitid syscall, including P_ALL and P_PIDFD.
+            let filter = [
+                libc::sock_filter {
+                    code: 0x20,
+                    jt: 0,
+                    jf: 0,
+                    k: 0,
+                },
+                libc::sock_filter {
+                    code: 0x15,
+                    jt: 0,
+                    jf: 1,
+                    k: libc::SYS_waitid as u32,
+                },
+                libc::sock_filter {
+                    code: 0x06,
+                    jt: 0,
+                    jf: 0,
+                    k: libc::SECCOMP_RET_ERRNO | errno,
+                },
+                libc::sock_filter {
+                    code: 0x06,
+                    jt: 0,
+                    jf: 0,
+                    k: libc::SECCOMP_RET_ALLOW,
+                },
+            ];
+            let program = libc::sock_fprog {
+                len: filter.len() as u16,
+                filter: filter.as_ptr() as *mut libc::sock_filter,
+            };
+            // SAFETY: the filter program stays valid throughout prctl.
+            unsafe {
+                assert_eq!(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0), 0);
+                assert_eq!(libc::prctl(libc::PR_SET_SECCOMP, 2, &program), 0);
+            }
+        }
+        let child = |code: i32| {
+            scopeguard::guard(
+                Command::new("/bin/sh")
+                    .args(["-c", &format!("exit {code}")])
+                    .spawn()
+                    .unwrap(),
+                |mut child| {
+                    if matches!(child.try_wait(), Ok(None)) {
+                        let _ = child.kill();
+                    }
+                    let _ = child.wait();
+                },
+            )
+        };
+        let managed = child(23);
+        let untracked = child(7);
+        let oci_process = ProcessBuilder::default().terminal(true).build().unwrap();
+        let mut process = Process::new(&logger, &oci_process, "managed", false, 0, None).unwrap();
+        process.bind_pid(managed.id() as i32).unwrap();
+        if errno != 0 && !pidfd_only {
+            assert!(!process.has_pidfd());
+        }
+        if pidfd_only {
+            assert!(process.has_pidfd());
+            let filter = [
+                libc::sock_filter {
+                    code: 0x20,
+                    jt: 0,
+                    jf: 0,
+                    k: 0,
+                },
+                libc::sock_filter {
+                    code: 0x15,
+                    jt: 0,
+                    jf: 3,
+                    k: libc::SYS_waitid as u32,
+                },
+                libc::sock_filter {
+                    code: 0x20,
+                    jt: 0,
+                    jf: 0,
+                    k: if cfg!(target_endian = "little") {
+                        16
+                    } else {
+                        20
+                    },
+                },
+                libc::sock_filter {
+                    code: 0x15,
+                    jt: 0,
+                    jf: 1,
+                    k: libc::P_PIDFD,
+                },
+                libc::sock_filter {
+                    code: 0x06,
+                    jt: 0,
+                    jf: 0,
+                    k: libc::SECCOMP_RET_ERRNO | errno,
+                },
+                libc::sock_filter {
+                    code: 0x06,
+                    jt: 0,
+                    jf: 0,
+                    k: libc::SECCOMP_RET_ALLOW,
+                },
+            ];
+            let program = libc::sock_fprog {
+                len: filter.len() as u16,
+                filter: filter.as_ptr() as *mut libc::sock_filter,
+            };
+            // SAFETY: only this isolated subprocess is restricted, after bind.
+            unsafe {
+                assert_eq!(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0), 0);
+                assert_eq!(libc::prctl(libc::PR_SET_SECCOMP, 2, &program), 0);
+            }
+        }
+        let mut exit_rx = process.exit_rx.take().unwrap();
+        container.processes.insert("managed".into(), process);
+        sandbox.add_container(container);
+        let sandbox = Arc::new(Mutex::new(sandbox));
+        // Observe zombies without consuming their exit statuses.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            for child in [&managed, &untracked] {
+                loop {
+                    let stat =
+                        std::fs::read_to_string(format!("/proc/{}/stat", child.id())).unwrap();
+                    if stat.split_once(") ").unwrap().1.starts_with('Z') {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        let result = handle_sigchild(logger.clone(), sandbox.clone()).await;
+        if pidfd_only && matches!(errno as i32, libc::ESRCH | libc::EMFILE) {
+            assert_eq!(
+                result.unwrap_err().downcast_ref::<Errno>(),
+                Some(&Errno::from_raw(errno as i32))
+            );
+            let mut sandbox = sandbox.lock().await;
+            let p = sandbox.find_container_process("reaper", "managed").unwrap();
+            assert!(p.has_pidfd());
+            assert!(p.exit_tx.is_some());
+            assert!(!exit_rx.has_changed().unwrap());
+            for child in [&managed, &untracked] {
+                assert!(matches!(
+                    wait::waitpid(Pid::from_raw(child.id() as i32), Some(WaitPidFlag::WNOHANG)),
+                    Ok(WaitStatus::Exited(_, _))
+                ));
+            }
+            return;
+        }
+        result.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_secs(5), exit_rx.changed())
+                .await
+                .unwrap()
+                .is_err()
+        );
+        {
+            let mut sandbox = sandbox.lock().await;
+            let p = sandbox.find_container_process("reaper", "managed").unwrap();
+            assert_eq!(p.exit_code, 23);
+            // Retain the exit record without invoking WaitProcess.
+            assert!(!p.has_pidfd());
+            assert_eq!(p.signal(0), Err(Errno::ESRCH));
+        }
+        handle_sigchild(logger, sandbox.clone()).await.unwrap();
+        for child in [&managed, &untracked] {
+            assert_eq!(
+                wait::waitpid(Pid::from_raw(child.id() as i32), Some(WaitPidFlag::WNOHANG)),
+                Err(Errno::ECHILD)
+            );
+        }
+    }
 
     #[test]
     fn test_exit_code_from_wait_status() {
