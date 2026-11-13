@@ -824,7 +824,6 @@ fn group_id_from_path(p: &Path) -> Result<u32> {
         .context("parse group id")
 }
 
-#[allow(dead_code)]
 pub fn is_dev_vfio_group_path(host_path: &str) -> bool {
     let s = host_path.trim_end_matches('/');
     const PREFIX: &str = "/dev/vfio/";
