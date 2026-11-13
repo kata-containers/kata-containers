@@ -7,6 +7,7 @@
 mod container;
 use container::{Container, Exec};
 mod container_inner;
+mod hugepages;
 mod io;
 use container_inner::ContainerInner;
 mod manager;

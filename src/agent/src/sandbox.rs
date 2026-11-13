@@ -138,6 +138,9 @@ pub struct Sandbox {
     pub bind_watcher: BindWatcher,
     pub pcimap: HashMap<String, PciHostGuestMapping>,
     pub devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+    /// Bound, in bytes, on the containers' memory taken together, from the
+    /// runtime. Zero means none.
+    pub sandbox_memory_max_bytes: u64,
 }
 
 impl Sandbox {
@@ -173,6 +176,7 @@ impl Sandbox {
             bind_watcher: BindWatcher::new(),
             pcimap: HashMap::new(),
             devcg_info: Arc::new(RwLock::new(DevicesCgroupInfo::default())),
+            sandbox_memory_max_bytes: 0,
         })
     }
 
@@ -922,6 +926,7 @@ mod tests {
             rootless_euid: false,
             rootless_cgroup: false,
             container_name: "".to_string(),
+            pod_memory_max_bytes: 0,
         }
     }
 

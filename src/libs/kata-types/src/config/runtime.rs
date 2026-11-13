@@ -7,6 +7,7 @@ use std::io::Result;
 use std::path::Path;
 
 use super::default;
+use crate::config::hypervisor::HYPERVISOR_NAME_DRAGONBALL;
 use crate::config::{ConfigOps, TomlConfig};
 use crate::mount::split_bind_mounts;
 use crate::validate_path;
@@ -226,6 +227,34 @@ pub struct Runtime {
     pub pod_resource_api_sock: String,
 }
 
+/// Refuses a configuration that enable_hugepages_pod_sizing cannot size.
+pub fn validate_hugepages_pod_sizing(conf: &TomlConfig) -> Result<()> {
+    let Some(hv) = conf
+        .hypervisor
+        .get(&conf.runtime.hypervisor_name)
+        .filter(|hv| hv.memory_info.enable_hugepages_pod_sizing)
+    else {
+        return Ok(());
+    };
+    if hv.factory.enable_template {
+        return Err(std::io::Error::other(
+            "enable_hugepages_pod_sizing sizes each VM from its pod, so it cannot use VM templates",
+        ));
+    }
+    if !conf.runtime.static_sandbox_resource_mgmt {
+        return Err(std::io::Error::other(
+            "enable_hugepages_pod_sizing needs static_sandbox_resource_mgmt",
+        ));
+    }
+    if conf.runtime.hypervisor_name != HYPERVISOR_NAME_DRAGONBALL {
+        return Err(std::io::Error::other(format!(
+            "enable_hugepages_pod_sizing needs the dragonball hypervisor, and the configuration selects `{}`",
+            conf.runtime.hypervisor_name
+        )));
+    }
+    Ok(())
+}
+
 fn default_passfd_listener_port() -> u32 {
     default::DEFAULT_PASSFD_LISTENER_PORT
 }
@@ -279,6 +308,8 @@ impl ConfigOps for Runtime {
                 "Invalid vfio_mode `{vfio_mode}` in configuration file",
             )));
         }
+
+        validate_hugepages_pod_sizing(conf)?;
 
         let emptydir_mode = &conf.runtime.emptydir_mode;
         if emptydir_mode != EMPTYDIR_MODE_SHARED_FS
@@ -423,6 +454,34 @@ emptydir_mode = "block-plain"
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
         assert_eq!(&config.runtime.emptydir_mode, "block-plain");
+    }
+
+    #[test]
+    fn test_hugepages_pod_sizing_needs_static_dragonball() {
+        let config_for = |hypervisor: &str, static_mgmt: bool| {
+            let mut config = TomlConfig::default();
+            let mut hv = crate::config::Hypervisor::default();
+            hv.memory_info.enable_hugepages_pod_sizing = true;
+            config.hypervisor.insert(hypervisor.to_owned(), hv);
+            config.runtime.hypervisor_name = hypervisor.to_owned();
+            config.runtime.static_sandbox_resource_mgmt = static_mgmt;
+            config.runtime.emptydir_mode = EMPTYDIR_MODE_SHARED_FS.to_owned();
+            config
+        };
+        Runtime::validate(&config_for(HYPERVISOR_NAME_DRAGONBALL, true)).unwrap();
+        let err = Runtime::validate(&config_for(HYPERVISOR_NAME_DRAGONBALL, false)).unwrap_err();
+        assert!(err.to_string().contains("static_sandbox_resource_mgmt"));
+        let err = Runtime::validate(&config_for("qemu", true)).unwrap_err();
+        assert!(err.to_string().contains("dragonball"));
+        let mut config = config_for(HYPERVISOR_NAME_DRAGONBALL, true);
+        config
+            .hypervisor
+            .get_mut(HYPERVISOR_NAME_DRAGONBALL)
+            .unwrap()
+            .factory
+            .enable_template = true;
+        let err = Runtime::validate(&config).unwrap_err();
+        assert!(err.to_string().contains("VM templates"));
     }
 
     #[test]

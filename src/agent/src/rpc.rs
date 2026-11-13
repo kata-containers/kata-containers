@@ -392,6 +392,7 @@ impl AgentService {
             rootless_euid: false,
             rootless_cgroup: false,
             container_name,
+            pod_memory_max_bytes: s.sandbox_memory_max_bytes,
         };
 
         let mut ctr: LinuxContainer = LinuxContainer::new(
@@ -1547,6 +1548,7 @@ impl agent_ttrpc::AgentService for AgentService {
 
             s.hostname = req.hostname.clone();
             s.running = true;
+            s.sandbox_memory_max_bytes = req.sandbox_memory_max_bytes;
 
             if !req.sandbox_id.is_empty() {
                 s.id = req.sandbox_id.clone();
@@ -2851,6 +2853,7 @@ mod tests {
             rootless_euid: false,
             rootless_cgroup: false,
             container_name: "".to_string(),
+            pod_memory_max_bytes: 0,
         }
     }
 

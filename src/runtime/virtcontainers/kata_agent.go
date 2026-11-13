@@ -865,13 +865,14 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	storages := setupStorages(ctx, sandbox)
 
 	req := &grpc.CreateSandboxRequest{
-		Hostname:      hostname,
-		Dns:           dns,
-		Storages:      storages,
-		SandboxPidns:  sandbox.sharePidNs,
-		SandboxId:     sandbox.id,
-		GuestHookPath: sandbox.config.HypervisorConfig.GuestHookPath,
-		KernelModules: kmodules,
+		Hostname:              hostname,
+		Dns:                   dns,
+		Storages:              storages,
+		SandboxPidns:          sandbox.sharePidNs,
+		SandboxId:             sandbox.id,
+		GuestHookPath:         sandbox.config.HypervisorConfig.GuestHookPath,
+		KernelModules:         kmodules,
+		SandboxMemoryMaxBytes: sandboxMemoryMaxBytes(sandbox),
 	}
 
 	_, err = k.sendReq(ctx, req)
@@ -1616,9 +1617,21 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	ctrStorages = append(ctrStorages, epheStorages...)
 
 	k.Logger().WithField("ociSpec Hugepage Resources", ociSpec.Linux.Resources.HugepageLimits).Debug("ociSpec HugepageLimit")
+	podSized := hugePagePodSized(&sandbox.config.HypervisorConfig)
+	name := containerDisplayName(c.config)
+	var own uint64
+	if podSized {
+		if own, err = refusePodSizedCreate(sandbox, c.config, name); err != nil {
+			return nil, err
+		}
+	}
+
 	hugepages, err := k.handleHugepages(ociSpec.Mounts, ociSpec.Linux.Resources.HugepageLimits)
 	if err != nil {
 		return nil, err
+	}
+	if podSized && len(hugepages) > 0 {
+		return nil, fmt.Errorf("container %s mounts a huge page volume, but huge pages inside the guest are not supported in a runtime class with enable_hugepages_pod_sizing", name)
 	}
 	ctrStorages = append(ctrStorages, hugepages...)
 
@@ -1704,6 +1717,9 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	if err != nil {
 		return nil, err
 	}
+	if podSized {
+		k.boundContainerInGuest(grpcSpec.Linux.Resources, vmHugePageSize(&sandbox.config.HypervisorConfig), own, name)
+	}
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
@@ -1719,6 +1735,9 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "CreateContainerRequest timed out")
 		}
 		return nil, err
+	}
+	if podSized {
+		recordGuestCeiling(c.config, grpcSpec.Linux.Resources)
 	}
 
 	return buildProcessFromExecID(req.ExecId)
@@ -2246,6 +2265,13 @@ func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Con
 		return err
 	}
 
+	// An update carries only the limits to apply now, so the reservation is
+	// applied again, or the ceiling it started with is lost.
+	podSized := hugePagePodSized(&sandbox.config.HypervisorConfig)
+	if podSized && grpcResources != nil {
+		k.boundContainerInGuest(grpcResources, vmHugePageSize(&sandbox.config.HypervisorConfig), ownHugePagesInPod(sandbox, c.config), containerDisplayName(c.config))
+	}
+
 	req := &grpc.UpdateContainerRequest{
 		ContainerId: c.id,
 		Resources:   grpcResources,
@@ -2254,6 +2280,9 @@ func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Con
 	_, err = k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
 		return grpcStatus.Errorf(codes.DeadlineExceeded, "UpdateContainerRequest timed out")
+	}
+	if err == nil && podSized {
+		recordGuestCeiling(c.config, grpcResources)
 	}
 	return err
 }

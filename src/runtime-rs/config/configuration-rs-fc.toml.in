@@ -181,6 +181,11 @@ enable_mem_prealloc = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Sizing a huge page backed VM from the pod's hugepages-<size> reservation needs
+# Dragonball; see configuration-dragonball.toml.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Disable the 'seccomp' feature from Cloud Hypervisor, firecracker or dragonball, default false
 disable_seccomp = false
 
