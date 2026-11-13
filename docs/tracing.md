@@ -126,6 +126,33 @@ To enable runtime tracing, set the tracing option as shown:
 enable_tracing = true
 ```
 
+For the Rust runtime, enable the collector's OTLP/gRPC receiver and set
+`otlp_endpoint` to its URL (default: `http://localhost:4317`), without a path
+such as `/v1/traces`.
+
+The `otlp_user` and `otlp_password` settings send Basic auth in gRPC metadata
+when a username is set. The receiver or proxy must support it; use HTTPS with
+trusted certificates for credentials sent over a network.
+
+### Migrating from the Jaeger exporter
+
+The Rust runtime used to export traces to Jaeger over HTTP Thrift. It now uses
+OTLP/gRPC, which Jaeger accepts by default since v1.46, as do other backends
+such as the OpenTelemetry Collector.
+
+The `jaeger_endpoint`, `jaeger_user` and `jaeger_password` options are
+deprecated and will be removed in a future release. Until then, each one is
+used when its `otlp_*` replacement is not set, and a warning is logged.
+
+If `otlp_endpoint` or `jaeger_endpoint` is a legacy Jaeger Thrift endpoint, one
+with the `/api/traces` path or port `14268`, it is replaced with port `4317` on
+the same host, and a warning is logged. This keeps Jaeger v1.46 or later on its
+default ports working without changes. Jaeger v1.35 to v1.45 must be started
+with `COLLECTOR_OTLP_ENABLED=true`. For older Jaeger versions, custom ports or
+proxies, set `otlp_endpoint` to the OTLP/gRPC receiver.
+
+The Go runtime still uses the `jaeger_*` options and the Jaeger exporter.
+
 ## Enable agent tracing
 
 To enable agent tracing, set the tracing option as shown:
