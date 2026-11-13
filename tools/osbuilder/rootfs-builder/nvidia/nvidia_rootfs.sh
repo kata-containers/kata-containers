@@ -727,6 +727,12 @@ assemble_nvidia_gpu_extension() {
 	extension="$(mktemp -d "${BUILD_DIR}/.nvidia-gpu-extension.XXXX")"
 	mkdir -p "${extension}/bin" "${extension}/sbin" "${extension}/${extlib}" \
 		 "${extension}/usr/share/nvidia" "${extension}/lib/firmware" "${extension}/lib/modules"
+	# nvidia-ctk discovers the persistenced socket below <driver-root>/run and
+	# <driver-root>/var/run only. The daemon's /var/run/nvidia-persistenced is
+	# compiled in and the extension is read-only, so NVRC binds that directory
+	# onto this empty mount point before the daemon starts; without it the CDI
+	# spec carries no socket mount and the container reports persistence Off.
+	mkdir -p "${extension}/run/nvidia-persistenced"
 
 	if nvidia_stack_has compute; then
 		local lib
