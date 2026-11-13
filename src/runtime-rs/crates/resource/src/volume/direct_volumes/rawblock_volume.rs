@@ -95,7 +95,7 @@ impl RawblockVolume {
             .await
             .context("do handle device failed.")?;
 
-        let block_volume = handle_block_volume(
+        let mut block_volume = handle_block_volume(
             device_info,
             m,
             read_only,
@@ -105,6 +105,15 @@ impl RawblockVolume {
         )
         .await
         .context("do handle block volume failed")?;
+
+        if let Some(value) = mount_info.metadata.get("fsGroup") {
+            let group_id = value.parse::<u32>().context("parse fsGroup metadata")?;
+
+            block_volume.0.fs_group = Some(agent::FSGroup {
+                group_id,
+                group_change_policy: agent::FSGroupChangePolicy::Always,
+            });
+        }
 
         Ok(Self {
             storage: Some(block_volume.0),
