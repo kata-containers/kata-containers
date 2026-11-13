@@ -399,11 +399,11 @@ impl ShareFsVolume {
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
+        // The root directory has no file name.
         let file_name = Path::new(&source_path)
             .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap();
+            .and_then(|name| name.to_str())
+            .unwrap_or("root");
         let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {
@@ -1197,6 +1197,41 @@ mod test {
         )
         .await
         .unwrap()
+    }
+
+    #[actix_rt::test]
+    async fn test_share_volume_source_basename() {
+        for (source, basename) in [
+            ("/", "root"),
+            ("///", "root"),
+            ("/.", "root"),
+            ("/host/volume", "volume"),
+            ("/host/volume/", "volume"),
+        ] {
+            for readonly in [false, true] {
+                let share_fs = Arc::new(FakeShareFs::default());
+                let volume =
+                    share_volume(share_fs.clone(), Path::new(source), "cid", readonly).await;
+                let mount = volume.mount.as_ref().unwrap();
+                let guest_path = mount.source().as_ref().unwrap();
+                let file_name = guest_path.file_name().unwrap().to_str().unwrap();
+
+                assert_eq!(guest_path.parent(), Some(Path::new("/guest")));
+                assert!(file_name.starts_with("sandbox-"));
+                assert!(file_name.ends_with(&format!("-{basename}")));
+                assert_eq!(mount.destination(), Path::new("/data"));
+                assert_eq!(
+                    mount.options(),
+                    &Some(vec![if readonly { "ro" } else { "rw" }.to_owned()])
+                );
+                assert_eq!(share_fs.mount.count("share"), 1);
+
+                let mounted_info_set = share_fs.mounted_info_set.lock().await;
+                let info = &mounted_info_set[source];
+                assert_eq!(&info.guest_path, guest_path);
+                assert_eq!(info.readonly(), readonly);
+            }
+        }
     }
 
     async fn ref_counts(share_fs: &FakeShareFs) -> Option<(usize, usize)> {
