@@ -29,6 +29,13 @@
 {{- $_ := set $selector . "true" }}
 {{- $_ := set $runtimeClassObj "scheduling" (merge (dict "nodeSelector" $selector) $scheduling) }}
 {{- end }}
+{{- /* Custom classes get the global tolerations too.
+       No per-runtime value exists, so the manifest's own entries follow them. */}}
+{{- with $.Values.runtimeClasses.tolerations }}
+{{- $scheduling := dig "scheduling" (dict) $runtimeClassObj }}
+{{- $_ := set $scheduling "tolerations" (concat . (dig "tolerations" (list) $scheduling)) }}
+{{- $_ := set $runtimeClassObj "scheduling" $scheduling }}
+{{- end }}
 {{ toYaml $runtimeClassObj }}
 ---
 {{- end }}
