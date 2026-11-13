@@ -1,0 +1,18 @@
+[package]
+name = "kata-agent-cc-op"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = "1"
+cc-op = { git =  "https://github.com/ray-valdez/guest-components.git", rev ="2c1e4be"}
+p256 = { version = "0.13.2", features = ["ecdsa", "pkcs8"] }
+
+futures = "0.3.30"
+
+
+[features]
+cc-op = []
