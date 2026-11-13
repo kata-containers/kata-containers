@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd/api/events"
@@ -83,43 +84,71 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		defer s.teardownWg.Done()
 		s.mu.Unlock()
 
-		// Publish the exit code and TaskExit event *before* the sandbox
-		// teardown.  Docker/containerd rely on the TaskExit event, not only on
-		// the Wait RPC; if teardown (a potentially slow guest shutdown) ran
-		// first, containerd could SIGKILL the shim before the exit was
-		// published, surfacing exit code 255.
-		c.exitCh <- uint32(ret)
-		shimLog.WithFields(logrus.Fields{
-			"container": c.id,
-			"exit-code": ret,
-		}).Info("Publishing container exit status")
-		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
+		// Docker/containerd rely on the TaskExit event, not only on the Wait
+		// RPC; if the teardown (a potentially slow guest shutdown) ran first,
+		// containerd could SIGKILL the shim before the exit was published,
+		// surfacing exit code 255.  Idempotent, as either path below may be
+		// the one to get here first.
+		var publishOnce sync.Once
+		publishExit := func() {
+			publishOnce.Do(func() {
+				c.exitCh <- uint32(ret)
+				shimLog.WithFields(logrus.Fields{
+					"container": c.id,
+					"exit-code": ret,
+				}).Info("Publishing container exit status")
+				shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
 
-		go cReap(s, int(ret), c.id, execID, timeStamp)
+				go cReap(s, int(ret), c.id, execID, timeStamp)
+			})
+		}
 
 		// Tear the sandbox down synchronously but *without* holding s.mu.
 		// Holding s.mu across the (slow) guest shutdown blocks the Delete()
-		// RPC that containerd issues right after the early TaskExit above;
-		// containerd then gives up on a clean Delete/Shutdown and runs the
-		// `shim delete` binary, which re-connects to the now-dead agent and
-		// hangs until killed -- surfacing as a failed `docker run --rm`.
+		// RPC that containerd issues right after the TaskExit; containerd
+		// then gives up on a clean Delete/Shutdown and runs the `shim delete`
+		// binary, which re-connects to the now-dead agent and hangs until
+		// killed -- surfacing as a failed `docker run --rm`.
 		//
 		// Shutdown() waits on teardownWg instead, so the sandbox run
 		// directory (watched by kata-monitor) is still removed before the
 		// shim exits.  teardownOnce serializes with watchSandbox()'s
 		// killed-VMM teardown so the (not internally synchronized)
 		// Sandbox.Stop/Delete never run concurrently.
-		if c.cType.IsSandbox() {
+		teardownSandbox := func(afterStop func()) {
 			s.teardownOnce.Do(func() {
-				if err = s.sandbox.Stop(ctx, true); err != nil {
-					shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
+				if serr := s.sandbox.Stop(ctx, true); serr != nil {
+					shimLog.WithError(serr).WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 				}
 
-				if err = s.sandbox.Delete(ctx); err != nil {
-					shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
+				afterStop()
+
+				if derr := s.sandbox.Delete(ctx); derr != nil {
+					shimLog.WithError(derr).WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 				}
 			})
-		} else {
+		}
+
+		// Stop() hands a passed-through netdev back to its host driver, which
+		// it can only do once the VMM has released the device.  Publishing
+		// the exit first has containerd call Delete()/Shutdown() and, on its
+		// own timeout, SIGKILL the shim, cutting that restore short and
+		// leaving the device on vfio-pci with no netdev for CNI or a later
+		// sandbox to find.  Delete() is not worth the same wait, so it stays
+		// behind the exit, as does every sandbox without such a device.
+		holdExitUntilStopped := c.cType.IsSandbox() && s.sandbox.HasPhysicalEndpoint()
+
+		switch {
+		case holdExitUntilStopped:
+			teardownSandbox(publishExit)
+			// watchSandbox() may have won the teardown, in which case
+			// nothing published the exit.
+			publishExit()
+		case c.cType.IsSandbox():
+			publishExit()
+			teardownSandbox(func() {})
+		default:
+			publishExit()
 			if _, err = s.sandbox.StopContainer(ctx, c.id, true); err != nil {
 				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
