@@ -915,6 +915,34 @@ impl Qmp {
             .with_context(|| format!("add QEMU block fd for {opaque}"))
     }
 
+    fn block_node_exists(&mut self, node_name: &str) -> Result<bool> {
+        let nodes = self
+            .qmp
+            .execute(&qapi_qmp::query_named_block_nodes { flat: None })
+            .map_err(|e| anyhow!("query-named-block-nodes: {:?}", e))?;
+        Ok(nodes
+            .iter()
+            .any(|node| node.node_name.as_deref() == Some(node_name)))
+    }
+
+    /// An unplug that failed or timed out can leave the backend node and its
+    /// fdsets behind, and blockdev-add then fails with "Duplicate nodes" for
+    /// every container that gets this index later. Delete the leftover before
+    /// the node is added again; a node a frontend still uses refuses the
+    /// delete, so a live device cannot be reclaimed by mistake.
+    fn reclaim_leftover_block_node(&mut self, node_name: &str) -> Result<()> {
+        if self.block_node_exists(node_name)? {
+            self.qmp
+                .execute(&qapi_qmp::blockdev_del {
+                    node_name: node_name.to_owned(),
+                })
+                .map_err(|e| anyhow!("delete leftover block node {}: {:?}", node_name, e))?;
+            warn!(sl!(), "deleted a leftover block node {}", node_name);
+        }
+        self.remove_block_fdsets(node_name);
+        Ok(())
+    }
+
     fn remove_block_fdsets(&mut self, node_name: &str) {
         let Some(fdset_ids) = self.block_fdsets.remove(node_name) else {
             return;
@@ -1248,9 +1276,7 @@ impl Qmp {
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = block_node_name(index);
-        if self.block_fdsets.contains_key(&node_name) {
-            return Err(anyhow!("duplicate QEMU block device ID {node_name}"));
-        }
+        self.reclaim_leftover_block_node(&node_name)?;
         let discard_option = || discard_unmap.then_some(BlockdevDiscardOptions::unmap);
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
@@ -1363,7 +1389,11 @@ impl Qmp {
         };
 
         if !fdset_ids.is_empty() {
-            self.block_fdsets.insert(node_name.clone(), fdset_ids);
+            // A failed removal during reclaim stays queued for later cleanup.
+            self.block_fdsets
+                .entry(node_name.clone())
+                .or_default()
+                .extend(fdset_ids);
         }
 
         if let Err(err) = self.qmp.execute(&qapi_qmp::blockdev_add(blockdev_options)) {
@@ -1909,7 +1939,216 @@ fn block_node_name(index: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::{json, Value};
+    use std::io::Write;
+    use std::os::unix::net::UnixListener;
+    use std::sync::{Arc, Mutex};
+
     use super::*;
+
+    struct BlockQemu {
+        node_exists: bool,
+        frontend_live: bool,
+        fdsets: Vec<i64>,
+        fail_remove_once: Option<i64>,
+        fail_backend_add: bool,
+        removals: Vec<i64>,
+        added_sources: usize,
+    }
+
+    impl BlockQemu {
+        fn reply(&mut self, command: &str, args: &Value) -> Value {
+            match command {
+                "query-fdsets" => {
+                    let sets: Vec<_> = self.fdsets.iter().map(|id| json!({
+                        "fdset-id": id,
+                        "fds": [{"fd": id + 20, "opaque": block_fd_opaque("drive-0", "source")}]
+                    })).collect();
+                    json!({"return": sets})
+                }
+                "query-named-block-nodes" => {
+                    let nodes = if self.node_exists {
+                        vec![json!({"node-name": "drive-0", "drv": "raw", "ro": false,
+                            "encrypted": false, "file": "disk.img", "backing_file_depth": 0,
+                            "bps": 0, "bps_rd": 0, "bps_wr": 0,
+                            "iops": 0, "iops_rd": 0, "iops_wr": 0, "write_threshold": 0,
+                            "detect_zeroes": "off",
+                            "cache": {"direct": false, "no-flush": false, "writeback": true},
+                            "image": {"filename": "disk.img", "format": "raw", "virtual-size": 4096}})]
+                    } else {
+                        vec![]
+                    };
+                    json!({"return": nodes})
+                }
+                "blockdev-del" => {
+                    if self.frontend_live {
+                        json!({"error": {"class": "GenericError", "desc": "node is in use"}})
+                    } else {
+                        self.node_exists = false;
+                        json!({"return": {}})
+                    }
+                }
+                "remove-fd" => {
+                    let id = args["fdset-id"].as_i64().unwrap();
+                    self.removals.push(id);
+                    if self.fail_remove_once == Some(id) {
+                        self.fail_remove_once = None;
+                        json!({"error": {"class": "GenericError", "desc": "scripted remove-fd failure"}})
+                    } else {
+                        assert!(self.fdsets.contains(&id));
+                        self.fdsets.retain(|fdset| *fdset != id);
+                        json!({"return": {}})
+                    }
+                }
+                "add-fd" => {
+                    self.added_sources += 1;
+                    self.fdsets.push(11);
+                    json!({"return": {"fdset-id": 11, "fd": 31}})
+                }
+                "blockdev-add" => {
+                    if self.fail_backend_add {
+                        json!({"error": {"class": "GenericError", "desc": "scripted backend failure"}})
+                    } else {
+                        assert!(!self.node_exists);
+                        self.node_exists = true;
+                        json!({"return": {}})
+                    }
+                }
+                "device_add" => {
+                    assert!(self.node_exists);
+                    self.frontend_live = true;
+                    json!({"return": {}})
+                }
+                other => panic!("unexpected QMP command {}", other),
+            }
+        }
+    }
+
+    fn block_qmp(state: BlockQemu) -> (Qmp, Arc<Mutex<BlockQemu>>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("qmp.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+        let state = Arc::new(Mutex::new(state));
+        let served = state.clone();
+        std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut writer = stream.try_clone().unwrap();
+            let greeting = json!({"QMP": {
+                "version": {"qemu": {"major": 9, "minor": 2, "micro": 0}, "package": ""},
+                "capabilities": []
+            }});
+            writeln!(writer, "{greeting}").unwrap();
+            // add-fd is sent with SCM_RIGHTS and no trailing newline, so
+            // parse complete JSON values rather than reading one line at a time.
+            for request in serde_json::Deserializer::from_reader(stream).into_iter::<Value>() {
+                let Ok(request) = request else { return };
+                let command = request["execute"].as_str().unwrap();
+                let reply = if command == "qmp_capabilities" {
+                    json!({"return": {}})
+                } else {
+                    served.lock().unwrap().reply(command, &request["arguments"])
+                };
+                if writeln!(writer, "{reply}").is_err() {
+                    return;
+                }
+            }
+        });
+        (Qmp::new(path.to_str().unwrap()).unwrap(), state, dir)
+    }
+
+    fn leftover_block() -> BlockQemu {
+        BlockQemu {
+            node_exists: true,
+            frontend_live: false,
+            fdsets: vec![7, 8],
+            fail_remove_once: Some(8),
+            fail_backend_add: false,
+            removals: vec![],
+            added_sources: 0,
+        }
+    }
+
+    fn add_test_block(qmp: &mut Qmp, disk: &std::path::Path) -> Result<()> {
+        qmp.hotplug_block_device(
+            VIRTIO_SCSI,
+            0,
+            disk.to_str().unwrap(),
+            "threads",
+            Some(false),
+            false,
+            false,
+            false,
+            0,
+            0,
+            &BlockSourceFormat::Raw,
+            None,
+        )
+        .map(|_| ())
+    }
+
+    #[rstest::rstest]
+    #[case::old_fdsets_removed(false)]
+    #[case::failed_removal_retried(true)]
+    fn hotplug_keeps_fdsets_that_reclaim_could_not_remove(#[case] failed: bool) {
+        let mut initial = leftover_block();
+        initial.fail_remove_once = failed.then_some(8);
+        let (mut qmp, state, _dir) = block_qmp(initial);
+        let disk = tempfile::NamedTempFile::new().unwrap();
+
+        add_test_block(&mut qmp, disk.path()).unwrap();
+        let expected = if failed { vec![8, 11] } else { vec![11] };
+        assert_eq!(qmp.block_fdsets["drive-0"], expected);
+        assert_eq!(state.lock().unwrap().fdsets, expected);
+
+        // A later unplug can again leave only its backend. Reclaim must
+        // release both the new source and the old failed fdset then.
+        state.lock().unwrap().frontend_live = false;
+        qmp.reclaim_leftover_block_node("drive-0").unwrap();
+        assert!(!qmp.block_fdsets.contains_key("drive-0"));
+        let state = state.lock().unwrap();
+        assert!(state.fdsets.is_empty());
+        assert!(!state.node_exists);
+        assert_eq!(
+            state.removals.iter().filter(|id| **id == 8).count(),
+            if failed { 2 } else { 1 }
+        );
+    }
+
+    #[test]
+    fn failed_hotplug_cleans_new_and_retained_fdsets() {
+        let mut initial = leftover_block();
+        initial.fail_backend_add = true;
+        let (mut qmp, state, _dir) = block_qmp(initial);
+        let disk = tempfile::NamedTempFile::new().unwrap();
+
+        let error = add_test_block(&mut qmp, disk.path()).unwrap_err();
+        assert!(format!("{error:#}").contains("scripted backend failure"));
+        assert!(qmp.block_fdsets.is_empty());
+        let state = state.lock().unwrap();
+        assert!(state.fdsets.is_empty());
+        assert!(!state.node_exists);
+        assert!(!state.frontend_live);
+    }
+
+    #[test]
+    fn reclaim_does_not_touch_a_backend_still_in_use() {
+        let mut initial = leftover_block();
+        initial.frontend_live = true;
+        let (mut qmp, state, _dir) = block_qmp(initial);
+        let disk = tempfile::NamedTempFile::new().unwrap();
+
+        let error = add_test_block(&mut qmp, disk.path()).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("delete leftover block node drive-0"));
+        assert!(!message.contains("reclaim leftover block node"));
+        assert_eq!(qmp.block_fdsets["drive-0"], [7, 8]);
+        let state = state.lock().unwrap();
+        assert!(state.node_exists);
+        assert!(state.frontend_live);
+        assert_eq!(state.fdsets, [7, 8]);
+        assert!(state.removals.is_empty());
+        assert_eq!(state.added_sources, 0);
+    }
 
     #[test]
     fn reconstructs_kata_block_fdsets_from_qmp() {
