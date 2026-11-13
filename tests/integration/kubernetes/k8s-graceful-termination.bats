@@ -48,7 +48,7 @@ wait_for_pod_terminated() {
 	# Add finalizer so the pod is not fully removed during the test
 	kubectl patch pod "$pod_name" --patch '{"metadata":{"finalizers":["katacontainers.io/test-finalizer"]}}' --type=merge
 
-	# Check pod creation
+	# Wait for the readiness probe to confirm the signal traps are installed.
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
     # Send a SIGTERM by deleting the pod
