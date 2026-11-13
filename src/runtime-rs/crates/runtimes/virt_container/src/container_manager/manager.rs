@@ -7,7 +7,10 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use agent::Agent;
 use common::{
@@ -24,7 +27,7 @@ use oci::Process as OCIProcess;
 use oci_spec::runtime as oci;
 use resource::ResourceManager;
 use runtime_spec as spec;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::{watch, OnceCell, RwLock, RwLockWriteGuard};
 use tracing::instrument;
 
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
@@ -38,6 +41,9 @@ pub struct VirtContainerManager {
     sid: String,
     pid: u32,
     containers: Arc<RwLock<HashMap<String, Container>>>,
+    // Accessed while holding the containers lock. Create removes the old
+    // record only after successfully creating a new task with the same ID.
+    missing_container_exits: Mutex<HashMap<String, watch::Sender<Option<ProcessExitStatus>>>>,
     resource_manager: Arc<ResourceManager>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
@@ -74,6 +80,7 @@ impl VirtContainerManager {
             sid: sid.to_string(),
             pid,
             containers: Default::default(),
+            missing_container_exits: Default::default(),
             resource_manager,
             agent,
             hypervisor,
@@ -87,6 +94,54 @@ impl VirtContainerManager {
             .get_or_try_init(|| self.hypervisor.get_vmm_master_tid())
             .await
             .copied()
+    }
+
+    fn missing_container_state(&self, process: &ContainerProcess) -> Option<ProcessStateInfo> {
+        if process.process_type != ProcessType::Container || process.container_id() == self.sid {
+            return None;
+        }
+        let exits = self.missing_container_exits.lock().unwrap();
+        let exit = exits.get(process.container_id())?.borrow().clone()?;
+        Some(ProcessStateInfo {
+            container_id: process.container_id().to_string(),
+            exec_id: String::new(),
+            pid: PID { pid: 0 },
+            bundle: String::new(),
+            stdin: None,
+            stdout: None,
+            stderr: None,
+            terminal: false,
+            status: ProcessStatus::Stopped,
+            exit_status: exit.exit_code,
+            exited_at: exit.exit_time,
+        })
+    }
+
+    fn subscribe_missing_container(&self, id: &str) -> watch::Receiver<Option<ProcessExitStatus>> {
+        self.missing_container_exits
+            .lock()
+            .unwrap()
+            .entry(id.to_string())
+            .or_insert_with(|| watch::channel(None).0)
+            .subscribe()
+    }
+
+    async fn begin_container_creation(&self) -> RwLockWriteGuard<'_, HashMap<String, Container>> {
+        self.containers.write().await
+    }
+
+    fn finish_container_creation(
+        &self,
+        containers: &mut RwLockWriteGuard<'_, HashMap<String, Container>>,
+        container: Container,
+    ) {
+        // Keep the accepted exit through failed or cancelled creation. Only a
+        // successfully created replacement starts a new task generation.
+        self.missing_container_exits
+            .lock()
+            .unwrap()
+            .remove(&container.container_id.container_id);
+        containers.insert(container.container_id.to_string(), container);
     }
 }
 
@@ -136,7 +191,7 @@ impl ContainerManager for VirtContainerManager {
             .track(&config.container_id, &config.bundle, &spec)
             .await;
 
-        let mut containers = self.containers.write().await;
+        let mut containers = self.begin_container_creation().await;
         if let Err(e) = container.create(spec).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
@@ -146,7 +201,7 @@ impl ContainerManager for VirtContainerManager {
             return Err(e);
         }
 
-        containers.insert(container.container_id.to_string(), container);
+        self.finish_container_creation(&mut containers, container);
         Ok(PID {
             pid: vmm_master_tid,
         })
@@ -170,9 +225,14 @@ impl ContainerManager for VirtContainerManager {
         match process.process_type {
             ProcessType::Container => {
                 let mut containers = self.containers.write().await;
-                let mut c = containers
-                    .remove(container_id)
-                    .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+                let mut c = match containers.remove(container_id) {
+                    Some(c) => c,
+                    None => {
+                        return self.missing_container_state(process).ok_or_else(|| {
+                            Error::ContainerNotFound(container_id.to_string()).into()
+                        })
+                    }
+                };
                 // Returning an error here blocks containerd from processing the exit
                 // and reaching sandbox teardown, so report the cleanup failure and continue.
                 if let Err(e) = c.finish_cleanup().await {
@@ -277,6 +337,25 @@ impl ContainerManager for VirtContainerManager {
             None => {
                 // Container already removed - this is OK for SIGKILL/SIGTERM
                 if is_termination_signal(req.signal) {
+                    if req.process.process_type == ProcessType::Container
+                        && container_id != &self.sid
+                    {
+                        let mut exits = self.missing_container_exits.lock().unwrap();
+                        let exit = exits
+                            .entry(container_id.clone())
+                            .or_insert_with(|| watch::channel(None).0);
+                        // Preserve the first accepted exit across duplicate
+                        // Kill, Wait, State and Delete requests.
+                        exit.send_if_modified(|status| {
+                            if status.is_some() {
+                                return false;
+                            }
+                            let mut stopped = ProcessExitStatus::new();
+                            stopped.update_exit_code(128 + req.signal as i32);
+                            *status = Some(stopped);
+                            true
+                        });
+                    }
                     warn!(
                         sl!(),
                         "Signal {} ignored due to container not existing", req.signal;
@@ -335,6 +414,24 @@ impl ContainerManager for VirtContainerManager {
 
         let containers = self.containers.read().await;
         let container_id = &process.container_id.container_id;
+        if !containers.contains_key(container_id)
+            && process.process_type == ProcessType::Container
+            && container_id != &self.sid
+        {
+            let mut exit = self.subscribe_missing_container(container_id);
+            drop(containers);
+            // containerd starts Wait before sending Kill for an UNKNOWN task.
+            // Do not invent an exit until a termination signal was accepted.
+            loop {
+                if let Some(status) = exit.borrow_and_update().clone() {
+                    return Ok(status);
+                }
+                if exit.changed().await.is_err() {
+                    // Create invalidated this task generation.
+                    return Err(Error::ContainerNotFound(container_id.clone()).into());
+                }
+            }
+        }
         let c = containers
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
@@ -418,6 +515,8 @@ impl ContainerManager for VirtContainerManager {
                 exit_status: 0,
                 exited_at: None,
             })
+        } else if let Some(state) = self.missing_container_state(process) {
+            Ok(state)
         } else {
             Err(Error::ContainerNotFound(container_id.clone()).into())
         }
@@ -500,5 +599,310 @@ impl ContainerManager for VirtContainerManager {
     async fn is_sandbox_container(&self, process: &ContainerProcess) -> bool {
         process.process_type == ProcessType::Container
             && process.container_id.container_id == self.sid
+    }
+}
+
+#[cfg(test)]
+mod missing_container_tests {
+    use super::*;
+    use hypervisor::qemu::Qemu;
+    use kata_types::config::TomlConfig;
+    use persist::sandbox_persist::Persist;
+    use resource::{
+        cgroups::cgroup_persist::CgroupState, manager::ManagerArgs, resource_persist::ResourceState,
+    };
+
+    async fn manager() -> VirtContainerManager {
+        let agent = Arc::new(agent::kata::KataAgent::new(Default::default()));
+        let hypervisor = Arc::new(Qemu::new());
+        // Restore only opens managers for these nonexistent cgroups. It does
+        // not create cgroups or move the test process into one.
+        let resources = Arc::new(
+            ResourceManager::restore(
+                ManagerArgs {
+                    sid: "missing-container-test".into(),
+                    agent: agent.clone(),
+                    hypervisor: hypervisor.clone(),
+                    config: TomlConfig::default(),
+                },
+                ResourceState {
+                    cgroup_state: Some(CgroupState {
+                        path: Some("missing-container-test".into()),
+                        overhead_path: Some("missing-container-test-overhead".into()),
+                        sandbox_cgroup_only: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap(),
+        );
+        VirtContainerManager::new(
+            "sandbox",
+            0,
+            agent,
+            hypervisor,
+            resources,
+            Arc::new(CrioOomNotifier::default()),
+        )
+    }
+
+    async fn container(manager: &VirtContainerManager, id: &str) -> Container {
+        Container::new(
+            0,
+            ContainerConfig {
+                container_id: id.into(),
+                bundle: String::new(),
+                rootfs_mounts: vec![],
+                terminal: false,
+                options: None,
+                stdin: None,
+                stdout: None,
+                stderr: None,
+            },
+            oci::Spec::default(),
+            manager.agent.clone(),
+            manager.resource_manager.clone(),
+            None,
+        )
+        .await
+        .unwrap()
+    }
+
+    fn kill(id: &str, signal: u32) -> KillRequest {
+        KillRequest {
+            process: ContainerProcess::new(id, "").unwrap(),
+            signal,
+            all: false,
+        }
+    }
+
+    #[rstest::rstest]
+    #[case(9, 137)]
+    #[case(15, 143)]
+    #[tokio::test]
+    async fn accepted_kill_completes_wait_state_and_delete(#[case] signal: u32, #[case] code: i32) {
+        let manager = manager().await;
+        let request = kill("ghost", signal);
+        manager.kill_process(&request).await.unwrap();
+        let exit = manager.wait_process(&request.process).await.unwrap();
+        assert_eq!(exit.exit_code, code);
+        assert!(exit.exit_time.is_some());
+        for _ in 0..2 {
+            let state = manager.state_process(&request.process).await.unwrap();
+            assert_eq!(state.status, ProcessStatus::Stopped);
+            assert_eq!(state.exit_status, code);
+            let deleted = manager.delete_process(&request.process).await.unwrap();
+            assert_eq!(deleted.exit_status, code);
+            manager.kill_process(&request).await.unwrap();
+            assert_eq!(
+                manager
+                    .wait_process(&request.process)
+                    .await
+                    .unwrap()
+                    .exit_time,
+                exit.exit_time
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_before_kill_does_not_report_an_exit_early() {
+        let manager = manager().await;
+        let request = kill("ghost", 9);
+        let wait = manager.wait_process(&request.process);
+        tokio::pin!(wait);
+        tokio::select! {
+            biased;
+            result = &mut wait => panic!("Wait completed without Kill: {:?}", result),
+            _ = tokio::task::yield_now() => {}
+        }
+        assert!(manager.kill_process(&kill("ghost", 1)).await.is_err());
+        assert!(manager.state_process(&request.process).await.is_err());
+        assert!(manager.delete_process(&request.process).await.is_err());
+        tokio::select! {
+            biased;
+            result = &mut wait => panic!("rejected signal completed Wait: {:?}", result),
+            _ = tokio::task::yield_now() => {}
+        }
+        manager.kill_process(&request).await.unwrap();
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), wait)
+                .await
+                .unwrap()
+                .unwrap()
+                .exit_code,
+            137
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_wait_does_not_lose_a_later_exit() {
+        let manager = manager().await;
+        let request = kill("ghost", 9);
+        {
+            let wait = manager.wait_process(&request.process);
+            tokio::pin!(wait);
+            tokio::select! {
+                biased;
+                result = &mut wait => panic!("Wait completed without Kill: {:?}", result),
+                _ = tokio::task::yield_now() => {}
+            }
+        }
+        manager.kill_process(&request).await.unwrap();
+        assert_eq!(
+            manager
+                .wait_process(&request.process)
+                .await
+                .unwrap()
+                .exit_code,
+            137
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_exec_and_sandbox_ids_do_not_get_synthetic_exits() {
+        let manager = manager().await;
+        for process in [
+            ContainerProcess::new("ghost", "exec").unwrap(),
+            ContainerProcess::new("sandbox", "").unwrap(),
+        ] {
+            manager
+                .kill_process(&KillRequest {
+                    process: process.clone(),
+                    signal: 9,
+                    all: false,
+                })
+                .await
+                .unwrap();
+            assert!(manager.wait_process(&process).await.is_err());
+            assert!(manager.delete_process(&process).await.is_err());
+        }
+        assert!(manager.missing_container_exits.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn ghosts_do_not_require_an_empty_map_and_leave_other_containers_alone() {
+        let manager = manager().await;
+        for id in ["sandbox", "sibling"] {
+            let mut containers = manager.begin_container_creation().await;
+            manager.finish_container_creation(&mut containers, container(&manager, id).await);
+        }
+        let request = kill("ghost", 9);
+        manager.kill_process(&request).await.unwrap();
+        assert_eq!(
+            manager
+                .wait_process(&request.process)
+                .await
+                .unwrap()
+                .exit_code,
+            137
+        );
+        let containers = manager.containers.read().await;
+        assert!(containers.contains_key("sandbox"));
+        assert!(containers.contains_key("sibling"));
+    }
+
+    #[tokio::test]
+    async fn successful_creation_invalidates_an_older_exit_and_pending_wait() {
+        let manager = manager().await;
+        let request = kill("reused", 9);
+        manager.kill_process(&request).await.unwrap();
+        let mut pending = manager.subscribe_missing_container("reused");
+        let mut containers = manager.begin_container_creation().await;
+        assert_eq!(
+            manager
+                .missing_container_state(&request.process)
+                .unwrap()
+                .exit_status,
+            137
+        );
+        manager.finish_container_creation(&mut containers, container(&manager, "reused").await);
+        drop(containers);
+        assert!(manager.missing_container_state(&request.process).is_none());
+        assert!(pending.changed().await.is_err());
+
+        let process = ContainerProcess::new("pending", "").unwrap();
+        let wait = manager.wait_process(&process);
+        tokio::pin!(wait);
+        tokio::select! {
+            biased;
+            result = &mut wait => panic!("Wait completed before Kill or Create: {:?}", result),
+            _ = tokio::task::yield_now() => {}
+        }
+        let mut containers = manager.begin_container_creation().await;
+        manager.finish_container_creation(&mut containers, container(&manager, "pending").await);
+        drop(containers);
+        assert!(wait.await.is_err());
+    }
+
+    #[rstest::rstest]
+    #[case(true)]
+    #[case(false)]
+    #[tokio::test]
+    async fn failed_creation_preserves_the_exit_and_waiters(#[case] accepted: bool) {
+        let manager = manager().await;
+        let request = kill("reused", 9);
+        let mut pending = manager.subscribe_missing_container("reused");
+        if accepted {
+            manager.kill_process(&request).await.unwrap();
+        }
+        let replacement = container(&manager, "reused").await;
+        let creating = manager.begin_container_creation().await;
+        let mut invalid = oci::Spec::default();
+        invalid.set_root(None);
+        assert!(replacement.create(invalid).await.is_err());
+        drop(creating);
+        if !accepted {
+            manager.kill_process(&request).await.unwrap();
+        }
+        tokio::time::timeout(std::time::Duration::from_secs(1), pending.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        let state = manager.missing_container_state(&request.process).unwrap();
+        assert_eq!(state.exit_status, 137);
+        assert_eq!(
+            manager
+                .wait_process(&request.process)
+                .await
+                .unwrap()
+                .exit_code,
+            137
+        );
+        assert_eq!(
+            manager
+                .delete_process(&request.process)
+                .await
+                .unwrap()
+                .exited_at,
+            state.exited_at
+        );
+    }
+
+    #[tokio::test]
+    async fn a_kill_cannot_overtake_creation_and_leave_a_stale_exit() {
+        let manager = manager().await;
+        let created = container(&manager, "new").await;
+        let mut creating = manager.begin_container_creation().await;
+        let request = kill("new", 9);
+        let kill = manager.kill_process(&request);
+        tokio::pin!(kill);
+        tokio::select! {
+            biased;
+            result = &mut kill => panic!("Kill bypassed creation lock: {:?}", result),
+            _ = tokio::task::yield_now() => {}
+        }
+        manager.finish_container_creation(&mut creating, created);
+        drop(creating);
+        // The real task reaches the unconnected test agent; it must never be
+        // mistaken for a missing task and acknowledged with a synthetic exit.
+        assert!(kill.await.is_err());
+        assert!(manager
+            .missing_container_exits
+            .lock()
+            .unwrap()
+            .get("new")
+            .is_none());
     }
 }
