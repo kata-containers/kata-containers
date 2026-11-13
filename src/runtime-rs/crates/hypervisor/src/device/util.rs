@@ -102,10 +102,44 @@ pub fn do_decrease_count(ref_count: &mut u64) -> Result<bool> {
     Ok((*ref_count) != 0)
 }
 
+/// What a detach still has to do for a device attached `ref_count` times.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DetachStep {
+    /// Other references remain; the device stays in the guest.
+    Release,
+    /// Last reference: remove the device from the hypervisor, then call
+    /// [`detach_removed`] and finish the bookkeeping.
+    Remove,
+    /// An earlier detach already removed the device from the hypervisor but
+    /// did not get to finish the bookkeeping.
+    Finish,
+}
+
+/// Decides the next step of a detach. The count is only dropped below one by
+/// [`detach_removed`], once the hypervisor has removed the device. A detach
+/// that fails or is cancelled while removing therefore keeps its reference
+/// and is retried as a removal, and one cancelled after the removal is
+/// retried as the bookkeeping that remains, instead of failing forever on a
+/// count that already reached zero.
+pub fn detach_step(ref_count: &mut u64) -> DetachStep {
+    match *ref_count {
+        0 => DetachStep::Finish,
+        1 => DetachStep::Remove,
+        _ => {
+            *ref_count -= 1;
+            DetachStep::Release
+        }
+    }
+}
+
+pub fn detach_removed(ref_count: &mut u64) {
+    *ref_count = 0;
+}
+
 #[cfg(test)]
 mod tests {
     use crate::device::util::get_virt_drive_name;
-    use crate::device::util::{do_decrease_count, do_increase_count};
+    use crate::device::util::{detach_step, do_decrease_count, do_increase_count, DetachStep};
 
     #[actix_rt::test]
     async fn test_get_virt_drive_name() {
@@ -178,5 +212,16 @@ mod tests {
 
         assert!(!testd2.detach());
         assert_eq!(testd2.ref_cnt, 0_u64);
+    }
+
+    #[rstest::rstest]
+    #[case::shared(3, DetachStep::Release, 2)]
+    #[case::last_shared(2, DetachStep::Release, 1)]
+    #[case::last_reference(1, DetachStep::Remove, 1)]
+    #[case::removed_but_unfinished(0, DetachStep::Finish, 0)]
+    fn test_detach_step(#[case] count: u64, #[case] step: DetachStep, #[case] left: u64) {
+        let mut ref_count = count;
+        assert_eq!(detach_step(&mut ref_count), step);
+        assert_eq!(ref_count, left);
     }
 }
