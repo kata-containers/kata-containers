@@ -111,6 +111,15 @@ impl Container {
         })
     }
 
+    #[cfg(test)]
+    pub(super) async fn mark_stopped_for_test(&self) {
+        self.inner
+            .write()
+            .await
+            .set_state(ProcessStatus::Stopped)
+            .await;
+    }
+
     pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
         // process oci spec
         let mut inner = self.inner.write().await;

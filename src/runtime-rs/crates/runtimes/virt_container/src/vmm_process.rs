@@ -5,9 +5,10 @@
 use std::convert::TryFrom;
 use std::fs;
 use std::io::{self, ErrorKind};
-use std::time::Duration;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
 use anyhow::{anyhow, Context, Result};
+use tokio::io::{unix::AsyncFd, Interest};
 
 /// The exit watcher may reap the VMM while a stop fallback still holds its
 /// PID, and the kernel may then hand that PID to another process. The start
@@ -79,24 +80,16 @@ impl VmmProcessIdentity {
         })
     }
 
-    pub(crate) async fn terminate_and_wait(&self, timeout: Duration) -> Result<()> {
-        let identity = self.clone();
-        tokio::task::spawn_blocking(move || identity.terminate_and_wait_blocking(timeout))
-            .await
-            .context("join VMM stop")?
-    }
-
-    fn terminate_and_wait_blocking(&self, timeout: Duration) -> Result<()> {
-        use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-        use std::time::Instant;
-
-        // Open a pidfd before checking the start time. Signals sent through
-        // this fd cannot hit a process which later reuses the numeric PID.
+    /// Returns None once this process has exited. Signals sent through the
+    /// pidfd cannot hit a process which later reuses the numeric PID.
+    fn open_pidfd(&self) -> Result<Option<OwnedFd>> {
+        // Open the pidfd before checking the start time, so it refers to the
+        // process that was checked.
         let raw_fd = unsafe { libc::syscall(libc::SYS_pidfd_open, self.pid, 0) };
         if raw_fd < 0 {
             let err = io::Error::last_os_error();
             if err.raw_os_error() == Some(libc::ESRCH) {
-                return Ok(());
+                return Ok(None);
             }
             return Err(err).context("open VMM pidfd");
         }
@@ -112,19 +105,41 @@ impl VmmProcessIdentity {
             };
             let rc = unsafe { libc::poll(&mut pollfd, 1, 0) };
             if rc > 0 && pollfd.revents & libc::POLLIN != 0 {
-                return Ok(());
+                return Ok(None);
             }
             return Err(anyhow!("cannot verify VMM {} exited", self.pid));
         };
-        if stat.start_time != self.start_time || matches!(stat.state, 'Z' | 'X') {
-            return Ok(());
+        if stat.start_time != self.start_time {
+            return Ok(None);
         }
+        // The thread-group leader can be a zombie while another VMM thread
+        // still runs. Only pidfd readiness confirms the whole group exited.
+        if matches!(stat.state, 'Z' | 'X') {
+            let mut pollfd = libc::pollfd {
+                fd: pidfd.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            if unsafe { libc::poll(&mut pollfd, 1, 0) } < 0 {
+                return Err(io::Error::last_os_error()).context("poll VMM pidfd");
+            }
+            if pollfd.revents & libc::POLLIN != 0 {
+                return Ok(None);
+            }
+        }
+        Ok(Some(pidfd))
+    }
 
+    /// Sends SIGKILL without waiting; wait_exit() confirms the exit.
+    pub(crate) fn kill(&self) -> Result<()> {
         // pidfd_open() only accepts thread-group leaders, so the PID is the
         // thread group. Reading /proc here instead could race the reap.
         if u32::try_from(self.pid).ok() == Some(std::process::id()) {
             return Err(anyhow!("refusing to signal the shim process"));
         }
+        let Some(pidfd) = self.open_pidfd()? else {
+            return Ok(());
+        };
 
         let rc = unsafe {
             libc::syscall(
@@ -141,33 +156,33 @@ impl VmmProcessIdentity {
                 return Err(err).context("kill VMM through pidfd");
             }
         }
+        Ok(())
+    }
 
-        let deadline = Instant::now() + timeout;
-        loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(anyhow!("VMM {} did not exit", self.pid));
-            }
-            let mut pollfd = libc::pollfd {
-                fd: pidfd.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            let wait_ms = remaining.as_millis().min(i32::MAX as u128) as i32;
-            let rc = unsafe { libc::poll(&mut pollfd, 1, wait_ms.max(1)) };
-            if rc > 0 && pollfd.revents & libc::POLLIN != 0 {
-                return Ok(());
-            }
-            if rc < 0 && io::Error::last_os_error().kind() != ErrorKind::Interrupted {
-                return Err(io::Error::last_os_error()).context("wait for VMM exit");
-            }
-        }
+    /// Returns once the process has exited. The pidfd reports the exit
+    /// before the process is reaped, so this does not race the exit watcher.
+    pub(crate) async fn wait_exit(&self) -> Result<()> {
+        let Some(pidfd) = self.open_pidfd()? else {
+            return Ok(());
+        };
+        let pidfd = AsyncFd::with_interest(pidfd, Interest::READABLE).context("watch VMM pidfd")?;
+        let _ = pidfd.readable().await.context("wait for VMM exit")?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct ChildGuard(std::process::Child);
+
+    impl Drop for ChildGuard {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
 
     #[test]
     fn parses_process_name_with_parenthesis() {
@@ -201,14 +216,13 @@ mod tests {
         thread.join().unwrap();
     }
 
-    #[tokio::test]
-    async fn never_signals_the_shim_process() {
+    #[test]
+    fn never_signals_the_shim_process() {
         let pid = std::process::id() as i32;
         let start_time = read_stat(pid).unwrap().unwrap().start_time;
         let shim = VmmProcessIdentity { pid, start_time };
         assert!(shim
-            .terminate_and_wait(Duration::from_secs(1))
-            .await
+            .kill()
             .unwrap_err()
             .to_string()
             .contains("refusing to signal the shim"));
@@ -224,16 +238,68 @@ mod tests {
 
         let mut different = identity.clone();
         different.start_time += 1;
-        different
-            .terminate_and_wait(Duration::from_secs(1))
-            .await
-            .unwrap();
+        different.kill().unwrap();
+        different.wait_exit().await.unwrap();
         assert!(child.try_wait().unwrap().is_none());
 
-        identity
-            .terminate_and_wait(Duration::from_secs(5))
-            .await
-            .unwrap();
+        let exit = identity.wait_exit();
+        tokio::pin!(exit);
+        tokio::select! {
+            biased;
+            _ = &mut exit => panic!("exit reported for a running process"),
+            _ = std::future::ready(()) => {}
+        }
+        identity.kill().unwrap();
+        // The pidfd reports the exit before the reap.
+        exit.await.unwrap();
         child.wait().unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_zombie_leader_with_live_threads_is_not_an_exited_vmm() {
+        use std::io::{BufRead, BufReader};
+        use std::process::{Command, Stdio};
+        let script = r#"
+import ctypes, sys, threading, time
+def worker():
+    print('ready', flush=True)
+    time.sleep(30)
+threading.Thread(target=worker).start()
+ctypes.CDLL(None).syscall(int(sys.argv[1]), 0)
+"#;
+        let mut child = ChildGuard(
+            Command::new("python3")
+                .args(["-c", script, &libc::SYS_exit.to_string()])
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let mut ready = String::new();
+        BufReader::new(child.0.stdout.take().unwrap())
+            .read_line(&mut ready)
+            .unwrap();
+        assert_eq!(ready.trim(), "ready");
+        let pid = child.0.id();
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while read_stat(pid as i32).unwrap().unwrap().state != 'Z' {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let identity = VmmProcessIdentity::capture(pid).unwrap();
+        let exit = identity.wait_exit();
+        tokio::pin!(exit);
+        tokio::select! {
+            biased;
+            result = &mut exit => panic!("live VMM thread was treated as exited: {:?}", result),
+            _ = tokio::task::yield_now() => {}
+        }
+        identity.kill().unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(2), exit)
+            .await
+            .unwrap()
+            .unwrap();
+        child.0.wait().unwrap();
     }
 }

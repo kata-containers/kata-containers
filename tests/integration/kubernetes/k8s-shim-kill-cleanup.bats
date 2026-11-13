@@ -78,6 +78,8 @@ start_pod_again() {
 @test "Nothing of a sandbox is left once its VMM was killed" {
 	local sandbox_id
 
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "CRI-O leaves the sandbox of a pod whose VMM was killed behind"
+
 	case "${KATA_HYPERVISOR}" in
 		qemu*|clh*) ;;
 		*) skip "the VMM is only looked up for QEMU and Cloud Hypervisor (KATA_HYPERVISOR=${KATA_HYPERVISOR})" ;;
