@@ -33,6 +33,10 @@ pub type CgroupManager = Box<dyn Manager>;
 
 const KILL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Stable cgroup v2 leaf used to hold a runtime/shim process while its runtime-owned sandbox cgroup is being removed.
+/// The leaf is shared and reusable. Exiting runtime processes disappear from `cgroup.procs` automatically.
+const RUNTIME_CGROUP_V2_CLEANUP: &str = "kata-cgroupv2-cleanup";
+
 fn procs_dir(cgroup: &dyn Manager) -> Option<PathBuf> {
     // The unified hierarchy ignores the subsystem, while every v1 hierarchy
     // lists the same processes.
@@ -60,6 +64,35 @@ fn read_procs(dir: &Path) -> Result<Vec<i32>> {
         .lines()
         .map(|pid| pid.parse().context("parse cgroup.procs"))
         .collect()
+}
+
+fn move_pid_to_cleanup(cgroup: &dyn Manager, pid: i32) -> Result<()> {
+    if !cgroup.v2() {
+        return Ok(());
+    }
+
+    let dir = procs_dir(cgroup).context("no cgroup.procs for the runtime cgroup")?;
+    if !read_procs(&dir)?.contains(&pid) {
+        return Ok(());
+    }
+
+    // A parent with subtree controllers enabled cannot contain processes (the cgroup v2 no-internal-process rule).
+    // Use one stable sibling leaf for exiting runtimes; it remains inside the same parent resource boundary.
+    let cleanup = dir
+        .parent()
+        .context("runtime cgroup has no parent")?
+        .join(RUNTIME_CGROUP_V2_CLEANUP);
+    match fs::create_dir(&cleanup) {
+        Ok(()) => {}
+        Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
+        Err(err) => {
+            return Err(err).context(format!("create {}", cleanup.display()));
+        }
+    }
+
+    let procs = cleanup.join("cgroup.procs");
+    fs::write(&procs, pid.to_string())
+        .context(format!("move runtime pid {pid} to {}", procs.display()))
 }
 
 /// An empty cgroup.procs does not imply populated 0: exiting threads can still
@@ -588,6 +621,23 @@ impl CgroupsResourceInner {
 
     pub(crate) async fn delete(&mut self) -> Result<()> {
         let mut errors = Vec::new();
+
+        // With sandbox_cgroup_only (always used by Dragonball), the runtime itself is a member of the cgroup it owns. 
+        // Move it to a stable sibling leaf only after the VMM exit has been confirmed and final resourcecleanup has begun.
+        let pid = process::id() as i32;
+        if let Err(e) = move_pid_to_cleanup(self.sandbox_cgroup.as_ref(), pid)
+            .context("leave sandbox cgroup before cleanup")
+        {
+            errors.push(e);
+        }
+        if let Some(overhead_cgroup) = self.overhead_cgroup.as_deref() {
+            if let Err(e) = move_pid_to_cleanup(overhead_cgroup, pid)
+                .context("leave overhead cgroup before cleanup")
+            {
+                errors.push(e);
+            }
+        }
+
         if !self.sandbox_cgroup_deleted {
             match self
                 .sandbox_cgroup
@@ -865,6 +915,30 @@ mod tests {
         result.unwrap();
         assert!(!status.success());
         assert!(read_procs(&dir).unwrap().is_empty());
+    }
+
+    #[test]
+    fn cleanup_moves_runtime_out_of_its_own_cgroup() {
+        let name = format!("kata-leave-test-{}", process::id());
+        let Some(relative) = sibling_cgroup(&name) else {
+            eprintln!("skipping: cannot create a cgroup v2 sibling");
+            return;
+        };
+        let dir = Path::new("/sys/fs/cgroup").join(&relative);
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let pid = child.id() as i32;
+        fs::write(dir.join("cgroup.procs"), pid.to_string()).unwrap();
+        let cgroup = FsManager::new(&relative).unwrap();
+
+        move_pid_to_cleanup(&cgroup, pid).unwrap();
+
+        assert!(!read_procs(&dir).unwrap().contains(&pid));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        fs::remove_dir(&dir).unwrap();
     }
 
     const VMM_LIKE_ENV: &str = "KATA_CGROUP_TEST_VMM_LIKE";
