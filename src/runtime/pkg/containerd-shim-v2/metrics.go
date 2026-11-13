@@ -16,8 +16,8 @@ import (
 	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
-func marshalMetrics(ctx context.Context, s *service, containerID string) (*anypb.Any, error) {
-	stats, err := s.sandbox.StatsContainer(ctx, containerID)
+func marshalMetrics(ctx context.Context, sandbox vc.VCSandbox, containerID string) (*anypb.Any, error) {
+	stats, err := sandbox.StatsContainer(ctx, containerID)
 	if err != nil {
 		return nil, err
 	}
