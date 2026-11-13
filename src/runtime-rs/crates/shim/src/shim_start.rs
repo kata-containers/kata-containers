@@ -6,14 +6,15 @@
 
 use std::{
     fs,
-    io::Write,
-    os::unix::{io::IntoRawFd, net::UnixStream, prelude::OsStrExt},
+    io::Read,
+    os::unix::{io::IntoRawFd, net::UnixStream},
     path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::spec::get_bundle_path;
 use kata_types::{container::ContainerType, k8s};
+use protobuf::Message;
 use unix_socket::UnixListener;
 
 use crate::{
@@ -25,14 +26,19 @@ impl ShimExecutor {
     pub fn start(&mut self) -> Result<()> {
         self.args.validate(false).context("validate")?;
 
-        let address = self.do_start().context("do start")?;
-        std::io::stdout()
-            .write_all(address.as_os_str().as_bytes())
-            .context("failed to write stdout")?;
+        let mut input = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut input)
+            .context("read runtime options")?;
+        let config_path = bootstrap_config_path(&input)?;
+        let address = self.do_start(&config_path).context("do start")?;
+        serde_json::to_writer(std::io::stdout().lock(), &bootstrap_result(&address))
+            .context("failed to write shim bootstrap result")?;
+
         Ok(())
     }
 
-    fn do_start(&mut self) -> Result<PathBuf> {
+    fn do_start(&mut self, config_path: &str) -> Result<PathBuf> {
         let bundle_path = get_bundle_path().context("get bundle path")?;
 
         let mut container_type = ContainerType::PodSandbox;
@@ -46,7 +52,7 @@ impl ShimExecutor {
             ContainerType::PodSandbox | ContainerType::SingleContainer => {
                 let address = self.socket_address(&self.args.id)?;
                 let socket = new_listener(&address)?;
-                let child_pid = self.create_shim_process(socket)?;
+                let child_pid = self.create_shim_process(socket, config_path)?;
                 self.write_pid_file(&bundle_path, child_pid)?;
                 self.write_address(&bundle_path, &address)?;
                 Ok(address)
@@ -96,8 +102,9 @@ impl ShimExecutor {
         Ok(command)
     }
 
-    fn create_shim_process<T: IntoRawFd>(&self, socket: T) -> Result<u32> {
+    fn create_shim_process<T: IntoRawFd>(&self, socket: T, config_path: &str) -> Result<u32> {
         let mut cmd = self.new_command().context("new command")?;
+        cmd.env(common::config::SHIM_CONFIG_PATH_ENV, config_path);
         cmd.env(
             ENV_KATA_RUNTIME_BIND_FD,
             format!("{}", socket.into_raw_fd()),
@@ -109,6 +116,39 @@ impl ShimExecutor {
 
         Ok(child.id())
     }
+}
+
+fn bootstrap_config_path(input: &[u8]) -> Result<String> {
+    if input.is_empty() {
+        return common::config::runtime_config_path(None);
+    }
+
+    let is_runtime_options = |value: &protobuf::well_known_types::any::Any| {
+        value.type_url.rsplit('/').next() == Some("runtimeoptions.v1.Options")
+    };
+    let legacy = protobuf::well_known_types::any::Any::parse_from_bytes(input)
+        .context("decode bootstrap input")?;
+    if is_runtime_options(&legacy) {
+        return common::config::runtime_config_path(Some(&legacy.value));
+    }
+
+    let params = containerd_shim_protos::bootstrap_api::BootstrapParams::parse_from_bytes(input)
+        .context("decode bootstrap parameters")?;
+    let options = params
+        .extensions
+        .iter()
+        .filter_map(|extension| extension.value.as_ref())
+        .find(|value| is_runtime_options(value));
+
+    common::config::runtime_config_path(options.map(|options| options.value.as_slice()))
+}
+
+fn bootstrap_result(address: &Path) -> serde_json::Value {
+    serde_json::json!({
+        "version": 3,
+        "address": address.as_os_str().to_string_lossy(),
+        "protocol": "ttrpc",
+    })
 }
 
 fn new_listener(address: &Path) -> Result<UnixListener> {
@@ -141,6 +181,74 @@ mod tests {
 
     use super::*;
     use crate::Args;
+
+    #[test]
+    #[serial]
+    fn test_bootstrap_config_selection() {
+        struct RestoreEnv(Vec<(&'static str, Option<std::ffi::OsString>)>);
+        impl Drop for RestoreEnv {
+            fn drop(&mut self) {
+                for (key, value) in &self.0 {
+                    match value {
+                        Some(value) => std::env::set_var(key, value),
+                        None => std::env::remove_var(key),
+                    }
+                }
+            }
+        }
+        let keys = ["KATA_CONF_FILE", common::config::SHIM_CONFIG_PATH_ENV];
+        let _restore = RestoreEnv(
+            keys.iter()
+                .map(|key| (*key, std::env::var_os(key)))
+                .collect(),
+        );
+        for key in keys {
+            std::env::remove_var(key);
+        }
+        assert_eq!(bootstrap_config_path(&[]).unwrap(), "");
+        std::env::set_var(common::config::SHIM_CONFIG_PATH_ENV, "/bootstrap.toml");
+        assert_eq!(bootstrap_config_path(&[]).unwrap(), "/bootstrap.toml");
+        assert_eq!(
+            common::config::runtime_config_path(Some(&[])).unwrap(),
+            "/bootstrap.toml"
+        );
+        assert_eq!(
+            common::config::runtime_config_path(Some(&[0xff])).unwrap(),
+            "/bootstrap.toml"
+        );
+
+        let mut empty_options = protobuf::well_known_types::any::Any::new();
+        empty_options.type_url = "runtimeoptions.v1.Options".to_owned();
+        assert_eq!(
+            bootstrap_config_path(&empty_options.write_to_bytes().unwrap()).unwrap(),
+            "/bootstrap.toml"
+        );
+
+        let path = "/options.toml";
+        // runtimeoptions.v1.Options.config_path is protobuf field 2.
+        let mut value = vec![0x12, path.len() as u8];
+        value.extend_from_slice(path.as_bytes());
+        let mut options = protobuf::well_known_types::any::Any::new();
+        options.type_url = "runtimeoptions.v1.Options".to_owned();
+        options.value = value;
+        let bytes = options.write_to_bytes().unwrap();
+        assert_eq!(bootstrap_config_path(&bytes).unwrap(), path);
+        let mut params = containerd_shim_protos::bootstrap_api::BootstrapParams::new();
+        params.instance_id = "test-sandbox".to_owned();
+        params.namespace = "k8s.io".to_owned();
+        let mut extension = containerd_shim_protos::bootstrap_api::Extension::new();
+        extension.value = Some(options).into();
+        params.extensions.push(extension);
+        assert_eq!(
+            bootstrap_config_path(&params.write_to_bytes().unwrap()).unwrap(),
+            path
+        );
+        std::env::set_var("KATA_CONF_FILE", "/non-shipped-env.toml");
+        assert!(bootstrap_config_path(&bytes)
+            .unwrap_err()
+            .to_string()
+            .contains("invalid KATA_CONF_FILE"));
+    }
 
     #[test]
     #[serial]
