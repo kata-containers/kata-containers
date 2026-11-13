@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	cdshim "github.com/containerd/containerd/runtime/v2/shim"
+	cdshim "github.com/containerd/containerd/v2/pkg/shim"
 	shim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 )
 

@@ -10,7 +10,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/v2/core/events"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 
 	"github.com/stretchr/testify/assert"
