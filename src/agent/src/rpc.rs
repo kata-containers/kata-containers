@@ -355,6 +355,9 @@ impl AgentService {
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
 
+        if use_sandbox_pidns {
+            s.ensure_shared_pidns()?;
+        }
         update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
 
         // Append guest hooks
