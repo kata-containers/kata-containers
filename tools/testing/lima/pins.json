@@ -1,0 +1,19 @@
+{
+  "smoke_image": "docker.io/library/busybox@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+  "architectures": {
+    "amd64": {
+      "image": {
+        "name": "just-kata-ubuntu-26.04-20260927-amd64.qcow2",
+        "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img",
+        "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2"
+      }
+    },
+    "arm64": {
+      "image": {
+        "name": "just-kata-ubuntu-26.04-20260927-arm64.qcow2",
+        "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20260927/ubuntu-26.04-server-cloudimg-arm64.img",
+        "sha256": "63a93bd5a8d76e33b15ceb5daa3657bd79be804748051ab178e643b0f5da22e7"
+      }
+    }
+  }
+}

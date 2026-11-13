@@ -1,0 +1,7 @@
+.state/
+results/
+targets/*.local.json
+ci/*.local.json
+__pycache__/
+*.pyc
+result

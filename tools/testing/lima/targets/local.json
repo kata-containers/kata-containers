@@ -1,0 +1,9 @@
+{
+  "name": "local",
+  "backend": "lima",
+  "vm_type": "qemu",
+  "arch": "amd64",
+  "cpus": 4,
+  "memory_mib": 16384,
+  "disk_gib": 50
+}

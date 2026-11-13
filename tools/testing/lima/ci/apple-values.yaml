@@ -1,0 +1,23 @@
+# Apple's nested ARM CPU does not expose QEMU's PMU property. Apply this through
+# kata-deploy's supported per-shim config.d mechanism, not by editing artifacts.
+# Disable virtual ITS to avoid the observed nested ARM root-disk boot stall.
+# Allow the nested guest up to 60 seconds to start its agent, with debug enabled.
+shims:
+  qemu-runtime-rs:
+    enabled: true
+    supportedArches: [amd64, arm64, s390x, ppc64le]
+    dropIn: &appleOverrides |
+      [hypervisor.qemu]
+      cpu_features = ""
+      machine_accelerators = "usb=off,gic-version=host,its=off"
+      enable_debug = true
+
+      [runtime]
+      enable_debug = true
+
+      [agent.kata]
+      enable_debug = true
+      debug_console_enabled = true
+      reconnect_timeout_ms = 60000
+  qemu-nvidia-cpu-runtime-rs:
+    dropIn: *appleOverrides
