@@ -30,9 +30,5 @@ legacy-irq = []
 msi-irq = []
 
 kvm-irq = ["kvm-bindings", "kvm-ioctls"]
-kvm-legacy-irq = ["kvm-irq", "legacy-irq"]
-kvm-msi-generic = ["kvm-irq", "msi-irq"]
-kvm-msi-irq = ["kvm-msi-generic"]
-
-split-irq = ["kvm-bindings", "kvm-ioctls"]
-split-legacy-irq = ["legacy-irq", "split-irq"]
+split-irq = ["kvm-irq", "userspace-irq"]
+userspace-irq = ["kvm-bindings", "kvm-ioctls"]
