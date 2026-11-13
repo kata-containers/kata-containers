@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::ops::Deref;
-#[cfg(target_arch = "x86_64")]
-use std::os::unix::io::AsRawFd;
 use std::os::unix::io::RawFd;
+#[cfg(target_arch = "x86_64")]
+use std::os::unix::io::{AsRawFd, FromRawFd};
 
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -39,7 +39,7 @@ use crate::address_space_manager::{
     GuestMemoryImpl,
 };
 use crate::api::v1::ConfidentialVmType;
-use crate::api::v1::{InstanceInfo, InstanceState};
+use crate::api::v1::{InstanceInfo, InstanceState, SnapshotMemory, SnapshotMemoryMode};
 use crate::device_manager::console_manager::DmesgWriter;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::error::{Error, LoadInitrdError, Result, StartMicroVmError, StopMicrovmError};
@@ -194,6 +194,9 @@ pub struct Vm {
     shared_info: Arc<RwLock<InstanceInfo>>,
 
     address_space: AddressSpaceMgr,
+    // Keep the actual mmap backing, including a factory template, for delta saves.
+    #[cfg(target_arch = "x86_64")]
+    restore_memory_base: Option<Arc<std::fs::File>>,
     /// device manager for Dragonball
     pub device_manager: DeviceManager,
     dmesg_fifo: Option<Box<dyn io::Write + Send>>,
@@ -281,6 +284,8 @@ impl Vm {
             shared_info: api_shared_info,
 
             address_space: AddressSpaceMgr::default(),
+            #[cfg(target_arch = "x86_64")]
+            restore_memory_base: None,
             device_manager,
             dmesg_fifo: None,
             kernel_config: None,
@@ -1149,38 +1154,74 @@ impl Vm {
         &mut self,
         state_path: &std::path::Path,
         mem_path: &std::path::Path,
+        memory_mode: SnapshotMemoryMode,
         reset_vsock_transport: bool,
-    ) -> std::result::Result<(), crate::snapshot::SnapshotError> {
+    ) -> std::result::Result<Option<SnapshotMemory>, crate::snapshot::SnapshotError> {
         use crate::snapshot::SnapshotError;
 
         let msr_list = self.kvm.supported_msrs(0).map_err(SnapshotError::Kvm)?;
 
         let initial_state = self.instance_state();
         let resume_after_save = match initial_state {
-            InstanceState::Running => {
-                self.pause_all_vcpus_with_downtime()?;
-                true
-            }
+            InstanceState::Running => true,
             InstanceState::Paused => false,
             state => return Err(SnapshotError::InvalidState(format!("{state:?}"))),
         };
+        let mut mem_file = match memory_mode {
+            SnapshotMemoryMode::PersistentPath => std::fs::File::create(mem_path)?,
+            SnapshotMemoryMode::TransientUnlinked => {
+                let name = std::ffi::CString::new("dragonball-memory-snapshot")
+                    .expect("static memfd name has no NUL bytes");
+                // SAFETY: memfd_create copies the NUL-terminated name and
+                // returns a new owned descriptor on success.
+                let fd = unsafe { libc::memfd_create(name.as_ptr(), libc::MFD_CLOEXEC) };
+                if fd < 0 {
+                    return Err(SnapshotError::Io(std::io::Error::last_os_error()));
+                }
+                // SAFETY: memfd_create returned a new descriptor that this
+                // File takes ownership of exactly once.
+                unsafe { std::fs::File::from_raw_fd(fd) }
+            }
+        };
+        if resume_after_save {
+            self.pause_all_vcpus_with_downtime()?;
+        }
 
         let save_result = self.save_microvm_paused(
             state_path,
-            mem_path,
+            &mut mem_file,
             msr_list.as_slice(),
+            memory_mode == SnapshotMemoryMode::TransientUnlinked
+                && self.restore_memory_base.is_some(),
             reset_vsock_transport,
         );
+
+        let transient_memory =
+            if save_result.is_ok() && memory_mode == SnapshotMemoryMode::TransientUnlinked {
+                Some(mem_file)
+            } else {
+                drop(mem_file);
+                None
+            };
+
         let resume_result = if resume_after_save {
             self.resume_all_vcpus_with_downtime()
         } else {
             Ok(())
         };
         match (save_result, resume_result) {
-            (Ok(()), Ok(())) => Ok(()),
+            (Ok(delta_ranges), Ok(())) => Ok(transient_memory.map(|file| SnapshotMemory {
+                file,
+                base: delta_ranges.as_ref().and(self.restore_memory_base.clone()),
+                delta_ranges,
+            })),
             (Err(save_err), Ok(())) => Err(save_err),
-            (Ok(()), Err(resume_err)) => Err(SnapshotError::Vcpu(resume_err)),
+            (Ok(_), Err(resume_err)) => {
+                drop(transient_memory);
+                Err(SnapshotError::Vcpu(resume_err))
+            }
             (Err(save_err), Err(resume_err)) => {
+                drop(transient_memory);
                 // Both failed: the vCPUs may be left paused, which is the more
                 // urgent condition to surface, but don't silently lose the
                 // save error that is the actual root cause.
@@ -1208,10 +1249,14 @@ impl Vm {
     fn save_microvm_paused(
         &mut self,
         state_path: &std::path::Path,
-        mem_path: &std::path::Path,
+        mem_file: &mut std::fs::File,
         msr_list: &[u32],
+        save_delta: bool,
         #[allow(unused_variables)] reset_vsock_transport: bool,
-    ) -> std::result::Result<(), crate::snapshot::SnapshotError> {
+    ) -> std::result::Result<
+        Option<Vec<crate::address_space_manager::GuestMemoryDeltaRange>>,
+        crate::snapshot::SnapshotError,
+    > {
         use crate::snapshot::{DeviceManagerState, MicrovmState, SnapshotError};
         use dbs_snapshot::Persist;
 
@@ -1291,8 +1336,15 @@ impl Vm {
         // TODO: balloon, virtio-mem, vhost-net and vhost-user-net are not yet
         // snapshotted; kata-dragonball does not instantiate them.
 
-        let mut mem_file = std::fs::File::create(mem_path)?;
-        let memory_state = self.address_space.save_state(&mut mem_file)?;
+        let delta = if save_delta {
+            self.address_space.save_delta(mem_file)?
+        } else {
+            None
+        };
+        let (memory_state, delta_ranges) = match delta {
+            Some((state, ranges)) => (state, Some(ranges)),
+            None => (self.address_space.save_state(mem_file)?, None),
+        };
 
         let state = MicrovmState {
             vm_kvm_state: Some(vm_kvm_state),
@@ -1302,7 +1354,10 @@ impl Vm {
             ..Default::default()
         };
         state.save_to_file(state_path)?;
-        Ok(())
+
+        drop(state);
+
+        Ok(delta_ranges)
     }
 
     /// Restore the runtime state of a freshly built microVM from a snapshot.
@@ -1354,6 +1409,7 @@ impl Vm {
             let mut mem_file = std::fs::File::open(mem_path)?;
             self.address_space
                 .restore_state(memory_state, &mut mem_file)?;
+            self.restore_memory_base = Some(Arc::new(mem_file));
         }
 
         // Restore vCPU/LAPIC state before device activation can replay an
@@ -1579,9 +1635,15 @@ pub mod tests {
                 .unwrap();
         }
         source.set_instance_state(InstanceState::Paused);
-        source
-            .save_microvm(state_file.as_path(), memory_file.as_path(), false)
-            .unwrap();
+        assert!(source
+            .save_microvm(
+                state_file.as_path(),
+                memory_file.as_path(),
+                SnapshotMemoryMode::PersistentPath,
+                false,
+            )
+            .unwrap()
+            .is_none());
 
         let snapshot = MicrovmState::load_from_file(state_file.as_path()).unwrap();
         snapshot.validate_for_restore(vm_config.vcpu_count).unwrap();
@@ -1643,6 +1705,50 @@ pub mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(inspected_vcpu_states[0].regs.rbx, MEMORY_MARKER);
+
+        // A template restore has no workload restore directory. Its delta must
+        // carry the original mapped backing, even if the pathname is replaced.
+        inspected
+            .vcpu_manager()
+            .unwrap()
+            .start_vcpus(vm_config.vcpu_count, Default::default(), false)
+            .unwrap();
+        inspected.set_instance_state(InstanceState::Paused);
+        let backing = inspected.restore_memory_base.as_ref().unwrap().clone();
+        let retained_path = TempFile::new().unwrap();
+        std::fs::rename(memory_file.as_path(), retained_path.as_path()).unwrap();
+        std::fs::write(memory_file.as_path(), b"replacement").unwrap();
+        for value in [0_u64, MEMORY_MARKER + 1] {
+            inspected
+                .address_space
+                .vm_memory()
+                .unwrap()
+                .write_obj(value, MARKER_ADDRESS)
+                .unwrap();
+            let checkpoint_state = TempFile::new().unwrap();
+            let memory = inspected
+                .save_microvm(
+                    checkpoint_state.as_path(),
+                    memory_file.as_path(),
+                    SnapshotMemoryMode::TransientUnlinked,
+                    false,
+                )
+                .unwrap()
+                .unwrap();
+            assert!(Arc::ptr_eq(memory.base.as_ref().unwrap(), &backing));
+            let offset = MARKER_ADDRESS.raw_value();
+            assert!(memory.delta_ranges.as_ref().unwrap().iter().any(|range| {
+                range.file_offset <= offset && offset + 8 <= range.file_offset + range.length
+            }));
+            let mut bytes = [0_u8; 8];
+            std::os::unix::fs::FileExt::read_exact_at(&memory.file, &mut bytes, offset).unwrap();
+            assert_eq!(u64::from_ne_bytes(bytes), value);
+            std::os::unix::fs::FileExt::read_exact_at(&*backing, &mut bytes, offset).unwrap();
+            assert_eq!(u64::from_ne_bytes(bytes), MEMORY_MARKER);
+        }
+
+        std::fs::rename(retained_path.as_path(), memory_file.as_path()).unwrap();
+        inspected.vcpu_manager().unwrap().exit_all_vcpus().unwrap();
         drop(inspected);
 
         let target_epoll = EpollManager::default();
