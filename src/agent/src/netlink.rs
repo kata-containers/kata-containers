@@ -125,6 +125,7 @@ impl Handle {
         let supports_ipv6 = supports_ipv6_default || supports_ipv6_all;
 
         // Add new ip addresses from request
+        let mut ip_addresses = Vec::with_capacity(iface.IPAddresses.len());
         for ip_address in &iface.IPAddresses {
             let ip = IpAddr::from_str(ip_address.address())?;
             let mask = ip_address.mask().parse::<u8>()?;
@@ -136,10 +137,9 @@ impl Handle {
                 // error at the "CreatePodSandbox" time.
                 continue;
             }
-
-            self.add_addresses(link.index(), std::iter::once(net))
-                .await?;
+            ip_addresses.push(net);
         }
+        self.set_addresses(link.index(), ip_addresses).await?;
 
         // we need to update the link's interface name, thus we should rename the existed link whose name
         // is the same with the link's request name, otherwise, it would update the link failed with the
@@ -669,6 +669,21 @@ impl Handle {
         }
 
         Ok(())
+    }
+
+    async fn set_addresses<I>(&mut self, index: u32, list: I) -> Result<()>
+    where
+        I: IntoIterator<Item = IpNetwork>,
+    {
+        for address in self.list_addresses(AddressFilter::LinkIndex(index)).await? {
+            self.handle
+                .address()
+                .del(address.0)
+                .execute()
+                .await
+                .context("delete stale interface address")?;
+        }
+        self.add_addresses(index, list).await
     }
 
     pub async fn add_arp_neighbors<I>(&mut self, list: I) -> Result<()>

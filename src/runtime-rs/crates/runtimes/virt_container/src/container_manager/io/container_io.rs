@@ -141,6 +141,8 @@ type ResultBuffer = Result<agent::ReadStreamResponse>;
 struct ContainerIoRead<'inner> {
     pub info: Arc<ContainerIoInfo>,
     is_stdout: bool,
+    read_session_id: String,
+    next_read_request_id: u64,
     read_future: Option<Pin<Box<dyn Future<Output = ResultBuffer> + Send + 'inner>>>,
 }
 
@@ -149,6 +151,8 @@ impl<'inner> ContainerIoRead<'inner> {
         Self {
             info,
             is_stdout,
+            read_session_id: uuid::Uuid::new_v4().to_string(),
+            next_read_request_id: 1,
             read_future: Default::default(),
         }
     }
@@ -159,9 +163,13 @@ impl<'inner> ContainerIoRead<'inner> {
     ) -> Poll<std::io::Result<()>> {
         let mut read_future = self.read_future.take();
         if read_future.is_none() {
+            let read_request_id = self.next_read_request_id;
+            self.next_read_request_id = self.next_read_request_id.wrapping_add(1);
             let req = agent::ReadStreamRequest {
                 process_id: self.info.process.clone().into(),
                 len: buf.remaining() as u32,
+                read_session_id: self.read_session_id.clone(),
+                read_request_id,
             };
             read_future = if self.is_stdout {
                 Some(Box::pin(self.info.agent.read_stdout(req)))

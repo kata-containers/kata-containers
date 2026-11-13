@@ -334,6 +334,26 @@ impl From<ContainerID> for agent::ResumeContainerRequest {
     }
 }
 
+impl From<crate::RebindSandboxRequest> for agent::RebindSandboxRequest {
+    fn from(from: crate::RebindSandboxRequest) -> Self {
+        Self {
+            sandbox_id: from.sandbox_id,
+            hostname: from.hostname,
+            dns: from.dns,
+            containers: from
+                .containers
+                .into_iter()
+                .map(|mapping| agent::ContainerIDMapping {
+                    old_id: mapping.old_id,
+                    new_id: mapping.new_id,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+}
+
 impl From<SignalProcessRequest> for agent::SignalProcessRequest {
     fn from(from: SignalProcessRequest) -> Self {
         Self {
@@ -575,6 +595,8 @@ impl From<ReadStreamRequest> for agent::ReadStreamRequest {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
             len: from.len,
+            read_session_id: from.read_session_id,
+            read_request_id: from.read_request_id,
             ..Default::default()
         }
     }

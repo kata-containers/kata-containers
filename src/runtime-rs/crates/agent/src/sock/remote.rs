@@ -33,7 +33,10 @@ impl Sock for Remote {
             match connect_helper(&self.path).await {
                 Ok(stream) => {
                     info!(sl!(), "remote sock: connected to {:?}", self);
-                    return Ok(Stream::Unix(stream));
+                    return Ok(Stream::Unix {
+                        stream,
+                        hvsock_local_port: None,
+                    });
                 }
                 Err(err) => {
                     trace!(

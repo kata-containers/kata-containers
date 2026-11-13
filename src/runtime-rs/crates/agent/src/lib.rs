@@ -15,18 +15,19 @@ mod sock;
 pub mod types;
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapPathRequest, AddSwapRequest,
-    BlkioStatsEntry, CheckRequest, CloseStdinRequest, ContainerID, ContainerProcessID,
-    CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, Empty, ExecProcessRequest,
-    FSGroup, FSGroupChangePolicy, GetDiagnosticDataRequest, GetDiagnosticDataResponse,
-    GetGuestDetailsRequest, GetIPTablesRequest, GetIPTablesResponse, GuestDetailsResponse,
-    HealthCheckResponse, IPAddress, IPFamily, Interface, Interfaces, ListProcessesRequest,
-    MemHotplugByProbeRequest, MetricsResponse, OnlineCPUMemRequest, OomEventResponse,
-    ReadStreamRequest, ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest,
-    ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest,
-    SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage,
-    TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-    VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-    WaitProcessResponse, WriteStreamRequest, WriteStreamResponse,
+    BlkioStatsEntry, CheckRequest, CloseStdinRequest, ContainerID, ContainerIDMapping,
+    ContainerProcessID, CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, Empty,
+    ExecProcessRequest, FSGroup, FSGroupChangePolicy, GetDiagnosticDataRequest,
+    GetDiagnosticDataResponse, GetGuestDetailsRequest, GetIPTablesRequest, GetIPTablesResponse,
+    GuestDetailsResponse, HealthCheckResponse, IPAddress, IPFamily, Interface, Interfaces,
+    ListProcessesRequest, MemHotplugByProbeRequest, MetricsResponse, OnlineCPUMemRequest,
+    OomEventResponse, ReadStreamRequest, ReadStreamResponse, RebindSandboxRequest,
+    RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
+    SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest,
+    StatsContainerResponse, Storage, TtyWinResizeRequest, UpdateContainerRequest,
+    UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest,
+    VolumeStatsResponse, WaitProcessRequest, WaitProcessResponse, WriteStreamRequest,
+    WriteStreamResponse,
 };
 
 use anyhow::Result;
@@ -38,8 +39,21 @@ use crate::types::SetPolicyRequest;
 
 pub const AGENT_KATA: &str = "kata";
 
+/// Returns true only when the guest agent explicitly rejected an operation
+/// because its preconditions were not met.
+pub fn is_failed_precondition(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<ttrpc::Error>(),
+            Some(ttrpc::Error::RpcStatus(status))
+                if status.code() == ttrpc::Code::FAILED_PRECONDITION
+        )
+    })
+}
+
 #[async_trait]
 pub trait AgentManager: Send + Sync {
+    /// Connect the agent RPC transport and start log forwarding.
     async fn start(&self, address: &str) -> Result<()>;
     async fn stop(&self);
     async fn disconnect(&self) -> Result<()>;
@@ -58,6 +72,7 @@ pub trait HealthService: Send + Sync {
 pub trait Agent: AgentManager + HealthService + Send + Sync {
     // sandbox
     async fn create_sandbox(&self, req: CreateSandboxRequest) -> Result<Empty>;
+    async fn rebind_sandbox(&self, req: RebindSandboxRequest) -> Result<Empty>;
     async fn destroy_sandbox(&self, req: Empty) -> Result<Empty>;
     async fn online_cpu_mem(&self, req: OnlineCPUMemRequest) -> Result<Empty>;
     async fn reseed_random_dev(&self, req: ReseedRandomDevRequest) -> Result<Empty>;
