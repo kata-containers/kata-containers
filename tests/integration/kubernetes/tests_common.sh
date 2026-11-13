@@ -380,6 +380,41 @@ shim_pid_for_pod() {
 	echo "${pid}"
 }
 
+# A retry may reuse a stale UID directory, so track this pod's temporary
+# account and directory rather than comparing whole-host snapshots.
+get_rootless_host_resources() {
+	local uid="$1"
+	local user="$2"
+	local query="{ getent passwd ${user} | awk -F: '{ print \"user:\" \$1 \":\" \$3 }'; "
+	query+="getent group ${user} | awk -F: '{ print \"group:\" \$1 \":\" \$3 }'; "
+	query+="test ! -d /run/user/${uid} || echo dir:${uid}; } | sort"
+
+	exec_host "${node}" "${query}"
+}
+
+wait_for_rootless_host_resources() {
+	local actual_resources
+	local attempt
+	local uid="$1"
+	local user="$2"
+	# GPU device reset can outlast the initial stop attempt before QEMU exits.
+	local timeout_seconds="${ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS:-90}"
+
+	for ((attempt = 0; attempt < timeout_seconds; attempt++)); do
+		actual_resources="$(get_rootless_host_resources "${uid}" "${user}")"
+		[[ -z "${actual_resources}" ]] && return 0
+		sleep 1
+	done
+
+	echo "Rootless host resources remaining after sandbox teardown:"
+	echo "${actual_resources}"
+	echo "Processes still running as rootless UID ${uid}:"
+	exec_host "${node}" "ps -u ${uid} -o pid,ppid,uid,stat,wchan:32,etime,args --no-headers || true"
+	echo "Mounts under /run/user/${uid}:"
+	exec_host "${node}" "findmnt -R /run/user/${uid} || true"
+	return 1
+}
+
 # Check that sandbox $2 on node $1 has something to clean up, and record in
 # sandbox_cleanup_paths the host paths that have to go with it. Without these
 # checks the wait for the cleanup also succeeds when the sandbox never had a
