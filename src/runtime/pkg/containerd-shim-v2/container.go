@@ -39,6 +39,9 @@ type container struct {
 	status      task.Status
 	terminal    bool
 	mounted     bool
+	// startFailed is protected by s.mu. A failed Start publishes an exit
+	// result and cannot be retried, even if the status is still CREATED.
+	startFailed bool
 }
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
@@ -67,6 +70,7 @@ func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.Con
 		exitCh:      make(chan uint32, 1),
 		stdinCloser: make(chan struct{}),
 		mounted:     mounted,
+		startFailed: false,
 	}
 	return c, nil
 }
