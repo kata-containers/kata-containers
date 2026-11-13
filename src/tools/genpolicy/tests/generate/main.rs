@@ -3,19 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use assert_cmd::prelude::*;
+#[path = "../common/mod.rs"]
+mod common;
+
+use common::{genpolicy_succeeds_stdin, run_genpolicy};
 use std::fs::{self};
-use std::io::Write;
 use std::path;
 use std::process::{Command, Output};
-use std::thread;
-use std::time::Duration;
-
-/// Number of genpolicy invocations a test attempts before giving up.
-const GENPOLICY_ATTEMPTS: u32 = 6;
-
-/// Delay between genpolicy invocations.
-const GENPOLICY_RETRY_DELAY: Duration = Duration::from_secs(10);
 
 #[test]
 fn config_map_in_separate_file_config_map_flag() -> Result<(), Box<dyn std::error::Error>> {
@@ -681,74 +675,12 @@ fn output_behavior() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Run genpolicy through `run` until `accept` approves its output.
-///
-/// genpolicy reads image manifests, config blobs and layers from a container
-/// registry while generating a policy. Those requests are unreliable enough to
-/// fail a whole test run, so an unexpected outcome is retried instead of being
-/// reported right away.
-fn run_genpolicy<R, A>(run: R, accept: A) -> Result<Output, Box<dyn std::error::Error>>
-where
-    R: Fn() -> Result<Output, Box<dyn std::error::Error>>,
-    A: Fn(&Output) -> bool,
-{
-    for attempt in 1..=GENPOLICY_ATTEMPTS {
-        let output = run()?;
-        if accept(&output) {
-            return Ok(output);
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        assert!(
-            attempt < GENPOLICY_ATTEMPTS,
-            "genpolicy did not produce the expected outcome in {GENPOLICY_ATTEMPTS} attempts\nstdout: {stdout}\nstderr: {stderr}"
-        );
-
-        println!("retrying genpolicy, attempt {attempt} produced an unexpected outcome\nstdout: {stdout}\nstderr: {stderr}");
-        thread::sleep(GENPOLICY_RETRY_DELAY);
-    }
-
-    unreachable!("the loop either returns or asserts on the last attempt");
-}
-
 /// Run genpolicy with the arguments applied by `configure` and expect success.
 fn genpolicy_succeeds<C>(configure: C) -> Result<Output, Box<dyn std::error::Error>>
 where
     C: Fn(&mut Command),
 {
-    run_genpolicy(
-        || {
-            let mut cmd = Command::cargo_bin("genpolicy")?;
-            configure(&mut cmd);
-            Ok(cmd.output()?)
-        },
-        |output| output.status.success(),
-    )
-}
-
-/// Like [`genpolicy_succeeds`], but feed `stdin` to genpolicy instead of
-/// passing `--yaml-file`.
-fn genpolicy_succeeds_stdin<C>(
-    stdin: &[u8],
-    configure: C,
-) -> Result<Output, Box<dyn std::error::Error>>
-where
-    C: Fn(&mut Command),
-{
-    run_genpolicy(
-        || {
-            let mut cmd = Command::cargo_bin("genpolicy")?;
-            configure(&mut cmd);
-            let mut child = cmd
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .spawn()?;
-            child.stdin.take().unwrap().write_all(stdin)?;
-            Ok(child.wait_with_output()?)
-        },
-        |output| output.status.success(),
-    )
+    run_genpolicy(None, configure, |output| output.status.success())
 }
 
 /// Run genpolicy with the arguments applied by `configure` and expect it to
@@ -763,17 +695,10 @@ fn genpolicy_fails_with<C>(
 where
     C: Fn(&mut Command),
 {
-    run_genpolicy(
-        || {
-            let mut cmd = Command::cargo_bin("genpolicy")?;
-            configure(&mut cmd);
-            Ok(cmd.output()?)
-        },
-        |output| {
-            !output.status.success()
-                && String::from_utf8_lossy(&output.stderr).contains(expected_stderr)
-        },
-    )
+    run_genpolicy(None, configure, |output| {
+        !output.status.success()
+            && String::from_utf8_lossy(&output.stderr).contains(expected_stderr)
+    })
 }
 
 fn prepare_workdir(test_case_dir: &str, files_to_copy: &[&str]) -> path::PathBuf {
