@@ -7,7 +7,7 @@ use crate::ProtectionDevConfig;
 use crate::VmConfig;
 use crate::{
     ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DiskConfig, ImageType,
-    MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig, VsockConfig,
+    MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig, RtcConfig, VsockConfig,
 };
 use anyhow::Result;
 use kata_types::config::default::DEFAULT_CH_ENTROPY_SOURCE;
@@ -16,7 +16,7 @@ use kata_types::config::hypervisor::{CpuInfo, MachineInfo, MemoryInfo};
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::errors::*;
 
@@ -146,6 +146,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             disks,
             vsock: Some(vsock),
             rng,
+            rtc: get_rtc_cfg(Path::new("/dev/mshv")),
             balloon,
 
             ..Default::default()
@@ -153,6 +154,10 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         Ok(cfg)
     }
+}
+
+fn get_rtc_cfg(mshv_device: &Path) -> Option<RtcConfig> {
+    mshv_device.exists().then(RtcConfig::default)
 }
 
 impl TryFrom<(String, u32)> for VsockConfig {
@@ -1374,6 +1379,58 @@ mod tests {
     }
 
     #[test]
+    fn test_get_rtc_cfg() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let missing_device = manifest.join("mshv");
+
+        for (device_path, expected) in [
+            (manifest.as_path(), Some(RtcConfig::default())),
+            (missing_device.as_path(), None),
+        ] {
+            let config = VmConfig {
+                rtc: get_rtc_cfg(device_path),
+                ..Default::default()
+            };
+            assert_eq!(config.rtc, expected);
+            assert_eq!(
+                serde_json::to_value(config).unwrap().get("rtc").is_some(),
+                expected.is_some()
+            );
+        }
+    }
+
+    #[test]
+    fn test_vmconfig_rtc_json() {
+        let config = VmConfig {
+            cpus: CpusConfig {
+                max_phys_bits: 46,
+                ..Default::default()
+            },
+            rtc: Some(RtcConfig::default()),
+            ..Default::default()
+        };
+        let mut json = serde_json::to_value(&config).unwrap();
+        assert_eq!(
+            json["rtc"],
+            serde_json::json!({
+                "iommu": "Off",
+                "id": null,
+                "pci_segment": 0,
+                "pci_device_id": null,
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<VmConfig>(json.clone()).unwrap(),
+            config
+        );
+
+        json.as_object_mut().unwrap().remove("rtc");
+        let legacy = serde_json::from_value::<VmConfig>(json).unwrap();
+        assert_eq!(legacy.rtc, None);
+        assert!(serde_json::to_value(legacy).unwrap().get("rtc").is_none());
+    }
+
+    #[test]
     fn test_named_hypervisor_config_to_vmconfig() {
         #[derive(Debug)]
         struct TestData {
@@ -1410,6 +1467,8 @@ mod tests {
         let (memory_info_std, mem_config_std) = make_memory_objects(79, usable_max_mem_bytes);
 
         let (machine_info, rng_config) = make_machineinfo_rngconfig_objects(entropy_source);
+
+        let rtc_config = Path::new("/dev/mshv").exists().then(RtcConfig::default);
 
         let payload_firmware = None;
 
@@ -1449,6 +1508,7 @@ mod tests {
             cpus: cpus_config.clone(),
             memory: mem_config_std.clone(),
             rng: rng_config.clone(),
+            rtc: rtc_config.clone(),
             vsock: Some(valid_vsock.clone()),
 
             // rootfs image specific
@@ -1468,6 +1528,7 @@ mod tests {
             cpus: cpus_config.clone(),
             memory: mem_config_std,
             rng: rng_config.clone(),
+            rtc: rtc_config,
             vsock: Some(valid_vsock.clone()),
 
             // initrd/initramfs specific

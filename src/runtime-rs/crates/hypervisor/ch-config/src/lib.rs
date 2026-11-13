@@ -427,6 +427,18 @@ pub struct RngConfig {
     pub iommu: IommuType,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
+pub struct RtcConfig {
+    #[serde(default)]
+    pub iommu: IommuType,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub pci_segment: u16,
+    #[serde(default)]
+    pub pci_device_id: Option<u8>,
+}
+
 #[cfg(target_arch = "x86_64")]
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct SgxEpcConfig {
@@ -489,6 +501,8 @@ pub struct VmConfig {
     pub net: Option<Vec<NetConfig>>,
     #[serde(default)]
     pub rng: RngConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rtc: Option<RtcConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub balloon: Option<BalloonConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
