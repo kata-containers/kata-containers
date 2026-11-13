@@ -64,7 +64,7 @@ impl ConfigPlugin for DragonballConfig {
                 db.cpu_info.default_maxvcpus = default::MAX_DRAGONBALL_VCPUS;
             }
 
-            if db.cpu_info.default_vcpus as u32 > db.cpu_info.default_maxvcpus {
+            if db.cpu_info.default_vcpus > db.cpu_info.default_maxvcpus as f32 {
                 db.cpu_info.default_vcpus = db.cpu_info.default_maxvcpus as f32;
             }
 
@@ -144,8 +144,7 @@ impl ConfigPlugin for DragonballConfig {
                 ));
             }
 
-            if (db.cpu_info.default_vcpus > 0.0
-                && db.cpu_info.default_vcpus as u32 > default::MAX_DRAGONBALL_VCPUS)
+            if db.cpu_info.default_vcpus > default::MAX_DRAGONBALL_VCPUS as f32
                 || db.cpu_info.default_maxvcpus > default::MAX_DRAGONBALL_VCPUS
             {
                 return Err(std::io::Error::other(format!(
@@ -228,5 +227,37 @@ mod tests {
                 .template_path,
             default::DEFAULT_TEMPLATE_PATH
         );
+    }
+
+    #[test]
+    fn test_validate_cpu_limits() {
+        let plugin = DragonballConfig::new();
+        let limit = default::MAX_DRAGONBALL_VCPUS;
+        let mut db = Hypervisor::default();
+        db.boot_info.kernel = "vmlinuz".to_string();
+        db.boot_info.image = "kata.img".to_string();
+        db.memory_info.default_memory = MIN_DRAGONBALL_MEMORY_SIZE_MB;
+        db.blockdev_info.block_device_driver = VIRTIO_BLK_PCI.to_string();
+
+        for (boot_vcpus, max_vcpus, valid) in [
+            (limit as f32 - 0.5, limit, true),
+            (limit as f32, limit, true),
+            (limit as f32 + 0.5, limit, false),
+            (limit as f32 + 1.0, limit, false),
+            (1.0, limit + 1, false),
+        ] {
+            db.cpu_info.default_vcpus = boot_vcpus;
+            db.cpu_info.default_maxvcpus = max_vcpus;
+            let mut config = TomlConfig::default();
+            config
+                .hypervisor
+                .insert(HYPERVISOR_NAME_DRAGONBALL.to_string(), db.clone());
+
+            assert_eq!(
+                plugin.validate(&config).is_ok(),
+                valid,
+                "boot_vcpus={boot_vcpus}, max_vcpus={max_vcpus}"
+            );
+        }
     }
 }

@@ -72,8 +72,7 @@ impl ConfigPlugin for OpenVmmConfig {
             }
             validate_path!(ovmm.path, "OpenVMM binary path `{}` is invalid: {}")?;
 
-            if (ovmm.cpu_info.default_vcpus > 0.0
-                && ovmm.cpu_info.default_vcpus as u32 > MAX_OPENVMM_VCPUS)
+            if ovmm.cpu_info.default_vcpus > MAX_OPENVMM_VCPUS as f32
                 || ovmm.cpu_info.default_maxvcpus > MAX_OPENVMM_VCPUS
             {
                 return Err(std::io::Error::other(format!(
@@ -179,5 +178,36 @@ mod tests {
             .default_memory = MIN_OPENVMM_MEMORY_SIZE_MB - 1;
 
         assert!(OpenVmmConfig::new().validate(&config).is_err());
+    }
+
+    #[test]
+    fn validate_cpu_limits() {
+        let binary = NamedTempFile::new().unwrap();
+        let mut config = create_config(binary.path());
+        let limit = MAX_OPENVMM_VCPUS;
+
+        for (boot_vcpus, max_vcpus, valid) in [
+            (limit as f32 - 0.5, limit, true),
+            (limit as f32, limit, true),
+            (limit as f32 + 0.5, limit, false),
+            (limit as f32 + 1.0, limit, false),
+            (1.0, limit + 1, false),
+        ] {
+            {
+                let hypervisor = config
+                    .hypervisor
+                    .get_mut(HYPERVISOR_NAME_OPENVMM)
+                    .unwrap();
+                hypervisor.cpu_info.default_vcpus = boot_vcpus;
+                hypervisor.cpu_info.default_maxvcpus = max_vcpus;
+                hypervisor.memory_info.default_memory = MIN_OPENVMM_MEMORY_SIZE_MB;
+            }
+
+            assert_eq!(
+                OpenVmmConfig::new().validate(&config).is_ok(),
+                valid,
+                "boot_vcpus={boot_vcpus}, max_vcpus={max_vcpus}"
+            );
+        }
     }
 }
