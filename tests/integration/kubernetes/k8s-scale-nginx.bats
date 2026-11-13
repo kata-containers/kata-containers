@@ -27,7 +27,7 @@ setup() {
 @test "Scale nginx deployment" {
 	kubectl create -f "${test_yaml}"
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
-	kubectl expose deployment/${deployment}
+	kubectl expose "deployment/${deployment}" --labels=katacontainers.io/test-resource=true
 	kubectl scale deployment/${deployment} --replicas=${replicas}
 	cmd="kubectl get deployment/${deployment} -o yaml | grep 'availableReplicas: ${replicas}'"
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"

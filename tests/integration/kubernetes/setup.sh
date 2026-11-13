@@ -41,6 +41,19 @@ reset_workloads_work_dir() {
 	rm -rf "${runtimeclass_workloads_work_dir}"
 	cp -R "${runtimeclass_workloads_dir}" "${runtimeclass_workloads_work_dir}"
 	setup_policy_files
+	label_test_workloads
+}
+
+# Mark only controller and Service fixtures for recovery after an interrupted test.
+# Keep the label on the controller itself, outside the pod template and policy.
+label_test_workloads() {
+	local yaml_file
+	while IFS= read -r -d '' yaml_file; do
+		yq -i '(select(.kind == "Deployment" or .kind == "ReplicationController" or
+			.kind == "ReplicaSet" or .kind == "StatefulSet" or .kind == "DaemonSet" or
+			.kind == "Job" or .kind == "CronJob" or .kind == "Service") |
+			.metadata.labels."katacontainers.io/test-resource") = "true"' "${yaml_file}"
+	done < <(find "${runtimeclass_workloads_work_dir}" -type f -name '*.yaml' -print0)
 }
 
 setup_policy_files() {

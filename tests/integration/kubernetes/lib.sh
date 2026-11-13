@@ -11,6 +11,16 @@ set -euo pipefail
 wait_time=60
 sleep_time=3
 
+# Stop test-owned controllers before removing pods, otherwise they recreate them.
+# Foreground deletion waits for dependent ReplicaSets, Jobs and Pods as well.
+k8s_delete_test_controllers() {
+	kubectl delete deployments,replicasets,statefulsets,daemonsets,replicationcontrollers,jobs,cronjobs \
+		-l katacontainers.io/test-resource=true --ignore-not-found \
+		--cascade=foreground --wait=true --timeout="${timeout:-90s}" || return 1
+	kubectl delete services -l katacontainers.io/test-resource=true \
+		--ignore-not-found --wait=true --timeout="${timeout:-90s}"
+}
+
 # Delete all pods if any exist, otherwise just return
 #
 k8s_delete_all_pods_if_any_exists() {

@@ -27,7 +27,7 @@ setup() {
 
 	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
-	kubectl expose deployment/${deployment}
+	kubectl expose "deployment/${deployment}" --labels=katacontainers.io/test-resource=true
 
 	busybox_pod="test-nginx"
         # We need to use `-O index.html` as the busybox' wget has a different behaviour
