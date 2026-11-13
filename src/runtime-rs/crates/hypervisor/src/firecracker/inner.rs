@@ -74,6 +74,7 @@ impl FcInner {
     }
 
     pub(crate) async fn prepare_vmm(&mut self, netns: Option<String>) -> Result<()> {
+        self.validate_version().await?;
         let mut cmd: Command;
         self.netns = netns.clone();
         match self.jailed {

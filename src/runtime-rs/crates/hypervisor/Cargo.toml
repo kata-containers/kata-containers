@@ -32,6 +32,7 @@ rand = { workspace = true }
 regex = "1"
 rust-ini = "0.18.0"
 seccompiler = "0.5.0"
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
