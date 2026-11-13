@@ -16,6 +16,9 @@ spec:
     image: ${NGINX_IMAGE}
     ports:
     - containerPort: 80
+    readinessProbe:
+      tcpSocket:
+        port: 80
 ---
 apiVersion: v1
 kind: Pod
