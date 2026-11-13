@@ -8,7 +8,9 @@ use crate::config::{Config, ContainerdPaths, CustomRuntime, NYDUS_FOR_KATA_TEE};
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
+use kata_types::annotations::{HYPERVISOR_ANNOTATION_KEYS, KATA_ANNO_CFG_HYPERVISOR_PREFIX};
 use log::info;
+use regex::RegexSet;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -30,18 +32,28 @@ struct ContainerdRuntimeParams {
 
 const DEFAULT_CONTAINER_ANNOTATIONS: &str = "[\"io.kubernetes.container.terminationMessage*\"]";
 
-fn format_toml_string_array(values: &[String]) -> String {
-    let quoted: Vec<String> = values.iter().map(|v| format!("\"{v}\"")).collect();
-    format!("[{}]", quoted.join(", "))
-}
+// These keys are supported by the Go runtime but have no Rust equivalent.
+const GO_HYPERVISOR_ANNOTATIONS: &[&str] = &[
+    "block_device_aio",
+    "cold_plug_vfio",
+    "disable_block_device_use",
+    "firmware_volume",
+    "firmware_volume_hash",
+    "hot_plug_vfio",
+    "hypervisor_hash",
+    "msize_9p",
+    "numa_mapping",
+    "reclaim_guest_freed_memory",
+    "use_legacy_serial",
+    "vhost_user_reconnect_timeout_sec",
+];
 
-fn hypervisor_annotation_pattern(name: &str) -> String {
-    let name = name.trim();
-    if name.starts_with("io.katacontainers.") {
-        name.to_string()
-    } else {
-        format!("io.katacontainers.config.hypervisor.{name}")
+fn format_toml_string_array(values: &[String]) -> String {
+    let mut array = toml_edit::Array::new();
+    for value in values {
+        array.push(value.as_str());
     }
+    array.to_string()
 }
 
 /// Read in the order Kata itself merges them: a drop-in setting the key
@@ -84,11 +96,28 @@ fn pod_annotations_for_kata_config(kata_config_file: &Path, extra: &[String]) ->
 
     let mut annotations = Vec::new();
 
-    for name in effective_enable_annotations(kata_config_file)? {
-        if name.trim().is_empty() {
-            continue;
+    let expressions = effective_enable_annotations(kata_config_file)?;
+    let enabled = RegexSet::new(&expressions).with_context(|| {
+        format!(
+            "Invalid hypervisor annotation regular expression in {}",
+            kata_config_file.display()
+        )
+    })?;
+    let known_annotations = HYPERVISOR_ANNOTATION_KEYS
+        .iter()
+        .map(|key| (*key).to_owned())
+        .chain(
+            GO_HYPERVISOR_ANNOTATIONS
+                .iter()
+                .map(|name| format!("{KATA_ANNO_CFG_HYPERVISOR_PREFIX}{name}")),
+        );
+    for key in known_annotations {
+        let name = key
+            .strip_prefix(KATA_ANNO_CFG_HYPERVISOR_PREFIX)
+            .context("Hypervisor annotation registry contains an invalid key")?;
+        if enabled.is_match(name) {
+            annotations.push(key);
         }
-        annotations.push(hypervisor_annotation_pattern(&name));
     }
 
     annotations.extend(
@@ -1289,6 +1318,134 @@ mod tests {
             !rendered.contains("io.katacontainers.*\""),
             "must not forward the unrestricted wildcard: {rendered}"
         );
+    }
+
+    #[test]
+    fn pod_annotation_regexes_expand_to_exact_known_keys() {
+        let cases: &[(&str, &[&str])] = &[
+            (r#"["^enable_iommu$"]"#, &["enable_iommu"]),
+            (
+                r#"["enable_iommu"]"#,
+                &["enable_iommu", "enable_iommu_platform"],
+            ),
+            (
+                r#"["^(default_vcpus|default_memory)$"]"#,
+                &["default_memory", "default_vcpus"],
+            ),
+            (
+                r#"["^firmware_volume(_hash)?$"]"#,
+                &["firmware_volume", "firmware_volume_hash"],
+            ),
+            (r#"["^prefetch_files\\.list$"]"#, &["prefetch_files.list"]),
+            (r#"["^not_a_kata_annotation$"]"#, &[]),
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration.toml");
+
+        for (expressions, expected) in cases {
+            std::fs::write(
+                &config_file,
+                format!("[hypervisor.qemu]\nenable_annotations = {expressions}\n"),
+            )
+            .unwrap();
+            let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+            let doc = format!("pod_annotations = {rendered}")
+                .parse::<toml_edit::DocumentMut>()
+                .unwrap();
+            let actual: Vec<_> = doc["pod_annotations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap().to_owned())
+                .collect();
+            let expected: Vec<_> = expected
+                .iter()
+                .map(|name| format!("{KATA_ANNO_CFG_HYPERVISOR_PREFIX}{name}"))
+                .collect();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn wildcard_regex_only_forwards_known_hypervisor_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\".*\"]\n",
+        )
+        .unwrap();
+
+        let rendered = pod_annotations_for_kata_config(&config_file, &[]).unwrap();
+        let doc = format!("pod_annotations = {rendered}")
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        let annotations = doc["pod_annotations"].as_array().unwrap();
+        assert_eq!(
+            annotations.len(),
+            HYPERVISOR_ANNOTATION_KEYS.len() + GO_HYPERVISOR_ANNOTATIONS.len()
+        );
+        for value in annotations {
+            let key = value.as_str().unwrap();
+            assert!(key.starts_with(KATA_ANNO_CFG_HYPERVISOR_PREFIX));
+            assert!(!key.contains(['*', '?', '[']));
+        }
+    }
+
+    #[test]
+    fn invalid_annotation_regex_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("configuration.toml");
+        std::fs::write(
+            &config_file,
+            "[hypervisor.qemu]\nenable_annotations = [\"[\"]\n",
+        )
+        .unwrap();
+
+        let error = pod_annotations_for_kata_config(&config_file, &[]).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Invalid hypervisor annotation regular expression"));
+    }
+
+    #[test]
+    fn go_only_annotation_registry_matches_the_go_runtime() {
+        let declarations =
+            regex::Regex::new(r#"kataAnnotHypervisorPrefix\s*\+\s*"([^"]+)""#).unwrap();
+        let rust: std::collections::BTreeSet<_> = HYPERVISOR_ANNOTATION_KEYS
+            .iter()
+            .map(|key| key.strip_prefix(KATA_ANNO_CFG_HYPERVISOR_PREFIX).unwrap())
+            .collect();
+        let go: std::collections::BTreeSet<_> = declarations
+            .captures_iter(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../../src/runtime/virtcontainers/pkg/annotations/annotations.go"
+            )))
+            .map(|capture| capture.get(1).unwrap().as_str())
+            .collect();
+        let go_only: std::collections::BTreeSet<_> = go.difference(&rust).copied().collect();
+        let registered: std::collections::BTreeSet<_> =
+            GO_HYPERVISOR_ANNOTATIONS.iter().copied().collect();
+        assert_eq!(registered, go_only);
+    }
+
+    #[test]
+    fn annotation_array_escapes_toml_strings() {
+        let values = vec![
+            "example.io/quote\"".to_owned(),
+            "example.io/backslash\\".to_owned(),
+        ];
+        let rendered = format_toml_string_array(&values);
+        let doc = format!("pod_annotations = {rendered}")
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        let decoded: Vec<_> = doc["pod_annotations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(decoded, values);
     }
 
     #[rstest]
