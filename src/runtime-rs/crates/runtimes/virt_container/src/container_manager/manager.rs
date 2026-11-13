@@ -103,6 +103,7 @@ impl ContainerManager for VirtContainerManager {
             self.agent.clone(),
             self.resource_manager.clone(),
             self.hypervisor.get_passfd_listener_addr().await.ok(),
+            self.hypervisor.supports_fd_passthrough().await,
         )
         .await
         .context("new container")?;

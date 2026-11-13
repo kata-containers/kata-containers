@@ -12,6 +12,7 @@ use anyhow::{Context, Result};
 use awaitgroup::{WaitGroup, Worker as WaitGroupWorker};
 use common::types::{ContainerProcess, ProcessExitStatus, ProcessStateInfo, ProcessStatus, PID};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::net::UnixStream;
 use tokio::sync::{watch, RwLock};
 
 use super::container::Container;
@@ -159,7 +160,12 @@ impl Process {
     }
 
     /// Init the `passfd_io` struct and vsock connections for io to the agent.
-    pub async fn passfd_io_init(&mut self, hvsock_uds_path: &str, passfd_port: u32) -> Result<()> {
+    pub async fn passfd_io_init(
+        &mut self,
+        hvsock_uds_path: &str,
+        passfd_port: u32,
+        fd_passthrough: bool,
+    ) -> Result<()> {
         info!(self.logger, "passfd io init");
 
         // Binary loggers need the host shim to feed their pipes, so this
@@ -174,16 +180,44 @@ impl Process {
         let mut passfd_io =
             PassfdIo::new(self.stdin.clone(), self.stdout.clone(), self.stderr.clone()).await;
 
-        self.pre_fifos_open()?;
-        passfd_io
-            .open_and_passfd(hvsock_uds_path, passfd_port, self.terminal)
-            .await
-            .context("passfd connect")?;
-        self.post_fifos_open()?;
+        info!(
+            self.logger,
+            "passfd io: fd_passthrough mode = {fd_passthrough} \
+             (true: transfer FIFO fds into the guest; \
+              false: UDS pull over hybrid-vsock streams)"
+        );
+
+        if fd_passthrough {
+            // recv-fd capable hypervisor (e.g. Dragonball): transfer the host
+            // FIFO fds into the guest so the agent writes stdout/stderr
+            // straight back into them.
+            self.pre_fifos_open()?;
+            passfd_io
+                .open_and_passfd(hvsock_uds_path, passfd_port, self.terminal)
+                .await
+                .context("passfd connect")?;
+            self.post_fifos_open()?;
+        } else {
+            // Hypervisors without recv-fd support (e.g. CLH): connect over the
+            // hybrid-vsock UDS and keep the streams on the runtime-rs side so
+            // stdout/stderr can be actively pulled and stdin pushed.
+            passfd_io
+                .open_and_connect(hvsock_uds_path, passfd_port, self.terminal)
+                .await
+                .context("passfd io connect")?;
+        }
 
         self.passfd_io = Some(passfd_io);
 
         Ok(())
+    }
+
+    /// Take the UDS streams established by `passfd_io_init` in the non-fd
+    /// passthrough mode. Returns the (stdin, stdout, stderr) streams, if any.
+    pub fn take_passfd_streams(
+        &mut self,
+    ) -> Option<(Option<UnixStream>, Option<UnixStream>, Option<UnixStream>)> {
+        self.passfd_io.as_mut().map(|io| io.take_streams())
     }
 
     /// (After process started) Send a WaitProcessRequest to agent in the

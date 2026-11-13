@@ -32,6 +32,7 @@ use futures::future::join_all;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
 use kata_types::config::hypervisor::RootlessUser;
+use kata_types::config::PASSFD_LISTENER_PORT;
 use kata_types::rootless::is_rootless;
 use nix::sched::{setns, CloneFlags};
 use serde_json::Value;
@@ -148,6 +149,15 @@ impl CloudHypervisorInner {
             params.append(&mut KernelParams::from_string(&format!(
                 "kata.extension.{}.verity_params={}",
                 extra.name, extra.verity_params
+            )));
+        }
+
+        // In passfd io mode (UDS pull for CLH, which lacks recv-fd), the agent
+        // listens on passfd_listener_port inside the guest, so it must be
+        // conveyed through the kernel cmdline.
+        if let Some(passfd_listener_port) = self.passfd_listener_port {
+            params.append(&mut KernelParams::from_string(&format!(
+                "{PASSFD_LISTENER_PORT}={passfd_listener_port}"
             )));
         }
 
@@ -768,6 +778,19 @@ impl CloudHypervisorInner {
         let uri = format!("{HYBRID_VSOCK_SCHEME}://{vsock_path}");
 
         Ok(uri)
+    }
+
+    /// Get the address of agent vsock server used to init connections for io.
+    ///
+    /// CLH does not support recv-fd, so unlike Dragonball this is used to let
+    /// runtime-rs connect to the agent's passfd/io listener over the
+    /// hybrid-vsock UDS and actively pull stdout/stderr and push stdin.
+    pub(crate) async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
+        if let Some(passfd_port) = self.passfd_listener_port {
+            Ok((get_vsock_path(&self.id)?, passfd_port))
+        } else {
+            Err(anyhow!("passfd listener port is not set"))
+        }
     }
 
     pub(crate) async fn disconnect(&mut self) {

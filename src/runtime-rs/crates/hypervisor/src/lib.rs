@@ -181,6 +181,14 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn guest_memory_block_size(&self) -> u32;
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)>;
 
+    /// Whether the hypervisor can transfer host fds into the guest (recv-fd)
+    /// for stdio passthrough. Dragonball supports this; hypervisors that do
+    /// not (e.g. CLH) fall back to the UDS-pull mode where runtime-rs keeps
+    /// the vsock streams and actively copies the process stdio.
+    async fn supports_fd_passthrough(&self) -> bool {
+        false
+    }
+
     async fn set_rootless_user(&self, _user: RootlessUser) -> Result<()> {
         Err(anyhow::anyhow!(
             "updating the rootless user is not supported for this hypervisor"

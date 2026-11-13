@@ -1,4 +1,4 @@
-# How to Use Passthrough-FD IO within Runtime-rs and Dragonball
+# How to Use Passthrough-FD IO within Runtime-rs
 
 This document describes the Passthrough-FD (pass-fd) technology implemented in Kata Containers to optimize IO performance. By bypassing the intermediate proxy layers, this technology significantly reduces latency and CPU overhead for container IO streams.
 
@@ -6,8 +6,9 @@ This document describes the Passthrough-FD (pass-fd) technology implemented in K
 
 Before diving into the technical details, please note the following restriction:
 
-- Exclusive Support for Dragonball VMM: This feature is currently implemented only for Kata Containers' built-in VMM, Dragonball.
-- Unsupported VMMs: Other VMMs such as QEMU, Cloud Hypervisor, and Firecracker do not support this feature at this time.
+- Full FD Passthrough (recv-fd): This variant is currently implemented only for Kata Containers' built-in VMM, Dragonball, by extending its hybrid-vsock implementation with recv-fd support.
+- UDS Pull (CLH): Cloud Hypervisor does not implement recv-fd, but supports the same `use_passfd_io` knob through a "UDS pull" mode: runtime-rs connects to the agent's vsock listener over the hybrid-vsock UDS, keeps the streams, and actively copies stdout/stderr (see below).
+- Unsupported VMMs: QEMU and Firecracker do not support this feature at this time.
 
 ## Overview
 
@@ -140,6 +141,46 @@ sequenceDiagram
 6. Final Binding: Upon receiving the RPC, the agent retrieves the saved connections using the provided ports and binds them directly to the container's standard IO streams.
 
 
+## CLH: UDS Pull Mode (no recv-fd)
+
+Cloud Hypervisor (CLH) does not implement the recv-fd extension of Dragonball's hybrid-vsock module, so host FDs cannot be transferred into the guest. The same `use_passfd_io` configuration instead enables a **UDS pull** mode on CLH:
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    box rgb(220,235,255) Guest (VM)
+        participant Agent as kata-agent<br/>(Server)
+        participant VSOCK as AF_VSOCK socket<br/>(Hybrid Vsock)
+    end
+
+    box rgb(255,240,220) Host
+        participant Shim as kata-shim<br/>(Client)
+        participant FIFO as File or FIFO<br/>(stdin/stdout/stderr)
+    end
+
+    Note over Agent: Agent Initialization:<br/>listen() on passfd_listener_port
+
+    Shim->>VSOCK: connect() + send("connect port\n")
+    Note over VSOCK,Agent: Connection Establishment over Hybrid Vsock<br/>(repeat for stdin-port, stdout-port, stderr-port)
+    VSOCK->>Agent: forward connection
+    Agent->>Agent: accept() → get host-port<br/>save: map[host-port] = stream
+    Agent-->>Shim: echo host-port back over the connection
+
+    Shim->>Agent: create_container RPC<br/>(includes stdin-port, stdout-port, stderr-port)
+    Agent->>Agent: lookup map[stdin-port] → bind to container stdin<br/>lookup map[stdout-port] → bind to container stdout<br/>lookup map[stderr-port] → bind to container stderr
+    Agent-->>Shim: create_container RPC response (OK)
+
+    Note over Shim,FIFO: runtime-rs keeps the UDS streams<br/>and actively copies:<br/>stdout/stderr ← stream → FIFO<br/>stdin ← FIFO → stream
+```
+
+The differences with the Dragonball path are:
+
+- No fd is transferred. runtime-rs simply connects to the agent listener over the host-side hybrid-vsock UDS (`<sandbox>/vsock.sock`, the same endpoint used for the agent ttrpc channel) using the standard `connect <port>` handshake.
+- The agent echoes the host port back over the established connection, so runtime-rs learns the port to embed in the `CreateContainer`/`ExecProcess` RPC.
+- runtime-rs keeps the three UDS streams and runs the usual `start_io_and_wait` copy loop between them and the containerd FIFOs. **stdout/stderr no longer go through the agent's `read_stdout`/`read_stderr` ttrpc calls**; only the control plane (create/start/exec/wait/signal) still uses ttrpc.
+
+
 ## How to enable PassthroughFD IO within Configuration?
 
 The Passthrough-FD feature is controlled by two main parameters in the Kata configuration file:
@@ -151,7 +192,8 @@ To enable Passthrough-FD IO, set use_passfd_io to true in the configuration file
 ```toml
 ...
 # If enabled, the runtime will attempt to use fd passthrough feature for process io.
-# Note: this feature is only supported by the Dragonball hypervisor.
+# Note: this feature is supported by the Dragonball (fd passthrough) and
+# Cloud Hypervisor (UDS pull) hypervisors.
 use_passfd_io = true
 
 # If fd passthrough io is enabled, the runtime will attempt to use the specified port instead of the default port.

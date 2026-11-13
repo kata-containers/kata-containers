@@ -50,6 +50,11 @@ impl CloudHypervisor {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
+
+    pub async fn set_passfd_listener_port(&self, port: u32) {
+        let mut inner = self.inner.write().await;
+        inner.set_passfd_listener_port(port)
+    }
 }
 
 impl Default for CloudHypervisor {
@@ -223,7 +228,8 @@ impl Hypervisor for CloudHypervisor {
     }
 
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
-        Err(anyhow::anyhow!("Not yet supported"))
+        let inner = self.inner.read().await;
+        inner.get_passfd_listener_addr().await
     }
 }
 
