@@ -18,6 +18,10 @@ shims:
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
+    # Keep emptyDir writes visible to kubelet without filesystem sharing.
+    dropIn: |
+      [runtime]
+      emptydir_mode = "block-plain"
     containerd:
       snapshotter: devmapper
 
