@@ -187,10 +187,14 @@ impl RuntimeHandlerManagerInner {
         sandbox_config.config_path = Some(config_path);
 
         // Computed before the hypervisor config is borrowed: it only reads
-        // the runtime section and the OCI spec.
+        // the runtime section and the sandbox cgroup parent or OCI spec.
         #[cfg(feature = "virt")]
-        let cgroup_state = resource::cgroups::preview_cgroup_state(&self.id, &config)
-            .context("preview the cgroup state")?;
+        let cgroup_state = resource::cgroups::preview_cgroup_state(
+            &self.id,
+            &config,
+            sandbox_config.cgroup_parent.as_deref(),
+        )
+        .context("preview the cgroup state")?;
 
         let hypervisor_name = &config.runtime.hypervisor_name;
         let hypervisor = config
@@ -600,6 +604,7 @@ impl RuntimeHandlerManager {
             dns,
             hostname: spec.hostname().clone().unwrap_or_default(),
             network_env,
+            cgroup_parent: None,
             annotations: spec.annotations().clone().unwrap_or_default(),
             hooks: spec.hooks().clone(),
             state: state.clone(),

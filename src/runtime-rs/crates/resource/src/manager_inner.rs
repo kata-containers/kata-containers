@@ -97,6 +97,7 @@ impl ResourceManagerInner {
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
+        cgroup_parent: Option<&str>,
     ) -> Result<Self> {
         let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
@@ -149,7 +150,7 @@ impl ResourceManagerInner {
         // recorded until the sandbox exists and saves its state, so a failure
         // after either leaves it behind. Create the cgroups last, when nothing
         // else can fail, and remove the swap directory if they fail.
-        let cgroups_resource = match CgroupsResource::new(sid, &toml_config) {
+        let cgroups_resource = match CgroupsResource::new(sid, &toml_config, cgroup_parent) {
             Ok(cgroups_resource) => cgroups_resource,
             Err(e) => {
                 if let Some(swap) = &swap_resource {
