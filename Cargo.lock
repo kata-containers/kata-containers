@@ -1212,9 +1212,9 @@ dependencies = [
 
 [[package]]
 name = "containerd-shim"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a886cc76f89aab452d78a9034a62426468175d795d0fb2ee57338fe075cbdc0a"
+checksum = "a57ad7290484772339896d655dff22258e0964302e09a30da7219be5c22b416a"
 dependencies = [
  "async-trait",
  "cgroups-rs",
@@ -1225,29 +1225,29 @@ dependencies = [
  "log",
  "mio 1.2.0",
  "nix 0.31.3",
- "oci-spec 0.9.0",
+ "oci-spec 0.10.0",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "signal-hook",
  "tempfile",
  "thiserror 2.0.18",
  "time",
  "tokio",
- "which 8.0.4",
+ "tokio-util",
  "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "containerd-shim-protos"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f714d7ff4f5e9d5f9b57d27152d70c8cab6639284e5c4f7dfaca774a7b94fa52"
+checksum = "b1284614d4f75c19a851250b6a13b2e5099f1d8bb9b98c6e7cba328504926edd"
 dependencies = [
  "async-trait",
  "protobuf",
  "ttrpc",
- "ttrpc-codegen",
+ "ttrpc-codegen 0.7.0",
 ]
 
 [[package]]
@@ -3053,7 +3053,7 @@ dependencies = [
  "tokio",
  "tracing",
  "ttrpc",
- "ttrpc-codegen",
+ "ttrpc-codegen 0.6.0",
  "virtio-bindings",
  "vmm-sys-util",
 ]
@@ -3647,7 +3647,7 @@ dependencies = [
  "ttrpc",
  "url",
  "vsock-exporter",
- "which 4.4.2",
+ "which",
 ]
 
 [[package]]
@@ -5702,7 +5702,7 @@ dependencies = [
  "prost 0.8.0",
  "prost-types 0.8.0",
  "tempfile",
- "which 4.4.2",
+ "which",
 ]
 
 [[package]]
@@ -5724,7 +5724,7 @@ dependencies = [
  "regex",
  "syn 1.0.109",
  "tempfile",
- "which 4.4.2",
+ "which",
 ]
 
 [[package]]
@@ -5833,7 +5833,7 @@ dependencies = [
  "protobuf-support",
  "tempfile",
  "thiserror 1.0.69",
- "which 4.4.2",
+ "which",
 ]
 
 [[package]]
@@ -5855,7 +5855,7 @@ dependencies = [
  "serde",
  "serde_json",
  "ttrpc",
- "ttrpc-codegen",
+ "ttrpc-codegen 0.6.0",
 ]
 
 [[package]]
@@ -7297,6 +7297,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
+ "common",
  "containerd-shim-protos",
  "go-flag",
  "kata-sys-util",
@@ -7308,6 +7309,7 @@ dependencies = [
  "oci-spec 0.10.0",
  "protobuf",
  "runtime-spec",
+ "serde_json",
  "serial_test 0.10.0",
  "service",
  "sha2 0.11.0",
@@ -7357,9 +7359,9 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "signal-hook"
-version = "0.3.18"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+checksum = "49f7447afd772ca79ad17ae0a3972a6b0df0cb4b80990fd82707593e9e012a74"
 dependencies = [
  "libc",
  "signal-hook-registry",
@@ -7963,9 +7965,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.52.2"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "110a78583f19d5cdb2c5ccf321d1290344e71313c6c37d43520d386027d18386"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes 1.11.1",
  "libc",
@@ -8039,6 +8041,7 @@ dependencies = [
  "bytes 1.11.1",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]
@@ -8446,15 +8449,16 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "ttrpc"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f12efe237328bbe3b3b50503627f7cc9e74cfae34ffa8438561916623cd8f50"
+checksum = "3b5b30abab5b508e5b5e5f1a5ca3c9e0e8048ffa3c0bbd74bc11e5a9a3f05cad"
 dependencies = [
  "async-stream",
  "async-trait",
  "byteorder",
  "crossbeam",
  "futures",
+ "home",
  "libc",
  "log",
  "nix 0.26.4",
@@ -8475,7 +8479,19 @@ dependencies = [
  "protobuf",
  "protobuf-codegen",
  "protobuf-support",
- "ttrpc-compiler",
+ "ttrpc-compiler 0.8.0",
+]
+
+[[package]]
+name = "ttrpc-codegen"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb33d862aaa2de82c3c6ebce75ceba133605d43fdceffcfbc45db6d899ca8d5c"
+dependencies = [
+ "protobuf",
+ "protobuf-codegen",
+ "protobuf-parse",
+ "ttrpc-compiler 0.9.0",
 ]
 
 [[package]]
@@ -8491,6 +8507,16 @@ dependencies = [
  "protobuf",
  "protobuf-codegen",
  "tempfile",
+]
+
+[[package]]
+name = "ttrpc-compiler"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d5f93ba3bc5a0f36151409ddd0a3890824583acbe4a5bf31557e4dfb0556220"
+dependencies = [
+ "protobuf",
+ "protobuf-codegen",
 ]
 
 [[package]]
@@ -9051,15 +9077,6 @@ dependencies = [
  "home",
  "once_cell",
  "rustix 0.38.44",
-]
-
-[[package]]
-name = "which"
-version = "8.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48d7cd18d4acb58fb3cdfe9ea54e6cd96a4e7d4cc45c56338b236e82dad47248"
-dependencies = [
- "libc",
 ]
 
 [[package]]
