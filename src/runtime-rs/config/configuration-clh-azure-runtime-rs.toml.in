@@ -297,6 +297,19 @@ guest_swap_size_percent = 100
 # Default 60.
 guest_swap_create_threshold_secs = 60
 
+# Memory restore mode used by Cloud Hypervisor when a VM is created from a
+# template (see the `factory.enable_template` option below).
+#
+# Valid values are:
+#   - "copy": copy the snapshot memory into the guest (default)
+#   - "ondemand": populate guest memory on demand using userfaultfd
+#   - "copyonwrite": map the snapshot memory copy-on-write
+
+#
+# "ondemand" reduces the time needed to restore the VM but requires host
+# kernel support for userfaultfd.
+# memory_restore_mode = "ondemand"
+
 [hypervisor.clh.factory]
 # VM templating support. Once enabled, new VMs are created from template.
 # CLH templating requires no shared filesystem and a block-capable snapshotter.

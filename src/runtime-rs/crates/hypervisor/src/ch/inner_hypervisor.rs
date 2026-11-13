@@ -22,7 +22,7 @@ use ch_config::{
         cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_pause,
         cloud_hypervisor_vm_resize, cloud_hypervisor_vm_restore, cloud_hypervisor_vm_resume,
         cloud_hypervisor_vm_snapshot, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
-        cloud_hypervisor_vmm_shutdown, RestoreConfig, VmSnapshotConfig,
+        cloud_hypervisor_vmm_shutdown, MemoryRestoreMode, RestoreConfig, VmSnapshotConfig,
     },
     VmResize,
 };
@@ -355,10 +355,25 @@ impl CloudHypervisorInner {
             .with_context(|| format!("access config file {}", config_file.display()))?;
 
         let source_url = format!("file://{}", vm_path.display());
+
+        // An empty configuration value keeps the Cloud Hypervisor default ("Copy").
+        let memory_restore_mode = if self.config.vm_template.memory_restore_mode.is_empty() {
+            None
+        } else {
+            Some(MemoryRestoreMode::parse(
+                &self.config.vm_template.memory_restore_mode,
+            )?)
+        };
+
+        debug!(sl!(), "restoring VM from template";
+            "source-url" => source_url.as_str(),
+            "memory-restore-mode" => format!("{:?}", memory_restore_mode));
+
         let response = cloud_hypervisor_vm_restore(
             &self.api_socket,
             RestoreConfig {
                 source_url: source_url.clone(),
+                memory_restore_mode,
             },
         )
         .await?;
