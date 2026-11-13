@@ -219,6 +219,13 @@ impl TryFrom<MemoryInfo> for MemoryConfig {
             // Required
             shared: true,
 
+            // Huge page backed guest memory. Not just a performance option
+            // for vhost-user backends: without it the device registers guest
+            // memory at a 2 MiB granularity and an unaligned mapping can
+            // fault outside it, so SPDK vhost-user-blk requires it (the Go
+            // runtime's CLH and QEMU drivers unset it alike).
+            hugepages: mem.enable_hugepages,
+
             hotplug_size,
 
             prefault: mem.enable_mem_prealloc,
@@ -1249,6 +1256,25 @@ mod tests {
                 result: Ok(MemoryConfig {
                     size: 1024_u64 * MIB,
                     shared: true,
+                    hotplug_size: checked_next_multiple_of(
+                        usable_max_mem_bytes - (1024 * MIB),
+                        PMEM_ALIGN_BYTES,
+                    ),
+
+                    ..Default::default()
+                }),
+            },
+            TestData {
+                mem_info: MemoryInfo {
+                    default_memory: 1024,
+                    enable_hugepages: true,
+
+                    ..Default::default()
+                },
+                result: Ok(MemoryConfig {
+                    size: 1024_u64 * MIB,
+                    shared: true,
+                    hugepages: true,
                     hotplug_size: checked_next_multiple_of(
                         usable_max_mem_bytes - (1024 * MIB),
                         PMEM_ALIGN_BYTES,

@@ -1,7 +1,8 @@
 # A new way for Kata Containers to use Kinds of Block Volumes
 
-> **Note:** This guide is only available for runtime-rs with default Hypervisor Dragonball.
-> Now, other hypervisors are still ongoing, and it'll be updated when they're ready.
+> **Note:** This guide is available for runtime-rs with the default Hypervisor Dragonball,
+> and `spdkvol` volumes are also supported by Cloud Hypervisor. Other hypervisors are
+> still ongoing, and it'll be updated when they're ready.
 
 
 ## Background
@@ -152,6 +153,12 @@ $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=vfiovol,src=
 SPDK vhost-user devices in runtime-rs, unlike runtime (golang version), there is no need to `mknod` device node under `/dev/` any more.
 Just using the `kata-ctl direct-volume add ..` to make a mount info config is enough.
 
+> **Tip:** `spdkvol` is currently supported by the Dragonball and Cloud Hypervisor drivers.
+> With Cloud Hypervisor, the sandbox must be configured with huge page backed guest
+> memory, e.g. set `enable_hugepages` to `true` in the hypervisor section of
+> `configuration.toml`. A vhost-user backend registers guest memory at a 2 MiB
+> granularity, so an unaligned mapping can fault outside the registered region.
+
 #### Run SPDK vhost target and Expose vhost block device
 
 Run a SPDK vhost target and get vhost-user block controller as an example:
@@ -176,7 +183,9 @@ $ sudo ${SPDK_DEVEL}/build/bin/spdk_tgt -S $VHU_UDS_PATH -s 1024 -m 0x3 &
 Second, create a vhost controller:
 
 ```bash
-$ sudo dd if=/dev/zero of=${RAW_DISKS}/rawdisk01.20g bs=1M count=20480
+$ # raw block backend storage MUST be formatted with mkfs before use
+$ sudo truncate -s 20G ${RAW_DISKS}/rawdisk01.20g
+$ sudo mkfs.ext4 -F ${RAW_DISKS}/rawdisk01.20g
 $ sudo ${SPDK_DEVEL}/scripts/rpc.py bdev_aio_create ${RAW_DISKS}/rawdisk01.20g vhu-rawdisk01.20g 512
 $ sudo ${SPDK_DEVEL}/scripts/rpc.py vhost_create_blk_controller vhost-blk-rawdisk01.sock vhu-rawdisk01.20g
 ```
