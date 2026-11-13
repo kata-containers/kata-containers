@@ -24,7 +24,7 @@ use std::{sync::Arc, vec::Vec};
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 use agent::Agent;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::{k8s::is_disk_empty_dir, mount::get_mount_options};
@@ -48,6 +48,10 @@ pub trait Volume: Send + Sync {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>>;
     fn get_storage(&self) -> Result<Vec<agent::Storage>>;
     fn get_device_id(&self) -> Result<Option<String>>;
+    /// Resolve a directly assigned host device to its mounted guest filesystem.
+    fn get_guest_mount_path(&self, _host_path: &str) -> Option<&str> {
+        None
+    }
     async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()>;
 }
 
@@ -251,6 +255,16 @@ impl VolumeResource {
             })),
             volume_manager: Arc::new(VolumeManager::new()),
         }
+    }
+
+    pub async fn direct_volume_guest_path(&self, host_path: &str) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner
+            .volumes
+            .iter()
+            .find_map(|volume| volume.get_guest_mount_path(host_path))
+            .map(str::to_owned)
+            .ok_or_else(|| anyhow!("direct volume {host_path} not found in sandbox"))
     }
 
     pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
