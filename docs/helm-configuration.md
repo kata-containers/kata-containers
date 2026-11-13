@@ -1564,8 +1564,7 @@ Use `affinity` when you need more granular scheduling controls than
 `nodeSelector` alone. `nodeSelector` only matches exact key/value pairs on a
 node; affinity gives you `matchExpressions` (e.g. `In`, `NotIn`) and rules
 about other pods on the same node. For example, you might want kata-deploy on
-nodes reserved for your platform team but *not* on nodes that run the GPU
-operator.
+nodes reserved for your platform team.
 
 !!! info "`nodeAffinity` selects nodes in both modes; pod affinity only in `daemonset` mode"
     `affinity.nodeAffinity` is the match-expression form of `nodeSelector` and, like
@@ -1595,15 +1594,6 @@ affinity:
               operator: In
               values:
                 - platform-team
-  podAntiAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchExpressions:
-            - key: app
-              operator: In
-              values:
-                - gpu-operator
-        topologyKey: kubernetes.io/hostname
 ```
 
 When `node-feature-discovery.enabled=true`, the chart also merges in a

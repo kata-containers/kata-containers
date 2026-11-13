@@ -1038,7 +1038,7 @@ function helm_helper() {
 	# Enable node-feature-discovery deployment
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
-	# Do not enable on nvidia-gpu-* tests, as it'll be deployed by the GPU operator
+	# GPU runners provide NFD as part of their device provisioning setup.
 	if [[ "${KATA_HYPERVISOR}" == *"nvidia-gpu"* ]]; then
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
 		yq -i ".runtimeClasses.createDefault = true" "${values_yaml}"

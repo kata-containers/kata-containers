@@ -262,7 +262,7 @@ spec:
       limits:
         cpu: "4"
         memory: "8Gi"
-        nvidia.com/pgpu: "1"
+        nvidia.com/gpu: "1"
 EOF
 ```
 

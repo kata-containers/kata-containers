@@ -224,7 +224,7 @@ affinity:
             - key: app
               operator: In
               values:
-                - gpu-operator
+                - test-workload
         topologyKey: kubernetes.io/hostname
 EOF
 
@@ -238,7 +238,7 @@ EOF
 	echo "${ds}" | grep -q "node.cloud/reserved"
 	echo "${ds}" | grep -q "platform-team"
 	echo "${ds}" | grep -q "podAntiAffinity:"
-	echo "${ds}" | grep -q "gpu-operator"
+	echo "${ds}" | grep -q "test-workload"
 }
 
 @test "Helm template: NFD enabled merges virtualization nodeAffinity with user nodeAffinity" {
@@ -303,7 +303,7 @@ affinity:
             - key: app
               operator: In
               values:
-                - gpu-operator
+                - test-workload
         topologyKey: kubernetes.io/hostname
 EOF
 
@@ -314,7 +314,7 @@ EOF
 	ds=$(extract_kata_deploy_ds)
 
 	echo "${ds}" | grep -q "podAntiAffinity:"
-	echo "${ds}" | grep -q "gpu-operator"
+	echo "${ds}" | grep -q "test-workload"
 	echo "${ds}" | grep -q "platform-team"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 }
