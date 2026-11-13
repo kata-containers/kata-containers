@@ -524,7 +524,7 @@ impl DeviceManager {
 
         if block_config.path_on_host.is_empty() {
             block_config.path_on_host =
-                get_host_path(DEVICE_TYPE_BLOCK, config.major, config.minor)
+                get_host_path(DEVICE_TYPE_BLOCK, config.major, config.minor, None)
                     .context("failed to get host path")?;
         }
 

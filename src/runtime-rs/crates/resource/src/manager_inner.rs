@@ -724,8 +724,10 @@ impl ResourceManagerInner {
                     }
                 }
                 LinuxDeviceType::C => {
-                    let host_path = get_host_path(DEVICE_TYPE_CHAR, d.major(), d.minor())
-                        .context("get host path failed")?;
+                    let host_path =
+                        get_host_path(DEVICE_TYPE_CHAR, d.major(), d.minor(), Some(d.path()))
+                            .context("get host path failed")?;
+
                     // First of all, filter vfio devices.
                     if !host_path.starts_with("/dev/vfio") {
                         continue;
@@ -1645,7 +1647,7 @@ where
 /// reliable source. Any failure is logged and treated as not-read-only so it
 /// can never flip a positive signal back.
 fn block_device_node_is_readonly(major: i64, minor: i64) -> bool {
-    let host_path = match get_host_path(DEVICE_TYPE_BLOCK, major, minor) {
+    let host_path = match get_host_path(DEVICE_TYPE_BLOCK, major, minor, None) {
         Ok(path) if !path.is_empty() => path,
         Ok(_) => return false,
         Err(e) => {
