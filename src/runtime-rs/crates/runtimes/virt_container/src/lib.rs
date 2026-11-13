@@ -181,6 +181,13 @@ impl RuntimeHandler for VirtContainer {
         );
         let pid = std::process::id();
 
+        let mut sandbox_files = Vec::new();
+        if !sandbox_config.dns.is_empty() {
+            sandbox_files.push("resolv.conf");
+        }
+        if !sandbox_config.hostname.is_empty() {
+            sandbox_files.push("hostname");
+        }
         let sandbox = sandbox::VirtSandbox::new(
             sid,
             msg_sender,
@@ -205,6 +212,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor,
             resource_manager,
             sandbox.oom_notifier(),
+            sandbox_files,
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),
