@@ -3613,6 +3613,7 @@ dependencies = [
  "url",
  "virt_container",
  "vmm-sys-util",
+ "which 4.4.2",
 ]
 
 [[package]]
