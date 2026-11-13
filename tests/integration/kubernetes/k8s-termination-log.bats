@@ -142,11 +142,13 @@ teardown() {
 		return
 	fi
 
-	# Debugging information
-	kubectl describe "pod/${pod_name:-}" || true
-	kubectl get "pod/${pod_name:-}" -o yaml || true
+	if [ -n "${pod_name:-}" ]; then
+		# Debugging information
+		kubectl describe "pod/${pod_name}" || true
+		kubectl get "pod/${pod_name}" -o yaml || true
 
-	kubectl delete pod "${pod_name:-}" --ignore-not-found=true
+		kubectl delete pod "${pod_name}" --ignore-not-found=true
+	fi
 	if [ -n "${policy_settings_dir:-}" ]; then
 		delete_tmp_policy_settings_dir "${policy_settings_dir}"
 	fi
