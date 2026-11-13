@@ -5,7 +5,7 @@
 //
 
 use crate::{
-    types::{ContainerProcess, SandboxExitInfo, SandboxStatus},
+    types::{ContainerProcess, SandboxExitInfo, SandboxStatus, StatsInfo},
     ContainerManager,
 };
 
@@ -55,6 +55,7 @@ pub trait Sandbox: Send + Sync {
     // before any of them exists, so a shim killed during the create leaves a
     // state that already covers them.
     async fn save_container_intents(&self, spec: &oci_spec::runtime::Spec) -> Result<()>;
+    async fn metrics(&self) -> Result<StatsInfo>;
 
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;

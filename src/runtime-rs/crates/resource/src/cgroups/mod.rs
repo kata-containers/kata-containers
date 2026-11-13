@@ -49,6 +49,12 @@ pub async fn delete_cgroups_from_state(
     resource.delete().await.context("delete the cgroups")
 }
 
+#[derive(Debug)]
+pub enum SandboxCgroupStats {
+    V1(Box<cgroups::CgroupStats>),
+    V2(std::path::PathBuf),
+}
+
 const SANDBOXED_CGROUP_PATH: &str = "kata_sandboxed_pod";
 
 pub struct CgroupArgs {
