@@ -4,7 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use zvariant::{OwnedObjectPath, OwnedValue};
+use zbus::wire::{OwnedObjectPath, OwnedVariant};
 
 use super::dbus::{Connection, Method};
 
@@ -200,7 +200,7 @@ fn wait_for_job(connection: &mut Connection, job: &OwnedObjectPath, unit: &str) 
     }
 }
 
-fn unit_property(connection: &mut Connection, unit: &str, name: &str) -> Result<OwnedValue> {
+fn unit_property(connection: &mut Connection, unit: &str, name: &str) -> Result<OwnedVariant> {
     let reply = connection
         .call(&manager("GetUnit"), &(unit,))
         .with_context(|| format!("Failed to find systemd unit {unit}"))?;

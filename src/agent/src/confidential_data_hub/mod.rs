@@ -10,7 +10,7 @@
 
 use crate::AGENT_CONFIG;
 use anyhow::{bail, Context, Result};
-use derivative::Derivative;
+use derive_where::derive_where;
 use protocols::{
     confidential_data_hub,
     confidential_data_hub::GetResourceRequest,
@@ -39,16 +39,16 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "cdh"))
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug)]
+#[derive(Clone)]
+#[derive_where(Debug)]
 pub struct CDHClient {
-    #[derivative(Debug = "ignore")]
+    #[derive_where(skip(Debug))]
     sealed_secret_client: SealedSecretServiceClient,
-    #[derivative(Debug = "ignore")]
+    #[derive_where(skip(Debug))]
     secure_mount_client: SecureMountServiceClient,
-    #[derivative(Debug = "ignore")]
+    #[derive_where(skip(Debug))]
     get_resource_client: GetResourceServiceClient,
-    #[derivative(Debug = "ignore")]
+    #[derive_where(skip(Debug))]
     image_pull_client: ImagePullServiceClient,
 }
 
