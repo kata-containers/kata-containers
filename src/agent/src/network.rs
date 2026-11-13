@@ -27,6 +27,10 @@ impl Network {
     pub fn set_dns(&mut self, dns: String) {
         self.dns.push(dns);
     }
+
+    pub fn reset_dns(&mut self, dns: Vec<String>) {
+        self.dns = dns;
+    }
 }
 
 pub fn setup_guest_dns(logger: Logger, dns_list: &[String]) -> Result<()> {
@@ -78,6 +82,15 @@ fn do_setup_guest_dns(logger: Logger, dns_list: &[String], src: &str, dst: &str)
         .map_err(|err| anyhow!(err).context("failed to setup guest DNS"))?;
 
     Ok(())
+}
+
+pub fn update_guest_dns(dns_list: &[String]) -> Result<()> {
+    let content = dns_list
+        .iter()
+        .map(|entry| entry.trim())
+        .collect::<Vec<&str>>()
+        .join("\n");
+    fs::write(KATA_GUEST_SANDBOX_DNS_FILE, content).map_err(Into::into)
 }
 
 #[cfg(test)]

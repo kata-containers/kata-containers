@@ -38,7 +38,10 @@ pub enum Stream {
     // hvsock://<path>:<port>. Firecracker/Dragonball implements the virtio-vsock device
     // model, and mediates communication between AF_UNIX sockets (on the host end)
     // and AF_VSOCK sockets (on the guest end).
-    Unix(UnixStream),
+    Unix {
+        stream: UnixStream,
+        hvsock_local_port: Option<u32>,
+    },
     // vsock://<cid>:<port>
     Vsock(UnixStream),
 }
@@ -51,18 +54,29 @@ impl Stream {
     ) -> Poll<std::io::Result<()>> {
         // Safety: `UnixStream::read` correctly handles reads into uninitialized memory
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => Pin::new(stream).poll_read(cx, buf),
+            Stream::Unix { stream, .. } | Stream::Vsock(stream) => {
+                Pin::new(stream).poll_read(cx, buf)
+            }
         }
     }
     pub(crate) fn raw_fd(&self) -> RawFd {
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => stream.as_raw_fd(),
+            Stream::Unix { stream, .. } | Stream::Vsock(stream) => stream.as_raw_fd(),
+        }
+    }
+
+    pub(crate) fn hvsock_local_port(&self) -> Option<u32> {
+        match self {
+            Stream::Unix {
+                hvsock_local_port, ..
+            } => *hvsock_local_port,
+            Stream::Vsock(_) => None,
         }
     }
 
     pub(crate) fn into_ttrpc_socket(self) -> TtrpcSocket {
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => TtrpcSocket::from(stream),
+            Stream::Unix { stream, .. } | Stream::Vsock(stream) => TtrpcSocket::from(stream),
         }
     }
 }
@@ -84,10 +98,15 @@ impl AsyncRead for Stream {
 pub struct ConnectConfig {
     dial_timeout_ms: u64,
     reconnect_timeout_ms: u64,
+    handshake_replay: HandshakeReplayPolicy,
 }
 
 impl ConnectConfig {
-    pub fn new(dial_timeout_ms: u64, reconnect_timeout_ms: u64) -> Self {
+    pub(crate) fn new(
+        dial_timeout_ms: u64,
+        reconnect_timeout_ms: u64,
+        handshake_replay: HandshakeReplayPolicy,
+    ) -> Self {
         // With static sandbox resource sizing enabled by default, tiny CPU
         // allocations can make early guest boot/agent startup exceed 3s on
         // loaded nodes. Keep a reasonable lower bound to avoid premature
@@ -96,8 +115,15 @@ impl ConnectConfig {
         Self {
             dial_timeout_ms,
             reconnect_timeout_ms: reconnect_timeout_ms.max(MIN_RECONNECT_TIMEOUT_MS),
+            handshake_replay,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HandshakeReplayPolicy {
+    PeerClosedBeforeResponse,
+    Never,
 }
 
 #[derive(Debug, PartialEq)]
@@ -110,6 +136,15 @@ enum SockType {
 #[async_trait]
 pub trait Sock: Send + Sync + std::fmt::Debug {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream>;
+
+    async fn wait_guest_rst(
+        &self,
+        _local_port: u32,
+        _peer_port: u32,
+        _deadline: tokio::time::Instant,
+    ) -> Result<()> {
+        Err(anyhow!("guest RST acknowledgement is unsupported"))
+    }
 }
 
 // Supported sock address formats are:
