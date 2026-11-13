@@ -1,0 +1,74 @@
+name: ok-to-test gate
+
+# Decides whether the 'ok-to-test' label on a PR can be trusted for the event
+# being processed. Sample usage:
+#
+#   gate:
+#     uses: ./.github/workflows/ok-to-test-gate.yaml
+#
+#   your-workflow:
+#     needs: gate
+#     if: ${{ needs.gate.outputs.approved == 'true' }}
+#
+# The label is per-PR metadata, so it survives pushes of new code. The label
+# list in the event payload is also a snapshot taken before
+# label-on-synchronize.yaml can remove a stale label, so 'if' conditions on
+# the label alone cannot be relied on. This gate treats the label as valid
+# only when:
+#
+#   - the 'ok-to-test' label itself was just applied (only users with triage
+#     access or above can do that), or
+#   - the user who triggered the event (e.g. pushed the new commits) has
+#     write access to this repository.
+
+on:
+  workflow_call:
+    outputs:
+      approved:
+        value: ${{ jobs.gate.outputs.approved }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ok-to-test-gate
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  gate:
+    name: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+    steps:
+      - id: check
+        env:
+          ACTION: ${{ github.event.action }}
+          GH_TOKEN: ${{ github.token }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
+          LABEL_ADDED: ${{ github.event.label.name }}
+          REPO: ${{ github.repository }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+
+          approved=false
+          if [[ "${HAS_LABEL}" != "true" ]]; then
+            echo "No 'ok-to-test' label - not approved."
+          elif [[ "${ACTION}" == "labeled" && "${LABEL_ADDED}" == "ok-to-test" ]]; then
+            echo "'ok-to-test' was applied by '${SENDER}' - approved."
+            approved=true
+          else
+            # Fail closed: if the lookup fails, treat the sender as untrusted.
+            permission=$(gh api "repos/${REPO}/collaborators/${SENDER}/permission" \
+              --jq '.permission' 2>/dev/null || echo "unknown")
+            if [[ "${permission}" == "admin" || "${permission}" == "write" ]]; then
+              echo "'${SENDER}' has '${permission}' access - approved."
+              approved=true
+            else
+              echo "'${SENDER}' has '${permission}' access - not approved."
+            fi
+          fi
+
+          echo "approved=${approved}" >> "${GITHUB_OUTPUT}"
+        shell: bash

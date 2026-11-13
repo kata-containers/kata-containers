@@ -1,10 +1,10 @@
 name: Remove ok-to-test label on synchronize
 
 # When a PR receives new commits (synchronize), remove the 'ok-to-test' label
-# unless the PR author is an org member or owner. This prevents a contributor
-# from receiving the label on a benign commit and then force-pushing arbitrary
-# code that runs in the privileged CI context (pull_request_target) with access
-# to repository secrets.
+# unless the user who pushed them has write access to this repository. This
+# prevents a contributor from receiving the label on a benign commit and then
+# force-pushing arbitrary code that runs in the privileged CI context
+# (pull_request_target) with access to repository secrets.
 
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] See #11332.
@@ -25,23 +25,34 @@ jobs:
     permissions:
       pull-requests: write # needed to remove the ok-to-test label
     steps:
-      - name: Remove ok-to-test label if author is not an org member
+      - name: Remove ok-to-test label if the pusher lacks write access
         env:
-          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PUSHER: ${{ github.event.sender.login }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [[ "${AUTHOR_ASSOCIATION}" == "MEMBER" || "${AUTHOR_ASSOCIATION}" == "OWNER" ]]; then
-            echo "Author is an org ${AUTHOR_ASSOCIATION} - label retained."
-            exit 0
-          fi
 
           has_label=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json labels \
             --jq 'any(.labels[]; .name == "ok-to-test")')
-          if [[ "${has_label}" == "true" ]]; then
-            echo "Author association is '${AUTHOR_ASSOCIATION}' - removing 'ok-to-test' label."
-            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "ok-to-test"
+          if [[ "${has_label}" != "true" ]]; then
+            echo "No 'ok-to-test' label on PR ${PR_NUMBER} - nothing to do."
+            exit 0
           fi
+
+          # The collaborator permission API reflects repository access rather
+          # than org membership, so it is not affected by members who keep
+          # their org membership private (which author_association is).
+          # Fail closed: if the lookup fails, treat the pusher as untrusted.
+          permission=$(gh api "repos/${REPO}/collaborators/${PUSHER}/permission" \
+            --jq '.permission' 2>/dev/null || echo "unknown")
+
+          if [[ "${permission}" == "admin" || "${permission}" == "write" ]]; then
+            echo "Pusher '${PUSHER}' has '${permission}' access - label retained."
+            exit 0
+          fi
+
+          echo "Pusher '${PUSHER}' has '${permission}' access - removing 'ok-to-test' label."
+          gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "ok-to-test"
         shell: bash
