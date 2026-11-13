@@ -287,9 +287,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Read Helm version
+        id: helm-version
+        env:
+          INSTALL_IN_GOPATH: "false"
+        run: |
+          ./ci/install_yq.sh
+          version=$(yq -e '.externals.helm.version' versions.yaml)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Install helm
         uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
         id: install
+        with:
+          version: ${{ steps.helm-version.outputs.version }}
 
       - name: Login to the OCI registries
         env:
