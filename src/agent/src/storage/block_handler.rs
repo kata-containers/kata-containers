@@ -273,25 +273,23 @@ impl StorageHandler for VirtioBlkPciHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
-        let dev_num: String;
-
         // If hot-plugged, get the device node path based on the PCI path
         // otherwise use the virt path provided in Storage Source
-        if storage.source.starts_with("/dev") {
+        let dev_num: String = if storage.source.starts_with("/dev") {
             let metadata = fs::metadata(&storage.source)
                 .context(format!("get metadata on file {:?}", storage.source))?;
             let mode = metadata.permissions().mode();
             if mode & libc::S_IFBLK == 0 {
                 return Err(anyhow!("Invalid device {}", storage.source));
             }
-            dev_num = get_device_number(&storage.source, Some(&metadata))?;
+            get_device_number(&storage.source, Some(&metadata))?
         } else {
             let (root_complex, pcipath) = pcipath_from_dev_tree_path(&storage.source)?;
             let dev_path =
                 get_virtio_blk_pci_device_name(ctx.sandbox, root_complex, &pcipath).await?;
             storage.source = dev_path;
-            dev_num = get_device_number(&storage.source, None)?;
-        }
+            get_device_number(&storage.source, None)?
+        };
 
         handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
