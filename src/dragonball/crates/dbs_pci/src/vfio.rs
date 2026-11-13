@@ -989,7 +989,6 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
             let mut lsb_size: u32 = 0xffff_ffff;
             let mut msb_size = 0;
             let mut region_size: u64;
-            let bar_addr: GuestAddress;
 
             // Read the BAR size (Starts by all 1s to the BAR)
             let bar_offset = if bar_id == VFIO_PCI_ROM_REGION_INDEX {
@@ -1037,7 +1036,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
             let mut mmap_offset: u64 = 0;
             let mut mmap_size: u64 = 0;
 
-            if io_bar {
+            let bar_addr: GuestAddress = if io_bar {
                 // IO BAR
                 region_type = PciBarRegionType::IoRegion;
                 // Clear first bit.
@@ -1058,7 +1057,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                     .map_err(VfioPciError::VmPciError)?;
                 // unwrap is safe here because we have just allocate the pio address above.
                 let base = resources.get_pio_address_ranges().pop().unwrap();
-                bar_addr = GuestAddress(base.0 as u64);
+                GuestAddress(base.0 as u64)
             } else {
                 if is_64bit_bar {
                     // 64 bits Memory BAR
@@ -1137,8 +1136,8 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                     .map_err(VfioPciError::VmPciError)?;
                 // unwrap is safe because we have just allocated mmio address resource.
                 let base = resources.get_mmio_address_ranges().pop().unwrap();
-                bar_addr = GuestAddress(base.0);
-            }
+                GuestAddress(base.0)
+            };
 
             log::info!(
                 "{} region info[{},{},0x{:x},0x{:x},{},{}]",
