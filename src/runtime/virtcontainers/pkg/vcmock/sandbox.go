@@ -72,6 +72,9 @@ func (s *Sandbox) Release(ctx context.Context) error {
 
 // Start implements the VCSandbox function of the same name.
 func (s *Sandbox) Start(ctx context.Context) error {
+	if s.StartFunc != nil {
+		return s.StartFunc()
+	}
 	return nil
 }
 
@@ -110,11 +113,17 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, contID string) (vc.VCCont
 
 // StartContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StartContainer(ctx context.Context, contID string) (vc.VCContainer, error) {
+	if s.StartContainerFunc != nil {
+		return s.StartContainerFunc(contID)
+	}
 	return &Container{}, nil
 }
 
 // StopContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StopContainer(ctx context.Context, contID string, force bool) (vc.VCContainer, error) {
+	if s.StopContainerFunc != nil {
+		return s.StopContainerFunc(contID, force)
+	}
 	return &Container{}, nil
 }
 
@@ -153,6 +162,9 @@ func (s *Sandbox) Status() vc.SandboxStatus {
 
 // EnterContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) EnterContainer(ctx context.Context, containerID string, cmd types.Cmd) (vc.VCContainer, *vc.Process, error) {
+	if s.EnterContainerFunc != nil {
+		return s.EnterContainerFunc(containerID, cmd)
+	}
 	return &Container{}, &vc.Process{}, nil
 }
 
@@ -173,6 +185,9 @@ func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string
 
 // SignalProcess implements the VCSandbox function of the same name.
 func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error {
+	if s.SignalProcessFunc != nil {
+		return s.SignalProcessFunc(containerID, processID, signal, all)
+	}
 	return nil
 }
 
@@ -183,6 +198,9 @@ func (s *Sandbox) WinsizeProcess(ctx context.Context, containerID, processID str
 
 // IOStream implements the VCSandbox function of the same name.
 func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
+	if s.IOStreamFunc != nil {
+		return s.IOStreamFunc(containerID, processID)
+	}
 	return nil, nil, nil, nil
 }
 
