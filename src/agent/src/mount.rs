@@ -336,7 +336,6 @@ mod tests {
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
     use tempfile::tempdir;
     use test_utils::TestUserType;
     use test_utils::{
@@ -476,31 +475,25 @@ mod tests {
 
             skip_loop_by_user!(msg, d.test_user);
 
-            let src: PathBuf;
-            let dest: PathBuf;
-
-            let src_filename: String;
-            let dest_filename: String;
-
-            if !d.src.is_empty() {
-                src = dir.path().join(d.src);
-                src_filename = src
+            let src_filename: String = if !d.src.is_empty() {
+                dir.path()
+                    .join(d.src)
                     .to_str()
                     .expect("failed to convert src to filename")
-                    .to_string();
+                    .to_string()
             } else {
-                src_filename = "".to_owned();
-            }
+                "".to_owned()
+            };
 
-            if !d.dest.is_empty() {
-                dest = dir.path().join(d.dest);
-                dest_filename = dest
+            let dest_filename: String = if !d.dest.is_empty() {
+                dir.path()
+                    .join(d.dest)
                     .to_str()
                     .expect("failed to convert dest to filename")
-                    .to_string();
+                    .to_string()
             } else {
-                dest_filename = "".to_owned();
-            }
+                "".to_owned()
+            };
 
             // Create the mount directories
             for d in [src_filename.clone(), dest_filename.clone()].iter() {

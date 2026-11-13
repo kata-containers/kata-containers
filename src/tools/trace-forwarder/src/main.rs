@@ -38,7 +38,7 @@ use crate::utils::{
 use server::VsockType;
 
 fn announce(logger: &Logger, version: &str, dump_only: bool) {
-    let commit = env::var("VERSION_COMMIT").map_or(String::new(), |s| s);
+    let commit = env::var("VERSION_COMMIT").unwrap_or_default();
 
     info!(logger, "announce";
     "commit-version" => commit.as_str(),

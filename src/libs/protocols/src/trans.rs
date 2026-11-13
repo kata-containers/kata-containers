@@ -144,8 +144,8 @@ impl From<oci::LinuxDeviceCgroup> for grpc::LinuxDeviceCgroup {
         grpc::LinuxDeviceCgroup {
             Allow: from.allow(),
             Type: from.typ().map_or(String::new(), |x| x.as_str().to_string()),
-            Major: from.major().map_or(0, |t| t),
-            Minor: from.minor().map_or(0, |t| t),
+            Major: from.major().unwrap_or(0),
+            Minor: from.minor().unwrap_or(0),
             Access: from.access().as_ref().map_or(String::new(), |x| x.clone()),
             ..Default::default()
         }
@@ -155,12 +155,12 @@ impl From<oci::LinuxDeviceCgroup> for grpc::LinuxDeviceCgroup {
 impl From<oci::LinuxMemory> for grpc::LinuxMemory {
     fn from(from: oci::LinuxMemory) -> Self {
         grpc::LinuxMemory {
-            Limit: from.limit().map_or(0, |t| t),
-            Reservation: from.reservation().map_or(0, |t| t),
-            Swap: from.swap().map_or(0, |t| t),
-            Kernel: from.kernel().map_or(0, |t| t),
-            KernelTCP: from.kernel_tcp().map_or(0, |t| t),
-            Swappiness: from.swappiness().map_or(0, |t| t),
+            Limit: from.limit().unwrap_or(0),
+            Reservation: from.reservation().unwrap_or(0),
+            Swap: from.swap().unwrap_or(0),
+            Kernel: from.kernel().unwrap_or(0),
+            KernelTCP: from.kernel_tcp().unwrap_or(0),
+            Swappiness: from.swappiness().unwrap_or(0),
             DisableOOMKiller: from.disable_oom_killer().is_some_and(|t| t),
             ..Default::default()
         }
@@ -170,11 +170,11 @@ impl From<oci::LinuxMemory> for grpc::LinuxMemory {
 impl From<oci::LinuxCpu> for grpc::LinuxCPU {
     fn from(from: oci::LinuxCpu) -> Self {
         grpc::LinuxCPU {
-            Shares: from.shares().map_or(0, |t| t),
-            Quota: from.quota().map_or(0, |t| t),
-            Period: from.period().map_or(0, |t| t),
-            RealtimeRuntime: from.realtime_runtime().map_or(0, |t| t),
-            RealtimePeriod: from.realtime_period().map_or(0, |t| t),
+            Shares: from.shares().unwrap_or(0),
+            Quota: from.quota().unwrap_or(0),
+            Period: from.period().unwrap_or(0),
+            RealtimeRuntime: from.realtime_runtime().unwrap_or(0),
+            RealtimePeriod: from.realtime_period().unwrap_or(0),
             Cpus: from.cpus().as_ref().map_or(String::new(), |x| x.clone()),
             Mems: from.mems().as_ref().map_or(String::new(), |m| m.clone()),
             ..Default::default()
@@ -252,7 +252,7 @@ impl From<oci::LinuxInterfacePriority> for grpc::LinuxInterfacePriority {
 impl From<oci::LinuxNetwork> for grpc::LinuxNetwork {
     fn from(from: oci::LinuxNetwork) -> Self {
         grpc::LinuxNetwork {
-            ClassID: from.class_id().map_or(0, |t| t),
+            ClassID: from.class_id().unwrap_or(0),
             Priorities: from_option_vec(from.priorities().clone()),
             ..Default::default()
         }
@@ -363,8 +363,8 @@ impl From<oci::LinuxDevice> for grpc::LinuxDevice {
             // when compiling on Linux platforms. We have to disable it.
             #[allow(clippy::useless_conversion)]
             FileMode: from.file_mode().map_or(0, |v| v.into()),
-            UID: from.uid().map_or(0, |v| v),
-            GID: from.gid().map_or(0, |v| v),
+            UID: from.uid().unwrap_or(0),
+            GID: from.gid().unwrap_or(0),
             ..Default::default()
         }
     }
@@ -389,7 +389,7 @@ impl From<oci::LinuxSyscall> for grpc::LinuxSyscall {
             Action: from.action().to_string(),
             Args: from_option_vec(from.args().clone()),
             ErrnoRet: Some(grpc::linux_syscall::ErrnoRet::Errnoret(
-                from.errno_ret().map_or(0, |e| e),
+                from.errno_ret().unwrap_or(0),
             )),
             ..Default::default()
         }
