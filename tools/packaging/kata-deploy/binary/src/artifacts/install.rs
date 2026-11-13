@@ -470,6 +470,20 @@ fn install_custom_runtime_configs(config: &Config, distribution: Option<&str>) -
             )?;
         }
 
+        // Debug/devkit variants retain the base shim's user settings, with
+        // handler-specific overrides taking precedence below.
+        let base_drop_in = runtime.debug_variant.then(|| {
+            format!(
+                "{}/config.d/50-user-overrides.toml",
+                utils::get_kata_containers_config_path(&runtime.base_config, &config.dest_dir)
+            )
+        });
+        reconcile_optional_drop_in(
+            base_drop_in.as_deref(),
+            &format!("{config_d_dir}/40-base-overrides.toml"),
+            &format!("base shim drop-in for {}", runtime.handler),
+        )?;
+
         // Copy user-provided drop-in file if provided (at 50-overrides.toml).
         // If it was removed from values in a later upgrade/migration, remove stale file.
         let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
@@ -2672,6 +2686,77 @@ pub(crate) mod tests {
 
         fs::remove_dir_all(&runtime_dir).unwrap();
         assert!(!runtime_dir.exists());
+    }
+
+    #[rstest]
+    #[case::go_debug("fc", true)]
+    #[case::rust_debug("rs-fc", true)]
+    #[case::go_custom("fc", false)]
+    #[case::rust_custom("rs-fc", false)]
+    fn test_custom_runtime_inherits_base_overrides_only_for_debug_variants(
+        #[case] shim: &str,
+        #[case] debug_variant: bool,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let mut config = test_config(shim, tmpdir.path().to_str().unwrap());
+        let base_dir = utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+        fs::create_dir_all(&base_dir).unwrap();
+        fs::write(
+            Path::new(&base_dir).join(format!("configuration-{shim}.toml")),
+            "[hypervisor.firecracker]\nkernel_params = \"\"\n[runtime]\nemptydir_mode = \"shared-fs\"\n",
+        )
+        .unwrap();
+        let base_config_d = Path::new(&utils::get_kata_containers_config_path(
+            shim,
+            &config.dest_dir,
+        ))
+        .join("config.d");
+        fs::create_dir_all(&base_config_d).unwrap();
+        let base_override = base_config_d.join("50-user-overrides.toml");
+        let content = "[runtime]\nemptydir_mode = \"block-plain\"\n";
+        fs::write(&base_override, content).unwrap();
+
+        let handler = format!("kata-{shim}-custom");
+        let custom_override = tmpdir.path().join("custom.toml");
+        let custom_content = "[runtime]\nenable_tracing = true\n";
+        fs::write(&custom_override, custom_content).unwrap();
+        config.custom_runtimes.push(crate::config::CustomRuntime {
+            handler: handler.clone(),
+            base_config: shim.to_string(),
+            drop_in_file: Some(custom_override.to_str().unwrap().to_string()),
+            containerd_snapshotter: None,
+            crio_pull_type: None,
+            debug_variant,
+            devkit: false,
+        });
+        let config_d = tmpdir.path().join(format!(
+            "share/defaults/kata-containers/custom-runtimes/{handler}/config.d"
+        ));
+        let inherited = config_d.join("40-base-overrides.toml");
+
+        install_custom_runtime_configs(&config, None).unwrap();
+
+        assert_eq!(inherited.exists(), debug_variant);
+        if debug_variant {
+            assert_eq!(fs::read_to_string(&inherited).unwrap(), content);
+            assert!(config_d.join("20-debug.toml").exists());
+        }
+        assert_eq!(
+            fs::read_to_string(config_d.join("50-overrides.toml")).unwrap(),
+            custom_content
+        );
+
+        // Reinstalling must refresh the inherited settings, then remove them
+        // when the base profile no longer supplies an override.
+        let updated = format!("{content}enable_vcpus_pinning = true\n");
+        fs::write(&base_override, &updated).unwrap();
+        install_custom_runtime_configs(&config, None).unwrap();
+        if debug_variant {
+            assert_eq!(fs::read_to_string(&inherited).unwrap(), updated);
+        }
+        fs::remove_file(base_override).unwrap();
+        install_custom_runtime_configs(&config, None).unwrap();
+        assert!(!inherited.exists());
     }
 
     #[test]
