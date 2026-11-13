@@ -9,10 +9,13 @@ use std::{
     convert::TryFrom,
     fs::File,
     io::Read,
+    mem::ManuallyDrop,
+    ops::{Deref, DerefMut},
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    thread,
     time::Duration,
 };
 
@@ -108,10 +111,48 @@ impl MonitorConfig {
     }
 }
 
+/// Closing an inotify fd waits for the kernel to destroy its watches, which can
+/// block uninterruptibly for as long as an unmount of the watched path stalls.
+/// The fd is therefore closed on a detached thread, never on a Tokio worker nor
+/// on Tokio's blocking pool, which the runtime waits for when it is dropped.
+struct InotifyFd(ManuallyDrop<Inotify>);
+
+impl InotifyFd {
+    fn new(inotify: Inotify) -> Self {
+        Self(ManuallyDrop::new(inotify))
+    }
+}
+
+impl Deref for InotifyFd {
+    type Target = Inotify;
+
+    fn deref(&self) -> &Inotify {
+        &self.0
+    }
+}
+
+impl DerefMut for InotifyFd {
+    fn deref_mut(&mut self) -> &mut Inotify {
+        &mut self.0
+    }
+}
+
+impl Drop for InotifyFd {
+    fn drop(&mut self) {
+        // SAFETY: self.0 is not used again after being taken here.
+        let inotify = unsafe { ManuallyDrop::take(&mut self.0) };
+        // If no thread can be spawned, the closure, and with it the fd, is
+        // dropped here instead.
+        let _ = thread::Builder::new()
+            .name("inotify-close".to_string())
+            .spawn(move || drop(inotify));
+    }
+}
+
 #[derive(Clone)]
 struct FsWatcher {
     config: MonitorConfig,
-    inotify: Arc<Mutex<Inotify>>,
+    inotify: Arc<Mutex<InotifyFd>>,
     watch_dirs: Arc<Mutex<HashSet<PathBuf>>>,
     pending_events: Arc<Mutex<HashSet<PathBuf>>>,
     need_sync: Arc<Mutex<bool>>,
@@ -123,7 +164,7 @@ impl FsWatcher {
         let mon_cfg = MonitorConfig::new(source_path);
         let mut watcher = Self {
             config: mon_cfg,
-            inotify: Arc::new(Mutex::new(inotify)),
+            inotify: Arc::new(Mutex::new(InotifyFd::new(inotify))),
             pending_events: Arc::new(Mutex::new(HashSet::new())),
             watch_dirs: Arc::new(Mutex::new(HashSet::new())),
             need_sync: Arc::new(Mutex::new(false)),
