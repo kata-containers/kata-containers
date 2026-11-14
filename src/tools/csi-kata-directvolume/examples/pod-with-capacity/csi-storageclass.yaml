@@ -1,0 +1,15 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-kata-directvolume-capacity-sc
+parameters:
+  katacontainers.direct.volume/volumetype: directvol
+  katacontainers.direct.volume/fstype: ext4
+  # Reserve the volumes from the "standard" pool of csi-capacity-configmap.yaml.
+  katacontainers.direct.volume/capacity-pool: standard
+provisioner: directvolume.csi.katacontainers.io
+reclaimPolicy: Delete
+# The scheduler only takes storage capacity into account for volumes which
+# are bound when the first pod using them is scheduled.
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false

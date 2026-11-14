@@ -26,9 +26,13 @@ import (
 const (
 	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
 	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
-	DirectVolumeTypeName           = "directvol"
-	SpdkVolumeTypeName             = "spdkvol"
-	IsDirectVolume                 = "is_directvolume"
+	// KataContainersDirectCapacityPool is the StorageClass parameter that
+	// selects the capacity pool a volume is reserved from. The driver also
+	// stores it in the volume context.
+	KataContainersDirectCapacityPool = "katacontainers.direct.volume/capacity-pool"
+	DirectVolumeTypeName             = "directvol"
+	SpdkVolumeTypeName               = "spdkvol"
+	IsDirectVolume                   = "is_directvolume"
 )
 
 const (
@@ -176,6 +180,13 @@ func GetStoragePath(storagePath, volID string) (string, error) {
 	return upperPath, nil
 }
 
+// DirectBlockDevicePath returns the path of the raw disk file which backs a
+// directvol volume, for example
+// storagePath/62a268d9-893a-11ee-97cb-d89d6725e7b0/directvol-rawdisk.2048M
+func DirectBlockDevicePath(storagePath, volID string, capacityInBytes int64) string {
+	return filepath.Join(storagePath, volID, fmt.Sprintf("directvol-rawdisk.%dM", capacityInBytes/MiB))
+}
+
 // createVolume create the directory for the direct volume.
 // It returns the volume path or err if one occurs.
 func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*string, error) {
@@ -199,7 +210,7 @@ func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*st
 	}
 
 	// storagePath/62a268d9-893a-11ee-97cb-d89d6725e7b0/directvol-rawdisk.2048M
-	devicePath := filepath.Join(*upperDir, fmt.Sprintf("directvol-rawdisk.%s", diskSize))
+	devicePath := DirectBlockDevicePath(storagePath, volID, capacityInBytes)
 	if _, err = os.Stat(devicePath); !os.IsNotExist(err) {
 		klog.Warning("direct block device exists, just skip creating it.")
 		return &devicePath, nil

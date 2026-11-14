@@ -68,31 +68,9 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	volumeID := req.GetVolumeId()
 	attrib := req.GetVolumeContext()
 
-	devicePath := dv.config.VolumeDevices[volumeID]
-
-	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
-		if devicePath == "" {
-			if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
-				if dp := vol.Metadata["devicePath"]; dp != "" {
-					devicePath = dp
-					dv.config.VolumeDevices[volumeID] = dp
-					klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
-				} else {
-					return nil, status.Errorf(codes.NotFound,
-						"[SPDK] devicePath not found in state for volume %s", volumeID)
-				}
-			} else {
-				return nil, status.Errorf(codes.NotFound,
-					"[SPDK] volume %s not found in state: %v", volumeID, err)
-			}
-		}
-
-		if _, err := os.Stat(devicePath); err != nil {
-			return nil, status.Errorf(codes.NotFound,
-				"[SPDK] vhost socket missing after driver restart: %s (err=%v)", devicePath, err)
-		}
-
-		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
+	devicePath, err := dv.publishDevicePath(volumeID, req.GetVolumeContext())
+	if err != nil {
+		return nil, err
 	}
 
 	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
@@ -136,22 +114,15 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 
 	volInStat, err := dv.state.GetVolumeByID(volumeID)
 	if err != nil {
-		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
-		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
-		if err != nil {
+		if volInStat, err = dv.adoptVolume(volumeID, req.GetVolumeContext()); err != nil {
 			return nil, err
 		}
-		vol.NodeID = dv.config.NodeID
-		vol.Published.Add(targetPath)
-		klog.Infof("create volume %v successfully", vol)
-
-		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	volInStat.NodeID = dv.config.NodeID
-	volInStat.Published.Add(targetPath)
+	if !volInStat.Published.Has(targetPath) {
+		volInStat.Published.Add(targetPath)
+	}
 	if err := dv.state.UpdateVolume(volInStat); err != nil {
 		return nil, err
 	}
@@ -159,6 +130,59 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	klog.Infof("directvolume: volume %s has been published.", targetPath)
 
 	return &csi.NodePublishVolumeResponse{}, nil
+}
+
+// publishDevicePath returns the device which backs a staged volume. The
+// device map is not persisted, so it is empty after a driver restart: the
+// device of an SPDK volume is then read from the state, and the raw disk of
+// a directvol volume has a fixed path.
+func (dv *directVolume) publishDevicePath(volumeID string, volumeCtx map[string]string) (string, error) {
+	devicePath := dv.config.VolumeDevices[volumeID]
+
+	if volumeCtx[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
+		if devicePath == "" {
+			if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
+				if dp := vol.Metadata["devicePath"]; dp != "" {
+					devicePath = dp
+					dv.config.VolumeDevices[volumeID] = dp
+					klog.Infof("[SPDK] recovered devicePath from state: %s -> %s", volumeID, dp)
+				} else {
+					return "", status.Errorf(codes.NotFound,
+						"[SPDK] devicePath not found in state for volume %s", volumeID)
+				}
+			} else {
+				return "", status.Errorf(codes.NotFound,
+					"[SPDK] volume %s not found in state: %v", volumeID, err)
+			}
+		}
+
+		if _, err := os.Stat(devicePath); err != nil {
+			return "", status.Errorf(codes.NotFound,
+				"[SPDK] vhost socket missing after driver restart: %s (err=%v)", devicePath, err)
+		}
+
+		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
+		return devicePath, nil
+	}
+
+	if devicePath != "" {
+		return devicePath, nil
+	}
+
+	size, err := strconv.ParseInt(volumeCtx[utils.CapabilityInBytes], 10, 64)
+	if err != nil {
+		return "", status.Errorf(codes.InvalidArgument, "volume %s has an invalid %s %q in its volume context",
+			volumeID, utils.CapabilityInBytes, volumeCtx[utils.CapabilityInBytes])
+	}
+	devicePath = utils.DirectBlockDevicePath(dv.config.StoragePath, volumeID, size)
+	if _, err := os.Stat(devicePath); err != nil {
+		return "", status.Errorf(codes.FailedPrecondition, "raw disk of volume %s is not available, the volume must be staged first: %v",
+			volumeID, err)
+	}
+	dv.config.VolumeDevices[volumeID] = devicePath
+	klog.Infof("recovered device %s of volume %s", devicePath, volumeID)
+
+	return devicePath, nil
 }
 
 func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
@@ -179,8 +203,9 @@ func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUn
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Unmount only if the target path is really a mount point.
-	if isMnt, err := dv.config.safeMounter.IsMountPoint(targetPath); err != nil {
+	// Unmount only if the target path is really a mount point. A missing
+	// target path means that the volume is not published there (any more).
+	if isMnt, err := dv.config.safeMounter.IsMountPoint(targetPath); err != nil && !os.IsNotExist(err) {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("check target path: %v", err))
 	} else if isMnt {
 		// Unmounting the image or filesystem.
@@ -271,8 +296,9 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Unmount only if the target path is really a mount point.
-	if isMnt, err := dv.config.safeMounter.IsMountPoint(stagingTargetPath); err != nil {
+	// Unmount only if the target path is really a mount point. A missing
+	// staging path means that the volume is not staged there (any more).
+	if isMnt, err := dv.config.safeMounter.IsMountPoint(stagingTargetPath); err != nil && !os.IsNotExist(err) {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("check staging target path: %v", err))
 	} else if isMnt {
 		err = dv.config.safeMounter.Unmount(stagingTargetPath)
@@ -464,17 +490,9 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 
 	volInStat, err := dv.state.GetVolumeByID(req.VolumeId)
 	if err != nil {
-		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
-		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
-		if err != nil {
+		if volInStat, err = dv.adoptVolume(volumeID, req.GetVolumeContext()); err != nil {
 			return nil, err
 		}
-		vol.Staged.Add(stagingTargetPath)
-
-		klog.Infof("create volume %v successfully", vol)
-		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
 	if volInStat.Staged.Has(stagingTargetPath) {
