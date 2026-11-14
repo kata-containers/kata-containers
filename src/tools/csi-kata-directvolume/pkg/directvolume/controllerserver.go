@@ -53,6 +53,12 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	volumeCtx := make(map[string]string)
 	volumeCtx[utils.IsDirectVolume] = "False"
 
+	// kind selects the capacity pool that this volume is accounted
+	// against. It must be propagated so that the same pool is used by
+	// CreateVolume capacity accounting, the persisted volume state,
+	// GetCapacity and later NodeStage/NodePublish calls (#14151, gap 3).
+	kind := ""
+
 	for key, value := range req.GetParameters() {
 		switch strings.ToLower(key) {
 		case utils.KataContainersDirectVolumeType:
@@ -62,9 +68,33 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 			}
 		case utils.KataContainersDirectFsType:
 			volumeCtx[utils.KataContainersDirectFsType] = value
+		case utils.StorageKind:
+			kind = value
+			volumeCtx[utils.StorageKind] = value
 		default:
 			continue
 		}
+	}
+
+	// When capacity tracking is configured, the pool must be known:
+	// GetCapacity picks the pool from the same parameter, and an
+	// unknown or missing pool has no meaningful capacity. Missing or
+	// unknown kinds are therefore rejected instead of silently picking
+	// an arbitrary pool: Go map iteration order is random, so a
+	// fallback would make pool accounting nondeterministic and
+	// inconsistent with what GetCapacity advertises, causing
+	// mis-scheduling. The validation is symmetric: with tracking
+	// enabled, "kind" is required; with tracking disabled, passing
+	// "kind" is rejected. Deterministic failure beats lucky success.
+	if dv.config.Capacity.Enabled() {
+		if kind == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "capacity tracking is enabled, storage class parameter %q must select a capacity pool", utils.StorageKind)
+		}
+		if _, ok := dv.config.Capacity[kind]; !ok {
+			return nil, status.Errorf(codes.InvalidArgument, "unknown capacity pool %q, configured pools: %v", kind, dv.config.Capacity.Kinds())
+		}
+	} else if kind != "" {
+		return nil, status.Errorf(codes.InvalidArgument, "capacity tracking is disabled, specifying %q parameter is invalid", utils.StorageKind)
 	}
 
 	contentSrc := req.GetVolumeContentSource()
@@ -103,7 +133,6 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	}
 
 	volumeID := uuid.NewUUID().String()
-	kind := volumeCtx[storageKind]
 
 	var vol *state.Volume
 	var err error
@@ -256,19 +285,59 @@ func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityReq
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Topology and capabilities are irrelevant. We only
-	// distinguish based on the "kind" parameter, if at all.
-	// Without configured capacity, we just have the maximum size.
-	available := dv.config.MaxVolumeSize
-	if dv.config.Capacity.Enabled() {
-		// Empty "kind" will return "zero capacity". There is no fallback
-		// to some arbitrary kind here because in practice it always should
-		// be set.
-		kind := req.GetParameters()[storageKind]
-		quantity := dv.config.Capacity[kind]
-		allocated := dv.sumVolumeSizes(kind)
-		available = quantity.Value() - allocated
+	// Topology and volume capabilities are not part of capacity yet
+	// (#14151, gap 5 is tracked separately); pools are selected only
+	// via the "kind" parameter.
+	if !dv.config.Capacity.Enabled() {
+		// Without configured capacity tracking there is no logical
+		// capacity model to report. MaxVolumeSize is a per-volume
+		// size limit, not the node's available storage, so reporting
+		// it as node capacity (previously the behavior, #14151 gap
+		// 2a) would advertise a phantom 1TiB in the default
+		// deployment. Zero is the honest answer: a scheduler seeing
+		// zero merely skips this node.
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: 0,
+			MaximumVolumeSize: &wrappers.Int64Value{Value: 0},
+			MinimumVolumeSize: &wrappers.Int64Value{Value: 0},
+		}, nil
 	}
+
+	// Resolve the same capacity pool that CreateVolume uses (the
+	// same "kind" parameter) so that both sides of the ledger agree.
+	// An unknown or missing pool has no usable capacity; reporting
+	// zero (rather than an error) is the honest answer for a query:
+	// "at most nothing" is what the node can offer for that pool.
+	kind := req.GetParameters()[storageKind]
+	quantity, ok := dv.config.Capacity[kind]
+	if !ok {
+		return &csi.GetCapacityResponse{
+			AvailableCapacity: 0,
+			MaximumVolumeSize: &wrappers.Int64Value{Value: 0},
+			MinimumVolumeSize: &wrappers.Int64Value{Value: 0},
+		}, nil
+	}
+
+	allocated := dv.sumVolumeSizes(kind)
+	// Clamp negative results to zero (#14151, gap 2b): an
+	// overcommitted pool (reduced configuration, state drift, or
+	// allocation paths that bypass quota enforcement) yields a
+	// negative difference. A negative available_capacity violates
+	// the CSI spec and is harmful downstream: stored into a
+	// CSIStorageCapacity resource.Quantity, negative values can
+	// overflow into a huge positive quantity that the scheduler
+	// reads as abundant capacity, attracting workloads to the node
+	// with the least storage. Zero is the safe answer; the warning
+	// keeps the configured and allocated values visible so the drift
+	// stays diagnosable.
+	available := quantity.Value() - allocated
+	if available < 0 {
+		klog.Warningf("capacity pool %q is overcommitted: configured %d, allocated %d, reporting zero", kind, quantity.Value(), allocated)
+		available = 0
+	}
+
+	// Enforce 0 <= maximum_volume_size <= available_capacity, also
+	// respecting the configured per-volume maximum (MaxVolumeSize).
 	maxVolumeSize := dv.config.MaxVolumeSize
 	if maxVolumeSize > available {
 		maxVolumeSize = available
