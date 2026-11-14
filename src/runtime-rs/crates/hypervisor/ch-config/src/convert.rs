@@ -219,6 +219,8 @@ impl TryFrom<MemoryInfo> for MemoryConfig {
             // Required
             shared: true,
 
+            hugepages: mem.enable_hugepages,
+
             hotplug_size,
 
             prefault: mem.enable_mem_prealloc,
@@ -1283,6 +1285,21 @@ mod tests {
 
             assert!(result.is_ok(), "{}", msg);
             assert_eq!(&result.unwrap(), d.result.as_ref().unwrap(), "{}", msg);
+        }
+    }
+
+    #[test]
+    fn test_memoryinfo_hugepages() {
+        for enable_hugepages in [false, true] {
+            let memory = MemoryConfig::try_from(MemoryInfo {
+                default_memory: 1024,
+                enable_hugepages,
+                ..Default::default()
+            })
+            .unwrap();
+
+            assert_eq!(memory.hugepages, enable_hugepages);
+            assert!(memory.shared);
         }
     }
 
