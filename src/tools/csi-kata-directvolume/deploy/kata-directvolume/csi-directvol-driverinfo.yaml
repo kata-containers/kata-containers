@@ -15,7 +15,12 @@ spec:
   podInfoOnMount: true
   # No attacher needed.
   attachRequired: false
-  storageCapacity: false
+  # The csi-provisioner sidecars of every node publish GetCapacity
+  # results as CSIStorageCapacity objects, and the scheduler then
+  # places pods with unbound WaitForFirstConsumer volumes only on
+  # nodes which have enough capacity (#14151). Requires Kubernetes
+  # >= 1.24, where CSIStorageCapacity v1 graduated.
+  storageCapacity: true
   # Kubernetes may use fsGroup to change permissions and ownership
   # of the volume to match user requested fsGroup in the pod's SecurityPolicy
   fsGroupPolicy: File

@@ -138,14 +138,18 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	if err != nil {
 		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
 		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
+		kind := req.VolumeContext[utils.StorageKind]
+		// The kubelet sent us a volume the state file does not know
+		// about: re-register it. A volume created before the "kind"
+		// parameter existed has no kind in its VolumeContext, so this
+		// must not reject the volume outright — backfillVolume records
+		// legacy volumes untracked instead of failing (#14151, gap 8).
+		vol, err := dv.backfillVolume(volumeID, volName, capInt64, kind)
 		if err != nil {
 			return nil, err
 		}
 		vol.NodeID = dv.config.NodeID
 		vol.Published.Add(targetPath)
-		klog.Infof("create volume %v successfully", vol)
 
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
@@ -466,8 +470,11 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 	if err != nil {
 		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
 		volName := req.VolumeContext[utils.DirectVolumeName]
-		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
+		kind := req.VolumeContext[utils.StorageKind]
+		// Same backfill path as NodePublishVolume: a pre-"kind"
+		// volume has an empty kind in its context and must not be
+		// rejected when capacity tracking is enabled (#14151, gap 8).
+		vol, err := dv.backfillVolume(volumeID, volName, capInt64, kind)
 		if err != nil {
 			return nil, err
 		}

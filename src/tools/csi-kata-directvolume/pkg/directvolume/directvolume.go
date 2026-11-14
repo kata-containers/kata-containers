@@ -30,7 +30,7 @@ import (
 const (
 	// storageKind is the special parameter which requests
 	// storage of a certain kind (only affects capacity checks).
-	storageKind = "kind"
+	storageKind = utils.StorageKind
 )
 
 type directVolume struct {
@@ -38,6 +38,11 @@ type directVolume struct {
 
 	config Config
 	state  state.State
+
+	// storage backs the free-space accounting of checkQuota. It is a
+	// field instead of a global so tests can inject a fake filesystem;
+	// production always uses the real one.
+	storage backingStorage
 }
 
 type Config struct {
@@ -50,6 +55,12 @@ type Config struct {
 	ShowVersion    bool
 	EnableAttach   bool
 	EnableTopology bool
+
+	// CapacityConfigDir names the directory with per-node capacity
+	// pools. main() merges the node's entry into Capacity before the
+	// driver is constructed; the driver itself never re-reads the
+	// directory (startup-merge semantics, #14151).
+	CapacityConfigDir string
 
 	StateDir       string
 	VolumeDevices  map[string]string
@@ -112,8 +123,9 @@ func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
 		return nil, err
 	}
 	dv := &directVolume{
-		config: cfg,
-		state:  s,
+		config:  cfg,
+		state:   s,
+		storage: hostStorage{},
 	}
 
 	return dv, nil
@@ -134,35 +146,108 @@ func (dv *directVolume) getVolumePath(volID string) string {
 	return filepath.Join(dv.config.StateDir, volID)
 }
 
+// checkQuota enforces, in increasing order of hardness, three limits:
+//
+//  1. the per-volume maximum (MaxVolumeSize), regardless of any
+//     tracking configuration;
+//  2. the remaining capacity of the configured pool for the given
+//     kind (only when capacity tracking is enabled);
+//  3. the space the backing filesystem can still provide for volumes
+//     of the given type. Configured pools are a logical limit and
+//     say nothing about the host: without the filesystem check a
+//     pool larger than the disk would let CreateVolume "succeed" and
+//     push the failure to stage time, where it surfaces as a write
+//     error inside the guest.
+//
+// It is shared by both volume-creation paths so that directvol and
+// spdkvol get identical quota enforcement (#14151, gap 4).
+func (dv *directVolume) checkQuota(kind, volumeType string, cap int64) error {
+	// Check for maximum volume size. This applies regardless of
+	// whether capacity tracking is configured.
+	if cap > dv.config.MaxVolumeSize {
+		return status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
+	}
+
+	// The kind was validated by CreateVolume upstream: it is
+	// non-empty and known whenever tracking is enabled. There is
+	// deliberately no fallback to picking "some pool with room":
+	// Go map iteration order is random, so a fallback could charge
+	// the volume to an arbitrary pool, inconsistent with the pool
+	// its StorageClass named and the pool GetCapacity advertises
+	// (#14151, gap 3). Upfront validation with no fallback makes
+	// pool selection deterministic by construction.
+	if !dv.config.Capacity.Enabled() {
+		if kind != "" {
+			return status.Error(codes.InvalidArgument, fmt.Sprintf("capacity tracking disabled, specifying kind %q is invalid", kind))
+		}
+	} else {
+		used := dv.sumVolumeSizes(kind)
+		available := dv.config.Capacity[kind]
+		if used+cap > available.Value() {
+			return status.Errorf(codes.ResourceExhausted, "requested capacity %d exceeds remaining capacity for %q, %s out of %s already used",
+				cap, kind, resource.NewQuantity(used, resource.BinarySI).String(), available.String())
+		}
+	}
+
+	// Filesystem bound. Applies with or without capacity tracking:
+	// even a driver without pools must not promise more than the
+	// backing filesystem holds. When tracking is disabled the volume
+	// is recorded with an empty kind, which sumVolumeSizes does not
+	// attribute to any pool, but its reservation still occupies real
+	// space and therefore still reduces the filesystem remainder
+	// computed in filesystemRemaining.
+	remaining, err := dv.filesystemRemaining(volumeType)
+	if err != nil {
+		return status.Errorf(codes.Internal, "cannot determine space available on the backing filesystem: %v", err)
+	}
+	if cap > remaining {
+		dir := dv.backingDir(volumeType)
+		return status.Errorf(codes.ResourceExhausted,
+			"requested capacity %d exceeds the %d bytes still available on the backing filesystem at %s",
+			cap, remaining, dir)
+	}
+	return nil
+}
+
+// backfillVolume re-creates the state entry for a volume that stage or
+// publish received from the kubelet but that is missing from the state
+// file (e.g. the state file was lost, or the volume was created before
+// the driver had persistent state). It is also the compatibility path
+// for legacy volumes: a volume created before the "kind" parameter
+// existed has no kind in its VolumeContext. Such a volume cannot be
+// attributed to any configured pool (inventing one would pollute pool
+// accounting), so it is recorded with an empty kind, is not counted
+// against any pool's capacity, and only the per-volume maximum is
+// enforced. A warning is logged because pool accounting is incomplete
+// for this volume until it is recreated.
+func (dv *directVolume) backfillVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
+	if dv.config.Capacity.Enabled() && kind == "" {
+		klog.Warningf("backfilling legacy volume %q without a %q capacity pool: not counted against any pool", name, utils.StorageKind)
+		if cap > dv.config.MaxVolumeSize {
+			return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
+		}
+		return dv.storeVolume(volID, name, cap, "")
+	}
+	return dv.createVolume(volID, name, cap, kind)
+}
+
 // createVolume allocates capacity, creates the directory for the direct volume, and
 // adds the volume to the list.
 // It returns the volume path or err if one occurs. That error is suitable as result of a gRPC call.
 func (dv *directVolume) createVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
-	// Check for maximum available capacity
-	if cap > dv.config.MaxVolumeSize {
-		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
-	}
-	if dv.config.Capacity.Enabled() {
-		if kind == "" {
-			// Pick some kind with sufficient remaining capacity.
-			for k, c := range dv.config.Capacity {
-				if dv.sumVolumeSizes(k)+cap <= c.Value() {
-					kind = k
-					break
-				}
-			}
-		}
-
-		used := dv.sumVolumeSizes(kind)
-		available := dv.config.Capacity[kind]
-		if used+cap > available.Value() {
-			return nil, status.Errorf(codes.ResourceExhausted, "requested capacity %d exceeds remaining capacity for %q, %s out of %s already used",
-				cap, kind, resource.NewQuantity(used, resource.BinarySI).String(), available.String())
-		}
-	} else if kind != "" {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("capacity tracking disabled, specifying kind %q is invalid", kind))
+	if err := dv.checkQuota(kind, utils.DirectVolumeTypeName, cap); err != nil {
+		return nil, err
 	}
 
+	return dv.storeVolume(volID, name, cap, kind)
+}
+
+// storeVolume persists the volume state entry and creates its
+// directory. Quota enforcement is the caller's responsibility; the
+// exported creation paths (createVolume, createSPDKVolume) call
+// checkQuota before storing, while backfillVolume stores legacy
+// volumes without charging them to a capacity pool.
+func (dv *directVolume) storeVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
 	path := dv.getVolumePath(volID)
 
 	if err := os.MkdirAll(path, utils.PERM); err != nil {
@@ -218,10 +303,25 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 		return nil, status.Errorf(codes.Internal, "failed to create dir %s: %v", utils.SpdkRawDiskDir, err)
 	}
 
+	// Quota enforcement for the SPDK path: previously this function
+	// enforced neither the per-volume maximum nor the remaining pool
+	// capacity, so the spdkvol path could over-allocate a pool and
+	// drive a later GetCapacity negative (#14151, gap 4). Both
+	// creation paths now share checkQuota for identical enforcement.
+	//
+	// The check runs only when a new backing file is created. When an
+	// existing file is reused (retry of a CreateVolume that already
+	// recorded the volume in state), the reservation is already
+	// accounted for: re-checking would double-count it and could
+	// wrongly reject an idempotent retry.
 	fi, err := os.Stat(backingFile)
 	if err == nil {
 		klog.Infof("[SPDK] reuse existing backing file %s (size=%d)", backingFile, fi.Size())
 	} else if os.IsNotExist(err) {
+		if err := dv.checkQuota(kind, utils.SpdkVolumeTypeName, capacity); err != nil {
+			return nil, err
+		}
+
 		f, err := os.Create(backingFile)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create backing file %s: %v", backingFile, err)

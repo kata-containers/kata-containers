@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: csi-directvolume-gold-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      # 4Gi: more than worker-2's 2Gi pool but within worker-1's 8Gi,
+      # so capacity-aware scheduling places this pod on worker-1.
+      storage: 4Gi
+  storageClassName: csi-kata-directvolume-gold-sc # defined in csi-storageclass.yaml

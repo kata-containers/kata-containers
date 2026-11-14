@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -53,6 +54,21 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	volumeCtx := make(map[string]string)
 	volumeCtx[utils.IsDirectVolume] = "False"
 
+	// kind selects the capacity pool that this volume is accounted
+	// against. It must be propagated so that the same pool is used by
+	// CreateVolume capacity accounting, the persisted volume state,
+	// GetCapacity and later NodeStage/NodePublish calls (#14151, gap 3).
+	//
+	// Parameter names are case-insensitive, so "kind" and "Kind" are
+	// the same parameter and a request may carry both spellings. The
+	// last spelling seen in map iteration would silently win, and map
+	// order is random — the same request could charge one pool and
+	// then another on a retry. Conflicting spellings with different
+	// values are therefore rejected upfront instead of being resolved
+	// nondeterministically.
+	kind := ""
+	var kindKeys []string
+
 	for key, value := range req.GetParameters() {
 		switch strings.ToLower(key) {
 		case utils.KataContainersDirectVolumeType:
@@ -62,9 +78,51 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 			}
 		case utils.KataContainersDirectFsType:
 			volumeCtx[utils.KataContainersDirectFsType] = value
+		case utils.StorageKind:
+			kindKeys = append(kindKeys, key)
+			if kind == "" {
+				kind = value
+			}
 		default:
 			continue
 		}
+	}
+
+	// Deterministic conflict detection: the kindKeys are sorted, so the
+	// error message is stable no matter which map entry iterated first.
+	// Equal values under different spellings are fine — they select the
+	// same pool and the canonical (lowercase) key is the one propagated
+	// in volumeCtx.
+	sort.Strings(kindKeys)
+	for _, key := range kindKeys {
+		if value := req.GetParameters()[key]; value != kind {
+			return nil, status.Errorf(codes.InvalidArgument,
+				"parameters %q select different capacity pools %q and %q", kindKeys, kind, value)
+		}
+	}
+	if kind != "" {
+		volumeCtx[utils.StorageKind] = kind
+	}
+
+	// When capacity tracking is configured, the pool must be known:
+	// GetCapacity picks the pool from the same parameter, and an
+	// unknown or missing pool has no meaningful capacity. Missing or
+	// unknown kinds are therefore rejected instead of silently picking
+	// an arbitrary pool: Go map iteration order is random, so a
+	// fallback would make pool accounting nondeterministic and
+	// inconsistent with what GetCapacity advertises, causing
+	// mis-scheduling. The validation is symmetric: with tracking
+	// enabled, "kind" is required; with tracking disabled, passing
+	// "kind" is rejected. Deterministic failure beats lucky success.
+	if dv.config.Capacity.Enabled() {
+		if kind == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "capacity tracking is enabled, storage class parameter %q must select a capacity pool", utils.StorageKind)
+		}
+		if _, ok := dv.config.Capacity[kind]; !ok {
+			return nil, status.Errorf(codes.InvalidArgument, "unknown capacity pool %q, configured pools: %v", kind, dv.config.Capacity.Kinds())
+		}
+	} else if kind != "" {
+		return nil, status.Errorf(codes.InvalidArgument, "capacity tracking is disabled, specifying %q parameter is invalid", utils.StorageKind)
 	}
 
 	contentSrc := req.GetVolumeContentSource()
@@ -103,7 +161,6 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	}
 
 	volumeID := uuid.NewUUID().String()
-	kind := volumeCtx[storageKind]
 
 	var vol *state.Volume
 	var err error
@@ -252,23 +309,109 @@ func (dv *directVolume) ValidateVolumeCapabilities(ctx context.Context, req *csi
 	}, nil
 }
 
+// zeroCapacity is the response for a query this node cannot answer
+// with usable capacity: a topology it does not serve, an unknown pool,
+// or capacity tracking that is not configured. Zero is the honest
+// answer for a capacity query (rather than an error): a scheduler
+// seeing zero merely skips this node (#14151).
+func zeroCapacity() *csi.GetCapacityResponse {
+	return &csi.GetCapacityResponse{
+		AvailableCapacity: 0,
+		MaximumVolumeSize: &wrappers.Int64Value{Value: 0},
+		MinimumVolumeSize: &wrappers.Int64Value{Value: 0},
+	}
+}
+
+// localTopologyMatch reports whether a GetCapacity request's
+// accessible topology is satisfiable by this node (#14151, gap 5).
+//
+// The rules, mirroring how the driver publishes its own topology
+// (NodeGetInfo, CreateVolume):
+//
+//   - No topology requested: satisfiable — the caller does not care
+//     where the volume is placed.
+//   - Topology requested while the driver does not publish topology
+//     (EnableTopology off): the request disagrees with what the node
+//     advertises, so it cannot be satisfied here. Returning the
+//     node's capacity for a topology it never announced would let a
+//     central caller provision on the wrong node.
+//   - Topology requested and enabled: satisfiable only when the
+//     segment for the driver's own key selects this node. The driver
+//     publishes exactly one segment (topology.directvolume.csi/node),
+//     so only that key can match; a request carrying other keys
+//     alongside is fine as long as the driver's key selects this
+//     node, because the external-provisioner forwards the full set
+//     of topology segments it picked from the chosen node.
+func (dv *directVolume) localTopologyMatch(segments map[string]string) bool {
+	if len(segments) == 0 {
+		return true
+	}
+	if !dv.config.EnableTopology {
+		return false
+	}
+	return segments[TopologyKeyNode] == dv.config.NodeID
+}
+
 func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+	// Now that the capability is advertised (see
+	// getControllerServiceCapabilities), the RPC validates it like
+	// the other controller RPCs do.
+	if err := dv.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_GET_CAPACITY); err != nil {
+		return nil, err
+	}
+
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
-	// Topology and capabilities are irrelevant. We only
-	// distinguish based on the "kind" parameter, if at all.
-	// Without configured capacity, we just have the maximum size.
-	available := dv.config.MaxVolumeSize
-	if dv.config.Capacity.Enabled() {
-		// Empty "kind" will return "zero capacity". There is no fallback
-		// to some arbitrary kind here because in practice it always should
-		// be set.
-		kind := req.GetParameters()[storageKind]
-		quantity := dv.config.Capacity[kind]
-		allocated := dv.sumVolumeSizes(kind)
-		available = quantity.Value() - allocated
+	// A topology which this node cannot satisfy (#14151, gap 5): the
+	// node may have capacity, but not for that placement, so zero is
+	// the honest answer and lets a central caller route the request
+	// elsewhere.
+	if !dv.localTopologyMatch(req.GetAccessibleTopology().GetSegments()) {
+		return zeroCapacity(), nil
 	}
+
+	if !dv.config.Capacity.Enabled() {
+		// Without configured capacity tracking there is no logical
+		// capacity model to report. MaxVolumeSize is a per-volume
+		// size limit, not the node's available storage, so reporting
+		// it as node capacity (previously the behavior, #14151 gap
+		// 2a) would advertise a phantom 1TiB in the default
+		// deployment.
+		return zeroCapacity(), nil
+	}
+
+	// Resolve the same capacity pool that CreateVolume uses (the
+	// same "kind" parameter) so that both sides of the ledger agree.
+	// An unknown or missing pool has no usable capacity; reporting
+	// zero (rather than an error) is the honest answer for a query:
+	// "at most nothing" is what the node can offer for that pool.
+	kind := req.GetParameters()[storageKind]
+	quantity, ok := dv.config.Capacity[kind]
+	if !ok {
+		return zeroCapacity(), nil
+	}
+
+	allocated := dv.sumVolumeSizes(kind)
+	// Clamp negative results to zero (#14151, gap 2b): an
+	// overcommitted pool (reduced configuration, state drift, or
+	// allocation paths that bypass quota enforcement) yields a
+	// negative difference. A negative available_capacity violates
+	// the CSI spec and is harmful downstream: stored into a
+	// CSIStorageCapacity resource.Quantity, negative values can
+	// overflow into a huge positive quantity that the scheduler
+	// reads as abundant capacity, attracting workloads to the node
+	// with the least storage. Zero is the safe answer; the warning
+	// keeps the configured and allocated values visible so the drift
+	// stays diagnosable.
+	available := quantity.Value() - allocated
+	if available < 0 {
+		klog.Warningf("capacity pool %q is overcommitted: configured %d, allocated %d, reporting zero", kind, quantity.Value(), allocated)
+		available = 0
+	}
+
+	// Enforce 0 <= maximum_volume_size <= available_capacity, also
+	// respecting the configured per-volume maximum (MaxVolumeSize).
 	maxVolumeSize := dv.config.MaxVolumeSize
 	if maxVolumeSize > available {
 		maxVolumeSize = available
@@ -295,8 +438,13 @@ func (dv *directVolume) validateControllerServiceRequest(c csi.ControllerService
 }
 
 func (dv *directVolume) getControllerServiceCapabilities() []*csi.ControllerServiceCapability {
+	// The GET_CAPACITY capability is advertised unconditionally: the
+	// RPC answers zero for nodes without configured capacity pools,
+	// which is meaningful (it tells the scheduler to skip the node)
+	// rather than an error (#14151, gap 6).
 	cl := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 	}
 
 	var csc []*csi.ControllerServiceCapability
