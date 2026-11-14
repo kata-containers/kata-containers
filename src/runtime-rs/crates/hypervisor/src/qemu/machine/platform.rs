@@ -840,6 +840,7 @@ fn emit_backend(backend: &MemoryBackend, id: &str) -> String {
             size,
             path,
             is_egm: false,
+            prealloc,
             host_nodes,
             policy,
             ..
@@ -853,6 +854,9 @@ fn emit_backend(backend: &MemoryBackend, id: &str) -> String {
             }
             if let Some(pol) = policy {
                 s.push_str(&format!(",policy={pol}"));
+            }
+            if *prealloc {
+                s.push_str(",prealloc=on");
             }
             s.push_str(",share=on");
             s
