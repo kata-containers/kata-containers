@@ -81,7 +81,10 @@ pub struct VfioDeviceModern {
     pub device: VfioDevice,
     pub config: VfioDeviceBase,
 
-    /// Configuration options passed to the vfio-pci handler in kata-agent
+    /// Options passed to the vfio-pci handler in kata-agent, one
+    /// "<host BDF>=<guest PCI path>" entry per assigned function. Only set by
+    /// hypervisors that place VFIO devices themselves, which must then map
+    /// every function of the device; see agent_options().
     pub device_options: Vec<String>,
 
     /// Indicates if the host device has been allocated to a specific guest
@@ -148,6 +151,25 @@ impl VfioDeviceModern {
             attach_count: 0,
         })
     }
+
+    /// Returns the options for the vfio-pci handler in kata-agent: the
+    /// hypervisor-provided device_options or, when there are none, the primary
+    /// function mapped to its guest PCI path.
+    pub fn agent_options(&self) -> Result<Vec<String>> {
+        if !self.device_options.is_empty() {
+            return Ok(self.device_options.clone());
+        }
+
+        let guest_pci_path = self
+            .config
+            .guest_pci_path
+            .as_ref()
+            .context("VFIO device has no guest PCI path assigned")?;
+        Ok(vec![format!(
+            "{}={}",
+            self.device.primary.addr, guest_pci_path
+        )])
+    }
 }
 
 /// Thread-safe handle for managing modern VFIO devices using asynchronous locking.
@@ -203,6 +225,35 @@ impl VfioDeviceModernHandle {
     pub async fn update_config(&self, cfg: VfioDeviceBase) {
         self.inner.lock().await.config = cfg;
     }
+
+    /// Registers the device in runtime-rs's shared PCIe topology, unless it is
+    /// an AP device, which has no PCIe topology, or the hypervisor places VFIO
+    /// devices itself, as OpenVMM does. Then hands it to the hypervisor,
+    /// releasing the registration if that fails.
+    async fn add_to_hypervisor(
+        &mut self,
+        pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn Hypervisor,
+    ) -> Result<()> {
+        let is_ap = self
+            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
+            .await;
+        if is_ap || h.capabilities().await?.is_vfio_placement_supported() {
+            h.add_device(DeviceType::VfioModern(self.arc())).await?;
+            return Ok(());
+        }
+
+        let topo = pcie_topo
+            .as_deref_mut()
+            .context("VFIO device requires a PCIe topology but none was provided")?;
+        self.register(topo).await?;
+        if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
+            self.unregister(topo).await?;
+            return Err(e);
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -227,29 +278,10 @@ impl Device for VfioDeviceModernHandle {
             return Ok(());
         }
 
-        let is_ap = self
-            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
-            .await;
-
-        if is_ap {
-            // AP devices have no PCIe topology; call the hypervisor directly.
-            if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
-                error!(sl!(), "failed to attach vfio-ap device: {:?}", e);
-                self.decrease_attach_count().await?;
-                return Err(e);
-            }
-        } else {
-            // PCI devices must be registered in the topology first.
-            let topo = pcie_topo.as_deref_mut().ok_or_else(|| {
-                anyhow::anyhow!("VFIO device requires a PCIe topology but none was provided")
-            })?;
-            self.register(topo).await?;
-            if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
-                error!(sl!(), "failed to attach vfio device: {:?}", e);
-                self.decrease_attach_count().await?;
-                self.unregister(topo).await?;
-                return Err(e);
-            }
+        if let Err(e) = self.add_to_hypervisor(pcie_topo, h).await {
+            error!(sl!(), "failed to attach vfio device: {:?}", e);
+            self.decrease_attach_count().await?;
+            return Err(e);
         }
 
         info!(
@@ -266,6 +298,10 @@ impl Device for VfioDeviceModernHandle {
         pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn Hypervisor,
     ) -> Result<Option<u64>> {
+        // Only release a topology reservation that attach made: capabilities
+        // can change after attach.
+        let uses_pcie_topology = self.with(|d| d.is_allocated).await;
+
         // Only proceed with detachment if reference count reaches zero
         if self
             .decrease_attach_count()
@@ -288,11 +324,7 @@ impl Device for VfioDeviceModernHandle {
         let virt = self.with(|d| d.config.virt_path.clone()).await;
         let device_index = virt.map(|(idx, _)| idx);
 
-        // AP devices have no PCIe topology to unregister from.
-        let is_ap = self
-            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
-            .await;
-        if !is_ap {
+        if uses_pcie_topology {
             if let Some(topo) = pcie_topo {
                 self.unregister(topo).await?;
             }
@@ -372,5 +404,87 @@ impl PCIeDevice for VfioDeviceModernHandle {
         .await;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::qemu::Qemu;
+    use crate::remote::Remote;
+    use crate::vfio_device::core::{BdfAddress, DeviceAddress};
+    use std::convert::TryFrom;
+
+    fn test_handle() -> VfioDeviceModernHandle {
+        VfioDeviceModernHandle {
+            inner: Arc::new(Mutex::new(VfioDeviceModern {
+                device_id: "vfio-test".to_string(),
+                ..Default::default()
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn generic_attach_without_topology_rolls_back_reference() {
+        let mut handle = test_handle();
+        let mut topology = None;
+
+        let error = handle
+            .attach(&mut topology, &Qemu::new())
+            .await
+            .unwrap_err();
+
+        assert!(error.to_string().contains("requires a PCIe topology"));
+        assert_eq!(handle.attach_count().await, 0);
+        assert!(!handle.with(|device| device.is_allocated).await);
+    }
+
+    #[tokio::test]
+    async fn detach_only_unregisters_devices_that_attach_registered() {
+        for registered in [false, true] {
+            let mut handle = test_handle();
+            handle
+                .with_mut(|device| {
+                    device.attach_count = 1;
+                    device.is_allocated = registered;
+                    device.config.guest_pci_path = PciPath::try_from("08/00").ok();
+                })
+                .await;
+            let mut topology = PCIeTopology::default();
+
+            handle
+                .detach(&mut Some(&mut topology), &Remote::new())
+                .await
+                .unwrap();
+
+            assert_eq!(handle.attach_count().await, 0);
+            assert!(!handle.with(|device| device.is_allocated).await);
+            let guest_pci_path = handle
+                .with(|device| device.config.guest_pci_path.clone())
+                .await;
+            assert_eq!(guest_pci_path.is_none(), registered);
+        }
+    }
+
+    #[test]
+    fn agent_options_default_to_the_primary_function() {
+        let mut device = VfioDeviceModern::default();
+        assert!(device.agent_options().is_err());
+
+        device.device.primary.addr = DeviceAddress::Pci(BdfAddress::new(0, 3, 0, 0));
+        device.config.guest_pci_path = PciPath::try_from("09/00").ok();
+        assert_eq!(device.agent_options().unwrap(), ["0000:03:00.0=09/00"]);
+    }
+
+    #[test]
+    fn agent_options_prefer_hypervisor_provided_options() {
+        let device = VfioDeviceModern {
+            device_options: vec![
+                "0000:02:00.0=08/00".to_string(),
+                "0000:02:00.1=08/01".to_string(),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(device.agent_options().unwrap(), device.device_options);
     }
 }
