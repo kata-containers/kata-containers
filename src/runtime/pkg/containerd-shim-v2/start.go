@@ -53,10 +53,18 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 		// not have run yet on slower architectures).
 		// RescanNetwork is idempotent — it returns immediately if
 		// endpoints already exist.
+		//
+		// The netlink watcher is started AFTER the rescan completes
+		// to avoid racing on endpoint discovery.
 		go func() {
 			if err := s.sandbox.RescanNetwork(s.ctx); err != nil {
 				shimLog.WithError(err).Error("async network rescan failed — container may lack networking")
 			}
+
+			// Watch for network interfaces added/removed from the pod
+			// network namespace (e.g. by Multus Dynamic Networks Controller)
+			// and hot-plug/unplug them into the kata VM.
+			watchNetworkInterfaces(s.ctx, s)
 		}()
 
 		// We use s.ctx(`ctx` derived from `s.ctx`) to check for cancellation of the
