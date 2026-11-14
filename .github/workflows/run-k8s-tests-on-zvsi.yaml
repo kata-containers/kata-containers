@@ -57,8 +57,6 @@ jobs:
           - snapshotter: overlayfs
             vmm: qemu-coco-dev-runtime-rs
           - snapshotter: devmapper
-            vmm: qemu-runtime-rs
-          - snapshotter: devmapper
             vmm: qemu-coco-dev
           - snapshotter: devmapper
             vmm: qemu-coco-dev-runtime-rs
