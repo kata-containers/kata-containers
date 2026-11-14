@@ -113,7 +113,10 @@ impl OpenVmmInner {
     }
 
     pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
-        self.capabilities.set(flag);
+        // Add to the capabilities set at construction rather than replacing
+        // them: the sandbox reports guest capabilities, such as
+        // GuestMemoryProbe, after boot.
+        self.capabilities.add(flag);
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
@@ -189,5 +192,23 @@ impl OpenVmmInner {
         (0..OPENVMM_BLOCK_HOTPLUG_PORT_COUNT)
             .map(OpenVmmHotplugPort::new)
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_capabilities_keeps_the_existing_capabilities() {
+        let (exit_notify, _) = watch::channel(None);
+        let mut inner = OpenVmmInner::new(exit_notify);
+
+        inner.set_capabilities(CapabilityBits::GuestMemoryProbe);
+
+        assert!(inner.capabilities.is_mem_hotplug_probe_supported());
+        assert!(inner.capabilities.is_block_device_supported());
+        assert!(inner.capabilities.is_block_device_discard_supported());
+        assert!(inner.capabilities.is_fs_sharing_supported());
     }
 }
