@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -3384,16 +3385,45 @@ func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConf
 		return q.arch.appendPCIeRootPortDevice(devices, totalPorts)
 	}
 
-	// Create a pxb-pcie + root ports per NUMA node that has devices.
-	var rpIndex uint32
+	// A device on a host NUMA node that is not covered by the guest topology
+	// cannot be placed on a pxb-pcie bus.  Skipping just that node is not safe:
+	// the VFIO driver still assigns the device to one of the flat "rp<N>"
+	// buses, which are only created by appendPCIeRootPortDevice() and hence do
+	// not exist when the NUMA topology is emitted.  QEMU then fails with
+	// "Bus 'rp<N>' not found".  Fall back to the flat topology for all
+	// devices instead.
+	for hostNode := range numaDevCount {
+		if _, ok := coveredHostNodes[hostNode]; !ok {
+			q.Logger().WithField("host-numa", hostNode).
+				Warn("VFIO device on host NUMA node not covered by guest NUMA topology; falling back to flat PCIe root ports")
+			return q.arch.appendPCIeRootPortDevice(devices, totalPorts)
+		}
+	}
+
+	// Group the host nodes by the guest NUMA node backing them.  A single
+	// guest node may span several host nodes (HostNodes == "0-1"), so one
+	// pxb-pcie per host node would emit the same device ID more than once.
+	guestHostNodes := make(map[uint32][]int)
+	for hostNode := range numaDevCount {
+		guestNode := coveredHostNodes[hostNode]
+		guestHostNodes[guestNode] = append(guestHostNodes[guestNode], hostNode)
+	}
+
+	guestNodes := make([]uint32, 0, len(guestHostNodes))
+	for guestNode := range guestHostNodes {
+		guestNodes = append(guestNodes, guestNode)
+	}
+	sort.Slice(guestNodes, func(i, j int) bool { return guestNodes[i] < guestNodes[j] })
+
+	// Create a pxb-pcie per guest NUMA node that has devices, and one root
+	// port per device.  Root ports are partitioned per host node so that the
+	// per-host-node round-robin assignment in the VFIO driver never maps two
+	// devices from different host nodes to the same root port.
 	const busNrSpacing uint8 = 0x20
 
-	for hostNode, devCount := range numaDevCount {
-		guestNode, ok := coveredHostNodes[hostNode]
-		if !ok {
-			q.Logger().WithField("host-numa", hostNode).Warn("VFIO device on uncovered NUMA node; skipping pxb-pcie")
-			continue
-		}
+	for _, guestNode := range guestNodes {
+		hostNodes := guestHostNodes[guestNode]
+		sort.Ints(hostNodes)
 
 		pxbID := fmt.Sprintf("pxb-numa%d", guestNode)
 		busNr := busNrSpacing * uint8(guestNode+1)
@@ -3405,28 +3435,31 @@ func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConf
 		})
 
 		// Create root ports on this pxb bus for the VFIO devices.
-		var rpIDs []string
-		for i := 0; i < devCount; i++ {
-			rpID := fmt.Sprintf("rp-numa%d-%d", guestNode, i)
-			rpIDs = append(rpIDs, rpID)
-			devices = append(devices, govmmQemu.PCIeRootPortDevice{
-				ID:      rpID,
-				Bus:     pxbID,
-				Chassis: fmt.Sprintf("%d", 10+guestNode),
-				Slot:    fmt.Sprintf("%d", i),
-			})
-			rpIndex++
+		var rpIdx int
+		for _, hostNode := range hostNodes {
+			var rpIDs []string
+			for i := 0; i < numaDevCount[hostNode]; i++ {
+				rpID := fmt.Sprintf("rp-numa%d-%d", guestNode, rpIdx)
+				rpIDs = append(rpIDs, rpID)
+				devices = append(devices, govmmQemu.PCIeRootPortDevice{
+					ID:      rpID,
+					Bus:     pxbID,
+					Chassis: fmt.Sprintf("%d", 10+guestNode),
+					Slot:    fmt.Sprintf("%d", rpIdx),
+				})
+				rpIdx++
+			}
+
+			config.NUMARootPorts[hostNode] = rpIDs
+
+			q.Logger().WithFields(logrus.Fields{
+				"pxb-id":     pxbID,
+				"bus-nr":     busNr,
+				"guest-numa": guestNode,
+				"host-numa":  hostNode,
+				"root-ports": rpIDs,
+			}).Info("Created pxb-pcie with root ports for NUMA VFIO placement")
 		}
-
-		config.NUMARootPorts[hostNode] = rpIDs
-
-		q.Logger().WithFields(logrus.Fields{
-			"pxb-id":     pxbID,
-			"bus-nr":     busNr,
-			"guest-numa": guestNode,
-			"host-numa":  hostNode,
-			"root-ports": rpIDs,
-		}).Info("Created pxb-pcie with root ports for NUMA VFIO placement")
 	}
 
 	return devices
