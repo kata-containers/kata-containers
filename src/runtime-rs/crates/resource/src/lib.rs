@@ -17,6 +17,7 @@ pub mod cgroups;
 pub mod manager;
 mod manager_inner;
 pub mod network;
+mod orphaned_devices;
 pub mod resource_persist;
 use hypervisor::{
     vfio_device::VfioDeviceBase, BlockConfigModern, HybridVsockConfig, PortDeviceConfig,

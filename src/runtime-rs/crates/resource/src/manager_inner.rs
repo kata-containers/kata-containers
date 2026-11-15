@@ -48,6 +48,7 @@ use crate::{
     },
     manager::ManagerArgs,
     network::{self, dan_config_path, Network, NetworkConfig, NetworkWithNetNsConfig},
+    orphaned_devices::OrphanedDeviceReferences,
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, NydusShareFs, ShareFs},
@@ -80,6 +81,7 @@ pub(crate) struct ResourceManagerInner {
     /// outlives a cancelled caller, so a late creation could otherwise
     /// register a network after the cleanup that would have removed it.
     cleaned: std::sync::atomic::AtomicBool,
+    orphaned_device_references: OrphanedDeviceReferences,
 }
 
 #[derive(Default)]
@@ -185,7 +187,29 @@ impl ResourceManagerInner {
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
             cleaned: std::sync::atomic::AtomicBool::new(false),
+            orphaned_device_references: OrphanedDeviceReferences::default(),
         })
+    }
+
+    pub async fn adopt_orphaned_device_references(&self, device_ids: Vec<String>) {
+        self.orphaned_device_references.adopt(device_ids).await
+    }
+
+    pub async fn adopt_orphaned_resources(
+        &self,
+        devices: Vec<String>,
+        rootfs: Vec<Arc<dyn crate::rootfs::Rootfs>>,
+        volumes: Vec<Arc<dyn crate::volume::Volume>>,
+    ) {
+        self.orphaned_device_references
+            .adopt_resources(devices, rootfs, volumes)
+            .await;
+    }
+
+    pub async fn release_orphaned_device_references(&self) -> Result<()> {
+        self.orphaned_device_references
+            .release(&self.device_manager)
+            .await
     }
 
     pub fn config(&self) -> Arc<TomlConfig> {
@@ -1404,6 +1428,7 @@ impl Persist for ResourceManagerInner {
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
             cleaned: std::sync::atomic::AtomicBool::new(false),
+            orphaned_device_references: OrphanedDeviceReferences::default(),
         })
     }
 }
