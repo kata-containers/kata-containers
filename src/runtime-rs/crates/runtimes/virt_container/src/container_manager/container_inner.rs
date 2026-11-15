@@ -21,6 +21,7 @@ use tokio::sync::RwLock;
 use crate::container_manager::{convert_agent_error, logger_with_process};
 
 use super::{
+    container::Container,
     io::ContainerIo,
     process::{Process, ProcessWatcher},
     Exec,
@@ -84,7 +85,93 @@ impl ContainerInner {
         *status = state;
     }
 
-    pub(crate) async fn start_exec_process(&mut self, process: &ContainerProcess) -> Result<()> {
+    pub(crate) async fn start_exec(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        process: &ContainerProcess,
+        passfd_listener_addr: Option<&(String, u32)>,
+    ) -> Result<()> {
+        // A rejected replay must not reconnect IO or kill the existing process.
+        self.exec_processes
+            .get(&process.exec_id)
+            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?
+            .process
+            .check_start()
+            .await?;
+
+        let result: Result<()> = async {
+            // In passfd io mode, we create vsock connections for io in advance
+            // and pass port info to agent in `ExecProcessRequest`.
+            // These vsock connections will be used as stdin/stdout/stderr of the exec process.
+            // See agent/src/passfd_io.rs for more details.
+            if let Some((hvsock_uds_path, passfd_port)) = passfd_listener_addr {
+                let exec = self
+                    .exec_processes
+                    .get_mut(&process.exec_id)
+                    .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                exec.process
+                    .passfd_io_init(hvsock_uds_path, *passfd_port)
+                    .await?;
+            }
+
+            self.start_exec_process(process)
+                .await
+                .context("enter process")?;
+
+            {
+                let exec = self
+                    .exec_processes
+                    .get(&process.exec_id)
+                    .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                if exec.process.height != 0 && exec.process.width != 0 {
+                    self.win_resize_process(process, exec.process.height, exec.process.width)
+                        .await
+                        .context("win resize")?;
+                }
+            }
+
+            let exec = self
+                .exec_processes
+                .get_mut(&process.exec_id)
+                .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+            if exec.process.passfd_io.is_some() {
+                // The agent waits for passfd IO to finish before reporting exit.
+                exec.process
+                    .passfd_io_wait(containers, self.agent.clone())
+                    .await?;
+            } else {
+                // Legacy IO must be drained by the shim before waiting on the agent.
+                let container_io = ContainerIo::new(self.agent.clone(), process.clone());
+                exec.process
+                    .start_io_and_wait(containers, self.agent.clone(), container_io)
+                    .await
+                    .context("start io and wait")?;
+            }
+            Ok(())
+        }
+        .await;
+
+        if result.is_err() {
+            if let Err(err) = self
+                .signal_process(process, Signal::SIGKILL as u32, false)
+                .await
+            {
+                warn!(
+                    self.logger,
+                    "failed to stop exec after start failure: {:?}", err
+                );
+            }
+            self.exec_processes
+                .get_mut(&process.exec_id)
+                .ok_or_else(|| Error::ProcessNotFound(process.clone()))?
+                .process
+                .fail_start()
+                .await;
+        }
+        result
+    }
+
+    async fn start_exec_process(&mut self, process: &ContainerProcess) -> Result<()> {
         let exec = self
             .exec_processes
             .get_mut(&process.exec_id)
@@ -147,7 +234,7 @@ impl ContainerInner {
     }
 
     pub(crate) async fn start_container(&mut self, cid: &ContainerID) -> Result<()> {
-        self.check_state(vec![ProcessStatus::Created, ProcessStatus::Stopped])
+        self.check_state(vec![ProcessStatus::Created])
             .await
             .context("check state")?;
 
@@ -456,6 +543,13 @@ mod tests {
     struct FakeAgent {
         removed: AtomicUsize,
         remove_failures: usize,
+        exec_calls: AtomicUsize,
+        exec_failures: usize,
+        reject_duplicate: bool,
+        wait_calls: AtomicUsize,
+        wait_blocked: bool,
+        wait_release: tokio::sync::Notify,
+        signals: std::sync::Mutex<Vec<(String, u32)>>,
     }
 
     #[async_trait]
@@ -495,7 +589,11 @@ mod tests {
             }
             Ok(agent::Empty::new())
         }
-        async fn signal_process(&self, _: agent::SignalProcessRequest) -> Result<agent::Empty> {
+        async fn signal_process(&self, req: agent::SignalProcessRequest) -> Result<agent::Empty> {
+            self.signals
+                .lock()
+                .unwrap()
+                .push((req.process_id.exec_id, req.signal));
             Ok(agent::Empty::new())
         }
 
@@ -560,13 +658,24 @@ mod tests {
             unimplemented!()
         }
         async fn exec_process(&self, _: agent::ExecProcessRequest) -> Result<agent::Empty> {
-            unimplemented!()
+            let attempt = self.exec_calls.fetch_add(1, Ordering::SeqCst);
+            if attempt < self.exec_failures {
+                return Err(anyhow!("missing executable"));
+            }
+            if self.reject_duplicate && attempt > 0 {
+                return Err(anyhow!("exec_id 'test-exec' already exists"));
+            }
+            Ok(agent::Empty::new())
         }
         async fn wait_process(
             &self,
             _: agent::WaitProcessRequest,
         ) -> Result<agent::WaitProcessResponse> {
-            unimplemented!()
+            self.wait_calls.fetch_add(1, Ordering::SeqCst);
+            if self.wait_blocked {
+                self.wait_release.notified().await;
+            }
+            Ok(agent::WaitProcessResponse { status: 42 })
         }
         async fn close_stdin(&self, _: agent::CloseStdinRequest) -> Result<agent::Empty> {
             unimplemented!()
@@ -913,5 +1022,261 @@ mod tests {
         assert_eq!(volume.cleanups(), 1);
         assert_eq!(blocked_rootfs.cleanups(), 2);
         assert_eq!(rootfs.cleanups(), 1);
+    }
+
+    fn add_test_exec(inner: &mut ContainerInner) -> ContainerProcess {
+        let process = ContainerProcess::new(CID, "test-exec").unwrap();
+        inner.add_exec_process(
+            &process.exec_id,
+            Exec {
+                process: Process::new(&process, 0, "", None, None, None, false),
+                oci_process: oci::Process::default(),
+            },
+        );
+        process
+    }
+
+    async fn wait_for_exit(
+        inner: &ContainerInner,
+        process: &ContainerProcess,
+    ) -> ProcessExitStatus {
+        let (watcher, status) = inner.fetch_exit_watcher(process).unwrap();
+        let mut watcher = watcher.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while watcher.changed().await.is_ok() {}
+        })
+        .await
+        .expect("Wait did not finish");
+        let exit = status.read().await.clone();
+        exit
+    }
+
+    #[tokio::test]
+    async fn repeated_exec_start_preserves_running_process() {
+        for passfd in [false, true] {
+            let agent = Arc::new(FakeAgent {
+                reject_duplicate: true,
+                wait_blocked: true,
+                ..Default::default()
+            });
+            let (mut inner, _) = new_container(agent.clone()).await;
+            let process = add_test_exec(&mut inner);
+            let containers = Arc::new(RwLock::new(HashMap::new()));
+            let addr = ("unused-without-stdio".to_string(), 1);
+            let addr = passfd.then_some(&addr);
+            inner
+                .start_exec(containers.clone(), &process, addr)
+                .await
+                .unwrap();
+
+            // If a replay reaches IO setup, this missing FIFO makes it fail.
+            inner
+                .exec_processes
+                .get_mut(&process.exec_id)
+                .unwrap()
+                .process
+                .stdout = Some("/nonexistent-kata-start-test/stdout".to_string());
+            for _ in 0..2 {
+                let err = inner
+                    .start_exec(containers.clone(), &process, addr)
+                    .await
+                    .unwrap_err();
+                assert!(err.to_string().contains("cannot start process"));
+            }
+            assert_eq!(agent.exec_calls.load(Ordering::SeqCst), 1);
+            assert!(agent.signals.lock().unwrap().is_empty());
+            assert_eq!(
+                inner.exec_processes[&process.exec_id]
+                    .process
+                    .get_status()
+                    .await,
+                ProcessStatus::Running
+            );
+            let (watcher, status) = inner.fetch_exit_watcher(&process).unwrap();
+            assert!(watcher.unwrap().has_changed().is_ok(), "replay closed Wait");
+            assert!(status.read().await.exit_time.is_none());
+
+            agent.wait_release.notify_one();
+            assert_eq!(wait_for_exit(&inner, &process).await.exit_code, 42);
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_exec_start_completes_wait_and_rejects_retry() {
+        for passfd in [false, true] {
+            // Cover both a persistent failure and a guest that would accept a retry.
+            for failures in [1, usize::MAX] {
+                let agent = Arc::new(FakeAgent {
+                    exec_failures: failures,
+                    ..Default::default()
+                });
+                let (mut inner, _) = new_container(agent.clone()).await;
+                let process = add_test_exec(&mut inner);
+                let containers = Arc::new(RwLock::new(HashMap::new()));
+                let addr = ("unused-without-stdio".to_string(), 1);
+                let addr = passfd.then_some(&addr);
+                let (watcher, _) = inner.fetch_exit_watcher(&process).unwrap();
+                let mut watcher = watcher.unwrap();
+                let err = inner
+                    .start_exec(containers.clone(), &process, addr)
+                    .await
+                    .unwrap_err();
+                assert!(format!("{err:#}").contains("missing executable"));
+                assert!(
+                    tokio::time::timeout(std::time::Duration::from_secs(1), watcher.changed())
+                        .await
+                        .expect("existing Wait was not notified")
+                        .is_err()
+                );
+                let exit = wait_for_exit(&inner, &process).await;
+                assert_eq!(exit.exit_code, crate::UNKNOWN_EXIT_STATUS);
+                assert!(exit.exit_time.is_some());
+
+                for _ in 0..2 {
+                    assert!(inner
+                        .start_exec(containers.clone(), &process, addr)
+                        .await
+                        .is_err());
+                }
+                assert_eq!(agent.exec_calls.load(Ordering::SeqCst), 1);
+                assert_eq!(agent.signals.lock().unwrap().len(), 1);
+                assert_eq!(agent.wait_calls.load(Ordering::SeqCst), 0);
+                assert_eq!(
+                    inner.exec_processes[&process.exec_id]
+                        .process
+                        .get_status()
+                        .await,
+                    ProcessStatus::Stopped
+                );
+                assert_eq!(
+                    wait_for_exit(&inner, &process).await.exit_time,
+                    exit.exit_time
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_io_start_failure_completes_wait() {
+        for passfd in [false, true] {
+            let agent = Arc::new(FakeAgent::default());
+            let (mut inner, _) = new_container(agent.clone()).await;
+            let process = add_test_exec(&mut inner);
+            inner
+                .exec_processes
+                .get_mut(&process.exec_id)
+                .unwrap()
+                .process
+                .stdout = Some("/nonexistent-kata-start-test/stdout".to_string());
+            let containers = Arc::new(RwLock::new(HashMap::new()));
+            let addr = ("unused".to_string(), 1);
+            let addr = passfd.then_some(&addr);
+            assert!(inner
+                .start_exec(containers.clone(), &process, addr)
+                .await
+                .is_err());
+            assert_eq!(
+                wait_for_exit(&inner, &process).await.exit_code,
+                crate::UNKNOWN_EXIT_STATUS
+            );
+            // Passfd setup fails before the agent call, legacy IO setup after it.
+            assert_eq!(
+                agent.exec_calls.load(Ordering::SeqCst),
+                usize::from(!passfd)
+            );
+            assert_eq!(agent.signals.lock().unwrap().len(), 1);
+            assert!(inner.start_exec(containers, &process, addr).await.is_err());
+            assert_eq!(agent.signals.lock().unwrap().len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn exited_exec_cannot_restart_or_replace_exit_status() {
+        for passfd in [false, true] {
+            let agent = Arc::new(FakeAgent::default());
+            let (mut inner, _) = new_container(agent.clone()).await;
+            let process = add_test_exec(&mut inner);
+            let containers = Arc::new(RwLock::new(HashMap::new()));
+            let addr = ("unused-without-stdio".to_string(), 1);
+            let addr = passfd.then_some(&addr);
+            inner
+                .start_exec(containers.clone(), &process, addr)
+                .await
+                .unwrap();
+            let exit = wait_for_exit(&inner, &process).await;
+            assert_eq!(exit.exit_code, 42);
+
+            assert!(inner.start_exec(containers, &process, addr).await.is_err());
+            assert_eq!(agent.exec_calls.load(Ordering::SeqCst), 1);
+            assert!(agent.signals.lock().unwrap().is_empty());
+            assert_eq!(
+                inner.exec_processes[&process.exec_id]
+                    .process
+                    .get_status()
+                    .await,
+                ProcessStatus::Stopped
+            );
+            let after = wait_for_exit(&inner, &process).await;
+            assert_eq!(after.exit_code, exit.exit_code);
+            assert_eq!(after.exit_time, exit.exit_time);
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_start_rejects_non_created_states() {
+        for status in [
+            ProcessStatus::Unknown,
+            ProcessStatus::Running,
+            ProcessStatus::Stopped,
+            ProcessStatus::Paused,
+            ProcessStatus::Pausing,
+        ] {
+            let agent = Arc::new(FakeAgent::default());
+            let (mut inner, _) = new_container(agent.clone()).await;
+            let process = add_test_exec(&mut inner);
+            inner.exec_processes[&process.exec_id]
+                .process
+                .set_status(status)
+                .await;
+            assert!(inner
+                .start_exec(Arc::default(), &process, None)
+                .await
+                .is_err());
+            assert_eq!(agent.exec_calls.load(Ordering::SeqCst), 0);
+            assert!(agent.signals.lock().unwrap().is_empty());
+            assert_eq!(
+                inner.exec_processes[&process.exec_id]
+                    .process
+                    .get_status()
+                    .await,
+                status
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn killed_created_container_cannot_start_with_an_existing_waiter() {
+        let agent = Arc::new(FakeAgent {
+            wait_blocked: true,
+            ..Default::default()
+        });
+        let (mut inner, process) = new_container(agent.clone()).await;
+        inner.init_process.set_status(ProcessStatus::Created).await;
+        // Killing a Created container installs this waiter before its exit is known.
+        inner
+            .init_process
+            .passfd_io_wait(Arc::default(), agent.clone())
+            .await
+            .unwrap();
+        assert!(inner.init_process.check_start().await.is_err());
+        assert!(inner
+            .init_process
+            .exit_status
+            .read()
+            .await
+            .exit_time
+            .is_none());
+        agent.wait_release.notify_one();
+        assert_eq!(wait_for_exit(&inner, &process).await.exit_code, 42);
     }
 }
