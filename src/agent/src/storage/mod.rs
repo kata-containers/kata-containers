@@ -191,6 +191,7 @@ async fn handle_multi_layer_storage(
     storages: &[Storage],
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: &Option<String>,
+    mount_label: Option<&str>,
     processed_mount_points: &HashSet<String>,
 ) -> Result<Option<MultiLayerProcessResult>> {
     if !is_multi_layer_storage(storage) {
@@ -211,7 +212,9 @@ async fn handle_multi_layer_storage(
         "fstype" => &storage.fstype,
     );
 
-    let result = handle_multi_layer_erofs_group(storage, storages, cid, sandbox, logger).await?;
+    let result =
+        handle_multi_layer_erofs_group(storage, storages, cid, mount_label, sandbox, logger)
+            .await?;
 
     // Create device for the mount point
     let device = new_device(result.mount_point.clone())?;
@@ -268,6 +271,7 @@ pub async fn add_storages(
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
     is_pod_sandbox: bool,
+    mount_label: Option<&str>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
     let mut processed_mount_points = HashSet::new();
@@ -280,6 +284,7 @@ pub async fn add_storages(
             &storages,
             sandbox,
             &cid,
+            mount_label,
             &processed_mount_points,
         )
         .await?
