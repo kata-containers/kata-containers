@@ -47,7 +47,7 @@ pub struct Container {
     pub container_id: ContainerID,
     config: ContainerConfig,
     spec: oci::Spec,
-    inner: Arc<RwLock<ContainerInner>>,
+    pub(super) inner: Arc<RwLock<ContainerInner>>,
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
@@ -617,6 +617,37 @@ impl Container {
             .context("clean up container")
     }
 
+    /// Called when this container is about to be dropped: any device reference
+    /// it still holds goes to the resource manager, which keeps retrying it.
+    pub async fn orphan_device_references(&self) {
+        let inner = self.inner.clone();
+        let resource_manager = self.resource_manager.clone();
+        let logger = self.logger.clone();
+        // Once the container leaves the map, the shim must finish handing off
+        // its references even if the Delete or failed Create RPC is cancelled.
+        let handoff = tokio::spawn(async move {
+            let mut inner = inner.write().await;
+            let devices = std::mem::take(&mut inner.devices);
+            let rootfs = std::mem::take(&mut inner.rootfs);
+            let volumes = std::mem::take(&mut inner.volumes);
+            drop(inner);
+            if devices.is_empty() && rootfs.is_empty() && volumes.is_empty() {
+                return;
+            }
+            warn!(
+                logger,
+                "handing {} unreleased device reference(s) to the resource manager",
+                devices.len() + rootfs.len() + volumes.len()
+            );
+            resource_manager
+                .adopt_orphaned_resources(devices, rootfs, volumes)
+                .await;
+        });
+        if let Err(e) = handoff.await {
+            error!(self.logger, "failed to hand off device references: {e}");
+        }
+    }
+
     async fn copy_termination_log(&self) {
         let toml_config = self.resource_manager.config().await;
         let shared_fs = toml_config
@@ -949,6 +980,106 @@ mod tests {
     use super::*;
     use oci_spec::runtime::LinuxNamespaceType;
     use oci_spec::runtime::{LinuxBuilder, LinuxNamespaceBuilder};
+
+    #[tokio::test]
+    async fn orphan_handoff_survives_caller_cancellation() {
+        use hypervisor::{
+            device::{device_manager::do_handle_device, DeviceConfig, DeviceType},
+            qemu::Qemu,
+            BlockConfigModern,
+        };
+        use persist::sandbox_persist::Persist;
+        use resource::{
+            cgroups::cgroup_persist::CgroupState, manager::ManagerArgs,
+            resource_persist::ResourceState,
+        };
+
+        let agent = Arc::new(agent::kata::KataAgent::new(Default::default()));
+        // Restoring only opens cgroup managers; it does not create cgroups or
+        // move this test process into them.
+        let resources = Arc::new(
+            ResourceManager::restore(
+                ManagerArgs {
+                    sid: "orphan-handoff-test".into(),
+                    agent: agent.clone(),
+                    hypervisor: Arc::new(Qemu::new()),
+                    config: TomlConfig::default(),
+                },
+                ResourceState {
+                    cgroup_state: Some(CgroupState {
+                        path: Some("orphan-handoff-test".into()),
+                        overhead_path: Some("orphan-handoff-test-overhead".into()),
+                        sandbox_cgroup_only: true,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap(),
+        );
+        let device_manager = resources.get_device_manager().await;
+        let config = DeviceConfig::BlockCfgModern(BlockConfigModern {
+            path_on_host: "/dev/orphan-handoff-test".into(),
+            driver_option: "virtio-blk-pci".into(),
+            ..Default::default()
+        });
+        let device = match do_handle_device(&device_manager, &config).await.unwrap() {
+            DeviceType::BlockModern(device) => device,
+            other => panic!("unexpected device {}", other),
+        };
+        do_handle_device(&device_manager, &config).await.unwrap();
+
+        let container = Arc::new(
+            Container::new(
+                0,
+                ContainerConfig {
+                    container_id: "orphan-handoff-test".into(),
+                    bundle: String::new(),
+                    rootfs_mounts: vec![],
+                    terminal: false,
+                    options: None,
+                    stdin: None,
+                    stdout: None,
+                    stderr: None,
+                },
+                oci::Spec::default(),
+                agent,
+                resources.clone(),
+                None,
+            )
+            .await
+            .unwrap(),
+        );
+        let mut inner = container.inner.write().await;
+        inner.devices.push(device.lock().await.device_id.clone());
+        {
+            let handoff = container.orphan_device_references();
+            tokio::pin!(handoff);
+            tokio::select! {
+                biased;
+                _ = &mut handoff => panic!("handoff bypassed the container lock"),
+                _ = tokio::task::yield_now() => {}
+            }
+            // Cancelling the RPC must leave the shim-owned handoff running.
+        }
+        drop(inner);
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                resources
+                    .release_orphaned_device_references()
+                    .await
+                    .unwrap();
+                if device.lock().await.attach_count == 1 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(container.inner.read().await.devices.is_empty());
+    }
 
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {

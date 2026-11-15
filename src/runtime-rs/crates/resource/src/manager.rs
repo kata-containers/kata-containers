@@ -249,6 +249,29 @@ impl ResourceManager {
         inner.handler_devices(cid, linux, device_ids).await
     }
 
+    pub async fn adopt_orphaned_device_references(&self, device_ids: Vec<String>) {
+        let inner = self.inner.read().await;
+        inner.adopt_orphaned_device_references(device_ids).await
+    }
+
+    pub async fn adopt_orphaned_resources(
+        &self,
+        devices: Vec<String>,
+        rootfs: Vec<Arc<dyn crate::rootfs::Rootfs>>,
+        volumes: Vec<Arc<dyn crate::volume::Volume>>,
+    ) {
+        self.inner
+            .read()
+            .await
+            .adopt_orphaned_resources(devices, rootfs, volumes)
+            .await;
+    }
+
+    pub async fn release_orphaned_device_references(&self) -> Result<()> {
+        let inner = self.inner.read().await;
+        inner.release_orphaned_device_references().await
+    }
+
     pub async fn dump(&self) {
         let inner = self.inner.read().await;
         inner.dump().await

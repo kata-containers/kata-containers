@@ -134,11 +134,7 @@ impl Rootfs for BlockRootfs {
     }
 
     async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
-        device_manager
-            .write()
-            .await
-            .try_remove_device(&self.device_id)
-            .await
+        DeviceManager::remove_device(device_manager, &self.device_id).await
     }
 }
 
