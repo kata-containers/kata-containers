@@ -11,6 +11,7 @@ use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIeTopology;
 use crate::device::util::do_decrease_count;
 use crate::device::util::do_increase_count;
+use crate::device::util::{detach_removed, detach_step, DetachStep};
 use crate::device::Device;
 use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
@@ -215,17 +216,14 @@ impl Device for BlockDeviceModernHandle {
         _pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn hypervisor,
     ) -> Result<Option<u64>> {
-        // get the count of device detached, skip detach once it reaches the 0
-        if self
-            .decrease_attach_count()
-            .await
-            .context("failed to decrease attach count")?
-        {
-            return Ok(None);
-        }
-        if let Err(e) = h.remove_device(DeviceType::BlockModern(self.arc())).await {
-            self.increase_attach_count().await?;
-            return Err(e);
+        let step = detach_step(&mut self.inner.lock().await.attach_count);
+        match step {
+            DetachStep::Release => return Ok(None),
+            DetachStep::Remove => {
+                h.remove_device(DeviceType::BlockModern(self.arc())).await?;
+                detach_removed(&mut self.inner.lock().await.attach_count);
+            }
+            DetachStep::Finish => {}
         }
         Ok(Some(self.snapshot_config().await.index))
     }
