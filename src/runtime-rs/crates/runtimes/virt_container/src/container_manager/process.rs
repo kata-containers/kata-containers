@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::{fs::File, os::unix::fs::OpenOptionsExt, sync::Arc};
 
 use agent::Agent;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use awaitgroup::{WaitGroup, Worker as WaitGroupWorker};
 use common::types::{ContainerProcess, ProcessExitStatus, ProcessStateInfo, ProcessStatus, PID};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
@@ -464,6 +464,29 @@ impl Process {
         *status = ProcessStatus::Stopped;
     }
 
+    pub async fn check_start(&self) -> Result<()> {
+        let status = self.get_status().await;
+        if status != ProcessStatus::Created {
+            return Err(anyhow!("cannot start process in state {:?}", status));
+        }
+        // Kill can install a waiter while a container is still Created.
+        if self.exit_watcher_tx.is_none() {
+            return Err(anyhow!("cannot start process after exit wait has begun"));
+        }
+        Ok(())
+    }
+
+    // A failed start has no wait task to record an exit or notify Wait callers.
+    pub async fn fail_start(&mut self) {
+        self.exit_status
+            .write()
+            .await
+            .update_exit_code(UNKNOWN_EXIT_STATUS);
+        self.stop().await;
+        self.passfd_io.take();
+        self.exit_watcher_tx.take();
+    }
+
     /// Close the stdin of the process in container.
     pub async fn close_io(&mut self, _agent: Arc<dyn Agent>) {
         // Close the stdin writer keeper so that
@@ -488,6 +511,52 @@ impl Process {
 #[cfg(test)]
 mod tests {
     use super::is_binary_stdio;
+    use super::*;
+
+    #[tokio::test]
+    async fn failed_start_notifies_existing_and_future_waiters() {
+        for exec_id in ["", "exec"] {
+            let id = ContainerProcess::new("start-test", exec_id).unwrap();
+            let mut process = Process::new(&id, 0, "", None, None, None, false);
+            process.check_start().await.unwrap();
+            let (watcher, exit_status) = process.fetch_exit_watcher().unwrap();
+            let mut watcher = watcher.unwrap();
+
+            process.fail_start().await;
+            tokio::time::timeout(std::time::Duration::from_secs(1), watcher.changed())
+                .await
+                .expect("existing Wait did not finish")
+                .unwrap_err();
+            assert_eq!(process.get_status().await, ProcessStatus::Stopped);
+            assert!(process.check_start().await.is_err());
+            let exit_status = exit_status.read().await;
+            assert_eq!(exit_status.exit_code, UNKNOWN_EXIT_STATUS);
+            assert!(exit_status.exit_time.is_some());
+            let (watcher, _) = process.fetch_exit_watcher().unwrap();
+            assert!(watcher.unwrap().has_changed().is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn start_requires_created_state() {
+        for exec_id in ["", "exec"] {
+            let id = ContainerProcess::new("start-test", exec_id).unwrap();
+            let process = Process::new(&id, 0, "", None, None, None, false);
+            process.check_start().await.unwrap();
+            for status in [
+                ProcessStatus::Unknown,
+                ProcessStatus::Running,
+                ProcessStatus::Stopped,
+                ProcessStatus::Paused,
+                ProcessStatus::Pausing,
+            ] {
+                process.set_status(status).await;
+                assert!(process.check_start().await.is_err());
+                assert_eq!(process.get_status().await, status);
+                assert!(process.exit_status.read().await.exit_time.is_none());
+            }
+        }
+    }
 
     #[test]
     fn identifies_binary_logger_uri() {

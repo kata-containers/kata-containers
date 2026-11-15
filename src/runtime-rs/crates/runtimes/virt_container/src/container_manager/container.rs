@@ -324,6 +324,8 @@ impl Container {
         let mut inner = self.inner.write().await;
         match process.process_type {
             ProcessType::Container => {
+                // Reject replays before entering the failure cleanup path.
+                inner.init_process.check_start().await?;
                 let res: Result<()> = async {
                     inner.start_container(&process.container_id).await?;
 
@@ -346,6 +348,7 @@ impl Container {
                 if let Err(err) = res {
                     let device_manager = self.resource_manager.get_device_manager().await;
                     let _ = inner.stop_process(process, true, &device_manager).await;
+                    inner.init_process.fail_start().await;
 
                     if let Err(e) = self
                         .resource_manager
@@ -365,67 +368,9 @@ impl Container {
                 }
             }
             ProcessType::Exec => {
-                // In passfd io mode, we create vsock connections for io in advance
-                // and pass port info to agent in `ExecProcessRequest`.
-                // These vsock connections will be used as stdin/stdout/stderr of the exec process.
-                // See agent/src/passfd_io.rs for more details.
-                if let Some((hvsock_uds_path, passfd_port)) = &self.passfd_listener_addr {
-                    let exec = inner
-                        .exec_processes
-                        .get_mut(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    exec.process
-                        .passfd_io_init(hvsock_uds_path, *passfd_port)
-                        .await?;
-                }
-
-                if let Err(e) = inner.start_exec_process(process).await {
-                    let device_manager = self.resource_manager.get_device_manager().await;
-                    let _ = inner.stop_process(process, true, &device_manager).await;
-                    return Err(e).context("enter process");
-                }
-
-                {
-                    let exec = inner
-                        .exec_processes
-                        .get(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    if exec.process.height != 0 && exec.process.width != 0 {
-                        inner
-                            .win_resize_process(process, exec.process.height, exec.process.width)
-                            .await
-                            .context("win resize")?;
-                    }
-                }
-
-                if process_uses_passfd_io(&inner, process)? {
-                    // In passfd io mode, we don't bother with the IO.
-                    // We send `WaitProcessRequest` immediately to the agent
-                    // and wait for the response in a separate thread.
-                    // The agent will only respond after IO is done.
-                    let exec = inner
-                        .exec_processes
-                        .get_mut(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    exec.process
-                        .passfd_io_wait(containers, self.agent.clone())
-                        .await?;
-                } else {
-                    // In legacy io mode, we handle IO by polling the agent.
-                    // When IO is done, we send `WaitProcessRequest` to agent
-                    // to get the exit status.
-                    let container_io =
-                        inner.new_container_io(process).await.context("io stream")?;
-
-                    let exec = inner
-                        .exec_processes
-                        .get_mut(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    exec.process
-                        .start_io_and_wait(containers, self.agent.clone(), container_io)
-                        .await
-                        .context("start io and wait")?;
-                }
+                inner
+                    .start_exec(containers, process, self.passfd_listener_addr.as_ref())
+                    .await?;
             }
         }
 
