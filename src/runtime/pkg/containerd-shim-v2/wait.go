@@ -81,6 +81,13 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		// counter and let the shim exit before the teardown even started.
 		s.teardownWg.Add(1)
 		defer s.teardownWg.Done()
+
+		// Closed when wait() returns, i.e. after the teardown below
+		// finished (both the sandbox-container and the regular-container
+		// branch).  Registered after teardownWg.Done's defer so LIFO order
+		// closes this first: teardownWg.Wait() returning in Shutdown() then
+		// implies teardownDone is closed.
+		defer close(c.teardownDone)
 		s.mu.Unlock()
 
 		// Publish the exit code and TaskExit event *before* the sandbox

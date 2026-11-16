@@ -29,16 +29,25 @@ type container struct {
 	stdinPipe   io.WriteCloser
 	stdinCloser chan struct{}
 	exitCh      chan uint32
-	id          string
-	stdin       string
-	stdout      string
-	stderr      string
-	bundle      string
-	cType       vc.ContainerType
-	exit        uint32
-	status      task.Status
-	terminal    bool
-	mounted     bool
+	// teardownDone is closed by this container's wait() goroutine when the
+	// post-exit teardown has finished.  deleteContainer waits on it (bounded)
+	// when the shim-level status is already STOPPED, so that a Delete issued
+	// right after the early TaskExit does not hit virtcontainers' "Container
+	// not ready or stopped, impossible to delete" rejection while the
+	// teardown is still in flight.  wait() is spawned exactly once per
+	// container (from startContainer) and closes it via a single defer, so
+	// the close happens exactly once.
+	teardownDone chan struct{}
+	id           string
+	stdin        string
+	stdout       string
+	stderr       string
+	bundle       string
+	cType        vc.ContainerType
+	exit         uint32
+	status       task.Status
+	terminal     bool
+	mounted      bool
 }
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {
@@ -52,21 +61,22 @@ func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.Con
 	}
 
 	c := &container{
-		s:           s,
-		spec:        spec,
-		id:          r.ID,
-		bundle:      r.Bundle,
-		stdin:       r.Stdin,
-		stdout:      r.Stdout,
-		stderr:      r.Stderr,
-		terminal:    r.Terminal,
-		cType:       containerType,
-		execs:       make(map[string]*exec),
-		status:      task.Status_CREATED,
-		exitIOch:    make(chan struct{}),
-		exitCh:      make(chan uint32, 1),
-		stdinCloser: make(chan struct{}),
-		mounted:     mounted,
+		s:            s,
+		spec:         spec,
+		id:           r.ID,
+		bundle:       r.Bundle,
+		stdin:        r.Stdin,
+		stdout:       r.Stdout,
+		stderr:       r.Stderr,
+		terminal:     r.Terminal,
+		cType:        containerType,
+		execs:        make(map[string]*exec),
+		status:       task.Status_CREATED,
+		exitIOch:     make(chan struct{}),
+		exitCh:       make(chan uint32, 1),
+		stdinCloser:  make(chan struct{}),
+		teardownDone: make(chan struct{}),
+		mounted:      mounted,
 	}
 	return c, nil
 }
