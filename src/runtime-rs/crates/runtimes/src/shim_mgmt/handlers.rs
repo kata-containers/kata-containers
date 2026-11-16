@@ -97,22 +97,24 @@ async fn generic_ip_table_handler(
 ) -> Result<Response<Full<Bytes>>> {
     info!(sl!(), "handler: iptable  ipv6?: {}", is_ipv6);
     match *req.method() {
-        Method::GET => match sandbox.get_iptables(is_ipv6).await {
-            Ok(data) => {
-                let body = Full::new(Bytes::from(data));
-                Response::builder().body(body).map_err(|e| anyhow!(e))
-            }
-            _ => Err(anyhow!("Failed to get iptable")),
-        },
+        Method::GET => {
+            let data = sandbox
+                .get_iptables(is_ipv6)
+                .await
+                .context("Failed to get iptable")?;
+            let body = Full::new(Bytes::from(data));
+            Response::builder().body(body).map_err(|e| anyhow!(e))
+        }
 
         Method::PUT => {
             let data = req.into_body().collect().await?.to_bytes();
-            match sandbox.set_iptables(is_ipv6, data.to_vec()).await {
-                Ok(resp_data) => Response::builder()
-                    .body(Full::new(Bytes::from(resp_data)))
-                    .map_err(|e| anyhow!(e)),
-                _ => Err(anyhow!("Failed to set iptable")),
-            }
+            let resp_data = sandbox
+                .set_iptables(is_ipv6, data.to_vec())
+                .await
+                .context("Failed to set iptable")?;
+            Response::builder()
+                .body(Full::new(Bytes::from(resp_data)))
+                .map_err(|e| anyhow!(e))
         }
 
         _ => Err(anyhow!("IP Tables only takes PUT and GET")),
