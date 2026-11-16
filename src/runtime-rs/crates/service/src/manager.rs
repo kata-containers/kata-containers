@@ -180,7 +180,15 @@ impl ServiceManager {
 
             let task_service: Arc<dyn shim_async::Task + Send + Sync> =
                 Arc::new(TaskService::new(self.handler.clone()));
-            let s = s.register_service(shim_async::create_task(task_service));
+            let mut task_services = shim_async::create_task(task_service);
+            if !task_services.contains_key("containerd.task.v3.Task") {
+                let task_service = task_services
+                    .remove("containerd.task.v2.Task")
+                    .context("generated Task service is missing")?;
+                task_services.insert("containerd.task.v3.Task".to_string(), task_service);
+            }
+            let s = s.register_service(task_services);
+
             self.server = Some(s);
         }
         Ok(())
