@@ -105,6 +105,9 @@ func (s *Sandbox) CreateContainer(ctx context.Context, conf vc.ContainerConfig) 
 
 // DeleteContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) DeleteContainer(ctx context.Context, contID string) (vc.VCContainer, error) {
+	if s.DeleteContainerFunc != nil {
+		return s.DeleteContainerFunc(contID)
+	}
 	return &Container{}, nil
 }
 
@@ -115,6 +118,9 @@ func (s *Sandbox) StartContainer(ctx context.Context, contID string) (vc.VCConta
 
 // StopContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StopContainer(ctx context.Context, contID string, force bool) (vc.VCContainer, error) {
+	if s.StopContainerFunc != nil {
+		return s.StopContainerFunc(contID, force)
+	}
 	return &Container{}, nil
 }
 
