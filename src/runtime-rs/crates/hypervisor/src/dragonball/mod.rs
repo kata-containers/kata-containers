@@ -28,7 +28,10 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
 
-use crate::{DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds};
+use crate::{
+    DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds, VmSaveOptions,
+    VmSaveResult, VmStartOptions,
+};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -83,7 +86,9 @@ impl Hypervisor for Dragonball {
     }
 
     #[instrument]
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
+        let timeout = options.regular_timeout()?;
+
         let mut inner = self.inner.write().await;
         let ret = inner.start_vm(timeout).await;
 
@@ -131,9 +136,13 @@ impl Hypervisor for Dragonball {
         inner.resume_vm()
     }
 
-    async fn save_vm(&self) -> Result<()> {
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<VmSaveResult> {
+        options.require_template()?;
+
         let inner = self.inner.read().await;
-        inner.save_vm().await
+        inner.save_vm().await?;
+
+        Ok(VmSaveResult::default())
     }
 
     // returns Result<(old_vcpus, new_vcpus)>

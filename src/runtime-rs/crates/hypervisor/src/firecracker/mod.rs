@@ -10,7 +10,9 @@ mod inner_hypervisor;
 
 use super::HypervisorState;
 use crate::MemoryConfig;
-use crate::{device::DeviceType, Hypervisor, HypervisorConfig, VcpuThreadIds};
+use crate::{
+    device::DeviceType, Hypervisor, HypervisorConfig, VcpuThreadIds, VmSaveOptions, VmStartOptions,
+};
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -70,7 +72,9 @@ impl Hypervisor for Firecracker {
         inner.prepare_vm(id, netns, selinux_label).await
     }
 
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
+        let timeout = options.regular_timeout()?;
+
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await
     }
@@ -105,9 +109,13 @@ impl Hypervisor for Firecracker {
         inner.resume_vm()
     }
 
-    async fn save_vm(&self) -> Result<()> {
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<crate::VmSaveResult> {
+        options.require_template()?;
+
         let inner = self.inner.read().await;
-        inner.save_vm().await
+        inner.save_vm().await?;
+
+        Ok(crate::VmSaveResult::default())
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
