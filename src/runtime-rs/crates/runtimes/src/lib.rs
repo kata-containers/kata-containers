@@ -18,3 +18,6 @@ pub use shim_interface;
 mod shim_metrics;
 mod shim_mgmt;
 pub mod tracer;
+
+#[cfg(feature = "virt")]
+pub use virt_container;

@@ -16,6 +16,9 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 
+#[cfg(test)]
+use common::config::load_runtime_config;
+
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::utils::{
     authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user, find_user,
@@ -51,7 +54,6 @@ use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use std::{
     collections::HashMap,
     env,
-    ops::Deref,
     os::unix::fs::chown,
     path::{Path, PathBuf},
     sync::Arc,
@@ -73,6 +75,8 @@ use crate::{
     shim_mgmt::server::MgmtServer,
     tracer::{KataTracer, ROOTSPAN},
 };
+
+mod checkpoint_restore;
 
 fn convert_string_to_slog_level(string_level: &str) -> slog::Level {
     match string_level {
@@ -368,6 +372,7 @@ pub enum CleanupOutcome {
 
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
+    sandbox_operation_guard: Arc<RwLock<()>>,
 }
 
 // todo: a more detailed impl for fmt::Debug
@@ -383,6 +388,7 @@ impl RuntimeHandlerManager {
             inner: Arc::new(RwLock::new(RuntimeHandlerManagerInner::new(
                 id, msg_sender,
             )?)),
+            sandbox_operation_guard: Arc::new(RwLock::new(())),
         })
     }
 
@@ -623,23 +629,104 @@ impl RuntimeHandlerManager {
 
     #[instrument(parent = &*(ROOTSPAN))]
     pub async fn handler_sandbox_message(&self, req: SandboxRequest) -> Result<SandboxResponse> {
-        if let SandboxRequest::CreateSandbox(sandbox_config) = req {
-            let config = sandbox_config.deref().clone();
+        if let SandboxRequest::CreateSandbox(request) = req {
+            let config = request.sandbox_config.clone();
 
             self.sandbox_init_runtime_instance(config)
                 .await
                 .context("init sandboxed runtime")?;
 
-            Ok(SandboxResponse::CreateSandbox)
-        } else {
-            self.handler_sandbox_request(req)
+            if let Some(prepare_restore) = &request.prepare_restore {
+                let instance = self
+                    .get_runtime_instance()
+                    .await
+                    .context("get runtime instance for restore preparation")?;
+                let checkpoint_restore = instance.checkpoint_restore.as_ref().ok_or_else(|| {
+                    anyhow!("sandbox restore preparation is unsupported by this runtime")
+                })?;
+                checkpoint_restore
+                    .sandbox
+                    .prepare_restore_sandbox(prepare_restore)
+                    .await
+                    .context("prepare sandbox restore intent")?;
+            }
+
+            return Ok(SandboxResponse::CreateSandbox);
+        }
+
+        // Checkpoint and restore require a stable task inventory, so they are
+        // exclusive with lifecycle mutations. Observer requests do not take
+        // the gate: WaitSandbox is intentionally long-lived and would
+        // otherwise block every checkpoint until the VM exits.
+        let is_observer = matches!(
+            &req,
+            SandboxRequest::Platform(_)
+                | SandboxRequest::WaitSandbox(_)
+                | SandboxRequest::SandboxStatus(_)
+                | SandboxRequest::Ping(_)
+        );
+        if is_observer {
+            return self
+                .handler_sandbox_request(req)
                 .await
-                .context("handler request")
+                .context("handler request");
+        }
+
+        let is_ckpt_restore = matches!(
+            &req,
+            SandboxRequest::CheckpointSandbox(_) | SandboxRequest::RestoreSandbox(_)
+        );
+        if !is_ckpt_restore {
+            let _operation_guard = self.sandbox_operation_guard.read().await;
+            return self
+                .handler_sandbox_request(req)
+                .await
+                .context("handler request");
+        }
+
+        let operation_timeout = match &req {
+            SandboxRequest::RestoreSandbox(req) => req.operation_timeout,
+            SandboxRequest::CheckpointSandbox(req) => req.operation_timeout,
+            _ => unreachable!("checkpoint/restore request classification changed"),
+        };
+        let (_operation_guard, remaining_timeout) = checkpoint_restore::acquire_operation_guard(
+            &self.sandbox_operation_guard,
+            operation_timeout,
+        )
+        .await?;
+        match req {
+            SandboxRequest::RestoreSandbox(mut req) => {
+                req.operation_timeout = remaining_timeout;
+                self.handle_restore_sandbox(req).await
+            }
+            SandboxRequest::CheckpointSandbox(mut req) => {
+                req.operation_timeout = remaining_timeout;
+                self.handle_checkpoint_sandbox(req)
+                    .await
+                    .context("handler request")
+            }
+            _ => unreachable!("checkpoint/restore request classification changed"),
         }
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
     pub async fn handler_task_message(&self, req: TaskRequest) -> Result<TaskResponse> {
+        // Keep observers outside the checkpoint/restore gate. WaitProcess is intentionally excluded
+        // because it lives for the lifetime of the process and would otherwise block every checkpoint.
+        let task_is_observer = matches!(
+            &req,
+            TaskRequest::WaitProcess(_)
+                | TaskRequest::StateProcess(_)
+                | TaskRequest::StatsContainer(_)
+                | TaskRequest::Pid
+                | TaskRequest::ConnectContainer(_)
+        );
+        let _operation_guard = if task_is_observer {
+            None
+        } else {
+            Some(self.sandbox_operation_guard.read().await)
+        };
+
         if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
             let bundler_path = format!(
@@ -803,6 +890,10 @@ impl RuntimeHandlerManager {
 
                 Ok(SandboxResponse::ShutdownSandbox)
             }
+            SandboxRequest::CheckpointSandbox(req) => self.handle_checkpoint_sandbox(req).await,
+            SandboxRequest::RestoreSandbox(_) => Err(anyhow!(
+                "restore request reached initialized sandbox dispatcher"
+            )),
         }
     }
 
@@ -1661,6 +1752,7 @@ mod tests {
                 waiters: waiters_tx,
             }),
             container_manager: Arc::new(StartingContainerManager),
+            checkpoint_restore: None,
         }));
 
         let process_id = ContainerProcess::new("test-cid", exec_id).unwrap();
@@ -1708,11 +1800,13 @@ mod tests {
             config_path: path.to_string_lossy().to_string(),
             ..Default::default()
         };
-        let options = Some(options.write_to_bytes().unwrap());
+        let options = options.write_to_bytes().unwrap();
 
         init_runtime_handlers().unwrap();
-        let config = load_config(&HashMap::new(), &options).unwrap();
+        let (config, loaded_path) =
+            load_runtime_config(&HashMap::new(), Some(options.as_slice())).unwrap();
         assert_eq!(config.runtime.hypervisor_name, "qemu");
+        assert_eq!(loaded_path, path.canonicalize().unwrap());
     }
 
     fn write_qemu_config(path: &Path, hypervisor_path: &str) {

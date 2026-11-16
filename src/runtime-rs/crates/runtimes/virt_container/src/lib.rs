@@ -209,6 +209,7 @@ impl RuntimeHandler for VirtContainer {
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),
             container_manager: Arc::new(container_manager),
+            checkpoint_restore: None,
         })
     }
 

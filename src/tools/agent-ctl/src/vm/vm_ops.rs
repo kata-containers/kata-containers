@@ -17,7 +17,7 @@ use hypervisor::{
         DeviceConfig,
     },
     qemu::Qemu,
-    BlockConfigModern, Hypervisor, VsockConfig,
+    BlockConfigModern, Hypervisor, VmStartOptions, VsockConfig,
 };
 use kata_types::config::{
     hypervisor::register_hypervisor_plugin, hypervisor::TopologyConfigInfo,
@@ -151,7 +151,13 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
         share_fs_utils::setup_virtio_fs(hypervisor.clone(), dev_manager.clone(), name).await?;
 
     // start vm
-    if let Err(e) = hypervisor.start_vm(VM_START_TIMEOUT).await {
+    if let Err(e) = hypervisor
+        .start_vm(VmStartOptions {
+            timeout: VM_START_TIMEOUT,
+            restore: None,
+        })
+        .await
+    {
         // shutdown the virtiofs daemon
         let _ = share_fs_utils::shutdown_virtiofsd(fs_info).await;
         return Err(anyhow!("start_vm error: {:?}", e));

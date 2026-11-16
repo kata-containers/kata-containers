@@ -10,6 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use common::error::map_runtime_error;
 use common::types::{SandboxRequest, SandboxResponse};
 use containerd_shim_protos::{sandbox_api, sandbox_async};
 use runtimes::RuntimeHandlerManager;
@@ -36,17 +37,15 @@ impl SandboxService {
         <TtrpcResp as TryFrom<SandboxResponse>>::Error: std::fmt::Debug,
     {
         let r = req.try_into().map_err(|err| {
-            ttrpc::Error::Others(format!("failed to translate from shim {err:?}"))
+            ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("failed to translate sandbox request: {err:?}"),
+            ))
         })?;
         let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
         debug!(logger, "====> sandbox service {:?}", &r);
-        let resp = self
-            .handler
-            .handler_sandbox_message(r)
-            .await
-            .map_err(|err| {
-                ttrpc::Error::Others(format!("failed to handle sandbox message {err:?}"))
-            })?;
+        let response = self.handler.handler_sandbox_message(r).await;
+        let resp = response.map_err(map_runtime_error)?;
         debug!(logger, "<==== sandbox service {:?}", &resp);
         resp.try_into()
             .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {err:?}")))

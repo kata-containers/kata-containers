@@ -10,7 +10,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::types::{TaskRequest, TaskResponse};
+use common::{
+    error::map_runtime_error,
+    types::{TaskRequest, TaskResponse},
+};
 use containerd_shim_protos::{api, shim_async};
 use ttrpc::{self, r#async::TtrpcContext};
 
@@ -45,7 +48,7 @@ impl TaskService {
             .handler
             .handler_task_message(r)
             .await
-            .map_err(|err| ttrpc::Error::Others(format!("failed to handle message {err:?}")))?;
+            .map_err(map_runtime_error)?;
         debug!(logger, "<==== task service {:?}", &resp);
         resp.try_into()
             .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {err:?}")))

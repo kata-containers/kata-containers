@@ -1729,6 +1729,25 @@ fn setid(uid: Uid, gid: Gid) -> Result<()> {
 }
 
 impl LinuxContainer {
+    // Reassert the freezer invariant for a container restored with the VM.
+    // A restored workload must already be represented as Paused in the
+    // checkpointed agent state.
+    pub fn ensure_restored_frozen(&self) -> Result<()> {
+        let status = self.status();
+        if status != ContainerState::Paused {
+            return Err(anyhow!(
+                "restored container {} status is {:?}, expected Paused",
+                self.id,
+                status
+            ));
+        }
+
+        self.cgroup_manager
+            .as_ref()
+            .freeze(FreezerState::Frozen)
+            .context(format!("freeze restored container {}", self.id))
+    }
+
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
