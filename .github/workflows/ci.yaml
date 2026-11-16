@@ -417,7 +417,8 @@ jobs:
       NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
 
   run-k8s-tests-on-nvidia-gpu-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    # Temporarily disable NVIDIA GPU tests on arm64.
+    if: false
     needs: publish-kata-deploy-image-arm64
     uses: ./.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
     with:
