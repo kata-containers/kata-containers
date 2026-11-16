@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Result};
 use nix::mount::MsFlags;
-use nix::sched::{unshare, CloneFlags};
+use nix::sched::{setns, unshare, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use slog::Logger;
 use std::fmt;
@@ -142,6 +142,34 @@ impl Namespace {
             .map_err(|e| anyhow!("Failed to join thread {:?}!", e))??;
 
         Ok(self)
+    }
+
+    pub fn set_hostname(&mut self, hostname: &str) -> Result<()> {
+        if hostname.is_empty() {
+            self.hostname = None;
+            return Ok(());
+        }
+        if self.ns_type != NamespaceType::Uts {
+            return Err(anyhow!("hostname can only be set in a UTS namespace"));
+        }
+
+        let namespace = File::open(&self.path)?;
+        let hostname = hostname.to_string();
+        let thread_hostname = hostname.clone();
+
+        // setns(2) man page: "The setns() system call changes the namespace of the calling thread",
+        // With this reason, a new thread will be spawned here.
+        std::thread::spawn(move || -> Result<()> {
+            setns(&namespace, CloneFlags::CLONE_NEWUTS)?;
+            nix::unistd::sethostname(thread_hostname)?;
+            Ok(())
+        })
+        .join()
+        .map_err(|err| anyhow!("Failed to join UTS namespace thread {:?}!", err))??;
+
+        self.hostname = Some(hostname);
+
+        Ok(())
     }
 }
 
