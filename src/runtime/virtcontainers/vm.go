@@ -252,6 +252,20 @@ func (v *VM) Disconnect(ctx context.Context) error {
 	return nil
 }
 
+// CheckAgentReady verifies that the guest agent is reachable and serving.
+// It always attempts to disconnect the agent before returning. The disconnect
+// is best-effort and does not change the readiness check result.
+func (v *VM) CheckAgentReady(ctx context.Context) error {
+	v.logger().Info("check agent readiness")
+	defer func() {
+		if err := v.agent.disconnect(ctx); err != nil {
+			v.logger().WithError(err).Warn("failed to disconnect agent after readiness check")
+		}
+	}()
+
+	return v.agent.check(ctx)
+}
+
 // Stop stops a VM process.
 func (v *VM) Stop(ctx context.Context) error {
 	v.logger().Info("stop vm")
