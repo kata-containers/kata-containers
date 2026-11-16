@@ -17,6 +17,7 @@ use kata_types::{container::ContainerType, k8s};
 use unix_socket::UnixListener;
 
 use crate::{
+    core_sched,
     shim::{socket_path, ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
     Error,
 };
@@ -43,14 +44,11 @@ impl ShimExecutor {
         }
 
         match container_type {
-            ContainerType::PodSandbox | ContainerType::SingleContainer => {
-                let address = self.socket_address(&self.args.id)?;
-                let socket = new_listener(&address)?;
-                let child_pid = self.create_shim_process(socket)?;
-                self.write_pid_file(&bundle_path, child_pid)?;
-                self.write_address(&bundle_path, &address)?;
-                Ok(address)
-            }
+            ContainerType::PodSandbox | ContainerType::SingleContainer => self.start_new_shim(
+                &bundle_path,
+                std::env::var("SCHED_CORE").ok().as_deref(),
+                core_sched::core_sched_create,
+            ),
             ContainerType::PodContainer => {
                 let sid = id
                     .ok_or(Error::InvalidArgument)
@@ -60,6 +58,23 @@ impl ShimExecutor {
                 Ok(address)
             }
         }
+    }
+
+    fn start_new_shim(
+        &self,
+        bundle_path: &Path,
+        core_sched_value: Option<&str>,
+        create_core_sched: impl FnOnce(usize) -> Result<(), nix::errno::Errno>,
+    ) -> Result<PathBuf> {
+        // Children inherit the cookie across fork/exec. Activate before binding
+        // the listener so containerd sees the error and no socket needs cleanup.
+        try_core_sched(core_sched_value, create_core_sched).context("enable core scheduling")?;
+        let address = self.socket_address(&self.args.id)?;
+        let socket = new_listener(&address)?;
+        let child_pid = self.create_shim_process(socket)?;
+        self.write_pid_file(bundle_path, child_pid)?;
+        self.write_address(bundle_path, &address)?;
+        Ok(address)
     }
 
     fn new_command(&self) -> Result<std::process::Command> {
@@ -111,6 +126,16 @@ impl ShimExecutor {
     }
 }
 
+fn try_core_sched(
+    value: Option<&str>,
+    create: impl FnOnce(usize) -> Result<(), nix::errno::Errno>,
+) -> Result<()> {
+    if value.is_some_and(|v| !v.is_empty()) {
+        create(core_sched::PROCESS_GROUP)?;
+    }
+    Ok(())
+}
+
 fn new_listener(address: &Path) -> Result<UnixListener> {
     let file_path = socket_path(address)?;
     let file_path = file_path.as_path();
@@ -135,12 +160,68 @@ fn new_listener(address: &Path) -> Result<UnixListener> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{cell::Cell, path::Path};
+
+    use nix::errno::Errno;
 
     use serial_test::serial;
 
     use super::*;
     use crate::Args;
+
+    #[test]
+    fn test_core_sched_activation() {
+        for (value, requested) in [
+            (None, false),
+            (Some(""), false),
+            (Some("1"), true),
+            (Some("0"), true),
+        ] {
+            for outcome in [Ok(()), Err(Errno::EINVAL)] {
+                let called = Cell::new(false);
+                let result = try_core_sched(value, |scope| {
+                    called.set(true);
+                    assert_eq!(scope, core_sched::PROCESS_GROUP);
+                    outcome
+                });
+                assert_eq!(called.get(), requested);
+                if requested && outcome.is_err() {
+                    assert_eq!(
+                        result.unwrap_err().downcast_ref::<Errno>(),
+                        Some(&Errno::EINVAL)
+                    );
+                } else {
+                    result.unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_core_sched_failure_prevents_listener_and_child_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let executor = ShimExecutor::new(Args {
+            id: format!(
+                "core-sched-{}",
+                dir.path().file_name().unwrap().to_str().unwrap()
+            ),
+            namespace: "core-sched-test".into(),
+            address: "containerd.sock".into(),
+            publish_binary: "containerd".into(),
+            ..Default::default()
+        });
+        let address = executor.socket_address(&executor.args.id).unwrap();
+        let path = socket_path(&address).unwrap();
+        assert!(!path.exists());
+        let error = executor
+            .start_new_shim(dir.path(), Some("1"), |_| Err(Errno::EINVAL))
+            .unwrap_err();
+        assert_eq!(error.downcast_ref::<Errno>(), Some(&Errno::EINVAL));
+        assert!(format!("{error:#}").contains("enable core scheduling"));
+        assert!(!path.exists());
+        assert!(!dir.path().join("shim.pid").exists());
+        assert!(!dir.path().join("address").exists());
+    }
 
     #[test]
     #[serial]
