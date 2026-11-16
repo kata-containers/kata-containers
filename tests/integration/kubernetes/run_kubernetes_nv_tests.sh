@@ -156,6 +156,17 @@ nv_tests_include() {
 	return 1
 }
 
+# Diagnose confidential guest startup before a full suite can exhaust the job
+# timeout. Keep the console enabled from the first boot, including NVRC setup.
+case "${KATA_HYPERVISOR:-}" in
+	qemu-nvidia-gpu-snp | qemu-nvidia-gpu-snp-runtime-rs)
+		info "Diagnostic run: only Get CDH resource, with the debug RuntimeClass"
+		export KATA_TEST_RUNTIME_CLASS_MODE=debug
+		export K8S_TEST_BATS_FILTER='^Get CDH resource$'
+		K8S_TEST_NV=k8s-confidential-attestation.bats
+		;;
+esac
+
 if [[ -n "${K8S_TEST_NV:-}" ]]; then
 	mapfile -d " " -t K8S_TEST_NV <<< "${K8S_TEST_NV}"
 else

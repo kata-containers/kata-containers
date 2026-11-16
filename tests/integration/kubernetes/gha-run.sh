@@ -386,6 +386,10 @@ function collect_artifacts() {
 	fi
 	mkdir -p "${artifacts_dir}"
 	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
+	# A timed-out bats file may only have partial TAP output. Preserve it too.
+	if [[ -d "${kubernetes_dir}/reports" ]]; then
+		cp -a "${kubernetes_dir}/reports" "${artifacts_dir}/reports"
+	fi
 	local journalctl_log_filename
 	local journalctl_log_path
 

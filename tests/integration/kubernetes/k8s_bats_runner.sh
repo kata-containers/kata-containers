@@ -153,11 +153,22 @@ triage_failed_tests_with_debug() {
 # Environment:
 #	BATS_TEST_FAIL_FAST - "yes" to stop after the first failed file
 #	K8S_TEST_DEBUG_RETRY - "true" (default) to re-run failed cases on -debug
+#	KATA_TEST_RUNTIME_CLASS_MODE - "plain" (default) or "debug" for the first run
+#	K8S_TEST_BATS_FILTER - optional bats test-name regular expression
 run_kubernetes_bats_tests() {
 	local test_dir="$1"
 	local -n test_array=$2
 	local fail_fast="${BATS_TEST_FAIL_FAST:-no}"
 	local debug_retry="${K8S_TEST_DEBUG_RETRY:-true}"
+	local default_mode="${KATA_TEST_RUNTIME_CLASS_MODE:-plain}"
+	local -a bats_args=()
+	case "${default_mode}" in
+		plain | debug) ;;
+		*) die "Invalid KATA_TEST_RUNTIME_CLASS_MODE=${default_mode}" ;;
+	esac
+	if [[ -n "${K8S_TEST_BATS_FILTER:-}" ]]; then
+		bats_args+=(--filter "${K8S_TEST_BATS_FILTER}")
+	fi
 	local required
 	local required_runtime
 	local required_file
@@ -182,7 +193,7 @@ run_kubernetes_bats_tests() {
 	export K8S_TEST_DIR="${test_dir}"
 
 	info "Running k8s tests with bats version: $(bats --version). Save outputs to ${report_dir}"
-	info "RuntimeClass mode default=plain; debug triage retry=${debug_retry}"
+	info "RuntimeClass mode default=${default_mode}; debug triage retry=${debug_retry}"
 
 	local tests_fail=()
 	local test_entry
@@ -203,19 +214,19 @@ run_kubernetes_bats_tests() {
 
 		pushd "${test_dir}" > /dev/null || return 1
 
-		if bats_file_requires_guest_debug "${test_entry}"; then
+		if [[ "${default_mode}" == "debug" ]] || bats_file_requires_guest_debug "${test_entry}"; then
 			if ! debug_runtime_class_available; then
 				popd > /dev/null || true
 				die "${test_entry} requires kata-${KATA_HYPERVISOR}-debug RuntimeClass, but it is not deployed"
 			fi
 			mode="debug"
-			info "${test_entry} requires guest debug; running on -debug only"
+			info "Running ${test_entry} on the debug RuntimeClass"
 		else
 			mode="plain"
 		fi
 
 		verdict=0
-		run_bats_file_with_mode "${test_entry}" "${mode}" "${out_file}" || verdict=$?
+		run_bats_file_with_mode "${test_entry}" "${mode}" "${out_file}" "${bats_args[@]}" || verdict=$?
 
 		if [[ ${verdict} -ne 0 ]]; then
 			tests_fail+=("${test_entry}")

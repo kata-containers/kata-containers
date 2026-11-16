@@ -145,10 +145,12 @@ jobs:
 
       - name: Collect artifacts ${{ matrix.environment.vmm }}
         if: always()
+        timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
         continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.environment.vmm }}
+        if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: k8s-tests-${{ matrix.environment.vmm }}-${{ inputs.arch }}-kubeadm-${{ inputs.tag }}
