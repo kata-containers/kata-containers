@@ -35,8 +35,9 @@ spec:
             - --strict-topology=true
             - --immediate-topology=false
             - --worker-threads=5
-              #- --enable-capacity
-              #- --capacity-ownerref-level=0 # pod is owner
+            - --enable-capacity
+            - --capacity-ownerref-level=1
+            - --capacity-poll-interval=1m
           env:
           - name: NODE_NAME
             valueFrom:
@@ -98,6 +99,7 @@ spec:
             - --spdk-rawpath=$(RAW_DISKS)
             - --spdk-vhostpath=$(VHU_UDS_PATH)
             - --spdk-rpc-timeout=10s
+            - --capacity-config-dir=/etc/kata-directvolume/capacity
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -141,6 +143,9 @@ spec:
               name: csi-persist-data
             - mountPath: /dev
               name: dev-dir
+            - mountPath: /etc/kata-directvolume/capacity
+              name: capacity-config
+              readOnly: true
             # backend block file stored at storage-pool
             - mountPath: /tmp/kata-directvol-storages
               name: storage-pool
@@ -166,6 +171,10 @@ spec:
           - --csi-address=/csi/csi.sock
           - --health-port=9898
       volumes:
+        - name: capacity-config
+          configMap:
+            name: csi-kata-directvol-capacity
+            optional: true
         - hostPath:
             path: /var/lib/kubelet/plugins/csi-kata-directvolume
             type: DirectoryOrCreate
@@ -205,7 +214,7 @@ spec:
         # vhost there.
         - hostPath:
             path: /var/lib/spdk/vhost
-            type: Directory
+            type: DirectoryOrCreate
           name: vhost-dir
         # rawdisk there.
         - hostPath:
