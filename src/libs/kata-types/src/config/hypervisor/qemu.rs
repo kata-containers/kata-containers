@@ -133,6 +133,15 @@ impl ConfigPlugin for QemuConfig {
                 ));
             }
 
+            // GPUDirect P2P cliques are not supported for confidential guests.
+            if qemu.security_info.confidential_guest
+                && qemu.device_info.nvidia_gpudirect_clique().is_some()
+            {
+                return Err(std::io::Error::other(
+                    "nvidia_gpudirect_clique is not supported for confidential guests",
+                ));
+            }
+
             if qemu.boot_info.kernel.is_empty() {
                 return Err(std::io::Error::other(
                     "Guest kernel image for qemu is empty",

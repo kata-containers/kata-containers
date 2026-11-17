@@ -211,6 +211,9 @@ type HypervisorConfig struct {
 	// PCIeSwitchPort is the number of ports needed in the hypvervisor
 	PCIeSwitchPort uint32
 
+	// NVIDIAGPUDirectClique is the NVIDIA GPUDirect P2P clique ID, or nil
+	NVIDIAGPUDirectClique *uint8
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 

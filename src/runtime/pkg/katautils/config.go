@@ -167,6 +167,7 @@ type hypervisor struct {
 	ColdPlugVFIO                   config.PCIePort           `toml:"cold_plug_vfio"`
 	PCIeRootPort                   uint32                    `toml:"pcie_root_port"`
 	PCIeSwitchPort                 uint32                    `toml:"pcie_switch_port"`
+	NVIDIAGPUDirectClique          *int64                    `toml:"nvidia_gpudirect_clique"`
 	DisableVhostNet                bool                      `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool                      `toml:"guest_memory_dump_paging"`
 	ConfidentialGuest              bool                      `toml:"confidential_guest"`
@@ -345,6 +346,13 @@ func (h hypervisor) pcieRootPort() uint32 {
 		return maxPCIeRootPorts
 	}
 	return h.PCIeRootPort
+}
+
+func (h hypervisor) nvidiaGPUDirectClique() (*uint8, error) {
+	if h.NVIDIAGPUDirectClique == nil {
+		return nil, nil
+	}
+	return vc.ParseNVIDIAGPUDirectClique(*h.NVIDIAGPUDirectClique)
 }
 
 func (h hypervisor) pcieSwitchPort() uint32 {
@@ -1057,6 +1065,14 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	nvidiaGPUDirectClique, err := h.nvidiaGPUDirectClique()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+	if nvidiaGPUDirectClique != nil && h.ConfidentialGuest {
+		return vc.HypervisorConfig{}, errors.New("nvidia_gpudirect_clique is not supported for confidential guests")
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:                hypervisor,
 		HypervisorPathList:            h.HypervisorPathList,
@@ -1116,6 +1132,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ColdPlugVFIO:                  h.coldPlugVFIO(),
 		PCIeRootPort:                  h.pcieRootPort(),
 		PCIeSwitchPort:                h.pcieSwitchPort(),
+		NVIDIAGPUDirectClique:         nvidiaGPUDirectClique,
 		DisableVhostNet:               h.DisableVhostNet,
 		EnableVhostUserStore:          h.EnableVhostUserStore,
 		VhostUserStorePath:            h.vhostUserStorePath(),

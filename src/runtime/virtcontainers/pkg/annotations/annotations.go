@@ -126,6 +126,9 @@ const (
 	// PCIeSwitchPort is the number of PCIe switch ports to create for the VM.
 	PCIeSwitchPort = kataAnnotHypervisorPrefix + "pcie_switch_port"
 
+	// NVIDIAGPUDirectClique sets the NVIDIA GPUDirect P2P clique ID (0-15, -1 off).
+	NVIDIAGPUDirectClique = kataAnnotHypervisorPrefix + "nvidia_gpudirect_clique"
+
 	// EntropySource is a sandbox annotation to specify the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource = kataAnnotHypervisorPrefix + "entropy_source"

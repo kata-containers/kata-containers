@@ -13,6 +13,8 @@ use std::fs;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
+use crate::device::driver::vfio::parse_pci_hex_id;
+
 const SYS_IOMMU_GROUPS: &str = "/sys/kernel/iommu_groups";
 const SYS_PCI_DEVS: &str = "/sys/bus/pci/devices";
 const DEV_IOMMU: &str = "/dev/iommu";
@@ -184,6 +186,19 @@ pub struct DeviceInfo {
     /// VFIO character device node (e.g., /dev/vfio/devices/vfio0)
     /// Only populated if the kernel/hardware supports device-centric VFIO
     pub vfio_cdev: Option<VfioCdev>,
+}
+
+impl DeviceInfo {
+    /// Returns true if this device is an NVIDIA GPU.
+    pub fn is_nvidia_gpu(&self) -> bool {
+        match (
+            self.vendor_id.as_deref().and_then(parse_pci_hex_id),
+            self.class_code,
+        ) {
+            (Some(vendor), Some(class)) => pcilibs_rs::platform::is_nvidia_gpu(vendor, class),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1044,5 +1059,32 @@ mod tests {
     #[test]
     fn test_discover_vfio_ap_device_invalid_group_path_errors() {
         assert!(discover_vfio_ap_device(Path::new("/dev/vfio/vfio")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod nvidia_gpu_tests {
+    use super::*;
+
+    #[test]
+    fn test_device_info_is_nvidia_gpu() {
+        for (vendor, class, expected) in [
+            (Some("0x10de"), Some(0x030200), true),
+            (Some("0x10de"), Some(0x068000), false),
+            (Some("0x15b3"), Some(0x020000), false),
+            (Some("0x10de"), None, false),
+            (None, Some(0x030200), false),
+        ] {
+            let info = DeviceInfo {
+                vendor_id: vendor.map(String::from),
+                class_code: class,
+                ..Default::default()
+            };
+            assert_eq!(
+                info.is_nvidia_gpu(),
+                expected,
+                "vendor {vendor:?} class {class:?}"
+            );
+        }
     }
 }
