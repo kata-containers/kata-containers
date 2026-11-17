@@ -124,7 +124,7 @@ jobs:
           PROMPT
 
       - name: Draft release notes with Codex
-        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1
+        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1.13
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: ${{ runner.temp }}/release-notes-prompt.md
@@ -218,7 +218,7 @@ jobs:
           git diff --cached --binary > "$RUNNER_TEMP/release-notes.patch"
 
       - name: Check spelling
-        uses: streetsidesoftware/cspell-action@de2a73e963e7443969755b648a1008f77033c5b2 # 8.4.0
+        uses: streetsidesoftware/cspell-action@de2a73e963e7443969755b648a1008f77033c5b2 # v8.4.0
         with:
           files: |
             docs/releases/${{ inputs.version }}.md
