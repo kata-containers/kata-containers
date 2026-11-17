@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 
@@ -580,6 +581,21 @@ pub struct VmInfo {
     pub state: State,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_actual_size: Option<u64>,
+    /// The devices of the VM, keyed by their Cloud Hypervisor identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_tree: Option<HashMap<String, DeviceNode>>,
+}
+
+/// DeviceNode : A device in the Cloud Hypervisor device tree
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceNode {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    #[serde(default)]
+    pub children: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pci_bdf: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
@@ -611,6 +627,67 @@ mod tests {
             serde_json::from_str::<IommuType>("\"Smmuv3\"").unwrap(),
             IommuType::Smmuv3
         );
+    }
+
+    #[test]
+    fn test_vm_info_device_tree() {
+        // Trimmed vm.info response of Cloud Hypervisor v54.0 with a
+        // hot-plugged vhost-user-blk disk.
+        let info: VmInfo = serde_json::from_str(
+            r#"{
+                "config": {
+                    "cpus": {"boot_vcpus": 1, "max_vcpus": 1, "kvm_hyperv": false,
+                             "max_phys_bits": 46, "features": {"amx": false}},
+                    "memory": {"size": 536870912, "shared": true, "hotplug_method": "Acpi"},
+                    "disks": [{"id": "_disk0", "num_queues": 1, "queue_size": 128,
+                               "vhost_user": true, "vhost_socket": "/run/spdk/vhost-blk.0"}],
+                    "rng": {"src": "/dev/urandom"},
+                    "serial": {"mode": "Off"},
+                    "console": {"mode": "Off"}
+                },
+                "state": "Running",
+                "memory_actual_size": 536870912,
+                "device_tree": {
+                    "_disk0": {"id": "_disk0", "resources": [],
+                               "parent": "_virtio-pci-_disk0", "children": []},
+                    "_virtio-pci-_disk0": {"id": "_virtio-pci-_disk0", "resources": [],
+                                           "children": ["_disk0"], "pci_bdf": "0000:00:02.0"},
+                    "__serial": {"id": "__serial", "resources": [], "children": []}
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let disks = info.config.disks.unwrap();
+        assert!(disks[0].vhost_user);
+        assert!(disks[0].path.is_none());
+
+        let tree = info.device_tree.unwrap();
+        assert_eq!(tree.len(), 3);
+        assert_eq!(tree["_disk0"].parent.as_deref(), Some("_virtio-pci-_disk0"));
+        assert_eq!(
+            tree["_virtio-pci-_disk0"].pci_bdf.as_deref(),
+            Some("0000:00:02.0")
+        );
+        assert_eq!(tree["_virtio-pci-_disk0"].children, vec!["_disk0"]);
+        assert!(tree["__serial"].pci_bdf.is_none());
+    }
+
+    #[test]
+    fn test_vm_info_without_device_tree() {
+        let info: VmInfo = serde_json::from_str(
+            r#"{
+                "config": {
+                    "cpus": {"boot_vcpus": 1, "max_vcpus": 1, "max_phys_bits": 46},
+                    "memory": {"size": 536870912},
+                    "serial": {"mode": "Off"},
+                    "console": {"mode": "Off"}
+                },
+                "state": "Created"
+            }"#,
+        )
+        .unwrap();
+        assert!(info.device_tree.is_none());
     }
 
     #[test]

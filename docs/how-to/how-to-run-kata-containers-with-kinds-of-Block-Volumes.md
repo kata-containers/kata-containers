@@ -2,6 +2,8 @@
 
 > **Note:** This guide is only available for runtime-rs with default Hypervisor Dragonball.
 > Now, other hypervisors are still ongoing, and it'll be updated when they're ready.
+> The [SPDK device based block volume](#spdk-device-based-block-volume) also works with
+> Cloud Hypervisor.
 
 
 ## Background
@@ -175,8 +177,12 @@ $ sudo ${SPDK_DEVEL}/build/bin/spdk_tgt -S $VHU_UDS_PATH -s 1024 -m 0x3 &
 
 Second, create a vhost controller:
 
+> **Tips:** As for the direct block device volume, the backend storage MUST be formatted with `mkfs`:
+> the guest mounts it with the `fstype` given in `mountInfo.json`.
+
 ```bash
-$ sudo dd if=/dev/zero of=${RAW_DISKS}/rawdisk01.20g bs=1M count=20480
+$ sudo truncate -s 20G ${RAW_DISKS}/rawdisk01.20g
+$ sudo mkfs.ext4 -F ${RAW_DISKS}/rawdisk01.20g
 $ sudo ${SPDK_DEVEL}/scripts/rpc.py bdev_aio_create ${RAW_DISKS}/rawdisk01.20g vhu-rawdisk01.20g 512
 $ sudo ${SPDK_DEVEL}/scripts/rpc.py vhost_create_blk_controller vhost-blk-rawdisk01.sock vhu-rawdisk01.20g
 ```
@@ -188,27 +194,29 @@ be passed to Hypervisor, such as Dragonball, Cloud-Hypervisor, Firecracker or QE
 #### setup vhost-user block device for kata-containers
 
 
-First, `mkdir` a sub-path `kubelet/kata-test-vol-001/` under `/run/kata-containers/shared/direct-volumes/`.
+First, fill fields in `mountInfo.json`, it looks like as below. The `device` is the vhost-user
+socket of the controller. The optional `metadata` sets the `num_queues` and `queue_size`
+of the virtio-blk device, as strings, for example `{"num_queues": "2", "queue_size": "256"}`.
 
-Second, fill fields in `mountInfo.json`, it looks like as below:
 ```json
 {
   "device": "/tmp/vhu-targets/vhost-blk-rawdisk01.sock",
   "volume-type": "spdkvol",
   "fstype": "ext4",
-  "metadata":"{}",
+  "metadata": {},
   "options": []
 }
 ```
 
-Third, with the help of `kata-ctl direct-volume` to add block device to generate `mountInfo.json`, and run a kata container with `--mount`.
+Second, with the help of `kata-ctl direct-volume` to add block device to generate `mountInfo.json`, and run a kata container with `--mount`.
+`kata-ctl direct-volume add` takes the volume path and the mount information as positional arguments.
 
 ```bash
 $ # kata-ctl direct-volume add
-$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 "{\"device\": \"/tmp/vhu-targets/vhost-blk-rawdisk01.sock\", \"volume-type\":\"spdkvol\", \"fstype\": \"ext4\", \"metadata\":"{}", \"options\": []}"
+$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 '{"device": "/tmp/vhu-targets/vhost-blk-rawdisk01.sock", "volume-type": "spdkvol", "fstype": "ext4", "metadata": {}, "options": []}'
 $ # /kubelet/kata-test-vol-001/volume001 <==> /run/kata-containers/shared/direct-volumes/L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx
-$ cat L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
-$ {"volume-type":"spdkvol","device":"/tmp/vhu-targets/vhost-blk-rawdisk01.sock","fstype":"ext4","metadata":{},"options":[]}
+$ sudo cat /run/kata-containers/shared/direct-volumes/L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
+{"volume-type":"spdkvol","device":"/tmp/vhu-targets/vhost-blk-rawdisk01.sock","fstype":"ext4"}
 ```
 
 As `/run/kata-containers/shared/direct-volumes/` is a fixed path , we will be able to run a kata pod with `--mount` and set
@@ -224,6 +232,36 @@ In the case, `ctr run --mount type=X, src=source, dst=dest`, the X will be set `
 $ # ctr run with --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001
 $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001,options=rbind:rw "$image" kata-spdk-vol-xx0530 /bin/bash
 ```
+
+#### SPDK vhost-user block device with Cloud Hypervisor
+
+With Cloud Hypervisor, the volume is hot-plugged once the VM is running, as a virtio-blk
+PCI device that the agent finds by its PCI path.
+
+The guest memory must be backed by huge pages: set `enable_hugepages = true` in the
+`[hypervisor.clh]` section, and keep enough free huge pages on the host for the VM memory, in
+addition to those of the SPDK target. SPDK supports only huge page backed guest memory, which
+is also why the Go runtime refuses vhost-user-blk devices without huge pages. With the default
+4 KiB pages, SPDK can only register the guest memory for address translation when it runs on
+VFIO with an IOMMU. Otherwise its NVMe driver fails, and the SPDK target can crash when the
+mapping of the guest memory does not start on a 2 MiB boundary.
+
+- A `num_queues` larger than the number of boot vCPUs is reduced to it, as Cloud Hypervisor
+  does not accept more queues than vCPUs.
+- Cloud Hypervisor does not pass a read-only flag to vhost-user devices. To make the device
+  itself read-only, create the controller with `vhost_create_blk_controller --readonly`.
+- When the container is deleted, the runtime waits until the guest has released the device,
+  which closes the vhost-user connection. Once SPDK has ended the session (the `sessions` of
+  `vhost_get_controllers` is empty), the controller can be deleted with `vhost_delete_controller`.
+- The SPDK target must be listening when the container starts: otherwise Cloud Hypervisor
+  keeps trying to connect for 60 seconds before the container fails to start.
+- Without an IOMMU on the host, SPDK maps all of the VM memory when the guest activates the
+  disk, and the virtual CPU doing that waits meanwhile, while the agent waits 3 seconds for the
+  disk. With huge pages this takes up to about a second for a 2 GiB VM and up to about three
+  for an 8 GiB one; `enable_mem_prealloc = true` brings it down to milliseconds. If the
+  container still fails with `Timeout after 3s waiting for uevent`, give the agent more time
+  with `agent.hotplug_timeout=<seconds>`, in `kernel_params` or in the
+  `io.katacontainers.config.hypervisor.kernel_params` annotation.
 
 ## Integrate Direct Volume with K8S
 

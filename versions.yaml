@@ -390,6 +390,11 @@ externals:
     url: "https://github.com/open-policy-agent/opa"
     version: "v1.9.0"
 
+  spdk:
+    description: "Storage Performance Development Kit for vhost-user-blk tests"
+    url: "https://github.com/spdk/spdk"
+    version: "v26.09"
+
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
     url: "https://github.com/tianocore/edk2"

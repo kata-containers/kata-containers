@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
+use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::utils::open_named_tuntap;
@@ -17,13 +18,14 @@ use crate::ProtectionDeviceConfig;
 use crate::ShareFsConfig;
 use crate::ShareFsDevice;
 use crate::VfioDevice;
+use crate::VhostUserConfig;
 use crate::VmmState;
 use crate::{BlockConfigModern, BlockDeviceModern};
 use anyhow::{anyhow, ensure, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
-    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add_with_fds,
+    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_info, cloud_hypervisor_vm_netdev_add_with_fds,
     cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
@@ -46,10 +48,18 @@ use std::os::fd::IntoRawFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use virtio_bindings::bindings::virtio_blk::VIRTIO_BLK_ID_BYTES;
 
 const VIRTIO_FS: &str = "virtio-fs";
+
+// Cloud Hypervisor answers vm.remove-device as soon as it has asked the
+// guest to eject the device. The device, and with it the connection to a
+// vhost-user backend, only goes away once the guest has acknowledged the
+// eject, which normally takes well under a second.
+const DEVICE_REMOVAL_TIMEOUT: Duration = Duration::from_secs(10);
+const DEVICE_REMOVAL_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
@@ -89,6 +99,15 @@ impl CloudHypervisorInner {
                 DeviceType::Vfio(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Protection(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::BlockModern(_) => self.pending_devices.insert(0, device.clone()),
+                // The guest finds a vhost-user-blk disk by the PCI path that
+                // Cloud Hypervisor assigns when hot-plugging it, so it cannot
+                // be queued for boot like a BlockModern device.
+                DeviceType::VhostUserBlk(dev) => {
+                    return Err(anyhow!(
+                        "cannot add vhost-user-blk device {} before the VM is running",
+                        dev.device_id
+                    ));
+                }
                 _ => {
                     debug!(
                         sl!(),
@@ -108,6 +127,7 @@ impl CloudHypervisorInner {
             DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs).await,
             DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(hvsock).await,
             DeviceType::BlockModern(block) => self.handle_block_device(block).await,
+            DeviceType::VhostUserBlk(vhu_blk) => self.handle_vhost_user_blk_device(vhu_blk).await,
             DeviceType::Vfio(vfiodev) => self.handle_vfio_device(vfiodev).await,
             DeviceType::Network(netdev) => self.handle_network_device(netdev).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
@@ -138,6 +158,10 @@ impl CloudHypervisorInner {
             DeviceType::BlockModern(blockdev) => {
                 let device_id = blockdev.lock().await.device_id.clone();
                 self.inner_remove_device(device_id.as_str()).await
+            }
+            DeviceType::VhostUserBlk(vhu_blk) => {
+                self.remove_vhost_user_blk_device(&vhu_blk.device_id, DEVICE_REMOVAL_TIMEOUT)
+                    .await
             }
             _ => Ok(()),
         }
@@ -247,7 +271,173 @@ impl CloudHypervisorInner {
             debug!(sl!(), "device remove response: {:?}", detail);
         }
 
+        self.device_ids.remove(device_id);
+
         Ok(())
+    }
+
+    async fn handle_vhost_user_blk_device(
+        &mut self,
+        mut device: VhostUserBlkDevice,
+    ) -> Result<DeviceType> {
+        let mut disk_config = DiskConfig::try_from(&device.config)
+            .with_context(|| format!("vhost-user-blk device {}", device.device_id))?;
+
+        // Cloud Hypervisor rejects a disk with more queues than boot vCPUs.
+        let max_queues = self.disk_queue_limit();
+        if disk_config.num_queues > max_queues {
+            info!(
+                sl!(),
+                "Reducing vhost-user-blk queues from {} to {}", disk_config.num_queues, max_queues
+            );
+            disk_config.num_queues = max_queues;
+        }
+
+        info!(
+            sl!(),
+            "hot-plugging vhost-user-blk device";
+            "device" => &device.device_id,
+            "socket" => disk_config.vhost_socket.as_deref().unwrap_or_default(),
+            "num_queues" => disk_config.num_queues,
+            "queue_size" => disk_config.queue_size,
+        );
+
+        let response = cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config)
+            .await
+            .with_context(|| format!("add vhost-user-blk device {}", device.device_id))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "no device information returned for vhost-user-blk device {}",
+                    device.device_id
+                )
+            })?;
+
+        let dev_info: PciDeviceInfo = serde_json::from_str(&response)
+            .with_context(|| format!("invalid vm.add-disk response {response:?}"))?;
+
+        let pci_path = match Self::clh_pci_info_to_path(&dev_info.bdf) {
+            Ok(pci_path) => pci_path,
+            Err(e) => {
+                // Don't leave a disk in the guest that nothing keeps track of.
+                let rm_data = VmRemoveDeviceData {
+                    id: dev_info.id.clone(),
+                };
+                if let Err(rm_err) =
+                    cloud_hypervisor_vm_device_remove(&self.api_socket, rm_data).await
+                {
+                    warn!(
+                        sl!(),
+                        "failed to remove vhost-user-blk device {}: {:?}", dev_info.id, rm_err
+                    );
+                }
+                return Err(e);
+            }
+        };
+
+        info!(
+            sl!(),
+            "vhost-user-blk device hot-plugged";
+            "device" => &device.device_id,
+            "clh_id" => &dev_info.id,
+            "bdf" => &dev_info.bdf,
+        );
+
+        self.device_ids
+            .insert(device.device_id.clone(), dev_info.id);
+        device.config.pci_path = Some(pci_path);
+
+        Ok(DeviceType::VhostUserBlk(device))
+    }
+
+    async fn remove_vhost_user_blk_device(
+        &mut self,
+        device_id: &str,
+        timeout: Duration,
+    ) -> Result<()> {
+        let clh_id = self
+            .device_ids
+            .get(device_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("vhost-user-blk device {device_id} is not attached"))?;
+
+        // The device went away with the VM, whose API socket may be closed
+        // already: this happens when a container is cleaned up after the
+        // sandbox has been stopped.
+        if self.state != VmmState::VmRunning {
+            info!(
+                sl!(),
+                "VM is not running, forgetting vhost-user-blk device";
+                "device" => device_id,
+                "clh_id" => &clh_id,
+            );
+            self.device_ids.remove(device_id);
+            return Ok(());
+        }
+
+        // A removal that timed out is retried later on, by which time the guest
+        // may have completed the eject: Cloud Hypervisor would then answer 404.
+        if !self.device_present(&clh_id).await? {
+            info!(
+                sl!(),
+                "vhost-user-blk device already removed";
+                "device" => device_id,
+                "clh_id" => &clh_id,
+            );
+            self.device_ids.remove(device_id);
+            return Ok(());
+        }
+
+        self.inner_remove_device(device_id)
+            .await
+            .with_context(|| format!("remove vhost-user-blk device {device_id}"))?;
+
+        // Only return once the device is gone, which closes the vhost-user
+        // connection: a backend such as SPDK refuses to delete a controller
+        // that still has a connected front-end.
+        if let Err(e) = self.wait_for_device_removal(&clh_id, timeout).await {
+            // Keep track of the device so that removing it can be retried.
+            self.device_ids.insert(device_id.to_string(), clh_id);
+            return Err(e);
+        }
+
+        info!(
+            sl!(),
+            "vhost-user-blk device removed";
+            "device" => device_id,
+            "clh_id" => &clh_id,
+        );
+
+        Ok(())
+    }
+
+    fn disk_queue_limit(&self) -> usize {
+        (self.config.cpu_info.default_vcpus.ceil() as usize).max(1)
+    }
+
+    async fn device_present(&self, clh_id: &str) -> Result<bool> {
+        let vm_info = cloud_hypervisor_vm_info(&self.api_socket).await?;
+
+        Ok(vm_info
+            .device_tree
+            .is_some_and(|tree| tree.contains_key(clh_id)))
+    }
+
+    async fn wait_for_device_removal(&self, clh_id: &str, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+
+        loop {
+            if !self.device_present(clh_id).await? {
+                return Ok(());
+            }
+
+            if Instant::now() >= deadline {
+                return Err(anyhow!(
+                    "device {clh_id} was not removed from the VM within {timeout:?}"
+                ));
+            }
+
+            tokio::time::sleep(DEVICE_REMOVAL_POLL_INTERVAL).await;
+        }
     }
 
     // Various cloud-hypervisor APIs report a PCI address in "BB:DD.F"
@@ -559,6 +749,46 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
     }
 }
 
+impl TryFrom<&VhostUserConfig> for DiskConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(cfg: &VhostUserConfig) -> Result<Self, Self::Error> {
+        let socket = vhost_user_socket_path(&cfg.socket_path);
+        ensure!(
+            Path::new(socket).is_absolute(),
+            "vhost-user socket path {:?} is not absolute",
+            cfg.socket_path
+        );
+        check_unix_socket_path_len(Path::new(socket))?;
+
+        Ok(DiskConfig {
+            // The disk is served by the vhost-user back-end: Cloud Hypervisor
+            // rejects a disk path given together with a vhost socket.
+            path: None,
+            vhost_user: true,
+            vhost_socket: Some(socket.to_string()),
+            num_queues: match cfg.num_queues {
+                0 => DEFAULT_DISK_QUEUES,
+                n => n,
+            },
+            queue_size: match cfg.queue_size {
+                0 => DEFAULT_DISK_QUEUE_SIZE,
+                sz => u16::try_from(sz)
+                    .with_context(|| format!("vhost-user-blk queue size {sz} is too large"))?,
+            },
+            ..Default::default()
+        })
+    }
+}
+
+// SPDK volumes name their vhost-user socket "spdk://<path>" or
+// "spool://<path>", while Cloud Hypervisor needs the plain path.
+fn vhost_user_socket_path(socket_path: &str) -> &str {
+    socket_path
+        .split_once("://")
+        .map_or(socket_path, |(_, path)| path)
+}
+
 // Write the descriptor text file for a VMDK layout to the specified path
 fn write_vmdk_descriptor(descriptor_path: &Path, vmdk: &VmdkConfig) -> Result<()> {
     let descriptor = validate_vmdk_layout(vmdk)?
@@ -630,8 +860,491 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::MAX_UNIX_SOCKET_PATH_LEN;
     use crate::Address;
+    use crate::VhostUserType;
+    use ch_config::ch_api::ApiSocket;
+    use ch_config::{DeviceNode, State, VmInfo};
     use rstest::rstest;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::os::unix::net::UnixStream;
+    use std::thread::JoinHandle;
+
+    #[derive(Debug)]
+    struct ApiRequest {
+        method: String,
+        endpoint: String,
+        body: String,
+    }
+
+    // Stand-in for the Cloud Hypervisor HTTP API: answers the requests
+    // received on `server` with `responses`, in order, and returns every
+    // request it got. A request it has no response left for is recorded and
+    // the connection closed, so that the client fails instead of hanging.
+    fn spawn_mock_api(server: UnixStream, responses: Vec<String>) -> JoinHandle<Vec<ApiRequest>> {
+        std::thread::spawn(move || {
+            server
+                .set_read_timeout(Some(Duration::from_secs(30)))
+                .unwrap();
+            let mut reader = BufReader::new(server.try_clone().unwrap());
+            let mut writer = server;
+            let mut responses = responses.into_iter();
+            let mut requests = vec![];
+
+            loop {
+                let mut line = String::new();
+                if !matches!(reader.read_line(&mut line), Ok(n) if n > 0) {
+                    break;
+                }
+                // e.g. "PUT /api/v1/vm.add-disk HTTP/1.1"
+                let mut request_line = line.split_whitespace();
+                let method = request_line.next().unwrap().to_string();
+                let endpoint = request_line.next().unwrap().replace("/api/v1/", "");
+
+                let mut content_length = 0;
+                loop {
+                    let mut header = String::new();
+                    reader.read_line(&mut header).unwrap();
+                    if header == "\r\n" {
+                        break;
+                    }
+                    if let Some(len) = header.strip_prefix("Content-Length: ") {
+                        content_length = len.trim().parse().unwrap();
+                    }
+                }
+                let mut body = vec![0; content_length];
+                reader.read_exact(&mut body).unwrap();
+
+                requests.push(ApiRequest {
+                    method,
+                    endpoint,
+                    body: String::from_utf8(body).unwrap(),
+                });
+
+                match responses.next() {
+                    Some(response) => writer.write_all(response.as_bytes()).unwrap(),
+                    None => break,
+                }
+            }
+
+            requests
+        })
+    }
+
+    // Cloud Hypervisor sends the status code without a reason phrase.
+    fn http_response(status: u16, body: &str) -> String {
+        if body.is_empty() {
+            format!("HTTP/1.1 {status} \r\n\r\n")
+        } else {
+            format!(
+                "HTTP/1.1 {status} \r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            )
+        }
+    }
+
+    fn vm_info_response(device_ids: &[&str]) -> String {
+        let mut info = VmInfo {
+            state: State::Running,
+            device_tree: Some(
+                device_ids
+                    .iter()
+                    .map(|id| {
+                        let node = DeviceNode {
+                            id: id.to_string(),
+                            ..Default::default()
+                        };
+                        (id.to_string(), node)
+                    })
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+        info.config.cpus.max_phys_bits = 46;
+
+        http_response(200, &serde_json::to_string(&info).unwrap())
+    }
+
+    fn running_clh(api_socket: UnixStream) -> CloudHypervisorInner {
+        let mut clh = CloudHypervisorInner {
+            api_socket: ApiSocket::new(Some(api_socket)),
+            state: VmmState::VmRunning,
+            ..Default::default()
+        };
+        clh.config.cpu_info.default_vcpus = 4.0;
+        clh
+    }
+
+    fn vhost_user_blk(device_id: &str, socket_path: &str) -> VhostUserBlkDevice {
+        VhostUserBlkDevice::new(
+            device_id.to_string(),
+            VhostUserConfig {
+                socket_path: socket_path.to_string(),
+                device_type: VhostUserType::Blk,
+                driver_option: "blk".to_string(),
+                num_queues: 4,
+                queue_size: 256,
+                ..Default::default()
+            },
+        )
+    }
+
+    const ADD_DISK_RESPONSE: &str = r#"{"id":"_disk2","bdf":"0000:00:06.0"}"#;
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_hotplug() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(server, vec![http_response(200, ADD_DISK_RESPONSE)]);
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "spdk:///run/spdk/vhost-blk.0");
+        let added = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap();
+
+        let DeviceType::VhostUserBlk(added) = added else {
+            panic!("unexpected device {:?}", added);
+        };
+        assert_eq!(
+            added.config.pci_path,
+            Some(PciPath::try_from("06").unwrap())
+        );
+        assert_eq!(
+            clh.device_ids.get("vhu-blk-1").map(String::as_str),
+            Some("_disk2")
+        );
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        assert_eq!(requests.len(), 1, "{:?}", requests);
+        assert_eq!(requests[0].method, "PUT");
+        assert_eq!(requests[0].endpoint, "vm.add-disk");
+        // A vhost-user disk needs a socket and must not have a path.
+        let disk: DiskConfig = serde_json::from_str(&requests[0].body).unwrap();
+        assert_eq!(
+            disk,
+            DiskConfig {
+                path: None,
+                vhost_user: true,
+                vhost_socket: Some("/run/spdk/vhost-blk.0".to_string()),
+                num_queues: 4,
+                queue_size: 256,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_hot_unplug() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(
+            server,
+            vec![
+                http_response(200, ADD_DISK_RESPONSE),
+                vm_info_response(&["_disk2", "_virtio-pci-_disk2"]),
+                http_response(204, ""),
+                // The guest has not acknowledged the eject yet ...
+                vm_info_response(&["_disk2", "_virtio-pci-_disk2"]),
+                // ... and now it has.
+                vm_info_response(&[]),
+            ],
+        );
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "spdk:///run/spdk/vhost-blk.0");
+        let added = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap();
+        clh.remove_device(added).await.unwrap();
+        assert!(clh.device_ids.is_empty());
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        let endpoints: Vec<&str> = requests.iter().map(|r| r.endpoint.as_str()).collect();
+        assert_eq!(
+            endpoints,
+            [
+                "vm.add-disk",
+                "vm.info",
+                "vm.remove-device",
+                "vm.info",
+                "vm.info"
+            ]
+        );
+        assert_eq!(requests[1].method, "GET");
+        assert_eq!(requests[2].method, "PUT");
+        let remove: VmRemoveDeviceData = serde_json::from_str(&requests[2].body).unwrap();
+        assert_eq!(remove.id, "_disk2");
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_already_removed() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(
+            server,
+            vec![
+                http_response(200, ADD_DISK_RESPONSE),
+                // The guest completed the eject after an earlier attempt timed out.
+                vm_info_response(&[]),
+            ],
+        );
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+        let added = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap();
+        clh.remove_device(added).await.unwrap();
+        assert!(clh.device_ids.is_empty());
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        let endpoints: Vec<&str> = requests.iter().map(|r| r.endpoint.as_str()).collect();
+        assert_eq!(endpoints, ["vm.add-disk", "vm.info"]);
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_hot_unplug_timeout() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let mut responses = vec![
+            http_response(200, ADD_DISK_RESPONSE),
+            vm_info_response(&["_disk2"]),
+            http_response(204, ""),
+        ];
+        responses.extend((0..20).map(|_| vm_info_response(&["_disk2"])));
+        let api = spawn_mock_api(server, responses);
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+        clh.add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap();
+        let err = clh
+            .remove_vhost_user_blk_device("vhu-blk-1", Duration::from_millis(120))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("was not removed"), "{:?}", err);
+        // Still tracked, so that removing it can be retried.
+        assert_eq!(
+            clh.device_ids.get("vhu-blk-1").map(String::as_str),
+            Some("_disk2")
+        );
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        assert!(requests.len() >= 3, "{:?}", requests);
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_remove_after_vm_stop() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(server, vec![http_response(200, ADD_DISK_RESPONSE)]);
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+        let added = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap();
+
+        // stop_vm() marks the VM as not running before shutting it down.
+        clh.state = VmmState::NotReady;
+        clh.remove_device(added).await.unwrap();
+        assert!(clh.device_ids.is_empty());
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        assert_eq!(requests.len(), 1, "{:?}", requests);
+        assert_eq!(requests[0].endpoint, "vm.add-disk");
+    }
+
+    #[rstest]
+    #[case(1.0, 4, 1)]
+    #[case(2.0, 4, 2)]
+    #[case(1.5, 4, 2)]
+    #[case(8.0, 4, 4)]
+    #[tokio::test]
+    async fn test_vhost_user_blk_queues_limited_by_vcpus(
+        #[case] vcpus: f32,
+        #[case] requested: usize,
+        #[case] expected: usize,
+    ) {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(server, vec![http_response(200, ADD_DISK_RESPONSE)]);
+        let mut clh = running_clh(client);
+        clh.config.cpu_info.default_vcpus = vcpus;
+
+        let mut device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+        device.config.num_queues = requested;
+        clh.add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap();
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        let disk: DiskConfig = serde_json::from_str(&requests[0].body).unwrap();
+        assert_eq!(disk.num_queues, expected);
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_before_boot() {
+        let mut clh = CloudHypervisorInner::default();
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+
+        let err = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("before the VM is running"),
+            "{:?}",
+            err
+        );
+        assert!(clh.pending_devices.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_unexpected_pci_address() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(
+            server,
+            vec![
+                http_response(200, r#"{"id":"_disk2","bdf":"0000:01:00.0"}"#),
+                http_response(204, ""),
+            ],
+        );
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+        let err = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Unexpected PCI address"),
+            "{:?}",
+            err
+        );
+        assert!(clh.device_ids.is_empty());
+
+        drop(clh);
+        // The disk the guest got is removed again.
+        let requests = api.join().unwrap();
+        let endpoints: Vec<&str> = requests.iter().map(|r| r.endpoint.as_str()).collect();
+        assert_eq!(endpoints, ["vm.add-disk", "vm.remove-device"]);
+        assert!(requests[1].body.contains("_disk2"));
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_add_disk_failure() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(
+            server,
+            vec![http_response(
+                500,
+                r#"["Error from API","The disk could not be added to the VM","Timed out waiting for vhost-user connection"]"#,
+            )],
+        );
+        let mut clh = running_clh(client);
+
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+        let err = clh
+            .add_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("add vhost-user-blk device vhu-blk-1"),
+            "{:#}",
+            err
+        );
+        assert!(clh.device_ids.is_empty());
+
+        drop(clh);
+        assert_eq!(api.join().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_vhost_user_blk_remove_unknown_device() {
+        let mut clh = CloudHypervisorInner {
+            state: VmmState::VmRunning,
+            ..Default::default()
+        };
+        let device = vhost_user_blk("vhu-blk-1", "/run/spdk/vhost-blk.0");
+
+        let err = clh
+            .remove_device(DeviceType::VhostUserBlk(device))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("is not attached"), "{:?}", err);
+    }
+
+    #[rstest]
+    #[case("spdk:///run/spdk/vhost-blk.0", 0, 0, Some(("/run/spdk/vhost-blk.0", 1, 128)))]
+    #[case("spool:///run/spool/blk.sock", 2, 1024, Some(("/run/spool/blk.sock", 2, 1024)))]
+    #[case("/run/vhost-blk.sock", 1, 64, Some(("/run/vhost-blk.sock", 1, 64)))]
+    #[case("spdk://vhost-blk.0", 1, 128, None)]
+    #[case("", 1, 128, None)]
+    #[case("/run/vhost-blk.sock", 1, 65536, None)]
+    fn test_vhost_user_disk_config(
+        #[case] socket_path: &str,
+        #[case] num_queues: usize,
+        #[case] queue_size: u32,
+        #[case] expected: Option<(&str, usize, u16)>,
+    ) {
+        let cfg = VhostUserConfig {
+            socket_path: socket_path.to_string(),
+            num_queues,
+            queue_size,
+            ..Default::default()
+        };
+
+        match (DiskConfig::try_from(&cfg), expected) {
+            (Ok(disk), Some((socket, num_queues, queue_size))) => {
+                assert!(disk.vhost_user);
+                assert!(disk.path.is_none());
+                assert_eq!(disk.vhost_socket.as_deref(), Some(socket));
+                assert_eq!(disk.num_queues, num_queues);
+                assert_eq!(disk.queue_size, queue_size);
+            }
+            (Err(_), None) => {}
+            (result, expected) => panic!("got {:?}, expected {:?}", result, expected),
+        }
+    }
+
+    #[test]
+    fn test_vhost_user_disk_config_socket_path_too_long() {
+        let cfg = VhostUserConfig {
+            socket_path: format!("spdk:///{}", "s".repeat(MAX_UNIX_SOCKET_PATH_LEN)),
+            ..Default::default()
+        };
+        assert!(DiskConfig::try_from(&cfg).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_block_device_removal_forgets_device_id() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let api = spawn_mock_api(server, vec![http_response(204, "")]);
+        let mut clh = running_clh(client);
+        clh.device_ids
+            .insert("blk-1".to_string(), "_disk3".to_string());
+
+        let device = BlockDeviceModern {
+            device_id: "blk-1".into(),
+            ..Default::default()
+        };
+        clh.remove_device(DeviceType::BlockModern(Arc::new(Mutex::new(device))))
+            .await
+            .unwrap();
+        assert!(clh.device_ids.is_empty());
+
+        drop(clh);
+        let requests = api.join().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].endpoint, "vm.remove-device");
+    }
 
     #[actix_rt::test]
     async fn test_cold_plug_guest_extension_images() {
