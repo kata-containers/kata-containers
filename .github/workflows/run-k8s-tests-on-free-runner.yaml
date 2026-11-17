@@ -40,12 +40,12 @@ jobs:
       fail-fast: false
       matrix:
         environment: [
-          { vmm: clh, containerd_version: latest },
+          { vmm: clh, containerd_version: latest, hugepages: 512 },
           { vmm: clh, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: clh, containerd_version: minimum },
-          { vmm: dragonball, containerd_version: latest },
+          { vmm: dragonball, containerd_version: latest, hugepages: 512 },
           { vmm: dragonball, containerd_version: minimum },
-          { vmm: qemu, containerd_version: latest },
+          { vmm: qemu, containerd_version: latest, hugepages: 512 },
           { vmm: qemu, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: qemu, containerd_version: minimum },
           { vmm: qemu-runtime-rs, containerd_version: latest },
@@ -124,8 +124,24 @@ jobs:
           sudo rm -rf /opt/google
           sudo rm -rf /usr/lib/firefox
 
+      # k8s-hugepage-pod-sizing.bats boots a 1024 MiB guest on 2 MiB huge pages.
+      - name: Reserve huge pages
+        if: ${{ matrix.environment.hugepages }}
+        run: sudo sysctl -w vm.nr_hugepages="${HUGEPAGES}"
+        env:
+          HUGEPAGES: ${{ matrix.environment.hugepages }}
+
       - name: Deploy k8s (kubeadm)
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+
+      # containerd drops the containers' huge page limits unless this is false.
+      - name: Let containerd pass huge page limits to the runtime
+        if: ${{ matrix.environment.hugepages }}
+        run: |
+          sudo sed -i -E 's/^([[:space:]]*disable_hugetlb_controller[[:space:]]*=[[:space:]]*)true/\1false/' /etc/containerd/config.toml
+          sudo grep -q 'disable_hugetlb_controller = false' /etc/containerd/config.toml
+          sudo systemctl restart containerd
+          kubectl wait --for=condition=Ready --timeout=180s node --all
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats

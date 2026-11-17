@@ -14,6 +14,11 @@ ceiling. Its `memory` limit only covers what the sandbox uses on the host,
 so it can stay small and the pod still be Guaranteed. A container without
 a reservation keeps its `memory` limit as its ceiling.
 
+containerd passes a container's `hugepages-<size>` to the runtime only with
+`disable_hugetlb_controller = false` in its CRI plugin configuration. The
+default is `true`, and every container then keeps its `memory` limit as its
+ceiling. CRI-O passes it by default.
+
 The guest also needs memory of its own, which grows with its size. Declare
 it as `hugepages-<size>` in the runtime class's pod overhead, or as a pod
 level value above the containers' sum:
