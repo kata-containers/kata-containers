@@ -830,19 +830,6 @@ impl ResourceManagerInner {
                             .unwrap_or_default()
                             .to_string();
 
-                        let guest_pci_path = vfio_device
-                            .config
-                            .guest_pci_path
-                            .clone()
-                            .context("VFIO device has no guest PCI path assigned")?;
-                        let host_bdf = vfio_device.device.primary.addr.to_string();
-                        info!(
-                            sl!(),
-                            "vfio device guest pci path: {:?}, host bdf: {:?}",
-                            guest_pci_path,
-                            &host_bdf
-                        );
-
                         // vfio mode: vfio-pci and vfio-pci-gk for x86_64
                         // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
                         // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
@@ -850,7 +837,8 @@ impl ResourceManagerInner {
                             "vfio" => "vfio-pci".to_string(),
                             _ => "vfio-pci-gk".to_string(),
                         };
-                        let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
+                        let device_options = vfio_device.agent_options()?;
+                        info!(sl!(), "vfio device options: {:?}", device_options);
                         // The Go runtime sets the device Id to
                         // filepath.Base(dev.ContainerPath), e.g. "vfio0".
                         // The agent policy validates this with:

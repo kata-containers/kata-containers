@@ -7,7 +7,7 @@
 use bitmask_enum::bitmask;
 
 /// CapabilityBits
-#[bitmask(u8)]
+#[bitmask(u16)]
 pub enum CapabilityBits {
     /// hypervisor supports use block device
     BlockDeviceSupport,
@@ -25,6 +25,9 @@ pub enum CapabilityBits {
     BlockDeviceDiscardSupport,
     /// hypervisor supports network device hotplug
     NetworkDeviceHotplugSupport,
+    /// hypervisor builds the guest PCIe hierarchy itself and places VFIO
+    /// devices in it, instead of using runtime-rs's shared PCIe topology
+    VfioPlacementSupport,
 }
 
 /// Capabilities describe a virtcontainers hypervisor capabilities through a bit mask.
@@ -98,6 +101,12 @@ impl Capabilities {
     pub fn is_network_device_hotplug_supported(&self) -> bool {
         self.flags.and(CapabilityBits::NetworkDeviceHotplugSupport) != 0
     }
+
+    /// is_vfio_placement_supported tells if the hypervisor places VFIO
+    /// devices in its own guest PCIe hierarchy.
+    pub fn is_vfio_placement_supported(&self) -> bool {
+        self.flags.and(CapabilityBits::VfioPlacementSupport) != 0
+    }
 }
 
 #[cfg(test)]
@@ -154,6 +163,11 @@ mod tests {
         assert!(cap.is_block_device_discard_supported());
         // test network device hotplug capability
         cap.add(CapabilityBits::NetworkDeviceHotplugSupport);
+        assert!(cap.is_network_device_hotplug_supported());
+        // test VFIO placement capability
+        assert!(!cap.is_vfio_placement_supported());
+        cap.add(CapabilityBits::VfioPlacementSupport);
+        assert!(cap.is_vfio_placement_supported());
         assert!(cap.is_network_device_hotplug_supported());
     }
 }
