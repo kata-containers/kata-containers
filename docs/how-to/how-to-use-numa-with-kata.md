@@ -242,38 +242,7 @@ EOF
 > pinning. The large `limits.cpu` value tells Kata to create a VM with
 > that many vCPUs distributed across NUMA nodes.
 
-!!! tip "Huge page backed guests"
-
-    Guaranteed QoS needs a `memory` limit, which is awkward on a host that
-    reserves most of its memory as huge pages: the limit is charged against
-    the ordinary memory left behind, so a value anywhere near the guest's
-    size is unschedulable. It does not have to be near it. When the guest
-    runs on huge pages (`enable_hugepages = true`), the memory limit does not
-    size the VM — `default_memory` does, and the pod reserves it as a
-    `hugepages-<size>` resource — so the limit only has to be large enough
-    for what the sandbox uses outside the guest:
-
-    ```yaml
-    resources:
-      requests: { cpu: "80", memory: 2Gi, hugepages-1Gi: 64Gi }
-      limits:   { cpu: "80", memory: 2Gi, hugepages-1Gi: 64Gi }
-    ```
-
-    That pod is Guaranteed, and its guest is the 64Gi of `default_memory`
-    that `hugepages-1Gi` covers. Inside the guest that 64Gi is ordinary RAM,
-    so the container is bounded by its `memory` limit *plus* the huge pages it
-    reserved, and not by the 2Gi alone — and never by more than the guest can
-    hold. A 64Gi guest reports about 63Gi of it, the rest being the page
-    metadata its kernel needs to describe that memory, so the ceiling lands at
-    62Gi. A
-    ceiling above that could not stop the container: the guest's own OOM killer
-    would, and it picks among all of the guest's processes, so it may kill the
-    guest's init before the workload that filled the memory, leaving the pod
-    with no OOM and no restart to report.
-
-    A sidecar that reserves no huge pages keeps its own limit as its ceiling,
-    far below the guest's size, so the containers of a pod still bound each
-    other.
+For huge page backed guests sized from the pod, see [How to size a huge page backed guest from its pod](how-to-size-hugepage-backed-guest.md).
 
 ### 4.2 GPU passthrough pod with NUMA
 
