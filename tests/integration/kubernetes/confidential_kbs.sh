@@ -646,6 +646,7 @@ function kbs_k8s_deploy() {
 		prepare_credentials_for_qemu_se
 		helm_set_args+=(--set "as.verifier.se.credsDir=${IBM_SE_CREDS_DIR:-}")
 		helm_set_args+=(--set "as.verifier.se.nodeName=${node_name}")
+		helm_set_args+=(--set "as.verifier.se.enableFirmwareVerification=${IBM_SE_FW_ATTESTATION:-false}")
 		# fsGroup must match the owning GID of the files under credsDir so the
 		# non-root AS container (CAP_DAC_OVERRIDE dropped) can read them.
 		helm_set_args+=(--set "as.podSecurityContext.fsGroup=1000")
