@@ -4,6 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod checkpoint_restore;
+
+use checkpoint_restore::PendingRestoredTask;
+
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 
@@ -30,7 +34,7 @@ use tracing::instrument;
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
 use kata_types::annotations::KATA_ANNO_CFG_RUNTIME_ENVD;
 
-use crate::container_manager::is_termination_signal;
+use crate::container_manager::{is_termination_signal, restoring_container_error};
 use crate::oom::CrioOomNotifier;
 
 use super::{logger_with_process, Container};
@@ -39,12 +43,14 @@ pub struct VirtContainerManager {
     sid: String,
     pid: u32,
     containers: Arc<RwLock<HashMap<String, Container>>>,
+    pending_restored_tasks: Arc<RwLock<HashMap<String, PendingRestoredTask>>>,
     resource_manager: Arc<ResourceManager>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
     sandbox_annotations: HashMap<String, String>,
+    use_guest_resolv_conf: bool,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -64,6 +70,7 @@ fn from_hooks(hooks: &Option<Vec<oci::Hook>>) -> &[oci::Hook] {
 }
 
 impl VirtContainerManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         sid: &str,
         pid: u32,
@@ -72,17 +79,20 @@ impl VirtContainerManager {
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
         sandbox_annotations: HashMap<String, String>,
+        use_guest_resolv_conf: bool,
     ) -> Self {
         Self {
             sid: sid.to_string(),
             pid,
             containers: Default::default(),
+            pending_restored_tasks: Default::default(),
             resource_manager,
             agent,
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
             sandbox_annotations,
+            use_guest_resolv_conf,
         }
     }
 
@@ -98,6 +108,21 @@ impl VirtContainerManager {
 impl ContainerManager for VirtContainerManager {
     #[instrument]
     async fn create_container(&self, config: ContainerConfig, mut spec: oci::Spec) -> Result<PID> {
+        // RestoreSandbox records the exact new task IDs. Bind an ordinary
+        // Task.Create only when its ID is in that pending restore inventory.
+        if self.is_pending_restore(&config.container_id).await {
+            return self.bind_restored_container(config, spec).await;
+        }
+
+        if self
+            .containers
+            .read()
+            .await
+            .contains_key(&config.container_id)
+        {
+            return Err(anyhow!("container {} already exists", config.container_id));
+        }
+
         let vmm_master_tid = self.get_vmm_master_tid().await?;
 
         let mut container = Container::new(
@@ -106,6 +131,7 @@ impl ContainerManager for VirtContainerManager {
             spec.clone(),
             self.agent.clone(),
             self.resource_manager.clone(),
+            self.use_guest_resolv_conf,
             self.hypervisor.get_passfd_listener_addr().await.ok(),
         )
         .await
@@ -178,6 +204,22 @@ impl ContainerManager for VirtContainerManager {
         match process.process_type {
             ProcessType::Container => {
                 let mut containers = self.containers.write().await;
+                let c = match containers.get_mut(container_id) {
+                    Some(container) => container,
+                    None => {
+                        let pending = self
+                            .pending_restored_tasks
+                            .read()
+                            .await
+                            .contains_key(container_id);
+                        return Err(restoring_container_error(container_id, pending).into());
+                    }
+                };
+
+                c.discard_unstarted_restored()
+                    .await
+                    .context("discard unstarted VM-restored container")?;
+
                 let mut c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
@@ -222,7 +264,10 @@ impl ContainerManager for VirtContainerManager {
                         .execute_hooks(from_hooks(hooks.poststop()), Some(state))?;
                 }
 
-                c.state_process(process).await.context("state process")
+                let state = c.state_process(process).await.context("state process")?;
+                containers.remove(container_id);
+
+                Ok(state)
             }
             ProcessType::Exec => {
                 let containers = self.containers.read().await;

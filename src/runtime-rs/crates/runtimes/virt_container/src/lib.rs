@@ -151,6 +151,7 @@ impl RuntimeHandler for VirtContainer {
         init_size_manager: InitialSizeManager,
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
+        let use_guest_resolv_conf = !sandbox_config.dns.is_empty();
         let mut factory = config.get_factory();
         if factory.enable_template {
             if let Err(e) = check_template_vm_config(&config) {
@@ -208,6 +209,7 @@ impl RuntimeHandler for VirtContainer {
             resource_manager,
             sandbox.oom_notifier(),
             sandbox_annotations,
+            use_guest_resolv_conf,
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),
