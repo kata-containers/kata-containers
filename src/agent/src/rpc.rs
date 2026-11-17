@@ -82,7 +82,9 @@ use crate::features::get_build_features;
 use crate::metrics::{get_metrics, is_collection_in_progress};
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
-use crate::network::setup_guest_dns;
+use crate::network::{
+    copy_sandbox_files, remove_sandbox_files, setup_guest_dns, setup_guest_hostname,
+};
 use crate::passfd_io;
 use crate::pci;
 use crate::random;
@@ -362,9 +364,10 @@ impl AgentService {
 
         // write spec to bundle path, hooks might
         // read ocispec
-        let olddir = setup_bundle(&cid, &mut oci)?;
+        let (olddir, sandbox_files) = setup_bundle(&cid, &mut oci)?;
         // restore the cwd for kata-agent process.
         defer!(unistd::chdir(&olddir).unwrap());
+        let sandbox_files = scopeguard::guard(sandbox_files, |files| remove_sandbox_files(&files));
 
         // determine which cgroup driver to take and then assign to use_systemd_cgroup
         // systemd: "[slice]:[prefix]:[name]"
@@ -428,6 +431,7 @@ impl AgentService {
         s.update_shared_pidns(&ctr)?;
         s.setup_shared_mounts(&ctr, &req.shared_mounts)?;
         s.add_container(ctr);
+        scopeguard::ScopeGuard::into_inner(sandbox_files);
         info!(sl(), "created container!");
 
         Ok(())
@@ -1578,6 +1582,7 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        setup_guest_hostname(&req.hostname).map_ttrpc_err(same)?;
         setup_guest_dns(sl(), &req.dns).map_ttrpc_err(same)?;
         {
             let mut s = self.sandbox.lock().await;
@@ -2525,7 +2530,9 @@ async fn do_add_swap_path(req: &AddSwapPathRequest) -> Result<()> {
 // - config.json at /<CONTAINER_BASE>/<cid>/config.json
 // - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
 // - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
-pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
+// Returns the previous cwd and the private sandbox files created in the
+// bundle, which the caller must remove if the container is not created.
+pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<(PathBuf, Vec<PathBuf>)> {
     let spec_root = if let Some(sr) = &spec.root() {
         sr
     } else {
@@ -2560,20 +2567,26 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     oci_root.set_readonly(spec_root.readonly());
     spec.set_root(Some(oci_root));
 
-    let _ = spec.save(
-        config_path
-            .to_str()
-            .ok_or_else(|| anyhow!("cannot convert path to unicode"))?,
-    );
+    let sandbox_files = copy_sandbox_files(spec, &bundle_path)?;
 
-    let olddir = unistd::getcwd().context("cannot getcwd")?;
-    unistd::chdir(
-        bundle_path
-            .to_str()
-            .ok_or_else(|| anyhow!("cannot convert bundle path to unicode"))?,
-    )?;
+    let enter_bundle = || -> Result<PathBuf> {
+        let _ = spec.save(
+            config_path
+                .to_str()
+                .ok_or_else(|| anyhow!("cannot convert path to unicode"))?,
+        );
 
-    Ok(olddir)
+        let olddir = unistd::getcwd().context("cannot getcwd")?;
+        unistd::chdir(
+            bundle_path
+                .to_str()
+                .ok_or_else(|| anyhow!("cannot convert bundle path to unicode"))?,
+        )?;
+        Ok(olddir)
+    };
+    let olddir = enter_bundle().inspect_err(|_| remove_sandbox_files(&sandbox_files))?;
+
+    Ok((olddir, sandbox_files))
 }
 
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {

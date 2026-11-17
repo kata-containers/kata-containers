@@ -3,14 +3,104 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use nix::mount::{self, MsFlags};
+use oci_spec::runtime::Spec;
 use slog::Logger;
 use std::fs;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path;
 
 const KATA_GUEST_SANDBOX_DNS_FILE: &str = "/run/kata-containers/sandbox/resolv.conf";
 const GUEST_DNS_FILE: &str = "/etc/resolv.conf";
+const KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox";
+
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "network"))
+}
+
+pub fn setup_guest_hostname(hostname: &str) -> Result<()> {
+    if !hostname.is_empty() {
+        fs::create_dir_all(KATA_GUEST_SANDBOX_DIR)?;
+        fs::write(
+            path::Path::new(KATA_GUEST_SANDBOX_DIR).join("hostname"),
+            format!("{hostname}\n"),
+        )?;
+    }
+    Ok(())
+}
+
+// Validate the incoming mount against policy before replacing its source with
+// a private file in the container bundle. A workload may write its own copy,
+// but must not modify the sandbox template or another workload's resolver.
+//
+// The returned files must be passed to remove_sandbox_files() if the container
+// is not created: the bundle is only removed when a registered container is
+// destroyed, and leftover files make a retry with the same ID fail.
+pub fn copy_sandbox_files(spec: &mut Spec, bundle: &path::Path) -> Result<Vec<path::PathBuf>> {
+    copy_sandbox_files_from(spec, bundle, path::Path::new(KATA_GUEST_SANDBOX_DIR))
+}
+
+pub fn remove_sandbox_files(files: &[path::PathBuf]) {
+    for file in files {
+        if let Err(err) = fs::remove_file(file) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                warn!(
+                    sl(),
+                    "failed to remove private sandbox file {}: {:?}",
+                    file.display(),
+                    err
+                );
+            }
+        }
+    }
+}
+
+fn copy_sandbox_files_from(
+    spec: &mut Spec,
+    bundle: &path::Path,
+    sandbox: &path::Path,
+) -> Result<Vec<path::PathBuf>> {
+    let mut created = Vec::new();
+    copy_sandbox_files_into(spec, bundle, sandbox, &mut created).inspect_err(|_| {
+        remove_sandbox_files(&created);
+    })?;
+    Ok(created)
+}
+
+fn copy_sandbox_files_into(
+    spec: &mut Spec,
+    bundle: &path::Path,
+    sandbox: &path::Path,
+    created: &mut Vec<path::PathBuf>,
+) -> Result<()> {
+    if let Some(mounts) = spec.mounts_mut() {
+        for mount in mounts {
+            for filename in ["resolv.conf", "hostname"] {
+                let source = sandbox.join(filename);
+                let destination = path::Path::new("/etc").join(filename);
+                if mount.source().as_ref() != Some(&source)
+                    || mount.destination() != &destination
+                    || mount.typ().as_deref() != Some("bind")
+                {
+                    continue;
+                }
+                let target = bundle.join(filename);
+                let mut input = fs::File::open(&source).context("open sandbox file template")?;
+                let mut output = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o644)
+                    .open(&target)
+                    .context("create private sandbox file")?;
+                created.push(target.clone());
+                std::io::copy(&mut input, &mut output).context("copy sandbox file template")?;
+                mount.set_source(Some(target));
+            }
+        }
+    }
+    Ok(())
+}
 
 // Network describes a sandbox network, includings its dns
 // related information.
@@ -88,6 +178,145 @@ mod tests {
     use std::io::Write;
     use tempfile::tempdir;
     use test_utils::skip_if_not_root;
+
+    #[test]
+    fn sandbox_file_copies_are_private_and_preserve_mount_options() {
+        let sandbox = tempdir().unwrap();
+        let first = tempdir().unwrap();
+        let second = tempdir().unwrap();
+        let mut spec = Spec::default();
+        let mut mounts = Vec::new();
+        for filename in ["resolv.conf", "hostname"] {
+            fs::write(sandbox.path().join(filename), "original\n").unwrap();
+            mounts.push(
+                oci_spec::runtime::MountBuilder::default()
+                    .destination(path::Path::new("/etc").join(filename))
+                    .source(sandbox.path().join(filename))
+                    .typ("bind")
+                    .options(vec!["rbind".to_string(), "rprivate".into(), "rw".into()])
+                    .build()
+                    .unwrap(),
+            );
+        }
+        spec.set_mounts(Some(mounts));
+        let mut sibling = spec.clone();
+        copy_sandbox_files_from(&mut spec, first.path(), sandbox.path()).unwrap();
+        copy_sandbox_files_from(&mut sibling, second.path(), sandbox.path()).unwrap();
+        for (index, filename) in ["resolv.conf", "hostname"].iter().enumerate() {
+            fs::write(first.path().join(filename), "changed\n").unwrap();
+            assert_eq!(
+                fs::read_to_string(sandbox.path().join(filename)).unwrap(),
+                "original\n"
+            );
+            assert_eq!(
+                fs::read_to_string(second.path().join(filename)).unwrap(),
+                "original\n"
+            );
+            let mount = &spec.mounts().as_ref().unwrap()[index];
+            assert_eq!(
+                mount.source().as_ref().unwrap(),
+                &first.path().join(filename)
+            );
+            assert_eq!(
+                mount.options().as_ref().unwrap(),
+                &vec!["rbind", "rprivate", "rw"]
+            );
+        }
+    }
+
+    #[test]
+    fn sandbox_file_copy_preserves_explicit_mounts() {
+        let sandbox = tempdir().unwrap();
+        let bundle = tempdir().unwrap();
+        let mount = oci_spec::runtime::MountBuilder::default()
+            .destination("/etc/resolv.conf")
+            .source("/custom/resolv.conf")
+            .typ("bind")
+            .build()
+            .unwrap();
+        let mut spec = Spec::default();
+        spec.set_mounts(Some(vec![mount.clone()]));
+        copy_sandbox_files_from(&mut spec, bundle.path(), sandbox.path()).unwrap();
+        assert_eq!(spec.mounts().as_ref().unwrap(), &vec![mount]);
+        assert!(!bundle.path().join("resolv.conf").exists());
+    }
+
+    #[test]
+    fn sandbox_file_copy_rejects_existing_target() {
+        let sandbox = tempdir().unwrap();
+        let bundle = tempdir().unwrap();
+        fs::write(sandbox.path().join("resolv.conf"), "template").unwrap();
+        let protected = bundle.path().join("protected");
+        fs::write(&protected, "preserve").unwrap();
+        std::os::unix::fs::symlink(&protected, bundle.path().join("resolv.conf")).unwrap();
+        let mut spec = Spec::default();
+        spec.set_mounts(Some(vec![oci_spec::runtime::MountBuilder::default()
+            .destination("/etc/resolv.conf")
+            .source(sandbox.path().join("resolv.conf"))
+            .typ("bind")
+            .build()
+            .unwrap()]));
+        assert!(copy_sandbox_files_from(&mut spec, bundle.path(), sandbox.path()).is_err());
+        assert_eq!(fs::read_to_string(protected).unwrap(), "preserve");
+    }
+
+    fn sandbox_file_mounts(sandbox: &path::Path) -> Spec {
+        let mut spec = Spec::default();
+        spec.set_mounts(Some(
+            ["resolv.conf", "hostname"]
+                .iter()
+                .map(|filename| {
+                    oci_spec::runtime::MountBuilder::default()
+                        .destination(path::Path::new("/etc").join(filename))
+                        .source(sandbox.join(filename))
+                        .typ("bind")
+                        .build()
+                        .unwrap()
+                })
+                .collect(),
+        ));
+        spec
+    }
+
+    #[test]
+    fn sandbox_file_copy_rolls_back_partial_copies() {
+        let sandbox = tempdir().unwrap();
+        let bundle = tempdir().unwrap();
+        fs::write(sandbox.path().join("resolv.conf"), "template").unwrap();
+        let mut spec = sandbox_file_mounts(sandbox.path());
+        assert!(copy_sandbox_files_from(&mut spec, bundle.path(), sandbox.path()).is_err());
+        assert!(!bundle.path().join("resolv.conf").exists());
+
+        fs::write(sandbox.path().join("hostname"), "template").unwrap();
+        let mut spec = sandbox_file_mounts(sandbox.path());
+        let files = copy_sandbox_files_from(&mut spec, bundle.path(), sandbox.path()).unwrap();
+        assert_eq!(files.len(), 2);
+    }
+
+    #[test]
+    fn sandbox_file_removal_allows_same_bundle_retry() {
+        let sandbox = tempdir().unwrap();
+        let bundle = tempdir().unwrap();
+        for filename in ["resolv.conf", "hostname"] {
+            fs::write(sandbox.path().join(filename), "template").unwrap();
+        }
+        let mut spec = sandbox_file_mounts(sandbox.path());
+        let files = copy_sandbox_files_from(&mut spec, bundle.path(), sandbox.path()).unwrap();
+        assert_eq!(
+            files,
+            vec![
+                bundle.path().join("resolv.conf"),
+                bundle.path().join("hostname")
+            ]
+        );
+
+        let mut retry = sandbox_file_mounts(sandbox.path());
+        assert!(copy_sandbox_files_from(&mut retry, bundle.path(), sandbox.path()).is_err());
+
+        remove_sandbox_files(&files);
+        let mut retry = sandbox_file_mounts(sandbox.path());
+        copy_sandbox_files_from(&mut retry, bundle.path(), sandbox.path()).unwrap();
+    }
 
     #[test]
     fn test_setup_guest_dns() {

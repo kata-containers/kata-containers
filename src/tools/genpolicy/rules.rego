@@ -84,6 +84,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
 
     # check sandbox name
     sandbox_name = i_oci.Annotations[S_NAME_KEY]
+    allow_sandbox_name_for_known_hostname(sandbox_name)
     add_sandbox_name_to_state := state_allows("sandbox_name", sandbox_name)
     ops_builder1 := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
 
@@ -1675,7 +1676,7 @@ allow_copy_file_path(path, regex_suffix) if {
     regex.match(regex5, path)
 }
 
-CreateSandboxRequest := {"ops": [add_sandbox_to_state], "allowed": true} if {
+CreateSandboxRequest := {"ops": [add_sandbox_to_state, add_hostname_to_state], "allowed": true} if {
     print("CreateSandboxRequest: input.guest_hook_path =", input.guest_hook_path)
     count(input.guest_hook_path) == 0
 
@@ -1686,10 +1687,79 @@ CreateSandboxRequest := {"ops": [add_sandbox_to_state], "allowed": true} if {
     print("CreateSandboxRequest: i_pidns =", i_pidns)
     i_pidns == false
     allow_sandbox_storages(input.storages)
+    allow_sandbox_dns(input.dns)
+    allow_sandbox_hostname(input.hostname)
 
     state := get_state()
     not state["sandbox_created"]
+    allow_hostname_for_known_sandbox_name(input.hostname)
     add_sandbox_to_state := state_allows("sandbox_created", true)
+    add_hostname_to_state := state_allows("sandbox_hostname", input.hostname)
+}
+
+# The agent writes these lines to the sandbox resolver configuration.
+allow_sandbox_dns(i_dns) if {
+    every i_line in i_dns {
+        allow_sandbox_dns_line(i_line)
+    }
+}
+
+allow_sandbox_dns_line(i_line) if {
+    some p_regex1 in policy_data.request_defaults.CreateSandboxRequest.allow_dns_regex
+    p_regex2 := replace(p_regex1, "$(ipv4_a)", policy_data.common.ipv4_a)
+    p_regex3 := replace(p_regex2, "$(dns_label)", policy_data.common.dns_label)
+    print("allow_sandbox_dns_line: p_regex3 =", p_regex3, "i_line =", i_line)
+    regex.match(p_regex3, i_line)
+}
+
+allow_sandbox_hostname(i_hostname) if {
+    p_hostname := policy_data.sandbox.hostname
+    print("allow_sandbox_hostname: p_hostname =", p_hostname, "i_hostname =", i_hostname)
+    count(i_hostname) <= 64
+    regex.match(p_hostname.regex, i_hostname)
+}
+
+# Same truncation as kubelet's truncatePodHostnameIfNeeded(). Keep in sync
+# with truncate_pod_hostname() in genpolicy.
+pod_hostname(s_name) := s_name if {
+    count(s_name) <= 63
+}
+pod_hostname(s_name) := hostname if {
+    count(s_name) > 63
+    hostname := trim_right(substring(s_name, 0, 63), "-.")
+}
+
+allow_hostname_for_sandbox_name(hostname, s_name) if {
+    not policy_data.sandbox.hostname.from_sandbox_name
+}
+allow_hostname_for_sandbox_name(hostname, s_name) if {
+    policy_data.sandbox.hostname.from_sandbox_name
+    print("allow_hostname_for_sandbox_name: hostname =", hostname, "s_name =", s_name)
+    hostname == pod_hostname(s_name)
+}
+
+# The pod name is only known from CreateContainerRequest, which normally
+# follows CreateSandboxRequest. Check in whichever request comes second, so
+# that reordering the requests cannot skip the check.
+allow_hostname_for_known_sandbox_name(i_hostname) if {
+    not has_state_key("sandbox_name")
+}
+allow_hostname_for_known_sandbox_name(i_hostname) if {
+    s_name := get_state_val("sandbox_name")
+    allow_hostname_for_sandbox_name(i_hostname, s_name)
+}
+
+allow_sandbox_name_for_known_hostname(s_name) if {
+    not has_state_key("sandbox_hostname")
+}
+allow_sandbox_name_for_known_hostname(s_name) if {
+    hostname := get_state_val("sandbox_hostname")
+    allow_hostname_for_sandbox_name(hostname, s_name)
+}
+
+has_state_key(key) if {
+    state := get_state()
+    _ = state[key]
 }
 
 allow_exec(p_container, i_process) if {

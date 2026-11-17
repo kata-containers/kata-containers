@@ -121,6 +121,10 @@ impl yaml::K8sResource for CronJob {
         &self.spec.jobTemplate.spec.template.spec.containers
     }
 
+    fn get_pod_spec(&self) -> &pod::PodSpec {
+        &self.spec.jobTemplate.spec.template.spec
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         if let Some(metadata) = &self.spec.jobTemplate.spec.template.metadata {
             return &metadata.annotations;

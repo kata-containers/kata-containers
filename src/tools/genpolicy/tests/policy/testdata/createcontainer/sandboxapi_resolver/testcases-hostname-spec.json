@@ -1,0 +1,37 @@
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "hostname": "gid-experiment",
+        "sandbox_pidns": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "pod name is rejected when the pod spec sets a hostname",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": []
+    },
+    {
+      "description": "hostname from the pod spec",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": "web"
+        }
+      ]
+    },
+    {
+      "description": "workload is not bound to the pod name when the pod spec sets a hostname",
+      "base": "sandbox-rw",
+      "allowed": true,
+      "patch": []
+    }
+  ]
+}

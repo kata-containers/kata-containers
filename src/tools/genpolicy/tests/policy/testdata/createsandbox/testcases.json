@@ -3,23 +3,12 @@
     "create-sandbox": {
       "kind": "CreateSandboxRequest",
       "request": {
-        "sandbox_pidns": false
+        "sandbox_pidns": false,
+        "hostname": "dummy"
       }
     }
   },
   "cases": [
-    {
-      "description": "no pidns",
-      "base": "create-sandbox",
-      "allowed": true,
-      "patch": []
-    },
-    {
-      "description": "reject a second sandbox because it would violate the policy state",
-      "base": "create-sandbox",
-      "allowed": false,
-      "patch": []
-    },
     {
       "description": "pidns",
       "base": "create-sandbox",
@@ -59,6 +48,162 @@
           "value": "/attacker/controlled/path"
         }
       ]
+    },
+    {
+      "description": "empty hostname",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": ""
+        }
+      ]
+    },
+    {
+      "description": "hostname with a newline",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": "dummy\nevil"
+        }
+      ]
+    },
+    {
+      "description": "hostname with invalid characters",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": "dummy_1"
+        }
+      ]
+    },
+    {
+      "description": "hostname longer than 64 characters",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/hostname",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "description": "dns comment line",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "# evil"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "dns line with an embedded newline",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "nameserver 10.96.0.10\nnameserver 192.0.2.1"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "dns domain directive",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "domain evil.example"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "dns nameserver host name",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "nameserver evil.example"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "dns search with an empty domain",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "search "
+          ]
+        }
+      ]
+    },
+    {
+      "description": "dns options with an invalid value",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "options ndots:x"
+          ]
+        }
+      ]
+    },
+    {
+      "description": "kubelet resolver configuration",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/dns",
+          "value": [
+            "search default.svc.cluster.local svc.cluster.local cluster.local",
+            "nameserver 10.96.0.10",
+            "nameserver fd00:10:96::a",
+            "options ndots:5 single-request-reopen",
+            ""
+          ]
+        }
+      ]
+    },
+    {
+      "description": "reject a second sandbox because it would violate the policy state",
+      "base": "create-sandbox",
+      "allowed": false,
+      "patch": []
     }
   ]
 }

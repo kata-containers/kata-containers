@@ -12,6 +12,7 @@ use json_patch::{patch, Patch};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -28,6 +29,12 @@ pub struct Settings {
     pub common: policy::CommonData,
     pub mount_destinations: Vec<String>,
     pub sandbox: policy::SandboxData,
+
+    /// Source regexes of the system file mounts that the runtime adds for
+    /// workload containers in the Sandbox API, by mount destination. They
+    /// replace or extend the other_container sources according to
+    /// cluster_config.runtime_api.
+    pub sandbox_api_mount_sources: BTreeMap<String, String>,
 }
 
 /// Volume settings loaded from genpolicy-settings.json.

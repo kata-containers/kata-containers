@@ -1,0 +1,45 @@
+{
+  "cases": [
+    {
+      "description": "Task API mode rejects the guest-local hostname source",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/9/source",
+          "value": "/run/kata-containers/shared/containers/gid-8c0d97703dbbb30e-resolv.conf"
+        }
+      ]
+    },
+    {
+      "description": "Task API mode rejects the guest-local resolver source",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/8/source",
+          "value": "/run/kata-containers/shared/containers/gid-89f0faae823d569c-hostname"
+        }
+      ]
+    },
+    {
+      "description": "Task API mode admits the shared sources",
+      "base": "sandbox-rw",
+      "allowed": true,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/8/source",
+          "value": "/run/kata-containers/shared/containers/gid-89f0faae823d569c-hostname"
+        },
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts/9/source",
+          "value": "/run/kata-containers/shared/containers/gid-8c0d97703dbbb30e-resolv.conf"
+        }
+      ]
+    }
+  ]
+}
