@@ -22,7 +22,7 @@ use virtio_queue::QueueT;
 use vm_memory::{GuestAddressSpace, GuestMemoryRegion};
 
 use crate::ArcMutexBoxDynVirtioDevice;
-use dbs_virtio_devices::VirtioQueueConfig;
+use dbs_virtio_devices::{VirtioQueueConfig, DEVICE_DRIVER_OK, DEVICE_FAILED, DEVICE_FEATURES_OK};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VirtioPciCommonConfigState {
@@ -161,7 +161,7 @@ impl VirtioPciCommonConfig {
     fn write_common_config_byte(&mut self, offset: u64, value: u8) {
         trace!("write_common_config_byte: offset 0x{offset:x} value 0x{value:x}");
         match offset {
-            0x14 => self.driver_status = value,
+            0x14 => self.set_driver_status(value),
             _ => {
                 warn!("invalid virtio config byte write: 0x{offset:x}");
             }
@@ -314,11 +314,37 @@ impl VirtioPciCommonConfig {
         queues.get(self.queue_select as usize).map(|q| f(&q.queue))
     }
 
+    /// Only allows adding device status bits; writing 0 resets the device.
+    fn set_driver_status(&mut self, value: u8) {
+        if value == 0 || (value & self.driver_status) == self.driver_status {
+            self.driver_status = value;
+        } else {
+            warn!(
+                "virtio-pci: rejecting illegal device_status transition 0x{:x} -> 0x{:x}",
+                self.driver_status, value
+            );
+        }
+    }
+
+    /// Returns true if all bits in `set` are present and all bits in `clr` are absent.
+    fn check_driver_status(&self, set: u32, clr: u32) -> bool {
+        u32::from(self.driver_status) & (set | clr) == set
+    }
+
     fn with_queue_mut<F: FnOnce(&mut Q), Q: QueueT + 'static>(
         &self,
         queues: &mut [VirtioQueueConfig<Q>],
         f: F,
     ) {
+        // Same guard as MMIO's update_queue_field(): queue configuration is
+        // only allowed in the FEATURES_OK -> DRIVER_OK window.
+        if !self.check_driver_status(DEVICE_FEATURES_OK, DEVICE_DRIVER_OK | DEVICE_FAILED) {
+            warn!(
+                "virtio-pci: rejecting virtqueue configuration write in invalid driver state 0x{:x}",
+                self.driver_status
+            );
+            return;
+        }
         if let Some(queue) = queues.get_mut(self.queue_select as usize) {
             f(&mut queue.queue);
         }
@@ -394,7 +420,7 @@ mod tests {
     #[test]
     fn write_base_regs() {
         let regs_state = VirtioPciCommonConfigState {
-            driver_status: 0xaa,
+            driver_status: 0x0,
             config_generation: 0x55,
             device_feature_select: 0x0,
             driver_feature_select: 0x0,
@@ -411,11 +437,22 @@ mod tests {
         queues.push(VirtioQueueConfig::create(2, 0).unwrap());
         queues.push(VirtioQueueConfig::create(2, 1).unwrap());
 
-        // Can set all bits of driver_status.
-        regs.write(0x14, &[0x55], &mut queues, Arc::clone(&dev));
+        // Status bits may only be added; writing 0 resets the device.
+        regs.write(0x14, &[0x01], &mut queues, Arc::clone(&dev));
+        regs.write(0x14, &[0x03], &mut queues, Arc::clone(&dev));
         let mut read_back = vec![0x00];
         regs.read(0x14, &mut read_back, &queues, Arc::clone(&dev));
-        assert_eq!(read_back[0], 0x55);
+        assert_eq!(read_back[0], 0x03);
+        // Clearing a previously-set bit (0x03 -> 0x01) is rejected; value unchanged.
+        regs.write(0x14, &[0x01], &mut queues, Arc::clone(&dev));
+        let mut read_back = vec![0x00];
+        regs.read(0x14, &mut read_back, &queues, Arc::clone(&dev));
+        assert_eq!(read_back[0], 0x03);
+        // Writing 0 resets the device status.
+        regs.write(0x14, &[0x00], &mut queues, Arc::clone(&dev));
+        let mut read_back = vec![0xff];
+        regs.read(0x14, &mut read_back, &queues, Arc::clone(&dev));
+        assert_eq!(read_back[0], 0x00);
 
         // The config generation register is read only.
         regs.write(0x15, &[0xaa], &mut queues, Arc::clone(&dev));
@@ -487,5 +524,98 @@ mod tests {
         regs.read(0x18, &mut read_back, &queues, Arc::clone(&dev));
         assert_eq!(read_back[0], 0x02);
         assert_eq!(read_back[1], 0x00);
+    }
+
+    // Queue configuration writes must only be honored in the
+    // FEATURES_OK -> DRIVER_OK window, never after activation.
+    #[test]
+    fn reject_queue_config_outside_init_window() {
+        const ACK: u8 = 0x01;
+        const DRIVER: u8 = 0x02;
+        const FEATURES_OK: u8 = 0x08;
+        const DRIVER_OK: u8 = 0x04;
+
+        let regs_state = VirtioPciCommonConfigState {
+            driver_status: 0x0,
+            config_generation: 0x0,
+            device_feature_select: 0x0,
+            driver_feature_select: 0x0,
+            queue_select: 0x0,
+            msix_config: 0,
+            msix_queues: vec![0; 1],
+        };
+        let mut regs = VirtioPciCommonConfig::new(regs_state);
+        let dev: Arc<
+            Mutex<Box<dyn VirtioDevice<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>>>,
+        > = Arc::new(Mutex::new(Box::new(DummyDevice::new())));
+        let mut queues = vec![VirtioQueueConfig::create(8, 0).unwrap()];
+        // Operate on queue 0.
+        regs.write(0x16, &[0x00, 0x00], &mut queues, Arc::clone(&dev));
+
+        // Before FEATURES_OK: queue configuration is rejected.
+        regs.write(0x14, &[ACK], &mut queues, Arc::clone(&dev));
+        regs.write(0x14, &[ACK | DRIVER], &mut queues, Arc::clone(&dev));
+        regs.write(0x18, &[0x04, 0x00], &mut queues, Arc::clone(&dev));
+        assert_eq!(
+            queues[0].queue.size(),
+            8,
+            "size must not change before FEATURES_OK"
+        );
+
+        // In the FEATURES_OK window (FEATURES_OK set, DRIVER_OK clear): accepted.
+        regs.write(
+            0x14,
+            &[ACK | DRIVER | FEATURES_OK],
+            &mut queues,
+            Arc::clone(&dev),
+        );
+        regs.write(0x18, &[0x04, 0x00], &mut queues, Arc::clone(&dev));
+        assert_eq!(
+            queues[0].queue.size(),
+            4,
+            "size must be configurable in the init window"
+        );
+
+        // After DRIVER_OK (device activated): reconfiguration is rejected.
+        regs.write(
+            0x14,
+            &[ACK | DRIVER | FEATURES_OK | DRIVER_OK],
+            &mut queues,
+            Arc::clone(&dev),
+        );
+        regs.write(0x18, &[0x02, 0x00], &mut queues, Arc::clone(&dev));
+        assert_eq!(
+            queues[0].queue.size(),
+            4,
+            "queue_size must be frozen after DRIVER_OK"
+        );
+
+        // A malicious driver cannot clear DRIVER_OK to re-open the window.
+        regs.write(
+            0x14,
+            &[ACK | DRIVER | FEATURES_OK],
+            &mut queues,
+            Arc::clone(&dev),
+        );
+        assert_eq!(regs.driver_status, ACK | DRIVER | FEATURES_OK | DRIVER_OK);
+        regs.write(0x18, &[0x02, 0x00], &mut queues, Arc::clone(&dev));
+        assert_eq!(
+            queues[0].queue.size(),
+            4,
+            "queue_size must stay frozen after illegal status clear"
+        );
+
+        // The ring-address registers are likewise frozen after activation.
+        regs.write(
+            0x20,
+            &[0xef, 0xbe, 0xad, 0xde],
+            &mut queues,
+            Arc::clone(&dev),
+        );
+        assert_eq!(
+            queues[0].queue.desc_table(),
+            0,
+            "descriptor table must not be re-pointed after activation"
+        );
     }
 }
