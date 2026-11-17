@@ -322,7 +322,9 @@ func parseGrpcHybridVSockAddr(sock string) (string, uint32, error) {
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md
 func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)
-	cancel := make(chan bool)
+	defer t.Stop()
+	cancel := make(chan struct{})
+	defer close(cancel)
 	ch := make(chan net.Conn)
 	go func() {
 		for {
@@ -335,10 +337,14 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 
 			conn, err := dialFunc()
 			if err == nil {
-				// Send conn back iff timer is not fired
-				// Otherwise there might be no one left reading it
+				// The attempt can outlive the caller deadline. Transfer ownership
+				// only while the caller still waits; otherwise close it here.
 				if t.Stop() {
-					ch <- conn
+					select {
+					case ch <- conn:
+					case <-cancel:
+						conn.Close()
+					}
 				} else {
 					conn.Close()
 				}
@@ -355,7 +361,6 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 			return nil, timeoutErrMsg
 		}
 	case <-t.C:
-		cancel <- true
 		return nil, timeoutErrMsg
 	}
 
