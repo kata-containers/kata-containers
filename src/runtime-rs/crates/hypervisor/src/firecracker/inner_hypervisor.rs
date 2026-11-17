@@ -27,6 +27,10 @@ impl FcInner {
     ) -> Result<()> {
         debug!(sl(), "Preparing Firecracker");
 
+        // Also check direct callers that did not run configuration validation.
+        // Reject invalid pool sizes before creating mounts or spawning the VMM.
+        self.drive_slot_range(false)?;
+
         self.id = id.to_string();
 
         if !self.config.jailer_path.is_empty() {
@@ -219,6 +223,25 @@ impl FcInner {
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn invalid_read_only_slots_fail_before_vm_setup() {
+        for slots in [8, u32::MAX] {
+            let (sender, _receiver) = mpsc::channel(1);
+            let mut fc = FcInner::new(sender);
+            fc.config.blockdev_info.block_device_read_only_slots = slots;
+
+            let error = fc
+                .prepare_vm("invalid-slots", None, None)
+                .await
+                .unwrap_err();
+            assert!(error.to_string().contains("block_device_read_only_slots"));
+            assert!(fc.id.is_empty());
+            assert!(fc.vm_path.is_empty());
+            assert!(fc.fc_process.lock().await.is_none());
+            assert_eq!(fc.state, VmmState::NotReady);
+        }
+    }
 
     #[tokio::test]
     async fn test_unsupported_hypervisor_metrics_are_empty() {

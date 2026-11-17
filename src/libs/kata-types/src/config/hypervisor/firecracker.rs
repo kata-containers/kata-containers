@@ -19,6 +19,10 @@ use crate::validate_path;
 /// Hypervisor name for firecracker, used to index `TomlConfig::hypervisor`.
 pub const HYPERVISOR_NAME_FIRECRACKER: &str = "firecracker";
 
+/// Attachment slots, excluding the guest OS root disk. Keep in sync with the Go runtime.
+pub const FIRECRACKER_DISK_POOL_SIZE: u32 = 8;
+const MAX_READ_ONLY_SLOTS: u32 = FIRECRACKER_DISK_POOL_SIZE - 1;
+
 /// Configuration information for firecracker.
 #[derive(Default, Debug)]
 pub struct FirecrackerConfig {}
@@ -33,6 +37,19 @@ impl FirecrackerConfig {
     pub fn register(self) {
         let plugin = Arc::new(self);
         register_hypervisor_plugin(HYPERVISOR_NAME_FIRECRACKER, plugin);
+    }
+
+    /// Validate the read-only placeholder pool before creating VMM resources.
+    pub fn validate_read_only_slots(slots: u32) -> Result<()> {
+        if slots > MAX_READ_ONLY_SLOTS {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "block_device_read_only_slots must be between 0 and {MAX_READ_ONLY_SLOTS}, got {slots}"
+                ),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -77,6 +94,7 @@ impl ConfigPlugin for FirecrackerConfig {
     /// Validate the configuration information.
     fn validate(&self, conf: &TomlConfig) -> Result<()> {
         if let Some(firecracker) = conf.hypervisor.get(HYPERVISOR_NAME_FIRECRACKER) {
+            Self::validate_read_only_slots(firecracker.blockdev_info.block_device_read_only_slots)?;
             if firecracker.path.is_empty() {
                 return Err(std::io::Error::other("Firecracker path is empty"));
             }
@@ -113,5 +131,40 @@ impl ConfigPlugin for FirecrackerConfig {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::hypervisor::Hypervisor;
+
+    #[test]
+    fn test_validate_read_only_slots() {
+        let image = tempfile::NamedTempFile::new().unwrap();
+        let path = image.path().to_str().unwrap().to_string();
+        for slots in [0, 1, 7, 8, u32::MAX] {
+            let mut hypervisor = Hypervisor {
+                path: path.clone(),
+                ..Default::default()
+            };
+            hypervisor.boot_info.kernel = path.clone();
+            hypervisor.boot_info.image = path.clone();
+            hypervisor.memory_info.default_memory = MIN_FIRECRACKER_MEMORY_SIZE_MB;
+            hypervisor.blockdev_info.block_device_read_only_slots = slots;
+            let mut config = TomlConfig::default();
+            config
+                .hypervisor
+                .insert(HYPERVISOR_NAME_FIRECRACKER.to_string(), hypervisor);
+
+            let result = FirecrackerConfig::new().validate(&config);
+            if slots <= MAX_READ_ONLY_SLOTS {
+                result.unwrap();
+            } else {
+                let error = result.unwrap_err();
+                assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+                assert!(error.to_string().contains("block_device_read_only_slots"));
+            }
+        }
     }
 }

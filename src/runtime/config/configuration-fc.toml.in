@@ -122,6 +122,13 @@ default_maxmemory = @DEFMAXMEMSZ@
 # or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 
+# Firecracker cannot change a disk's read-only mode after boot. Reserve the last
+# N of eight attachment slots as read-only. The remaining slots are writable.
+# Valid range: 0-7. Defaults to 1 when omitted; 0 disables read-only attachments.
+# Container root disks and read-only image devices also consume attachment slots.
+# Recreate existing sandboxes to apply this layout.
+block_device_read_only_slots = 1
+
 # Specifies cache-related options will be set to block devices or not.
 # Default false
 block_device_cache_set = false
