@@ -6,6 +6,7 @@
   "NoColor": false,
   "Exclude": [
     "src/runtime/virtcontainers/pkg/cloud-hypervisor/client",
+    "^src/runtime-rs/crates/runtimes/common/src/testdata/shim-start-bootstrap\\.pb$",
     "\\.img$",
     "\\.dtb$",
     "\\.drawio$",

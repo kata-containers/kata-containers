@@ -7116,6 +7116,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
+ "common",
  "containerd-shim-protos",
  "go-flag",
  "kata-sys-util",
