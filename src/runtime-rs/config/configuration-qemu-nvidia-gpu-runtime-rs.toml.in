@@ -303,6 +303,11 @@ enable_mem_prealloc = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# Sizing a huge page backed VM from the pod's hugepages-<size> reservation needs
+# Dragonball; see configuration-dragonball.toml.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable vhost-user storage device, default false
 # Enabling this will result in some Linux reserved block type
 # major range 240-254 being chosen to represent vhost-user devices.
