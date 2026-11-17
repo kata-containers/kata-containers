@@ -172,3 +172,7 @@ libc
 Ziyue
 fdisk
 fsprogs
+ORAS
+chrony
+inotify
+paravirtual
