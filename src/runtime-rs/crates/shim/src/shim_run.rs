@@ -18,7 +18,7 @@ use kata_sys_util::spec::get_bundle_path;
 use nix::fcntl::{fcntl, FcntlArg, FdFlag};
 
 use crate::{
-    core_sched, logger,
+    logger,
     shim::{socket_path, ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
     Error,
 };
@@ -33,13 +33,6 @@ impl ShimExecutor {
             logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug).context("set logger");
         // Regist shim logger for later use.
         logging::register_subsystem_logger("runtimes", "shim");
-
-        if try_core_sched().is_err() {
-            warn!(
-                sl!(),
-                "Failed to enable core sched since prctl() returns non-zero value."
-            );
-        }
 
         self.do_run()
             .await
@@ -113,17 +106,6 @@ fn set_cloexec(fd: RawFd) -> Result<()> {
     // SAFETY: the fd stays open for the whole shim lifetime.
     let fd = unsafe { BorrowedFd::borrow_raw(fd) };
     fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
-    Ok(())
-}
-
-// TODO: currently we log a warning on fail (i.e. kernel version < 5.14), maybe just exit
-// TODO: more test on higher version of kernel
-fn try_core_sched() -> Result<()> {
-    if let Ok(v) = std::env::var("SCHED_CORE") {
-        if !v.is_empty() {
-            core_sched::core_sched_create(core_sched::PROCESS_GROUP)?
-        }
-    }
     Ok(())
 }
 
