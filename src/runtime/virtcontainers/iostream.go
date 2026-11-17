@@ -15,12 +15,15 @@ type iostream struct {
 	sandbox   *Sandbox
 	container *Container
 	process   string
-	closed    bool
 }
 
 // io.WriteCloser
 type stdinStream struct {
 	*iostream
+	// Closing stdin only tears down the process' input. Output can still be
+	// produced afterwards, so this state must not be shared with the stdout
+	// and stderr readers created from the same iostream.
+	closed bool
 }
 
 // io.Reader
@@ -38,12 +41,11 @@ func newIOStream(s *Sandbox, c *Container, proc string) *iostream {
 		sandbox:   s,
 		container: c,
 		process:   proc,
-		closed:    false, // needed to workaround buggy structcheck
 	}
 }
 
 func (s *iostream) stdin() io.WriteCloser {
-	return &stdinStream{s}
+	return &stdinStream{iostream: s}
 }
 
 func (s *iostream) stdout() io.Reader {
@@ -65,7 +67,7 @@ func (s *stdinStream) Write(data []byte) (n int, err error) {
 
 func (s *stdinStream) Close() error {
 	if s.closed {
-		return errors.New("stream closed")
+		return errors.New("stdin closed")
 	}
 
 	// can not pass context to Close(), so use background context
@@ -77,20 +79,14 @@ func (s *stdinStream) Close() error {
 	return err
 }
 
+// Read keeps draining the process' output even after stdin has been closed:
+// a process is free to write to stdout/stderr long after its input hit EOF.
 func (s *stdoutStream) Read(data []byte) (n int, err error) {
-	if s.closed {
-		return 0, errors.New("stream closed")
-	}
-
 	// can not pass context to Read(), so use background context
 	return s.sandbox.agent.readProcessStdout(context.Background(), s.container, s.process, data)
 }
 
 func (s *stderrStream) Read(data []byte) (n int, err error) {
-	if s.closed {
-		return 0, errors.New("stream closed")
-	}
-
 	// can not pass context to Read(), so use background context
 	return s.sandbox.agent.readProcessStderr(context.Background(), s.container, s.process, data)
 }
