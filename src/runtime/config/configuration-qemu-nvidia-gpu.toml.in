@@ -292,6 +292,16 @@ reclaim_guest_freed_memory = false
 # result in memory pre allocation
 enable_hugepages = false
 
+# A pod reserves a huge page backed VM's RAM as hugepages-<size>, so the VM is
+# sized from it and each container is bounded in the guest by its own share of it;
+# huge page volumes are refused. Needs enable_hugepages,
+# static_sandbox_resource_mgmt, sandbox_cgroup_only, cgroup v2 and no VM factory.
+# The pod or the runtime class's pod overhead declares the guest's own room in pages:
+# VM/64 + 128 MiB + min(768 MiB + MemTotal/512 + 24 MiB per vCPU, MemTotal/4),
+# and the overhead's memory covers the host processes.
+# Default false
+enable_hugepages_pod_sizing = false
+
 # Enable vhost-user storage device, default false
 # Enabling this will result in some Linux reserved block type
 # major range 240-254 being chosen to represent vhost-user devices.

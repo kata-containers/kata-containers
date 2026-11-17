@@ -17,6 +17,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -432,4 +433,36 @@ func TestConfigValid(t *testing.T) {
 	config = newTestContainerConfigNoop("foobar")
 	result = config.valid()
 	assert.True(result)
+}
+
+func TestUpdatedHugepageLimits(t *testing.T) {
+	assert := assert.New(t)
+	held := []specs.LinuxHugepageLimit{{Pagesize: "2MB", Limit: 0}, {Pagesize: "1GB", Limit: 4 << 30}}
+	zeros := []specs.LinuxHugepageLimit{{Pagesize: "2MB", Limit: 0}, {Pagesize: "1GB", Limit: 0}}
+
+	// An in-place resize carries huge pages as zero, which containerd appends
+	// to the container's own entries.
+	keep, apply := updatedHugepageLimits(held, append(append([]specs.LinuxHugepageLimit{}, held...), zeros...))
+	assert.Equal(held, keep)
+	assert.Equal(held, apply)
+
+	keep, apply = updatedHugepageLimits(held, zeros)
+	assert.Equal(held, keep)
+	assert.Equal(held, apply)
+
+	// An update that carries no huge pages leaves them alone.
+	keep, apply = updatedHugepageLimits(held, nil)
+	assert.Equal(held, keep)
+	assert.Nil(apply)
+
+	larger := []specs.LinuxHugepageLimit{{Pagesize: "1GB", Limit: 8 << 30}}
+	keep, apply = updatedHugepageLimits(held, larger)
+	want := []specs.LinuxHugepageLimit{{Pagesize: "2MB", Limit: 0}, {Pagesize: "1GB", Limit: 8 << 30}}
+	assert.Equal(want, keep)
+	assert.Equal(want, apply)
+
+	// Nothing held: the update goes through, one entry per size.
+	keep, apply = updatedHugepageLimits(nil, zeros)
+	assert.Equal(zeros, keep)
+	assert.Equal(zeros, apply)
 }
