@@ -75,7 +75,7 @@ destdir="${workdir}/kata-static"
 
 default_binary_permissions='0744'
 
-# Rootfs image variants that carry a dm-verity root hash (measured rootfs).
+# Rootfs and extension image variants that may carry a dm-verity root hash.
 # Their hashes are collected at build time and consumed by the Rust runtime,
 # so this list is walked in a few places - keep it in one spot to avoid drift.
 readonly MEASURED_ROOTFS_VARIANTS=(
@@ -302,8 +302,8 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	if [[ "${MEASURED_ROOTFS}" = "yes" ]] && \
-		{ [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; }; then
+	if [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; then
+		# Extensions can carry verity hashes even when the base rootfs is unmeasured.
 		install_cached_shim_v2_tarball_get_root_hash
 	fi
 
@@ -325,8 +325,7 @@ install_cached_tarball_component() {
 	fi
 	sha256sum -c "${component}-sha256sum" || { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return 1; }
 
-	if [[ "${MEASURED_ROOTFS}" = "yes" ]] && \
-		{ [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; }; then
+	if [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; then
 		install_cached_shim_v2_tarball_compare_root_hashes "${component}" || { cleanup_and_fail_shim_v2_specifics "${component}" "${component_tarball_path}" "${extra_tarballs}"; return 1; }
 	fi
 
@@ -2237,11 +2236,11 @@ handle_build() {
 			tar --zstd -tvf "${modules_final_tarball_path}"
 			;;
 		shim-v2-go|shim-v2-rust)
-			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-				for variant in "${MEASURED_ROOTFS_VARIANTS[@]}"; do
-					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/${build_target}-root_hash_${variant}.txt"
-				done
-			fi
+			for variant in "${MEASURED_ROOTFS_VARIANTS[@]}"; do
+				if [[ -f "${workdir}/root_hash_${variant}.txt" ]]; then
+					mv "${workdir}/root_hash_${variant}.txt" "${workdir}/${build_target}-root_hash_${variant}.txt"
+				fi
+			done
 			;;
 	esac
 
@@ -2302,14 +2301,13 @@ handle_build() {
 				)
 				;;
 		shim-v2-go|shim-v2-rust)
-			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-				local found_any=""
-				for variant in "${MEASURED_ROOTFS_VARIANTS[@]}"; do
-					# The variants could be built independently we need to check if
-					# they exist and then push them to the registry
-					[[ -f "${workdir}/${build_target}-root_hash_${variant}.txt" ]] && files_to_push+=("${build_target}-root_hash_${variant}.txt") && found_any="yes"
-				done
-				[[ -z "${found_any}" ]] && die "No files to push for ${build_target} with MEASURED_ROOTFS support"
+			local found_any=""
+			for variant in "${MEASURED_ROOTFS_VARIANTS[@]}"; do
+				# Include extension hashes even if the base rootfs is unmeasured.
+				[[ -f "${workdir}/${build_target}-root_hash_${variant}.txt" ]] && files_to_push+=("${build_target}-root_hash_${variant}.txt") && found_any="yes"
+			done
+			if [[ "${MEASURED_ROOTFS}" == "yes" && -z "${found_any}" ]]; then
+				die "No files to push for ${build_target} with MEASURED_ROOTFS support"
 			fi
 			;;
 			*)

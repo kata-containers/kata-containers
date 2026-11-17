@@ -30,12 +30,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-pub const COCO_COMPONENT_OCICRYPT_CONFIG: &str = "ocicrypt-config";
 pub const COCO_COMPONENT_PAUSE_BUNDLE: &str = "pause-bundle";
 pub const COCO_EXTENSION_NAME: &str = "coco";
 
 const EXTENSIONS_ROOT: &str = "/run/kata-extensions";
 const COMPONENTS_MANIFEST_REL_PATH: &str = "etc/kata-extensions/components.toml";
+const LEGACY_COCO_COMPONENT_OCICRYPT_CONFIG: &str = "ocicrypt-config";
 
 #[derive(Debug, Deserialize)]
 struct ExtensionManifest {
@@ -429,6 +429,29 @@ fn launch_plan_in_root(
     };
 
     let root = extension_root(extensions_root, extension_name)?;
+    // Older CoCo manifests use this substitution; keep it local to manifest
+    // consumption so it does not remain part of the agent's public context.
+    let compatibility_ctx =
+        if let Some(rel_path) = manifest.paths.get(LEGACY_COCO_COMPONENT_OCICRYPT_CONFIG) {
+            let path = resolve_rel_path(
+                &root,
+                rel_path,
+                &format!(
+                    "component '{}' in extension '{}'",
+                    LEGACY_COCO_COMPONENT_OCICRYPT_CONFIG, extension_name
+                ),
+            )?;
+            let mut compatibility_ctx = ctx.clone();
+            compatibility_ctx.insert(
+                "ocicrypt_config_path".to_string(),
+                path.to_string_lossy().into_owned(),
+            );
+            Some(compatibility_ctx)
+        } else {
+            None
+        };
+    let ctx = compatibility_ctx.as_ref().unwrap_or(ctx);
+
     let mut specs = Vec::new();
     for raw in &manifest.process {
         if raw.level == 0 || raw.level > max_level {
@@ -470,10 +493,6 @@ mod tests {
         c.insert("aa_config_path".into(), "/run/initdata/aa.toml".into());
         c.insert("cdh_config_path".into(), "/run/initdata/cdh.toml".into());
         c.insert("cdh_socket".into(), "/run/cdh.sock".into());
-        c.insert(
-            "ocicrypt_config_path".into(),
-            "/run/kata-extensions/coco/etc/ocicrypt_config.json".into(),
-        );
         c.insert("rest_api_features".into(), "all".into());
         c.insert("launch_process_timeout".into(), "6".into());
         c.insert("initdata_toml_path".into(), "".into());
@@ -486,8 +505,7 @@ mod tests {
 schema_version = 1
 
 [paths]
-"ocicrypt-config" = "etc/ocicrypt_config.json"
-"pause-bundle"    = "pause_bundle"
+"pause-bundle" = "pause_bundle"
 
 [[process]]
 id            = "attestation-agent"
@@ -511,7 +529,7 @@ id           = "confidential-data-hub"
 level        = 2
 path         = "usr/local/bin/confidential-data-hub"
 config       = "${cdh_config_path}"
-env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
+env          = { PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket  = "${cdh_socket}"
 timeout_secs = "${launch_process_timeout}"
 
@@ -530,7 +548,7 @@ timeout_secs = "0"
         let got = resolve_component_path_in_root(
             dir.path(),
             COCO_EXTENSION_NAME,
-            COCO_COMPONENT_OCICRYPT_CONFIG,
+            COCO_COMPONENT_PAUSE_BUNDLE,
             legacy,
         )
         .unwrap();
@@ -585,7 +603,7 @@ schema_version = 1
         let err = resolve_component_path_in_root(
             dir.path(),
             COCO_EXTENSION_NAME,
-            COCO_COMPONENT_OCICRYPT_CONFIG,
+            "some-other-component",
             "/legacy",
         )
         .unwrap_err();
@@ -601,13 +619,13 @@ schema_version = 1
             r#"
 schema_version = 1
 [paths]
-"ocicrypt-config" = "../outside"
+"pause-bundle" = "../outside"
 "#,
         );
         let err = resolve_component_path_in_root(
             dir.path(),
             COCO_EXTENSION_NAME,
-            COCO_COMPONENT_OCICRYPT_CONFIG,
+            COCO_COMPONENT_PAUSE_BUNDLE,
             "/legacy",
         )
         .unwrap_err();
@@ -635,27 +653,57 @@ schema_version = 1
 
         let cdh = &specs[1];
         assert_eq!(cdh.id, "confidential-data-hub");
-        // env is sorted by key, so OCICRYPT_KEYPROVIDER_CONFIG precedes PATH.
         // PATH puts the extension's cryptsetup (usr/sbin) ahead of the base dirs
         // that carry mke2fs/mkfs.ext4/dd, which CDH's secure_mount shells out to.
         assert_eq!(
             cdh.env,
-            vec![
-                (
-                    "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
-                    "/run/kata-extensions/coco/etc/ocicrypt_config.json".to_string()
-                ),
-                (
-                    "PATH".to_string(),
-                    "/run/kata-extensions/coco/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin".to_string()
-                )
-            ]
+            vec![(
+                "PATH".to_string(),
+                "/run/kata-extensions/coco/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin".to_string()
+            )]
         );
 
         let api = &specs[2];
         assert_eq!(api.id, "api-server-rest");
         assert_eq!(api.args, vec!["--features", "all"]);
         assert_eq!(api.timeout_secs, 0);
+    }
+
+    #[test]
+    fn supports_legacy_ocicrypt_config_substitution() {
+        let dir = tempdir().unwrap();
+        write_manifest(
+            dir.path(),
+            COCO_EXTENSION_NAME,
+            r#"
+schema_version = 1
+
+[paths]
+"ocicrypt-config" = "etc/ocicrypt_config.json"
+
+[[process]]
+id = "confidential-data-hub"
+level = 2
+path = "usr/local/bin/confidential-data-hub"
+env = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}" }
+"#,
+        );
+
+        let specs = launch_plan_in_root(dir.path(), COCO_EXTENSION_NAME, 2, &ctx())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            specs[0].env,
+            vec![(
+                "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
+                dir.path()
+                    .join(COCO_EXTENSION_NAME)
+                    .join("etc/ocicrypt_config.json")
+                    .to_string_lossy()
+                    .into_owned()
+            )]
+        );
     }
 
     #[test]
