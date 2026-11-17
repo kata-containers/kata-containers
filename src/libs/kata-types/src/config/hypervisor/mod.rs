@@ -1699,6 +1699,21 @@ impl VmTemplateInfo {
 
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
+        if self.boot_to_be_template && self.boot_from_template {
+            return Err(io::Error::other(
+                "boot_to_be_template and boot_from_template cannot both be enabled",
+            ));
+        }
+
+        if self.boot_to_be_template || self.boot_from_template {
+            if self.memory_path.is_empty() {
+                return Err(io::Error::other("VM template memory_path is empty"));
+            }
+            if self.device_state_path.is_empty() {
+                return Err(io::Error::other("VM template device_state_path is empty"));
+            }
+        }
+
         Ok(())
     }
 }
@@ -1724,6 +1739,7 @@ pub struct Hypervisor {
     /// Path to the hypervisor executable.
     #[serde(default)]
     pub path: String,
+
     /// List of valid annotation values for the hypervisor path.
     ///
     /// Each member of the list is a path pattern as described by `glob(3)`.

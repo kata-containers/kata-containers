@@ -72,7 +72,23 @@ pub(crate) fn vm_config_value(config: &VmConfig) -> Result<serde_json::Value> {
     let mut config = config.clone();
     config.hypervisor_config.vm_template = Default::default();
 
-    Ok(serde_json::to_value(config)?)
+    Ok(normalize_vm_config(serde_json::to_value(config)?))
+}
+
+fn normalize_vm_config(mut value: serde_json::Value) -> serde_json::Value {
+    if let Some(hypervisor) = value
+        .get_mut("hypervisor_config")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for field in [
+            "valid_hypervisor_paths",
+            "valid_ctlpaths",
+            "valid_jailer_paths",
+        ] {
+            hypervisor.remove(field);
+        }
+    }
+    value
 }
 
 fn validate_factory_config(mut toml_config: TomlConfig) -> Result<(TomlConfig, FactoryConfig)> {
@@ -118,14 +134,10 @@ pub async fn destroy_factory_command(toml_config: TomlConfig) -> Result<()> {
 pub async fn status_factory_command(toml_config: TomlConfig) -> Result<()> {
     let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
-    if new_factory(&mut factory_config, toml_config, true)
+    new_factory(&mut factory_config, toml_config, true)
         .await
-        .is_ok()
-    {
-        info!(sl!(), "vm factory is on");
-    } else {
-        info!(sl!(), "vm factory is off");
-    }
+        .context("vm factory is off")?;
+    info!(sl!(), "vm factory is on");
 
     Ok(())
 }
@@ -238,5 +250,29 @@ static_sandbox_resource_mgmt = true
         let limits = HashMap::from([(SANDBOX_MEM_KEY.to_string(), (512u64 << 20).to_string())]);
         let limited = sandbox_config(&config, limits);
         assert!(check_template_vm_config(&limited).is_err());
+    }
+
+    #[test]
+    fn template_matching_ignores_host_path_policy() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = qemu_static_config(dir.path());
+        let saved = vm_config_value(&VmConfig::new(&config)).unwrap();
+        fs::write(
+            dir.path().join("vm_config.json"),
+            serde_json::to_vec(&saved).unwrap(),
+        )
+        .unwrap();
+        let hypervisor = config.hypervisor.get_mut("qemu").unwrap();
+        hypervisor.valid_hypervisor_paths = vec!["/new/host/*".into()];
+        hypervisor.valid_ctlpaths = vec!["/new/control/*".into()];
+        hypervisor.valid_jailer_paths = vec!["/new/jailer/*".into()];
+        assert!(check_template_vm_config(&config).is_ok());
+        config
+            .hypervisor
+            .get_mut("qemu")
+            .unwrap()
+            .cpu_info
+            .default_maxvcpus += 1;
+        assert!(check_template_vm_config(&config).is_err());
     }
 }

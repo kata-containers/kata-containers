@@ -16,6 +16,7 @@ oci-spec = { workspace = true }
 protobuf = { workspace = true }
 sendfd = { features = ["tokio"], version = "0.4.3" }
 serde = { features = ["derive"], workspace = true }
+ring = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }

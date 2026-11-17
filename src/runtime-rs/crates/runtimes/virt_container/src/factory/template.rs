@@ -4,7 +4,9 @@
 //
 
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
+use std::io::{BufReader, Read, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
@@ -13,6 +15,8 @@ use anyhow::{anyhow, Context, Result};
 use hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use nix::mount::{mount, MsFlags};
+use ring::digest::{Context as Sha256Context, SHA256};
+use serde::{Deserialize, Serialize};
 use slog::warn;
 
 use crate::factory::{
@@ -27,14 +31,30 @@ const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 /// Preallocated size (in MB) for saving the device state snapshot of the template VM.
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8;
 const MIB: u64 = 1024 * 1024;
-
-/// Cloud Hypervisor already writes its own `config.json` here.
+const TEMPLATE_IDENTITY_FILE: &str = "template.json";
+const TEMPLATE_IDENTITY_FORMAT_VERSION: u32 = 1;
+/// Cloud Hypervisor already writes its own `config.json` in the template directory.
 const TEMPLATE_VM_CONFIG_FILE: &str = "vm_config.json";
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TemplateIdentity {
+    pub(crate) format_version: u32,
+    pub(crate) hypervisor: String,
+    pub(crate) memory_size: u64,
+    pub(crate) memory_sha256: String,
+    pub(crate) device_state_size: u64,
+    pub(crate) device_state_sha256: String,
+    pub(crate) config_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) native_config_sha256: Option<String>,
+}
 
 #[derive(Debug)]
 pub struct Template {
     pub state_path: PathBuf,
     pub config: VmConfig,
+    identity: Option<TemplateIdentity>,
 }
 
 impl Template {
@@ -43,16 +63,28 @@ impl Template {
         Template {
             state_path: template_path,
             config,
+            identity: None,
         }
     }
 
     pub fn fetch(config: VmConfig, template_path: PathBuf) -> Result<Box<Template>> {
-        let t = Template::new(config, template_path);
+        Self::fetch_inner(config, template_path, true)
+    }
 
-        // Call template_vm_exists to validate the template's files
-        if !t.template_vm_exists() {
-            return Err(anyhow!("no template vm found"));
+    fn fetch_inner(
+        config: VmConfig,
+        template_path: PathBuf,
+        verify_assets: bool,
+    ) -> Result<Box<Template>> {
+        let mut t = Template::new(config, template_path);
+
+        if !t.template_vm_exists()? {
+            return Err(anyhow!(
+                "VM template metadata is incomplete; recreate the template"
+            ));
         }
+
+        t.identity = Some(t.load_identity(verify_assets)?);
 
         Ok(Box::new(t))
     }
@@ -64,12 +96,25 @@ impl Template {
         toml_config: TomlConfig,
         template_path: PathBuf,
     ) -> Result<Box<Template>> {
-        let t = Template::new(config, template_path);
+        let mut t = Template::new(config, template_path);
 
-        if t.template_vm_exists() {
+        if t.template_vm_exists()? {
             return Err(anyhow!(
                 "There is already a VM template in {:?}",
                 t.state_path
+            ));
+        }
+
+        if t.state_path.exists()
+            && t.state_path
+                .read_dir()
+                .with_context(|| format!("read template directory {}", t.state_path.display()))?
+                .next()
+                .is_some()
+        {
+            return Err(anyhow!(
+                "incomplete or incompatible VM template exists in {}; destroy it before recreating",
+                t.state_path.display()
             ));
         }
 
@@ -79,6 +124,7 @@ impl Template {
             .await
             .context("create template files")?;
         t.save_vm_config().context("save template vm config")?;
+        t.identity = Some(t.publish_identity().context("publish template identity")?);
 
         Ok(Box::new(t))
     }
@@ -101,20 +147,16 @@ impl Template {
             .with_context(|| format!("failed to write {}", path.display()))
     }
 
-    pub fn template_vm_exists(&self) -> bool {
-        if !self.memory_path().exists() || !self.device_state_path().exists() {
-            return false;
+    pub fn template_vm_exists(&self) -> Result<bool> {
+        if !self.memory_path().exists()
+            || !self.device_state_path()?.exists()
+            || !self.identity_path().exists()
+            || !self.state_path.join(TEMPLATE_VM_CONFIG_FILE).exists()
+        {
+            return Ok(false);
         }
 
-        self.config_path().is_none_or(|path| path.exists())
-    }
-
-    fn memory_path(&self) -> PathBuf {
-        self.state_path.join("memory")
-    }
-
-    fn device_state_path(&self) -> PathBuf {
-        template_device_state_path(&self.config.hypervisor_name, &self.state_path)
+        Ok(self.config_path().is_none_or(|path| path.exists()))
     }
 
     fn config_path(&self) -> Option<PathBuf> {
@@ -128,14 +170,6 @@ impl Template {
         // Create state directory
         std::fs::create_dir_all(&self.state_path)
             .context(format!("failed to create directory: {:?}", self.state_path))?;
-
-        // Verify directory was created and is accessible
-        if !self.state_path.exists() {
-            return Err(anyhow!(
-                "state path {:?} does not exist after creation",
-                self.state_path
-            ));
-        }
 
         // Mount tmpfs to store template VM memory data in memory for:
         // - Accelerating VM cloning by avoiding disk I/O
@@ -155,15 +189,6 @@ impl Template {
         )
         .context(format!("failed to mount tmpfs at {:?}", self.state_path))?;
 
-        // Verify mount successfully by checking if directory is still accessible
-        if !self.state_path.is_dir() {
-            return Err(anyhow!(
-                "state path {:?} is not a directory after mount",
-                self.state_path
-            ));
-        }
-
-        // Create memory file
         let memory_file = self.memory_path();
         let file = File::create(&memory_file)
             .context(format!("failed to create memory file: {memory_file:?}"))?;
@@ -173,31 +198,24 @@ impl Template {
         file.set_len(memory_size_bytes)
             .context(format!("failed to size memory file: {memory_file:?}"))?;
 
-        // Verify memory file was created successfully
-        if !memory_file.exists() {
-            return Err(anyhow!(
-                "memory file {:?} does not exist after creation",
-                memory_file
-            ));
-        }
-
         Ok(())
     }
 
-    /// Configures the VM configuration for template operations.
-    fn prepare_vm_config(&self, boot_to_be_template: bool) -> VmConfig {
+    fn template_vm_config(&self) -> Result<VmConfig> {
         let mut config = self.config.clone();
-        config.hypervisor_config.vm_template.boot_to_be_template = boot_to_be_template;
-        config.hypervisor_config.vm_template.boot_from_template = !boot_to_be_template;
+
+        config.hypervisor_config.vm_template.boot_to_be_template = true;
+        config.hypervisor_config.vm_template.boot_from_template = false;
         config.hypervisor_config.vm_template.memory_path =
             self.memory_path().to_string_lossy().to_string();
         config.hypervisor_config.vm_template.device_state_path =
-            self.device_state_path().to_string_lossy().to_string();
-        config
+            self.device_state_path()?.to_string_lossy().to_string();
+
+        Ok(config)
     }
 
     pub async fn save_to_template(&self, toml_config: TomlConfig) -> Result<()> {
-        let config = self.prepare_vm_config(true);
+        let config = self.template_vm_config()?;
         let vm = TemplateVm::new_vm(config, toml_config)
             .await
             .context("new template vm")?;
@@ -235,5 +253,398 @@ impl Template {
         }
 
         result
+    }
+
+    fn memory_path(&self) -> PathBuf {
+        self.state_path.join("memory")
+    }
+
+    fn device_state_path(&self) -> Result<PathBuf> {
+        Ok(template_device_state_path(
+            self.config.hypervisor_name.as_str(),
+            &self.state_path,
+        ))
+    }
+
+    fn identity_path(&self) -> PathBuf {
+        self.state_path.join(TEMPLATE_IDENTITY_FILE)
+    }
+
+    fn file_integrity(path: &std::path::Path) -> Result<(u64, String)> {
+        let metadata = std::fs::symlink_metadata(path)
+            .with_context(|| format!("inspect template artifact {}", path.display()))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(anyhow!(
+                "template artifact {} is not a regular file",
+                path.display()
+            ));
+        }
+
+        let file = File::open(path)
+            .context(format!("open template artifact {}", path.display()))?;
+        let mut reader = BufReader::new(file);
+        let mut hasher = Sha256Context::new(&SHA256);
+        let mut buffer = vec![0_u8; 1024 * 1024];
+
+        loop {
+            let count = reader
+                .read(&mut buffer)
+                .with_context(|| format!("read template artifact {}", path.display()))?;
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+        }
+
+        let sha256 = hasher
+            .finish()
+            .as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+
+        Ok((metadata.len(), sha256))
+    }
+
+    fn config_sha256(&self) -> Result<String> {
+        Self::config_sha256_with_assets(&self.config, |path| {
+            Ok(Self::file_integrity(Path::new(path))?.1)
+        })
+    }
+
+    fn config_sha256_with_assets(
+        config: &VmConfig,
+        mut asset_sha256: impl FnMut(&str) -> Result<String>,
+    ) -> Result<String> {
+        let mut config = config.clone();
+        // Bind the template to its boot assets, independent of installation paths.
+        let hv = &mut config.hypervisor_config;
+        for path in [
+            &mut hv.path,
+            &mut hv.boot_info.kernel,
+            &mut hv.boot_info.initrd,
+            &mut hv.boot_info.image,
+        ] {
+            if !path.is_empty() {
+                *path = format!("sha256:{}", asset_sha256(path)?);
+            }
+        }
+
+        hv.vm_template.memory_path.clear();
+        hv.vm_template.device_state_path.clear();
+        hv.factory.template_path.clear();
+
+        // Host annotation authorization policy does not describe saved VM state.
+        hv.valid_hypervisor_paths.clear();
+        hv.valid_ctlpaths.clear();
+        hv.valid_jailer_paths.clear();
+
+        let bytes = serde_json::to_vec(&config).context("encode VM template configuration")?;
+        let mut hasher = Sha256Context::new(&SHA256);
+        hasher.update(&bytes);
+
+        Ok(hasher
+            .finish()
+            .as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+
+    fn calculate_identity(&self) -> Result<TemplateIdentity> {
+        let (memory_size, memory_sha256) = Self::file_integrity(&self.memory_path())?;
+        let (device_state_size, device_state_sha256) =
+            Self::file_integrity(&self.device_state_path()?)?;
+        let native_config_sha256 = self
+            .config_path()
+            .map(|path| Self::file_integrity(&path).map(|(_, sha256)| sha256))
+            .transpose()?;
+
+        Ok(TemplateIdentity {
+            format_version: TEMPLATE_IDENTITY_FORMAT_VERSION,
+            hypervisor: self.config.hypervisor_name.clone(),
+            memory_size,
+            memory_sha256,
+            device_state_size,
+            device_state_sha256,
+            config_sha256: self.config_sha256()?,
+            native_config_sha256,
+        })
+    }
+
+    fn publish_identity(&self) -> Result<TemplateIdentity> {
+        let identity = self.calculate_identity()?;
+
+        let identity_path = self.identity_path();
+        let partial_path = self.state_path.join("template.json.partial");
+
+        let result = (|| -> Result<()> {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&partial_path)
+                .with_context(|| format!("create template identity {}", partial_path.display()))?;
+
+            file.write_all(&serde_json::to_vec_pretty(&identity)?)
+                .context("write template identity")?;
+
+            file.sync_all().context("sync template identity")?;
+
+            std::fs::rename(&partial_path, &identity_path).context("publish template identity")?;
+
+            File::open(&self.state_path)?
+                .sync_all()
+                .context("sync template directory")?;
+
+            Ok(())
+        })();
+
+        if result.is_err() {
+            let _ = std::fs::remove_file(&partial_path);
+        }
+        result?;
+
+        Ok(identity)
+    }
+
+    #[cfg(test)]
+    fn load_and_verify_identity(&self) -> Result<TemplateIdentity> {
+        self.load_identity(true)
+    }
+
+    fn load_identity(&self, verify_assets: bool) -> Result<TemplateIdentity> {
+        let identity_path = self.identity_path();
+        let metadata = std::fs::symlink_metadata(&identity_path)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(anyhow!("VM template identity is not a regular file"));
+        }
+
+        let identity: TemplateIdentity =
+            serde_json::from_slice(&std::fs::read(&identity_path)?)
+            .context("decode template identity")?;
+
+        if identity.format_version != TEMPLATE_IDENTITY_FORMAT_VERSION {
+            return Err(anyhow!(
+                "unsupported VM template identity format {}; recreate the template",
+                identity.format_version
+            ));
+        }
+
+        let regular_file_size = |path: &std::path::Path| -> Result<u64> {
+            let metadata = std::fs::symlink_metadata(path)?;
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                return Err(anyhow!(
+                    "template artifact {} is not a regular file",
+                    path.display()
+                ));
+            }
+
+            Ok(metadata.len())
+        };
+
+        // Rehash the small device-state artifact on every fetch.
+        let memory_size = regular_file_size(&self.memory_path())?;
+        let (device_state_size, device_state_sha256) =
+            Self::file_integrity(&self.device_state_path()?)?;
+        let config_matches = !verify_assets || self.config_sha256()? == identity.config_sha256;
+        let valid_digest = |digest: &str| {
+            digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        };
+
+        match (self.config_path(), identity.native_config_sha256.as_ref()) {
+            (Some(path), Some(expected))
+                if valid_digest(expected) && Self::file_integrity(&path)?.1 == *expected => {}
+            (None, None) => {}
+            _ => return Err(anyhow!("VM template native configuration does not match")),
+        }
+
+        if memory_size != identity.memory_size
+            || device_state_size != identity.device_state_size
+            || device_state_sha256 != identity.device_state_sha256
+            || !config_matches
+            || identity.hypervisor != self.config.hypervisor_name
+            || !valid_digest(&identity.memory_sha256)
+            || !valid_digest(&identity.device_state_sha256)
+            || !valid_digest(&identity.config_sha256)
+        {
+            return Err(anyhow!("VM template identity does not match its artifacts"));
+        }
+
+        Ok(identity)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_template() -> Template {
+        let path = std::env::temp_dir().join(format!(
+            "kata-template-identity-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&path).unwrap();
+        std::fs::write(path.join("memory"), b"template memory").unwrap();
+        std::fs::write(path.join("state"), b"template device state").unwrap();
+        let mut config = VmConfig {
+            hypervisor_name: hypervisor::HYPERVISOR_QEMU.to_string(),
+            ..Default::default()
+        };
+        config.hypervisor_config.memory_info.default_memory = 2048;
+        let template = Template::new(config, path);
+        template.save_vm_config().unwrap();
+        template
+    }
+
+    #[test]
+    fn template_identity_round_trip_and_artifact_mismatch() {
+        let mut template = test_template();
+        let identity = template.publish_identity().unwrap();
+        template.identity = Some(identity.clone());
+        assert_eq!(template.identity.as_ref().unwrap(), &identity);
+
+        let fetched =
+            Template::fetch(template.config.clone(), template.state_path.clone()).unwrap();
+        assert_eq!(fetched.identity.as_ref().unwrap(), &identity);
+
+        std::fs::write(template.memory_path(), b"modified template memory").unwrap();
+        let error = Template::fetch(template.config.clone(), template.state_path.clone())
+            .expect_err("modified template memory must fail identity validation");
+        assert!(error
+            .to_string()
+            .contains("VM template identity does not match its artifacts"));
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
+    fn clh_template_binds_native_config() {
+        let mut template = test_template();
+        template.config.hypervisor_name = HYPERVISOR_NAME_CH.to_string();
+        std::fs::rename(
+            template.state_path.join("state"),
+            template.state_path.join("state.json"),
+        )
+        .unwrap();
+        let native_config = template.state_path.join("config.json");
+        std::fs::write(&native_config, b"native config A").unwrap();
+        template.save_vm_config().unwrap();
+        let mut identity = template.publish_identity().unwrap();
+        assert_eq!(identity.format_version, TEMPLATE_IDENTITY_FORMAT_VERSION);
+        assert!(identity.native_config_sha256.is_some());
+        Template::fetch(template.config.clone(), template.state_path.clone()).unwrap();
+
+        // Per-sandbox edits must not change the original template identity.
+        let private_config = template.state_path.join("private-config.json");
+        std::fs::copy(&native_config, &private_config).unwrap();
+        std::fs::write(&private_config, b"private socket").unwrap();
+        Template::fetch(template.config.clone(), template.state_path.clone()).unwrap();
+        std::fs::write(&native_config, b"native config B").unwrap();
+        assert!(Template::fetch(template.config.clone(), template.state_path.clone()).is_err());
+        std::fs::write(&native_config, b"native config A").unwrap();
+
+        identity.native_config_sha256 = None;
+        std::fs::write(
+            template.identity_path(),
+            serde_json::to_vec(&identity).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            Template::fetch(template.config.clone(), template.state_path.clone())
+                .unwrap_err()
+                .to_string()
+                .contains("native configuration does not match")
+        );
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
+    fn template_identity_rejects_config_mismatch() {
+        let mut template = test_template();
+        template.publish_identity().unwrap();
+        template.config.hypervisor_config.memory_info.default_memory += 1;
+
+        let error = Template::fetch(template.config.clone(), template.state_path.clone())
+            .expect_err("modified template configuration must fail identity validation");
+        assert!(error
+            .to_string()
+            .contains("VM template identity does not match its artifacts"));
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
+    fn template_identity_allows_relocated_installation() {
+        let mut template = test_template();
+        let asset = template.state_path.join("initrd");
+        let relocated = template.state_path.join("relocated-initrd");
+        std::fs::write(&asset, b"agent version A").unwrap();
+        std::fs::copy(&asset, &relocated).unwrap();
+        template.config.hypervisor_config.boot_info.initrd = asset.display().to_string();
+        template.publish_identity().unwrap();
+        let original = template.config_sha256().unwrap();
+        template.config.hypervisor_config.boot_info.initrd = relocated.display().to_string();
+        template.config.hypervisor_config.factory.template_path = "/other/template".into();
+        assert_eq!(original, template.config_sha256().unwrap());
+        template.load_and_verify_identity().unwrap();
+        std::fs::write(&relocated, b"agent version B").unwrap();
+        assert!(template.load_and_verify_identity().is_err());
+        template.config.hypervisor_config.cpu_info.default_maxvcpus += 1;
+        assert_ne!(original, template.config_sha256().unwrap());
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
+    fn template_identity_ignores_host_path_authorization_policy() {
+        let mut template = test_template();
+        let identity = template.publish_identity().unwrap();
+        let hv = &mut template.config.hypervisor_config;
+        hv.valid_hypervisor_paths = vec!["/other/qemu/*".into()];
+        hv.valid_ctlpaths = vec!["/other/control/*".into()];
+        hv.valid_jailer_paths = vec!["/other/jailer/*".into()];
+        assert_eq!(identity.config_sha256, template.config_sha256().unwrap());
+        template.load_and_verify_identity().unwrap();
+        template.config.hypervisor_config.cpu_info.default_maxvcpus += 1;
+        assert!(template.load_and_verify_identity().is_err());
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
+    fn template_identity_rejects_same_size_device_state_mismatch() {
+        let template = test_template();
+        template.publish_identity().unwrap();
+        let state_path = template.device_state_path().unwrap();
+        let mut state = std::fs::read(&state_path).unwrap();
+        state[0] ^= 0xff;
+        std::fs::write(&state_path, state).unwrap();
+
+        let error = Template::fetch(template.config.clone(), template.state_path.clone())
+            .expect_err("same-size device-state corruption must fail identity validation");
+        assert!(error
+            .to_string()
+            .contains("VM template identity does not match its artifacts"));
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
+    fn template_identity_rejects_unknown_format() {
+        let template = test_template();
+        let mut identity = template.publish_identity().unwrap();
+        identity.format_version += 1;
+        std::fs::write(
+            template.identity_path(),
+            serde_json::to_vec(&identity).unwrap(),
+        )
+        .unwrap();
+
+        let error = Template::fetch(template.config.clone(), template.state_path.clone())
+            .expect_err("unknown identity format must fail");
+        assert!(error
+            .to_string()
+            .contains("unsupported VM template identity format"));
+        std::fs::remove_dir_all(&template.state_path).unwrap();
     }
 }

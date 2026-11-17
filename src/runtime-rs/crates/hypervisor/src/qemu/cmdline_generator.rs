@@ -3079,9 +3079,36 @@ impl<'a> QemuCmdLine<'a> {
             iommufd_objects: HashMap::new(),
         };
 
-        // add_virtiofs_share() installs the file-backed memory backend when
+        let template_enabled =
+            config.vm_template.boot_to_be_template || config.vm_template.boot_from_template;
+        if template_enabled {
+            if config.vm_template.boot_to_be_template && config.vm_template.boot_from_template {
+                return Err(anyhow!(
+                    "boot_to_be_template and boot_from_template cannot both be enabled"
+                ));
+            }
+            if config.vm_template.memory_path.is_empty() {
+                return Err(anyhow!("VM template memory_path is empty"));
+            }
+            if !matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+                return Err(anyhow!(
+                    "QEMU VM templates are incompatible with filesystem sharing"
+                ));
+            }
+
+            // The template producer maps the backing file shared so that QEMU
+            // can populate it. Clones map the same file privately, giving each
+            // restored VM copy-on-write guest RAM. The migration stream can
+            // therefore omit shared RAM via x-ignore-shared.
+            qemu_cmd_line.add_file_memory_backend(
+                "entire-guest-memory-template",
+                &config.vm_template.memory_path,
+                config.vm_template.boot_to_be_template,
+                false,
+                config.memory_info.enable_mem_prealloc,
+            );
         // filesystem sharing is enabled.
-        if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+        } else if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
             qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
         }
 
@@ -4849,5 +4876,28 @@ mod tests {
             "kernel_irqchip=on must be present on this arch, got: {}",
             machine_value
         );
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_template_clone_has_one_deferred_incoming() {
+        let mut config = test_qemu_config(Some("none"), false);
+        config.vm_template.boot_from_template = true;
+        config.vm_template.memory_path = "/template/memory".to_string();
+        let params = build_test_cmdline("template-clone", &config).await;
+
+        assert_eq!(
+            params
+                .windows(2)
+                .filter(|args| args[0] == "-incoming" && args[1] == "defer")
+                .count(),
+            1
+        );
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-object"
+                && args[1].contains("memory-backend-file")
+                && args[1].contains("mem-path=/template/memory")
+                && args[1].contains("share=off")
+        }));
     }
 }
