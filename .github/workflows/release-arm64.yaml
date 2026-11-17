@@ -65,6 +65,15 @@ jobs:
           path: tools/packaging/kata-deploy/local-build/build
           merge-multiple: true
 
+      # kata-ctl ships in the kata-tools bundle under its own artifact name, so
+      # stage it into the build dir separately to bake it into the deploy image.
+      - name: get-kata-ctl
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: kata-tools-artifacts-arm64-kata-ctl
+          path: tools/packaging/kata-deploy/local-build/build
+          merge-multiple: true
+
       - name: build-and-push-kata-deploy-ci-arm64
         id: build-and-push-kata-deploy-ci-arm64
         env:
