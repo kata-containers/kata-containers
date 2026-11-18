@@ -45,6 +45,18 @@ Containers, run:
 $ kata-ctl check all
 ```
 
+### Runtime information
+
+Use `kata-ctl env` to display the host and configured component details, or
+`kata-ctl env --json` for JSON output.
+
+The runtime section resolves `containerd-shim-kata-v2` from `PATH`, follows
+symbolic links, and reports the shim's path, `variant` (`rust` or `golang`),
+version and commit. The `search_method` field is `path`: this identifies the
+discovery method, not necessarily the shim selected by a container manager
+with an explicit runtime path. An unavailable shim or an unsuccessful or
+unrecognized version response is reported as an error.
+
 ### Full details
 
 For a usage statement, run:
