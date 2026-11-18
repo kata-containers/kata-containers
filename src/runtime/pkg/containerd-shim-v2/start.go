@@ -8,8 +8,10 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/containerd/containerd/api/types/task"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
@@ -17,9 +19,21 @@ import (
 
 func startContainer(ctx context.Context, s *service, c *container) (retErr error) {
 	shimLog.WithField("container", c.id).Debug("start container")
+	if c.startFailed {
+		return fmt.Errorf("container %s cannot be started after a failed start: %w", c.id, errdefs.ErrFailedPrecondition)
+	}
+	if c.status != task.Status_CREATED {
+		return fmt.Errorf("container %s cannot be started in state %s: %w", c.id, c.status, errdefs.ErrFailedPrecondition)
+	}
 	defer func() {
 		if retErr != nil {
-			// notify the wait goroutine to continue
+			// Publishing an exit result makes this attempt final. Keep the
+			// guest status so Kill/Delete can clean up a partial start.
+			c.startFailed = true
+			c.exit = exitCode255
+			c.exitTime = time.Now()
+			// No wait goroutine was started, and retries are rejected before
+			// this defer, so this is the only producer of the exit result.
 			c.exitCh <- exitCode255
 		}
 	}()
@@ -126,9 +140,25 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (e *
 		return nil, err
 	}
 
+	// An exec process can be started only once. Rejecting other states keeps a
+	// repeated Start from re-entering the container or re-reporting an exit.
+	if execs.status != task.Status_CREATED {
+		return nil, fmt.Errorf("exec %s in container %s cannot be started in state %s: %w", execID, containerID, execs.status, errdefs.ErrFailedPrecondition)
+	}
+
 	defer func() {
 		if retErr != nil {
-			// notify the wait goroutine to continue
+			// If no guest process was created, the exec has finished: report
+			// it as stopped so State/Kill/Delete behave like any exited exec.
+			// Otherwise a process exists in the guest and keeps its status, so
+			// it can still be signalled.
+			if execs.id == "" {
+				execs.status = task.Status_STOPPED
+				execs.exitCode = exitCode255
+				execs.exitTime = time.Now()
+			}
+			// The exec is now STOPPED or RUNNING, so retries cannot publish
+			// another result. No wait goroutine was started on this path.
 			execs.exitCh <- exitCode255
 		}
 	}()
