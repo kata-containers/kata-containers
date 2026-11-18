@@ -95,6 +95,7 @@ type hypervisor struct {
 	KernelVerityParams             string                    `toml:"kernel_verity_params"`
 	MachineType                    string                    `toml:"machine_type"`
 	QgsPort                        uint32                    `toml:"tdx_quote_generation_service_socket_port"`
+	BlockDeviceReadOnlySlots       *uint32                   `toml:"block_device_read_only_slots"`
 	BlockDeviceDriver              string                    `toml:"block_device_driver"`
 	EntropySource                  string                    `toml:"entropy_source"`
 	SharedFS                       string                    `toml:"shared_fs"`
@@ -826,6 +827,13 @@ func (a agent) kernelModules() []string {
 }
 
 func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	readOnlySlots := uint32(1)
+	if h.BlockDeviceReadOnlySlots != nil {
+		readOnlySlots = *h.BlockDeviceReadOnlySlots
+	}
+	if readOnlySlots >= vc.FirecrackerDiskPoolSize {
+		return vc.HypervisorConfig{}, fmt.Errorf("block_device_read_only_slots must be between 0 and %d, got %d", vc.FirecrackerDiskPoolSize-1, readOnlySlots)
+	}
 	hypervisor, err := h.path()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -872,39 +880,40 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	txRateLimiterMaxRate := h.getTxRateLimiterCfg()
 
 	return vc.HypervisorConfig{
-		HypervisorPath:        hypervisor,
-		HypervisorPathList:    h.HypervisorPathList,
-		JailerPath:            jailer,
-		JailerPathList:        h.JailerPathList,
-		KernelPath:            kernel,
-		InitrdPath:            initrd,
-		ImagePath:             image,
-		RootfsType:            rootfsType,
-		FirmwarePath:          firmware,
-		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		KernelVerityParams:    h.kernelVerityParams(),
-		NumVCPUsF:             h.defaultVCPUs(vc.FirecrackerHypervisor),
-		DefaultMaxVCPUs:       h.defaultMaxVCPUs(vc.FirecrackerHypervisor),
-		MemorySize:            h.defaultMemSz(),
-		MemSlots:              h.defaultMemSlots(),
-		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
-		EntropySource:         h.GetEntropySource(),
-		EntropySourceList:     h.EntropySourceList,
-		DefaultBridges:        h.defaultBridges(),
-		DisableBlockDeviceUse: false, // shared fs is not supported in Firecracker,
-		HugePages:             h.HugePages,
-		Debug:                 h.Debug,
-		DisableNestingChecks:  h.DisableNestingChecks,
-		BlockDeviceDriver:     blockDriver,
-		EnableIOThreads:       h.EnableIOThreads,
-		IndepIOThreads:        h.indepiothreads(),
-		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
-		GuestHookPath:         h.guestHookPath(),
-		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
-		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
-		EnableAnnotations:     h.EnableAnnotations,
-		DisableSeLinux:        h.DisableSeLinux,
-		DisableGuestSeLinux:   true, // Guest SELinux is not supported in Firecracker
+		HypervisorPath:           hypervisor,
+		HypervisorPathList:       h.HypervisorPathList,
+		JailerPath:               jailer,
+		JailerPathList:           h.JailerPathList,
+		KernelPath:               kernel,
+		InitrdPath:               initrd,
+		ImagePath:                image,
+		RootfsType:               rootfsType,
+		FirmwarePath:             firmware,
+		KernelParams:             vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:       h.kernelVerityParams(),
+		NumVCPUsF:                h.defaultVCPUs(vc.FirecrackerHypervisor),
+		DefaultMaxVCPUs:          h.defaultMaxVCPUs(vc.FirecrackerHypervisor),
+		MemorySize:               h.defaultMemSz(),
+		MemSlots:                 h.defaultMemSlots(),
+		DefaultMaxMemorySize:     h.defaultMaxMemSz(),
+		EntropySource:            h.GetEntropySource(),
+		EntropySourceList:        h.EntropySourceList,
+		DefaultBridges:           h.defaultBridges(),
+		DisableBlockDeviceUse:    false, // shared fs is not supported in Firecracker,
+		HugePages:                h.HugePages,
+		Debug:                    h.Debug,
+		DisableNestingChecks:     h.DisableNestingChecks,
+		BlockDeviceDriver:        blockDriver,
+		BlockDeviceReadOnlySlots: readOnlySlots,
+		EnableIOThreads:          h.EnableIOThreads,
+		IndepIOThreads:           h.indepiothreads(),
+		DisableVhostNet:          true, // vhost-net backend is not supported in Firecracker
+		GuestHookPath:            h.guestHookPath(),
+		RxRateLimiterMaxRate:     rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:     txRateLimiterMaxRate,
+		EnableAnnotations:        h.EnableAnnotations,
+		DisableSeLinux:           h.DisableSeLinux,
+		DisableGuestSeLinux:      true, // Guest SELinux is not supported in Firecracker
 		// Firecracker has no shared fs; files are copied into the guest
 		// and must be kept in sync by the file event watcher.
 		SharedFS: config.NoSharedFS,

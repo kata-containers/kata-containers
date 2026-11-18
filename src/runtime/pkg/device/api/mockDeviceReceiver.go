@@ -25,7 +25,7 @@ func (mockDC *MockDeviceReceiver) HotplugRemoveDevice(context.Context, Device, c
 }
 
 // GetAndSetSandboxBlockIndex is used for get and set virtio-blk indexes
-func (mockDC *MockDeviceReceiver) GetAndSetSandboxBlockIndex() (int, error) {
+func (mockDC *MockDeviceReceiver) GetAndSetSandboxBlockIndex(readOnly bool) (int, error) {
 	return 0, nil
 }
 
