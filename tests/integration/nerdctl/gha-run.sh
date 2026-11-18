@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Copyright (c) 2023 Intel Corporation
+# Copyright (c) 2026 NVIDIA Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -93,16 +94,17 @@ function run() {
 	info "Running nerdctl with runc"
 	sudo nerdctl run --rm --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
 
-	local parent_interface="eth0"
-	# The following creates an ipvlan network with eth0 on host as parent. The test assumes
-	# that an interface called eth0 exists on the host.
+	local parent_interface
+	parent_interface=$(ip -o -4 route show default | awk '{for (i=1; i<NF; i++) if ($i == "dev") {print $(i+1); exit}}')
+	[[ -n "${parent_interface}" ]] || die "Cannot find the host default-route interface"
+	ip link show dev "${parent_interface}" > /dev/null
+
 	local ipvlan_net_name="ipvlan10"
-	info "Creating ipvlan network with eth0 interface on host as parent"
+	info "Creating ipvlan network with ${parent_interface} interface on host as parent"
 	sudo nerdctl network create "${ipvlan_net_name}" --driver ipvlan --subnet=10.5.74.0/24 -o parent="${parent_interface}"
 
-	# The following creates an ipvlan network with eth0 on host as parent.
 	local macvlan_net_name="macvlan20"
-	info "Creating macvlan network with eth0 interface on host as parent"
+	info "Creating macvlan network with ${parent_interface} interface on host as parent"
 	sudo nerdctl network create "${macvlan_net_name}" --driver ipvlan --subnet=10.8.0.0/24 -o parent="${parent_interface}"
 
 	# Create two bridge networks for testing multiple networks with Kata
