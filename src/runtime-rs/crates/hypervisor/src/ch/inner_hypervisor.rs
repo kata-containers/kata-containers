@@ -161,6 +161,17 @@ impl CloudHypervisorInner {
     }
 
     async fn boot_vm(&mut self) -> Result<()> {
+        let vfio_devices: Vec<_> = self
+            .pending_devices
+            .iter()
+            .filter_map(|dev| {
+                if let crate::device::DeviceType::VfioModern(vfio) = dev {
+                    Some(vfio.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
         let (shared_fs_devices, network_devices, host_devices, protection_device, boot_disks) =
             self.get_shared_devices().await?;
 
@@ -229,6 +240,23 @@ impl CloudHypervisorInner {
 
         if let Some(detail) = response {
             debug!(sl!(), "vm start response: {:?}", detail);
+        }
+
+        if !vfio_devices.is_empty() {
+            let info = cloud_hypervisor_vm_info(&self.api_socket).await?;
+            let tree = info.device_tree.context("CH vm.info has no device tree")?;
+            for device in vfio_devices {
+                let mut vfio = device.lock().await;
+                let bdf = tree
+                    .get(&vfio.device_id)
+                    .and_then(|node| node.pci_bdf.as_deref())
+                    .with_context(|| format!("CH has no PCI mapping for {}", vfio.device_id))?;
+                let path = Self::clh_pci_info_to_path(bdf)?;
+                self.device_ids
+                    .insert(vfio.device_id.clone(), vfio.device_id.clone());
+                vfio.device_options = vec![format!("{}={path}", vfio.device.primary.addr)];
+                vfio.config.guest_pci_path = Some(path);
+            }
         }
 
         Ok(())
