@@ -96,8 +96,13 @@ impl CloudHypervisorInner {
         let enable_debug = cfg.debug_info.enable_debug;
 
         // Note that the configuration option hypervisor.block_device_driver is not used.
-        // NVDIMM is not supported for Cloud Hypervisor.
-        let rootfs_driver = VM_ROOTFS_DRIVER_BLK;
+        // Fall back to virtio-blk when the driver is unset so the guest always
+        // gets a concrete root device.
+        let rootfs_driver = if cfg.boot_info.vm_rootfs_driver.is_empty() {
+            VM_ROOTFS_DRIVER_BLK
+        } else {
+            cfg.boot_info.vm_rootfs_driver.as_str()
+        };
 
         let rootfs_type = match cfg.boot_info.rootfs_type.is_empty() {
             true => DEFAULT_CH_ROOTFS_TYPE,
@@ -1525,5 +1530,31 @@ mod tests {
             !vcpus.contains_key(&1000),
             "non-vcpu thread should not be in the map"
         );
+    }
+
+    #[actix_rt::test]
+    async fn test_pmem_rootfs_kernel_params() {
+        let mut ch = CloudHypervisorInner::default();
+        ch.set_hypervisor_config(HypervisorConfig {
+            boot_info: kata_types::config::hypervisor::BootInfo {
+                kernel: "/kernel".into(),
+                image: "/rootfs.img".into(),
+                vm_rootfs_driver: "virtio-pmem".into(),
+
+                ..Default::default()
+            },
+
+            ..Default::default()
+        });
+
+        let params = ch.get_kernel_params().await.unwrap();
+        let tokens: Vec<&str> = params.split_whitespace().collect();
+        assert!(tokens.contains(&"root=/dev/pmem0p1"), "params: {}", params);
+        assert!(
+            params.contains("rootflags=dax,data=ordered,errors=remount-ro ro"),
+            "params: {}",
+            params
+        );
+        assert!(tokens.contains(&"rootfstype=ext4"), "params: {}", params);
     }
 }
