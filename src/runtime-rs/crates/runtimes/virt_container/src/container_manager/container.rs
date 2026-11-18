@@ -348,7 +348,7 @@ impl Container {
                 if let Err(err) = res {
                     let device_manager = self.resource_manager.get_device_manager().await;
                     let _ = inner.stop_process(process, true, &device_manager).await;
-                    inner.init_process.fail_start().await;
+                    inner.init_process.fail_start(ProcessStatus::Stopped).await;
 
                     if let Err(e) = self
                         .resource_manager
