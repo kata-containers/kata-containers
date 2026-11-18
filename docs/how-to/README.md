@@ -2,6 +2,7 @@
 
 ## Kubernetes Integration
 
+- [Test Kata Containers with Lima on Linux and macOS](test-kata-with-lima.md)
 - [Run Kata containers with `crictl`](run-kata-with-crictl.md)
 - [How to use Kata Containers and Containerd](containerd-kata.md)
 - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)

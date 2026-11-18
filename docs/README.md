@@ -50,6 +50,7 @@ Documents that help to understand and contribute to Kata Containers.
 ### How to Contribute
 
 * [Developer Guide](Developer-Guide.md): Setup the Kata Containers developing environments
+* [Lima development lab](how-to/test-kata-with-lima.md): Test Kata on Linux and supported Apple silicon Macs
 * [How to contribute to Kata Containers](https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md)
 * [Code of Conduct](../CODE_OF_CONDUCT.md)
 * [How to submit a blog post](Blog-Post-Submission-Guide.md)
