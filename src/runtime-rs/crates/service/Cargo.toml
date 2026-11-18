@@ -25,6 +25,5 @@ logging = { workspace = true }
 persist = { workspace = true }
 runtimes = { workspace = true }
 
-
 [package.metadata.cargo-machete]
 ignored = ["slog-scope"]

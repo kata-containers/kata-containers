@@ -143,6 +143,45 @@ impl TryFrom<SandboxResponse> for sandbox_api::ShutdownSandboxResponse {
     }
 }
 
+impl TryFrom<SandboxResponse> for sandbox_api::CheckpointResponse {
+    type Error = anyhow::Error;
+
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::CheckpointSandbox => Ok(Self::new()),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::RestoreResponse {
+    type Error = anyhow::Error;
+
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::RestoreSandbox(resp) => Ok(Self {
+                containers: resp
+                    .tasks
+                    .into_iter()
+                    .map(|task| sandbox_api::RestoredContainer {
+                        name: task.checkpoint_key,
+                        task_checkpoint_image: String::new(),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            }),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
 impl From<ProcessExitStatus> for api::WaitResponse {
     fn from(from: ProcessExitStatus) -> Self {
         Self {

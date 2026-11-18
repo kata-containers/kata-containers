@@ -278,3 +278,4 @@ opt-level = "z"
 # depend on it, such as containerd-shim.
 [patch.crates-io]
 cgroups-rs = { git = "https://github.com/kata-containers/cgroups-rs", rev = "4eb91bc293ec27b0ca33c2c796c1a675d5bf1f0a" }
+containerd-shim-protos = { git = "https://github.com/Apokleos/rust-extensions.git", rev = "8719efde2c41fadd4f36710e0271dbb35fcc7607" }

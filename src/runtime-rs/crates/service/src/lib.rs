@@ -9,6 +9,7 @@ extern crate slog;
 
 logging::logger_with_subsystem!(sl, "service");
 
+mod checkpoint_service;
 mod event;
 mod manager;
 mod sandbox_service;

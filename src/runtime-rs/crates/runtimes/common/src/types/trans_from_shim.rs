@@ -5,9 +5,10 @@
 //
 
 use super::{
-    ContainerConfig, ContainerID, ContainerProcess,
+    CheckpointSandboxRequest, ContainerConfig, ContainerID, ContainerProcess,
     CreateSandboxRequest as InternalCreateSandboxRequest, ExecProcessRequest, KillRequest,
-    ResizePTYRequest, SandboxConfig, SandboxID, SandboxNetworkEnv, SandboxRequest,
+    PrepareRestoreOptions, ResizePTYRequest, RestoreSandboxRequest, SandboxCheckpointTask,
+    SandboxConfig, SandboxID, SandboxNetworkEnv, SandboxRequest, SandboxRestoreTask,
     SandboxStatusRequest, ShutdownRequest, StopSandboxRequest, TaskRequest, UpdateRequest,
     DEFAULT_SHM_SIZE,
 };
@@ -93,7 +94,14 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
             )
         };
 
-        let prepare_restore = None;
+        let prepare_restore =
+            from.prepare_restore
+                .into_option()
+                .map(|prepare| PrepareRestoreOptions {
+                    checkpoint_path: prepare.checkpoint_path,
+                    options: prepare.options,
+                });
+
         let sandbox_config = SandboxConfig {
             sandbox_id: from.sandbox_id.clone(),
             hostname,
@@ -187,6 +195,96 @@ impl TryFrom<sandbox_api::ShutdownSandboxRequest> for SandboxRequest {
         Ok(SandboxRequest::ShutdownSandbox(SandboxID {
             sandbox_id: from.sandbox_id,
         }))
+    }
+}
+
+impl TryFrom<sandbox_api::CheckpointRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(from: sandbox_api::CheckpointRequest) -> Result<Self> {
+        Ok(SandboxRequest::CheckpointSandbox(
+            CheckpointSandboxRequest {
+                sandbox_id: from.sandbox_id,
+                output_path: from.output_path,
+                tasks: from
+                    .containers
+                    .into_iter()
+                    .map(|c| SandboxCheckpointTask {
+                        checkpoint_key: c.name,
+                        task_id: c.id,
+                        rootfs_device_ids: Vec::new(),
+                    })
+                    .collect(),
+                options: from.options,
+                operation_timeout: None,
+            },
+        ))
+    }
+}
+
+impl TryFrom<sandbox_api::RestoreRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(from: sandbox_api::RestoreRequest) -> Result<Self> {
+        let type_url = from.sandbox_config.type_url.clone();
+        if !type_url.is_empty() && type_url != SANDBOX_API_V1 {
+            return Err(anyhow!("unsupported sandbox config type url: {type_url}"));
+        }
+        let uses_request_fields = type_url.is_empty();
+        let config = if uses_request_fields {
+            cri_api_v1::PodSandboxConfig::new()
+        } else {
+            cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.sandbox_config.value)?
+        };
+        let dns = config
+            .dns_config
+            .into_option()
+            .map(dns_config_to_resolv_conf)
+            .unwrap_or_default();
+        let hostname = if config.hostname.is_empty() {
+            from.sandbox_id.clone()
+        } else {
+            config.hostname.clone()
+        };
+        let sandbox_id = from.sandbox_id;
+        let sandbox_config = SandboxConfig {
+            sandbox_id: sandbox_id.clone(),
+            hostname,
+            dns,
+            network_env: SandboxNetworkEnv {
+                netns: None,
+                network_created: false,
+            },
+            annotations: config.annotations.clone(),
+            hooks: None,
+            state: runtime_spec::State {
+                version: Default::default(),
+                id: sandbox_id,
+                status: runtime_spec::ContainerState::Creating,
+                pid: 0,
+                bundle: String::new(),
+                annotations: config.annotations,
+            },
+            shm_size: DEFAULT_SHM_SIZE,
+            config_path: None,
+        };
+        let tasks = from
+            .containers
+            .into_iter()
+            .map(|c| SandboxRestoreTask {
+                checkpoint_key: c.name,
+                task_id: c.id,
+            })
+            .collect();
+        Ok(SandboxRequest::RestoreSandbox(Box::new(
+            RestoreSandboxRequest {
+                sandbox_config,
+                checkpoint_path: from.checkpoint_path,
+                options: from.options,
+                tasks,
+                operation_timeout: None,
+            },
+        )))
     }
 }
 
@@ -488,5 +586,64 @@ mod tests {
                 .map(String::as_str),
             Some("cri")
         );
+    }
+
+    #[test]
+    fn create_sandbox_preserves_typed_prepare_restore() {
+        let mut request = sandbox_api::CreateSandboxRequest::new();
+        request.prepare_restore =
+            protobuf::MessageField::some(sandbox_api::SandboxPrepareRestoreOptions {
+                checkpoint_path: "/checkpoints/pod-a".into(),
+                options: vec![("runtime-asset-identity".into(), "asset-a".into())]
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            });
+
+        let request = SandboxRequest::try_from(request).unwrap();
+        let SandboxRequest::CreateSandbox(request) = request else {
+            panic!("expected create sandbox request");
+        };
+        let prepare = request.prepare_restore.expect("prepare restore");
+        assert_eq!(prepare.checkpoint_path, "/checkpoints/pod-a");
+        assert_eq!(
+            prepare.options.get("runtime-asset-identity"),
+            Some(&"asset-a".to_string())
+        );
+    }
+
+    #[test]
+    fn restore_sandbox_without_config_uses_sandbox_id_as_hostname() {
+        let mut request = sandbox_api::RestoreRequest::new();
+        request.sandbox_id = "sandbox-id".into();
+
+        let request = SandboxRequest::try_from(request).unwrap();
+        let SandboxRequest::RestoreSandbox(request) = request else {
+            panic!("expected restore sandbox request");
+        };
+
+        assert_eq!(request.sandbox_config.sandbox_id, "sandbox-id");
+        assert_eq!(request.sandbox_config.hostname, "sandbox-id");
+        assert!(request.sandbox_config.network_env.netns.is_none());
+    }
+
+    #[test]
+    fn restore_sandbox_with_config_uses_config_hostname() {
+        let mut config = cri_api_v1::PodSandboxConfig::new();
+        config.hostname = "cri-hostname".into();
+
+        let mut request = sandbox_api::RestoreRequest::new();
+        request.sandbox_id = "sandbox-id".into();
+        let mut sandbox_config = protobuf::well_known_types::any::Any::new();
+        sandbox_config.type_url = SANDBOX_API_V1.into();
+        sandbox_config.value = config.write_to_bytes().unwrap();
+        request.sandbox_config = protobuf::MessageField::some(sandbox_config);
+
+        let request = SandboxRequest::try_from(request).unwrap();
+        let SandboxRequest::RestoreSandbox(request) = request else {
+            panic!("expected restore sandbox request");
+        };
+
+        assert_eq!(request.sandbox_config.hostname, "cri-hostname");
     }
 }

@@ -1174,8 +1174,7 @@ dependencies = [
 [[package]]
 name = "containerd-shim-protos"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1284614d4f75c19a851250b6a13b2e5099f1d8bb9b98c6e7cba328504926edd"
+source = "git+https://github.com/Apokleos/rust-extensions.git?rev=8719efde2c41fadd4f36710e0271dbb35fcc7607#8719efde2c41fadd4f36710e0271dbb35fcc7607"
 dependencies = [
  "async-trait",
  "protobuf",
