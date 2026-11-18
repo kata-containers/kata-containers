@@ -9,6 +9,7 @@ use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
 use crate::utils::create_dir_all_with_inherit_owner;
+use crate::utils::exit_code_from_status;
 use crate::utils::set_process_credentials;
 use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
@@ -1034,14 +1035,14 @@ async fn cloud_hypervisor_log_output(
             status = child.wait(), if !exited => {
                 let status = status.context("wait for Cloud Hypervisor exit")?;
                 exited = true;
-                let _ = exit_notify.try_send(status.code().unwrap_or(0));
+                let _ = exit_notify.try_send(exit_code_from_status(status));
             },
             _ = shutdown.changed(), if !exited => {
                 info!(sl!(), "got shutdown request");
                 child.kill().await.context("kill Cloud Hypervisor")?;
                 let status = child.wait().await.context("wait for Cloud Hypervisor exit")?;
                 exited = true;
-                let _ = exit_notify.try_send(status.code().unwrap_or(0));
+                let _ = exit_notify.try_send(exit_code_from_status(status));
             },
             stderr_line = stderr_lines.next_segment(), if stderr_open => {
                 if let Ok(line) = stderr_line {
@@ -1267,7 +1268,7 @@ mod tests {
             tokio::time::timeout(Duration::from_secs(5), exit_rx.recv())
                 .await
                 .expect("exit notification must not wait for output EOF"),
-            Some(0)
+            Some(137)
         );
         assert!(!monitor.is_finished());
         drop(stdout_writer);
@@ -1341,7 +1342,7 @@ mod tests {
             .expect("shutdown must remain available after output closes or fails")
             .unwrap();
 
-        assert!(exit_rx.recv().await.is_some());
+        assert_eq!(exit_rx.recv().await, Some(137));
         assert_eq!(exit_rx.recv().await, None);
         assert_eq!(
             nix::sys::signal::kill(pid, None),
@@ -1349,13 +1350,19 @@ mod tests {
         );
     }
 
+    #[rstest::rstest]
+    #[case::sigkill(nix::sys::signal::Signal::SIGKILL, 137)]
+    #[case::sigterm(nix::sys::signal::Signal::SIGTERM, 143)]
     #[tokio::test]
-    async fn externally_killed_process_is_reaped_and_reported() {
+    async fn externally_killed_process_is_reaped_and_reported(
+        #[case] signal: nix::sys::signal::Signal,
+        #[case] expected: i32,
+    ) {
         let child = output_test_child("exec sleep 60");
         let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
         let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let (exit_tx, mut exit_rx) = mpsc::channel(1);
-        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGKILL).unwrap();
+        nix::sys::signal::kill(pid, signal).unwrap();
 
         tokio::time::timeout(
             Duration::from_secs(5),
@@ -1365,7 +1372,7 @@ mod tests {
         .expect("output task must report a killed VMM")
         .unwrap();
 
-        assert!(exit_rx.recv().await.is_some());
+        assert_eq!(exit_rx.recv().await, Some(expected));
         assert_eq!(exit_rx.recv().await, None);
         assert_eq!(
             nix::sys::signal::kill(pid, None),
