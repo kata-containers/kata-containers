@@ -11,7 +11,7 @@ mod qmp;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
-use crate::utils::SocketAddress;
+use crate::utils::{exit_code_from_status, SocketAddress};
 use crate::{Hypervisor, MemoryConfig, TdxConfig};
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
@@ -95,7 +95,7 @@ impl Hypervisor for Qemu {
         };
         if let Ok(mut process) = process {
             let status = process.wait().await?;
-            waiter.1 = status.code().unwrap_or(0);
+            waiter.1 = exit_code_from_status(status);
             self.inner.read().await.mark_exited();
         }
 
