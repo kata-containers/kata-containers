@@ -25,6 +25,7 @@ use oci_spec::runtime as oci;
 use resource::ResourceManager;
 use runtime_spec as spec;
 use tokio::sync::{OnceCell, RwLock};
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
@@ -43,6 +44,7 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
+    vmm_exit_confirmed: CancellationToken,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -69,6 +71,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
+        vmm_exit_confirmed: CancellationToken,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -79,6 +82,7 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
+            vmm_exit_confirmed,
         }
     }
 
@@ -103,6 +107,7 @@ impl ContainerManager for VirtContainerManager {
             self.agent.clone(),
             self.resource_manager.clone(),
             self.hypervisor.get_passfd_listener_addr().await.ok(),
+            self.vmm_exit_confirmed.clone(),
         )
         .await
         .context("new container")?;
@@ -289,44 +294,8 @@ impl ContainerManager for VirtContainerManager {
             }
         };
 
-        // According to CRI specs, kubelet will call StopPodSandbox()
-        // at least once before calling RemovePodSandbox, and this call
-        // is idempotent, and must not return an error if all relevant
-        // resources have already been reclaimed. And in that call it will
-        // send a SIGKILL signal first to try to stop the container, thus
-        // once the container has terminated, here should ignore this signal
-        // and return directly.
-        //
-        // When the VM/agent is dead (e.g., QEMU killed externally), the ttrpc
-        // connection will fail with AgentConnectionClosed error.
-        // Additionally, if the container's init process is already gone, the
-        // agent returns ProcessAlreadyTerminated error.
-        // For SIGKILL/SIGTERM, we should treat these as success since the
-        // container is effectively terminated.
         c.kill_process(self.containers.clone(), &req.process, req.signal, req.all)
             .await
-            .or_else(|err| {
-                let is_term_signal = is_termination_signal(req.signal);
-
-                // Check for typed errors using downcast_ref
-                let is_expected_error = matches!(
-                    err.downcast_ref::<Error>(),
-                    Some(Error::AgentConnectionClosed) | Some(Error::ProcessAlreadyTerminated)
-                );
-
-                if is_term_signal && is_expected_error {
-                    warn!(
-                        sl!(),
-                        "Signal encounters expected error, VM/process already terminated";
-                        "container" => container_id,
-                        "process" => ?&req.process,
-                        "signal" => req.signal,
-                    );
-                    Ok(())
-                } else {
-                    Err(err)
-                }
-            })
     }
 
     #[instrument]
@@ -500,5 +469,128 @@ impl ContainerManager for VirtContainerManager {
     async fn is_sandbox_container(&self, process: &ContainerProcess) -> bool {
         process.process_type == ProcessType::Container
             && process.container_id.container_id == self.sid
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn kill_reports_failed_delivery_until_container_is_removed() {
+        use agent::{kata::KataAgent, AgentManager, HealthService};
+        use persist::sandbox_persist::Persist;
+        use std::time::Duration;
+        use tokio::net::UnixListener;
+        use ttrpc::proto::GenMessage;
+
+        tokio::time::timeout(Duration::from_secs(35), async {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("agent.sock");
+            let listener = UnixListener::bind(&path).unwrap();
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                // Interrupt an RPC and leave the agent socket unreachable.
+                GenMessage::read_from(&mut socket).await.unwrap();
+                drop(listener);
+                drop(socket);
+            });
+            let agent = Arc::new(KataAgent::new(Default::default()));
+            agent
+                .start(&format!("remote://{}", path.display()))
+                .await
+                .unwrap();
+            agent.stop().await;
+            let error = agent.check(Default::default()).await.unwrap_err();
+            assert!(matches!(
+                error.downcast_ref::<ttrpc::Error>(),
+                Some(ttrpc::Error::Socket(_))
+            ));
+            server.await.unwrap();
+
+            let id = "container";
+            let hypervisor = Arc::new(hypervisor::qemu::Qemu::new());
+            // Restore resource handles without starting a VM or creating host cgroups.
+            let resources = Arc::new(
+                ResourceManager::restore(
+                    resource::manager::ManagerArgs {
+                        sid: id.into(),
+                        agent: agent.clone(),
+                        hypervisor: hypervisor.clone(),
+                        config: Default::default(),
+                    },
+                    resource::resource_persist::ResourceState {
+                        cgroup_state: Some(resource::cgroups::cgroup_persist::CgroupState {
+                            path: Some(id.into()),
+                            overhead_path: Some(id.into()),
+                            sandbox_cgroup_only: true,
+                        }),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap(),
+            );
+            let exit = CancellationToken::new();
+            let container = Container::new(
+                1,
+                ContainerConfig {
+                    container_id: id.into(),
+                    bundle: String::new(),
+                    rootfs_mounts: vec![],
+                    terminal: false,
+                    options: None,
+                    stdin: None,
+                    stdout: None,
+                    stderr: None,
+                },
+                Default::default(),
+                agent.clone(),
+                resources.clone(),
+                None,
+                exit.clone(),
+            )
+            .await
+            .unwrap();
+            let manager = VirtContainerManager::new(
+                id,
+                1,
+                agent.clone(),
+                hypervisor,
+                resources,
+                Default::default(),
+                exit,
+            );
+            manager
+                .containers
+                .write()
+                .await
+                .insert(id.into(), container);
+
+            for signal in [libc::SIGKILL, libc::SIGTERM] {
+                let req = KillRequest {
+                    process: ContainerProcess::new(id, "").unwrap(),
+                    signal: signal as u32,
+                    all: false,
+                };
+                let error = manager.kill_process(&req).await.unwrap_err();
+                assert!(matches!(
+                    error.downcast_ref::<Error>(),
+                    Some(Error::AgentConnectionClosed)
+                ));
+            }
+            manager.containers.write().await.remove(id);
+            manager
+                .kill_process(&KillRequest {
+                    process: ContainerProcess::new(id, "").unwrap(),
+                    signal: libc::SIGKILL as u32,
+                    all: false,
+                })
+                .await
+                .unwrap();
+            agent.disconnect().await.unwrap();
+        })
+        .await
+        .expect("agent reconnection attempts did not finish");
     }
 }

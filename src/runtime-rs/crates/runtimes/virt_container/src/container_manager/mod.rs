@@ -13,7 +13,38 @@ mod manager;
 pub use manager::VirtContainerManager;
 mod process;
 
+use std::future::Future;
+
 use common::{error::Error, types::ContainerProcess};
+
+pub(crate) fn agent_disconnected(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<ttrpc::Error>(),
+        Some(ttrpc::Error::Socket(_) | ttrpc::Error::LocalClosed | ttrpc::Error::RemoteClosed)
+    )
+}
+
+// WaitProcess and legacy output reads stay pending while the guest is running.
+async fn retry_on_disconnect<T, F: Future<Output = anyhow::Result<T>>>(
+    mut request: impl FnMut() -> F,
+) -> anyhow::Result<T> {
+    use std::time::Duration;
+    let mut delay = Duration::ZERO;
+    loop {
+        match request().await {
+            Err(error) if agent_disconnected(&error) => {
+                debug!(sl!(), "agent disconnected, retrying request: {error:#}");
+            }
+            result => return result,
+        }
+        if delay.is_zero() {
+            delay = Duration::from_secs(1);
+        } else {
+            tokio::time::sleep(delay).await;
+            delay = (delay * 2).min(Duration::from_secs(30));
+        }
+    }
+}
 
 /// Check if the signal is a termination signal (SIGKILL or SIGTERM).
 ///

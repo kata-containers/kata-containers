@@ -123,9 +123,8 @@ impl KataAgent {
                 .unwrap_or_else(|_| Err(anyhow::anyhow!("agent connection timed out")))
                 .map_err(|error| {
                     if reconnecting {
-                        // The previous connection is closed, even if a new
-                        // one cannot be established. Preserve that semantic
-                        // for idempotent termination after the VM exits.
+                        // A failed redial leaves the session closed. The VM
+                        // and its processes may still be running.
                         warn!(sl!(), "failed to reconnect agent: {error:#}"; "socket" => ?sock);
                         ttrpc::Error::LocalClosed
                     } else {

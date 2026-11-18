@@ -205,6 +205,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor,
             resource_manager,
             sandbox.oom_notifier(),
+            sandbox.vmm_exit_confirmed(),
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),

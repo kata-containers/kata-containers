@@ -30,8 +30,10 @@ use resource::{
     cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
 };
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use super::{
+    io::ContainerIo,
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
@@ -52,6 +54,7 @@ pub struct Container {
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
+    vmm_exit_confirmed: CancellationToken,
 }
 
 fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) -> Result<bool> {
@@ -75,6 +78,7 @@ impl Container {
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
         passfd_listener_addr: Option<(String, u32)>,
+        vmm_exit_confirmed: CancellationToken,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
         let logger = sl!().new(o!("container_id" => config.container_id.clone()));
@@ -108,6 +112,7 @@ impl Container {
             resource_manager,
             logger,
             passfd_listener_addr,
+            vmm_exit_confirmed,
         })
     }
 
@@ -330,13 +335,26 @@ impl Container {
                     if process_uses_passfd_io(&inner, process)? {
                         inner
                             .init_process
-                            .passfd_io_wait(containers, self.agent.clone())
+                            .passfd_io_wait(
+                                containers,
+                                self.agent.clone(),
+                                self.vmm_exit_confirmed.clone(),
+                            )
                             .await?;
                     } else {
-                        let container_io = inner.new_container_io(process).await?;
+                        let container_io = ContainerIo::new(
+                            self.agent.clone(),
+                            process.clone(),
+                            self.vmm_exit_confirmed.clone(),
+                        );
                         inner
                             .init_process
-                            .start_io_and_wait(containers, self.agent.clone(), container_io)
+                            .start_io_and_wait(
+                                containers,
+                                self.agent.clone(),
+                                container_io,
+                                self.vmm_exit_confirmed.clone(),
+                            )
                             .await?;
                     }
                     Ok(())
@@ -408,21 +426,33 @@ impl Container {
                         .get_mut(&process.exec_id)
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
                     exec.process
-                        .passfd_io_wait(containers, self.agent.clone())
+                        .passfd_io_wait(
+                            containers,
+                            self.agent.clone(),
+                            self.vmm_exit_confirmed.clone(),
+                        )
                         .await?;
                 } else {
                     // In legacy io mode, we handle IO by polling the agent.
                     // When IO is done, we send `WaitProcessRequest` to agent
                     // to get the exit status.
-                    let container_io =
-                        inner.new_container_io(process).await.context("io stream")?;
+                    let container_io = ContainerIo::new(
+                        self.agent.clone(),
+                        process.clone(),
+                        self.vmm_exit_confirmed.clone(),
+                    );
 
                     let exec = inner
                         .exec_processes
                         .get_mut(&process.exec_id)
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
                     exec.process
-                        .start_io_and_wait(containers, self.agent.clone(), container_io)
+                        .start_io_and_wait(
+                            containers,
+                            self.agent.clone(),
+                            container_io,
+                            self.vmm_exit_confirmed.clone(),
+                        )
                         .await
                         .context("start io and wait")?;
                 }
@@ -526,7 +556,11 @@ impl Container {
         {
             inner
                 .init_process
-                .passfd_io_wait(containers, self.agent.clone())
+                .passfd_io_wait(
+                    containers,
+                    self.agent.clone(),
+                    self.vmm_exit_confirmed.clone(),
+                )
                 .await
                 .context("wait for killed created container")?;
         }

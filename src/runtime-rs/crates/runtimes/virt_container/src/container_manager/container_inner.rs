@@ -21,7 +21,6 @@ use tokio::sync::RwLock;
 use crate::container_manager::{convert_agent_error, logger_with_process};
 
 use super::{
-    io::ContainerIo,
     process::{Process, ProcessWatcher},
     Exec,
 };
@@ -329,10 +328,6 @@ impl ContainerInner {
             .map_err(convert_agent_error)?;
 
         Ok(())
-    }
-
-    pub async fn new_container_io(&self, process: &ContainerProcess) -> Result<ContainerIo> {
-        Ok(ContainerIo::new(self.agent.clone(), process.clone()))
     }
 
     pub async fn close_io(&mut self, process: &ContainerProcess) -> Result<()> {
@@ -737,66 +732,6 @@ mod tests {
                 .await
                 .unwrap(),
         )
-    }
-
-    #[tokio::test]
-    async fn signal_process_preserves_closed_connection_after_reconnect_failure() {
-        use agent::{kata::KataAgent, AgentManager, HealthService};
-        use std::time::Duration;
-        use tokio::net::UnixListener;
-        use ttrpc::proto::GenMessage;
-
-        tokio::time::timeout(Duration::from_secs(45), async {
-            let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join("agent.sock");
-            let listener = UnixListener::bind(&path).unwrap();
-            let server = tokio::spawn(async move {
-                let (mut socket, _) = listener.accept().await.unwrap();
-                // Close both endpoints while a real RPC is in flight, as if
-                // the VM exited. The next RPC must attempt reconnection.
-                GenMessage::read_from(&mut socket).await.unwrap();
-                drop(listener);
-                drop(socket);
-            });
-            let agent = Arc::new(KataAgent::new(Default::default()));
-            agent
-                .start(&format!("remote://{}", path.display()))
-                .await
-                .unwrap();
-            agent.stop().await;
-            let error = agent.check(Default::default()).await.unwrap_err();
-            assert!(matches!(
-                error.downcast_ref::<ttrpc::Error>(),
-                Some(ttrpc::Error::Socket(_))
-            ));
-            server.await.unwrap();
-
-            let process = ContainerProcess::new(CID, "").unwrap();
-            let init_process = Process::new(&process, 0, "", None, None, None, false);
-            init_process.set_status(ProcessStatus::Running).await;
-            let logger = slog::Logger::root(slog::Discard, slog::o!());
-            let mut inner = ContainerInner::new(agent.clone(), init_process, logger, None);
-
-            for signal in [libc::SIGKILL, libc::SIGTERM, libc::SIGUSR1] {
-                let error = inner
-                    .signal_process(&process, signal as u32, false)
-                    .await
-                    .unwrap_err();
-                // VirtContainerManager treats this classification as success
-                // only for SIGKILL/SIGTERM; other signals still fail.
-                assert!(matches!(
-                    error.downcast_ref::<Error>(),
-                    Some(Error::AgentConnectionClosed)
-                ));
-                assert_eq!(
-                    inner.init_process.get_status().await,
-                    ProcessStatus::Running
-                );
-            }
-            agent.disconnect().await.unwrap();
-        })
-        .await
-        .expect("agent reconnection attempts did not finish");
     }
 
     #[tokio::test]
