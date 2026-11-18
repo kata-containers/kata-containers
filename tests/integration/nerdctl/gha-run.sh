@@ -129,11 +129,13 @@ function run() {
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and multiple bridge nwtorks"
 	sudo nerdctl "${snapshotter[@]}" run --rm --net "${net1}" --net "${net2}" --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip a
 
+	# Check in the guest so the result does not depend on nerdctl draining
+	# attached stdout before it removes a short-lived container.
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
-	sudo nerdctl "${snapshotter[@]}" run  --rm --net "${ipvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip a | grep "eth0"
+	sudo nerdctl "${snapshotter[@]}" run  --rm --net "${ipvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip address show dev eth0
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and macvlan network"
-	sudo nerdctl "${snapshotter[@]}" run  --rm --net "${macvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip a | grep "eth0"
+	sudo nerdctl "${snapshotter[@]}" run  --rm --net "${macvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip address show dev eth0
 
 	info "Removing networks"
 	sudo nerdctl network rm "${macvlan_net_name}" "${ipvlan_net_name}"
