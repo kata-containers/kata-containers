@@ -25,7 +25,7 @@ use ch_config::{
         cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_pause,
         cloud_hypervisor_vm_resize, cloud_hypervisor_vm_restore, cloud_hypervisor_vm_resume,
         cloud_hypervisor_vm_snapshot, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
-        cloud_hypervisor_vmm_shutdown, RestoreConfig, VmSnapshotConfig,
+        cloud_hypervisor_vmm_shutdown, MemoryRestoreMode, RestoreConfig, VmSnapshotConfig,
     },
     VmResize,
 };
@@ -367,6 +367,9 @@ impl CloudHypervisorInner {
             &self.api_socket,
             RestoreConfig {
                 source_url: source_url.clone(),
+                memory_restore_mode: MemoryRestoreMode::from(
+                    self.config.memory_info.memory_restore_mode.clone(),
+                ),
             },
         )
         .await?;

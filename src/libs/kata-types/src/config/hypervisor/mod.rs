@@ -1024,6 +1024,23 @@ pub enum HugePageType {
     THP,
 }
 
+/// Controls how Cloud Hypervisor populates guest memory during restore.
+#[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, PartialEq, Eq, Default)]
+pub enum MemoryRestoreMode {
+    /// Copy all guest memory before restore completes.
+    #[serde(rename = "copy")]
+    #[default]
+    Copy,
+
+    /// Populate guest memory on first access.
+    #[serde(rename = "ondemand")]
+    OnDemand,
+
+    /// Map the snapshot memory privately and copy pages on write.
+    #[serde(rename = "copyonwrite")]
+    CopyOnWrite,
+}
+
 /// Virtual machine memory configuration information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MemoryInfo {
@@ -1071,6 +1088,10 @@ pub struct MemoryInfo {
     /// Requires `echo 1 > /proc/sys/vm/overcommit_memory`
     #[serde(default)]
     pub enable_virtio_mem: bool,
+
+    /// Guest-memory restore strategy. Cloud Hypervisor only.
+    #[serde(default)]
+    pub memory_restore_mode: MemoryRestoreMode,
 
     /// Enable swap in guest.
     #[serde(default)]
