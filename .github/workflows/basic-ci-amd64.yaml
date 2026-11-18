@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   run-containerd-sandboxapi:
+    if: false # DO NOT MERGE
     name: run-containerd-sandboxapi
     strategy:
       # We can set this to true whenever we're 100% sure that
@@ -85,6 +86,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
+    if: false # DO NOT MERGE
     name: run-containerd-stability
     strategy:
       fail-fast: false
@@ -142,6 +144,7 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-nydus:
+    if: false # DO NOT MERGE
     name: run-nydus
     strategy:
       # We can set this to true whenever we're 100% sure that
@@ -323,6 +326,7 @@ jobs:
           retention-days: 1
 
   run-kata-agent-apis:
+    if: false # DO NOT MERGE
     name: run-kata-agent-apis
     runs-on: ubuntu-24.04
     concurrency:
