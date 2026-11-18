@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"net"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -3388,7 +3390,9 @@ func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConf
 	var rpIndex uint32
 	const busNrSpacing uint8 = 0x20
 
-	for hostNode, devCount := range numaDevCount {
+	// Map order is random; the pxb order shapes the ACPI tables measured into RTMR0.
+	for _, hostNode := range slices.Sorted(maps.Keys(numaDevCount)) {
+		devCount := numaDevCount[hostNode]
 		guestNode, ok := coveredHostNodes[hostNode]
 		if !ok {
 			q.Logger().WithField("host-numa", hostNode).Warn("VFIO device on uncovered NUMA node; skipping pxb-pcie")
