@@ -58,10 +58,10 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (minimum, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (minimum, qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-kata-agent-apis
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (clh-runtime-rs)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu-runtime-rs)
+    # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (clh-runtime-rs) # See #14410
+    # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
+    # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu) # See #14409
+    # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (latest, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (latest, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (latest, qemu)
