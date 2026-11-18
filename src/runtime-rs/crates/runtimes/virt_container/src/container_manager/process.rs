@@ -477,12 +477,13 @@ impl Process {
     }
 
     // A failed start has no wait task to record an exit or notify Wait callers.
-    pub async fn fail_start(&mut self) {
+    // The caller determines guest state from the startup and cleanup outcomes.
+    pub async fn fail_start(&mut self, guest_status: ProcessStatus) {
         self.exit_status
             .write()
             .await
             .update_exit_code(UNKNOWN_EXIT_STATUS);
-        self.stop().await;
+        self.set_status(guest_status).await;
         self.passfd_io.take();
         self.exit_watcher_tx.take();
     }
@@ -522,7 +523,7 @@ mod tests {
             let (watcher, exit_status) = process.fetch_exit_watcher().unwrap();
             let mut watcher = watcher.unwrap();
 
-            process.fail_start().await;
+            process.fail_start(ProcessStatus::Stopped).await;
             tokio::time::timeout(std::time::Duration::from_secs(1), watcher.changed())
                 .await
                 .expect("existing Wait did not finish")
