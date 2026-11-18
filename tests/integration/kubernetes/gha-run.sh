@@ -481,7 +481,7 @@ function cleanup() {
 		return
 	fi
 
-	# In case of canceling workflow manually, 'run_kubernetes_tests.sh' continues running and triggers new tests,
+	# In case of canceling workflow manually, 'run_kubernetes_[nv_]tests.sh' continues running and triggers new tests,
 	# resulting in the CI being in an unexpected state. So we need kill all running test scripts before cleaning up the node.
 	# See issue https://github.com/kata-containers/kata-containers/issues/9980
 	delete_test_runners || true
