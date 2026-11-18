@@ -15,7 +15,11 @@ chroot /host /bin/bash -c "sudo lsmod"
 echo "::endgroup::"
 echo ""
 echo "::group::Check Kata Containers deployed binaries"
-tree /host/opt/kata /host/usr/local/bin
+if command -v tree &>/dev/null; then
+	tree /host/opt/kata /host/usr/local/bin
+else
+	ls -lR /host/opt/kata /host/usr/local/bin
+fi
 echo "::endgroup::"
 echo ""
 echo "::group:: Check node's dmesg"
