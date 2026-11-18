@@ -887,28 +887,29 @@ mod tests {
     // Verifies that record_sandbox_id writes a file named after the sandbox id
     // (which kata-ctl's get_sandbox_id_for_volume relies on) only when a
     // mountInfo.json already exists. Mirrors runtime-go's TestRecordSandboxID.
-    // The well-known direct-volume root requires root privileges to create, so
-    // the test soft-skips when it cannot be created (e.g. unprivileged CI).
+    // The well-known direct-volume root requires root privileges to create.
     #[cfg(feature = "safe-path")]
     #[test]
     fn test_record_sandbox_id() {
         use std::fs;
+        use test_utils::skip_if_not_root;
+
+        skip_if_not_root!();
 
         let root = kata_direct_volume_root_path();
-        if fs::create_dir_all(&root).is_err() {
-            // Not running as root; cannot exercise the well-known path.
-            return;
-        }
+        fs::create_dir_all(&root).unwrap();
 
-        let volume_path = "/tmp/kata-types-test-record-sandbox-id-volume";
+        let volume = tempfile::tempdir().unwrap();
+        let volume_path = volume.path().to_str().unwrap();
         let dir = join_path(root.as_str(), volume_path).unwrap();
-        // Ensure a clean state from any previous run.
-        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir(&dir).unwrap();
+        let _cleanup = scopeguard::guard(&dir, |dir| {
+            let _ = fs::remove_dir_all(dir);
+        });
 
         let sandbox_id = "test-sandbox-id";
 
         // Without mountInfo.json present, recording must fail.
-        fs::create_dir_all(&dir).unwrap();
         assert!(record_sandbox_id(sandbox_id, volume_path).is_err());
 
         // With mountInfo.json present, recording must create a file whose name
@@ -923,8 +924,5 @@ mod tests {
         add_volume_mount_info(volume_path, &mount_info).unwrap();
         record_sandbox_id(sandbox_id, volume_path).unwrap();
         assert!(dir.join(sandbox_id).exists());
-
-        // cleanup
-        let _ = fs::remove_dir_all(&dir);
     }
 }
