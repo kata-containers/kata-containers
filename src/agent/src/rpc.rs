@@ -2871,6 +2871,167 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_storage_deadline_cancellation_and_retry() {
+        use std::time::Duration;
+
+        for shared in [false, true] {
+            let logger = slog::Logger::root(slog::Discard, o!());
+            let agent_service = AgentService {
+                sandbox: Arc::new(Mutex::new(Sandbox::new(&logger).unwrap())),
+                init_mode: true,
+                oma: None,
+            };
+            let cid = "cancelled-storage";
+            let root = tempdir().unwrap();
+            let path = root.path().join("mount").to_str().unwrap().to_string();
+            let storage = protocols::agent::Storage {
+                driver: kata_types::device::DRIVER_BLK_MMIO_TYPE.to_string(),
+                source: "/dev/kata-test-missing-device".to_string(),
+                mount_point: path.clone(),
+                shared,
+                ..Default::default()
+            };
+
+            // A deadline drops add_storages while the device handler is waiting for hotplug.
+            for _ in 0..2 {
+                tokio::time::timeout(
+                    Duration::from_millis(10),
+                    add_storages(
+                        logger.clone(),
+                        vec![storage.clone()],
+                        &agent_service.sandbox,
+                        Some(cid.to_string()),
+                        false,
+                    ),
+                )
+                .await
+                .expect_err("storage setup did not wait for the missing device");
+
+                {
+                    let sandbox = agent_service.sandbox.lock().await;
+                    assert!(!sandbox.uevent_watchers.is_empty());
+                    assert!(!sandbox.storages.contains_key(&path));
+                    assert!(!sandbox.container_mounts.contains_key(cid));
+                }
+                agent_service
+                    .do_remove_container(protocols::agent::RemoveContainerRequest {
+                        container_id: cid.to_string(),
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            // A working handler must run, rather than reusing the cancelled dummy entry.
+            let local = protocols::agent::Storage {
+                driver: kata_types::device::DRIVER_LOCAL_TYPE.to_string(),
+                ..storage
+            };
+            add_storages(
+                logger,
+                vec![local],
+                &agent_service.sandbox,
+                Some(cid.to_string()),
+                false,
+            )
+            .await
+            .unwrap();
+            assert!(Path::new(&path).is_dir());
+            let sandbox = agent_service.sandbox.lock().await;
+            assert_eq!(sandbox.storages[&path].path(), Some(""));
+            assert_eq!(sandbox.storages[&path].ref_count().await, 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_storage_deadline_retry_mounts_device() {
+        use std::time::Duration;
+
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let agent_service = AgentService {
+            sandbox: Arc::new(Mutex::new(Sandbox::new(&logger).unwrap())),
+            init_mode: true,
+            oma: None,
+        };
+        let cid = "cancelled-storage";
+        let root = tempdir().unwrap();
+        let path = root.path().join("mount").to_str().unwrap().to_string();
+        // Use tmpfs to exercise the block driver's mount path without a real hotplugged disk.
+        let storage = protocols::agent::Storage {
+            driver: kata_types::device::DRIVER_NVDIMM_TYPE.to_string(),
+            source: "/dev/pmem-kata-test".to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: path.clone(),
+            ..Default::default()
+        };
+        tokio::time::timeout(
+            Duration::from_millis(10),
+            add_storages(
+                logger.clone(),
+                vec![storage.clone()],
+                &agent_service.sandbox,
+                Some(cid.to_string()),
+                false,
+            ),
+        )
+        .await
+        .expect_err("storage setup did not wait for hotplug");
+        agent_service
+            .do_remove_container(protocols::agent::RemoveContainerRequest {
+                container_id: cid.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut uevent = crate::uevent::Uevent::default();
+        uevent.subsystem = "block".to_string();
+        uevent.devname = "pmem-kata-test".to_string();
+        uevent.devpath = format!(
+            "{}/test/block/pmem-kata-test",
+            crate::linux_abi::ACPI_DEV_PATH
+        );
+        agent_service
+            .sandbox
+            .lock()
+            .await
+            .uevent_map
+            .insert(uevent.devpath.clone(), uevent);
+        let mounts = add_storages(
+            logger,
+            vec![storage],
+            &agent_service.sandbox,
+            Some(cid.to_string()),
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(mounts, vec![path.clone()]);
+        assert!(crate::mount::is_mounted(&path).unwrap());
+        agent_service
+            .sandbox
+            .lock()
+            .await
+            .container_mounts
+            .insert(cid.to_string(), mounts);
+        agent_service
+            .do_remove_container(protocols::agent::RemoveContainerRequest {
+                container_id: cid.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(!agent_service
+            .sandbox
+            .lock()
+            .await
+            .storages
+            .contains_key(&path));
+        assert!(!crate::mount::is_mounted(&path).unwrap());
+    }
+
+    #[tokio::test]
     async fn test_do_remove_container_after_failed_create() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut sandbox = Sandbox::new(&logger).unwrap();
