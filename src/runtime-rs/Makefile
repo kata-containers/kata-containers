@@ -224,7 +224,7 @@ DEFNETQUEUES := 1
 # Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
 DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"enable_memfd\"]
 DEFENABLEANNOTATIONS_NVIDIA := []
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\", \"enable_memfd\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFENABLEANNOTATIONS_COCO_NVIDIA := [\"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFEMPTYDIRMODE := shared-fs
