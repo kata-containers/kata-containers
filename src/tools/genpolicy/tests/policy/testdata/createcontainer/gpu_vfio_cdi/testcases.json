@@ -256,6 +256,23 @@
       "patch": []
     },
     {
+      "description": "Valid: Hot-plug - guest PCI functions zero and seven",
+      "base": "create-container",
+      "allowed": true,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/devices/0/options/0",
+          "value": "0000:65:00.0=09/00.0"
+        },
+        {
+          "op": "replace",
+          "path": "/devices/1/options/0",
+          "value": "0000:66:00.0=09/00.7"
+        }
+      ]
+    },
+    {
       "description": "Invalid: Hot-plug - CDI annotation number doesn't match VFIO device number",
       "base": "create-container",
       "allowed": false,
