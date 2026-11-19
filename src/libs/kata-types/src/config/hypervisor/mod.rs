@@ -1056,6 +1056,14 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_mem_prealloc: bool,
 
+    /// Back shared VM RAM with a memfd instead of a file on `/dev/shm`.
+    ///
+    /// Only used by the runtime-rs QEMU driver, where guest RAM has to be
+    /// shared with virtiofsd. A memfd is not limited by the size of the
+    /// host `/dev/shm` mount. Hugepages are not used for the memfd backend.
+    #[serde(default)]
+    pub enable_memfd: bool,
+
     /// Use huge pages for VM RAM.
     #[serde(default)]
     pub enable_hugepages: bool,
@@ -2241,6 +2249,17 @@ mod tests {
         assert_eq!(mem.overhead_memory, 512);
         assert_eq!(mem.default_memory, 1024);
         assert_eq!(mem.default_maxmemory, 4096);
+    }
+
+    #[test]
+    fn test_memory_info_enable_memfd() {
+        assert!(!MemoryInfo::default().enable_memfd);
+
+        let mem: MemoryInfo = toml::from_str("").unwrap();
+        assert!(!mem.enable_memfd);
+
+        let mem: MemoryInfo = toml::from_str("enable_memfd = true").unwrap();
+        assert!(mem.enable_memfd);
     }
 
     #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
