@@ -39,6 +39,10 @@ const GI_B: u64 = 1024 * MI_B;
 pub const QMP_SOCKET_FILE: &str = "qmp.sock";
 const DEBUG_MONITOR_SOCKET: &str = "debug-monitor.sock";
 
+// Shared guest memory is a file on this tmpfs unless enable_memfd is set.
+pub const SHARED_MEMORY_PATH: &str = "/dev/shm";
+const SHARED_MEMORY_BACKEND_ID: &str = "entire-guest-memory-share";
+
 // The approach taken here is inspired by govmm.  We build structs, each
 // corresponding to a qemu command line parameter, like Kernel, or a device,
 // for instance MemoryBackendFile.  Members of these structs mostly directly
@@ -781,9 +785,55 @@ impl ToQemuParams for MemoryBackendFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct MemoryBackendMemfd {
+    id: String,
+    size: u64,
+    share: bool,
+    prealloc: bool,
+}
+
+impl MemoryBackendMemfd {
+    fn new(id: &str, size: u64) -> MemoryBackendMemfd {
+        MemoryBackendMemfd {
+            id: id.to_string(),
+            size,
+            share: false,
+            prealloc: false,
+        }
+    }
+
+    fn set_share(&mut self, share: bool) -> &mut Self {
+        self.share = share;
+        self
+    }
+
+    fn set_prealloc(&mut self, prealloc: bool) -> &mut Self {
+        self.prealloc = prealloc;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for MemoryBackendMemfd {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("memory-backend-memfd".to_owned());
+        params.push(format!("id={}", self.id));
+        params.push(format!("size={}", format_memory(self.size)));
+        params.push(format!("share={}", if self.share { "on" } else { "off" }));
+        if self.prealloc {
+            params.push("prealloc=on".to_owned());
+        }
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum MemoryBackend {
     Ram(MemoryBackendRam),
     File(MemoryBackendFile),
+    Memfd(MemoryBackendMemfd),
 }
 
 impl MemoryBackend {
@@ -791,6 +841,7 @@ impl MemoryBackend {
         match self {
             MemoryBackend::Ram(backend) => &backend.id,
             MemoryBackend::File(backend) => &backend.id,
+            MemoryBackend::Memfd(backend) => &backend.id,
         }
     }
 }
@@ -801,6 +852,7 @@ impl ToQemuParams for MemoryBackend {
         match self {
             MemoryBackend::Ram(backend) => backend.qemu_params().await,
             MemoryBackend::File(backend) => backend.qemu_params().await,
+            MemoryBackend::Memfd(backend) => backend.qemu_params().await,
         }
     }
 }
@@ -3083,6 +3135,12 @@ impl<'a> QemuCmdLine<'a> {
         // filesystem sharing is enabled.
         if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
             qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
+            if config.memory_info.enable_memfd {
+                info!(
+                    sl!(),
+                    "enable_memfd only applies to shared guest memory (virtio-fs), boot memory stays anonymous"
+                );
+            }
         }
 
         if config.device_info.enable_iommu {
@@ -3274,7 +3332,18 @@ impl<'a> QemuCmdLine<'a> {
         mem_file.set_readonly(readonly);
         mem_file.set_prealloc(prealloc);
 
-        let backend = MemoryBackend::File(mem_file);
+        self.install_main_memory_backend(MemoryBackend::File(mem_file));
+    }
+
+    fn add_memfd_memory_backend(&mut self, id: &str, share: bool, prealloc: bool) {
+        let mut mem_memfd = MemoryBackendMemfd::new(id, self.memory.size);
+        mem_memfd.set_share(share);
+        mem_memfd.set_prealloc(prealloc);
+
+        self.install_main_memory_backend(MemoryBackend::Memfd(mem_memfd));
+    }
+
+    fn install_main_memory_backend(&mut self, backend: MemoryBackend) {
         self.memory.set_memory_backend(&backend);
 
         // runtime-rs does not implement guest NUMA topology (Go's enable_numa /
@@ -3325,15 +3394,29 @@ impl<'a> QemuCmdLine<'a> {
         }
         self.devices.push(Box::new(virtiofs_device));
 
-        // don't put the /dev/shm memory backend file into the anonymous container,
+        // don't put the shared memory backend into the anonymous container,
         // there has to be at most one of those so keep it by name in Memory instead
-        self.add_file_memory_backend(
-            "entire-guest-memory-share",
-            "/dev/shm",
-            true,
-            false,
-            self.config.memory_info.enable_mem_prealloc,
-        );
+        if self.config.memory_info.enable_memfd {
+            if self.config.memory_info.enable_hugepages {
+                warn!(
+                    sl!(),
+                    "enable_hugepages is not used with the memfd memory backend, guest memory is not backed by huge pages"
+                );
+            }
+            self.add_memfd_memory_backend(
+                SHARED_MEMORY_BACKEND_ID,
+                true,
+                self.config.memory_info.enable_mem_prealloc,
+            );
+        } else {
+            self.add_file_memory_backend(
+                SHARED_MEMORY_BACKEND_ID,
+                SHARED_MEMORY_PATH,
+                true,
+                false,
+                self.config.memory_info.enable_mem_prealloc,
+            );
+        }
     }
 
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
@@ -4253,6 +4336,127 @@ mod tests {
             args[0] == "-machine"
                 && contains_param(&args[1..2], "memory-backend=entire-guest-memory")
         }));
+    }
+
+    async fn build_virtiofs_test_cmdline(id: &str, config: &HypervisorConfig) -> Vec<String> {
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new(id, config).unwrap();
+        cmdline.add_virtiofs_share("/run/virtiofsd.sock", "kataShared", 1024);
+        let params = cmdline.build().await.unwrap();
+        drop(cmdline);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        params
+    }
+
+    fn has_machine_memory_backend(params: &[String], id: &str) -> bool {
+        params.windows(2).any(|args| {
+            args[0] == "-machine" && contains_param(&args[1..2], &format!("memory-backend={id}"))
+        })
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_virtiofs_uses_dev_shm_file_by_default() {
+        let config = test_qemu_config(Some("virtio-fs"), false);
+        let params = build_virtiofs_test_cmdline("virtiofs-file", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-file,id=entire-guest-memory-share,mem-path=/dev/shm,size=2G,share=on,prealloc=off,readonly=off"
+        ));
+        assert!(!params
+            .iter()
+            .any(|arg| arg.starts_with("memory-backend-memfd")));
+        assert!(has_machine_memory_backend(
+            &params,
+            "entire-guest-memory-share"
+        ));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_virtiofs_memfd_backend() {
+        let mut config = test_qemu_config(Some("virtio-fs"), false);
+        config.memory_info.enable_memfd = true;
+        let params = build_virtiofs_test_cmdline("virtiofs-memfd", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-memfd,id=entire-guest-memory-share,size=2G,share=on"
+        ));
+        assert!(!params
+            .iter()
+            .any(|arg| arg.starts_with("memory-backend-file") || arg.contains("mem-path")));
+        assert!(!params.iter().any(|arg| arg.contains("prealloc=")));
+        assert!(has_machine_memory_backend(
+            &params,
+            "entire-guest-memory-share"
+        ));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_virtiofs_memfd_backend_with_prealloc() {
+        let mut config = test_qemu_config(Some("virtio-fs"), true);
+        config.memory_info.enable_memfd = true;
+        let params = build_virtiofs_test_cmdline("virtiofs-memfd-prealloc", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-memfd,id=entire-guest-memory-share,size=2G,share=on,prealloc=on"
+        ));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_virtiofs_memfd_ignores_hugepages() {
+        let mut config = test_qemu_config(Some("virtio-fs"), false);
+        config.memory_info.enable_memfd = true;
+        config.memory_info.enable_hugepages = true;
+        let params = build_virtiofs_test_cmdline("virtiofs-memfd-hugepages", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-memfd,id=entire-guest-memory-share,size=2G,share=on"
+        ));
+        assert!(!params.iter().any(|arg| arg.contains("hugetlb")));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_memfd_keeps_hotplug_region_only_when_needed() {
+        for (enable_virtio_mem, expected_mem) in [(false, "2G"), (true, "2G,slots=4,maxmem=4G")] {
+            let mut config = test_qemu_config(Some("virtio-fs"), false);
+            config.memory_info.enable_memfd = true;
+            config.memory_info.enable_virtio_mem = enable_virtio_mem;
+            config.memory_info.memory_slots = 4;
+            config.memory_info.default_maxmemory = 4096;
+            let params = build_virtiofs_test_cmdline("virtiofs-memfd-slots", &config).await;
+
+            assert!(has_qemu_arg(&params, "-m", expected_mem));
+        }
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_memfd_without_shared_fs_keeps_ram_backend() {
+        let mut config = test_qemu_config(Some("none"), true);
+        config.memory_info.enable_memfd = true;
+        let params = build_test_cmdline("memfd-no-shared-fs", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-ram,id=entire-guest-memory,size=2G,prealloc=on"
+        ));
+        assert!(!params
+            .iter()
+            .any(|arg| arg.contains("memory-backend-memfd")));
+        assert!(has_machine_memory_backend(&params, "entire-guest-memory"));
     }
 
     #[actix_rt::test]
