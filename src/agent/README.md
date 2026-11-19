@@ -126,7 +126,6 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.debug_console_vport` | Debug console port | Allow to specify the `vsock` port to connect the debugging console | integer | `0` |
 | `agent.guest_components_rest_api` | `api-server-rest` configuration | Select the features that the API Server Rest attestation component will run with. Valid values are `all`, `attestation`, `resource` | string | `resource` |
 | `agent.guest_components_procs` | guest-components processes | Attestation-related processes that should be spawned as children of the guest. Valid values are `none`, `attestation-agent`, `confidential-data-hub` (implies `attestation-agent`), `api-server-rest` (implies `attestation-agent` and `confidential-data-hub`) | string | `api-server-rest` |
-| `agent.hotplug_timeout` | Hotplug timeout | Allow to configure hotplug timeout(seconds) of block devices | integer | `3` |
 | `agent.cdh_api_timeout` | Confidential Data Hub (CDH) API timeout | Allow to configure CDH API timeout(seconds) | integer | `50` |
 | `agent.image_pull_timeout` | Confidential Data Hub (CDH) Image Pull API timeout | Allow to configure CDH API image pull timeout(seconds) | integer | `1200` |
 | `agent.https_proxy` | HTTPS proxy | Allow to configure `https_proxy` in the guest | string | `""` |
@@ -147,7 +146,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 >    we will generate the agent config from it.
 >    The agent will fail to start if the configuration file is not present,
 >    or if it can't be parsed properly.
->  - `agent.hotplug_timeout`, `agent.image_pull_timeout` and `agent.cdh_api_timeout`: a whole number of seconds
+>  - `agent.image_pull_timeout` and `agent.cdh_api_timeout`: a whole number of seconds
 >  - `agent.log`:   "critical"("fatal" | "panic") | "error" | "warn"("warning") | "info" | "debug"
 >  - `agent.server_addr`: "{VSOCK_ADDR}:{VSOCK_PORT}"
 >  - `agent.trace`: true | false
@@ -155,9 +154,9 @@ The kata agent has the ability to configure agent options in guest kernel comman
 
 For instance, you can enable the debug console and set the agent log level to debug by configuring the guest kernel command line in the configuration file:
 ```toml
-kernel_params = "agent.debug_console agent.log=debug agent.hotplug_timeout=10"
+kernel_params = "agent.debug_console agent.log=debug"
 ```
 results in:
 ```bash
-{"msg":"announce","level":"INFO","subsystem":"root","version":"0.1.0","pid":"214","source":"agent","name":"kata-agent","config":"AgentConfig { debug_console: true, log_level: Debug, hotplug_timeout: 10s, debug_console_vport: 0, log_vport: 0, container_pipe_size: 0, server_addr: "vsock://-1:1024", passfd_listener_port: 0, unified_cgroup_hierarchy: false, tracing: false, supports_seccomp: true }","agent-version":"3.3.0-alpha0"}
+{"msg":"announce","level":"INFO","subsystem":"root","version":"0.1.0","pid":"214","source":"agent","name":"kata-agent","config":"AgentConfig { debug_console: true, log_level: Debug, debug_console_vport: 0, log_vport: 0, container_pipe_size: 0, server_addr: "vsock://-1:1024", passfd_listener_port: 0, unified_cgroup_hierarchy: false, tracing: false, supports_seccomp: true }","agent-version":"3.3.0-alpha0"}
 ```

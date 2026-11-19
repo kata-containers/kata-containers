@@ -99,6 +99,7 @@ pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", package = "s39
 [dev-dependencies]
 rstest.workspace = true
 tempfile.workspace = true
+tokio = { features = ["test-util"], workspace = true }
 which.workspace = true
 
 test-utils.workspace = true

@@ -6,10 +6,9 @@
 use crate::device::online_device;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
-use crate::AGENT_CONFIG;
 use slog::Logger;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use netlink_sys::{protocols, AsyncSocket, AsyncSocketExt, SocketAddr, TokioSocket};
 use std::fmt::Debug;
 use std::os::unix::io::FromRawFd;
@@ -132,7 +131,7 @@ pub async fn wait_for_uevent(
     // The key of the watchers map is the device we are interested in.
     // Note this is done inside the lock, not to miss any events from the
     // global udev listener.
-    let (tx, mut rx) = tokio::sync::oneshot::channel::<Uevent>();
+    let (tx, rx) = tokio::sync::oneshot::channel::<Uevent>();
     let idx = sb.uevent_watchers.len();
     sb.uevent_watchers.push(Some((Box::new(matcher), tx)));
     // Request deadlines can drop this future while it is waiting for the device.
@@ -148,25 +147,7 @@ pub async fn wait_for_uevent(
 
     info!(sl(), "{}: waiting on channel", logprefix);
 
-    let hotplug_timeout = AGENT_CONFIG.hotplug_timeout;
-
-    let uev = match tokio::time::timeout(hotplug_timeout, &mut rx).await {
-        Ok(v) => v?,
-        Err(_) => {
-            let mut sb = sandbox.lock().await;
-            if let Some((matcher, _)) = sb.uevent_watchers[idx].take() {
-                return Err(anyhow!(
-                    "Timeout after {:?} waiting for uevent {:?}",
-                    hotplug_timeout,
-                    matcher
-                ));
-            }
-            drop(sb);
-
-            // Delivery won the sandbox lock while timeout cleanup was waiting.
-            rx.await?
-        }
-    };
+    let uev = rx.await?;
 
     info!(sl(), "{}: found {:?} on channel", logprefix, &uev);
     Ok(uev)
@@ -273,7 +254,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_timeout_cleanup_after_event_delivery() {
+    async fn test_wait_for_uevent_delivery_while_sandbox_locked() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
         let waiting_sandbox = Arc::clone(&sandbox);
@@ -293,51 +274,20 @@ mod tests {
         .await
         .expect("waiter did not register");
 
-        // Keep timeout cleanup waiting for the lock, then simulate process_add's delivery.
-        tokio::time::sleep(AGENT_CONFIG.hotplug_timeout + std::time::Duration::from_millis(50))
-            .await;
         let event = Uevent {
             action: U_EVENT_ACTION_ADD.to_string(),
-            devpath: "/test/timeout-race".to_string(),
+            devpath: "/test/delivery-race".to_string(),
             ..Default::default()
         };
         let (_, sender) = sb.uevent_watchers[0].take().unwrap();
         let _ = sender.send(event.clone());
-        drop(sb);
-
         let received = tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
             .await
             .expect("waiter did not finish")
             .expect("waiter panicked")
             .expect("delivered event was lost");
         assert_eq!(received, event);
-        assert!(sandbox.lock().await.uevent_watchers[0].is_none());
-    }
-
-    #[tokio::test]
-    async fn test_timeout_cleans_watcher_and_allows_retry() {
-        let logger = slog::Logger::root(slog::Discard, o!());
-        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
-
-        let err = wait_for_uevent(&sandbox, AlwaysMatch()).await.unwrap_err();
-        assert!(err.to_string().contains("waiting for uevent AlwaysMatch"));
-        assert!(err.to_string().starts_with("Timeout after "));
-        {
-            let sb = sandbox.lock().await;
-            assert!(sb.uevent_watchers[0].is_none());
-        }
-
-        let event = Uevent {
-            action: U_EVENT_ACTION_ADD.to_string(),
-            devpath: "/test/late-add".to_string(),
-            ..Default::default()
-        };
-        event.process_add(&logger, &sandbox).await;
-        assert_eq!(
-            wait_for_uevent(&sandbox, AlwaysMatch()).await.unwrap(),
-            event
-        );
-        assert_eq!(sandbox.lock().await.uevent_watchers.len(), 1);
+        assert!(sb.uevent_watchers[0].is_none());
     }
 
     #[tokio::test]
@@ -411,6 +361,35 @@ mod tests {
         let uev2 = wait_for_uevent(&sandbox, matcher).await;
         assert!(uev2.is_ok());
         assert_eq!(uev2.unwrap(), uev);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_wait_for_uevent_without_timeout() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let mut wait = Box::pin(wait_for_uevent(&sandbox, AlwaysMatch()));
+
+        // Exceed the former three-second hotplug timeout before delivering the event.
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(4), &mut wait)
+                .await
+                .is_err()
+        );
+
+        let uev = Uevent {
+            action: U_EVENT_ACTION_ADD.to_string(),
+            devpath: "/test/delayed".to_string(),
+            ..Default::default()
+        };
+        uev.process(&logger, &sandbox).await;
+
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), wait)
+                .await
+                .unwrap()
+                .unwrap(),
+            uev
+        );
     }
 
     #[tokio::test]

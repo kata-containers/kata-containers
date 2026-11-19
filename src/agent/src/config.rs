@@ -20,7 +20,6 @@ const TRACE_MODE_OPTION: &str = "agent.trace";
 const LOG_LEVEL_OPTION: &str = "agent.log";
 const SERVER_ADDR_OPTION: &str = "agent.server_addr";
 const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
-const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const CDH_API_TIMOUT_OPTION: &str = "agent.cdh_api_timeout";
 const CDH_IMAGE_PULL_TIMEOUT_OPTION: &str = "agent.image_pull_timeout";
 const CDI_TIMEOUT_OPTION: &str = "agent.cdi_timeout";
@@ -63,7 +62,6 @@ const MEM_AGENT_COMPACT_THRESHOLD: &str = "agent.mem_agent_compact_threshold";
 const MEM_AGENT_COMPACT_FORCE_TIMES: &str = "agent.mem_agent_compact_force_times";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
-const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CDH_API_TIMEOUT: time::Duration = time::Duration::from_secs(50);
 const DEFAULT_IMAGE_PULL_TIMEOUT: time::Duration = time::Duration::from_secs(1200);
 const DEFAULT_CDI_TIMEOUT: time::Duration = time::Duration::from_secs(100);
@@ -127,7 +125,6 @@ pub enum GuestComponentsProcs {
 pub struct AgentConfig {
     pub debug_console: bool,
     pub log_level: slog::Level,
-    pub hotplug_timeout: time::Duration,
     pub cdh_api_timeout: time::Duration,
     pub image_pull_timeout: time::Duration,
     pub cdi_timeout: time::Duration,
@@ -161,7 +158,6 @@ pub struct MemAgentConfig {
 pub struct AgentConfigBuilder {
     pub debug_console: Option<bool>,
     pub log_level: Option<String>,
-    pub hotplug_timeout: Option<time::Duration>,
     pub cdh_api_timeout: Option<time::Duration>,
     pub image_pull_timeout: Option<time::Duration>,
     pub cdi_timeout: Option<time::Duration>,
@@ -256,7 +252,6 @@ impl Default for AgentConfig {
         AgentConfig {
             debug_console: false,
             log_level: DEFAULT_LOG_LEVEL,
-            hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             cdh_api_timeout: DEFAULT_CDH_API_TIMEOUT,
             image_pull_timeout: DEFAULT_IMAGE_PULL_TIMEOUT,
             cdi_timeout: DEFAULT_CDI_TIMEOUT,
@@ -298,7 +293,6 @@ impl FromStr for AgentConfig {
             log_level,
             logrus_to_slog_level
         );
-        config_override!(agent_config_builder, agent_config, hotplug_timeout);
         config_override!(agent_config_builder, agent_config, cdh_api_timeout);
         config_override!(agent_config_builder, agent_config, image_pull_timeout);
         config_override!(agent_config_builder, agent_config, cdi_timeout);
@@ -448,15 +442,6 @@ impl AgentConfig {
                 SERVER_ADDR_OPTION,
                 config.server_addr,
                 get_string_value
-            );
-
-            // ensure the timeout is a positive value
-            parse_cmdline_param!(
-                param,
-                HOTPLUG_TIMOUT_OPTION,
-                config.hotplug_timeout,
-                get_timeout,
-                |hotplug_timeout: &time::Duration| hotplug_timeout.as_secs() > 0
             );
 
             // ensure the timeout is a positive value
@@ -758,8 +743,7 @@ fn get_timeout(param: &str) -> Result<time::Duration> {
     ensure!(
         matches!(
             fields[0],
-            HOTPLUG_TIMOUT_OPTION
-                | CDH_API_TIMOUT_OPTION
+            CDH_API_TIMOUT_OPTION
                 | CDH_IMAGE_PULL_TIMEOUT_OPTION
                 | CDI_TIMEOUT_OPTION
                 | LAUNCH_PROCESS_TIMEOUT_OPTION
@@ -881,7 +865,6 @@ mod tests {
         let config: AgentConfig = Default::default();
         assert!(!config.debug_console);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
-        assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
     }
 
     #[test]
@@ -896,7 +879,6 @@ mod tests {
             env_vars: Vec<&'a str>,
             debug_console: bool,
             log_level: slog::Level,
-            hotplug_timeout: time::Duration,
             container_pipe_size: i32,
             server_addr: &'a str,
             cgroup_no_v1: &'a str,
@@ -919,7 +901,6 @@ mod tests {
                     env_vars: Vec::new(),
                     debug_console: false,
                     log_level: DEFAULT_LOG_LEVEL,
-                    hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                     container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                     server_addr: TEST_SERVER_ADDR,
                     cgroup_no_v1: "",
@@ -1029,13 +1010,12 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.debug_console agent.hotplug_timeout=100 systemd.unified_cgroup_hierarchy=a",
+                contents: "agent.debug_console systemd.unified_cgroup_hierarchy=a",
                 debug_console: true,
-                hotplug_timeout: time::Duration::from_secs(100),
                 ..Default::default()
             },
             TestData {
-                contents: "agent.debug_console agent.hotplug_timeout=0 systemd.unified_cgroup_hierarchy=11",
+                contents: "agent.debug_console systemd.unified_cgroup_hierarchy=11",
                 debug_console: true,
                 unified_cgroup_hierarchy: true,
                 ..Default::default()
@@ -1438,7 +1418,6 @@ mod tests {
                 "{msg}"
             );
             assert_eq!(d.log_level, config.log_level, "{msg}");
-            assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{msg}");
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{msg}");
             assert_eq!(d.server_addr, config.server_addr, "{msg}");
             assert_eq!(d.tracing, config.tracing, "{msg}");
@@ -1499,7 +1478,6 @@ mod tests {
             config.unified_cgroup_hierarchy,
         );
         assert_eq!(expected.log_level, config.log_level);
-        assert_eq!(expected.hotplug_timeout, config.hotplug_timeout);
         assert_eq!(expected.container_pipe_size, config.container_pipe_size);
         assert_eq!(expected.server_addr, config.server_addr);
         assert_eq!(expected.tracing, config.tracing);
@@ -1552,32 +1530,32 @@ mod tests {
 
     #[rstest]
     #[case("", Err(anyhow!(ERR_INVALID_TIMEOUT)))]
-    #[case("agent.hotplug_timeout", Err(anyhow!(ERR_INVALID_TIMEOUT)))]
+    #[case("agent.cdh_api_timeout", Err(anyhow!(ERR_INVALID_TIMEOUT)))]
     #[case("foo=bar", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
-    #[case("agent.hotplug_timeot=1", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
-    #[case("agent.hotplug_timeout=1", Ok(time::Duration::from_secs(1)))]
-    #[case("agent.hotplug_timeout=3", Ok(time::Duration::from_secs(3)))]
-    #[case("agent.hotplug_timeout=3600", Ok(time::Duration::from_secs(3600)))]
-    #[case("agent.hotplug_timeout=0", Ok(time::Duration::from_secs(0)))]
-    #[case("agent.hotplug_timeout=-1", Err(anyhow!(
+    #[case("agent.cdh_api_timeot=1", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
+    #[case("agent.cdh_api_timeout=1", Ok(time::Duration::from_secs(1)))]
+    #[case("agent.cdh_api_timeout=3", Ok(time::Duration::from_secs(3)))]
+    #[case("agent.cdh_api_timeout=3600", Ok(time::Duration::from_secs(3600)))]
+    #[case("agent.cdh_api_timeout=0", Ok(time::Duration::from_secs(0)))]
+    #[case("agent.cdh_api_timeout=-1", Err(anyhow!(
         "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
     )))]
-    #[case("agent.hotplug_timeout=4jbsdja", Err(anyhow!(
+    #[case("agent.cdh_api_timeout=4jbsdja", Err(anyhow!(
         "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
     )))]
-    #[case("agent.hotplug_timeout=foo", Err(anyhow!(
+    #[case("agent.cdh_api_timeout=foo", Err(anyhow!(
         "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
     )))]
-    #[case("agent.hotplug_timeout=j", Err(anyhow!(
+    #[case("agent.cdh_api_timeout=j", Err(anyhow!(
         "unable to parse timeout
 
 Caused by:
@@ -1719,9 +1697,6 @@ Caused by:
             config.guest_components_rest_api,
             GuestComponentsFeatures::All
         );
-
-        // Verify that the default values are valid
-        assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
 
         assert_eq!(config.mem_agent, Some(MemAgentConfig::default()),);
     }
