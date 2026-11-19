@@ -16,4 +16,4 @@ spec:
         - sh
         - -c
         - |
-          curl http://127.0.0.1:8006/cdh/resource/default/aa/key; sleep 1000
+          curl --write-out '\n' http://127.0.0.1:8006/cdh/resource/default/aa/key; sleep 1000

@@ -202,7 +202,7 @@ kbs_set_resource() {
 	fi
 
 	file=$(mktemp -t kbs-resource-XXXXX)
-	echo "${data}" > "${file}"
+	printf '%s' "${data}" > "${file}"
 
 	kbs_set_resource_from_file "${repository}" "${type}" "${tag}" "${file}" || \
 		rc=$?
