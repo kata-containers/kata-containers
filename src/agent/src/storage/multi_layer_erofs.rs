@@ -137,8 +137,12 @@ impl Drop for LayerMountInfo {
             }
         }
         #[cfg(feature = "devicemapper")]
-        if let Some(device) = &self.verity_device {
-            cleanup_dmverity_devices(std::slice::from_ref(device), &self.logger);
+        if let Some(device) = self.verity_device.take() {
+            let logger = self.logger.clone();
+            // Unmount first; mapper removal can block waiting for udev.
+            tokio::task::spawn_blocking(move || {
+                cleanup_dmverity_devices(&[device], &logger);
+            });
         }
     }
 }
