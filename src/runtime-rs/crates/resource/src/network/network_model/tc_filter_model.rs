@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::TryStreamExt;
+use netlink_packet_route::tc::TcHandle;
 use rtnetlink::Handle;
 use scopeguard::defer;
 
@@ -95,6 +96,12 @@ impl NetworkModel for TcFilterModel {
     }
 
     async fn del(&self, pair: &NetworkPair) -> Result<()> {
+        // Only remove an ingress qdisc this model added. An attach that failed on a qdisc
+        // somebody else put on the device is still detached, and must leave theirs alone.
+        if !self.virt_qdisc_added.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
         let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
         let thread_handler = tokio::spawn(connection);
         defer!({
@@ -106,16 +113,22 @@ impl NetworkModel for TcFilterModel {
             .match_name(pair.virt_iface.name.clone())
             .execute();
         let virt_index = match links.try_next().await {
-            Ok(Some(link)) => link.header.index,
-            Ok(None) => return Ok(()),
-            Err(err) if is_absent(&err) => return Ok(()),
+            Ok(Some(link)) => Some(link.header.index),
+            // The qdisc went with the device.
+            Ok(None) => None,
+            Err(err) if is_absent(&err) => None,
             Err(err) => return Err(err.into()),
         };
-        match handle.qdisc().del(virt_index as i32).execute().await {
-            Ok(()) => {}
-            Err(err) if is_absent(&err) => {}
-            Err(err) => return Err(err.into()),
+        if let Some(virt_index) = virt_index {
+            match del_ingress_qdisc(&handle, virt_index as i32).await {
+                Ok(()) => {}
+                Err(err) if is_absent(&err) => {}
+                Err(err) => return Err(err.into()),
+            }
         }
+        // The qdisc is gone, so it is no longer this model's: a retried `del` must not take
+        // one somebody added since.
+        self.virt_qdisc_added.store(false, Ordering::SeqCst);
         Ok(())
     }
 }
@@ -158,6 +171,21 @@ async fn add_ingress_qdisc(
         Err(ref e) if is_eexist(e) && added_before.load(Ordering::SeqCst) => Ok(()),
         other => other,
     }
+}
+
+/// Delete the ingress qdisc added by [`add_ingress_qdisc`].
+///
+/// A bare `qdisc().del(index)` leaves the parent unset, which names no qdisc: the kernel
+/// answers ENOENT and the ingress qdisc stays. Address it by the ingress parent instead.
+/// `rtnetlink` offers `.ingress()` on the add request but not on the delete one, so set the
+/// parent on the message directly.
+///
+/// Leave the handle unset. With it set, deleting a qdisc that is already gone fails with
+/// EINVAL rather than ENOENT, and `del` would not count it as done.
+async fn del_ingress_qdisc(handle: &Handle, index: i32) -> Result<(), rtnetlink::Error> {
+    let mut req = handle.qdisc().del(index);
+    req.message_mut().header.parent = TcHandle::INGRESS;
+    req.execute().await
 }
 
 fn is_ebusy(err: &rtnetlink::Error) -> bool {
@@ -224,6 +252,8 @@ mod tests {
     #[tokio::test]
     async fn deleting_tc_filter_after_cni_removes_interface_is_idempotent() {
         let model = TcFilterModel::new().unwrap();
+        // `del` only acts on a qdisc the model added.
+        model.virt_qdisc_added.store(true, Ordering::SeqCst);
         let pair = NetworkPair {
             tap: TapInterface::default(),
             virt_iface: NetworkInterface {
@@ -236,6 +266,8 @@ mod tests {
         };
 
         model.del(&pair).await.unwrap();
+        // The qdisc went with the device, so it is no longer the model's.
+        assert!(!model.virt_qdisc_added.load(Ordering::SeqCst));
         model.del(&pair).await.unwrap();
     }
 }
