@@ -606,27 +606,23 @@ pub async fn do_handle_device(
     d: &RwLock<DeviceManager>,
     dev_info: &DeviceConfig,
 ) -> Result<DeviceType> {
-    let device_id = d
-        .write()
-        .await
+    // One lock for all three steps: new_device() may hand back the id of a
+    // device another owner is detaching, and the final detach removes it.
+    let mut device_manager = d.write().await;
+    let device_id = device_manager
         .new_device(dev_info)
         .await
         .context("failed to create device")?;
 
-    d.write()
-        .await
+    device_manager
         .try_add_device(&device_id)
         .await
         .context("failed to add device")?;
 
-    let device_info = d
-        .read()
-        .await
+    device_manager
         .get_device_info(&device_id)
         .await
-        .context("failed to get device info")?;
-
-    Ok(device_info)
+        .context("failed to get device info")
 }
 
 pub async fn do_update_device(
@@ -697,7 +693,7 @@ pub async fn find_cold_plugged_vfio_ap(
 
 #[cfg(test)]
 mod tests {
-    use super::DeviceManager;
+    use super::{do_handle_device, Device, DeviceManager, PCIeTopology};
     use crate::{
         device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
         qemu::Qemu,
@@ -707,7 +703,103 @@ mod tests {
     use kata_types::config::hypervisor::TopologyConfigInfo;
     use std::sync::Arc;
     use tests_utils::load_test_config;
-    use tokio::sync::RwLock;
+    use tokio::sync::{Mutex, RwLock};
+
+    #[derive(Debug)]
+    struct SharedTestDevice(Arc<Mutex<crate::BlockDeviceModern>>);
+
+    #[async_trait::async_trait]
+    impl Device for SharedTestDevice {
+        async fn attach(
+            &mut self,
+            _: &mut Option<&mut PCIeTopology>,
+            _: &dyn crate::Hypervisor,
+        ) -> Result<()> {
+            self.0.lock().await.attach_count += 1;
+            Ok(())
+        }
+
+        async fn detach(
+            &mut self,
+            _: &mut Option<&mut PCIeTopology>,
+            _: &dyn crate::Hypervisor,
+        ) -> Result<Option<u64>> {
+            let mut device = self.0.lock().await;
+            device.attach_count -= 1;
+            Ok((device.attach_count == 0).then_some(device.config.index))
+        }
+
+        async fn update(&mut self, _: &dyn crate::Hypervisor) -> Result<()> {
+            unreachable!()
+        }
+
+        async fn get_device_info(&self) -> DeviceType {
+            DeviceType::BlockModern(self.0.clone())
+        }
+
+        async fn increase_attach_count(&mut self) -> Result<bool> {
+            unreachable!()
+        }
+
+        async fn decrease_attach_count(&mut self) -> Result<bool> {
+            unreachable!()
+        }
+    }
+
+    #[tokio::test]
+    async fn attach_keeps_shared_device_alive_during_another_owners_detach() {
+        let config = BlockConfigModern {
+            path_on_host: "/dev/shared-attach-race-test".into(),
+            driver_option: "virtio-blk-pci".into(),
+            ..Default::default()
+        };
+        let block = Arc::new(Mutex::new(crate::BlockDeviceModern {
+            device_id: "shared".into(),
+            attach_count: 1,
+            config: config.clone(),
+        }));
+        let mut manager = DeviceManager::new(Arc::new(Qemu::new()), None)
+            .await
+            .unwrap();
+        manager.devices.insert(
+            "shared".into(),
+            Arc::new(Mutex::new(SharedTestDevice(block.clone()))),
+        );
+        let manager = RwLock::new(manager);
+        let device_config = DeviceConfig::BlockCfgModern(config);
+
+        // Pause lookup at the shared device while it holds the manager lock.
+        let block_guard = block.lock().await;
+        let attach = do_handle_device(&manager, &device_config);
+        tokio::pin!(attach);
+        tokio::select! {
+            biased;
+            result = &mut attach => panic!("lookup should be pending: {:?}", result),
+            _ = std::future::ready(()) => {}
+        }
+
+        // Queue the other owner's final detach before allowing lookup to finish.
+        let detach = async { manager.write().await.try_remove_device("shared").await };
+        tokio::pin!(detach);
+        tokio::select! {
+            biased;
+            result = &mut detach => panic!("detach should be pending: {:?}", result),
+            _ = std::future::ready(()) => {}
+        }
+        drop(block_guard);
+
+        let (attached, detached) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(attach, detach)
+        })
+        .await
+        .unwrap();
+        assert!(
+            matches!(attached.unwrap(), DeviceType::BlockModern(device) if Arc::ptr_eq(&device, &block))
+        );
+        detached.unwrap();
+        assert_eq!(block.lock().await.attach_count, 1);
+        assert!(manager.read().await.devices.contains_key("shared"));
+    }
 
     #[cfg(all(
         feature = "cloud-hypervisor",
