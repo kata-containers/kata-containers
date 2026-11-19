@@ -217,6 +217,15 @@ impl Sandbox {
         }
     }
 
+    /// Discard only the pending registration owned by this attempt, including shared storage.
+    pub fn remove_pending_storage(&mut self, path: &str, pending: &StorageState) {
+        if self.storages.get(path).is_some_and(|state| {
+            state.path().is_none() && Arc::ptr_eq(&state.count, &pending.count)
+        }) {
+            self.storages.remove(path);
+        }
+    }
+
     /// Decrease reference count and destroy the storage object if reference count reaches zero.
     ///
     /// For shared storages (e.g., emptyDir volumes), cleanup is skipped even when refcount

@@ -38,7 +38,7 @@ use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 use self::multi_layer_erofs::{handle_multi_layer_erofs_group, is_multi_layer_storage};
 use crate::mount::{baremount, is_mounted, remove_mounts};
-use crate::sandbox::Sandbox;
+use crate::sandbox::{Sandbox, StorageState};
 
 mod bind_watcher_handler;
 mod block_handler;
@@ -59,6 +59,39 @@ pub struct StorageContext<'a> {
     is_pod_sandbox: bool,
     logger: &'a Logger,
     sandbox: &'a Arc<Mutex<Sandbox>>,
+}
+
+struct PendingStorage {
+    sandbox: Arc<Mutex<Sandbox>>,
+    path: String,
+    state: StorageState,
+    device: Option<Arc<dyn StorageDevice>>,
+    logger: Logger,
+}
+
+impl PendingStorage {
+    fn rollback(self) {
+        let sandbox = self.sandbox.clone();
+        if let Ok(mut sandbox) = sandbox.try_lock() {
+            self.cleanup(&mut sandbox);
+            return;
+        }
+        // Request cancellation can happen while another handler owns the sandbox lock.
+        tokio::spawn(async move {
+            let mut sandbox = sandbox.lock().await;
+            self.cleanup(&mut sandbox);
+        });
+    }
+
+    fn cleanup(self, sandbox: &mut Sandbox) {
+        sandbox.remove_pending_storage(&self.path, &self.state);
+        if let Some(device) = self.device {
+            if let Err(e) = device.cleanup() {
+                error!(self.logger, "failed to clean state for storage device";
+                    "mount-point" => &self.path, "error" => ?e);
+            }
+        }
+    }
 }
 
 /// An implementation of generic storage device.
@@ -340,11 +373,15 @@ pub async fn add_storages(
 
         // Standard storage handling
         let path = storage.mount_point.clone();
-        let state = sandbox
-            .lock()
-            .await
-            .add_sandbox_storage(&path, storage.shared)
-            .await;
+        let mut sb = sandbox.lock().await;
+        if sb
+            .storages
+            .get(&path)
+            .is_some_and(|state| state.path().is_none())
+        {
+            return Err(anyhow!("Storage {} is still being initialized", path));
+        }
+        let state = sb.add_sandbox_storage(&path, storage.shared).await;
         if state.ref_count().await > 1 {
             if let Some(p) = state.path() {
                 if !p.is_empty() {
@@ -354,6 +391,18 @@ pub async fn add_storages(
             // The device already exists.
             continue;
         }
+
+        let mut registration = scopeguard::guard(
+            PendingStorage {
+                sandbox: sandbox.clone(),
+                path: path.clone(),
+                state,
+                device: None,
+                logger: logger.clone(),
+            },
+            PendingStorage::rollback,
+        );
+        drop(sb);
 
         // Create device using handler
         let device = if let Some(handler) = STORAGE_HANDLERS.handler(&storage.driver) {
@@ -375,7 +424,12 @@ pub async fn add_storages(
 
         match device {
             Ok(device) => {
-                update_storage_device(sandbox, &path, device.clone(), &logger).await?;
+                registration.device = Some(device.clone());
+                let mut sb = sandbox.lock().await;
+                sb.update_sandbox_storage(&path, device.clone())
+                    .map_err(|_| anyhow!("failed to update device for storage: {}", path))?;
+                scopeguard::ScopeGuard::into_inner(registration);
+                drop(sb);
                 if let Some(p) = device.path() {
                     if !p.is_empty() {
                         mount_list.push(p.to_string());
@@ -384,9 +438,6 @@ pub async fn add_storages(
             }
             Err(e) => {
                 error!(logger, "failed to create device for storage"; "error" => ?e);
-                if let Err(e) = sandbox.lock().await.remove_sandbox_storage(&path).await {
-                    warn!(logger, "failed to remove dummy sandbox storage"; "error" => ?e);
-                }
                 return Err(e);
             }
         }
@@ -647,6 +698,70 @@ mod tests {
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
+
+    #[tokio::test]
+    async fn test_cancelled_storage_rollback_with_contended_sandbox() {
+        for replace in [false, true] {
+            let logger = slog::Logger::root(slog::Discard, o!());
+            let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+            let root = tempdir().unwrap();
+            let path = root.path().join("mount").to_str().unwrap().to_string();
+            let storage = Storage {
+                driver: kata_types::device::DRIVER_BLK_MMIO_TYPE.to_string(),
+                source: "/dev/kata-test-missing-device".to_string(),
+                mount_point: path.clone(),
+                ..Default::default()
+            };
+            let local = Storage {
+                driver: kata_types::device::DRIVER_LOCAL_TYPE.to_string(),
+                ..storage.clone()
+            };
+            let mut pending = Box::pin(add_storages(
+                logger.clone(),
+                vec![storage],
+                &sandbox,
+                None,
+                false,
+            ));
+            assert!(futures::poll!(pending.as_mut()).is_pending());
+            let err = add_storages(logger.clone(), vec![local.clone()], &sandbox, None, false)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("is still being initialized"));
+
+            let mut sb = sandbox.lock().await;
+            assert_eq!(sb.storages[&path].ref_count().await, 1);
+            drop(pending);
+            assert!(sb.storages.contains_key(&path));
+            if replace {
+                sb.storages.remove(&path);
+            }
+            drop(sb);
+            if replace {
+                add_storages(logger, vec![local], &sandbox, None, false)
+                    .await
+                    .unwrap();
+            }
+            tokio::time::timeout(std::time::Duration::from_secs(1), async {
+                loop {
+                    let sb = sandbox.lock().await;
+                    if Arc::strong_count(&sandbox) == 1 {
+                        assert!(sb.uevent_watchers.iter().all(Option::is_none));
+                        assert_eq!(sb.storages.contains_key(&path), replace);
+                        if replace {
+                            assert_eq!(sb.storages[&path].path(), Some(""));
+                            assert_eq!(sb.storages[&path].ref_count().await, 1);
+                        }
+                        break;
+                    }
+                    drop(sb);
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("cancelled storage cleanup did not finish");
+        }
+    }
 
     #[test]
     fn test_mount_storage() {
