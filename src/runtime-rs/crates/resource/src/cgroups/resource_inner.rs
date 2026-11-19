@@ -276,7 +276,7 @@ impl CgroupsResourceInner {
     }
 
     /// Create a new `CgroupsResourceInner` instance.
-    pub(crate) fn new(config: &CgroupConfig) -> Result<Self> {
+    pub(crate) fn new(config: &CgroupConfig, attach_runtime: bool) -> Result<Self> {
         let (mut sandbox_cgroup, mut overhead_cgroup) =
             Self::new_cgroup_managers(config, false).context("create new cgroups")?;
 
@@ -288,7 +288,7 @@ impl CgroupsResourceInner {
                 pid,
                 "add runtime to overhead cgroup",
             )?;
-        } else {
+        } else if attach_runtime {
             Self::add_proc_with_existing_retry(
                 &mut sandbox_cgroup,
                 pid,
