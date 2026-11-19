@@ -10,20 +10,16 @@ and reports feature skips in form of "skip_$feature=yes|no"
 or list of required tests (based on argv[1])
 """
 
-from collections import OrderedDict
+import json
 import os
-import re
-import subprocess
 import sys
 
-import yaml
+from selection import CONFIG, from_git
 
 
 class Checks:
     def __init__(self):
-        config_path = os.path.join(os.path.dirname(__file__), "required-tests.yaml")
-        with open(config_path, "r", encoding="utf8") as config_fd:
-            config = yaml.load(config_fd, Loader=yaml.SafeLoader)
+        config = CONFIG
         if config.get('required_tests'):
             self.required_tests = config['required_tests']
         else:
@@ -32,10 +28,6 @@ class Checks:
             self.required_regexps = config['required_regexps']
         else:
             self.required_regexps = []
-        if config.get('paths'):
-            self.paths = OrderedDict((re.compile(key), value)
-                                       for items in config['paths']
-                                       for key, value in items.items())
         if config.get('mapping'):
             self.mapping = config['mapping']
         else:
@@ -49,9 +41,12 @@ class Checks:
         :param: tests: report required tests+regexps (bool)
         :param: target_branch: branch/commit to compare to
         """
-        enabled_features = self.get_features(target_branch)
+        selection = from_git(target_branch)
+        enabled_features = self.get_features(target_branch, selection)
         if not tests:
-            for feature in self.all_set_of_tests:
+            print("test_jobs=" + json.dumps(selection.jobs))
+            print("skip_test=" + ("no" if selection.suites else "yes"))
+            for feature in sorted(self.all_set_of_tests):
                 # Print all features status in "$key=$value" format to allow
                 # usage with $GITHUB_OUTPUT
                 print(f"skip_{feature}=" +
@@ -68,37 +63,18 @@ class Checks:
                 required_regexps.add(values["regexps"])
             if values.get("required-labels"):
                 required_labels.update(values["required-labels"])
-        print(';'.join(required_tests))
-        print(';'.join(required_regexps))
-        print(';'.join(required_labels))
+        print(';'.join(sorted(required_tests)))
+        print(';'.join(sorted(required_regexps)))
+        print(';'.join(sorted(required_labels)))
         return 0
 
-    def get_features(self, target_branch):
-        """
-        Get changed file to `target_branch` and map them to the
-        to-be-tested set-of-tests
-
-        :param target_branch: branch/commit to compare to
-        :returns: List of set-of-tests
-        """
-        cmd = ["git", "diff", "--name-only", f"origin/{target_branch}"]
-        changed_files = [_.decode("utf-8")
-                         for _ in subprocess.check_output(cmd).split(b'\n')
-                         if _.strip()]
-        print('\n'.join(changed_files), file=sys.stderr)
-        enabled_features = set()
-        # Go through lines and find what features should be covered
-        for changed_file in changed_files:
-            for regexp, features in self.paths.items():
-                if regexp.search(changed_file):
-                    for feature in features:
-                        enabled_features.add(feature)
-                    # this changed_file was treated, ignore other regexps
-                    break
-            else:
-                # Untreated changed_file, run all tests
-                return self.all_set_of_tests
-        return enabled_features
+    def get_features(self, target_branch, selection=None):
+        """Use the same suite selection as the workflows that schedule CI."""
+        selection = selection or from_git(target_branch)
+        features = {"static"} | selection.suites
+        if selection.build:
+            features.add("build")
+        return features
 
 
 if __name__ == "__main__":
