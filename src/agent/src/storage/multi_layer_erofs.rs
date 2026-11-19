@@ -532,6 +532,30 @@ pub async fn handle_multi_layer_erofs_group(
     for mount_point in &temp_mount_points {
         track_temporary_mount_for_cleanup(&mut sb, Path::new(mount_point), &logger).await?;
     }
+    for mp in &processed_mount_points {
+        let shared = multi_layer_storages
+            .iter()
+            .find(|s| s.mount_point == *mp)
+            .is_some_and(|s| s.shared);
+        let state = sb.add_sandbox_storage(mp, shared).await;
+        if state.ref_count().await == 1 {
+            sb.update_sandbox_storage(
+                mp,
+                Arc::new(crate::storage::StorageDeviceGeneric::new(
+                    target_mount_point.clone(),
+                )),
+            )
+            .map_err(|_| anyhow!("failed to update sandbox storage for {}", mp))?;
+        }
+    }
+    super::record_storage_ownership(&mut sb, cid, &processed_mount_points);
+    super::record_storage_ownership(&mut sb, cid, &temp_mount_points);
+    if let Some(cid) = cid {
+        sb.container_verity_devices
+            .entry(cid.clone())
+            .or_default()
+            .extend(verity_devices.clone());
+    }
     overlay_mount_info.commit();
     for (_, _, mount_info) in &mut results {
         mount_info.commit();
@@ -1165,16 +1189,34 @@ mod tests {
         assert!(!is_mounted(second_mount.to_str().unwrap()).unwrap());
         assert!(sandbox.lock().await.storages.is_empty());
 
-        let storages = vec![first.clone(), first.clone()];
-        let result = handle_multi_layer_erofs_group(&first, &storages, &cid, &sandbox, &logger)
-            .await
-            .expect("retry should mount the complete group");
-        assert!(is_mounted(&result.mount_point).unwrap());
+        let missing = Storage {
+            driver: DRIVER_BLK_MMIO_TYPE.to_string(),
+            source: format!("/dev/{}-later-missing", cid.as_deref().unwrap()),
+            mount_point: container_dir.path().join("later").display().to_string(),
+            ..Default::default()
+        };
+        let storages = vec![first.clone(), first.clone(), missing];
+        let mut retry = Box::pin(super::super::add_storages(
+            logger,
+            storages,
+            &sandbox,
+            cid.clone(),
+            false,
+        ));
+        assert!(futures::poll!(retry.as_mut()).is_pending());
+        assert!(is_mounted(target.to_str().unwrap()).unwrap());
         assert!(is_mounted(first_mount.to_str().unwrap()).unwrap());
         assert!(is_mounted(second_mount.to_str().unwrap()).unwrap());
-        nix::mount::umount(Path::new(&result.mount_point)).unwrap();
+        drop(retry);
+
         let mut sb = sandbox.lock().await;
-        for mount_point in &result.temp_mount_points {
+        let mounts = sb.container_mounts.remove(cid.as_ref().unwrap()).unwrap();
+        assert_eq!(
+            mounts,
+            [&target, &first_mount, &second_mount, &temp_base]
+                .map(|path| path.display().to_string())
+        );
+        for mount_point in &mounts {
             assert!(sb.remove_sandbox_storage(mount_point).await.unwrap());
         }
         assert!(sb.storages.is_empty());
