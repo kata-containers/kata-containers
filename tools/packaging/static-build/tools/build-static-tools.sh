@@ -19,12 +19,17 @@ build_tool_from_source() {
 
 	/usr/bin/install_libseccomp.sh /opt /opt
 
-	tool=${1}
+	local tool=${1}
+	local -a make_args=()
+	# Dragonball VM templates are supported on x86_64.
+	if [[ "${tool}" == "kata-ctl" && "$(uname -m)" == "x86_64" ]]; then
+		make_args+=(USE_BUILTIN_DB=true)
+	fi
 
 	echo "build ${tool} from source"
 
 	cd "src/tools/${tool}"
-	make
+	make "${make_args[@]}"
 }
 
 build_tool_from_source "$@"
