@@ -15,6 +15,11 @@ on:
         required: false
         type: string
         default: ""
+      test-jobs:
+        description: JSON list of integration jobs selected by Gatekeeper
+        required: false
+        type: string
+        default: '["all"]'
       skip-test:
         required: false
         type: string
@@ -53,7 +58,7 @@ concurrency:
 jobs:
   run-substrate-tests:
     needs: [build-kata-static-tarball-amd64, build-kata-static-tarball-arm64]
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-substrate-tests')) }}
     permissions:
       contents: read
     uses: ./.github/workflows/run-substrate-tests.yaml
@@ -265,6 +270,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-publish-tee-confidential-unencrypted-image:
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/build-and-publish-tee-confidential-unencrypted-image')) }}
     name: build-and-publish-tee-confidential-unencrypted-image
     permissions:
       contents: read
@@ -309,7 +315,7 @@ jobs:
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   run-kata-monitor-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-kata-monitor-tests')) }}
     needs: [build-kata-static-tarball-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
     with:
@@ -319,7 +325,7 @@ jobs:
       kata-monitor-image: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci:${{ inputs.tag }}-amd64
 
   run-kata-monitor-k8s-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-kata-monitor-k8s-tests')) }}
     needs: [publish-kata-deploy-image-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-k8s-tests.yaml
     with:
@@ -333,7 +339,7 @@ jobs:
       kata-monitor-image-tag: ${{ inputs.tag }}-amd64
 
   run-k8s-tests-on-aks:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-on-aks')) }}
     needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
 
@@ -354,7 +360,7 @@ jobs:
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
   run-k8s-tests-on-free-runner:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-on-free-runner')) }}
     needs: publish-kata-deploy-image-amd64
     permissions:
       contents: read
@@ -369,7 +375,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-crio:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-crio')) }}
     needs: publish-kata-deploy-image-amd64
     permissions:
       contents: read
@@ -384,7 +390,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-kata-coco-tests-on-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-kata-coco-tests-on-arm64')) }}
     needs:
       - publish-kata-deploy-image-arm64
       - build-and-publish-tee-confidential-unencrypted-image
@@ -401,7 +407,7 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-nvidia-gpu:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-on-nvidia-gpu')) }}
     needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
     with:
@@ -435,7 +441,7 @@ jobs:
       NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
 
   run-k8s-tests-on-nvidia-cpu-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-on-nvidia-cpu-arm64')) }}
     needs: publish-kata-deploy-image-arm64
     permissions:
       contents: read
@@ -451,7 +457,7 @@ jobs:
 
 
   run-kata-coco-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-kata-coco-tests')) }}
     needs:
      - publish-kata-deploy-image-amd64
      - build-and-publish-tee-confidential-unencrypted-image
@@ -476,7 +482,7 @@ jobs:
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
   run-k8s-tests-on-zvsi:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-on-zvsi')) }}
     needs: [publish-kata-deploy-image-s390x, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
     with:
@@ -491,7 +497,7 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-k8s-tests-on-ppc64le')) }}
     needs: publish-kata-deploy-image-ppc64le
     uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
     with:
@@ -503,7 +509,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-kata-deploy-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-kata-deploy-tests')) }}
     needs: [publish-kata-deploy-image-amd64]
     uses: ./.github/workflows/run-kata-deploy-tests.yaml
     with:
@@ -515,25 +521,27 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-basic-amd64-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-basic-amd64-tests')) }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/basic-ci-amd64.yaml
     with:
+      test-jobs: ${{ inputs.test-jobs }}
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
   run-basic-s390x-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-basic-s390x-tests')) }}
     needs: build-kata-static-tarball-s390x
     uses: ./.github/workflows/basic-ci-s390x.yaml
     with:
+      test-jobs: ${{ inputs.test-jobs }}
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
   run-cri-containerd-tests-amd64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-cri-containerd-tests-amd64')) }}
     needs: build-kata-static-tarball-amd64
     strategy:
       fail-fast: false
@@ -564,7 +572,7 @@ jobs:
       vmm: ${{ matrix.params.vmm }}
 
   run-cri-containerd-tests-s390x:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-cri-containerd-tests-s390x')) }}
     needs: build-kata-static-tarball-s390x
     strategy:
       fail-fast: false
@@ -587,7 +595,7 @@ jobs:
       vmm: ${{ matrix.params.vmm }}
 
   run-cri-containerd-tests-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'ci/run-cri-containerd-tests-ppc64le')) }}
     needs: build-kata-static-tarball-ppc64le
     strategy:
       fail-fast: false
