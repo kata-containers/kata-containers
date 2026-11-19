@@ -514,7 +514,7 @@ impl ErofsMultiLayerRootfs {
                     // Two modes are supported:
                     // 1. fsmerge mode: Single erofs mount with `device=` options pointing to additional files.
                     //    This is used when containerd has already merged layers into a single file.
-                    // 2. GPT+VMDK mode: Multiple independent erofs mounts (each mount is a separate layer file).
+                    // 2. GPT+VMDK mode: Independent erofs mounts (each mount is a separate layer file).
                     //    This is used when containerd does NOT use fsmerge, and we need to create GPT partitions.
 
                     // In GPT mode, all erofs layers are processed in bulk on the first
@@ -536,9 +536,26 @@ impl ErofsMultiLayerRootfs {
                         .filter(|(_, m)| m.fs_type.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE))
                         .collect();
                     let total_erofs_mounts = erofs_mounts_indexed.len();
+                    // dm-verity metadata path of each EROFS mount, keyed by mount index.
+                    let mut dmverity_paths: HashMap<usize, String> = HashMap::new();
+                    for (mount_idx, erofs_mount) in &erofs_mounts_indexed {
+                        let options_map: HashMap<String, String> = erofs_mount
+                            .options
+                            .iter()
+                            .filter_map(|opt| {
+                                opt.split_once('=')
+                                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                            })
+                            .collect();
 
-                    // GPT+VMDK mode: Multiple independent erofs layer files
-                    if total_erofs_mounts > 1 {
+                        if let Some(dmverity_path) = extract_dmverity_annotation(&options_map) {
+                            dmverity_paths.insert(*mount_idx, dmverity_path.to_string());
+                        }
+                    }
+
+                    // GPT+VMDK mode: used for multiple independent erofs layer files
+                    // or when dm-verity is present.
+                    if total_erofs_mounts > 1 || !dmverity_paths.is_empty() {
                         info!(
                             sl!(),
                             "multi-layer erofs: using GPT+VMDK mode for {} independent layers",
@@ -664,7 +681,6 @@ impl ErofsMultiLayerRootfs {
                                         part.layer.path
                                     )
                                 })?;
-                            let original_mount = &rootfs_mounts[*original_mount_idx];
 
                             let mut rolayer = base_device.clone();
                             let mut options: Vec<String> = vec![
@@ -674,17 +690,7 @@ impl ErofsMultiLayerRootfs {
                                 format!("X-kata.partition-number={}", part.partition_number),
                             ];
 
-                            // Look up dm-verity annotation from the original mount
-                            let options_map: HashMap<String, String> = original_mount
-                                .options
-                                .iter()
-                                .filter_map(|opt| {
-                                    opt.split_once('=')
-                                        .map(|(k, v)| (k.to_string(), v.to_string()))
-                                })
-                                .collect();
-
-                            if let Some(dmverity_path) = extract_dmverity_annotation(&options_map) {
+                            if let Some(dmverity_path) = dmverity_paths.get(original_mount_idx) {
                                 info!(
                                     sl!(),
                                     "Found dm-verity annotation for partition {} from {}",

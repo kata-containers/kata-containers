@@ -9,6 +9,7 @@ use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::utils::open_named_tuntap;
 use crate::utils::{check_unix_socket_path_len, link_rootless_vmm_socket};
+use crate::vfio_device::{VfioDeviceModern, VfioDeviceType};
 use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
@@ -16,7 +17,6 @@ use crate::NetworkDevice;
 use crate::ProtectionDeviceConfig;
 use crate::ShareFsConfig;
 use crate::ShareFsDevice;
-use crate::VfioDevice;
 use crate::VmmState;
 use crate::{BlockConfigModern, BlockDeviceModern};
 use anyhow::{anyhow, ensure, Context, Result};
@@ -86,7 +86,7 @@ impl CloudHypervisorInner {
             match device {
                 DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Network(_) => self.pending_devices.insert(0, device.clone()),
-                DeviceType::Vfio(_) => self.pending_devices.insert(0, device.clone()),
+                DeviceType::VfioModern(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Protection(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::BlockModern(_) => self.pending_devices.insert(0, device.clone()),
                 _ => {
@@ -108,7 +108,7 @@ impl CloudHypervisorInner {
             DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs).await,
             DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(hvsock).await,
             DeviceType::BlockModern(block) => self.handle_block_device(block).await,
-            DeviceType::Vfio(vfiodev) => self.handle_vfio_device(vfiodev).await,
+            DeviceType::VfioModern(vfiodev) => self.handle_vfio_device(vfiodev).await,
             DeviceType::Network(netdev) => self.handle_network_device(netdev).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
@@ -134,7 +134,10 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         match device {
-            DeviceType::Vfio(vfiodev) => self.inner_remove_device(vfiodev.device_id.as_str()).await,
+            DeviceType::VfioModern(vfiodev) => {
+                let device_id = vfiodev.lock().await.device_id.clone();
+                self.inner_remove_device(&device_id).await
+            }
             DeviceType::BlockModern(blockdev) => {
                 let device_id = blockdev.lock().await.device_id.clone();
                 self.inner_remove_device(device_id.as_str()).await
@@ -184,24 +187,25 @@ impl CloudHypervisorInner {
         Ok(DeviceType::ShareFs(sharefs))
     }
 
-    async fn handle_vfio_device(&mut self, device: VfioDevice) -> Result<DeviceType> {
-        let mut vfio_device: VfioDevice = device.clone();
-
-        // A device with multi-funtions, or a IOMMU group with one more
-        // devices, the Primary device is selected to be passed to VM.
-        // And the the first one is Primary device.
-        // safe here, devices is not empty.
-        let primary_device = device.devices.first().ok_or(anyhow!(
-            "Primary device list empty for vfio device {:?}",
-            device
-        ))?;
-
-        let primary_device = primary_device.clone();
-
-        let sysfsdev = primary_device.sysfs_path.clone();
+    async fn handle_vfio_device(
+        &mut self,
+        device: Arc<Mutex<VfioDeviceModern>>,
+    ) -> Result<DeviceType> {
+        let (device_id, sysfsdev) = {
+            let vfio = device.lock().await;
+            if vfio.device.device_type != VfioDeviceType::Normal {
+                return Err(anyhow!(
+                    "cloud-hypervisor does not support such vfio devices"
+                ));
+            }
+            (
+                vfio.device_id.clone(),
+                vfio.device.primary.sysfs_path.clone(),
+            )
+        };
 
         let device_config = DeviceConfig {
-            path: PathBuf::from(sysfsdev),
+            path: sysfsdev,
             iommu: false.into(),
             ..Default::default()
         };
@@ -214,17 +218,16 @@ impl CloudHypervisorInner {
             // Store the cloud-hypervisor device id to be used later for remving the device
             let dev_info: PciDeviceInfo =
                 serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
-            self.device_ids
-                .insert(device.device_id.clone(), dev_info.id);
+            self.device_ids.insert(device_id, dev_info.id);
 
             // Update PCI path for the vfio host device. It is safe to directly access the slice element
             // here as we have already checked if it exists.
             // Todo: Handle vfio-ap mediated devices - return error for them.
-            vfio_device.devices[0].guest_pci_path =
+            device.lock().await.config.guest_pci_path =
                 Some(Self::clh_pci_info_to_path(&dev_info.bdf)?);
         }
 
-        Ok(DeviceType::Vfio(vfio_device))
+        Ok(DeviceType::VfioModern(device))
     }
 
     async fn inner_remove_device(&mut self, device_id: &str) -> Result<()> {
@@ -253,7 +256,7 @@ impl CloudHypervisorInner {
     // Various cloud-hypervisor APIs report a PCI address in "BB:DD.F"
     // form within the PciDeviceInfo struct.
     // eg "0000:00:DD.F"
-    fn clh_pci_info_to_path(bdf: &str) -> Result<PciPath> {
+    pub(super) fn clh_pci_info_to_path(bdf: &str) -> Result<PciPath> {
         let tokens: Vec<&str> = bdf.split(':').collect();
         if tokens.len() != 3 || tokens[0] != "0000" || tokens[1] != "00" {
             return Err(anyhow!(
@@ -431,26 +434,22 @@ impl CloudHypervisorInner {
                     net_config.fds = Some(fds);
                     network_devices.push(net_config);
                 }
-                DeviceType::Vfio(vfio_device) => {
-                    // A device with multi-funtions, or a IOMMU group with one more
-                    // devices, the Primary device is selected to be passed to VM.
-                    // And the the first one is Primary device.
-                    // safe here, devices is not empty.
-                    let primary_device = vfio_device.devices.first().ok_or(anyhow!(
-                        "Primary device list empty for vfio device {:?}",
-                        vfio_device
-                    ))?;
-
-                    let primary_device = primary_device.clone();
-                    let sysfsdev = primary_device.sysfs_path.clone();
+                DeviceType::VfioModern(vfio_device) => {
+                    let vfio = vfio_device.lock().await;
+                    if vfio.device.device_type != VfioDeviceType::Normal {
+                        return Err(anyhow!(
+                            "cloud-hypervisor does not support such vfio devices"
+                        ));
+                    }
                     let device_config = DeviceConfig {
-                        path: PathBuf::from(sysfsdev),
+                        path: vfio.device.primary.sysfs_path.clone(),
+                        id: Some(vfio.device_id.clone()),
                         iommu: false.into(),
                         ..Default::default()
                     };
                     info!(
                         sl!(),
-                        "get host_devices primary device {:?}", primary_device
+                        "get host_devices primary device {:?}", vfio.device.primary
                     );
                     host_devices.push(device_config);
                 }

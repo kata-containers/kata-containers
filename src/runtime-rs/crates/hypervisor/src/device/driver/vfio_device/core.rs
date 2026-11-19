@@ -186,6 +186,22 @@ pub struct DeviceInfo {
     pub vfio_cdev: Option<VfioCdev>,
 }
 
+impl DeviceInfo {
+    /// Combine the PCI device and vendor IDs, treating missing IDs as zero.
+    pub fn vendor_device_id(&self) -> Result<u32> {
+        let parse_id = |id: Option<&String>| -> Result<u32> {
+            match id {
+                Some(id) => u32::from_str_radix(id.trim().trim_start_matches("0x"), 16)
+                    .with_context(|| format!("invalid PCI id {id}")),
+                None => Ok(0),
+            }
+        };
+        let vendor = parse_id(self.vendor_id.as_ref())?;
+        let dev = parse_id(self.device_id.as_ref())?;
+        Ok(((dev & 0xffff) << 16) | (vendor & 0xffff))
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Health {
     #[default]
