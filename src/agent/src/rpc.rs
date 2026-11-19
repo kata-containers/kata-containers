@@ -7,8 +7,8 @@ use async_trait::async_trait;
 #[cfg(feature = "agent-policy")]
 use kata_agent_policy::policy::PolicyCopyFileRequest;
 use pathrs::flags::OpenFlags;
-use rustjail::{pipestream::PipeStream, process::StreamType};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
+use rustjail::process::{ProcessOutputReader, StreamType};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
@@ -823,6 +823,7 @@ impl AgentService {
         let eid = &req.exec_id;
 
         let term_exit_notifier;
+        let mut output_generation;
         let reader = {
             let mut sandbox = self.sandbox.lock().await;
             let p = sandbox
@@ -830,6 +831,7 @@ impl AgentService {
                 .map_err(sandbox_err_to_ttrpc)?;
 
             term_exit_notifier = p.term_exit_notifier.clone();
+            output_generation = p.subscribe_output_generation();
 
             if p.term_master.is_some() {
                 p.get_reader(StreamType::TermMaster)
@@ -847,7 +849,12 @@ impl AgentService {
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
         // Create one in-flight read future and reuse it in both branches.
-        let read_fut = read_stream(&reader, req.len as usize);
+        let read_fut = read_stream(
+            &reader,
+            req.len as usize,
+            &req.read_session_id,
+            req.read_request_id,
+        );
         tokio::pin!(read_fut);
 
         // Cancellation and polling model: Rust async is polled, not preempted.
@@ -876,6 +883,9 @@ impl AgentService {
             // https://docs.rs/tokio/latest/src/tokio/macros/select.rs.html#67
             biased;
 
+            _ = output_generation.changed() => {
+                return Err(anyhow!("stale process output request invalidated by sandbox restore"));
+            }
             v = &mut read_fut => v?,
             _ = term_exit_notifier.notified() => {
                 // Drain-after-exit rationale:
@@ -944,6 +954,27 @@ fn mem_agent_compactconfig_to_compact_optionconfig(
 
 #[async_trait]
 impl agent_ttrpc::AgentService for AgentService {
+    async fn rebind_sandbox(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::RebindSandboxRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "rebind_sandbox", req);
+        is_allowed(&req).await?;
+        info!(sl(), "restore-timeline event=rebind-wait-sandbox-lock");
+        let mut sandbox = self.sandbox.lock().await;
+        info!(sl(), "restore-timeline event=rebind-acquired-sandbox-lock");
+        sandbox
+            .rebind_ids(&req.sandbox_id, &req.containers)
+            .map_err(|err| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, err))?;
+        info!(sl(), "restore-timeline event=rebind-ids-complete");
+        sandbox
+            .refresh_restored_config(&req.hostname, req.dns)
+            .map_err(|err| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, err))?;
+        info!(sl(), "restore-timeline event=rebind-complete");
+        Ok(Empty::new())
+    }
+
     async fn create_container(
         &self,
         ctx: &TtrpcContext,
@@ -2078,14 +2109,14 @@ fn get_agent_details() -> AgentDetails {
     detail
 }
 
-async fn read_stream(reader: &Mutex<ReadHalf<PipeStream>>, l: usize) -> Result<Vec<u8>> {
-    let mut content = vec![0u8; l];
-
+async fn read_stream(
+    reader: &Mutex<ProcessOutputReader>,
+    len: usize,
+    session_id: &str,
+    request_id: u64,
+) -> Result<Vec<u8>> {
     let mut reader = reader.lock().await;
-    let len = reader.read(&mut content).await?;
-    content.resize(len, 0);
-
-    Ok(content)
+    Ok(reader.read_replayable(len, session_id, request_id).await?)
 }
 
 pub async fn start(
@@ -2803,6 +2834,7 @@ mod tests {
             mh: MessageHeader::default(),
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,
+            connection_data: Default::default(),
         }
     }
 

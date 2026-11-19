@@ -48,6 +48,8 @@ use crate::storage::StorageDeviceGeneric;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 
+mod restore;
+
 /// Errors that can occur when looking up processes in the sandbox.
 #[derive(Debug, Error)]
 pub enum SandboxError {
@@ -117,6 +119,8 @@ pub struct Sandbox {
     pub id: String,
     pub hostname: String,
     pub containers: HashMap<String, LinuxContainer>,
+    /// cid_old -> cid_new
+    pub container_id_remappings: Arc<std::sync::RwLock<HashMap<String, String>>>,
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
@@ -154,6 +158,7 @@ impl Sandbox {
             hostname: String::new(),
             network: Network::new(),
             containers: HashMap::new(),
+            container_id_remappings: Arc::new(std::sync::RwLock::new(HashMap::new())),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             container_verity_devices: HashMap::new(),
@@ -451,6 +456,7 @@ impl Sandbox {
             }
         };
 
+        let remappings = self.container_id_remappings.clone();
         tokio::spawn(async move {
             loop {
                 let event = rx.recv().await;
@@ -459,7 +465,12 @@ impl Sandbox {
                     return;
                 }
                 info!(logger, "got an OOM event {:?}", event);
-                if let Err(e) = tx.send(container_id.clone()).await {
+                let current_id = remappings
+                    .read()
+                    .ok()
+                    .and_then(|mappings| mappings.get(&container_id).cloned())
+                    .unwrap_or_else(|| container_id.clone());
+                if let Err(e) = tx.send(current_id).await {
                     error!(logger, "failed to send message: {:?}", e);
                 }
             }
@@ -716,9 +727,14 @@ mod tests {
     use crate::mount::baremount;
     use anyhow::{anyhow, Error};
     use nix::mount::MsFlags;
-    use oci::{Linux, LinuxBuilder, LinuxDeviceCgroup, LinuxResources, Root, Spec, SpecBuilder};
+    use oci::{
+        Linux, LinuxBuilder, LinuxDeviceCgroup, LinuxResources, MountBuilder, Root, Spec,
+        SpecBuilder,
+    };
     use oci_spec::runtime as oci;
-    use rustjail::container::LinuxContainer;
+    use protocols::agent::ContainerIDMapping;
+    use rustjail::cgroups::mock::Manager as MockCgroupManager;
+    use rustjail::container::{Container, ContainerStatus, LinuxContainer};
     use rustjail::process::Process;
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
@@ -902,6 +918,7 @@ mod tests {
         );
 
         let spec = SpecBuilder::default()
+            .process(oci::Process::default())
             .linux(
                 LinuxBuilder::default()
                     .cgroups_path(cgroups_path)
