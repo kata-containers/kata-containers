@@ -12,7 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Weak};
 use std::time::{Duration, Instant};
 use std::{thread, time};
 
@@ -117,6 +117,7 @@ pub struct Sandbox {
     pub id: String,
     pub hostname: String,
     pub containers: HashMap<String, LinuxContainer>,
+    container_lifecycle_locks: HashMap<String, Weak<Mutex<()>>>,
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
@@ -154,6 +155,7 @@ impl Sandbox {
             hostname: String::new(),
             network: Network::new(),
             containers: HashMap::new(),
+            container_lifecycle_locks: HashMap::new(),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             container_verity_devices: HashMap::new(),
@@ -174,6 +176,23 @@ impl Sandbox {
             pcimap: HashMap::new(),
             devcg_info: Arc::new(RwLock::new(DevicesCgroupInfo::default())),
         })
+    }
+
+    /// Serialize same-ID creates and removals without holding the sandbox lock.
+    pub fn container_lifecycle_lock(&mut self, cid: &str) -> Arc<Mutex<()>> {
+        self.container_lifecycle_locks
+            .retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = self
+            .container_lifecycle_locks
+            .get(cid)
+            .and_then(Weak::upgrade)
+        {
+            return lock;
+        }
+        let lock = Arc::new(Mutex::new(()));
+        self.container_lifecycle_locks
+            .insert(cid.to_string(), Arc::downgrade(&lock));
+        lock
     }
 
     /// Add a new storage object or increase reference count of existing one.

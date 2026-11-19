@@ -257,37 +257,17 @@ async fn handle_multi_layer_storage(
     }))
 }
 
-/// Update sandbox storage with the created device.
-/// Handles cleanup on failure.
-async fn update_storage_device(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    mount_point: &str,
-    device: Arc<dyn StorageDevice>,
-    logger: &Logger,
-) -> Result<()> {
-    if let Err(device) = sandbox
-        .lock()
-        .await
-        .update_sandbox_storage(mount_point, device)
-    {
-        error!(logger, "failed to update device for storage"; "mount-point" => mount_point);
-        if let Err(e) = sandbox
-            .lock()
-            .await
-            .remove_sandbox_storage(mount_point)
-            .await
-        {
-            warn!(logger, "failed to remove dummy sandbox storage"; "error" => ?e);
-        }
-        if let Err(e) = device.cleanup() {
-            error!(logger, "failed to clean state for storage device"; "mount-point" => mount_point, "error" => ?e);
-        }
-        return Err(anyhow!(
-            "failed to update device for storage: {}",
-            mount_point
-        ));
+// Call while holding the sandbox lock, before relinquishing rollback ownership.
+fn record_storage_ownership(sandbox: &mut Sandbox, cid: &Option<String>, paths: &[String]) {
+    if let Some(cid) = cid {
+        sandbox
+            .container_mounts
+            .entry(cid.clone())
+            .or_default()
+            .extend_from_slice(paths);
+    } else {
+        sandbox.mounts.extend_from_slice(paths);
     }
-    Ok(())
 }
 
 // add_storages takes a list of storages passed by the caller, and perform the
@@ -322,23 +302,6 @@ pub async fn add_storages(
                 processed_mount_points.insert(mp.clone());
             }
 
-            // Add sandbox storage for each mount point in the group.
-            // Derive the shared flag from the matching storage in the
-            // group rather than assuming all members share the trigger's
-            // flag.
-            for mp in &result.processed_mount_points {
-                let shared = storages
-                    .iter()
-                    .find(|s| s.mount_point == *mp)
-                    .map_or(storage.shared, |s| s.shared);
-                let state = sandbox.lock().await.add_sandbox_storage(mp, shared).await;
-
-                // Only update device for the first occurrence
-                if state.ref_count().await == 1 {
-                    update_storage_device(sandbox, mp, result.device.clone(), &logger).await?;
-                }
-            }
-
             // Add the primary mount point to the list first, followed by
             // the temporary backing mounts (upper, lower-*).  Cleanup
             // iterates in order, so the overlay target is unmounted before
@@ -350,18 +313,6 @@ pub async fn add_storages(
             }
             mount_list.extend(result.temp_mount_points);
             mount_list.extend(result.verity_devices.clone());
-
-            // Record verity devices for cleanup
-            if let Some(ref cid) = cid {
-                if !result.verity_devices.is_empty() {
-                    let mut sandbox_guard = sandbox.lock().await;
-                    sandbox_guard
-                        .container_verity_devices
-                        .entry(cid.clone())
-                        .or_insert_with(Vec::new)
-                        .extend(result.verity_devices.clone());
-                }
-            }
 
             continue;
         }
@@ -381,8 +332,11 @@ pub async fn add_storages(
         {
             return Err(anyhow!("Storage {} is still being initialized", path));
         }
-        let state = sb.add_sandbox_storage(&path, storage.shared).await;
+        // Ephemeral volumes belong to the pod, even when the request omits shared.
+        let shared = storage.shared || storage.driver == kata_types::device::DRIVER_EPHEMERAL_TYPE;
+        let state = sb.add_sandbox_storage(&path, shared).await;
         if state.ref_count().await > 1 {
+            record_storage_ownership(&mut sb, &cid, std::slice::from_ref(&path));
             if let Some(p) = state.path() {
                 if !p.is_empty() {
                     mount_list.push(p.to_string());
@@ -428,6 +382,7 @@ pub async fn add_storages(
                 let mut sb = sandbox.lock().await;
                 sb.update_sandbox_storage(&path, device.clone())
                     .map_err(|_| anyhow!("failed to update device for storage: {}", path))?;
+                record_storage_ownership(&mut sb, &cid, std::slice::from_ref(&path));
                 scopeguard::ScopeGuard::into_inner(registration);
                 drop(sb);
                 if let Some(p) = device.path() {
