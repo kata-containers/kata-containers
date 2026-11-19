@@ -6,6 +6,9 @@
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
+
+use crate::container_manager::agent_disconnected;
 
 use agent::Agent;
 use anyhow::Context;
@@ -19,6 +22,21 @@ const VERSION_CHECK_THRESHOLD: u64 = 5 * 60 / HEALTH_CHECK_TIMER_INTERVAL;
 
 /// health check stop channel buffer size
 const HEALTH_CHECK_STOP_CHANNEL_BUFFER_SIZE: usize = 1;
+
+async fn check_agent(
+    agent: &dyn Agent,
+    budget: Duration,
+) -> anyhow::Result<agent::HealthCheckResponse> {
+    tokio::time::timeout(budget, async {
+        let check = || agent.check(agent::CheckRequest::new(""));
+        match check().await {
+            Err(error) if agent_disconnected(&error) => check().await,
+            result => result,
+        }
+    })
+    .await
+    .context("agent health check timed out")?
+}
 
 pub struct HealthCheck {
     pub keep_alive: bool,
@@ -53,6 +71,12 @@ impl HealthCheck {
         let stop_rx = self.stop_rx.clone();
         let keep_abnormal = self.keep_abnormal;
         tokio::spawn(async move {
+            let configured = agent.agent_config().await.health_check_request_timeout_ms;
+            let budget = Duration::from_millis(u64::from(if configured == 0 {
+                kata_types::config::Agent::default().health_check_request_timeout_ms
+            } else {
+                configured
+            }));
             let mut version_check_threshold_count = 0;
 
             loop {
@@ -67,11 +91,11 @@ impl HealthCheck {
 
                     Err(mpsc::error::TryRecvError::Empty) => {
                         // check agent
-                        match agent
-                            .check(agent::CheckRequest::new(""))
-                            .await
-                            .context("check health")
-                        {
+                        match tokio::select! {
+                            biased;
+                            _ = stop_rx.recv() => break,
+                            result = check_agent(agent.as_ref(), budget) => result,
+                        } {
                             Ok(_) => {
                                 debug!(sl!(), "check {} agent health successfully", id);
                                 version_check_threshold_count += 1;
@@ -133,6 +157,75 @@ impl HealthCheck {
             Err(e) => {
                 warn!(sl!(), "failed send monitor channel. {:?}", e);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agent::{kata::KataAgent, AgentManager};
+    use tokio::net::UnixListener;
+    use ttrpc::proto::{Codec, GenMessage, MessageHeader};
+
+    #[rstest::rstest]
+    #[case::recovers(Some(ttrpc::Code::OK))]
+    #[case::rpc_failure(Some(ttrpc::Code::PERMISSION_DENIED))]
+    #[case::deadline(None)]
+    #[tokio::test]
+    async fn probe_after_disconnect(#[case] reply: Option<ttrpc::Code>) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("agent.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+        let agent = KataAgent::new(Default::default());
+        agent
+            .start(&format!("remote://{}", path.display()))
+            .await
+            .unwrap();
+        agent.stop().await;
+        let probe = check_agent(&agent, Duration::from_secs(2));
+        let serve = async {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let first = GenMessage::read_from(&mut socket).await.unwrap();
+            assert_eq!(
+                ttrpc::Request::decode(first.payload).unwrap().method,
+                "Check"
+            );
+            drop(socket);
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let second = GenMessage::read_from(&mut socket).await.unwrap();
+            assert_eq!(
+                ttrpc::Request::decode(second.payload).unwrap().method,
+                "Check"
+            );
+            if let Some(code) = reply {
+                let mut response = ttrpc::Response::default();
+                response.set_status(ttrpc::get_status(code, ""));
+                let payload = response.encode().unwrap();
+                GenMessage {
+                    header: MessageHeader::new_response(
+                        second.header.stream_id,
+                        payload.len() as u32,
+                    ),
+                    payload,
+                }
+                .write_to(&mut socket)
+                .await
+                .unwrap();
+            }
+            socket
+        };
+        let (result, _socket) =
+            tokio::time::timeout(Duration::from_secs(5), async { tokio::join!(probe, serve) })
+                .await
+                .unwrap();
+        match reply {
+            Some(ttrpc::Code::OK) => assert!(result.is_ok()),
+            Some(code) => assert!(
+                matches!(result.err().unwrap().downcast_ref::<ttrpc::Error>(),
+                Some(ttrpc::Error::RpcStatus(status)) if status.code() == code)
+            ),
+            None => assert!(result.err().unwrap().is::<tokio::time::error::Elapsed>()),
         }
     }
 }

@@ -465,6 +465,10 @@ impl VirtSandbox {
         self.oom_notifier.clone()
     }
 
+    pub(crate) fn vmm_exit_confirmed(&self) -> CancellationToken {
+        self.vmm_exit_confirmed.clone()
+    }
+
     pub fn get_agent(&self) -> Arc<dyn Agent> {
         self.agent.clone()
     }

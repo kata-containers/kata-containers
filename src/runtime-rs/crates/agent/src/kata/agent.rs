@@ -62,7 +62,7 @@ macro_rules! impl_health_service {
         impl HealthService for KataAgent {
             $(async fn $name(&self, req: $req) -> Result<$resp> {
                 let r = req.into();
-                let (client, timeout, _) = self.get_health_client().await.context("get health client")?;
+                let (client, timeout) = self.get_health_client().await.context("get health client")?;
                 let resp = client.$name(new_ttrpc_ctx(timeout * MILLISECOND_TO_NANOSECOND), &r).await?;
                 Ok(resp.into())
             })*
@@ -82,7 +82,7 @@ macro_rules! impl_agent {
             #[instrument(skip(req))]
             $(async fn $name(&self, req: $req) -> Result<$resp> {
                 let r = req.into();
-                let (client, mut timeout, _) = self.get_agent_client().await.context("get client")?;
+                let (client, mut timeout) = self.get_agent_client().await.context("get client")?;
 
                 // update new timeout
                 if let Some(v) = $new_timeout {

@@ -104,7 +104,7 @@ hypervisor = { workspace = true }
 test-utils = { workspace = true }
 
 [build-dependencies]
-ttrpc-codegen = "0.6.0"
+ttrpc-codegen.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { check-cfg = [

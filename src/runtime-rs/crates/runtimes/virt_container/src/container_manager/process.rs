@@ -13,6 +13,7 @@ use awaitgroup::{WaitGroup, Worker as WaitGroupWorker};
 use common::types::{ContainerProcess, ProcessExitStatus, ProcessStateInfo, ProcessStatus, PID};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{watch, RwLock};
+use tokio_util::sync::CancellationToken;
 
 use super::container::Container;
 use super::io::{BinaryLogger, ContainerIo, PassfdIo, ShimIo};
@@ -97,6 +98,33 @@ fn is_binary_stdio(value: &str) -> bool {
     url::Url::parse(value)
         .map(|uri| uri.scheme() == "binary")
         .unwrap_or(false)
+}
+
+// A broken WaitProcess connection says nothing about the guest process.
+// Keep waiting until the agent reports an exit or the VMM exits.
+async fn wait_for_exit_code(
+    agent: &dyn Agent,
+    process: &ContainerProcess,
+    vmm_exit_confirmed: &CancellationToken,
+    logger: &slog::Logger,
+) -> i32 {
+    let request = agent::WaitProcessRequest {
+        process_id: process.clone().into(),
+    };
+    tokio::select! {
+        biased;
+        result = super::retry_on_disconnect(|| agent.wait_process(request.clone())) => match result {
+            Ok(response) => {
+                info!(logger, "process exited with status {}", response.status);
+                response.status
+            }
+            Err(error) => {
+                error!(logger, "failed to wait for process: {error:#}");
+                UNKNOWN_EXIT_STATUS
+            }
+        },
+        _ = vmm_exit_confirmed.cancelled() => UNKNOWN_EXIT_STATUS,
+    }
 }
 
 impl Process {
@@ -193,6 +221,7 @@ impl Process {
         &mut self,
         containers: Arc<RwLock<HashMap<String, Container>>>,
         agent: Arc<dyn Agent>,
+        vmm_exit_confirmed: CancellationToken,
     ) -> Result<()> {
         let logger = self.logger.clone();
         info!(logger, "start passfd io wait");
@@ -202,25 +231,8 @@ impl Process {
         let status = self.status.clone();
 
         tokio::spawn(async move {
-            let req = agent::WaitProcessRequest {
-                process_id: process.clone().into(),
-            };
-
-            info!(logger, "begin passfd io wait process");
-            // An unknown exit must still trigger cleanup without reporting success.
-            let exit_code = match agent.wait_process(req).await {
-                Ok(ret) => {
-                    info!(
-                        logger,
-                        "end passfd io wait process exit code {}", ret.status
-                    );
-                    ret.status
-                }
-                Err(e) => {
-                    error!(logger, "failed to passfd io wait process {:?}", e);
-                    UNKNOWN_EXIT_STATUS
-                }
-            };
+            let exit_code =
+                wait_for_exit_code(agent.as_ref(), &process, &vmm_exit_confirmed, &logger).await;
 
             let containers = containers.read().await;
             let container_id = &process.container_id.container_id;
@@ -257,6 +269,7 @@ impl Process {
         containers: Arc<RwLock<HashMap<String, Container>>>,
         agent: Arc<dyn Agent>,
         container_io: ContainerIo,
+        vmm_exit_confirmed: CancellationToken,
     ) -> Result<()> {
         info!(self.logger, "start io and wait");
 
@@ -302,9 +315,15 @@ impl Process {
             }
         }
 
-        self.run_io_wait(containers, agent, wg, shim_io.binary_logger)
-            .await
-            .context("run io thread")?;
+        self.run_io_wait(
+            containers,
+            agent,
+            wg,
+            shim_io.binary_logger,
+            vmm_exit_confirmed,
+        )
+        .await
+        .context("run io thread")?;
         Ok(())
     }
 
@@ -370,6 +389,7 @@ impl Process {
         agent: Arc<dyn Agent>,
         mut wg: WaitGroup,
         binary_logger: Option<BinaryLogger>,
+        vmm_exit_confirmed: CancellationToken,
     ) -> Result<()> {
         let logger = self.logger.clone();
         info!(logger, "start run io wait");
@@ -388,25 +408,8 @@ impl Process {
                 binary_logger.shutdown().await;
             }
 
-            let req = agent::WaitProcessRequest {
-                process_id: process.clone().into(),
-            };
-
-            info!(logger, "begin wait process");
-            // If wait_process fails (e.g., VM died), we still set status to Stopped
-            // This ensures that subsequent Kill() calls see the process as already stopped and return success.
-            let exit_code = match agent.wait_process(req).await {
-                Ok(ret) => {
-                    info!(logger, "end wait process exit code {}", ret.status);
-                    ret.status
-                }
-                Err(e) => {
-                    // Don't return early - continue to set status to Stopped.
-                    // Use UNKNOWN_EXIT_STATUS (255) to match containerd's convention.
-                    error!(logger, "failed to wait process {:?}", e);
-                    UNKNOWN_EXIT_STATUS
-                }
-            };
+            let exit_code =
+                wait_for_exit_code(agent.as_ref(), &process, &vmm_exit_confirmed, &logger).await;
 
             let containers = containers.read().await;
             let container_id = &process.container_id.container_id;
@@ -487,7 +490,7 @@ impl Process {
 
 #[cfg(test)]
 mod tests {
-    use super::is_binary_stdio;
+    use super::{is_binary_stdio, UNKNOWN_EXIT_STATUS};
 
     #[test]
     fn identifies_binary_logger_uri() {
@@ -496,6 +499,169 @@ mod tests {
         ));
         assert!(!is_binary_stdio("/run/containerd/io/stdout"));
         assert!(!is_binary_stdio("file:///run/container.log"));
+    }
+
+    #[rstest::rstest]
+    #[case::passfd_recovers(true, Some(ttrpc::Code::OK), 42, &[])]
+    #[case::legacy_io_recovers(false, Some(ttrpc::Code::OK), 42, &[])]
+    #[case::repeated_disconnects(true, Some(ttrpc::Code::OK), 42, &[1, 2])]
+    #[case::already_reaped(true, Some(ttrpc::Code::NOT_FOUND), UNKNOWN_EXIT_STATUS, &[])]
+    #[case::vm_exited(false, None, UNKNOWN_EXIT_STATUS, &[])]
+    #[tokio::test]
+    async fn wait_process_after_disconnect(
+        #[case] passfd: bool,
+        #[case] reply: Option<ttrpc::Code>,
+        #[case] expected_status: i32,
+        #[case] backoff_secs: &[u64],
+    ) {
+        use super::*;
+        use agent::{kata::KataAgent, AgentManager};
+        use std::time::Duration;
+        use tokio::io::AsyncReadExt;
+        use tokio::net::UnixListener;
+        use ttrpc::proto::{Codec, GenMessage, MessageHeader};
+
+        tokio::time::timeout(Duration::from_secs(15), async {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("agent.sock");
+            let listener = UnixListener::bind(&path).unwrap();
+            let agent = Arc::new(KataAgent::new(Default::default()));
+            agent
+                .start(&format!("remote://{}", path.display()))
+                .await
+                .unwrap();
+            agent.stop().await; // Stop the log forwarder.
+            let vmm_exit = CancellationToken::new();
+            let id = ContainerProcess::new("container", "exec").unwrap();
+            let mut process = Process::new(&id, 0, "", None, None, None, false);
+            process.set_status(ProcessStatus::Running).await;
+            let (watcher, exit_status) = process.fetch_exit_watcher().unwrap();
+            let mut watcher = watcher.unwrap();
+            let containers = Arc::new(RwLock::new(HashMap::new()));
+            let mut outputs = Vec::new();
+            if passfd {
+                process
+                    .passfd_io_wait(containers, agent, vmm_exit.clone())
+                    .await
+                    .unwrap();
+            } else {
+                let wg = WaitGroup::new();
+                let io = ContainerIo::new(agent.clone(), id, vmm_exit.clone());
+                for (kind, reader) in [
+                    (StdIoType::Stdout, io.stdout),
+                    (StdIoType::Stderr, io.stderr),
+                ] {
+                    let (output, sink) = tokio::io::duplex(64);
+                    outputs.push(output);
+                    process
+                        .run_io_copy(kind, Some(wg.worker()), reader, Box::new(sink))
+                        .await
+                        .unwrap();
+                }
+                process
+                    .run_io_wait(containers, agent, wg, None, vmm_exit.clone())
+                    .await
+                    .unwrap();
+            }
+
+            let (mut socket, _) = listener.accept().await.unwrap();
+            if !passfd {
+                // Interrupt both in-flight reads before either output worker reaches EOF.
+                let read_requests = async |socket: &mut tokio::net::UnixStream| {
+                    let mut requests = Vec::new();
+                    for _ in 0..2 {
+                        let msg = GenMessage::read_from(&mut *socket).await.unwrap();
+                        requests.push((
+                            ttrpc::Request::decode(msg.payload).unwrap().method,
+                            msg.header.stream_id,
+                        ));
+                    }
+                    requests.sort();
+                    assert_eq!(requests[0].0, "ReadStderr");
+                    assert_eq!(requests[1].0, "ReadStdout");
+                    requests
+                };
+                read_requests(&mut socket).await;
+                drop(socket);
+                (socket, _) = listener.accept().await.unwrap();
+                for eof in [false, true] {
+                    for (method, stream_id) in read_requests(&mut socket).await {
+                        let mut response = ttrpc::Response::default();
+                        if !eof {
+                            // ReadStreamResponse.data is a length-delimited field.
+                            response.payload =
+                                vec![0x0a, 1, if method == "ReadStdout" { b'O' } else { b'E' }];
+                        }
+                        let payload = response.encode().unwrap();
+                        GenMessage {
+                            header: MessageHeader::new_response(stream_id, payload.len() as u32),
+                            payload,
+                        }
+                        .write_to(&mut socket)
+                        .await
+                        .unwrap();
+                    }
+                }
+                for (mut output, expected) in outputs.into_iter().zip(*b"OE") {
+                    let mut data = Vec::new();
+                    output.read_to_end(&mut data).await.unwrap();
+                    assert_eq!(data, [expected]);
+                }
+            }
+            let first = GenMessage::read_from(&mut socket).await.unwrap();
+            assert_eq!(
+                ttrpc::Request::decode(first.payload.clone())
+                    .unwrap()
+                    .method,
+                "WaitProcess"
+            );
+            drop(socket);
+
+            let (mut socket, _) = listener.accept().await.unwrap();
+            for &secs in backoff_secs {
+                let interrupted = GenMessage::read_from(&mut socket).await.unwrap();
+                assert_eq!(first.payload, interrupted.payload);
+                let disconnected_at = tokio::time::Instant::now();
+                drop(socket);
+                (socket, _) = listener.accept().await.unwrap();
+                assert!(disconnected_at.elapsed() >= Duration::from_secs(secs));
+            }
+            let retry = GenMessage::read_from(&mut socket).await.unwrap();
+            assert_eq!(first.payload, retry.payload);
+            assert_eq!(process.get_status().await, ProcessStatus::Running);
+            assert!(!watcher.has_changed().unwrap());
+
+            if let Some(code) = reply {
+                let mut response = ttrpc::Response::default();
+                response.set_status(ttrpc::get_status(code, ""));
+                if code == ttrpc::Code::OK {
+                    // Wire encoding of WaitProcessResponse { status: 42 }.
+                    response.payload = vec![0x08, 42];
+                }
+                let payload = response.encode().unwrap();
+                GenMessage {
+                    header: MessageHeader::new_response(
+                        retry.header.stream_id,
+                        payload.len() as u32,
+                    ),
+                    payload,
+                }
+                .write_to(&mut socket)
+                .await
+                .unwrap();
+            } else {
+                vmm_exit.cancel();
+            }
+
+            watcher
+                .changed()
+                .await
+                .expect_err("exit notifier must close");
+            assert_eq!(exit_status.read().await.exit_code, expected_status);
+            assert_eq!(process.get_status().await, ProcessStatus::Stopped);
+        })
+        .await
+        .expect("WaitProcess did not finish");
     }
 
     #[tokio::test]
@@ -509,7 +675,11 @@ mod tests {
         let agent: Arc<dyn Agent> = Arc::new(agent::kata::KataAgent::new(Default::default()));
 
         process
-            .passfd_io_wait(Arc::new(RwLock::new(HashMap::new())), agent)
+            .passfd_io_wait(
+                Arc::new(RwLock::new(HashMap::new())),
+                agent,
+                CancellationToken::new(),
+            )
             .await
             .unwrap();
         let mut watcher = watcher.unwrap();

@@ -667,6 +667,7 @@ impl AgentService {
                 .find_container_process(cid.as_str(), eid.as_str())
                 .map_err(sandbox_err_to_ttrpc)?;
 
+            p.exit_watchers.retain(|watcher| !watcher.is_closed());
             p.exit_watchers.push(exit_send);
             pid = p.pid;
 
@@ -2803,6 +2804,7 @@ mod tests {
             mh: MessageHeader::default(),
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,
+            connection_data: Default::default(),
         }
     }
 
@@ -2868,6 +2870,54 @@ mod tests {
             .unwrap(),
             dir,
         )
+    }
+
+    #[tokio::test]
+    async fn wait_process_replaces_cancelled_watchers() {
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let (mut container, _root) = create_linuxcontainer();
+        let mut process =
+            Process::new(&logger, &oci::Process::default(), "exec", false, 1, None).unwrap();
+        let exit = process.exit_tx.take().unwrap();
+        process.exit_code = 42;
+        let request = protocols::agent::WaitProcessRequest {
+            container_id: container.id.clone(),
+            exec_id: process.exec_id.clone(),
+            ..Default::default()
+        };
+        container.processes.insert(process.exec_id.clone(), process);
+        let cgroup = container.cgroup_manager.clone();
+        sandbox.add_container(container);
+        let service = AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        };
+
+        let wait = || Box::pin(service.do_wait_process(request.clone()));
+        let mut first = wait();
+        assert!(futures::poll!(&mut first).is_pending());
+        for _ in 0..3 {
+            let mut cancelled = wait();
+            assert!(futures::poll!(&mut cancelled).is_pending());
+        }
+        let mut second = wait();
+        assert!(futures::poll!(&mut second).is_pending());
+        let watchers = service
+            .sandbox
+            .lock()
+            .await
+            .find_container_process(&request.container_id, &request.exec_id)
+            .unwrap()
+            .exit_watchers
+            .len();
+        assert_eq!(watchers, 2);
+        drop(exit);
+        assert_eq!(first.await.unwrap().status, 42);
+        assert_eq!(second.await.unwrap().status, 42);
+        cgroup.destroy().unwrap();
     }
 
     #[tokio::test]

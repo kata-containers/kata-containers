@@ -13,8 +13,38 @@ mod manager;
 pub use manager::VirtContainerManager;
 mod process;
 
+use std::future::Future;
+
 use common::{error::Error, types::ContainerProcess};
-use containerd_shim_protos::ttrpc;
+
+pub(crate) fn agent_disconnected(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<ttrpc::Error>(),
+        Some(ttrpc::Error::Socket(_) | ttrpc::Error::LocalClosed | ttrpc::Error::RemoteClosed)
+    )
+}
+
+// WaitProcess and legacy output reads stay pending while the guest is running.
+async fn retry_on_disconnect<T, F: Future<Output = anyhow::Result<T>>>(
+    mut request: impl FnMut() -> F,
+) -> anyhow::Result<T> {
+    use std::time::Duration;
+    let mut delay = Duration::ZERO;
+    loop {
+        match request().await {
+            Err(error) if agent_disconnected(&error) => {
+                debug!(sl!(), "agent disconnected, retrying request: {error:#}");
+            }
+            result => return result,
+        }
+        if delay.is_zero() {
+            delay = Duration::from_secs(1);
+        } else {
+            tokio::time::sleep(delay).await;
+            delay = (delay * 2).min(Duration::from_secs(30));
+        }
+    }
+}
 
 /// Check if the signal is a termination signal (SIGKILL or SIGTERM).
 ///
@@ -52,4 +82,48 @@ pub fn convert_agent_error(err: anyhow::Error) -> anyhow::Error {
 
     // Return original error if no known patterns matched
     err
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{convert_agent_error, Error};
+
+    #[test]
+    fn test_convert_agent_connection_errors() {
+        for error in [
+            ttrpc::Error::LocalClosed,
+            ttrpc::Error::RemoteClosed,
+            ttrpc::Error::Eof,
+        ] {
+            let error = anyhow::Error::new(error).context("signal process");
+            let converted = convert_agent_error(error);
+            assert!(matches!(
+                converted.downcast_ref::<Error>(),
+                Some(Error::AgentConnectionClosed)
+            ));
+        }
+    }
+
+    #[test]
+    fn test_convert_agent_not_found() {
+        let error = ttrpc::error::get_rpc_status(ttrpc::Code::NOT_FOUND, "process already gone");
+        let error = anyhow::Error::new(error).context("signal process");
+        let converted = convert_agent_error(error);
+        assert!(matches!(
+            converted.downcast_ref::<Error>(),
+            Some(Error::ProcessAlreadyTerminated)
+        ));
+    }
+
+    #[test]
+    fn test_convert_agent_other_errors() {
+        let error = ttrpc::error::get_rpc_status(ttrpc::Code::PERMISSION_DENIED, "signal denied");
+        let converted =
+            convert_agent_error(anyhow::Error::new(error.clone()).context("signal process"));
+        assert_eq!(converted.downcast_ref::<ttrpc::Error>(), Some(&error));
+        assert_eq!(converted.to_string(), "signal process");
+
+        let converted = convert_agent_error(anyhow::anyhow!("other error"));
+        assert_eq!(converted.to_string(), "other error");
+    }
 }

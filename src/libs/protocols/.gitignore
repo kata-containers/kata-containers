@@ -1,4 +1,5 @@
 Cargo.lock
+/src/generated/
 
 src/*.rs
 !src/lib.rs

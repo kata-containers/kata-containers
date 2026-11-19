@@ -21,7 +21,6 @@ use tokio::sync::RwLock;
 use crate::container_manager::{convert_agent_error, logger_with_process};
 
 use super::{
-    io::ContainerIo,
     process::{Process, ProcessWatcher},
     Exec,
 };
@@ -329,10 +328,6 @@ impl ContainerInner {
             .map_err(convert_agent_error)?;
 
         Ok(())
-    }
-
-    pub async fn new_container_io(&self, process: &ContainerProcess) -> Result<ContainerIo> {
-        Ok(ContainerIo::new(self.agent.clone(), process.clone()))
     }
 
     pub async fn close_io(&mut self, process: &ContainerProcess) -> Result<()> {
