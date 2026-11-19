@@ -81,6 +81,11 @@ impl VmmInstance {
         self.vmm_shared_info.clone()
     }
 
+    pub(crate) fn vmm_thread_stopped(&self) -> bool {
+        // The handle is installed at spawn and removed when stop joins it.
+        self.vmm_thread.is_none()
+    }
+
     fn set_instance_id(&mut self, id: &str) {
         let share_info_lock = self.vmm_shared_info.clone();
         share_info_lock.write().unwrap().id = String::from(id);

@@ -181,6 +181,11 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn guest_memory_block_size(&self) -> u32;
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)>;
 
+    /// Whether an in-process VMM has no running thread after a failed start.
+    async fn vmm_thread_stopped(&self) -> bool {
+        false
+    }
+
     async fn set_rootless_user(&self, _user: RootlessUser) -> Result<()> {
         Err(anyhow::anyhow!(
             "updating the rootless user is not supported for this hypervisor"

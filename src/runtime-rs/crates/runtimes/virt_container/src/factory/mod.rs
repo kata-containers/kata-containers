@@ -13,9 +13,12 @@ use kata_sys_util::mount::umount_all;
 use kata_types::config::TomlConfig;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use serde::{Deserialize, Serialize};
-use slog::{error, info, warn};
+use slog::{error, info};
 
-use crate::factory::{template::Template, vm::VmConfig};
+use crate::factory::{
+    template::{lock_template_parent, Template},
+    vm::VmConfig,
+};
 
 pub mod template;
 pub mod vm;
@@ -103,13 +106,8 @@ pub async fn init_factory_command(toml_config: TomlConfig) -> Result<()> {
 }
 
 pub async fn destroy_factory_command(toml_config: TomlConfig) -> Result<()> {
-    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
-
-    new_factory(&mut factory_config, toml_config, true)
-        .await
-        .context("new factory")?;
-
-    close_factory(&mut factory_config).context(" close VM factory")?;
+    let (_, factory_config) = validate_factory_config(toml_config)?;
+    close_factory(&factory_config).context("close VM factory")?;
 
     info!(sl!(), "vm factory destroyed");
     Ok(())
@@ -151,17 +149,11 @@ pub async fn new_factory(
     Ok(())
 }
 
-pub fn close_factory(config: &mut FactoryConfig) -> Result<()> {
+fn close_factory(config: &FactoryConfig) -> Result<()> {
     let state_path = Path::new(&config.template_path);
-
-    // Check if the path exists
-    if !state_path.exists() {
-        warn!(
-            sl!(),
-            "Template path {:?} does not exist, skipping unmount", state_path
-        );
-        return Ok(());
-    }
+    let _lock = lock_template_parent(state_path)?;
+    Template::fetch(config.vm_config.clone(), state_path.to_path_buf())
+        .context("fetch VM template")?;
 
     // Use umount_all to unmount all filesystems at the mountpoint
     // First try normal umount (lazy_umount = false)

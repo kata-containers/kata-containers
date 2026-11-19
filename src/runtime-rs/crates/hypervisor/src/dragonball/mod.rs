@@ -121,6 +121,10 @@ impl Hypervisor for Dragonball {
         Ok(waiter.1)
     }
 
+    async fn vmm_thread_stopped(&self) -> bool {
+        self.inner.read().await.vmm_instance.vmm_thread_stopped()
+    }
+
     async fn pause_vm(&self) -> Result<()> {
         let inner = self.inner.read().await;
         inner.pause_vm()
