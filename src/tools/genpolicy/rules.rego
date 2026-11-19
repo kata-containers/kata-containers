@@ -68,7 +68,7 @@ S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
 CRI_CONTAINER_TYPE_KEY = "io.kubernetes.cri.container-type"
 KATA_CONTAINER_TYPE_KEY = "io.katacontainers.pkg.oci.container_type"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
-VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
+VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}(\\.[0-7])?$"
 
 CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # Check if the input request should be rejected even before checking the
