@@ -101,10 +101,46 @@ struct MkdirDirective {
     raw_path: String,
 }
 
-/// Helper struct to track layer mount information including dm-verity devices
+/// Owns layer resources until the complete group is committed, including across cancellation.
 #[derive(Debug)]
 struct LayerMountInfo {
     verity_device: Option<String>,
+    mount_point: Option<PathBuf>,
+    logger: Logger,
+}
+
+impl LayerMountInfo {
+    fn new(logger: &Logger) -> Self {
+        Self {
+            verity_device: None,
+            mount_point: None,
+            logger: logger.clone(),
+        }
+    }
+
+    fn commit(&mut self) {
+        self.mount_point = None;
+        self.verity_device = None;
+    }
+}
+
+impl Drop for LayerMountInfo {
+    fn drop(&mut self) {
+        if let Some(mp) = &self.mount_point {
+            if let Err(e) = nix::mount::umount(mp) {
+                warn!(
+                    self.logger,
+                    "failed to unmount layer during multi-layer rollback";
+                    "mount-point" => mp.display(),
+                    "error" => format!("{:#}", e),
+                );
+            }
+        }
+        #[cfg(feature = "devicemapper")]
+        if let Some(device) = &self.verity_device {
+            cleanup_dmverity_devices(std::slice::from_ref(device), &self.logger);
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -264,15 +300,16 @@ pub async fn handle_multi_layer_erofs_group(
     };
     fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
-    if let Some(upper) = upper_storage {
-        wait_and_mount_layer(upper, &upper_mount, sandbox, &logger, None).await?;
+    let mut upper_mount_info = if let Some(upper) = upper_storage {
+        Some(wait_and_mount_layer(upper, &upper_mount, sandbox, &logger, None).await?)
     } else {
         info!(
             logger,
             "Using /run-backed upper directory";
             "mount-point" => upper_mount.display(),
         );
-    }
+        None
+    };
 
     for mkdir_dir in &mkdir_dirs {
         // As {{ mount 1 }} refers to the first lower layer, which is not available until we mount it.
@@ -353,8 +390,6 @@ pub async fn handle_multi_layer_erofs_group(
     );
 
     let mut results: Vec<(usize, PathBuf, LayerMountInfo)> = Vec::with_capacity(erofs_count);
-    let mut failed_verity_devices: Vec<String> = Vec::new();
-    let mut failed_mount_points: Vec<PathBuf> = Vec::new();
     let mut first_err: Option<anyhow::Error> = None;
 
     for result in futures::future::join_all(futures).await {
@@ -369,33 +404,6 @@ pub async fn handle_multi_layer_erofs_group(
     }
 
     if let Some(e) = first_err {
-        // Collect resources from successfully created layers
-        let mut sort_results: Vec<_> = results;
-        sort_results.sort_by_key(|(index, _, _)| *index);
-        for (_, lower_mount, mount_info) in sort_results {
-            if let Some(verity_dev) = mount_info.verity_device {
-                failed_verity_devices.push(verity_dev);
-            }
-            failed_mount_points.push(lower_mount);
-        }
-
-        // Unmount layers before destroying dm-verity devices.
-        for mp in failed_mount_points.iter().rev() {
-            if let Err(umount_err) = nix::mount::umount(mp) {
-                warn!(
-                    logger,
-                    "failed to unmount layer during concurrent-mount cleanup";
-                    "mount-point" => mp.display(),
-                    "error" => format!("{:#}", umount_err),
-                );
-            }
-        }
-
-        #[cfg(feature = "devicemapper")]
-        if !failed_verity_devices.is_empty() {
-            cleanup_dmverity_devices(&failed_verity_devices, &logger);
-        }
-
         return Err(e.context("failed to mount one or more EROFS layers concurrently"));
     }
 
@@ -403,10 +411,10 @@ pub async fn handle_multi_layer_erofs_group(
     // matches the host-supplied partition ordering.
     results.sort_by_key(|(index, _, _)| *index);
 
-    for (_, lower_mount, mount_info) in results {
-        lower_mounts.push(lower_mount);
-        if let Some(verity_dev) = mount_info.verity_device {
-            verity_devices.push(verity_dev);
+    for (_, lower_mount, mount_info) in &results {
+        lower_mounts.push(lower_mount.clone());
+        if let Some(verity_dev) = &mount_info.verity_device {
+            verity_devices.push(verity_dev.clone());
         }
     }
 
@@ -476,9 +484,11 @@ pub async fn handle_multi_layer_erofs_group(
         ..Default::default()
     };
 
+    let mut overlay_mount_info = LayerMountInfo::new(&logger);
     overlay_mount
         .mount(Path::new(&target_mount_point))
         .context("failed to mount overlay")?;
+    overlay_mount_info.mount_point = Some(PathBuf::from(&target_mount_point));
 
     info!(
         logger,
@@ -514,8 +524,21 @@ pub async fn handle_multi_layer_erofs_group(
         temp_mount_points.push(lm.display().to_string());
     }
     // Track the parent directory last so cleanup removes it only once empty.
-    track_temporary_mount_for_cleanup(sandbox, &temp_base, &logger).await?;
     temp_mount_points.push(temp_base.display().to_string());
+
+    // Publish backing storages only after all cancellable waits have finished.
+    // The vacant-entry registration path does not yield while we hold this lock.
+    let mut sb = sandbox.lock().await;
+    for mount_point in &temp_mount_points {
+        track_temporary_mount_for_cleanup(&mut sb, Path::new(mount_point), &logger).await?;
+    }
+    overlay_mount_info.commit();
+    for (_, _, mount_info) in &mut results {
+        mount_info.commit();
+    }
+    if let Some(mount_info) = &mut upper_mount_info {
+        mount_info.commit();
+    }
 
     Ok(MultiLayerErofsResult {
         mount_point: target_mount_point,
@@ -526,12 +549,11 @@ pub async fn handle_multi_layer_erofs_group(
 }
 
 async fn track_temporary_mount_for_cleanup(
-    sandbox: &Arc<tokio::sync::Mutex<Sandbox>>,
+    sandbox: &mut Sandbox,
     mount_point: &Path,
     logger: &Logger,
 ) -> Result<()> {
     let mount_point_str = mount_point.display().to_string();
-    let mut sandbox = sandbox.lock().await;
     if !sandbox.storages.contains_key(&mount_point_str) {
         sandbox.add_sandbox_storage(&mount_point_str, false).await;
 
@@ -851,7 +873,8 @@ async fn wait_and_mount_layer(
 
     // Determine the device path to mount
     // If dm-verity is enabled, we'll create a verity device and mount that instead
-    let (dev_path, verity_device_path) = if dmverity_enabled {
+    let mut mount_info = LayerMountInfo::new(logger);
+    let dev_path = if dmverity_enabled {
         // dm-verity mode: create verity device from partition
         let partition = partition_path.as_ref().ok_or_else(|| {
             anyhow!("dm-verity requires GPT-partitioned storage with partition number")
@@ -865,13 +888,14 @@ async fn wait_and_mount_layer(
             "partition" => partition,
             "verity-device" => &verity_device,
         );
-        (verity_device.clone(), Some(verity_device))
+        mount_info.verity_device = Some(verity_device.clone());
+        verity_device
     } else if let Some(ref partition) = partition_path {
         // GPT mode without dm-verity: use partition directly
-        (partition.clone(), None)
+        partition.clone()
     } else {
         // Non-GPT mode: use base device directly
-        (base_dev_path.clone(), None)
+        base_dev_path.clone()
     };
 
     info!(
@@ -927,13 +951,9 @@ async fn wait_and_mount_layer(
         logger,
     )
     .context("failed to mount layer")?;
+    mount_info.mount_point = Some(layer_mount.to_path_buf());
 
-    // After successfully mounting the layer, we track the mount point for cleanup.
-    track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
-
-    Ok(LayerMountInfo {
-        verity_device: verity_device_path,
-    })
+    Ok(mount_info)
 }
 
 async fn resolve_base_device_path(
@@ -1043,7 +1063,93 @@ async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mount::is_mounted;
     use rstest::rstest;
+    use test_utils::skip_if_not_root;
+
+    #[rstest]
+    #[case(true)]
+    #[case(false)]
+    #[tokio::test]
+    async fn test_partial_group_mount_rollback(#[case] cancel: bool) {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        fs::create_dir_all(CONTAINER_BASE).unwrap();
+        let container_dir = tempfile::Builder::new()
+            .prefix("test-erofs-rollback-")
+            .tempdir_in(CONTAINER_BASE)
+            .unwrap();
+        let cid = container_dir.path().file_name().unwrap().to_str().unwrap();
+        let temp_base = Path::new(MULTI_LAYER_EROFS_BASE).join(cid);
+        let target = container_dir.path().join("rootfs");
+        let first_mount = temp_base.join("lower-0");
+        let second_mount = temp_base.join("lower-1");
+        scopeguard::defer! {
+            for path in [&target, &second_mount, &first_mount] {
+                if is_mounted(path.to_str().unwrap()).unwrap() {
+                    nix::mount::umount(path).unwrap();
+                }
+            }
+            if temp_base.exists() {
+                fs::remove_dir_all(&temp_base).unwrap();
+            }
+        }
+
+        // tmpfs exercises the same mount path without requiring an EROFS disk image.
+        let first = Storage {
+            driver: DRIVER_BLK_MMIO_TYPE.to_string(),
+            source: container_dir.path().display().to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: target.display().to_string(),
+            options: vec![OPT_MULTI_LAYER.to_string(), OPT_OVERLAY_LOWER.to_string()],
+            ..Default::default()
+        };
+        let second = Storage {
+            source: format!("/dev/{cid}-missing"),
+            driver: if cancel {
+                DRIVER_BLK_MMIO_TYPE.to_string()
+            } else {
+                "unsupported".to_string()
+            },
+            ..first.clone()
+        };
+        let cid = Some(cid.to_string());
+        let storages = vec![first.clone(), second];
+        let mut group = Box::pin(handle_multi_layer_erofs_group(
+            &first, &storages, &cid, &sandbox, &logger,
+        ));
+        if cancel {
+            let polled = futures::poll!(group.as_mut());
+            assert!(polled.is_pending(), "{:?}", polled);
+            assert!(is_mounted(first_mount.to_str().unwrap()).unwrap());
+            let sb = sandbox.lock().await;
+            assert!(sb.storages.is_empty());
+            assert!(sb.container_mounts.is_empty());
+            drop(group);
+            drop(sb);
+        } else {
+            assert!(group.await.is_err());
+        }
+        assert!(!is_mounted(first_mount.to_str().unwrap()).unwrap());
+        assert!(!is_mounted(second_mount.to_str().unwrap()).unwrap());
+        assert!(sandbox.lock().await.storages.is_empty());
+
+        let storages = vec![first.clone(), first.clone()];
+        let result = handle_multi_layer_erofs_group(&first, &storages, &cid, &sandbox, &logger)
+            .await
+            .expect("retry should mount the complete group");
+        assert!(is_mounted(&result.mount_point).unwrap());
+        assert!(is_mounted(first_mount.to_str().unwrap()).unwrap());
+        assert!(is_mounted(second_mount.to_str().unwrap()).unwrap());
+        nix::mount::umount(Path::new(&result.mount_point)).unwrap();
+        let mut sb = sandbox.lock().await;
+        for mount_point in &result.temp_mount_points {
+            assert!(sb.remove_sandbox_storage(mount_point).await.unwrap());
+        }
+        assert!(sb.storages.is_empty());
+    }
 
     // --- validate_container_id ---
 
