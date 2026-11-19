@@ -42,7 +42,6 @@ $ genpolicy --help
 
 For advanced command line parameters, see [`genpolicy` advanced command line parameters](genpolicy-advanced-command-line-parameters.md).
 
-
 # Supported Kubernetes `YAML` file types
 
 `genpolicy` has support for automatic Policy generation based on Kubernetes `DaemonSet`, `Deployment`, `Job`, `Pod`, `ReplicaSet`, `ReplicationController`, and `StatefulSet` input `YAML` files.
@@ -57,3 +56,14 @@ You can pass a **directory** to `-j` instead of a single file. In that case `gen
 # Policy details
 
 See [auto-generated Policy details](genpolicy-auto-generated-policy-details.md).
+
+# Integration tests
+
+To run policy generation and integration tests from the repository root:
+
+```sh
+make -C src/tools/genpolicy src/version.rs
+cargo test -p genpolicy --test generate --test policy
+```
+
+For additional test information, see [integration tests](tests/README.md).

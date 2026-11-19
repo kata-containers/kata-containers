@@ -3,8 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[path = "../common/mod.rs"]
+mod common;
+
 #[cfg(test)]
 mod tests {
+    use super::common::genpolicy_succeeds_stdin;
     use anyhow::Context;
     use std::collections::BTreeMap;
     use std::fmt::{self, Display};
@@ -145,7 +149,7 @@ mod tests {
     }
 
     /// Run tests from the given directory.
-    /// The directory is searched under `src/tools/genpolicy/tests/testdata`, and
+    /// The directory is searched under `src/tools/genpolicy/tests/policy/testdata`, and
     /// it must contain a `pod.yaml` file as well as a `testcases.json` file.
     /// The pod must produce a policy when fed into genpolicy, so there
     /// should be exactly one entry with a PodSpec. The test case file contains named base
@@ -171,57 +175,34 @@ mod tests {
         // Prepare temp dir for running genpolicy.
         let (workdir, testdata_dir) = prepare_workdir(test_case_dir, &files_to_copy);
 
-        let settings = prepare_settings(&workdir, &testdata_dir);
+        prepare_settings(&workdir, &testdata_dir);
 
-        let config_files = if is_config_map_file_present {
-            Some(vec![workdir
-                .join("config_map.yaml")
-                .to_str()
-                .unwrap()
-                .to_string()])
-        } else {
-            None
-        };
-
-        let config = genpolicy::utils::Config {
-            base64_out: false,
-            config_files,
-            containerd_socket_path: None, // Some(String::from("/var/run/containerd/containerd.sock")),
-            insecure_registries: Vec::new(),
-            layers_cache: genpolicy::layers_cache::ImageLayersCache::new(&None),
-            raw_out: false,
-            rego_rules_path: workdir.join("rules.rego").to_str().unwrap().to_string(),
-            runtime_class_names: Vec::new(),
-            settings,
-            silent_unsupported_fields: false,
-            use_cache: false,
-            version: false,
-            yaml_file: workdir.join("pod.yaml").to_str().map(|s| s.to_string()),
-            initdata: kata_types::initdata::InitData::new("sha256", "0.1.0"),
-        };
-
-        // The container repos/network calls can be unreliable, so retry
-        // a few times before giving up.
-        let mut initdata_anno = String::new();
-        for i in 0..6 {
-            initdata_anno = match genpolicy::policy::AgentPolicy::from_files(&config).await {
-                Ok(policy) => {
-                    assert_eq!(policy.resources.len(), 1);
-                    policy.resources[0].generate_initdata_anno(&policy)
-                }
-                Err(e) => {
-                    if i == 5 {
-                        panic!("Failed to generate policy after 6 attempts");
-                    } else {
-                        println!("Retrying to generate policy: {e}");
-                        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-                        continue;
-                    }
-                }
-            };
-            break;
-        }
-        let policy = decode_policy(&initdata_anno);
+        let pod_yaml = fs::read(workdir.join("pod.yaml")).expect("should read pod YAML");
+        let resources: Vec<serde_yaml::Value> = serde_yaml::Deserializer::from_slice(&pod_yaml)
+            .map(serde_yaml::Value::deserialize)
+            .collect::<Result<_, _>>()
+            .expect("pod YAML should parse");
+        assert_eq!(
+            resources.iter().filter(|value| !value.is_null()).count(),
+            1,
+            "pod YAML should contain exactly one resource"
+        );
+        let output = genpolicy_succeeds_stdin(&pod_yaml, |cmd| {
+            cmd.current_dir(&workdir)
+                .arg("--base64-out")
+                .arg("--rego-rules-path")
+                .arg(workdir.join("rules.rego"))
+                .arg("--json-settings-path")
+                .arg(&workdir);
+            if is_config_map_file_present {
+                cmd.arg("--config-file")
+                    .arg(workdir.join("config_map.yaml"));
+            }
+        })
+        .expect("genpolicy should generate a policy");
+        let initdata_anno =
+            str::from_utf8(&output.stdout).expect("genpolicy output should be UTF-8");
+        let policy = decode_policy(initdata_anno);
 
         // write policy to a file
         fs::write(workdir.join("policy.rego"), &policy).unwrap();
@@ -300,10 +281,21 @@ mod tests {
             .to_string()
     }
 
-    fn prepare_settings(
-        workdir: &path::Path,
-        testdata_dir: &path::Path,
-    ) -> genpolicy::settings::Settings {
+    #[test]
+    fn successful_non_policy_output_is_not_retried() {
+        let attempts = std::cell::Cell::new(0);
+        let output = genpolicy_succeeds_stdin(b"", |cmd| {
+            attempts.set(attempts.get() + 1);
+            cmd.arg("--version");
+        })
+        .expect("genpolicy version command should succeed");
+
+        let initdata_anno = str::from_utf8(&output.stdout).unwrap();
+        assert!(std::panic::catch_unwind(|| decode_policy(initdata_anno)).is_err());
+        assert_eq!(attempts.get(), 1);
+    }
+
+    fn prepare_settings(workdir: &path::Path, testdata_dir: &path::Path) {
         let settings_patch = testdata_dir.join("settings-patch.json");
         if settings_patch.exists() {
             let drop_in_dir = workdir.join("genpolicy-settings.d");
@@ -316,8 +308,6 @@ mod tests {
                 ))
                 .expect("copying the settings patch should not fail");
         }
-
-        genpolicy::settings::Settings::new(workdir.to_str().unwrap())
     }
 
     fn prepare_workdir(
