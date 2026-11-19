@@ -1956,6 +1956,9 @@ install_tools_helper() {
 		latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/libs")"
 		latest_artefact+="-$(get_last_modification "${repo_root_dir}/Cargo.toml")"
 		latest_artefact+="-$(get_last_modification "${repo_root_dir}/Cargo.lock")"
+		if [[ "$(uname -m)" == "x86_64" ]]; then
+			latest_artefact+="-$(get_last_modification "${repo_root_dir}/src/dragonball")"
+		fi
 	fi
 	latest_builder_image="$(get_tools_image_name)"
 
