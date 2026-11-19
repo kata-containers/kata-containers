@@ -309,6 +309,9 @@ enable_template = false
 # Default "/run/vc/vm/template"
 template_path = "/run/vc/vm/template"
 
+# Optional directory for multiple templates, keyed by the effective VM configuration.
+# template_pool = "/run/vc/vm/template-pool"
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size = @PIPESIZE@
 # If enabled, make the agent display debug-level messages.
