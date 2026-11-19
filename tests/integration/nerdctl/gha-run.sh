@@ -105,7 +105,7 @@ function run() {
 
 	local macvlan_net_name="macvlan20"
 	info "Creating macvlan network with ${parent_interface} interface on host as parent"
-	sudo nerdctl network create "${macvlan_net_name}" --driver ipvlan --subnet=10.8.0.0/24 -o parent="${parent_interface}"
+	sudo nerdctl network create "${macvlan_net_name}" --driver macvlan --subnet=10.8.0.0/24 -o parent="${parent_interface}"
 
 	# Create two bridge networks for testing multiple networks with Kata
 	local net1="foo"
