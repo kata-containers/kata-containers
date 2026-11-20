@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use kata_types::qcow2::Qcow2Chain;
 use kata_types::vmdk::VmdkConfig;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -61,6 +62,7 @@ impl std::fmt::Display for BlockDeviceAio {
 ///
 /// @BlockSourceFormat::Raw for a plain raw block source;
 /// @BlockSourceFormat::Vmdk for a structured multi-extent VMDK layout;
+/// @BlockSourceFormat::Qcow2 for a qcow2 image;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum BlockSourceFormat {
     /// Plain raw block device, the default.
@@ -68,6 +70,8 @@ pub enum BlockSourceFormat {
     Raw,
     /// Structured VMDK layout with extent metadata.
     Vmdk(VmdkConfig),
+    /// qcow2 image (`path_on_host`).
+    Qcow2(Qcow2Chain),
 }
 
 #[derive(Debug, Clone, Default)]
