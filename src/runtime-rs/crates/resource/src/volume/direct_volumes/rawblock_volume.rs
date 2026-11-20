@@ -9,11 +9,12 @@ use async_trait::async_trait;
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        driver::virtio_blk_modern::BlockSourceFormat,
         DeviceConfig,
     },
     BlockConfigModern, BlockDeviceAio,
 };
-use kata_types::mount::DirectVolumeMountInfo;
+use kata_types::{mount::DirectVolumeMountInfo, qcow2::parse_qcow2_volume};
 use nix::sys::{stat, stat::SFlag};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
@@ -62,6 +63,11 @@ impl RawblockVolume {
             ));
         }
 
+        // The CSI declares the format; it is never probed from the image. The
+        // hypervisor checks the image when it opens it.
+        let qcow2 = parse_qcow2_volume(&mount_info.metadata)
+            .context("invalid qcow2 direct volume metadata")?;
+
         // For a real block device, honor its host read-only flag (BLKROGET) in
         // addition to the mount-derived intent, so a device marked read-only on
         // the host is exposed read-only to the guest. (Not applicable to
@@ -78,9 +84,12 @@ impl RawblockVolume {
                     false
                 }));
 
+        let source = qcow2.map_or(BlockSourceFormat::Raw, BlockSourceFormat::Qcow2);
+
         let block_config = BlockConfigModern {
             path_on_host: mount_info.device.clone(),
             is_readonly: read_only,
+            source,
             driver_option: blkdev_info.block_device_driver,
             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             num_queues: blkdev_info.num_queues,

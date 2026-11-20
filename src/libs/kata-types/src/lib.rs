@@ -71,6 +71,10 @@ pub mod vmdk;
 #[cfg(target_os = "linux")]
 pub mod block_source;
 
+/// qcow2 description for direct-assigned volumes
+#[cfg(target_os = "linux")]
+pub mod qcow2;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};

@@ -20,6 +20,7 @@ use tokio::sync::{Mutex, RwLock};
 use crate::{
     vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
+    virtio_blk_modern::BlockSourceFormat,
     BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor, NetworkDevice,
     PCIePortDevice, ProtectionDevice, ShareFsDevice, VhostUserConfig, VhostUserNetDevice,
     VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
@@ -311,6 +312,19 @@ impl DeviceManager {
             DeviceConfig::BlockCfgModern(config) => {
                 if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
                 {
+                    // A second user of the same host file shares the attached
+                    // device, so it must describe the file the same way.
+                    // Otherwise its format would be silently ignored.
+                    if let DeviceType::BlockModern(existing) =
+                        self.get_device_info(&device_matched_id).await?
+                    {
+                        if existing.lock().await.config.source != config.source {
+                            return Err(anyhow!(
+                                "{} is already attached as a block device with a different format",
+                                config.path_on_host
+                            ));
+                        }
+                    }
                     return Ok(device_matched_id);
                 }
 
@@ -488,6 +502,15 @@ impl DeviceManager {
                 block_config.driver_option = KATA_CCW_DEV_TYPE.to_string();
             }
             VIRTIO_PMEM => {
+                // virtio-pmem maps the host file into guest memory as it is,
+                // so a qcow2 image would reach the guest as raw bytes.
+                if matches!(block_config.source, BlockSourceFormat::Qcow2(_)) {
+                    return Err(anyhow!(
+                        "{} is a qcow2 image, which needs a virtio-blk or virtio-scsi block device driver, not {}",
+                        block_config.path_on_host,
+                        VIRTIO_PMEM
+                    ));
+                }
                 block_config.driver_option = KATA_NVDIMM_DEV_TYPE.to_string();
                 is_pmem = true;
             }
@@ -697,7 +720,8 @@ mod tests {
     use crate::{
         device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
         qemu::Qemu,
-        BlockConfigModern, KATA_BLK_DEV_TYPE,
+        virtio_blk_modern::BlockSourceFormat,
+        BlockConfigModern, KATA_BLK_DEV_TYPE, VIRTIO_PMEM,
     };
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
@@ -915,6 +939,75 @@ mod tests {
         assert!(
             matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
         );
+    }
+
+    #[actix_rt::test]
+    async fn test_shared_block_device_must_have_the_same_source() {
+        let d = new_device_manager().await.unwrap();
+        let block_driver = get_block_device_info(&d).await.block_device_driver;
+        let config = |source| {
+            DeviceConfig::BlockCfgModern(BlockConfigModern {
+                path_on_host: "/csi/disk.qcow2".to_string(),
+                driver_option: block_driver.clone(),
+                source,
+                ..Default::default()
+            })
+        };
+        let qcow2 = config(BlockSourceFormat::Qcow2(Default::default()));
+
+        let device_id = d.write().await.new_device(&qcow2).await.unwrap();
+        // The same declaration shares the device.
+        let matched_id = d.write().await.new_device(&qcow2).await.unwrap();
+        assert_eq!(device_id, matched_id);
+
+        // A different one is rejected rather than given the first one's.
+        let err = d
+            .write()
+            .await
+            .new_device(&config(BlockSourceFormat::Raw))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "/csi/disk.qcow2 is already attached as a block device with a different format"
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_virtio_pmem_rejects_qcow2_source() {
+        let d = new_device_manager().await.unwrap();
+        let config = |path: &str, source| {
+            DeviceConfig::BlockCfgModern(BlockConfigModern {
+                path_on_host: path.to_string(),
+                driver_option: VIRTIO_PMEM.to_string(),
+                source,
+                ..Default::default()
+            })
+        };
+
+        let err = d
+            .write()
+            .await
+            .new_device(&config(
+                "/csi/disk.qcow2",
+                BlockSourceFormat::Qcow2(Default::default()),
+            ))
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{:#}", err).contains(
+                "/csi/disk.qcow2 is a qcow2 image, which needs a virtio-blk or virtio-scsi block device driver, not virtio-pmem"
+            ),
+            "{:#}",
+            err
+        );
+
+        // Raw images keep working with virtio-pmem.
+        d.write()
+            .await
+            .new_device(&config("/csi/disk.img", BlockSourceFormat::Raw))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

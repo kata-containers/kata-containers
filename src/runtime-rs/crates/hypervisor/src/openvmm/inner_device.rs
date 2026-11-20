@@ -9,6 +9,7 @@ use anyhow::{anyhow, Context, Result};
 
 use super::inner::OpenVmmInner;
 use crate::device::DeviceType;
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::{VmmState, KATA_BLK_DEV_TYPE};
 
 impl OpenVmmInner {
@@ -23,6 +24,11 @@ impl OpenVmmInner {
             DeviceType::BlockModern(block_device) => {
                 let (device_id, path_on_host, is_readonly, driver_option) = {
                     let block = block_device.lock().await;
+                    // OpenVMM attaches `path_on_host` as raw bytes; a qcow2
+                    // image would reach the guest uninterpreted.
+                    if matches!(block.config.source, BlockSourceFormat::Qcow2(_)) {
+                        return Err(anyhow!("qcow2 block sources are not supported by OpenVMM"));
+                    }
                     (
                         block.device_id.clone(),
                         block.config.path_on_host.clone(),
@@ -134,6 +140,35 @@ mod tests {
     use super::*;
     use crate::{BlockConfigModern, BlockDeviceModernHandle};
     use tokio::sync::watch;
+
+    #[tokio::test]
+    async fn add_device_rejects_qcow2_block_source() {
+        let (exit_notify, _exit_waiter) = watch::channel(None);
+        let mut inner = OpenVmmInner::new(exit_notify);
+        inner.state = VmmState::VmRunning;
+        let free_ports = inner.free_block_hotplug_ports.len();
+        let device = DeviceType::BlockModern(
+            BlockDeviceModernHandle::new(
+                "block0".to_string(),
+                BlockConfigModern {
+                    path_on_host: "/csi/disk.qcow2".into(),
+                    driver_option: KATA_BLK_DEV_TYPE.to_string(),
+                    source: BlockSourceFormat::Qcow2(Default::default()),
+                    ..Default::default()
+                },
+            )
+            .arc(),
+        );
+
+        let err = inner.add_device(device).await.unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "qcow2 block sources are not supported by OpenVMM"
+        );
+        // Rejected before a hotplug port was reserved.
+        assert_eq!(inner.free_block_hotplug_ports.len(), free_ports);
+    }
 
     #[tokio::test]
     async fn remove_block_device_keeps_port_reserved_when_rpc_fails() {

@@ -89,6 +89,10 @@ pub(super) fn prepare_block_source<F>(
 where
     F: FnMut(File, &str) -> Result<String>,
 {
+    if let BlockSourceFormat::Qcow2(_) = source {
+        return Err(anyhow!("qcow2 block sources are not supported by QEMU yet"));
+    }
+
     let BlockSourceFormat::Vmdk(vmdk) = source else {
         let (file, metadata) = open_block_source(path, is_readonly, is_direct, false)?;
         let is_regular_file = metadata.is_file();
@@ -383,6 +387,27 @@ mod tests {
             .read_to_string(&mut contents)
             .unwrap();
         assert_eq!(contents, "persistent");
+    }
+
+    #[test]
+    fn rejects_qcow2_source() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("disk.qcow2");
+        std::fs::write(&path, b"QFI\xfb").unwrap();
+
+        let error = prepare_block_source(
+            path.to_str().unwrap(),
+            &BlockSourceFormat::Qcow2(Default::default()),
+            false,
+            false,
+            |_, _| panic!("a qcow2 source must not reach QEMU"),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "qcow2 block sources are not supported by QEMU yet"
+        );
     }
 
     #[test]
