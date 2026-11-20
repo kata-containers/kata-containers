@@ -397,6 +397,7 @@ expect_sandbox_resources() {
 	local state
 	local disk
 	local src
+	local volume_dir
 	local initdata_image
 
 	sandbox_cleanup_paths=("/run/kata/${sandbox_id}")
@@ -418,8 +419,12 @@ expect_sandbox_resources() {
 	state="$(exec_host "${node_name}" "cat '/run/kata/${sandbox_id}/state.json'")"
 	while IFS=$'\t' read -r disk src; do
 		[[ -n "${disk}" ]] || continue
+		volume_dir="/run/kata-containers/shared/direct-volumes/$(printf '%s' "${src}" | base64 -w0 | tr '+/' '-_')"
+		[[ "$(exec_host "${node_name}" \
+			"test -s '${volume_dir}/mountInfo.json' && echo present")" == "present" ]] || \
+			die "No mountInfo.json in ${volume_dir} for block emptyDir ${src}"
 		sandbox_cleanup_paths+=("${disk}")
-		sandbox_cleanup_paths+=("/run/kata-containers/shared/direct-volumes/$(printf '%s' "${src}" | base64 -w0 | tr '+/' '-_')")
+		sandbox_cleanup_paths+=("${volume_dir}")
 	done < <(jq -r '.resource.ephemeral_disks[]? | [.disk_path, .source_path] | @tsv' <<<"${state}")
 
 	# A sandbox configured with initdata, which is how a generated policy
