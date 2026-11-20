@@ -804,7 +804,9 @@ impl<'a> dbs_snapshot::Persist<'a> for NetworkDeviceMgr {
                 device,
                 &dev_state.device_info,
                 &dev_state.transport,
-                (),
+                info.config
+                    .guest_mac()
+                    .filter(|mac| Some(*mac) != dev_state.config.guest_mac()),
             )
             .map_err(NetworkDeviceError::Virtio)?;
         }
