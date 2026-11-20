@@ -301,15 +301,14 @@ func (c *LinuxCgroup) Logger() *logrus.Entry {
 }
 
 func (c *LinuxCgroup) Delete() error {
+	if IsSystemdCgroup(c.ID()) && c.sandboxCgroupOnly {
+		return deleteCgroupsSystemd(c.ID())
+	}
+
 	switch cg := c.cgroup.(type) {
 	case cgroup1.Cgroup:
 		return cg.Delete()
 	case *cgroup2.Manager:
-		if IsSystemdCgroup(c.ID()) && c.sandboxCgroupOnly {
-			if err := cg.DeleteSystemd(); err != nil {
-				return err
-			}
-		}
 		return cg.Delete()
 	default:
 		return ErrCgroupMode

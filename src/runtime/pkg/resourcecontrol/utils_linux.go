@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/containerd/cgroups/v3"
 	cgroup1 "github.com/containerd/cgroups/v3/cgroup1"
@@ -86,6 +87,7 @@ func createCgroupsSystemd(slice string, unit string, pid int) error {
 		newProperty("MemoryAccounting", true),
 		newProperty("CPUAccounting", true),
 		newProperty("IOAccounting", true),
+		newProperty("TimeoutStopUSec", uint64((5*time.Minute)/time.Microsecond)),
 	}
 
 	if strings.HasSuffix(unit, ".slice") {
