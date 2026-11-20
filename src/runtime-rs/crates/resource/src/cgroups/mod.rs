@@ -21,8 +21,12 @@ use crate::cgroups::cgroup_persist::CgroupState;
 
 /// The state CgroupsResource::new() will save, computed before the cgroups
 /// exist, so a caller can record them ahead of creating them.
-pub fn preview_cgroup_state(sid: &str, toml_config: &TomlConfig) -> Result<CgroupState> {
-    let config = CgroupConfig::new(sid, toml_config)?;
+pub fn preview_cgroup_state(
+    sid: &str,
+    toml_config: &TomlConfig,
+    cgroup_parent: Option<&str>,
+) -> Result<CgroupState> {
+    let config = CgroupConfig::new(sid, toml_config, cgroup_parent)?;
     Ok(CgroupState {
         path: Some(config.path),
         overhead_path: Some(config.overhead_path),
@@ -64,8 +68,11 @@ pub struct CgroupConfig {
 }
 
 impl CgroupConfig {
-    fn new(sid: &str, toml_config: &TomlConfig) -> Result<Self> {
-        let path = if let Ok(spec) = load_oci_spec() {
+    fn new(sid: &str, toml_config: &TomlConfig, cgroup_parent: Option<&str>) -> Result<Self> {
+        let path = if let Some(parent) = cgroup_parent {
+            // The cgroup manager expects a path relative to the cgroup mount.
+            parent.trim_start_matches('/').to_string()
+        } else if let Ok(spec) = load_oci_spec() {
             spec.linux()
                 .clone()
                 .and_then(|linux| linux.cgroups_path().clone())
@@ -118,5 +125,26 @@ impl CgroupConfig {
             // Only a live sandbox pins vCPUs; a restored one just deletes.
             enable_vcpus_pinning: false,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cgroup_config_uses_parent_directly() {
+        for parent in ["/kubepods/pod-id", "kubepods/pod-id"] {
+            let config =
+                CgroupConfig::new("sandbox-id", &TomlConfig::default(), Some(parent)).unwrap();
+            assert_eq!(config.path, "kubepods/pod-id");
+            let preview =
+                preview_cgroup_state("sandbox-id", &TomlConfig::default(), Some(parent)).unwrap();
+            assert_eq!(preview.path.as_deref(), Some("kubepods/pod-id"));
+            assert_eq!(
+                preview.overhead_path.as_deref(),
+                Some(config.overhead_path.as_str())
+            );
+        }
     }
 }
