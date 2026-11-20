@@ -115,7 +115,7 @@ pub fn remove_dm_dev_node(dev_path: &str) {
     }
 }
 
-/// Generate a unique dm-verity device name from source path and verity hash.
+/// Generate an attempt-specific dm-verity name so delayed cleanup cannot remove a retry.
 pub fn build_dmverity_device_name(source_device_path: &Path, verity_info: &DmVerityInfo) -> String {
     let source_short = source_device_path
         .file_name()
@@ -126,14 +126,48 @@ pub fn build_dmverity_device_name(source_device_path: &Path, verity_info: &DmVer
         "kata-verity-{}-off{}-{}",
         source_short, verity_info.offset, hash_prefix
     );
-    name.truncate(128);
-    name
+    // Reserve 33 bytes for the separator and UUID, plus the terminating NUL.
+    while name.len() > 94 {
+        name.pop();
+    }
+    format!("{}-{}", name, uuid::Uuid::new_v4().simple())
 }
 
 /// Result of dm-verity device setup, indicating whether the device node is ready or if we need to wait for udev.
 enum DmSetupResult {
     Ready(String),
     NeedUdevWait,
+}
+
+fn blocking_cleanup_guard<T, F>(
+    resource: T,
+    cleanup: F,
+) -> scopeguard::ScopeGuard<T, impl FnOnce(T)>
+where
+    T: Send + 'static,
+    F: FnOnce(T) + Send + 'static,
+{
+    scopeguard::guard(resource, move |resource| {
+        tokio::task::spawn_blocking(move || cleanup(resource));
+    })
+}
+
+async fn finish_dmverity_setup<F>(
+    setup: tokio::task::JoinHandle<Result<(DmSetupResult, scopeguard::ScopeGuard<String, F>)>>,
+    udev_wait: impl std::future::Future<Output = Result<String>>,
+) -> Result<String>
+where
+    F: FnOnce(String),
+{
+    let (result, cleanup) = setup
+        .await
+        .context("spawn_blocking for dm-verity ioctl panicked")??;
+    let path = match result {
+        DmSetupResult::Ready(path) => path,
+        DmSetupResult::NeedUdevWait => udev_wait.await?,
+    };
+    scopeguard::ScopeGuard::into_inner(cleanup);
+    Ok(path)
 }
 
 /// Destroy a dm-verity device by name.
@@ -236,7 +270,7 @@ pub async fn create_dmverity_device(
     // Always use no-udev DmOptions inside spawn_blocking to avoid DM_UDEV_WAIT
     // blocking on udevd event processing. When udev is running, we wait for the
     // device node asynchronously after the ioctl completes (via wait_for_dm_dev_node).
-    let dev_path_or_need_udev = tokio::task::spawn_blocking(move || -> Result<DmSetupResult> {
+    let setup = tokio::task::spawn_blocking(move || {
         let dm = DM::new()?;
         let verity_name = DmName::new(&verity_name_string)?;
         let id = DevId::Name(verity_name);
@@ -244,14 +278,13 @@ pub async fn create_dmverity_device(
         let opts = no_udev_dm_options();
         let ro_opts = dm_opts_readonly();
 
-        // Step 0: Remove stale device if it already exists
-        let remove_opts = dm_opts_deferred_remove();
-        if dm.device_remove(&id, remove_opts).is_ok() {
-            // Stale device removed; continue with creation.
-        }
-
         // Step 1: Create device as read-only
         dm.device_create(verity_name, None, ro_opts)?;
+        // The blocking task can outlive its caller; its output must retain cleanup ownership.
+        let cleanup =
+            blocking_cleanup_guard(format!("/dev/mapper/{}", verity_name_string), |path| {
+                cleanup_dmverity_devices(&[path], &slog_scope::logger());
+            });
 
         // Calculate hash start block.
         let hash_start_block: u64 = if verity_info.no_superblock {
@@ -317,23 +350,204 @@ pub async fn create_dmverity_device(
             DmSetupResult::Ready(path)
         };
 
-        Ok(result)
-    })
-    .await
-    .context("spawn_blocking for dm-verity ioctl panicked")??;
+        Ok((result, cleanup))
+    });
 
     // If udev is running, wait asynchronously for the device node (non-blocking poll).
-    let dev_path = match dev_path_or_need_udev {
-        DmSetupResult::Ready(path) => path,
-        DmSetupResult::NeedUdevWait => {
-            info!(
-                slog_scope::logger(),
-                "Waiting for udev to create dm-verity device node";
-                "device-name" => &verity_name_for_wait,
-            );
-            wait_for_dm_dev_node(&verity_name_for_wait).await?
-        }
-    };
+    finish_dmverity_setup(setup, async {
+        info!(
+            slog_scope::logger(),
+            "Waiting for udev to create dm-verity device node";
+            "device-name" => &verity_name_for_wait,
+        );
+        wait_for_dm_dev_node(&verity_name_for_wait).await
+    })
+    .await
+}
 
-    Ok(dev_path)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::future::Future;
+
+    #[test]
+    fn test_mapper_name_preserves_attempt_suffix_for_long_sources() {
+        for source in ["a".repeat(128), "\u{e9}".repeat(128)] {
+            let info = DmVerityInfo::default();
+            let first = build_dmverity_device_name(Path::new(&source), &info);
+            let retry = build_dmverity_device_name(Path::new(&source), &info);
+            assert!(first.len() < 128);
+            assert!(retry.len() < 128);
+            if source.is_ascii() {
+                DmName::new(&first).unwrap();
+                DmName::new(&retry).unwrap();
+            }
+            assert_ne!(first, retry);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cancelled_dmverity_setup_finishing_in_blocking_task() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("mapping");
+        let setup_path = path.clone();
+        let (created_tx, created_rx) = tokio::sync::oneshot::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        let (cleaned_tx, cleaned_rx) = tokio::sync::oneshot::channel();
+        let setup = tokio::task::spawn_blocking(move || {
+            std::fs::write(&setup_path, "").unwrap();
+            let cleanup = blocking_cleanup_guard(setup_path.display().to_string(), move |path| {
+                std::fs::remove_file(path).unwrap();
+                cleaned_tx.send(()).unwrap();
+            });
+            created_tx.send(()).unwrap();
+            resume_rx.recv().unwrap();
+            Ok((DmSetupResult::NeedUdevWait, cleanup))
+        });
+        let mut pending = Box::pin(finish_dmverity_setup(setup, std::future::pending()));
+        std::future::poll_fn(|cx| {
+            assert!(pending.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        created_rx.await.unwrap();
+        assert!(path.exists());
+        // Drop the future while the ioctl worker is still running.
+        drop(pending);
+        resume_tx.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), cleaned_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_dmverity_setup_ownership_during_udev_wait() {
+        for cancel in [true, false] {
+            let root = tempfile::tempdir().unwrap();
+            let path = root.path().join("mapping");
+            let setup_path = path.clone();
+            let (cleanup_started_tx, cleanup_started_rx) = tokio::sync::oneshot::channel();
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            let (cleaned_tx, cleaned_rx) = tokio::sync::oneshot::channel();
+            let release = scopeguard::guard(release_tx, |tx| {
+                let _ = tx.send(());
+            });
+            let setup = tokio::task::spawn_blocking(move || {
+                std::fs::write(&setup_path, "").unwrap();
+                let cleanup =
+                    blocking_cleanup_guard(setup_path.display().to_string(), move |path| {
+                        cleanup_started_tx.send(()).unwrap();
+                        release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                        std::fs::remove_file(path).unwrap();
+                        cleaned_tx.send(()).unwrap();
+                    });
+                Ok((DmSetupResult::NeedUdevWait, cleanup))
+            });
+            let (waiting_tx, waiting_rx) = tokio::sync::oneshot::channel();
+            let pending = finish_dmverity_setup(setup, async move {
+                waiting_tx.send(()).unwrap();
+                if cancel {
+                    std::future::pending().await
+                } else {
+                    Err(anyhow!("udev wait failed"))
+                }
+            });
+            let task = tokio::spawn(pending);
+            waiting_rx.await.unwrap();
+            if cancel {
+                task.abort();
+                assert!(tokio::time::timeout(Duration::from_secs(1), task)
+                    .await
+                    .expect("cancellation blocked on mapper cleanup")
+                    .unwrap_err()
+                    .is_cancelled());
+            } else {
+                assert!(task.await.unwrap().is_err());
+            }
+            cleanup_started_rx.await.unwrap();
+            assert!(path.exists());
+            drop(release);
+            cleaned_rx.await.unwrap();
+            assert!(!path.exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dmverity_setup_transfers_ownership_on_success() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("mapping");
+        let setup_path = path.display().to_string();
+        let setup = tokio::task::spawn_blocking(move || {
+            std::fs::write(&setup_path, "").unwrap();
+            let cleanup = blocking_cleanup_guard(setup_path.clone(), |path| {
+                std::fs::remove_file(path).unwrap();
+            });
+            Ok((DmSetupResult::Ready(setup_path), cleanup))
+        });
+        assert_eq!(
+            finish_dmverity_setup(setup, std::future::pending())
+                .await
+                .unwrap(),
+            path.display().to_string()
+        );
+        assert!(path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_cancelled_mapper_cleanup_does_not_remove_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let info = DmVerityInfo::default();
+        let source = Path::new("/dev/vda");
+        let old_path = root.path().join(build_dmverity_device_name(source, &info));
+        let retry_path = root.path().join(build_dmverity_device_name(source, &info));
+        let setup_path = old_path.clone();
+        let (created_tx, created_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let release = scopeguard::guard(release_tx, |tx| {
+            let _ = tx.send(());
+        });
+        let (cleaned_tx, cleaned_rx) = tokio::sync::oneshot::channel();
+        let setup = tokio::task::spawn_blocking(move || {
+            std::fs::write(&setup_path, "").unwrap();
+            let cleanup = blocking_cleanup_guard(setup_path.display().to_string(), move |path| {
+                std::fs::remove_file(path).unwrap();
+                cleaned_tx.send(()).unwrap();
+            });
+            created_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            Ok((DmSetupResult::NeedUdevWait, cleanup))
+        });
+        let mut pending = Box::pin(finish_dmverity_setup(setup, std::future::pending()));
+        std::future::poll_fn(|cx| {
+            assert!(pending.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        created_rx.await.unwrap();
+        drop(pending);
+        let setup_path = retry_path.clone();
+        let retry_setup = tokio::task::spawn_blocking(move || {
+            std::fs::write(&setup_path, "retry mapping").unwrap();
+            let path = setup_path.display().to_string();
+            let cleanup = blocking_cleanup_guard(path.clone(), |path| {
+                std::fs::remove_file(path).unwrap();
+            });
+            Ok((DmSetupResult::Ready(path), cleanup))
+        });
+        assert_eq!(
+            finish_dmverity_setup(retry_setup, std::future::pending())
+                .await
+                .unwrap(),
+            retry_path.display().to_string()
+        );
+        drop(release);
+        cleaned_rx.await.unwrap();
+        assert!(!old_path.exists());
+        assert_eq!(
+            std::fs::read_to_string(retry_path).unwrap(),
+            "retry mapping"
+        );
+    }
 }
