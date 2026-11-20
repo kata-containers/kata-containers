@@ -108,6 +108,11 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM_NV@"
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
 
+# CPU model
+# Guest CPU model, QEMU -cpu. Empty means host. Do not change this for TDX
+# QEMU's TDX support rejects any CPU model other than host.
+cpu_model = ""
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
