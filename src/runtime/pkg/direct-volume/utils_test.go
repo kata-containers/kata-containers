@@ -92,3 +92,41 @@ func TestRecordSandboxIDNoMountInfoFile(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, os.ErrNotExist))
 }
+
+func TestCheckRawImageFormat(t *testing.T) {
+	const runtimeRsOnly = "which is only supported by runtime-rs"
+	qcow2Key := func(key string) string {
+		return "direct volume /csi/top.qcow2 sets qcow2 metadata " + key + ", " + runtimeRsOnly
+	}
+	testCases := []struct {
+		name     string
+		metadata map[string]string
+		// Empty for success, otherwise text the error must contain.
+		wantErr string
+	}{
+		{"no metadata", nil, ""},
+		{"empty metadata", map[string]string{}, ""},
+		{"explicit raw", map[string]string{ImageFormatMetadataKey: "raw"}, ""},
+		{"unrelated short keys", map[string]string{"format": "qcow2", "backing-chain": "[]", "discard": "unmap"}, ""},
+		{"qcow2", map[string]string{ImageFormatMetadataKey: "qcow2"}, `has image format "qcow2", ` + runtimeRsOnly},
+		{"empty format", map[string]string{ImageFormatMetadataKey: ""}, `has image format "", ` + runtimeRsOnly},
+		{"upper-case raw", map[string]string{ImageFormatMetadataKey: "RAW"}, `has image format "RAW", ` + runtimeRsOnly},
+		{"backing chain only", map[string]string{BackingChainMetadataKey: "[]"}, qcow2Key(BackingChainMetadataKey)},
+		{"raw with backing chain", map[string]string{ImageFormatMetadataKey: "raw", BackingChainMetadataKey: "[]"}, qcow2Key(BackingChainMetadataKey)},
+		{"discard only", map[string]string{DiscardMetadataKey: "unmap"}, qcow2Key(DiscardMetadataKey)},
+		{"raw with empty discard", map[string]string{ImageFormatMetadataKey: "raw", DiscardMetadataKey: ""}, qcow2Key(DiscardMetadataKey)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			err := CheckRawImageFormat(&MountInfo{Device: "/csi/top.qcow2", Metadata: tc.metadata})
+			if tc.wantErr == "" {
+				assert.NoError(err)
+				return
+			}
+			assert.ErrorContains(err, tc.wantErr)
+		})
+	}
+}
