@@ -14,6 +14,8 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -81,16 +83,7 @@ func TestSPDKStage(t *testing.T) {
 	spdkrpc.Call = fs.fn
 	defer func() { spdkrpc.Call = oldCall }()
 
-	cfg := Config{
-		DriverName:    "directvolume.csi.katacontainers.io",
-		Endpoint:      "unix:///tmp/fake.sock",
-		NodeID:        "node-test",
-		StoragePath:   filepath.Join(tmp, "stor"),
-		StateDir:      filepath.Join(tmp, "st"),
-		MaxVolumeSize: 1 << 40,
-		SpdkRawPath:   filepath.Join(tmp, "spdk-raw"),
-		SpdkVhostPath: filepath.Join(tmp, "spdk-vhost"),
-	}
+	cfg := testConfig(tmp)
 	dv, err := NewDirectVolumeDriver(cfg)
 	require.NoError(t, err)
 
@@ -169,14 +162,6 @@ func TestSPDKStage(t *testing.T) {
 	}
 	require.True(t, foundDelete, "should call vhost_delete_controller at NodeUnstage")
 
-	_, err = dv.NodeUnstageVolume(context.TODO(), &csi.NodeUnstageVolumeRequest{
-		VolumeId:          volID,
-		StagingTargetPath: stagePath,
-	})
-	if err != nil {
-		require.Contains(t, err.Error(), "file does not exist")
-	}
-
 	_, err = dv.DeleteVolume(context.TODO(), &csi.DeleteVolumeRequest{VolumeId: volID})
 	require.NoError(t, err)
 
@@ -191,4 +176,86 @@ func TestSPDKStage(t *testing.T) {
 	}
 	require.Contains(t, callsJoined.String(), "vhost_get_controllers",
 		"should call vhost_get_controllers at least once")
+}
+
+func TestNodePublishVolumeMissingState(t *testing.T) {
+	cfg := testConfig(t.TempDir())
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	_, err = dv.NodePublishVolume(context.TODO(), &csi.NodePublishVolumeRequest{
+		VolumeId:         "00000000-0000-0000-0000-000000000000",
+		TargetPath:       filepath.Join(t.TempDir(), "target"),
+		VolumeCapability: mountCap(),
+		VolumeContext: map[string]string{
+			utils.IsDirectVolume:                 "True",
+			utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName,
+		},
+	})
+	require.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestNodeUnpublishVolumeMissingTarget(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := testConfig(tmp)
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	createResp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
+	require.NoError(t, err)
+
+	_, err = dv.NodeUnpublishVolume(context.TODO(), &csi.NodeUnpublishVolumeRequest{
+		VolumeId:   createResp.GetVolume().GetVolumeId(),
+		TargetPath: filepath.Join(tmp, "missing-target"),
+	})
+	require.NoError(t, err)
+}
+
+func TestNodeUnstageVolumeMissingTarget(t *testing.T) {
+	tmp := t.TempDir()
+
+	oldCall := spdkrpc.Call
+	spdkrpc.Call = newFakeSpdkNS().fn
+	defer func() { spdkrpc.Call = oldCall }()
+
+	cfg := testConfig(tmp)
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	createResp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
+	require.NoError(t, err)
+
+	_, err = dv.NodeUnstageVolume(context.TODO(), &csi.NodeUnstageVolumeRequest{
+		VolumeId:          createResp.GetVolume().GetVolumeId(),
+		StagingTargetPath: filepath.Join(tmp, "missing-target"),
+	})
+	require.NoError(t, err)
+}
+
+func TestStageDirectVolumeMissingBackingDevice(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := testConfig(tmp)
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	createResp, err := dv.CreateVolume(context.TODO(), directVolumeRequest("vol-direct"))
+	require.NoError(t, err)
+	volID := createResp.GetVolume().GetVolumeId()
+	req := &csi.NodeStageVolumeRequest{
+		VolumeId:          volID,
+		StagingTargetPath: filepath.Join(tmp, "stage", volID),
+		VolumeCapability:  mountCap(),
+		VolumeContext:     createResp.GetVolume().GetVolumeContext(),
+	}
+
+	// Staging must not replace a lost backing device with an empty one.
+	require.NoError(t, os.RemoveAll(filepath.Join(cfg.StoragePath, volID)))
+	_, err = dv.NodeStageVolume(context.TODO(), req)
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	_, err = os.Stat(filepath.Join(cfg.StoragePath, volID))
+	require.True(t, os.IsNotExist(err))
+
+	req.VolumeId = "00000000-0000-0000-0000-000000000000"
+	_, err = dv.NodeStageVolume(context.TODO(), req)
+	require.Equal(t, codes.NotFound, status.Code(err))
 }

@@ -35,8 +35,14 @@ spec:
             - --strict-topology=true
             - --immediate-topology=false
             - --worker-threads=5
-              #- --enable-capacity
-              #- --capacity-ownerref-level=0 # pod is owner
+            # Publish the capacity of this node as CSIStorageCapacity objects.
+            # They are owned by the DaemonSet (level 1 above the pod), so they
+            # survive a restart of the pod and get garbage collected with the
+            # DaemonSet. The capacity is also refreshed after every volume
+            # creation and deletion.
+            - --enable-capacity
+            - --capacity-ownerref-level=1
+            - --capacity-poll-interval=1m
           env:
           - name: NODE_NAME
             valueFrom:
@@ -98,6 +104,9 @@ spec:
             - --spdk-rawpath=$(RAW_DISKS)
             - --spdk-vhostpath=$(VHU_UDS_PATH)
             - --spdk-rpc-timeout=10s
+            # Per-node capacity pools, see docs/storage-capacity.md. Pools for
+            # all nodes can be added with --capacity=<pool>=<size>.
+            - --capacity-config-dir=/etc/csi-kata-directvolume/capacity
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -156,6 +165,10 @@ spec:
             # spdk socket
             - mountPath: /var/tmp
               name: spdk-dir
+            # per-node capacity pools
+            - mountPath: /etc/csi-kata-directvolume/capacity
+              name: capacity-config
+              readOnly: true
 
         - name: liveness-probe
           volumeMounts:
@@ -217,5 +230,12 @@ spec:
             path: /var/tmp
             type: Directory
           name: spdk-dir
+        # One key per node, named after the node, with the capacity pools
+        # of that node. Without it, volumes are only limited by the free
+        # space of the storage path.
+        - configMap:
+            name: csi-kata-directvol-capacity
+            optional: true
+          name: capacity-config
 
 
