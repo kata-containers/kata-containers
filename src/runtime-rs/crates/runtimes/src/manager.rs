@@ -9,9 +9,9 @@ use common::{
     config::{load_config, load_config_from, load_config_with_path},
     message::{Action, Message},
     types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxMetricsInfo,
+        SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, StatsInfo,
+        TaskRequest, TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -99,6 +99,7 @@ struct RuntimeHandlerManagerInner {
     msg_sender: Sender<Message>,
     kata_tracer: Arc<Mutex<KataTracer>>,
     runtime_instance: Option<Arc<RuntimeInstance>>,
+    enable_metrics: bool,
 }
 
 impl std::fmt::Debug for RuntimeHandlerManagerInner {
@@ -118,6 +119,7 @@ impl RuntimeHandlerManagerInner {
             msg_sender,
             kata_tracer: Arc::new(Mutex::new(tracer)),
             runtime_instance: None,
+            enable_metrics: false,
         })
     }
 
@@ -295,6 +297,8 @@ impl RuntimeHandlerManagerInner {
 
         update_component_log_level(&config);
 
+        self.enable_metrics = config.runtime.enable_metrics;
+
         let dan_path = dan_config_path(&config, &self.id);
         // set netns to None if we want no network for the VM
         if config.runtime.disable_new_netns || dan_path.exists() {
@@ -338,6 +342,7 @@ impl RuntimeHandlerManagerInner {
         let shim_mgmt_svr = MgmtServer::new(
             &self.id,
             self.runtime_instance.as_ref().unwrap().sandbox.clone(),
+            self.enable_metrics,
         )
         .context(ERR_NO_SHIM_SERVER)?;
 
@@ -802,6 +807,25 @@ impl RuntimeHandlerManager {
                 sandbox.shutdown().await.context("shutdown sandbox")?;
 
                 Ok(SandboxResponse::ShutdownSandbox)
+            }
+            SandboxRequest::SandboxMetrics(req) => {
+                {
+                    let inner = self.inner.read().await;
+                    if !inner.enable_metrics {
+                        return Ok(SandboxResponse::SandboxMetrics(SandboxMetricsInfo {
+                            sandbox_id: req.sandbox_id,
+                            timestamp: SystemTime::now(),
+                            stats: StatsInfo { value: None },
+                        }));
+                    }
+                }
+
+                let stats = sandbox.metrics().await.context("get sandbox metrics")?;
+                Ok(SandboxResponse::SandboxMetrics(SandboxMetricsInfo {
+                    sandbox_id: req.sandbox_id,
+                    timestamp: SystemTime::now(),
+                    stats,
+                }))
             }
         }
     }
@@ -1518,6 +1542,7 @@ mod tests {
             unimplemented!()
         }
         async fn save_state(&self) -> Result<()> {
+        async fn metrics(&self) -> Result<common::types::StatsInfo> {
             unimplemented!()
         }
         async fn set_iptables(&self, _is_ipv6: bool, _data: Vec<u8>) -> Result<Vec<u8>> {
