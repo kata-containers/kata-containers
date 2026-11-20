@@ -34,6 +34,10 @@ pub const DEFAULT_NUM_PCI_SEGMENTS: u16 = 1;
 pub const DEFAULT_DISK_QUEUES: usize = 1;
 pub const DEFAULT_DISK_QUEUE_SIZE: u16 = 128;
 
+// Rootfs driver that attaches the image as a virtio-pmem device instead of a
+// disk, so the guest can mount it with DAX.
+const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
+
 impl TryFrom<NamedHypervisorConfig> for VmConfig {
     type Error = VmConfigError;
 
@@ -75,8 +79,10 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         // Note how CH handles the different image types:
         //
         // - An initrd/initramfs is specified in PayloadConfig.
-        // - An image is specified in DiskConfig.
-        //   Note: pmem is not used as it's not properly supported by Cloud Hypervisor.
+        // - An image is specified in DiskConfig, or in PmemConfig when
+        //   vm_rootfs_driver is virtio-pmem. A pmem rootfs mounted with DAX
+        //   reads the image's files from the host mapping instead of copying
+        //   them into guest RAM.
         let boot_info = cfg.boot_info;
 
         let use_initrd = !boot_info.initrd.is_empty();
@@ -96,11 +102,18 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         );
 
         let mut disks: Vec<DiskConfig> = vec![];
+        let mut pmem_devices: Vec<PmemConfig> = vec![];
 
         if use_image {
-            let disk = DiskConfig::try_from(boot_info).map_err(VmConfigError::DiskError)?;
+            if boot_info.vm_rootfs_driver == VM_ROOTFS_DRIVER_PMEM {
+                let pmem = PmemConfig::try_from(&boot_info).map_err(VmConfigError::PmemError)?;
 
-            disks.push(disk);
+                pmem_devices.push(pmem);
+            } else {
+                let disk = DiskConfig::try_from(boot_info).map_err(VmConfigError::DiskError)?;
+
+                disks.push(disk);
+            }
         };
 
         // Append the cold-plugged block devices (such as the initdata image)
@@ -110,6 +123,11 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         }
 
         let disks = if !disks.is_empty() { Some(disks) } else { None };
+        let pmem = if !pmem_devices.is_empty() {
+            Some(pmem_devices)
+        } else {
+            None
+        };
 
         let serial = get_serial_cfg(debug);
         let console = get_console_cfg();
@@ -147,6 +165,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             vsock: Some(vsock),
             rng,
             balloon,
+            pmem,
 
             ..Default::default()
         };
@@ -1787,5 +1806,62 @@ mod tests {
 
             assert_eq!(result, d.result, "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_vmconfig_with_pmem_rootfs() {
+        let sysinfo = nix::sys::sysinfo::sysinfo().unwrap();
+        let max_mem_mib = sysinfo.ram_total().checked_div(MIB).unwrap();
+        let usable_max_mem_bytes = MIB.checked_mul(max_mem_mib).unwrap();
+
+        let (cpu_info, _) = make_cpu_objects(7, MAX_CH_VCPUS);
+        let (memory_info, _) = make_memory_objects(79, usable_max_mem_bytes);
+
+        let image = "image";
+        let kernel = "kernel";
+
+        let hypervisor_cfg = HypervisorConfig {
+            cpu_info,
+            memory_info,
+            boot_info: BootInfo {
+                kernel: kernel.to_string(),
+                image: image.to_string(),
+                vm_rootfs_driver: VM_ROOTFS_DRIVER_PMEM.to_string(),
+
+                ..Default::default()
+            },
+            machine_info: MachineInfo::default(),
+
+            ..Default::default()
+        };
+
+        let sandbox_path = std::env::temp_dir().join("kata-ch-config-pmem-test");
+        let _ = std::fs::remove_dir_all(&sandbox_path);
+
+        let named_cfg = NamedHypervisorConfig {
+            sandbox_path: sandbox_path.to_str().unwrap().into(),
+            vsock_socket_path: "vsock_socket_path".into(),
+            cfg: hypervisor_cfg,
+
+            ..Default::default()
+        };
+
+        let vmconfig = VmConfig::try_from(named_cfg).unwrap();
+
+        let pmem = vmconfig.pmem.expect("pmem devices should be set");
+        assert_eq!(pmem.len(), 1);
+        assert_eq!(pmem[0].file, PathBuf::from(image));
+        assert!(pmem[0].discard_writes);
+
+        // The rootfs image must not be attached as a disk as well.
+        assert!(
+            vmconfig.disks.as_ref().map_or(true, |disks| disks
+                .iter()
+                .all(|disk| disk.path.as_deref() != Some(std::path::Path::new(image)))),
+            "rootfs image should not be attached as a disk: {:?}",
+            vmconfig.disks
+        );
+
+        let _ = std::fs::remove_dir_all(&sandbox_path);
     }
 }
