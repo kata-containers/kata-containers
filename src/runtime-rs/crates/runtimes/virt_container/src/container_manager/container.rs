@@ -32,6 +32,7 @@ use resource::{
 use tokio::sync::RwLock;
 
 use super::{
+    hugepages::{self, PodHugePages, Reservation},
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
@@ -111,7 +112,7 @@ impl Container {
         })
     }
 
-    pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
+    pub async fn create(&self, mut spec: oci::Spec, pod: Option<&PodHugePages>) -> Result<()> {
         // process oci spec
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
@@ -143,6 +144,19 @@ impl Container {
             disable_guest_selinux,
         )
         .context("amend spec")?;
+
+        let container_name = k8s::container_name(&spec);
+        let plan = match pod {
+            Some(pod) => Some(hugepages::plan(
+                &toml_config,
+                pod,
+                &config.container_id,
+                &container_name,
+                spec.linux().as_ref().and_then(|l| l.resources().as_ref()),
+                true,
+            )?),
+            None => None,
+        };
 
         // get mutable root from oci spec
         let root = match spec.root_mut() {
@@ -199,6 +213,16 @@ impl Container {
         }
         spec.set_mounts(Some(oci_mounts));
 
+        if let Some(plan) = plan
+            .as_ref()
+            .filter(|_| storages.iter().any(|s| s.fs_type == hypervisor::HUGETLBFS))
+        {
+            return Err(anyhow!(
+                "container {} mounts a huge page volume, but huge pages inside the guest are not supported in a runtime class with enable_hugepages_pod_sizing",
+                plan.name
+            ));
+        }
+
         let linux = spec
             .linux()
             .as_ref()
@@ -231,6 +255,10 @@ impl Container {
                 resource.set_pids(None);
                 resource.set_block_io(None);
                 resource.set_network(None);
+
+                if let Some(plan) = &plan {
+                    hugepages::bound_container(resource, plan);
+                }
             }
 
             // VFIO device filtering depends on vfio_mode configuration:
@@ -250,7 +278,6 @@ impl Container {
             filter_vfio_devices(linux, vfio_mode);
         }
 
-        let container_name = k8s::container_name(&spec);
         let mut shared_mounts = Vec::new();
         for shared_mount in &toml_config.runtime.shared_mounts {
             if shared_mount.dst_ctr == container_name {
@@ -308,12 +335,34 @@ impl Container {
             ..Default::default()
         };
 
-        self.agent
-            .create_container(r)
-            .await
-            .context("agent create container")?;
+        let applied_ceiling = r
+            .oci
+            .as_ref()
+            .and_then(|s| s.linux().as_ref())
+            .and_then(|l| l.resources().as_ref())
+            .map(|res| hugepages::memory_limit(Some(res)))
+            .unwrap_or(0);
+        let created = self.agent.create_container(r).await;
+        if plan.is_some() && created.is_ok() {
+            inner.applied_ceiling = Some(applied_ceiling);
+        }
+        created.context("agent create container")?;
         self.resource_manager.dump().await;
         Ok(())
+    }
+
+    /// What the container carries for the pod's huge page checks, None once it stopped.
+    pub(crate) async fn reservation(&self, page_size: &str) -> Option<Reservation> {
+        let inner = self.inner.read().await;
+        if inner.init_process.get_status().await == ProcessStatus::Stopped {
+            return None;
+        }
+        Some(hugepages::reservation(
+            &self.config.container_id,
+            inner.linux_resources.as_ref(),
+            page_size,
+            inner.applied_ceiling,
+        ))
     }
 
     pub async fn start(
@@ -773,11 +822,36 @@ impl Container {
         Ok(Some(stats_resp))
     }
 
-    pub async fn update(&self, resources: &LinuxResources) -> Result<()> {
+    pub async fn update(
+        &self,
+        resources: &LinuxResources,
+        pod: Option<&PodHugePages>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
+        let toml_config = self.resource_manager.config().await;
+
+        // Check against the pod before recording, so a refusal leaves the container as it was.
+        let checked = match pod {
+            Some(pod) => {
+                let merged = hugepages::merged_update(inner.linux_resources.as_ref(), resources);
+                let name = k8s::container_name(&self.spec);
+                let plan = hugepages::plan(
+                    &toml_config,
+                    pod,
+                    &self.config.container_id,
+                    &name,
+                    Some(&merged),
+                    false,
+                )?;
+                Some((plan, merged))
+            }
+            None => None,
+        };
+        let resources = checked.as_ref().map_or(resources, |(_, merged)| merged);
         inner.linux_resources = Some(resources.clone());
+
         // update vcpus, mems and host cgroups
-        let agent_resources = self
+        let mut agent_resources = self
             .resource_manager
             .update_linux_resource(
                 &self.config.container_id,
@@ -786,6 +860,15 @@ impl Container {
             )
             .await?;
 
+        if let (Some((plan, _)), Some(res)) = (&checked, agent_resources.as_mut()) {
+            hugepages::fold_held(res, &plan.page, plan.held);
+            hugepages::bound_container(res, plan);
+        }
+
+        let ceiling = agent_resources
+            .as_ref()
+            .map(|res| hugepages::memory_limit(Some(res)))
+            .unwrap_or(0);
         let req = agent::UpdateContainerRequest {
             container_id: self.container_id.container_id.clone(),
             resources: agent_resources,
@@ -795,6 +878,9 @@ impl Container {
             .update_container(req)
             .await
             .context("agent update container")?;
+        if checked.is_some() {
+            inner.applied_ceiling = Some(ceiling);
+        }
         Ok(())
     }
 

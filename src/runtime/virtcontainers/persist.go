@@ -243,6 +243,8 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		Debug:                         sconfig.HypervisorConfig.Debug,
 		MemPrealloc:                   sconfig.HypervisorConfig.MemPrealloc,
 		HugePages:                     sconfig.HypervisorConfig.HugePages,
+		HugePagesPodSizing:            sconfig.HypervisorConfig.HugePagesPodSizing,
+		PodSizedHugePageSize:          sconfig.HypervisorConfig.PodSizedHugePageSize,
 		DisableNestingChecks:          sconfig.HypervisorConfig.DisableNestingChecks,
 		DisableNestedVirtualization:   sconfig.HypervisorConfig.DisableNestedVirtualization,
 		DisableImageNvdimm:            sconfig.HypervisorConfig.DisableImageNvdimm,
@@ -265,12 +267,13 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		LongLiveConn: sconfig.AgentConfig.LongLiveConn,
 	}
 
-	for _, contConf := range sconfig.Containers {
+	for _, contConf := range s.containerConfigs() {
 		ss.Config.ContainerConfigs = append(ss.Config.ContainerConfigs, persistapi.ContainerConfig{
-			ID:          contConf.ID,
-			Annotations: contConf.Annotations,
-			RootFs:      contConf.RootFs.Target,
-			Resources:   contConf.Resources,
+			ID:                 contConf.ID,
+			Annotations:        contConf.Annotations,
+			RootFs:             contConf.RootFs.Target,
+			Resources:          contConf.Resources,
+			GuestMemoryCeiling: contConf.GuestMemoryCeiling,
 		})
 	}
 }
@@ -485,6 +488,8 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		Debug:                         hconf.Debug,
 		MemPrealloc:                   hconf.MemPrealloc,
 		HugePages:                     hconf.HugePages,
+		HugePagesPodSizing:            hconf.HugePagesPodSizing,
+		PodSizedHugePageSize:          hconf.PodSizedHugePageSize,
 		DisableNestingChecks:          hconf.DisableNestingChecks,
 		DisableNestedVirtualization:   hconf.DisableNestedVirtualization,
 		DisableImageNvdimm:            hconf.DisableImageNvdimm,
@@ -512,9 +517,10 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 	for _, contConf := range savedConf.ContainerConfigs {
 		sconfig.Containers = append(sconfig.Containers, ContainerConfig{
-			ID:          contConf.ID,
-			Annotations: contConf.Annotations,
-			Resources:   contConf.Resources,
+			ID:                 contConf.ID,
+			Annotations:        contConf.Annotations,
+			Resources:          contConf.Resources,
+			GuestMemoryCeiling: contConf.GuestMemoryCeiling,
 			RootFs: RootFs{
 				Target: contConf.RootFs,
 			},

@@ -264,6 +264,10 @@ type ContainerConfig struct {
 
 	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
 	ReadonlyRootfs bool
+
+	// GuestMemoryCeiling is the memory ceiling the container was given in a
+	// guest sized from its pod, nil until it was given one.
+	GuestMemoryCeiling *uint64
 }
 
 // valid checks that the container configuration is valid.
@@ -735,7 +739,8 @@ func (c *Container) initConfigResourcesMemory() {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
+func newContainer(ctx context.Context, sandbox *Sandbox, config ContainerConfig) (*Container, error) {
+	contConfig := &config
 	span, ctx := katatrace.Trace(ctx, nil, "newContainer", containerTracingTags, map[string]string{"container_id": contConfig.ID, "sandbox_id": sandbox.id})
 	defer span.End()
 
@@ -1804,6 +1809,42 @@ func (c *Container) stats(ctx context.Context) (*ContainerStats, error) {
 	return c.sandbox.agent.statsContainer(ctx, c.sandbox, *c)
 }
 
+// Huge pages cannot be resized in place, yet a resize sends every size as zero
+// and containerd appends those entries to the container's own. Keep one entry
+// per page size, the last, and the held reservation where the update says zero.
+func updatedHugepageLimits(held, update []specs.LinuxHugepageLimit) (keep, apply []specs.LinuxHugepageLimit) {
+	if len(update) == 0 {
+		return held, update
+	}
+
+	var sizes []string
+	heldBySize := make(map[string]uint64)
+	updateBySize := make(map[string]uint64)
+	for _, l := range held {
+		if _, ok := heldBySize[l.Pagesize]; !ok {
+			sizes = append(sizes, l.Pagesize)
+		}
+		heldBySize[l.Pagesize] = l.Limit
+	}
+	for _, l := range update {
+		_, seen := heldBySize[l.Pagesize]
+		if _, ok := updateBySize[l.Pagesize]; !ok && !seen {
+			sizes = append(sizes, l.Pagesize)
+		}
+		updateBySize[l.Pagesize] = l.Limit
+	}
+
+	limits := make([]specs.LinuxHugepageLimit, 0, len(sizes))
+	for _, size := range sizes {
+		limit, ok := updateBySize[size]
+		if !ok || limit == 0 {
+			limit = heldBySize[size]
+		}
+		limits = append(limits, specs.LinuxHugepageLimit{Pagesize: size, Limit: limit})
+	}
+	return limits, limits
+}
+
 func (c *Container) update(ctx context.Context, resources specs.LinuxResources) error {
 	if err := c.checkSandboxRunning("update"); err != nil {
 		return err
@@ -1811,6 +1852,15 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 
 	if state := c.state.State; state != types.StateRunning && state != types.StateReady {
 		return fmt.Errorf("container(%s) not running or ready, impossible to update", state)
+	}
+
+	podSized := hugePagePodSized(&c.sandbox.config.HypervisorConfig)
+	var keepHugepages []specs.LinuxHugepageLimit
+	if podSized {
+		keepHugepages, resources.HugepageLimits = updatedHugepageLimits(c.config.Resources.HugepageLimits, resources.HugepageLimits)
+		if err := refusePodSizedUpdate(c, resources.Memory, keepHugepages); err != nil {
+			return err
+		}
 	}
 
 	if c.config.Resources.CPU == nil {
@@ -1838,6 +1888,10 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 
 	if mem := resources.Memory; mem != nil && mem.Limit != nil {
 		c.config.Resources.Memory.Limit = mem.Limit
+	}
+
+	if podSized {
+		c.config.Resources.HugepageLimits = keepHugepages
 	}
 
 	if err := c.sandbox.updateResources(ctx); err != nil {

@@ -628,6 +628,11 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		}
 		// Enable hugepages if needed
 		clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+		// memfd takes the kernel's default huge page size unless given one:
+		// back RAM with the pages the VM was sized from.
+		if clh.config.HugePages && clh.config.PodSizedHugePageSize != 0 {
+			clh.vmconfig.Memory.HugepageSize = func(i int64) *int64 { return &i }(int64(clh.config.PodSizedHugePageSize))
+		}
 		if !clh.config.ConfidentialGuest {
 			hotplugSize := clh.config.DefaultMaxMemorySize
 			// OpenAPI only supports int64 values

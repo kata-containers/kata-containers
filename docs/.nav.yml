@@ -20,6 +20,7 @@ nav:
       - Intel QAT: use-cases/using-Intel-QAT-and-kata.md
     - How To:
       - NUMA Support: how-to/how-to-use-numa-with-kata.md
+      - Huge Page Pod Sizing: how-to/how-to-size-hugepage-backed-guest.md
       - Local Builds & Deployment: how-to/how-to-build-and-deploy-local-artifacts.md
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
       - Rootless VMM: how-to/how-to-run-rootless-vmm.md
