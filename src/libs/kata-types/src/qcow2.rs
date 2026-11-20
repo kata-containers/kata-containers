@@ -12,7 +12,8 @@
 //! ```json
 //! "device": "/var/lib/csi/vol1/disk.qcow2",
 //! "metadata": {
-//!   "io.katacontainers.volume.format": "qcow2"
+//!   "io.katacontainers.volume.format": "qcow2",
+//!   "io.katacontainers.volume.discard": "unmap"
 //! }
 //! ```
 //!
@@ -30,6 +31,9 @@ use std::os::unix::fs::FileExt;
 /// namespaced because `metadata` is free-form and CSI drivers may already use
 /// short names such as `format` for their own purposes.
 pub const DIRECT_VOLUME_FORMAT_KEY: &str = "io.katacontainers.volume.format";
+/// `metadata` key selecting what QEMU does with guest discard requests:
+/// `"ignore"` (the default) or `"unmap"`.
+pub const DIRECT_VOLUME_DISCARD_KEY: &str = "io.katacontainers.volume.discard";
 
 /// qcow2 magic number, "QFI" followed by 0xfb.
 pub const QCOW2_MAGIC: [u8; 4] = *b"QFI\xfb";
@@ -123,20 +127,63 @@ impl Qcow2Header {
     }
 }
 
-/// A qcow2 volume.
+/// What QEMU does with discard requests the guest sends to the image.
+///
+/// Whether the guest sends any is up to the guest: the `discard` mount option
+/// or a periodic `fstrim`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DiscardMode {
+    /// Accept discards but keep the space allocated. This is QEMU's own
+    /// default, and the right choice for an image the CSI preallocated.
+    #[default]
+    Ignore,
+    /// Free the discarded clusters, punching holes in the host file, so a thin
+    /// image shrinks again when the guest deletes data.
+    Unmap,
+}
+
+/// A qcow2 volume, and how discards to its image are handled.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Qcow2Volume {}
+pub struct Qcow2Volume {
+    /// Handling of guest discard requests.
+    pub discard: DiscardMode,
+}
 
 /// Parse the qcow2 description of a direct volume out of its `metadata`.
 ///
 /// Returns `Ok(None)` when the volume is not qcow2 (no `format` key, or
 /// `raw`), which is the pre-existing behaviour.
 pub fn parse_qcow2_volume(metadata: &HashMap<String, String>) -> Result<Option<Qcow2Volume>> {
+    let discard = metadata.get(DIRECT_VOLUME_DISCARD_KEY);
     match metadata.get(DIRECT_VOLUME_FORMAT_KEY).map(String::as_str) {
-        None | Some("raw") => Ok(None),
-        Some("qcow2") => Ok(Some(Qcow2Volume {})),
-        Some(other) => Err(anyhow!("unsupported volume format {:?}", other)),
+        None | Some("raw") => {
+            // Reject rather than ignore keys that only apply to qcow2, so a CSI
+            // driver never believes they took effect on a raw volume.
+            if discard.is_some() {
+                return Err(anyhow!(
+                    "metadata {:?} requires {:?} to be \"qcow2\"",
+                    DIRECT_VOLUME_DISCARD_KEY,
+                    DIRECT_VOLUME_FORMAT_KEY
+                ));
+            }
+            return Ok(None);
+        }
+        Some("qcow2") => {}
+        Some(other) => return Err(anyhow!("unsupported volume format {:?}", other)),
     }
+
+    let discard = match discard.map(String::as_str) {
+        None | Some("ignore") => DiscardMode::Ignore,
+        Some("unmap") => DiscardMode::Unmap,
+        Some(other) => {
+            return Err(anyhow!(
+                "metadata {:?} must be \"unmap\" or \"ignore\", not {:?}",
+                DIRECT_VOLUME_DISCARD_KEY,
+                other
+            ))
+        }
+    };
+    Ok(Some(Qcow2Volume { discard }))
 }
 
 impl Qcow2Volume {
@@ -205,6 +252,11 @@ mod tests {
     use tempfile::tempdir;
 
     const FMT: &str = DIRECT_VOLUME_FORMAT_KEY;
+    const DISCARD: &str = DIRECT_VOLUME_DISCARD_KEY;
+
+    fn qcow2(discard: DiscardMode) -> Option<Qcow2Volume> {
+        Some(Qcow2Volume { discard })
+    }
 
     #[test]
     fn test_parse_qcow2_volume() {
@@ -220,6 +272,8 @@ mod tests {
             metadata: metadata.iter().map(|(k, v)| (*k, v.to_string())).collect(),
             result,
         };
+        let requires_qcow2 =
+            |key: &str| Err(format!("metadata {key:?} requires {FMT:?} to be \"qcow2\""));
         let err = |text: &str| Err(text.to_string());
 
         let tests = [
@@ -227,9 +281,27 @@ mod tests {
             case("no metadata", &[], Ok(None)),
             case("explicit raw", &[(FMT, "raw")], Ok(None)),
             // A CSI driver's own short keys are not ours, even with our values.
-            case("foreign short keys", &[("format", "qcow2")], Ok(None)),
+            case(
+                "foreign short keys",
+                &[("format", "qcow2"), ("discard", "on")],
+                Ok(None),
+            ),
             // qcow2.
-            case("qcow2", &[(FMT, "qcow2")], Ok(Some(Qcow2Volume {}))),
+            case(
+                "thin qcow2",
+                &[(FMT, "qcow2")],
+                Ok(qcow2(DiscardMode::Ignore)),
+            ),
+            case(
+                "discard unmap",
+                &[(FMT, "qcow2"), (DISCARD, "unmap")],
+                Ok(qcow2(DiscardMode::Unmap)),
+            ),
+            case(
+                "discard ignore",
+                &[(FMT, "qcow2"), (DISCARD, "ignore")],
+                Ok(qcow2(DiscardMode::Ignore)),
+            ),
             // Format.
             case(
                 "unknown format",
@@ -245,6 +317,33 @@ mod tests {
                 "upper-case format",
                 &[(FMT, "QCOW2")],
                 err(r#"unsupported volume format "QCOW2""#),
+            ),
+            // qcow2-only keys on a raw volume.
+            case(
+                "discard without format",
+                &[(DISCARD, "unmap")],
+                requires_qcow2(DISCARD),
+            ),
+            case(
+                "discard on raw",
+                &[(FMT, "raw"), (DISCARD, "ignore")],
+                requires_qcow2(DISCARD),
+            ),
+            // Discard.
+            case(
+                "unknown discard",
+                &[(FMT, "qcow2"), (DISCARD, "on")],
+                err(r#"must be "unmap" or "ignore", not "on""#),
+            ),
+            case(
+                "empty discard",
+                &[(FMT, "qcow2"), (DISCARD, "")],
+                err(r#"must be "unmap" or "ignore", not """#),
+            ),
+            case(
+                "upper-case discard",
+                &[(FMT, "qcow2"), (DISCARD, "Unmap")],
+                err(r#"must be "unmap" or "ignore", not "Unmap""#),
             ),
         ];
 

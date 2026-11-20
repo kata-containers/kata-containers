@@ -55,6 +55,7 @@ pub(crate) async fn handle_direct_volume(
     m: &oci::Mount,
     read_only: bool,
     sid: &str,
+    discard_supported: bool,
 ) -> Result<Option<Arc<dyn Volume>>> {
     // In the direct volume scenario, we check if the source of a mount is in the
     // /run/kata-containers/shared/direct-volumes/SID path by iterating over all the mounts.
@@ -97,9 +98,16 @@ pub(crate) async fn handle_direct_volume(
 
     let direct_volume: Arc<dyn Volume> = match volume_type {
         DirectVolumeType::RawBlock => Arc::new(
-            rawblock_volume::RawblockVolume::new(d, m, &mount_info, read_only, sid)
-                .await
-                .with_context(|| format!("new sid {:?} rawblock volume {:?}", sid, m))?,
+            rawblock_volume::RawblockVolume::new(
+                d,
+                m,
+                &mount_info,
+                read_only,
+                sid,
+                discard_supported,
+            )
+            .await
+            .with_context(|| format!("new sid {:?} rawblock volume {:?}", sid, m))?,
         ),
         DirectVolumeType::Spdk => Arc::new(
             spdk_volume::SPDKVolume::new(d, m, &mount_info, read_only, sid)
@@ -145,7 +153,7 @@ pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_types::qcow2::DIRECT_VOLUME_FORMAT_KEY;
+    use kata_types::qcow2::{DIRECT_VOLUME_DISCARD_KEY, DIRECT_VOLUME_FORMAT_KEY};
 
     #[test]
     fn spdk_and_vfio_volumes_reject_qcow2_metadata() {
@@ -180,6 +188,11 @@ mod tests {
                 volume_type: KATA_VFIO_VOLUME_TYPE,
                 metadata: &[(DIRECT_VOLUME_FORMAT_KEY, "qcow2")],
                 err: "vfiovol direct volumes do not support qcow2",
+            },
+            TestData {
+                volume_type: KATA_VFIO_VOLUME_TYPE,
+                metadata: &[(DIRECT_VOLUME_DISCARD_KEY, "unmap")],
+                err: r#"requires "io.katacontainers.volume.format" to be "qcow2""#,
             },
             TestData {
                 volume_type: KATA_SPDK_VOLUME_TYPE,
