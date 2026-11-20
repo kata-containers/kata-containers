@@ -23,7 +23,8 @@ use tracing::instrument;
 use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{
-    common_storage_handler, new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID,
+    mount_storage, new_device, parse_options, set_ownership, StorageContext, StorageHandler,
+    MODE_SETGID,
 };
 use kata_types::device::DRIVER_EPHEMERAL_TYPE;
 
@@ -48,7 +49,7 @@ impl StorageHandler for EphemeralHandler {
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
         // hugetlbfs
-        if storage.fstype == FS_TYPE_HUGETLB {
+        let opts = if storage.fstype == FS_TYPE_HUGETLB {
             info!(ctx.logger, "handle hugetlbfs storage");
             // Allocate hugepages before mount
             // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
@@ -56,33 +57,38 @@ impl StorageHandler for EphemeralHandler {
             // options eg "pagesize=2097152,size=524288000"(2M, 500M)
             Self::allocate_hugepages(ctx.logger, &storage.options.to_vec())
                 .context("allocate hugepages")?;
-            common_storage_handler(ctx.logger, &storage)?;
+            Default::default()
         } else if !storage.options.is_empty() {
             // By now we only support one option field: "fsGroup" which
             // isn't an valid mount option, thus we should remove it when
             // do mount.
             let opts = parse_options(&storage.options);
             storage.options = Default::default();
-            common_storage_handler(ctx.logger, &storage)?;
-
-            // ephemeral_storage didn't support mount options except fsGroup.
-            if let Some(fsgid) = opts.get(KATA_MOUNT_OPTION_FS_GID) {
-                let gid = fsgid.parse::<u32>()?;
-
-                nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
-
-                let meta = fs::metadata(&storage.mount_point)?;
-                let mut permission = meta.permissions();
-
-                let o_mode = meta.mode() | MODE_SETGID;
-                permission.set_mode(o_mode);
-                fs::set_permissions(&storage.mount_point, permission)?;
-            }
+            opts
         } else {
-            common_storage_handler(ctx.logger, &storage)?;
+            Default::default()
+        };
+
+        let mount = mount_storage(ctx.logger, &storage)?;
+        set_ownership(ctx.logger, &storage)?;
+
+        // ephemeral_storage didn't support mount options except fsGroup.
+        if let Some(fsgid) = opts.get(KATA_MOUNT_OPTION_FS_GID) {
+            let gid = fsgid.parse::<u32>()?;
+
+            nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
+
+            let meta = fs::metadata(&storage.mount_point)?;
+            let mut permission = meta.permissions();
+
+            let o_mode = meta.mode() | MODE_SETGID;
+            permission.set_mode(o_mode);
+            fs::set_permissions(&storage.mount_point, permission)?;
         }
 
-        new_device("".to_string())
+        let device = new_device("".to_string())?;
+        scopeguard::ScopeGuard::into_inner(mount);
+        Ok(device)
     }
 }
 
@@ -240,6 +246,35 @@ pub async fn update_ephemeral_mounts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_ephemeral_mount_rollback_on_invalid_fsgid() {
+        test_utils::skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempfile::tempdir().unwrap();
+        let mount_point = root.path().join("mount").to_str().unwrap().to_string();
+        let storage = Storage {
+            driver: DRIVER_EPHEMERAL_TYPE.to_string(),
+            source: "tmpfs".to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: mount_point.clone(),
+            options: vec!["fsgid=invalid".to_string()],
+            ..Default::default()
+        };
+        scopeguard::defer! {
+            if crate::mount::is_mounted(&mount_point).unwrap() {
+                nix::mount::umount(mount_point.as_str()).unwrap();
+            }
+        }
+
+        let result =
+            crate::storage::add_storages(logger, vec![storage], &sandbox, None, false).await;
+        assert!(result.is_err());
+        assert!(!crate::mount::is_mounted(&mount_point).unwrap());
+        assert!(!sandbox.lock().await.storages.contains_key(&mount_point));
+    }
 
     #[test]
     fn test_get_pagesize_and_size_from_option() {
