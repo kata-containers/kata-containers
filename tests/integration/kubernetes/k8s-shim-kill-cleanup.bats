@@ -7,7 +7,8 @@
 # When a shim dies, the container runtime runs the shim's delete command in a
 # new process, which only knows the sandbox through its state.json. Kill the
 # shim of a running pod and check that this cleanup leaves nothing of the
-# sandbox behind. k8s-rootless-vmm.bats does the same for a rootless VMM.
+# sandbox behind, including the temporary user and runtime directory for a
+# rootless VMM.
 #
 # When the VMM dies instead, the shim is still there and the teardown is its
 # own: kill the VMM of a running pod and check the same once the pod is gone.
@@ -60,6 +61,31 @@ start_pod_again() {
 	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
 }
 
+# Record rootless resources while the VMM is still running. Rootful VMMs have
+# no temporary account to check. PID lookup supports QEMU and Cloud Hypervisor.
+record_rootless_vmm() {
+	rootless_vmm_uid=""
+	rootless_vmm_user=""
+	case "${KATA_HYPERVISOR}" in
+		qemu*|clh*) ;;
+		*) return 0 ;;
+	esac
+	local vmm_pid
+	vmm_pid="$(get_vmm_pid_for_pod "${pod_name}")"
+	[[ "${vmm_pid}" =~ ^[0-9]+$ ]] || die "No VMM found for pod ${pod_name}"
+	rootless_vmm_uid="$(exec_host "${node}" "awk '/^Uid:/ {print \$2}' /proc/${vmm_pid}/status")"
+	[[ "${rootless_vmm_uid}" =~ ^[0-9]+$ ]] || die "Could not read VMM UID"
+	(( rootless_vmm_uid != 0 )) || return 0
+	rootless_vmm_user="$(exec_host "${node}" "getent passwd ${rootless_vmm_uid} | cut -d: -f1")"
+	[[ "${rootless_vmm_user}" =~ ^kata-[a-f0-9]{8}-[0-9]+$ ]] || \
+		die "Unexpected rootless VMM user: ${rootless_vmm_user}"
+}
+
+wait_for_recorded_rootless_vmm() {
+	[[ -n "${rootless_vmm_user}" ]] || return 0
+	wait_for_rootless_host_resources "${rootless_vmm_uid}" "${rootless_vmm_user}"
+}
+
 @test "Nothing of a sandbox is left once its shim was killed" {
 	local sandbox_id
 
@@ -71,7 +97,9 @@ start_pod_again() {
 	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
 	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
 
+	record_rootless_vmm
 	kill_shim_and_wait_for_cleanup "${node}" "${sandbox_id}"
+	wait_for_recorded_rootless_vmm
 	start_pod_again
 }
 
@@ -89,7 +117,9 @@ start_pod_again() {
 	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
 	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
 
+	record_rootless_vmm
 	kill_vmm_and_wait_for_cleanup "${node}" "${sandbox_id}" "${pod_name}"
+	wait_for_recorded_rootless_vmm
 	start_pod_again
 }
 
