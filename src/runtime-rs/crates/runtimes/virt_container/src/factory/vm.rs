@@ -127,6 +127,10 @@ impl TemplateVm {
                 let h = hypervisor::ch::CloudHypervisor::new();
                 h.set_hypervisor_config(config.hypervisor_config.clone())
                     .await;
+                if _toml_config.runtime.use_passfd_io {
+                    h.set_passfd_listener_port(_toml_config.runtime.passfd_listener_port)
+                        .await;
+                }
                 Arc::new(h)
             }
             #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]

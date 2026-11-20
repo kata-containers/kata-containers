@@ -16,6 +16,7 @@ use agent::Agent;
 use anyhow::Result;
 use common::types::ContainerProcess;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::net::UnixStream;
 
 struct ContainerIoInfo {
     pub agent: Arc<dyn Agent>,
@@ -36,6 +37,32 @@ impl ContainerIo {
             stdin: Box::new(ContainerIoWrite::new(info.clone())),
             stdout: Box::new(ContainerIoRead::new(info.clone(), true)),
             stderr: Box::new(ContainerIoRead::new(info, false)),
+        }
+    }
+
+    /// Build a `ContainerIo` whose backing streams are the UDS (hybrid-vsock)
+    /// connections established by `PassfdIo::open_and_connect`. The agent binds
+    /// the process stdio to these connections, so runtime-rs can actively pull
+    /// stdout/stderr and push stdin over them without going through the agent
+    /// ttrpc `read_stdout`/`read_stderr`/`write_stdin` calls.
+    pub fn from_streams(
+        stdin: Option<UnixStream>,
+        stdout: Option<UnixStream>,
+        stderr: Option<UnixStream>,
+    ) -> Self {
+        Self {
+            stdin: match stdin {
+                Some(s) => Box::new(s) as Box<dyn AsyncWrite + Send + Unpin>,
+                None => Box::new(tokio::io::sink()) as Box<dyn AsyncWrite + Send + Unpin>,
+            },
+            stdout: match stdout {
+                Some(s) => Box::new(s) as Box<dyn AsyncRead + Send + Unpin>,
+                None => Box::new(tokio::io::empty()) as Box<dyn AsyncRead + Send + Unpin>,
+            },
+            stderr: match stderr {
+                Some(s) => Box::new(s) as Box<dyn AsyncRead + Send + Unpin>,
+                None => Box::new(tokio::io::empty()) as Box<dyn AsyncRead + Send + Unpin>,
+            },
         }
     }
 }

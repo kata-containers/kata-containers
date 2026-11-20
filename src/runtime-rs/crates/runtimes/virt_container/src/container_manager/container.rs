@@ -32,6 +32,7 @@ use resource::{
 use tokio::sync::RwLock;
 
 use super::{
+    io::ContainerIo,
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
@@ -52,6 +53,11 @@ pub struct Container {
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
+    /// Whether the hypervisor can transfer host fds into the guest (recv-fd,
+    /// e.g. Dragonball). When false (e.g. CLH) the passfd listener is used to
+    /// establish UDS (hybrid-vsock) streams that runtime-rs keeps and actively
+    /// copies the process stdio over.
+    pub(crate) passfd_fd_passthrough: bool,
 }
 
 fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) -> Result<bool> {
@@ -75,6 +81,7 @@ impl Container {
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
         passfd_listener_addr: Option<(String, u32)>,
+        passfd_fd_passthrough: bool,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
         let logger = sl!().new(o!("container_id" => config.container_id.clone()));
@@ -108,6 +115,7 @@ impl Container {
             resource_manager,
             logger,
             passfd_listener_addr,
+            passfd_fd_passthrough,
         })
     }
 
@@ -272,7 +280,7 @@ impl Container {
         if let Some((hvsock_uds_path, passfd_port)) = &self.passfd_listener_addr {
             inner
                 .init_process
-                .passfd_io_init(hvsock_uds_path, *passfd_port)
+                .passfd_io_init(hvsock_uds_path, *passfd_port, self.passfd_fd_passthrough)
                 .await?;
         }
 
@@ -328,11 +336,43 @@ impl Container {
                     inner.start_container(&process.container_id).await?;
 
                     if process_uses_passfd_io(&inner, process)? {
-                        inner
-                            .init_process
-                            .passfd_io_wait(containers, self.agent.clone())
-                            .await?;
+                        if self.passfd_fd_passthrough {
+                            info!(
+                                self.logger,
+                                "passfd io: fd passthrough mode (Dragonball) - agent writes stdio back into the guest-transferred host fds"
+                            );
+                            // Dragonball: agent writes stdout/stderr straight
+                            // back into the host FIFO fds that were transferred
+                            // into the guest, so runtime-rs just waits.
+                            inner
+                                .init_process
+                                .passfd_io_wait(containers, self.agent.clone())
+                                .await?;
+                        } else {
+                            info!(
+                                self.logger,
+                                "passfd io: UDS pull mode (CLH, no fd passthrough) - runtime-rs actively copies stdio over UDS streams"
+                            );
+                            // CLH (no recv-fd): actively pull stdout/stderr and
+                            // push stdin over the UDS (hybrid-vsock) streams
+                            // kept on the runtime-rs side.
+                            let container_io = {
+                                let streams = inner.init_process.take_passfd_streams();
+                                match streams {
+                                    Some((s, o, e)) => ContainerIo::from_streams(s, o, e),
+                                    None => inner.new_container_io(process).await?,
+                                }
+                            };
+                            inner
+                                .init_process
+                                .start_io_and_wait(containers, self.agent.clone(), container_io)
+                                .await?;
+                        }
                     } else {
+                        info!(
+                            self.logger,
+                            "passfd io disabled: legacy ttrpc stdio (agent read_stdout/read_stderr)"
+                        );
                         let container_io = inner.new_container_io(process).await?;
                         inner
                             .init_process
@@ -375,7 +415,7 @@ impl Container {
                         .get_mut(&process.exec_id)
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
                     exec.process
-                        .passfd_io_init(hvsock_uds_path, *passfd_port)
+                        .passfd_io_init(hvsock_uds_path, *passfd_port, self.passfd_fd_passthrough)
                         .await?;
                 }
 
@@ -399,18 +439,56 @@ impl Container {
                 }
 
                 if process_uses_passfd_io(&inner, process)? {
-                    // In passfd io mode, we don't bother with the IO.
-                    // We send `WaitProcessRequest` immediately to the agent
-                    // and wait for the response in a separate thread.
-                    // The agent will only respond after IO is done.
-                    let exec = inner
-                        .exec_processes
-                        .get_mut(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    exec.process
-                        .passfd_io_wait(containers, self.agent.clone())
-                        .await?;
+                    if self.passfd_fd_passthrough {
+                        info!(
+                            self.logger,
+                            "passfd io: fd passthrough mode (Dragonball) - agent writes exec stdio back into the guest-transferred host fds"
+                        );
+                        // In passfd io mode, we don't bother with the IO.
+                        // We send `WaitProcessRequest` immediately to the agent
+                        // and wait for the response in a separate thread.
+                        // The agent will only respond after IO is done.
+                        let exec = inner
+                            .exec_processes
+                            .get_mut(&process.exec_id)
+                            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                        exec.process
+                            .passfd_io_wait(containers, self.agent.clone())
+                            .await?;
+                    } else {
+                        info!(
+                            self.logger,
+                            "passfd io: UDS pull mode (CLH, no fd passthrough) - runtime-rs actively copies exec stdio over UDS streams"
+                        );
+                        // UDS pull mode (CLH): actively copy the exec process
+                        // stdio over the UDS (hybrid-vsock) streams.
+                        let container_io = {
+                            let exec = inner
+                                .exec_processes
+                                .get_mut(&process.exec_id)
+                                .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                            let streams = exec.process.take_passfd_streams();
+                            match streams {
+                                Some((s, o, e)) => ContainerIo::from_streams(s, o, e),
+                                None => {
+                                    inner.new_container_io(process).await.context("io stream")?
+                                }
+                            }
+                        };
+                        let exec = inner
+                            .exec_processes
+                            .get_mut(&process.exec_id)
+                            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                        exec.process
+                            .start_io_and_wait(containers, self.agent.clone(), container_io)
+                            .await
+                            .context("start io and wait")?;
+                    }
                 } else {
+                    info!(
+                        self.logger,
+                        "passfd io disabled: legacy ttrpc stdio (agent read_stdout/read_stderr)"
+                    );
                     // In legacy io mode, we handle IO by polling the agent.
                     // When IO is done, we send `WaitProcessRequest` to agent
                     // to get the exit status.
