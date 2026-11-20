@@ -785,8 +785,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     let exec_file = Path::new(&args[0]);
     log_child!(cfd_log, "process command: {:?}", &args);
-    if !exec_file.exists() {
-        find_file(exec_file).ok_or_else(|| anyhow!("the file {} was not found", args[0]))?;
+    if !exec_file.exists() && find_file(exec_file).is_none() {
+        log_exec_lookup_failure(cfd_log, exec_file);
+        return Err(anyhow!("the file {} was not found", args[0]));
     }
 
     // notify parent that the child's ready to start
@@ -1425,6 +1426,144 @@ where
             })
             .next()
     })
+}
+
+const MAX_DIAG_NAMES: usize = 10;
+const MAX_DIAG_MOUNTINFO_LINES: usize = 20;
+
+/// Best-effort diagnostics for an executable lookup failure.
+///
+/// This runs in the container process after pivot_root/setuid, and may be
+/// restricted by seccomp, SELinux or a partially visible rootfs, so every probe
+/// is independent and errors are logged instead of propagated.
+fn log_exec_lookup_failure(cfd_log: RawFd, exec_file: &Path) {
+    log_child!(
+        cfd_log,
+        "exec-lookup: exe={:?} cwd={:?} euid={} egid={}",
+        exec_file,
+        fs::read_link("/proc/self/cwd").ok(),
+        unistd::geteuid().as_raw(),
+        unistd::getegid().as_raw()
+    );
+
+    match fs::symlink_metadata(exec_file) {
+        Ok(meta) => {
+            log_child!(
+                cfd_log,
+                "exec-lookup: symlink_metadata ok mode={:o} file={} dir={} symlink={}",
+                meta.mode(),
+                meta.is_file(),
+                meta.is_dir(),
+                meta.file_type().is_symlink()
+            );
+            if meta.file_type().is_symlink() {
+                match fs::read_link(exec_file) {
+                    Ok(target) => {
+                        log_child!(cfd_log, "exec-lookup: read_link -> {:?}", target)
+                    }
+                    Err(e) => log_child!(
+                        cfd_log,
+                        "exec-lookup: read_link error={:?} raw={:?}",
+                        e.kind(),
+                        e.raw_os_error()
+                    ),
+                }
+            }
+        }
+        Err(e) => log_child!(
+            cfd_log,
+            "exec-lookup: symlink_metadata error={:?} raw={:?}",
+            e.kind(),
+            e.raw_os_error()
+        ),
+    }
+
+    log_child!(cfd_log, "exec-lookup: PATH={:?}", env::var_os("PATH"));
+
+    // "/" also holds the mounts the agent injected (proc, dev, sys), so the
+    // /usr and /bin trees are the ones that reveal an empty container rootfs.
+    for dir in ["/", "/usr/sbin", "/usr/bin", "/bin"] {
+        log_dir_summary(cfd_log, Path::new(dir));
+    }
+
+    match fs::read_to_string("/proc/self/mountinfo") {
+        Ok(contents) => {
+            let total_lines = contents.lines().count();
+            let relevant: Vec<&str> = contents
+                .lines()
+                .filter(|line| mountinfo_line_is_relevant(line))
+                .take(MAX_DIAG_MOUNTINFO_LINES)
+                .collect();
+            log_child!(
+                cfd_log,
+                "exec-lookup: mountinfo total_lines={} shown={}",
+                total_lines,
+                relevant.len()
+            );
+            for line in relevant {
+                log_child!(cfd_log, "exec-lookup: mountinfo {}", line);
+            }
+        }
+        Err(e) => log_child!(
+            cfd_log,
+            "exec-lookup: mountinfo unavailable error={:?} raw={:?}",
+            e.kind(),
+            e.raw_os_error()
+        ),
+    }
+}
+
+fn log_dir_summary(cfd_log: RawFd, dir: &Path) {
+    match fs::read_dir(dir) {
+        Ok(entries) => {
+            let mut count = 0usize;
+            let mut names = Vec::with_capacity(MAX_DIAG_NAMES);
+
+            for entry in entries {
+                count += 1;
+                if names.len() < MAX_DIAG_NAMES {
+                    match entry {
+                        Ok(entry) => names.push(entry.file_name().to_string_lossy().into_owned()),
+                        Err(_) => names.push("<error>".to_string()),
+                    }
+                }
+            }
+
+            log_child!(
+                cfd_log,
+                "exec-lookup: dir {:?} entries={} names={:?}",
+                dir,
+                count,
+                names
+            );
+        }
+        Err(e) => log_child!(
+            cfd_log,
+            "exec-lookup: dir {:?} error={:?} raw={:?}",
+            dir,
+            e.kind(),
+            e.raw_os_error()
+        ),
+    }
+}
+
+/// Whether a raw /proc/self/mountinfo line is likely to explain the rootfs
+/// view: the container root or a bind of the shared containers tree, anything
+/// under /usr, or a virtiofs/overlay/9p mount.
+fn mountinfo_line_is_relevant(line: &str) -> bool {
+    let mount_point = line.split_whitespace().nth(4).unwrap_or("");
+    let fstype = line
+        .split_once(" - ")
+        .and_then(|(_, rest)| rest.split_whitespace().next())
+        .unwrap_or("");
+
+    mount_point == "/"
+        || mount_point.starts_with("/run/kata-containers")
+        || mount_point.starts_with("/usr")
+        || matches!(
+            fstype,
+            "overlay" | "fuse" | "fuse.virtiofs" | "virtiofs" | "9p"
+        )
 }
 
 fn do_exec(args: &[String]) -> ! {
@@ -2273,5 +2412,64 @@ mod tests {
     fn test_linuxcontainer_do_init_child() {
         let ret = do_init_child(std::io::stdin().as_raw_fd());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
+    }
+
+    #[test]
+    fn test_mountinfo_line_is_relevant() {
+        assert!(mountinfo_line_is_relevant(
+            "36 25 0:32 / / rw,relatime shared:1 - overlay overlay rw"
+        ));
+        assert!(mountinfo_line_is_relevant(
+            "37 25 0:33 / /usr rw - virtiofs kataShared rw"
+        ));
+        assert!(mountinfo_line_is_relevant(
+            "38 25 0:34 / /run/kata-containers/shared/containers/abc/rootfs rw - fuse.kata rw"
+        ));
+        assert!(mountinfo_line_is_relevant(
+            "39 25 0:35 / /mnt rw - 9p host rw"
+        ));
+        assert!(!mountinfo_line_is_relevant(
+            "40 25 0:36 / /proc rw - proc proc rw"
+        ));
+        assert!(!mountinfo_line_is_relevant(
+            "41 25 0:37 / /sys rw - sysfs sysfs rw"
+        ));
+    }
+
+    #[test]
+    fn test_log_exec_lookup_failure_is_bounded() {
+        use std::io::Read;
+
+        let (read_fd, write_fd) = unistd::pipe().unwrap();
+        log_exec_lookup_failure(
+            write_fd.as_raw_fd(),
+            Path::new("/nonexistent-kata-diag-test"),
+        );
+        // Close the write end so reading returns EOF.
+        drop(write_fd);
+
+        let mut output = String::new();
+        std::fs::File::from(read_fd)
+            .read_to_string(&mut output)
+            .unwrap();
+
+        assert!(output.contains("exec-lookup: exe=\"/nonexistent-kata-diag-test\""));
+        assert!(output.contains("exec-lookup: symlink_metadata error="));
+        assert!(output.contains("exec-lookup: PATH="));
+        assert!(output.contains("exec-lookup: dir \"/\" entries="));
+        assert!(output.contains("exec-lookup: mountinfo total_lines="));
+        assert!(
+            output.lines().count() < 100,
+            "unbounded diagnostics: {} lines",
+            output.lines().count()
+        );
+    }
+
+    #[test]
+    fn test_missing_exec_error_message_unchanged() {
+        assert_eq!(
+            format!("{}", anyhow!("the file {} was not found", "nginx")),
+            "the file nginx was not found"
+        );
     }
 }
