@@ -203,7 +203,10 @@ pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU_PLATFORM: &str =
 /// A sandbox annotation to specify the type of machine being emulated by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE: &str =
     "io.katacontainers.config.hypervisor.machine_type";
-/// A sandbox annotation to specify machine specific accelerators for the hypervisor.
+/// A sandbox annotation to specify properties appended to QEMU's `-machine` option.
+pub const KATA_ANNO_CFG_HYPERVISOR_MACHINE_PROPERTIES: &str =
+    "io.katacontainers.config.hypervisor.machine_properties";
+/// Backwards-compatible name for the QEMU machine properties annotation.
 pub const KATA_ANNO_CFG_HYPERVISOR_MACHINE_ACCELERATORS: &str =
     "io.katacontainers.config.hypervisor.machine_accelerators";
 /// EntropySource is a sandbox annotation to specify the path to a host source of
@@ -796,8 +799,9 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE => {
                         hv.machine_info.machine_type = value.to_string();
                     }
-                    KATA_ANNO_CFG_HYPERVISOR_MACHINE_ACCELERATORS => {
-                        hv.machine_info.machine_accelerators = value.to_string();
+                    KATA_ANNO_CFG_HYPERVISOR_MACHINE_PROPERTIES
+                    | KATA_ANNO_CFG_HYPERVISOR_MACHINE_ACCELERATORS => {
+                        hv.machine_info.machine_properties = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_ENTROPY_SOURCE => {
                         hv.machine_info.validate_entropy_source(value)?;
