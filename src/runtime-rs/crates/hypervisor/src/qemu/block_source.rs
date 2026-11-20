@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::block_source::open_block_source;
 use kata_types::vmdk::validate_vmdk_layout;
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
@@ -10,7 +11,7 @@ use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use crate::virtio_blk_modern::BlockSourceFormat;
@@ -33,41 +34,6 @@ pub(super) fn block_fd_node_name(opaque: &str) -> Option<&str> {
 pub(super) struct PreparedBlockSource {
     pub filename: String,
     pub is_regular_file: bool,
-}
-
-fn open_block_source(
-    path: &str,
-    is_readonly: bool,
-    is_direct: bool,
-    regular_file_only: bool,
-) -> Result<(File, std::fs::Metadata)> {
-    let mut options = OpenOptions::new();
-    let direct_flag = if is_direct { libc::O_DIRECT } else { 0 };
-    options
-        .read(true)
-        .write(!is_readonly)
-        // Rust opens files close-on-exec by default; specify it here as part of
-        // this security boundary and clear it only for descriptors intentionally
-        // inherited by QEMU at startup.
-        .custom_flags(direct_flag | libc::O_CLOEXEC);
-
-    let file = options
-        .open(path)
-        .with_context(|| format!("open QEMU block source {path}"))?;
-    let metadata = file
-        .metadata()
-        .with_context(|| format!("stat opened QEMU block source {path}"))?;
-    let file_type = metadata.file_type();
-    if regular_file_only && !file_type.is_file() {
-        return Err(anyhow!("QEMU block source {path} is not a regular file"));
-    }
-    if !regular_file_only && !file_type.is_file() && !file_type.is_block_device() {
-        return Err(anyhow!(
-            "QEMU block source {path} is neither an allowed regular file nor block device"
-        ));
-    }
-
-    Ok((file, metadata))
 }
 
 fn create_vmdk_descriptor_file(
