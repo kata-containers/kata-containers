@@ -28,6 +28,7 @@ use tokio::sync::{OnceCell, RwLock};
 use tracing::instrument;
 
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
+use kata_types::annotations::KATA_ANNO_CFG_RUNTIME_ENVD;
 
 use crate::container_manager::is_termination_signal;
 use crate::oom::CrioOomNotifier;
@@ -43,6 +44,7 @@ pub struct VirtContainerManager {
     hypervisor: Arc<dyn Hypervisor>,
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
+    sandbox_annotations: HashMap<String, String>,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -69,6 +71,7 @@ impl VirtContainerManager {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         oom_notifier: Arc<CrioOomNotifier>,
+        sandbox_annotations: HashMap<String, String>,
     ) -> Self {
         Self {
             sid: sid.to_string(),
@@ -79,6 +82,7 @@ impl VirtContainerManager {
             hypervisor,
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
+            sandbox_annotations,
         }
     }
 
@@ -93,7 +97,7 @@ impl VirtContainerManager {
 #[async_trait]
 impl ContainerManager for VirtContainerManager {
     #[instrument]
-    async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
+    async fn create_container(&self, config: ContainerConfig, mut spec: oci::Spec) -> Result<PID> {
         let vmm_master_tid = self.get_vmm_master_tid().await?;
 
         let mut container = Container::new(
@@ -132,11 +136,15 @@ impl ContainerManager for VirtContainerManager {
             }
         }
 
+        let mut containers = self.containers.write().await;
         self.oom_notifier
             .track(&config.container_id, &config.bundle, &spec)
             .await;
-
-        let mut containers = self.containers.write().await;
+        let envd_request = self
+            .sandbox_annotations
+            .get(KATA_ANNO_CFG_RUNTIME_ENVD)
+            .map(String::as_str);
+        crate::envd::inject_if_enabled(&mut spec, envd_request);
         if let Err(e) = container.create(spec).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);

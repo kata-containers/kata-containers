@@ -15,6 +15,7 @@ logging::logger_with_subsystem!(sl, "virt-container");
 pub(crate) const UNKNOWN_EXIT_STATUS: i32 = 255;
 
 mod container_manager;
+mod envd;
 pub mod factory;
 pub mod health_check;
 pub mod oom;
@@ -181,6 +182,7 @@ impl RuntimeHandler for VirtContainer {
         );
         let pid = std::process::id();
 
+        let sandbox_annotations = sandbox_config.annotations.clone();
         let sandbox = sandbox::VirtSandbox::new(
             sid,
             msg_sender,
@@ -205,6 +207,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor,
             resource_manager,
             sandbox.oom_notifier(),
+            sandbox_annotations,
         );
         Ok(RuntimeInstance {
             sandbox: Arc::new(sandbox),
