@@ -31,7 +31,8 @@ use crate::device::block_device_handler::{
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::storage::{
-    common_storage_handler, new_device, set_ownership, StorageContext, StorageHandler,
+    common_storage_handler, mount_rollback_guard, new_device, set_ownership, StorageContext,
+    StorageHandler,
 };
 use slog::Logger;
 #[cfg(target_arch = "s390x")]
@@ -77,8 +78,11 @@ async fn handle_block_storage(
             &mkfs_opts,
         )
         .await?;
+        let mount = mount_rollback_guard(logger, Some(storage.mount_point.clone()));
         set_ownership(logger, storage)?;
-        new_device(storage.mount_point.clone())
+        let device = new_device(storage.mount_point.clone())?;
+        scopeguard::ScopeGuard::into_inner(mount);
+        Ok(device)
     } else {
         if options.should_create_filesystem {
             ensure_block_filesystem(logger, storage).await?;
