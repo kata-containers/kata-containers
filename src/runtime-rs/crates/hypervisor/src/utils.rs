@@ -10,10 +10,13 @@ use std::{
     io,
     os::{
         fd::{BorrowedFd, RawFd},
-        unix::fs::{FileTypeExt, MetadataExt, PermissionsExt},
+        unix::{
+            fs::{FileTypeExt, MetadataExt, PermissionsExt},
+            process::ExitStatusExt,
+        },
     },
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, ExitStatus},
 };
 
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
@@ -38,6 +41,15 @@ use serde_json;
 use crate::device::Tap;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
+
+const SIGNAL_EXIT_CODE_BASE: i32 = 128;
+
+/// Preserve normal exit codes and encode signal termination using shell semantics.
+pub(crate) fn exit_code_from_status(status: ExitStatus) -> i32 {
+    status
+        .code()
+        .unwrap_or_else(|| SIGNAL_EXIT_CODE_BASE + status.signal().unwrap_or_default())
+}
 
 pub fn remove_dir_all_if_exists(path: impl AsRef<Path>) -> Result<()> {
     match std::fs::remove_dir_all(path) {

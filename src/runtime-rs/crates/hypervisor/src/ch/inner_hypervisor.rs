@@ -9,6 +9,7 @@ use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
 use crate::utils::create_dir_all_with_inherit_owner;
+use crate::utils::exit_code_from_status;
 use crate::utils::set_process_credentials;
 use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
@@ -27,7 +28,6 @@ use ch_config::{
     VmResize,
 };
 use ch_config::{NamedHypervisorConfig, State, VmConfig};
-use core::future::poll_fn;
 use futures::future::join_all;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
@@ -590,13 +590,14 @@ impl CloudHypervisorInner {
             debug!(sl!(), "shutdown response: {:?}", detail);
         }
 
-        // Trigger a controlled shutdown
-        self.shutdown_tx
+        // Trigger a controlled shutdown. Without a receiver, the output task
+        // already saw CH exit and reported it.
+        let _ = self
+            .shutdown_tx
             .as_mut()
             .ok_or("no shutdown channel")
             .map_err(|e| anyhow!(e))?
-            .send(true)
-            .map_err(|e| anyhow!(e).context("failed to request shutdown"))?;
+            .send(true);
 
         let tasks = self
             .tasks
@@ -1001,9 +1002,8 @@ impl CloudHypervisorInner {
     }
 }
 
-// Log all output from the CH process until a shutdown signal is received.
-// When that happens, stop logging and wait for the child process to finish
-// before returning.
+// Reap CH and report its exit promptly, then finish forwarding both output
+// streams so diagnostics buffered at process exit are preserved.
 async fn cloud_hypervisor_log_output(
     mut child: Child,
     mut shutdown: Receiver<bool>,
@@ -1011,32 +1011,49 @@ async fn cloud_hypervisor_log_output(
 ) -> Result<()> {
     let stdout = child
         .stdout
-        .as_mut()
+        .take()
         .ok_or("failed to get child stdout")
         .map_err(|e| anyhow!(e))?;
 
     let stdout_reader = BufReader::new(stdout);
-    let mut stdout_lines = stdout_reader.lines();
+    let mut stdout_lines = stdout_reader.split(b'\n');
 
     let stderr = child
         .stderr
-        .as_mut()
+        .take()
         .ok_or("failed to get child stderr")
         .map_err(|e| anyhow!(e))?;
 
     let stderr_reader = BufReader::new(stderr);
-    let mut stderr_lines = stderr_reader.lines();
+    let mut stderr_lines = stderr_reader.split(b'\n');
 
-    loop {
+    let mut stdout_open = true;
+    let mut stderr_open = true;
+    let mut exited = false;
+    while !exited || stdout_open || stderr_open {
         tokio::select! {
-            _ = shutdown.changed() => {
-                info!(sl!(), "got shutdown request");
-                break;
+            status = child.wait(), if !exited => {
+                let status = status.context("wait for Cloud Hypervisor exit")?;
+                exited = true;
+                let _ = exit_notify.try_send(exit_code_from_status(status));
             },
-            stderr_line = poll_fn(|cx| Pin::new(&mut stderr_lines).poll_next_line(cx)) => {
+            _ = shutdown.changed(), if !exited => {
+                info!(sl!(), "got shutdown request");
+                child.kill().await.context("kill Cloud Hypervisor")?;
+                let status = child.wait().await.context("wait for Cloud Hypervisor exit")?;
+                exited = true;
+                let _ = exit_notify.try_send(exit_code_from_status(status));
+            },
+            stderr_line = stderr_lines.next_segment(), if stderr_open => {
                 if let Ok(line) = stderr_line {
-                    let line = line.ok_or("missing stderr line").map_err(|e| anyhow!(e))?;
+                    let Some(line) = line else {
+                        stderr_open = false;
+                        continue;
+                    };
 
+                    // Guest serial output can contain arbitrary bytes. Decode only for
+                    // logging so invalid UTF-8 never stops draining the pipe.
+                    let line = String::from_utf8_lossy(line.strip_suffix(b"\r").unwrap_or(&line));
                     match parse_ch_log_level(&line) {
                         CloudHypervisorLogLevel::Trace => trace!(sl!(), "{:?}", line; "stream" => "stderr"),
                         CloudHypervisorLogLevel::Debug => debug!(sl!(), "{:?}", line; "stream" => "stderr"),
@@ -1044,12 +1061,21 @@ async fn cloud_hypervisor_log_output(
                         CloudHypervisorLogLevel::Error => error!(sl!(), "{:?}", line; "stream" => "stderr"),
                         _ => info!(sl!(), "{:?}", line; "stream" => "stderr"),
                     }
+                } else {
+                    warn!(sl!(), "failed to read Cloud Hypervisor stderr: {:?}", stderr_line);
+                    stderr_open = false;
                 }
             },
-            stdout_line = poll_fn(|cx| Pin::new(&mut stdout_lines).poll_next_line(cx)) => {
+            stdout_line = stdout_lines.next_segment(), if stdout_open => {
                 if let Ok(line) = stdout_line {
-                    let line = line.ok_or("missing stdout line").map_err(|e| anyhow!(e))?;
+                    let Some(line) = line else {
+                        stdout_open = false;
+                        continue;
+                    };
 
+                    // Guest serial output can contain arbitrary bytes. Decode only for
+                    // logging so invalid UTF-8 never stops draining the pipe.
+                    let line = String::from_utf8_lossy(line.strip_suffix(b"\r").unwrap_or(&line));
                     match parse_ch_log_level(&line) {
                         CloudHypervisorLogLevel::Trace => trace!(sl!(), "{:?}", line; "stream" => "stdout"),
                         CloudHypervisorLogLevel::Debug => debug!(sl!(), "{:?}", line; "stream" => "stdout"),
@@ -1057,15 +1083,12 @@ async fn cloud_hypervisor_log_output(
                         CloudHypervisorLogLevel::Error => error!(sl!(), "{:?}", line; "stream" => "stdout"),
                         _ => info!(sl!(), "{:?}", line; "stream" => "stdout"),
                     }
+                } else {
+                    warn!(sl!(), "failed to read Cloud Hypervisor stdout: {:?}", stdout_line);
+                    stdout_open = false;
                 }
             },
         };
-    }
-
-    // Note that this kills _and_ waits for the process!
-    let _ = child.kill().await;
-    if let Ok(status) = child.wait().await {
-        let _ = exit_notify.try_send(status.code().unwrap_or(0));
     }
 
     Ok(())
@@ -1115,6 +1138,247 @@ mod tests {
 
     use std::fs::{self, File};
     use tempfile::Builder;
+
+    fn output_test_child(script: &str) -> Child {
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(script)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap()
+    }
+
+    #[rstest::rstest]
+    #[case(0)]
+    #[case(23)]
+    #[tokio::test]
+    async fn spontaneous_exit_is_reaped_and_reported(#[case] code: i32) {
+        let child = output_test_child(&format!("exit {code}"));
+        let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (exit_tx, mut exit_rx) = mpsc::channel(1);
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            cloud_hypervisor_log_output(child, shutdown_rx, exit_tx),
+        )
+        .await
+        .expect("output task must observe spontaneous exit")
+        .unwrap();
+
+        assert_eq!(exit_rx.recv().await, Some(code));
+        assert_eq!(exit_rx.recv().await, None);
+        assert_eq!(
+            nix::sys::signal::kill(pid, None),
+            Err(nix::errno::Errno::ESRCH)
+        );
+    }
+
+    #[test]
+    fn process_exit_preserves_buffered_diagnostics() {
+        #[derive(Clone)]
+        struct CapturedOutput(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+        impl slog::Drain for CapturedOutput {
+            type Ok = ();
+            type Err = slog::Never;
+
+            fn log(&self, record: &slog::Record, _: &slog::OwnedKVList) -> Result<(), Self::Err> {
+                self.0.lock().unwrap().push(record.msg().to_string());
+                Ok(())
+            }
+        }
+
+        let output = CapturedOutput(Default::default());
+        let logger = slog::Logger::root(output.clone(), slog::o!());
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        slog_scope::scope(&logger, || {
+            runtime.block_on(async {
+                let mut child = output_test_child(
+                    "i=0; while [ $i -lt 100 ]; do \
+                     printf 'stdout line %s\\n' \"$i\"; \
+                     printf 'stderr line %s\\n' \"$i\" >&2; \
+                     i=$((i + 1)); done; \
+                     printf 'stdout final'; printf 'stderr final' >&2; exit 23",
+                );
+                // Make the process-exit branch ready before reading any output.
+                tokio::time::timeout(Duration::from_secs(5), child.wait())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+                let (exit_tx, mut exit_rx) = mpsc::channel(1);
+
+                tokio::time::timeout(
+                    Duration::from_secs(5),
+                    cloud_hypervisor_log_output(child, shutdown_rx, exit_tx),
+                )
+                .await
+                .expect("output task must finish draining after process exit")
+                .unwrap();
+
+                assert_eq!(exit_rx.recv().await, Some(23));
+                assert_eq!(exit_rx.recv().await, None);
+            });
+        });
+
+        let mut expected = Vec::new();
+        for stream in ["stdout", "stderr"] {
+            for i in 0..100 {
+                expected.push(format!("\"{stream} line {i}\""));
+            }
+            expected.push(format!("\"{stream} final\""));
+        }
+        expected.sort();
+        let mut actual = output.0.lock().unwrap().clone();
+        actual.sort();
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn exit_notification_does_not_wait_for_output_eof() {
+        let child = output_test_child("exec sleep 60");
+        let pid = child.id().unwrap();
+        // Keep the write ends open after the process exits, as an inherited
+        // descriptor could, to check that draining cannot hold up notification.
+        let stdout_writer = File::options()
+            .write(true)
+            .open(format!("/proc/{pid}/fd/1"))
+            .unwrap();
+        let stderr_writer = File::options()
+            .write(true)
+            .open(format!("/proc/{pid}/fd/2"))
+            .unwrap();
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (exit_tx, mut exit_rx) = mpsc::channel(1);
+        nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(pid as i32),
+            nix::sys::signal::Signal::SIGKILL,
+        )
+        .unwrap();
+        let monitor = tokio::spawn(cloud_hypervisor_log_output(child, shutdown_rx, exit_tx));
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), exit_rx.recv())
+                .await
+                .expect("exit notification must not wait for output EOF"),
+            Some(137)
+        );
+        assert!(!monitor.is_finished());
+        drop(stdout_writer);
+        drop(stderr_writer);
+        tokio::time::timeout(Duration::from_secs(5), monitor)
+            .await
+            .expect("output task must finish once both pipes reach EOF")
+            .unwrap()
+            .unwrap();
+        assert_eq!(exit_rx.recv().await, None);
+    }
+
+    #[rstest::rstest]
+    #[case::stdout("")]
+    #[case::stderr("exec 1>&2;")]
+    #[tokio::test]
+    async fn invalid_utf8_keeps_draining_until_exit(#[case] redirect: &str) {
+        // More than a pipe can buffer: stopping after the invalid byte would
+        // block the writer and prevent natural exit without a shutdown request.
+        let child = output_test_child(&format!(
+            "{redirect} printf '\\377\\n'; exec head -c 4194304 /dev/zero"
+        ));
+        let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (exit_tx, mut exit_rx) = mpsc::channel(1);
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            cloud_hypervisor_log_output(child, shutdown_rx, exit_tx),
+        )
+        .await
+        .expect("invalid UTF-8 must not prevent draining output and observing exit")
+        .unwrap();
+
+        assert_eq!(exit_rx.recv().await, Some(0));
+        assert_eq!(exit_rx.recv().await, None);
+        assert_eq!(
+            nix::sys::signal::kill(pid, None),
+            Err(nix::errno::Errno::ESRCH)
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::stdout_closed("exec 1>&-")]
+    #[case::stderr_closed("exec 2>&-")]
+    #[case::both_closed("exec 1>&- 2>&-")]
+    #[case::invalid_stdout("printf '\\377\\n'")]
+    #[tokio::test]
+    async fn output_failure_keeps_shutdown_available(#[case] output: &str) {
+        let child = output_test_child(&format!("{output}; exec sleep 60"));
+        let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (exit_tx, mut exit_rx) = mpsc::channel(1);
+        let monitor = cloud_hypervisor_log_output(child, shutdown_rx, exit_tx);
+        tokio::pin!(monitor);
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut monitor)
+                .await
+                .is_err()
+        );
+        assert_eq!(nix::sys::signal::kill(pid, None), Ok(()));
+        assert!(matches!(
+            exit_rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+
+        shutdown_tx.send(true).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), &mut monitor)
+            .await
+            .expect("shutdown must remain available after output closes or fails")
+            .unwrap();
+
+        assert_eq!(exit_rx.recv().await, Some(137));
+        assert_eq!(exit_rx.recv().await, None);
+        assert_eq!(
+            nix::sys::signal::kill(pid, None),
+            Err(nix::errno::Errno::ESRCH)
+        );
+    }
+
+    #[rstest::rstest]
+    #[case::sigkill(nix::sys::signal::Signal::SIGKILL, 137)]
+    #[case::sigterm(nix::sys::signal::Signal::SIGTERM, 143)]
+    #[tokio::test]
+    async fn externally_killed_process_is_reaped_and_reported(
+        #[case] signal: nix::sys::signal::Signal,
+        #[case] expected: i32,
+    ) {
+        let child = output_test_child("exec sleep 60");
+        let pid = nix::unistd::Pid::from_raw(child.id().unwrap() as i32);
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (exit_tx, mut exit_rx) = mpsc::channel(1);
+        nix::sys::signal::kill(pid, signal).unwrap();
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            cloud_hypervisor_log_output(child, shutdown_rx, exit_tx),
+        )
+        .await
+        .expect("output task must report a killed VMM")
+        .unwrap();
+
+        assert_eq!(exit_rx.recv().await, Some(expected));
+        assert_eq!(exit_rx.recv().await, None);
+        assert_eq!(
+            nix::sys::signal::kill(pid, None),
+            Err(nix::errno::Errno::ESRCH)
+        );
+    }
 
     #[actix_rt::test]
     async fn test_network_device_hotplug_capability() {

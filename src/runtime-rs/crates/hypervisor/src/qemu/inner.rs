@@ -1539,6 +1539,36 @@ mod tests {
     use crate::Hypervisor;
     use rstest::rstest;
 
+    #[rstest]
+    #[case::success("exit 0", 0)]
+    #[case::failure("exit 23", 23)]
+    #[case::sigkill("kill -KILL $$", 137)]
+    #[case::sigterm("kill -TERM $$", 143)]
+    #[tokio::test]
+    async fn wait_vm_reports_exit_status(#[case] script: &str, #[case] expected: i32) {
+        let qemu = Qemu::new();
+        let mut inner = qemu.inner.write().await;
+        let child = Command::new("sh")
+            .args(["-c", script])
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        *inner.qemu_process.lock().await = Some(child);
+        let notify = inner.exit_notify.take().unwrap();
+        drop(inner);
+        notify.send(()).await.unwrap();
+        drop(notify);
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), qemu.wait_vm())
+                .await
+                .expect("wait_vm must report the child exit")
+                .unwrap(),
+            expected
+        );
+        assert_eq!(qemu.wait_vm().await.unwrap(), expected);
+    }
+
     #[tokio::test]
     async fn network_removal_without_qemu_does_not_hotunplug() {
         let (exit_notify, _exit_waiter) = mpsc::channel(1);
@@ -1641,7 +1671,7 @@ mod tests {
             .await
             .expect("stop blocked behind exit watcher")
             .unwrap();
-        assert_eq!(waiter.await.unwrap().unwrap(), 0);
+        assert_eq!(waiter.await.unwrap().unwrap(), 137);
     }
 
     #[tokio::test]
