@@ -107,7 +107,8 @@ impl DragonballInner {
                 | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::FsSharingSupport
                 | CapabilityBits::HybridVsockSupport
-                | CapabilityBits::GuestMemoryProbe,
+                | CapabilityBits::GuestMemoryProbe
+                | CapabilityBits::NetworkDeviceHotplugSupport,
         );
         DragonballInner {
             id: "".to_string(),
@@ -751,6 +752,24 @@ mod tests {
         inner.config.boot_info.kernel = "/kernel-must-not-be-opened".to_string();
 
         inner.configure_boot_source().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_network_hotplug_is_advertised_for_cold_boot_and_template_restore() {
+        let (tx, _) = mpsc::channel(1);
+        let mut inner = DragonballInner::new(tx);
+        assert!(inner
+            .capabilities()
+            .await
+            .unwrap()
+            .is_network_device_hotplug_supported());
+
+        inner.config.vm_template.boot_from_template = true;
+        assert!(inner
+            .capabilities()
+            .await
+            .unwrap()
+            .is_network_device_hotplug_supported());
     }
 
     #[test]
