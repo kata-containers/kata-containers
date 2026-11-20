@@ -470,6 +470,7 @@ mod tests {
                     format: *format,
                 })
                 .collect(),
+            ..Default::default()
         }
     }
 

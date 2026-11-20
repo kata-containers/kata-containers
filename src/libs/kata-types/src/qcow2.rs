@@ -15,7 +15,8 @@
 //! "metadata": {
 //!   "io.katacontainers.volume.format": "qcow2",
 //!   "io.katacontainers.volume.backing-chain": "[{\"path\":\"/dev/mapper/base\",\"format\":\"raw\"},
-//!                      {\"path\":\"/var/lib/csi/l1.qcow2\",\"format\":\"qcow2\"}]"
+//!                      {\"path\":\"/var/lib/csi/l1.qcow2\",\"format\":\"qcow2\"}]",
+//!   "io.katacontainers.volume.discard": "unmap"
 //! }
 //! ```
 //!
@@ -37,6 +38,9 @@ use std::os::unix::fs::{FileExt, FileTypeExt, MetadataExt};
 pub const DIRECT_VOLUME_FORMAT_KEY: &str = "io.katacontainers.volume.format";
 /// `metadata` key holding the JSON encoded backing chain.
 pub const DIRECT_VOLUME_BACKING_CHAIN_KEY: &str = "io.katacontainers.volume.backing-chain";
+/// `metadata` key selecting what QEMU does with guest discard requests:
+/// `"ignore"` (the default) or `"unmap"`.
+pub const DIRECT_VOLUME_DISCARD_KEY: &str = "io.katacontainers.volume.discard";
 /// Maximum number of backing images below the top image.
 /// Raising it later breaks nobody, lowering it would.
 pub const MAX_BACKING_CHAIN_DEPTH: usize = 4;
@@ -164,11 +168,29 @@ pub struct BackingImage {
     pub format: ImageFormat,
 }
 
-/// A qcow2 volume: the backing chain below its top image, ordered base first.
+/// What QEMU does with discard requests the guest sends to the top image.
+///
+/// Whether the guest sends any is up to the guest: the `discard` mount option
+/// or a periodic `fstrim`. Backing images are read-only and never discarded.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DiscardMode {
+    /// Accept discards but keep the space allocated. This is QEMU's own
+    /// default, and the right choice for an image the CSI preallocated.
+    #[default]
+    Ignore,
+    /// Free the discarded clusters, punching holes in the host file, so a thin
+    /// image shrinks again when the guest deletes data.
+    Unmap,
+}
+
+/// A qcow2 volume: the backing chain below its top image, ordered base first,
+/// and how discards to the top image are handled.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Qcow2Chain {
     /// Read-only images, `backing[0]` being the base.
     pub backing: Vec<BackingImage>,
+    /// Handling of guest discard requests.
+    pub discard: DiscardMode,
 }
 
 /// Parse the qcow2 description of a direct volume out of its `metadata`.
@@ -181,11 +203,15 @@ pub fn parse_qcow2_chain(
     top_path: &str,
 ) -> Result<Option<Qcow2Chain>> {
     let chain = metadata.get(DIRECT_VOLUME_BACKING_CHAIN_KEY);
+    let discard = metadata.get(DIRECT_VOLUME_DISCARD_KEY);
     match metadata.get(DIRECT_VOLUME_FORMAT_KEY).map(String::as_str) {
         None | Some("raw") => {
             // Reject rather than ignore keys that only apply to qcow2, so a CSI
             // driver never believes they took effect on a raw volume.
-            for (key, value) in [(DIRECT_VOLUME_BACKING_CHAIN_KEY, chain)] {
+            for (key, value) in [
+                (DIRECT_VOLUME_BACKING_CHAIN_KEY, chain),
+                (DIRECT_VOLUME_DISCARD_KEY, discard),
+            ] {
                 if value.is_some() {
                     return Err(anyhow!(
                         "metadata {:?} requires {:?} to be \"qcow2\"",
@@ -204,7 +230,18 @@ pub fn parse_qcow2_chain(
         Some(s) => serde_json::from_str(s).context("parse backing-chain metadata")?,
         None => Vec::new(),
     };
-    let chain = Qcow2Chain { backing };
+    let discard = match discard.map(String::as_str) {
+        None | Some("ignore") => DiscardMode::Ignore,
+        Some("unmap") => DiscardMode::Unmap,
+        Some(other) => {
+            return Err(anyhow!(
+                "metadata {:?} must be \"unmap\" or \"ignore\", not {:?}",
+                DIRECT_VOLUME_DISCARD_KEY,
+                other
+            ))
+        }
+    };
+    let chain = Qcow2Chain { backing, discard };
     chain.validate(top_path)?;
     Ok(Some(chain))
 }
@@ -387,6 +424,7 @@ mod tests {
     const TOP: &str = "/csi/top.qcow2";
     const FMT: &str = DIRECT_VOLUME_FORMAT_KEY;
     const CHAIN: &str = DIRECT_VOLUME_BACKING_CHAIN_KEY;
+    const DISCARD: &str = DIRECT_VOLUME_DISCARD_KEY;
 
     fn image(path: &str, format: ImageFormat) -> BackingImage {
         BackingImage {
@@ -395,8 +433,8 @@ mod tests {
         }
     }
 
-    fn qcow2(backing: Vec<BackingImage>) -> Option<Qcow2Chain> {
-        Some(Qcow2Chain { backing })
+    fn qcow2(backing: Vec<BackingImage>, discard: DiscardMode) -> Option<Qcow2Chain> {
+        Some(Qcow2Chain { backing, discard })
     }
 
     fn layers(count: usize) -> Vec<BackingImage> {
@@ -435,15 +473,23 @@ mod tests {
             // A CSI driver's own short keys are not ours, even with our values.
             case(
                 "foreign short keys",
-                &[("format", "qcow2"), ("backing-chain", "[]")],
+                &[
+                    ("format", "qcow2"),
+                    ("backing-chain", "[]"),
+                    ("discard", "on"),
+                ],
                 Ok(None),
             ),
             // qcow2.
-            case("thin qcow2", &[(FMT, "qcow2")], Ok(qcow2(vec![]))),
+            case(
+                "thin qcow2",
+                &[(FMT, "qcow2")],
+                Ok(qcow2(vec![], DiscardMode::Ignore)),
+            ),
             case(
                 "explicit empty chain",
                 &[(FMT, "qcow2"), (CHAIN, "[]")],
-                Ok(qcow2(vec![])),
+                Ok(qcow2(vec![], DiscardMode::Ignore)),
             ),
             case(
                 "multi-layer chain keeps its order",
@@ -456,11 +502,14 @@ mod tests {
                             {"path":"/csi/l2.qcow2","format":"qcow2"}]"#,
                     ),
                 ],
-                Ok(qcow2(vec![
-                    image("/dev/base", ImageFormat::Raw),
-                    image("/csi/l1.qcow2", ImageFormat::Qcow2),
-                    image("/csi/l2.qcow2", ImageFormat::Qcow2),
-                ])),
+                Ok(qcow2(
+                    vec![
+                        image("/dev/base", ImageFormat::Raw),
+                        image("/csi/l1.qcow2", ImageFormat::Qcow2),
+                        image("/csi/l2.qcow2", ImageFormat::Qcow2),
+                    ],
+                    DiscardMode::Ignore,
+                )),
             ),
             case(
                 "qcow2 base",
@@ -468,17 +517,33 @@ mod tests {
                     (FMT, "qcow2"),
                     (CHAIN, r#"[{"path":"/b","format":"qcow2"}]"#),
                 ],
-                Ok(qcow2(vec![image("/b", ImageFormat::Qcow2)])),
+                Ok(qcow2(
+                    vec![image("/b", ImageFormat::Qcow2)],
+                    DiscardMode::Ignore,
+                )),
             ),
             case(
                 "chain at the depth limit",
                 &[(FMT, "qcow2"), (CHAIN, &max)],
-                Ok(qcow2(layers(MAX_BACKING_CHAIN_DEPTH))),
+                Ok(qcow2(layers(MAX_BACKING_CHAIN_DEPTH), DiscardMode::Ignore)),
             ),
             case(
                 "path with spaces and unicode",
                 &[(FMT, "qcow2"), (CHAIN, &unusual_chain)],
-                Ok(qcow2(vec![image(unusual, ImageFormat::Raw)])),
+                Ok(qcow2(
+                    vec![image(unusual, ImageFormat::Raw)],
+                    DiscardMode::Ignore,
+                )),
+            ),
+            case(
+                "discard unmap",
+                &[(FMT, "qcow2"), (DISCARD, "unmap")],
+                Ok(qcow2(vec![], DiscardMode::Unmap)),
+            ),
+            case(
+                "discard ignore",
+                &[(FMT, "qcow2"), (DISCARD, "ignore")],
+                Ok(qcow2(vec![], DiscardMode::Ignore)),
             ),
             // Format.
             case(
@@ -506,6 +571,16 @@ mod tests {
                 "chain on raw",
                 &[(FMT, "raw"), (CHAIN, "[]")],
                 requires_qcow2(CHAIN),
+            ),
+            case(
+                "discard without format",
+                &[(DISCARD, "unmap")],
+                requires_qcow2(DISCARD),
+            ),
+            case(
+                "discard on raw",
+                &[(FMT, "raw"), (DISCARD, "ignore")],
+                requires_qcow2(DISCARD),
             ),
             // Chain JSON.
             case(
@@ -585,6 +660,22 @@ mod tests {
                 "chain over the depth limit",
                 &[(FMT, "qcow2"), (CHAIN, &too_deep)],
                 err("backing chain has 5 images, the limit is 4"),
+            ),
+            // Discard.
+            case(
+                "unknown discard",
+                &[(FMT, "qcow2"), (DISCARD, "on")],
+                err(r#"must be "unmap" or "ignore", not "on""#),
+            ),
+            case(
+                "empty discard",
+                &[(FMT, "qcow2"), (DISCARD, "")],
+                err(r#"must be "unmap" or "ignore", not """#),
+            ),
+            case(
+                "upper-case discard",
+                &[(FMT, "qcow2"), (DISCARD, "Unmap")],
+                err(r#"must be "unmap" or "ignore", not "Unmap""#),
             ),
         ];
 
@@ -833,6 +924,7 @@ mod tests {
                 .iter()
                 .map(|(path, format)| image(path, *format))
                 .collect(),
+            ..Default::default()
         }
     }
 
