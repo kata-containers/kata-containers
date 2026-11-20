@@ -44,12 +44,28 @@ There are several kinds of Kata configurations and they are listed below.
 
 ### Hypervisor Options
 
-Hypervisor annotations must be explicitly whitelisted in the Kata runtime config. Example:
+Hypervisor annotations must be explicitly allowed in the Kata runtime
+configuration. Each `enable_annotations` entry is a regular expression matched
+against the part of the annotation key after
+`io.katacontainers.config.hypervisor.`. Matching does not have to cover the
+entire name: `enable_iommu` also matches `enable_iommu_platform`.
+
+Use `^` and `$` to match an exact name:
 
 ```toml title="/path/to/configuration.toml"
-# List of valid annotation names for the hypervisor
-enable_annotations = ["enable_iommu", "kernel_params"]
+# Allow only these exact hypervisor annotation names.
+enable_annotations = ["^enable_iommu$", "^kernel_params$"]
 ```
+
+!!! note "Containerd annotation forwarding"
+    Containerd must also forward an annotation before Kata can apply it.
+    Containerd's annotation filters use glob patterns, not regular expressions.
+    When configuring containerd directly, use the full annotation keys, such as
+    `io.katacontainers.config.hypervisor.enable_iommu`.
+
+    With `kata-deploy`, exact keys can also be added using
+    `containerd.extraPodAnnotations`, as described in the
+    [Helm configuration](../helm-configuration.md#containerd-pod-annotations).
 
 Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you fully trust all annotation sources. Passing arbitrary `virtiofsd` options can be abused for malicious host-side behavior.
 
