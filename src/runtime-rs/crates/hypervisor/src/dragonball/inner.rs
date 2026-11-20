@@ -396,9 +396,12 @@ impl DragonballInner {
                 .instance_start_from_snapshot(
                     template.device_state_path.clone(),
                     template.memory_path.clone(),
+                    false,
                 )
                 .context("Failed to start vmm from template snapshot")?;
+
             self.state = VmmState::VmRunning;
+
             return Ok(());
         }
         #[cfg(not(target_arch = "x86_64"))]
