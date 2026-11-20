@@ -34,6 +34,7 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
+use hypervisor::vfio_device::{is_dev_vfio_group_path, is_iommufd_devices_cdev_path};
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -776,11 +777,11 @@ impl VirtSandbox {
             info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
 
             let device_nodes = handle_cdi_devices(&cdi_devices).await?;
-            paths.extend(
+            paths.extend(vfio_passthrough_paths(
                 device_nodes
                     .iter()
                     .filter_map(pod_resources_rs::device_node_host_path),
-            );
+            ));
         }
 
         paths.extend(oci_spec_vfio_device_paths());
@@ -1476,6 +1477,19 @@ impl VirtSandbox {
 /// runtime injected directly into the OCI spec for the Docker/nerdctl/podman
 /// flow, where there is no kubelet PodResources API to query. The legacy
 /// `/dev/vfio/vfio` control node is skipped as it is not a pass-through device.
+// A CDI device can also carry nodes that are not passed through, such as the
+// VFIO and IOMMUFD control nodes (/dev/vfio/vfio, /dev/iommu). Keep only the
+// legacy group nodes (/dev/vfio/<group>) and the iommufd cdevs
+// (/dev/vfio/devices/vfioN).
+fn vfio_passthrough_paths(paths: impl IntoIterator<Item = String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|path| {
+            is_dev_vfio_group_path(path) || is_iommufd_devices_cdev_path(Path::new(path))
+        })
+        .collect()
+}
+
 fn oci_spec_vfio_device_paths() -> Vec<String> {
     let Ok(spec) = load_oci_spec() else {
         return Vec::new();
@@ -2881,6 +2895,26 @@ mod tests {
     use std::time::Duration;
 
     const NOTIFY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    #[test]
+    fn test_vfio_passthrough_paths_skips_control_and_non_vfio_nodes() {
+        // Device nodes of a CDI device, from a device plugin or a DRA driver,
+        // that mixes the VFIO devices with control and non-VFIO nodes.
+        let paths = [
+            "/dev/vfio/vfio",
+            "/dev/iommu",
+            "/dev/vfio/22",
+            "/dev/vfio/devices/vfio0",
+            "/dev/vfio/devices",
+            "/dev/dri/renderD128",
+        ]
+        .map(String::from);
+
+        assert_eq!(
+            vfio_passthrough_paths(paths),
+            vec!["/dev/vfio/22", "/dev/vfio/devices/vfio0"]
+        );
+    }
 
     #[tokio::test]
     async fn test_sandbox_exit_reaches_a_waiter_that_subscribes_afterwards() {
