@@ -41,7 +41,7 @@ fn to_volume_type(volume_type: &str) -> DirectVolumeType {
 /// Reject qcow2 metadata on them rather than ignore it, so a qcow2 image is
 /// never attached to the guest as a raw disk.
 fn reject_qcow2_metadata(mount_info: &DirectVolumeMountInfo) -> Result<()> {
-    if parse_qcow2_volume(&mount_info.metadata)?.is_some() {
+    if parse_qcow2_volume(&mount_info.metadata, &mount_info.device)?.is_some() {
         return Err(anyhow!(
             "{} direct volumes do not support qcow2",
             mount_info.volume_type
@@ -153,7 +153,9 @@ pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_types::qcow2::{DIRECT_VOLUME_DISCARD_KEY, DIRECT_VOLUME_FORMAT_KEY};
+    use kata_types::qcow2::{
+        DIRECT_VOLUME_BACKING_CHAIN_KEY, DIRECT_VOLUME_DISCARD_KEY, DIRECT_VOLUME_FORMAT_KEY,
+    };
 
     #[test]
     fn spdk_and_vfio_volumes_reject_qcow2_metadata() {
@@ -192,6 +194,11 @@ mod tests {
             TestData {
                 volume_type: KATA_VFIO_VOLUME_TYPE,
                 metadata: &[(DIRECT_VOLUME_DISCARD_KEY, "unmap")],
+                err: r#"requires "io.katacontainers.volume.format" to be "qcow2""#,
+            },
+            TestData {
+                volume_type: KATA_SPDK_VOLUME_TYPE,
+                metadata: &[(DIRECT_VOLUME_BACKING_CHAIN_KEY, "[]")],
                 err: r#"requires "io.katacontainers.volume.format" to be "qcow2""#,
             },
             TestData {

@@ -67,9 +67,11 @@ impl RawblockVolume {
             ));
         }
 
-        // The CSI declares the format; it is never probed from the image. The
-        // hypervisor checks the image when it opens it.
-        let qcow2 = parse_qcow2_volume(&mount_info.metadata)
+        // The CSI declares the format; it is never probed from the image. A
+        // qcow2 volume is a top image, optionally layered on read-only backing
+        // images that Kata only attaches and never creates. The hypervisor
+        // checks each image when it opens it.
+        let qcow2 = parse_qcow2_volume(&mount_info.metadata, &mount_info.device)
             .context("invalid qcow2 direct volume metadata")?;
 
         // For a real block device, honor its host read-only flag (BLKROGET) in
@@ -142,7 +144,7 @@ fn qcow2_discard_unmap(
 ) -> bool {
     discard_supported
         && !read_only
-        && matches!(qcow2, Some(volume) if volume.discard == DiscardMode::Unmap)
+        && matches!(qcow2, Some(chain) if chain.discard == DiscardMode::Unmap)
 }
 
 #[async_trait]
@@ -180,9 +182,12 @@ mod tests {
 
     #[test]
     fn only_writable_qcow2_volumes_asking_for_it_unmap_discards() {
-        let volume = |discard| Qcow2Volume { discard };
-        let unmap = volume(DiscardMode::Unmap);
-        let ignore = volume(DiscardMode::Ignore);
+        let chain = |discard| Qcow2Volume {
+            discard,
+            ..Default::default()
+        };
+        let unmap = chain(DiscardMode::Unmap);
+        let ignore = chain(DiscardMode::Ignore);
 
         struct TestData<'a> {
             name: &'a str,

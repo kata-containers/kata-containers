@@ -107,7 +107,10 @@ pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
     let unserialized_mount_info: DirectVolumeMountInfo = serde_json::from_str(mount_info)?;
     // Reject a malformed qcow2 description now rather than at pod start. This
     // runs before anything is written, so a rejected volume leaves no trace.
-    parse_qcow2_volume(&unserialized_mount_info.metadata)?;
+    parse_qcow2_volume(
+        &unserialized_mount_info.metadata,
+        &unserialized_mount_info.device,
+    )?;
 
     fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)?;
     let mount_info_dir_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
@@ -273,7 +276,7 @@ mod tests {
     fn qcow2_mount_info(metadata: &[(&str, &str)]) -> String {
         let info = DirectVolumeMountInfo {
             volume_type: String::from("directvol"),
-            device: String::from("/csi/disk.qcow2"),
+            device: String::from("/csi/top.qcow2"),
             fs_type: String::from("ext4"),
             metadata: metadata
                 .iter()

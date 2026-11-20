@@ -314,13 +314,14 @@ impl DeviceManager {
                 {
                     // A second user of the same host file shares the attached
                     // device, so it must describe the file the same way.
-                    // Otherwise its format would be silently ignored.
+                    // Otherwise its format, and for qcow2 its backing chain,
+                    // would be silently ignored.
                     if let DeviceType::BlockModern(existing) =
                         self.get_device_info(&device_matched_id).await?
                     {
                         if existing.lock().await.config.source != config.source {
                             return Err(anyhow!(
-                                "{} is already attached as a block device with a different format",
+                                "{} is already attached as a block device with a different format or backing chain",
                                 config.path_on_host
                             ));
                         }
@@ -969,7 +970,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "/csi/disk.qcow2 is already attached as a block device with a different format"
+            "/csi/disk.qcow2 is already attached as a block device with a different format or backing chain"
         );
     }
 

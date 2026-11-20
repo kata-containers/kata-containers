@@ -71,7 +71,7 @@ pub mod vmdk;
 #[cfg(target_os = "linux")]
 pub mod block_source;
 
-/// qcow2 description for direct-assigned volumes
+/// qcow2 backing-chain description for direct-assigned volumes
 #[cfg(target_os = "linux")]
 pub mod qcow2;
 

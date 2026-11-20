@@ -4,7 +4,7 @@
 //
 
 use crate::device::topology::{TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
-use crate::qemu::block_source::{block_fd_opaque, prepare_block_source};
+use crate::qemu::block_source::{block_fd_opaque, prepare_block_source, PreparedBackingImage};
 use crate::qemu::qmp::{get_qmp_socket_path, qcow2_node, BlockFileSettings};
 use crate::utils::{
     chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, uses_native_ccw_bus,
@@ -1046,12 +1046,14 @@ struct VmdkFormatNode {
     file: BlockBackend,
 }
 
-/// qcow2 image, passed to QEMU as a single JSON `-blockdev` so the file node
-/// is an anonymous child of one named node.
+/// qcow2 top image with its read-only backing chain, passed to QEMU as a single
+/// JSON `-blockdev` so the layers are anonymous children of one named node.
 #[derive(Debug)]
 struct Qcow2FormatNode {
     id: String,
     file: BlockBackend,
+    /// Backing images, base first.
+    backing: Vec<PreparedBackingImage>,
 }
 
 #[async_trait]
@@ -1068,13 +1070,15 @@ impl ToQemuParams for Qcow2FormatNode {
             .file
             .discard_unmap
             .then_some(BlockdevDiscardOptions::unmap);
-        // A qcow2 image is always a regular file.
-        let image_file = settings.file_node(&self.file.path, true, self.file.read_only, discard);
+        // The top image is always a regular file.
+        let top_file = settings.file_node(&self.file.path, true, self.file.read_only, discard);
         let node = qcow2_node(
             &format!("image-{}", self.id),
-            image_file,
+            top_file,
             self.file.read_only,
             discard,
+            &self.backing,
+            &settings,
         );
         Ok(vec![
             "-blockdev".to_owned(),
@@ -1218,6 +1222,7 @@ fn block_backend_node(
     is_direct: bool,
     is_readonly: bool,
     discard_unmap: bool,
+    backing: &[PreparedBackingImage],
 ) -> Box<dyn ToQemuParams> {
     let mut backend = BlockBackend::new(device_id, path, is_direct);
     backend.set_read_only(is_readonly);
@@ -1229,6 +1234,7 @@ fn block_backend_node(
         BlockSourceFormat::Qcow2(_) => Box::new(Qcow2FormatNode {
             id: device_id.to_owned(),
             file: backend,
+            backing: backing.to_vec(),
         }),
     }
 }
@@ -3450,13 +3456,14 @@ impl<'a> QemuCmdLine<'a> {
             return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
         }
         let mut fdset_ids = Vec::new();
-        let path = prepare_block_source(path, source, is_readonly, is_direct, |file, label| {
-            let (path, fdset_id) =
-                self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
-            fdset_ids.push(fdset_id);
-            Ok(path)
-        })?
-        .filename;
+        let prepared =
+            prepare_block_source(path, source, is_readonly, is_direct, |file, label| {
+                let (path, fdset_id) =
+                    self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
+                fdset_ids.push(fdset_id);
+                Ok(path)
+            })?;
+        let path = prepared.filename;
         self.block_fdsets.insert(device_id.to_string(), fdset_ids);
 
         let backend = block_backend_node(
@@ -3466,6 +3473,7 @@ impl<'a> QemuCmdLine<'a> {
             is_direct,
             is_readonly,
             discard_unmap,
+            &prepared.backing,
         );
         self.devices.push(backend);
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
@@ -4751,6 +4759,7 @@ mod tests {
             false,
             true,
             false,
+            &[],
         );
 
         let format_params = format_node.qemu_params().await.unwrap();
@@ -4778,29 +4787,65 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn test_cold_plug_qcow2_is_one_json_blockdev() {
-        use kata_types::qcow2::Qcow2Volume;
+    async fn test_cold_plug_qcow2_chain_is_one_json_blockdev() {
+        use kata_types::qcow2::{ImageFormat, Qcow2Volume};
 
+        let backing = vec![
+            PreparedBackingImage {
+                filename: "/dev/fdset/3".to_string(),
+                format: ImageFormat::Raw,
+                is_regular_file: false,
+            },
+            PreparedBackingImage {
+                filename: "/dev/fdset/4".to_string(),
+                format: ImageFormat::Qcow2,
+                is_regular_file: true,
+            },
+        ];
         let node = block_backend_node(
             "vol0",
             "/dev/fdset/2",
             &BlockSourceFormat::Qcow2(Qcow2Volume::default()),
             false,
             false,
-            true,
+            false,
+            &backing,
         );
         let params = node.qemu_params().await.unwrap();
         assert_eq!(params.len(), 2);
         assert_eq!(params[0], "-blockdev");
         let v: serde_json::Value = serde_json::from_str(&params[1]).unwrap();
 
-        assert_eq!(v["driver"], "qcow2");
         assert_eq!(v["node-name"], "image-vol0");
         assert_eq!(v["read-only"], false);
+        assert_eq!(v["file"]["filename"], "/dev/fdset/2");
+        let mid = &v["backing"];
+        assert_eq!(mid["file"]["filename"], "/dev/fdset/4");
+        let base = &mid["backing"];
+        assert_eq!(base["driver"], "raw");
+        assert_eq!(base["file"]["filename"], "/dev/fdset/3");
+        assert_eq!(base["file"]["driver"], "host_device");
+        assert_eq!(mid["file"]["driver"], "file");
+        assert_eq!(v["file"]["driver"], "file");
+        for node in [mid, base] {
+            assert_eq!(node["read-only"], true);
+            assert_eq!(node["force-share"], true);
+            assert_eq!(node["file"]["read-only"], true);
+        }
+
+        let plain = block_backend_node(
+            "vol1",
+            "/dev/fdset/5",
+            &BlockSourceFormat::Qcow2(Qcow2Volume::default()),
+            false,
+            false,
+            true,
+            &[],
+        );
+        let v: serde_json::Value =
+            serde_json::from_str(&plain.qemu_params().await.unwrap()[1]).unwrap();
         assert!(v["backing"].is_null());
         assert_eq!(v["discard"], "unmap");
-        assert_eq!(v["file"]["driver"], "file");
-        assert_eq!(v["file"]["filename"], "/dev/fdset/2");
         assert_eq!(v["file"]["discard"], "unmap");
     }
 
