@@ -300,6 +300,12 @@ num_queues = 1
 # Default false
 enable_mem_prealloc = false
 
+# Back the guest memory that is shared with virtiofsd with a memfd instead
+# of a file on /dev/shm. A memfd is not limited by the size of the /dev/shm
+# mount. Only used with shared_fs = "virtio-fs", and hugepages are not used.
+# Default false
+enable_memfd = false
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.

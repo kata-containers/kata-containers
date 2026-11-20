@@ -20,7 +20,9 @@ As of the 2.0 release of Kata Containers, [virtio-fs](https://virtio-fs.gitlab.i
 !!! warning
     `tmpfs` pages are allocated on first touch. A VM whose boot memory does not fit into `/dev/shm` fails to start; worse, an already-running VM that touches pages beyond the mount limit receives a `SIGBUS` and is killed. The kubelet cannot anticipate either failure because it does not track `/dev/shm` capacity.
 
-The size of `/dev/shm` can be increased at runtime:
+With the `runtime-rs` QEMU shim you can avoid this limit by setting `enable_memfd = true` in the `[hypervisor.qemu]` section of the configuration file. The shared guest memory is then a `memfd` (`memory-backend-memfd` with `share=on`) instead of a file on `/dev/shm`, so the size of the `/dev/shm` mount no longer limits it. The option is off by default and `enable_hugepages` has no effect on it. The memory is still shared memory in host RAM and is accounted in the same way, so the kubelet reservations described below still apply.
+
+Otherwise, the size of `/dev/shm` can be increased at runtime:
 
 ```bash
 $ sudo mount -o remount,size=${desired_shm_size} /dev/shm

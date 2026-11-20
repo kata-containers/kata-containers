@@ -224,6 +224,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS: &str =
 /// A sandbox annotation that specifies the memory space used for nvdimm device by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC: &str =
     "io.katacontainers.config.hypervisor.enable_mem_prealloc";
+/// A sandbox annotation to back shared VM memory with a memfd instead of a file on /dev/shm.
+pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_MEMFD: &str =
+    "io.katacontainers.config.hypervisor.enable_memfd";
 /// A sandbox annotation to specify if the memory should be pre-allocated from huge pages.
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES: &str =
     "io.katacontainers.config.hypervisor.enable_hugepages";
@@ -846,6 +849,14 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             hv.memory_info.enable_mem_prealloc = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(bool_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_ENABLE_MEMFD => match self.get_value::<bool>(key) {
+                        Ok(r) => {
+                            hv.memory_info.enable_memfd = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);

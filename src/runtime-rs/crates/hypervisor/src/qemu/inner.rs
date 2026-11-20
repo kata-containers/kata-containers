@@ -496,6 +496,7 @@ impl QemuInner {
                 if let Some(subchannel) = ccw_subchannel {
                     qmp.set_ccw_subchannel(subchannel);
                 }
+                qmp.set_shared_memfd(self.config.memory_info.enable_memfd);
                 qmp.verify_block_fdsets(block_fdsets)?;
                 // Setup virtio-mem device if enabled.  It requires a memory
                 // hotplug region (maxmem) on the QEMU command line; that region

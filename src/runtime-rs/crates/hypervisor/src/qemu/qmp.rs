@@ -5,7 +5,9 @@
 
 use crate::device::pci_path::PciPath;
 use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_block_source};
-use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
+use crate::qemu::cmdline_generator::{
+    CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE, SHARED_MEMORY_PATH,
+};
 use crate::utils::get_jailer_root;
 use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VcpuThreadIds;
@@ -58,6 +60,40 @@ fn collect_block_fdsets(fdsets: Vec<qmp::FdsetInfo>) -> HashMap<String, Vec<i64>
     block_fdsets
 }
 
+/// Options for a shared memory backend: a memfd if `use_memfd` is set,
+/// otherwise a file on /dev/shm.
+fn shared_memory_backend(
+    use_memfd: bool,
+    id: &str,
+    base: qapi_qmp::MemoryBackendProperties,
+) -> qapi_qmp::ObjectOptions {
+    if use_memfd {
+        qapi_qmp::ObjectOptions::memory_backend_memfd {
+            id: id.to_owned(),
+            memory_backend_memfd: qapi_qmp::MemoryBackendMemfdProperties {
+                base,
+                hugetlb: None,
+                hugetlbsize: None,
+                seal: None,
+            },
+        }
+    } else {
+        qapi_qmp::ObjectOptions::memory_backend_file {
+            id: id.to_owned(),
+            memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
+                base,
+                align: None,
+                discard_data: None,
+                offset: None,
+                pmem: None,
+                readonly: None,
+                mem_path: SHARED_MEMORY_PATH.to_owned(),
+                rom: None,
+            },
+        }
+    }
+}
+
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
 
@@ -86,6 +122,10 @@ pub struct Qmp {
     // backend is removed because format drivers such as VMDK may reopen an
     // extent after blockdev-add completes.
     block_fdsets: HashMap<String, Vec<i64>>,
+
+    // Back hot-added shared memory with a memfd instead of a file on
+    // /dev/shm (memory_info.enable_memfd).
+    shared_memfd: bool,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -115,6 +155,7 @@ impl Qmp {
                 ccw_subchannel: None,
                 pci_bridge_devices: HashMap::new(),
                 block_fdsets: HashMap::new(),
+                shared_memfd: false,
             };
 
             let info = qmp.qmp.handshake().context("qmp handshake failed")?;
@@ -169,6 +210,10 @@ impl Qmp {
 
     pub fn set_ccw_subchannel(&mut self, subchannel: CcwSubChannel) {
         self.ccw_subchannel = Some(subchannel);
+    }
+
+    pub fn set_shared_memfd(&mut self, shared_memfd: bool) {
+        self.shared_memfd = shared_memfd;
     }
 
     /// Initialise PCI bridge slot maps for cold-plugged `pci-bridge-N` devices.
@@ -454,31 +499,23 @@ impl Qmp {
 
         let memory_backend_id = format!("hotplugged-{memdev_idx}");
 
-        let memory_backend = qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
-            id: memory_backend_id.clone(),
-            memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
-                base: qapi_qmp::MemoryBackendProperties {
-                    dump: None,
-                    host_nodes: None,
-                    merge: None,
-                    policy: None,
-                    prealloc: None,
-                    prealloc_context: None,
-                    prealloc_threads: None,
-                    reserve: None,
-                    share: Some(true),
-                    x_use_canonical_path_for_ramblock_id: None,
-                    size,
-                },
-                align: None,
-                discard_data: None,
-                offset: None,
-                pmem: None,
-                readonly: None,
-                mem_path: "/dev/shm".to_owned(),
-                rom: None,
+        let memory_backend = qmp::object_add(shared_memory_backend(
+            self.shared_memfd,
+            &memory_backend_id,
+            qapi_qmp::MemoryBackendProperties {
+                dump: None,
+                host_nodes: None,
+                merge: None,
+                policy: None,
+                prealloc: None,
+                prealloc_context: None,
+                prealloc_threads: None,
+                reserve: None,
+                share: Some(true),
+                x_use_canonical_path_for_ramblock_id: None,
+                size,
             },
-        });
+        ));
         self.qmp.execute(&memory_backend)?;
 
         let memory_frontend_id = format!("frontend-to-{memory_backend_id}");
@@ -547,10 +584,10 @@ impl Qmp {
             .map(|fs| fs == "virtio-fs" || fs == "virtio-fs-nydus")
             .unwrap_or(false);
 
-        let (qomtype, mempath, share) = if uses_virtio_fs {
-            ("memory-backend-file", "/dev/shm", true)
-        } else {
-            ("memory-backend-ram", "", false)
+        let (qomtype, mempath, share) = match (uses_virtio_fs, self.shared_memfd) {
+            (true, true) => ("memory-backend-memfd", "", true),
+            (true, false) => ("memory-backend-file", SHARED_MEMORY_PATH, true),
+            (false, _) => ("memory-backend-ram", "", false),
         };
 
         let size_bytes = size_mb * 1024 * 1024;
@@ -592,24 +629,16 @@ impl Qmp {
         };
 
         // STEP 1: Create memory backend
-        let memory_backend = if mempath.is_empty() {
+        let memory_backend = if uses_virtio_fs {
+            qmp::object_add(shared_memory_backend(
+                self.shared_memfd,
+                "virtiomem",
+                create_backend_props(),
+            ))
+        } else {
             qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_ram {
                 id: "virtiomem".to_owned(),
                 memory_backend_ram: create_backend_props(),
-            })
-        } else {
-            qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
-                id: "virtiomem".to_owned(),
-                memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
-                    base: create_backend_props(),
-                    align: None,
-                    discard_data: None,
-                    offset: None,
-                    pmem: None,
-                    readonly: None,
-                    rom: None,
-                    mem_path: mempath.to_owned(),
-                },
             })
         };
 
@@ -1947,5 +1976,37 @@ mod tests {
             collect_block_fdsets(fdsets),
             HashMap::from([("drive-2".to_string(), vec![7, 8])])
         );
+    }
+
+    #[test]
+    fn shared_memory_backend_selects_memfd_or_dev_shm_file() {
+        let props = || qapi_qmp::MemoryBackendProperties {
+            dump: None,
+            host_nodes: None,
+            merge: None,
+            policy: None,
+            prealloc: None,
+            prealloc_context: None,
+            prealloc_threads: None,
+            reserve: None,
+            share: Some(true),
+            x_use_canonical_path_for_ramblock_id: None,
+            size: 1 << 30,
+        };
+
+        let file =
+            serde_json::to_value(shared_memory_backend(false, "hotplugged-0", props())).unwrap();
+        assert_eq!(file["qom-type"], "memory-backend-file");
+        assert_eq!(file["id"], "hotplugged-0");
+        assert_eq!(file["mem-path"], SHARED_MEMORY_PATH);
+        assert_eq!(file["share"], true);
+
+        let memfd =
+            serde_json::to_value(shared_memory_backend(true, "hotplugged-0", props())).unwrap();
+        assert_eq!(memfd["qom-type"], "memory-backend-memfd");
+        assert_eq!(memfd["id"], "hotplugged-0");
+        assert_eq!(memfd["share"], true);
+        assert_eq!(memfd["size"], 1u64 << 30);
+        assert!(memfd.get("mem-path").is_none());
     }
 }
