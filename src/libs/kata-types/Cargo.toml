@@ -37,6 +37,7 @@ sysinfo = { workspace = true }
 thiserror = { workspace = true }
 tokio = { features = ["rt", "time"], optional = true, workspace = true }
 toml = { workspace = true }
+uuid = { features = ["v4"], optional = true, version = "1" }
 [target.'cfg(target_os = "macos")'.dependencies]
 sysctl = "0.7.1"
 
@@ -45,9 +46,10 @@ nix = { workspace = true }
 rstest = { workspace = true }
 tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
+tokio = { features = ["macros", "rt", "sync"], workspace = true }
 
 [features]
 default = []
-devicemapper = ["dep:devicemapper", "dep:tokio"]
+devicemapper = ["dep:devicemapper", "dep:tokio", "dep:uuid"]
 enable-vendor = []
-safe-path = ["dep:safe-path"]                    # safe-path is platform-specific
+safe-path = ["dep:safe-path"]                                # safe-path is platform-specific
