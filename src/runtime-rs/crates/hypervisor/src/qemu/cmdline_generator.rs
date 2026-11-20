@@ -5,7 +5,7 @@
 
 use crate::device::topology::{TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
 use crate::qemu::block_source::{block_fd_opaque, prepare_block_source};
-use crate::qemu::qmp::get_qmp_socket_path;
+use crate::qemu::qmp::{get_qmp_socket_path, qcow2_chain_node, BlockFileSettings};
 use crate::utils::{
     chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, uses_native_ccw_bus,
     SocketAddress,
@@ -19,6 +19,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::{VIRTIO_BLK_PCI, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
+use qapi_qmp::BlockdevDiscardOptions;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -1045,6 +1046,43 @@ struct VmdkFormatNode {
     file: BlockBackend,
 }
 
+/// qcow2 image, passed to QEMU as a single JSON `-blockdev` so the file node
+/// is an anonymous child of one named node.
+#[derive(Debug)]
+struct Qcow2FormatNode {
+    id: String,
+    file: BlockBackend,
+}
+
+#[async_trait]
+impl ToQemuParams for Qcow2FormatNode {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        // Built by the same code as a hot-plugged qcow2 volume, so both get
+        // the same node tree.
+        let settings = BlockFileSettings {
+            is_direct: Some(self.file.cache_direct),
+            aio: &self.file.aio,
+            no_drop: false,
+        };
+        let discard = self
+            .file
+            .discard_unmap
+            .then_some(BlockdevDiscardOptions::unmap);
+        // The top image is always a regular file.
+        let top_file = settings.file_node(&self.file.path, true, self.file.read_only, discard);
+        let node = qcow2_chain_node(
+            &format!("image-{}", self.id),
+            top_file,
+            self.file.read_only,
+            discard,
+        );
+        Ok(vec![
+            "-blockdev".to_owned(),
+            serde_json::to_string(&node).context("serialize qcow2 -blockdev")?,
+        ])
+    }
+}
+
 #[async_trait]
 impl ToQemuParams for AddFd {
     async fn qemu_params(&self) -> Result<Vec<String>> {
@@ -1185,10 +1223,13 @@ fn block_backend_node(
     backend.set_read_only(is_readonly);
     backend.set_discard_unmap(discard_unmap);
 
-    if matches!(source, BlockSourceFormat::Vmdk(_)) {
-        Box::new(VmdkFormatNode::new(device_id, backend))
-    } else {
-        Box::new(backend)
+    match source {
+        BlockSourceFormat::Raw => Box::new(backend),
+        BlockSourceFormat::Vmdk(_) => Box::new(VmdkFormatNode::new(device_id, backend)),
+        BlockSourceFormat::Qcow2(_) => Box::new(Qcow2FormatNode {
+            id: device_id.to_owned(),
+            file: backend,
+        }),
     }
 }
 
@@ -4736,6 +4777,33 @@ mod tests {
             .await
             .unwrap();
         assert!(contains_param(&frontend[1..2], "drive=image-rootfs"));
+    }
+
+    #[actix_rt::test]
+    async fn test_cold_plug_qcow2_is_one_json_blockdev() {
+        use kata_types::qcow2::Qcow2Chain;
+
+        let node = block_backend_node(
+            "vol0",
+            "/dev/fdset/2",
+            &BlockSourceFormat::Qcow2(Qcow2Chain::default()),
+            false,
+            false,
+            true,
+        );
+        let params = node.qemu_params().await.unwrap();
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0], "-blockdev");
+        let v: serde_json::Value = serde_json::from_str(&params[1]).unwrap();
+
+        assert_eq!(v["driver"], "qcow2");
+        assert_eq!(v["node-name"], "image-vol0");
+        assert_eq!(v["read-only"], false);
+        assert!(v["backing"].is_null());
+        assert_eq!(v["discard"], "unmap");
+        assert_eq!(v["file"]["driver"], "file");
+        assert_eq!(v["file"]["filename"], "/dev/fdset/2");
+        assert_eq!(v["file"]["discard"], "unmap");
     }
 
     #[rstest]

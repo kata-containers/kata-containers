@@ -16,8 +16,9 @@ use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevDiscardOptions, BlockdevOptions, BlockdevOptionsBase,
-    BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
-    MigrationInfo, PciDeviceInfo,
+    BlockdevOptionsFile, BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat,
+    BlockdevOptionsQcow2, BlockdevOptionsRaw, BlockdevRef, BlockdevRefOrNull, MigrationInfo,
+    PciDeviceInfo,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -41,6 +42,91 @@ const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
 const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Settings shared by the file nodes of one block device.
+pub(super) struct BlockFileSettings<'a> {
+    /// `cache.direct`, or `None` to keep QEMU's default.
+    pub is_direct: Option<bool>,
+    /// `aio` mode, for example "threads" or "io_uring".
+    pub aio: &'a str,
+    /// Passed to QEMU as `drop-cache`.
+    pub no_drop: bool,
+}
+
+impl BlockFileSettings<'_> {
+    /// Build the node that reads `filename`: `file` for a regular file and
+    /// `host_device` for anything else, since QEMU >= 6.0 refuses `file` on a
+    /// block device.
+    pub(super) fn file_node(
+        &self,
+        filename: &str,
+        is_regular_file: bool,
+        read_only: bool,
+        discard: Option<BlockdevDiscardOptions>,
+    ) -> BlockdevOptions {
+        let base = BlockdevOptionsBase {
+            auto_read_only: None,
+            cache: self.is_direct.map(|direct| qapi_qmp::BlockdevCacheOptions {
+                direct: Some(direct),
+                no_flush: None,
+            }),
+            detect_zeroes: None,
+            discard,
+            force_share: None,
+            node_name: None,
+            read_only: Some(read_only),
+        };
+        let file = BlockdevOptionsFile {
+            aio: Some(
+                BlockdevAioOptions::from_str(self.aio).unwrap_or(BlockdevAioOptions::io_uring),
+            ),
+            aio_max_batch: None,
+            drop_cache: self.no_drop.then_some(true),
+            locking: None,
+            pr_manager: None,
+            x_check_cache_dropped: None,
+            filename: filename.to_owned(),
+        };
+        if is_regular_file {
+            BlockdevOptions::file { base, file }
+        } else {
+            BlockdevOptions::host_device {
+                base,
+                host_device: file,
+            }
+        }
+    }
+}
+
+/// Build the node of a qcow2 volume, used by both `blockdev-add` and the
+/// `-blockdev` of a cold-plugged volume.
+///
+/// `top_file` is the node reading the image. `backing` is set to null, so
+/// QEMU never opens a backing file named in the image header.
+pub(super) fn qcow2_chain_node(
+    node_name: &str,
+    top_file: BlockdevOptions,
+    read_only: bool,
+    discard: Option<BlockdevDiscardOptions>,
+) -> BlockdevOptions {
+    BlockdevOptions::qcow2 {
+        base: BlockdevOptionsBase {
+            auto_read_only: None,
+            cache: None,
+            detect_zeroes: None,
+            discard,
+            force_share: read_only.then_some(true),
+            node_name: Some(node_name.to_owned()),
+            read_only: Some(read_only),
+        },
+        qcow2: BlockdevOptionsQcow2::from(BlockdevOptionsGenericCOWFormat {
+            base: BlockdevOptionsGenericFormat {
+                file: BlockdevRef::definition(Box::new(top_file)),
+            },
+            backing: Some(BlockdevRefOrNull::null(())),
+        }),
+    }
+}
 
 fn collect_block_fdsets(fdsets: Vec<qmp::FdsetInfo>) -> HashMap<String, Vec<i64>> {
     let mut block_fdsets: HashMap<String, Vec<i64>> = HashMap::new();
@@ -1251,24 +1337,7 @@ impl Qmp {
         if self.block_fdsets.contains_key(&node_name) {
             return Err(anyhow!("duplicate QEMU block device ID {node_name}"));
         }
-        let discard_option = || discard_unmap.then_some(BlockdevDiscardOptions::unmap);
-
-        let create_base_options = || qapi_qmp::BlockdevOptionsBase {
-            auto_read_only: None,
-            cache: if is_direct.is_none() {
-                None
-            } else {
-                Some(qapi_qmp::BlockdevCacheOptions {
-                    direct: is_direct,
-                    no_flush: None,
-                })
-            },
-            detect_zeroes: None,
-            discard: discard_option(),
-            force_share: None,
-            node_name: None,
-            read_only: Some(is_readonly),
-        };
+        let discard = discard_unmap.then_some(BlockdevDiscardOptions::unmap);
 
         let mut fdset_ids = Vec::new();
         let prepared_source = match prepare_block_source(
@@ -1290,39 +1359,24 @@ impl Qmp {
             }
         };
 
-        let create_backend_options = || qapi_qmp::BlockdevOptionsFile {
-            aio: Some(
-                BlockdevAioOptions::from_str(blkdev_aio).unwrap_or(BlockdevAioOptions::io_uring),
-            ),
-            aio_max_batch: None,
-            drop_cache: if !no_drop { None } else { Some(no_drop) },
-            locking: None,
-            pr_manager: None,
-            x_check_cache_dropped: None,
-            filename: prepared_source.filename.clone(),
+        let settings = BlockFileSettings {
+            is_direct,
+            aio: blkdev_aio,
+            no_drop,
         };
+        let blockdev_file = settings.file_node(
+            &prepared_source.filename,
+            prepared_source.is_regular_file,
+            is_readonly,
+            discard,
+        );
 
-        // Add block device backend and check if the file is a regular file or device
-        let blockdev_file = if prepared_source.is_regular_file {
-            // Regular file
-            qmp::BlockdevOptions::file {
-                base: create_base_options(),
-                file: create_backend_options(),
-            }
-        } else {
-            // Host device (e.g., /dev/sdx, /dev/loopX)
-            qmp::BlockdevOptions::host_device {
-                base: create_base_options(),
-                host_device: create_backend_options(),
-            }
-        };
-
-        let blockdev_options = if matches!(source, BlockSourceFormat::Raw) {
-            BlockdevOptions::raw {
+        let blockdev_options = match source {
+            BlockSourceFormat::Raw => BlockdevOptions::raw {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
                     cache: None,
-                    discard: discard_option(),
+                    discard,
                     force_share: if is_readonly { Some(true) } else { None },
                     auto_read_only: None,
                     node_name: Some(node_name.clone()),
@@ -1335,30 +1389,34 @@ impl Qmp {
                     offset: None,
                     size: None,
                 },
-            }
-        } else {
-            info!(
-                sl!(),
-                "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
-                path_on_host,
-                is_readonly
-            );
-            BlockdevOptions::vmdk {
-                base: BlockdevOptionsBase {
-                    detect_zeroes: None,
-                    cache: None,
-                    discard: discard_option(),
-                    force_share: Some(true),
-                    auto_read_only: None,
-                    node_name: Some(node_name.clone()),
-                    read_only: Some(is_readonly),
-                },
-                vmdk: BlockdevOptionsGenericCOWFormat {
-                    base: BlockdevOptionsGenericFormat {
-                        file: BlockdevRef::definition(Box::new(blockdev_file)),
+            },
+            BlockSourceFormat::Vmdk(_) => {
+                info!(
+                    sl!(),
+                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                    path_on_host,
+                    is_readonly
+                );
+                BlockdevOptions::vmdk {
+                    base: BlockdevOptionsBase {
+                        detect_zeroes: None,
+                        cache: None,
+                        discard,
+                        force_share: Some(true),
+                        auto_read_only: None,
+                        node_name: Some(node_name.clone()),
+                        read_only: Some(is_readonly),
                     },
-                    backing: None,
-                },
+                    vmdk: BlockdevOptionsGenericCOWFormat {
+                        base: BlockdevOptionsGenericFormat {
+                            file: BlockdevRef::definition(Box::new(blockdev_file)),
+                        },
+                        backing: None,
+                    },
+                }
+            }
+            BlockSourceFormat::Qcow2(_) => {
+                qcow2_chain_node(&node_name, blockdev_file, is_readonly, discard)
             }
         };
 
@@ -1947,5 +2005,103 @@ mod tests {
             collect_block_fdsets(fdsets),
             HashMap::from([("drive-2".to_string(), vec![7, 8])])
         );
+    }
+
+    const SETTINGS: BlockFileSettings = BlockFileSettings {
+        is_direct: Some(false),
+        aio: "threads",
+        no_drop: false,
+    };
+
+    /// The qcow2 node as QEMU receives it, with the image read from
+    /// /dev/fdset/1.
+    fn qcow2_chain_json(
+        read_only: bool,
+        discard: Option<BlockdevDiscardOptions>,
+    ) -> serde_json::Value {
+        let top_file = SETTINGS.file_node("/dev/fdset/1", true, read_only, discard);
+        let node = qcow2_chain_node("drive-5", top_file, read_only, discard);
+        serde_json::to_value(&node).unwrap()
+    }
+
+    #[test]
+    fn file_node_driver_and_settings() {
+        // (is_regular_file, settings, expected node)
+        let tests = [
+            (
+                true,
+                SETTINGS,
+                serde_json::json!({
+                    "driver": "file",
+                    "filename": "/dev/fdset/1",
+                    "aio": "threads",
+                    "cache": { "direct": false },
+                    "read-only": true,
+                }),
+            ),
+            (
+                false,
+                BlockFileSettings {
+                    is_direct: None,
+                    aio: "io_uring",
+                    no_drop: true,
+                },
+                serde_json::json!({
+                    "driver": "host_device",
+                    "filename": "/dev/fdset/1",
+                    "aio": "io_uring",
+                    "drop-cache": true,
+                    "read-only": true,
+                }),
+            ),
+            // An unknown aio mode falls back to io_uring.
+            (
+                true,
+                BlockFileSettings {
+                    is_direct: Some(true),
+                    aio: "bogus",
+                    no_drop: false,
+                },
+                serde_json::json!({
+                    "driver": "file",
+                    "filename": "/dev/fdset/1",
+                    "aio": "io_uring",
+                    "cache": { "direct": true },
+                    "read-only": true,
+                }),
+            ),
+        ];
+
+        for (i, (is_regular_file, settings, expected)) in tests.iter().enumerate() {
+            let node = settings.file_node("/dev/fdset/1", *is_regular_file, true, None);
+            let actual = serde_json::to_value(&node).unwrap();
+            assert_eq!(&actual, expected, "test[{}]", i);
+        }
+    }
+
+    #[test]
+    fn qcow2_without_chain_disables_backing_and_honours_read_only() {
+        let v = qcow2_chain_json(true, None);
+        // An explicit null stops QEMU from following a path in the header.
+        assert!(v.as_object().unwrap().contains_key("backing"));
+        assert!(v["backing"].is_null());
+        assert_eq!(v["read-only"], true);
+        assert_eq!(v["force-share"], true);
+        assert_eq!(v["file"]["read-only"], true);
+    }
+
+    #[test]
+    fn qcow2_discard() {
+        let v = qcow2_chain_json(false, Some(BlockdevDiscardOptions::unmap));
+        // Both nodes need it for discards to punch holes in the host file.
+        assert_eq!(v["node-name"], "drive-5");
+        assert_eq!(v["read-only"], false);
+        assert!(v.get("force-share").is_none());
+        assert_eq!(v["discard"], "unmap");
+        assert_eq!(v["file"]["discard"], "unmap");
+
+        let v = qcow2_chain_json(false, None);
+        assert!(v.get("discard").is_none());
+        assert!(v["file"].get("discard").is_none());
     }
 }
