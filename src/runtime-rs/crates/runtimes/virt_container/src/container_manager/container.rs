@@ -480,9 +480,10 @@ impl Container {
         let mut inner = self.inner.write().await;
 
         // Check if process is already stopped before signaling.
-        // For SIGKILL/SIGTERM, if the process is already stopped, return success immediately.
-        // This is critical for proper cleanup when VM dies - the wait thread sets status to
-        // Stopped even on error, so subsequent Kill() calls will see it as already stopped.
+        // SIGKILL/SIGTERM are stop requests: returning success keeps teardown
+        // idempotent when the VM has died and the wait thread already set the
+        // status to Stopped. Signal 0 is a liveness query (see kill(2)): a
+        // stopped process is not alive.
         let is_term_signal = is_termination_signal(signal);
         let process_status = if container_process.exec_id.is_empty() {
             inner.init_process.get_status().await
@@ -492,15 +493,24 @@ impl Container {
             ProcessStatus::Unknown
         };
 
-        if is_term_signal && process_status == ProcessStatus::Stopped {
+        if process_status == ProcessStatus::Stopped {
             info!(
                 self.logger,
-                "process has already stopped, skipping signal";
+                "process has already stopped";
                 "container" => &self.container_id.container_id,
                 "process" => ?container_process,
                 "signal" => signal
             );
-            return Ok(());
+
+            // Stop requests stay idempotent when the process is already gone.
+            if is_term_signal {
+                return Ok(());
+            }
+
+            // Signal 0 is a liveness query (see kill(2)), not a stop request.
+            if signal == 0 {
+                return Err(Error::ProcessAlreadyTerminated.into());
+            }
         }
 
         match inner.signal_process(container_process, signal, all).await {
