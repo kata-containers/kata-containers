@@ -10,7 +10,7 @@ use kata_types::config::KATA_PATH;
 use serde::de;
 use std::{
     fs::{DirBuilder, File},
-    io::{BufReader, Write},
+    io::{BufReader, BufWriter, Write},
     os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
 };
@@ -46,8 +46,12 @@ pub fn to_disk_in<T: serde::Serialize>(root: &Path, value: &T, sid: &str) -> Res
         .prefix(PERSIST_FILE)
         .tempfile_in(&dir)
         .context("failed to create the temporary state file")?;
-    serde_json::to_writer_pretty(&mut tmp, value).context("failed to serialize the state")?;
-    tmp.flush().context("failed to write the state")?;
+    {
+        let mut writer = BufWriter::new(tmp.as_file_mut());
+        serde_json::to_writer_pretty(&mut writer, value)
+            .context("failed to serialize the state")?;
+        writer.flush().context("failed to write the state")?;
+    }
     tmp.persist(dir.join(PERSIST_FILE))
         .context("failed to replace the state file")?;
     Ok(())
