@@ -24,6 +24,8 @@ on:
         type: string
         default: ""
     outputs:
+      test_jobs:
+        value: ${{ jobs.skipper.outputs.test_jobs }}
       skip_build:
         value: ${{ jobs.skipper.outputs.skip_build }}
       skip_test:
@@ -43,6 +45,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
+      test_jobs: ${{ steps.skipper.outputs.test_jobs }}
       skip_build: ${{ steps.skipper.outputs.skip_build }}
       skip_test: ${{ steps.skipper.outputs.skip_test }}
       skip_static: ${{ steps.skipper.outputs.skip_static }}
@@ -53,6 +56,8 @@ jobs:
           allow-unsafe-pr-checkout: true
           fetch-depth: 0
           persist-credentials: false
+      - name: Validate test selection
+        run: python3 -m unittest discover -s tools/testing/gatekeeper -p 'test_*.py'
       - id: skipper
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
