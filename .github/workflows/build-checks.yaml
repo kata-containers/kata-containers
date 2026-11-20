@@ -126,7 +126,10 @@ jobs:
             sudo apt-get update && sudo apt-get -y install musl-tools
           fi
       - name: Install devicemapper
-        if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
+        if: >-
+          contains(matrix.component.needs, 'libdevmapper') &&
+          (matrix.command == 'make check' ||
+          (matrix.component.name == 'libs' && matrix.command == 'make test'))
         run: sudo apt-get update && sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
         if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make check'
@@ -162,3 +165,8 @@ jobs:
           RUST_BACKTRACE: "1"
           RUST_LIB_BACKTRACE: "0"
           SKIP_GO_VERSION_CHECK: "1"
+      - name: Test dm-verity creation rollback
+        if: matrix.component.name == 'libs' && matrix.command == 'make test'
+        run: |
+          cargo test -p kata-types --features devicemapper --locked dmverity::tests
+          cargo test -p kata-types --features devicemapper --locked --release dmverity::tests
