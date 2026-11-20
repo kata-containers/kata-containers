@@ -477,6 +477,10 @@ impl VirtSandbox {
         self.hypervisor.clone()
     }
 
+    pub(crate) fn vmm_exit_confirmed(&self) -> bool {
+        self.vmm_exit_confirmed.is_cancelled()
+    }
+
     async fn remember_vmm_process(&self) {
         let identity = match self.hypervisor.get_vmm_master_tid().await {
             Ok(pid) => VmmProcessIdentity::capture(pid),
@@ -1810,6 +1814,12 @@ impl Sandbox for VirtSandbox {
             .start_vm(10_000)
             .await
             .context("start template vm");
+        if started.is_err() && self.hypervisor.vmm_thread_stopped().await {
+            // Dragonball can already have joined its VMM thread before returning
+            // the startup error. There is no process left for the watcher to find.
+            self.vmm_exit_confirmed.cancel();
+            return started;
+        }
         self.remember_vmm_process().await;
         started?;
         info!(sl!(), "vm started from template");
@@ -1991,7 +2001,7 @@ impl Sandbox for VirtSandbox {
         // stages are skipped, and finish_cleanup() retries failures during shutdown.
         // A stop timeout does not prove that the VMM released its mounts,
         // cgroup, or rootless user. Leave them in place while it may be alive.
-        if self.inner.read().await.vmm_start_attempted && !self.vmm_exit_confirmed.is_cancelled() {
+        if self.inner.read().await.vmm_start_attempted && !self.vmm_exit_confirmed() {
             return Err(anyhow!(
                 "VMM exit unconfirmed; refusing unsafe sandbox cleanup"
             ));

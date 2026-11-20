@@ -3,9 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
+use std::process;
+use std::sync::Arc;
 
-use agent::{kata::KataAgent, Agent, AgentManager, AGENT_KATA};
+use agent::{kata::KataAgent, Agent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
 #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
@@ -15,18 +20,68 @@ use kata_types::config::{Agent as AgentConfig, Hypervisor as HypervisorConfig, T
 use resource::{cpu_mem::initial_size::InitialSizeManager, ResourceManager};
 use runtime_spec;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
 use crate::sandbox::VirtSandbox;
 
-const MESSAGE_BUFFER_SIZE: usize = 8;
+const CGROUP2_ROOT: &str = "/sys/fs/cgroup";
+
+fn launch_cgroup() -> Result<Option<PathBuf>> {
+    let root = Path::new(CGROUP2_ROOT);
+    if !root.join("cgroup.controllers").exists() {
+        return Ok(None);
+    }
+
+    let membership = fs::read_to_string("/proc/self/cgroup").context("read factory cgroup")?;
+    let path = membership
+        .lines()
+        .find_map(|line| line.strip_prefix("0::/"))
+        .map(Path::new)
+        .context("resolve factory cgroup")?;
+    if path
+        .components()
+        .any(|part| !matches!(part, Component::Normal(_)))
+    {
+        return Err(anyhow!("factory cgroup is outside the mounted hierarchy"));
+    }
+
+    let procs = root.join(path).join("cgroup.procs");
+    if !contains_factory_process(&procs)? {
+        return Err(anyhow!(
+            "{} does not contain the factory process; cgroup mount and namespace may not match",
+            procs.display()
+        ));
+    }
+    Ok(Some(procs))
+}
+
+fn contains_factory_process(path: &Path) -> Result<bool> {
+    let members = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let pid = process::id().to_string();
+    Ok(members.lines().any(|member| member == pid))
+}
+
+fn restore_launch_cgroup(original: Option<&Path>) -> Result<()> {
+    let Some(path) = original else {
+        return Ok(());
+    };
+    if !contains_factory_process(path)? {
+        OpenOptions::new()
+            .write(true)
+            .open(path)
+            .and_then(|mut procs| procs.write_all(b"0\n"))
+            .with_context(|| format!("return factory process to {}", path.display()))?;
+    }
+    Ok(())
+}
 
 /// VM is an abstraction of a virtual machine.
 #[derive(Clone)]
 pub struct TemplateVm {
     /// Sandbox that owns the VM and its host-side resources.
     sandbox: VirtSandbox,
+    launch_cgroup: Option<PathBuf>,
 
     /// The hypervisor responsible for managing the virtual machine lifecycle.
     pub hypervisor: Arc<dyn Hypervisor>,
@@ -92,12 +147,13 @@ impl VmConfig {
 
 impl TemplateVm {
     /// Creates a new TemplateVm instance from its owning sandbox.
-    pub fn new(sandbox: VirtSandbox, cpu: f32, memory: u32) -> Self {
+    fn new(sandbox: VirtSandbox, cpu: f32, memory: u32, launch_cgroup: Option<PathBuf>) -> Self {
         let id = sandbox.get_sid();
         let hypervisor = sandbox.get_hypervisor();
         let agent = sandbox.get_agent();
         Self {
             sandbox,
+            launch_cgroup,
             id,
             hypervisor,
             agent,
@@ -181,15 +237,18 @@ impl TemplateVm {
         }
     }
 
-    /// Creates a new VM based on the provided configuration.
-    pub async fn new_vm(config: VmConfig, toml_config: TomlConfig) -> Result<Self> {
+    /// Prepares the sandbox before starting the template VM.
+    pub(super) async fn prepare(
+        config: VmConfig,
+        toml_config: TomlConfig,
+        sender: Sender<Message>,
+    ) -> Result<Self> {
         let sid = Uuid::new_v4().to_string();
-
-        let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
 
         let hypervisor = Self::new_hypervisor(&config, &toml_config)
             .await
             .context("new hypervisor")?;
+        let hypervisor_config = hypervisor.hypervisor_config().await;
 
         let agent = Self::new_agent(&config).context("new agent")?;
 
@@ -208,72 +267,61 @@ impl TemplateVm {
 
         let toml_config_arc = Arc::new(toml_config);
 
-        let resource_manager = Arc::new(
-            ResourceManager::new(
-                &sid,
-                agent.clone(),
-                hypervisor.clone(),
-                toml_config_arc,
-                initial_size_manager,
-            )
-            .await
-            .context("build resource manager")?,
-        );
+        // The resource manager moves the caller into the template sandbox's cgroup.
+        let launch_cgroup = launch_cgroup()?;
+        let resource_manager = ResourceManager::new(
+            &sid,
+            agent.clone(),
+            hypervisor.clone(),
+            toml_config_arc,
+            initial_size_manager,
+        )
+        .await;
+        let resource_manager = match resource_manager {
+            Ok(manager) => Arc::new(manager),
+            Err(err) => {
+                restore_launch_cgroup(launch_cgroup.as_deref())
+                    .with_context(|| format!("build resource manager: {err:#}"))?;
+                return Err(err).context("build resource manager");
+            }
+        };
 
         let sandbox = VirtSandbox::new(
             &sid,
-            sender.clone(),
-            agent.clone(),
-            hypervisor.clone(),
-            resource_manager.clone(),
+            sender,
+            agent,
+            hypervisor,
+            resource_manager,
             sandbox_config,
             factory,
         )
         .await
         .context("build sandbox")?;
 
-        if let Err(start_error) = sandbox.start_template().await {
-            if let Err(teardown_error) = Self::teardown_sandbox(&sandbox).await {
-                warn!(
-                    sl!(),
-                    "failed to tear down template VM after startup failed: {}", teardown_error
-                );
-            }
-            return Err(start_error).context("start template");
-        }
-        info!(sl!(), "template VM has been started");
-
-        let hypervisor_config = sandbox.get_hypervisor().hypervisor_config().await;
-        let vm = TemplateVm::new(
+        Ok(Self::new(
             sandbox,
             hypervisor_config.cpu_info.default_vcpus,
             hypervisor_config.memory_info.default_memory,
-        );
+            launch_cgroup,
+        ))
+    }
 
-        let readiness_result: Result<()> = async {
-            let address = hypervisor
-                .get_agent_socket()
-                .await
-                .context("get template VM agent socket")?;
-            agent
-                .start(&address)
-                .await
-                .context("connect to template VM agent")
-        }
-        .await;
+    pub(super) async fn start(&self) -> Result<()> {
+        self.sandbox
+            .start_template()
+            .await
+            .context("start template")?;
+        info!(sl!(), "template VM has been started");
 
-        if let Err(readiness_error) = readiness_result {
-            if let Err(teardown_error) = vm.teardown().await {
-                warn!(
-                    sl!(),
-                    "failed to tear down template VM after agent readiness failed: {}",
-                    teardown_error
-                );
-            }
-            return Err(readiness_error);
-        }
-
-        Ok(vm)
+        let address = self
+            .hypervisor
+            .get_agent_socket()
+            .await
+            .context("get template VM agent socket")?;
+        self.agent
+            .start(&address)
+            .await
+            .context("connect to template VM agent")
     }
 
     /// Stop a VM
@@ -291,14 +339,21 @@ impl TemplateVm {
 
     /// Stop the template VM and release all resources created for its sandbox.
     pub async fn teardown(&self) -> Result<()> {
-        Self::teardown_sandbox(&self.sandbox).await
-    }
+        self.agent.stop().await;
 
-    async fn teardown_sandbox(sandbox: &VirtSandbox) -> Result<()> {
-        sandbox.get_agent().stop().await;
-
-        let stop_result = sandbox.stop().await;
-        let cleanup_result = sandbox.cleanup().await;
+        let stop_result = self.sandbox.stop().await;
+        if !self.vmm_exit_confirmed() {
+            stop_result.context("stop template sandbox during teardown")?;
+            return Err(anyhow!("VMM exit unconfirmed; preserving template sandbox"));
+        }
+        // Sandbox cleanup can kill remaining processes in the sandbox cgroup.
+        restore_launch_cgroup(self.launch_cgroup.as_deref()).with_context(
+            || match &stop_result {
+                Ok(()) => "tear down template sandbox".to_string(),
+                Err(err) => format!("stop template sandbox during teardown: {err:#}"),
+            },
+        )?;
+        let cleanup_result = self.sandbox.cleanup().await;
 
         match (stop_result, cleanup_result) {
             (Ok(()), Ok(())) => Ok(()),
@@ -313,6 +368,10 @@ impl TemplateVm {
                  cleanup template sandbox during teardown: {cleanup_error:#}"
             )),
         }
+    }
+
+    pub(super) fn vmm_exit_confirmed(&self) -> bool {
+        self.sandbox.vmm_exit_confirmed()
     }
 
     /// Disconnect agent
