@@ -115,6 +115,7 @@ pub(crate) struct NetEpollHandler<
     R: GuestMemoryRegion = GuestRegionMmap,
 > {
     tap: Tap,
+    tap_registered: bool,
     rx: RxVirtio<Q>,
     tx: TxVirtio<Q>,
     config: VirtioDeviceConfig<AS, Q, R>,
@@ -125,6 +126,26 @@ pub(crate) struct NetEpollHandler<
 }
 
 impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> NetEpollHandler<AS, Q, R> {
+    fn update_tap_registration(&mut self, ops: &mut EventOps) {
+        let should_register = !self.rx.deferred_frame && !self.rx.rate_limiter.is_blocked();
+        if should_register == self.tap_registered {
+            return;
+        }
+        let event = Events::with_data(&self.tap, RX_TAP_EVENT, EventSet::IN);
+        let result = if should_register {
+            ops.add(event)
+        } else {
+            ops.remove(event)
+        };
+        match result {
+            Ok(()) => self.tap_registered = should_register,
+            Err(e) => {
+                self.metrics.event_fails.inc();
+                error!("{}: failed to update TAP RX interest: {:?}", self.id, e);
+            }
+        }
+    }
+
     // Attempts to copy a single frame into the guest if there is enough rate limiting budget.
     // Returns true on successful frame delivery.
     fn rate_limited_rx_single_frame(&mut self, mem: &AS::M) -> bool {
@@ -161,27 +182,22 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> NetEpollH
 
     // Copies a single frame from `self.rx.frame_buf` into the guest.
     //
-    // Returns true if a buffer was used, and false if the frame must be deferred until a buffer
-    // is made available by the driver.
+    // Returns true if the whole frame was delivered, or false if it must be deferred.
     fn rx_single_frame(&mut self, mem: &AS::M) -> bool {
-        let mut next_desc;
-        let mut desc_chain;
-        let mut write_count = 0;
-
-        {
-            let queue = &mut self.rx.queue.queue_mut().lock();
-            let mut iter = match queue.iter(mem) {
+        // Try already available buffers before waiting for another guest kick.
+        // Bound retries so malformed guest buffers cannot pin the event loop.
+        for _ in 0..self.rx.queue.max_size() {
+            let mut desc_chain = match self.rx.queue.get_next_descriptor(mem) {
+                Ok(Some(chain)) => chain,
+                Ok(None) => return false,
                 Err(e) => {
                     error!("{}: failed to process queue. {}", self.id, e);
                     return false;
                 }
-                Ok(iter) => iter,
             };
-            desc_chain = match iter.next() {
-                Some(v) => v,
-                None => return false,
-            };
-            next_desc = desc_chain.next();
+            let mut write_count = 0;
+
+            let mut next_desc = desc_chain.next();
 
             // Copy from frame into buffer, which may span multiple descriptors.
             loop {
@@ -216,22 +232,23 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> NetEpollH
                     }
                 }
             }
+            self.rx
+                .queue
+                .add_used(mem, desc_chain.head_index(), write_count as u32);
+
+            // Mark that we have at least one pending packet and we need to interrupt the guest.
+            self.rx.deferred_irqs = true;
+
+            // Current descriptor chain is too small, need a bigger one.
+            if write_count < self.rx.bytes_read {
+                continue;
+            }
+
+            self.metrics.rx_bytes_count.add(write_count);
+            self.metrics.rx_packets_count.inc();
+            return true;
         }
-        self.rx
-            .queue
-            .add_used(mem, desc_chain.head_index(), write_count as u32);
-
-        // Mark that we have at least one pending packet and we need to interrupt the guest.
-        self.rx.deferred_irqs = true;
-
-        // Current descriptor chain is too small, need a bigger one.
-        if write_count < self.rx.bytes_read {
-            return false;
-        }
-
-        self.metrics.rx_bytes_count.add(write_count);
-        self.metrics.rx_packets_count.inc();
-        true
+        false
     }
 
     // Sends frame to the host TAP.
@@ -423,7 +440,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> NetEpollH
 impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> MutEventSubscriber
     for NetEpollHandler<AS, Q, R>
 {
-    fn process(&mut self, events: Events, _ops: &mut EventOps) {
+    fn process(&mut self, events: Events, ops: &mut EventOps) {
         let guard = self.config.lock_guest_memory();
         let mem = guard.deref();
         self.metrics.event_count.inc();
@@ -445,27 +462,17 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> MutEventS
             RX_TAP_EVENT => {
                 self.metrics.rx_tap_event_count.inc();
 
-                // While limiter is blocked, don't process any more incoming.
-                if self.rx.rate_limiter.is_blocked() {
-                    // TODO: this may cause busy loop when rate limiting.
-                    // Process a deferred frame first if available. Don't read from tap again
-                    // until we manage to receive this deferred frame.
-                } else if self.rx.deferred_frame {
-                    if self.rate_limited_rx_single_frame(mem) {
-                        self.rx.deferred_frame = false;
-                        // Process more packats from the tap device.
-                        if let Err(e) = self.process_rx(mem) {
-                            self.metrics.event_fails.inc();
-                            error!("{}: failed to process rx queue, {:?}", self.id, e);
-                        }
-                    } else if self.rx.deferred_irqs {
-                        self.rx.deferred_irqs = false;
-                        if let Err(e) = self.rx.queue.notify() {
-                            error!("{}: failed to send rx interrupt to guest, {:?}", self.id, e);
-                        }
+                // Retry the pending frame before reading more packets from TAP.
+                if !self.rx.rate_limiter.is_blocked() {
+                    let result = if self.rx.deferred_frame {
+                        self.resume_rx(mem)
+                    } else {
+                        self.process_rx(mem)
+                    };
+                    if let Err(e) = result {
+                        self.metrics.event_fails.inc();
+                        error!("{}: failed to process rx queue, {:?}", self.id, e);
                     }
-                } else if let Err(e) = self.process_rx(mem) {
-                    error!("{}: failed to process rx queue, {:?}", self.id, e);
                 }
             }
             TX_QUEUE_EVENT => {
@@ -529,15 +536,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> MutEventS
             }
             _ => error!("{}: unknown epoll event slot {}", self.id, events.data()),
         }
+        self.update_tap_registration(ops);
     }
 
     fn init(&mut self, ops: &mut EventOps) {
         trace!(target: "virtio-net", "{}: NetEpollHandler::init()", self.id);
 
-        let events = Events::with_data(&self.tap, RX_TAP_EVENT, EventSet::IN);
-        if let Err(e) = ops.add(events) {
-            error!("{}: failed to register TAP RX event, {:?}", self.id, e);
-        }
+        self.update_tap_registration(ops);
 
         let events =
             Events::with_data(self.rx.queue.eventfd.as_ref(), RX_QUEUE_EVENT, EventSet::IN);
@@ -813,6 +818,7 @@ where
 
         let handler = Box::new(NetEpollHandler {
             tap,
+            tap_registered: false,
             rx,
             tx,
             config,
@@ -864,15 +870,18 @@ where
 #[cfg(test)]
 mod tests {
 
+    use std::ffi::{CStr, CString};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
     use dbs_utils::epoll_manager::SubscriberOps;
     use dbs_utils::rate_limiter::TokenBucket;
     use kvm_ioctls::Kvm;
+    use nix::sys::socket::{socket, AddressFamily, SockFlag, SockType};
     use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::{GuestAddress, GuestMemoryMmap};
 
@@ -884,6 +893,12 @@ mod tests {
 
     #[allow(dead_code)]
     const MAX_REQ_SIZE: u32 = 0x10000;
+    const RX_TEST_QUEUE_SIZE: u16 = 16;
+    const RX_TEST_BUFFER_BASE: u64 = 0x1000;
+    const RX_TEST_BUFFER_SIZE: u32 = 0x800;
+    const ETHERNET_FRAME_LEN: usize = 60;
+    const TEST_ETHERTYPE: u16 = 0x88b5;
+    const EVENT_TIMEOUT_MS: i32 = 1000;
 
     fn create_net_epoll_handler(id: String) -> NetEpollHandler<Arc<GuestMemoryMmap>> {
         let next_ip = NEXT_IP.fetch_add(1, Ordering::SeqCst);
@@ -914,6 +929,7 @@ mod tests {
         );
         NetEpollHandler {
             tap,
+            tap_registered: false,
             rx,
             tx,
             config,
@@ -1440,5 +1456,306 @@ mod tests {
             handler.process(events, &mut event_op);
             assert!(!handler.rx.rate_limiter.is_blocked());
         }
+    }
+
+    fn assert_tap_unregistered(ops: &mut EventOps, tap: &Tap) {
+        let event = Events::with_data(tap, RX_TAP_EVENT, EventSet::IN);
+        let result = ops.remove(event);
+        assert!(
+            matches!(&result, Err(dbs_utils::epoll_manager::Error::Epoll(e))
+                if e.errno() == libc::ENOENT),
+            "TAP must be absent from epoll (ENOENT): {:?}",
+            result
+        );
+    }
+
+    fn assert_tap_registered(ops: &mut EventOps, tap: &Tap) {
+        let event = Events::with_data(tap, RX_TAP_EVENT, EventSet::IN);
+        ops.remove(event)
+            .expect("TAP must be registered with epoll");
+        // Restore the registration after probing it.
+        ops.add(event).unwrap();
+    }
+
+    fn rx_backpressure_fixture() -> NetEpollHandler<Arc<GuestMemoryMmap>> {
+        let mut handler = create_net_epoll_handler("rx-backpressure".into());
+        let mem = handler.config.vm_as.clone();
+        let tx = VirtQueue::new(GuestAddress(0x400), &mem, RX_TEST_QUEUE_SIZE);
+        handler.tx.queue.queue = tx.create_queue();
+        handler.rx.frame_buf[..64].fill(0xe7);
+        handler.rx.bytes_read = 64;
+        handler
+    }
+
+    #[test]
+    fn rx_backpressure_waits_for_guest_buffers() {
+        skip_if_kvm_unaccessable!();
+        let mut net = rx_backpressure_fixture();
+        let mem = net.config.vm_as.clone();
+        let rx = VirtQueue::new(GuestAddress(0), &mem, RX_TEST_QUEUE_SIZE);
+        rx.dtable(0).set(0x2000, 64, VIRTQ_DESC_F_WRITE, 0);
+        net.rx.queue.queue = rx.create_queue();
+        let handler = Arc::new(Mutex::new(net));
+        let manager = EpollManager::default();
+        let id = manager.add_subscriber(Box::new(handler.clone()));
+
+        for index in 0..2 {
+            {
+                let mut events = manager.mgr.lock().unwrap();
+                let mut ops = events.event_ops(id).unwrap();
+                let mut net = handler.lock().unwrap();
+                net.rx.deferred_frame = true;
+                net.rx.bytes_read = 64;
+                net.rx.frame_buf[..64].fill(0xe7);
+                let tap_event = Events::with_data(&net.tap, RX_TAP_EVENT, EventSet::IN);
+                net.process(tap_event, &mut ops);
+                assert_tap_unregistered(&mut ops, &net.tap);
+                assert!(net.rx.deferred_frame);
+                net.tx.queue.generate_event().unwrap();
+                let tx =
+                    Events::with_data(net.tx.queue.eventfd.as_ref(), TX_QUEUE_EVENT, EventSet::IN);
+                net.process(tx, &mut ops);
+                assert_tap_unregistered(&mut ops, &net.tap);
+            }
+            rx.avail.ring(index).store(0);
+            rx.avail.idx().store(index + 1);
+            handler.lock().unwrap().rx.queue.generate_event().unwrap();
+            manager.handle_events(0).unwrap();
+            let net = handler.lock().unwrap();
+            assert!(!net.rx.deferred_frame);
+            assert_eq!(rx.used.idx().load(), index + 1);
+            let mut received = [0; 64];
+            mem.read_slice(&mut received, GuestAddress(0x2000)).unwrap();
+            assert_eq!(received, [0xe7; 64]);
+            let mut events = manager.mgr.lock().unwrap();
+            let mut ops = events.event_ops(id).unwrap();
+            assert_tap_registered(&mut ops, &net.tap);
+        }
+    }
+
+    fn wait_for_rx_budget(
+        manager: &EpollManager,
+        handler: &Arc<Mutex<NetEpollHandler<Arc<GuestMemoryMmap>>>>,
+    ) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while handler.lock().unwrap().rx.rate_limiter.is_blocked() {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(!remaining.is_zero(), "RX limiter did not recover");
+            manager
+                .handle_events(remaining.as_millis().max(1) as i32)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn rx_backpressure_uses_already_available_buffers() {
+        skip_if_kvm_unaccessable!();
+        let mut net = rx_backpressure_fixture();
+        let mem = net.config.vm_as.clone();
+        let rx = VirtQueue::new(GuestAddress(0), &mem, RX_TEST_QUEUE_SIZE);
+        rx.dtable(0).set(0x2000, 1, VIRTQ_DESC_F_WRITE, 0);
+        rx.dtable(1).set(0x3000, 64, VIRTQ_DESC_F_WRITE, 0);
+        rx.avail.ring(0).store(0);
+        rx.avail.ring(1).store(1);
+        rx.avail.idx().store(2);
+        net.rx.queue.queue = rx.create_queue();
+        net.rx.deferred_frame = true;
+        let handler = Arc::new(Mutex::new(net));
+        let manager = EpollManager::default();
+        let id = manager.add_subscriber(Box::new(handler.clone()));
+        let mut events = manager.mgr.lock().unwrap();
+        let mut ops = events.event_ops(id).unwrap();
+        let mut net = handler.lock().unwrap();
+        let tap = Events::with_data(&net.tap, RX_TAP_EVENT, EventSet::IN);
+        net.process(tap, &mut ops);
+        assert!(
+            !net.rx.deferred_frame,
+            "available buffers must not wait for another kick"
+        );
+        assert_eq!(rx.used.idx().load(), 2);
+        let mut received = [0; 64];
+        mem.read_slice(&mut received, GuestAddress(0x3000)).unwrap();
+        assert_eq!(received, [0xe7; 64]);
+    }
+
+    #[test]
+    fn rx_backpressure_waits_for_rate_limiter() {
+        skip_if_kvm_unaccessable!();
+        for empty in [false, true] {
+            let mut net = rx_backpressure_fixture();
+            net.rx.rate_limiter = RateLimiter::new(0, 0, 0, 1, 0, 100).unwrap();
+            let mem = net.config.vm_as.clone();
+            let rx = VirtQueue::new(GuestAddress(0), &mem, RX_TEST_QUEUE_SIZE);
+            rx.dtable(0).set(0x2000, 64, VIRTQ_DESC_F_WRITE, 0);
+            rx.avail.ring(0).store(0);
+            rx.avail.idx().store(if empty { 0 } else { 1 });
+            net.rx.queue.queue = rx.create_queue();
+            let handler = Arc::new(Mutex::new(net));
+            let manager = EpollManager::default();
+            let id = manager.add_subscriber(Box::new(handler.clone()));
+            {
+                let mut events = manager.mgr.lock().unwrap();
+                let mut ops = events.event_ops(id).unwrap();
+                let mut net = handler.lock().unwrap();
+                assert!(net.rx.rate_limiter.consume(1, TokenType::Ops));
+                assert!(!net.rx.rate_limiter.consume(1, TokenType::Ops));
+                net.rx.deferred_frame = true;
+                let tap_event = Events::with_data(&net.tap, RX_TAP_EVENT, EventSet::IN);
+                net.process(tap_event, &mut ops);
+                assert_tap_unregistered(&mut ops, &net.tap);
+                net.rx.rate_limiter.manual_replenish(1, TokenType::Ops);
+            }
+            // Wait for the actual timer notification, not a fixed sleep.
+            wait_for_rx_budget(&manager, &handler);
+            if empty {
+                let net = handler.lock().unwrap();
+                assert!(!net.rx.rate_limiter.is_blocked());
+                assert!(net.rx.deferred_frame);
+                let mut events = manager.mgr.lock().unwrap();
+                let mut ops = events.event_ops(id).unwrap();
+                assert_tap_unregistered(&mut ops, &net.tap);
+                drop(events);
+                rx.avail.idx().store(1);
+                net.rx.queue.generate_event().unwrap();
+                drop(net);
+                manager.handle_events(0).unwrap();
+            }
+            let net = handler.lock().unwrap();
+            assert!(!net.rx.rate_limiter.is_blocked());
+            assert!(!net.rx.deferred_frame);
+            assert_eq!(rx.used.idx().load(), 1);
+            let mut received = [0; 64];
+            mem.read_slice(&mut received, GuestAddress(0x2000)).unwrap();
+            assert_eq!(received, [0xe7; 64]);
+            let mut events = manager.mgr.lock().unwrap();
+            let mut ops = events.event_ops(id).unwrap();
+            assert_tap_registered(&mut ops, &net.tap);
+        }
+    }
+
+    fn send_tap_frame(name: &CStr, marker: u8) -> [u8; ETHERNET_FRAME_LEN] {
+        // SAFETY: name is a valid, NUL-terminated interface name.
+        let ifindex = unsafe { libc::if_nametoindex(name.as_ptr()) };
+        assert_ne!(ifindex, 0);
+        let destination = libc::sockaddr_ll {
+            sll_family: libc::AF_PACKET as u16,
+            sll_protocol: TEST_ETHERTYPE.to_be(),
+            sll_ifindex: ifindex as i32,
+            sll_hatype: 0,
+            sll_pkttype: 0,
+            sll_halen: 6,
+            sll_addr: [0xff; 8],
+        };
+        let sender = socket(
+            AddressFamily::Packet,
+            SockType::Raw,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )
+        .unwrap();
+        let mut frame = [marker; ETHERNET_FRAME_LEN];
+        frame[..6].fill(0xff);
+        frame[6..12].copy_from_slice(&[0x02, 0, 0, 0, 0, 1]);
+        // Experimental EtherType avoids IP and ARP setup.
+        frame[12..14].copy_from_slice(&TEST_ETHERTYPE.to_be_bytes());
+        // SAFETY: both pointers reference initialized buffers of the supplied lengths;
+        // sendto does not retain them, and sender owns a valid socket FD.
+        let sent = unsafe {
+            libc::sendto(
+                sender.as_raw_fd(),
+                frame.as_ptr().cast(),
+                frame.len(),
+                0,
+                (&destination as *const libc::sockaddr_ll).cast(),
+                std::mem::size_of_val(&destination) as libc::socklen_t,
+            )
+        };
+        assert_eq!(sent, frame.len() as isize, "{}", io::Error::last_os_error());
+        frame
+    }
+
+    #[test]
+    fn rx_backpressure_stops_readable_tap_events() {
+        use vmm_sys_util::epoll::{ControlOperation, Epoll, EpollEvent};
+
+        skip_if_kvm_unaccessable!();
+        let mut net = rx_backpressure_fixture();
+        let name = CString::new(format!("rx{}", NEXT_IP.fetch_add(1, Ordering::SeqCst))).unwrap();
+        net.tap = Tap::open_named(name.to_str().unwrap(), false).unwrap();
+        net.tap.set_vnet_hdr_size(vnet_hdr_len() as i32).unwrap();
+        net.tap.enable().unwrap();
+
+        let mem = net.config.vm_as.clone();
+        let rx = VirtQueue::new(GuestAddress(0), &mem, RX_TEST_QUEUE_SIZE);
+        for index in 0..RX_TEST_QUEUE_SIZE {
+            rx.dtable(index).set(
+                RX_TEST_BUFFER_BASE + u64::from(index) * u64::from(RX_TEST_BUFFER_SIZE),
+                RX_TEST_BUFFER_SIZE,
+                VIRTQ_DESC_F_WRITE,
+                0,
+            );
+            rx.avail.ring(index).store(index);
+        }
+        net.rx.queue.queue = rx.create_queue();
+        // Observe readability independently without consuming any TAP packets.
+        let observer = Epoll::new().unwrap();
+        observer
+            .ctl(
+                ControlOperation::Add,
+                net.tap.as_raw_fd(),
+                EpollEvent::new(vmm_sys_util::epoll::EventSet::IN, 0),
+            )
+            .unwrap();
+        let mut ready = [EpollEvent::default()];
+        let metrics = net.metrics.clone();
+        let handler = Arc::new(Mutex::new(net));
+        let manager = EpollManager::default();
+        manager.add_subscriber(Box::new(handler.clone()));
+        let first = send_tap_frame(&name, 0x11);
+        let second = send_tap_frame(&name, 0x22);
+        manager.handle_events(EVENT_TIMEOUT_MS).unwrap();
+        assert!(handler.lock().unwrap().rx.deferred_frame);
+        assert_eq!(
+            observer.wait(0, &mut ready).unwrap(),
+            1,
+            "TAP must remain readable"
+        );
+        let blocked_events = metrics.rx_tap_event_count.count();
+        for _ in 0..3 {
+            manager.handle_events(0).unwrap();
+        }
+        assert_eq!(
+            metrics.rx_tap_event_count.count(),
+            blocked_events,
+            "readable TAP must not spin while RX is blocked"
+        );
+
+        rx.avail.idx().store(RX_TEST_QUEUE_SIZE);
+        handler.lock().unwrap().rx.queue.generate_event().unwrap();
+        manager.handle_events(EVENT_TIMEOUT_MS).unwrap();
+        assert!(!handler.lock().unwrap().rx.deferred_frame);
+        let assert_received = |expected: &[u8; ETHERNET_FRAME_LEN]| {
+            // The host may also send IPv6 control packets when the TAP comes up.
+            let found = (0..rx.used.idx().load()).any(|index| {
+                let mut frame = [0; ETHERNET_FRAME_LEN];
+                mem.read_slice(
+                    &mut frame,
+                    GuestAddress(
+                        RX_TEST_BUFFER_BASE
+                            + u64::from(index) * u64::from(RX_TEST_BUFFER_SIZE)
+                            + vnet_hdr_len() as u64,
+                    ),
+                )
+                .unwrap();
+                &frame == expected
+            });
+            assert!(found, "injected frame was not delivered");
+        };
+        assert_received(&first);
+        assert_received(&second);
+        let third = send_tap_frame(&name, 0x33);
+        manager.handle_events(EVENT_TIMEOUT_MS).unwrap();
+        assert!(metrics.rx_tap_event_count.count() > blocked_events);
+        assert_received(&third);
     }
 }
