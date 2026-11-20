@@ -70,7 +70,7 @@ async fn handle_block_storage(
 
     if options.has_ephemeral_encryption {
         let mkfs_opts = BLOCK_EMPTYDIR_EXT4_MKFS_OPTS.join(" ");
-        crate::rpc::cdh_secure_mount(
+        let mounted = crate::rpc::cdh_secure_mount(
             "block-device",
             dev_num,
             "luks2",
@@ -78,7 +78,7 @@ async fn handle_block_storage(
             &mkfs_opts,
         )
         .await?;
-        let mount = mount_rollback_guard(logger, Some(storage.mount_point.clone()));
+        let mount = mount_rollback_guard(logger, mounted.then(|| storage.mount_point.clone()));
         set_ownership(logger, storage)?;
         let device = new_device(storage.mount_point.clone())?;
         scopeguard::ScopeGuard::into_inner(mount);
@@ -169,6 +169,67 @@ async fn ensure_ext4_filesystem(logger: &Logger, source: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn test_secure_mount_noop_preserves_existing_mount() {
+        test_utils::skip_if_not_root!();
+
+        // Other tests initialize the global CDH OnceCell, so exercise the no-client path separately.
+        if std::env::var_os("KATA_TEST_SECURE_MOUNT_NOOP").is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "storage::block_handler::tests::test_secure_mount_noop_preserves_existing_mount",
+                    "--nocapture",
+                ])
+                .env("KATA_TEST_SECURE_MOUNT_NOOP", "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+
+        assert!(!crate::confidential_data_hub::is_cdh_client_initialized());
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let root = tempfile::tempdir().unwrap();
+        let mount_point = root.path().join("mount");
+        fs::create_dir(&mount_point).unwrap();
+        nix::mount::mount(
+            Some("tmpfs"),
+            &mount_point,
+            Some("tmpfs"),
+            nix::mount::MsFlags::MS_RDONLY,
+            None::<&str>,
+        )
+        .unwrap();
+        scopeguard::defer! {
+            if crate::mount::is_mounted(mount_point.to_str().unwrap()).unwrap() {
+                nix::mount::umount(&mount_point).unwrap();
+            }
+        }
+        let storage = Storage {
+            mount_point: mount_point.to_str().unwrap().to_string(),
+            fs_group: Some(protocols::agent::FSGroup {
+                group_id: 1234,
+                ..Default::default()
+            })
+            .into(),
+            ..storage_with_driver_options(&[
+                EPHEMERAL_ENCRYPTION_DRIVER_OPTION,
+                KATA_BLOCK_VOLUME_CREATE_FS,
+            ])
+        };
+
+        let error = handle_block_storage(&logger, &storage, "1:3")
+            .await
+            .err()
+            .expect("ownership change on the read-only mount should fail");
+        assert_eq!(
+            error.downcast_ref::<nix::errno::Errno>(),
+            Some(&nix::errno::Errno::EROFS)
+        );
+        assert!(crate::mount::is_mounted(&storage.mount_point).unwrap());
+    }
 
     fn storage_with_driver_options(options: &[&str]) -> Storage {
         Storage {
