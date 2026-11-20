@@ -64,6 +64,9 @@ pub mod dmverity;
 /// VMDK (Virtual Machine Disk) types and utilities
 pub mod vmdk;
 
+/// Opening the host files behind a block device
+pub mod block_source;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};
