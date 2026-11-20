@@ -296,6 +296,11 @@ guest_swap_create_threshold_secs = 60
 # Default false
 enable_template = false
 
+# Include one eth0 in the template. Requires disable_vhost_net = true.
+# Each restored sandbox must supply one eth0 with its own TAP and guest MAC.
+# Reinitialize the template after changing this setting.
+preplug_network = false
+
 # Specifies the path of the template memory and device-state files.
 #
 # Default "/run/vc/vm/template"

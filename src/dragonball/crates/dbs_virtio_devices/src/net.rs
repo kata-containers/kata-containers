@@ -18,7 +18,7 @@ use dbs_utils::epoll_manager::{
     EpollManager, EventOps, EventSet, Events, MutEventSubscriber, SubscriberId,
 };
 use dbs_utils::metric::IncMetric;
-use dbs_utils::net::{net_gen, MacAddr, Tap};
+use dbs_utils::net::{net_gen, MacAddr, Tap, TapError as DbsTapError, MAC_ADDR_LEN};
 use dbs_utils::rate_limiter::{BucketUpdate, RateLimiter, TokenType};
 use libc;
 use log::{debug, error, info, trace, warn};
@@ -681,7 +681,15 @@ impl<AS: GuestAddressSpace> Net<AS> {
         f_access_platform: bool,
     ) -> Result<Self> {
         info!("open net tap {host_dev_name}");
-        let tap = Tap::open_named(host_dev_name.as_str(), false)
+        let tap = Tap::open_named(&host_dev_name, false)
+            .or_else(|err| match err {
+                // Linux requires IFF_MULTI_QUEUE even to attach a single queue
+                // to a TAP that the sandbox created with that flag.
+                DbsTapError::CreateTap(ref e) if e.raw_os_error() == Some(libc::EINVAL) => {
+                    Tap::open_named(&host_dev_name, true)
+                }
+                err => Err(err),
+            })
             .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::Open(err))))?;
         info!("net tap opened");
 
@@ -704,7 +712,7 @@ impl<AS: GuestAddressSpace> Net<AS> {
 impl<'a, AS: GuestAddressSpace> crate::persist::VirtioDevicePersist<'a> for Net<AS> {
     type State = crate::persist::VirtioDeviceInfoState;
     type SaveArgs = ();
-    type RestoreArgs = ();
+    type RestoreArgs = Option<&'a MacAddr>;
     type Error = crate::Error;
 
     /// Capture the guest-negotiated state of this device.
@@ -714,10 +722,24 @@ impl<'a, AS: GuestAddressSpace> crate::persist::VirtioDevicePersist<'a> for Net<
 
     /// Restore the guest-negotiated state of this device.
     ///
-    /// The device must have been re-created with the same configuration and
-    /// must not have been activated yet.
-    fn restore_state(&mut self, state: &Self::State, _args: ()) -> crate::Result<()> {
-        self.device_info.restore_state(state)
+    /// The device must be inactive and have the same negotiated features.
+    /// A sandbox restoring a template may supply a replacement MAC.
+    fn restore_state(
+        &mut self,
+        state: &Self::State,
+        guest_mac: Self::RestoreArgs,
+    ) -> crate::Result<()> {
+        self.device_info.restore_state(state)?;
+        if let Some(mac) = guest_mac {
+            // The guest driver resumes with its negotiated queues, but a new
+            // sandbox must see its own address when it reads the device.
+            self.device_info
+                .config_space
+                .get_mut(..MAC_ADDR_LEN)
+                .ok_or(Error::InvalidInput)?
+                .copy_from_slice(mac.get_bytes());
+        }
+        Ok(())
     }
 }
 
@@ -922,6 +944,33 @@ mod tests {
             receiver: None,
             metrics: Arc::new(NetDeviceMetrics::default()),
         }
+    }
+
+    #[test]
+    fn restore_net_with_sandbox_mac() {
+        use crate::persist::VirtioDevicePersist;
+
+        skip_if_kvm_unaccessable!();
+        let template_mac = MacAddr::from_bytes(&[2, 0, 0, 0, 0, 1]).unwrap();
+        let sandbox_mac = MacAddr::from_bytes(&[2, 0, 0, 0, 0, 2]).unwrap();
+        let mut dev = Net::<Arc<GuestMemoryMmap>>::new(
+            String::new(),
+            Some(&template_mac),
+            Arc::new(vec![256, 256]),
+            EpollManager::default(),
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        let snapshot = dev.save_state(()).unwrap();
+        dev.restore_state(&snapshot, Some(&sandbox_mac)).unwrap();
+        let mut expected = snapshot.clone();
+        expected.config_space[..MAC_ADDR_LEN].copy_from_slice(sandbox_mac.get_bytes());
+        assert_eq!(dev.save_state(()).unwrap(), expected);
+
+        dev.restore_state(&snapshot, None).unwrap();
+        assert_eq!(dev.save_state(()).unwrap(), snapshot);
     }
 
     #[test]
