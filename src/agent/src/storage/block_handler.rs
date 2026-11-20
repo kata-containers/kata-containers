@@ -170,22 +170,50 @@ async fn ensure_ext4_filesystem(logger: &Logger, source: &str) -> Result<()> {
 mod tests {
     use super::*;
 
+    struct TestSecureMountService;
+
+    #[async_trait::async_trait]
+    impl protocols::confidential_data_hub_ttrpc_async::SecureMountService for TestSecureMountService {
+        async fn secure_mount(
+            &self,
+            _ctx: &ttrpc::asynchronous::TtrpcContext,
+            req: protocols::confidential_data_hub::SecureMountRequest,
+        ) -> ttrpc::Result<protocols::confidential_data_hub::SecureMountResponse> {
+            nix::mount::mount(
+                Some("tmpfs"),
+                req.mount_point.as_str(),
+                Some("tmpfs"),
+                nix::mount::MsFlags::MS_RDONLY,
+                None::<&str>,
+            )
+            .map_err(|error| ttrpc::Error::Others(format!("mock secure mount failed: {error}")))?;
+            Ok(protocols::confidential_data_hub::SecureMountResponse::new())
+        }
+    }
+
+    fn run_in_fresh_process(test_name: &str) -> bool {
+        // Other tests initialize the global CDH OnceCell, so isolate each client state.
+        if std::env::var_os("KATA_TEST_SECURE_MOUNT_PROCESS").as_deref()
+            == Some(std::ffi::OsStr::new(test_name))
+        {
+            return false;
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", test_name, "--nocapture"])
+            .env("KATA_TEST_SECURE_MOUNT_PROCESS", test_name)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        true
+    }
+
     #[tokio::test]
     async fn test_secure_mount_noop_preserves_existing_mount() {
         test_utils::skip_if_not_root!();
 
-        // Other tests initialize the global CDH OnceCell, so exercise the no-client path separately.
-        if std::env::var_os("KATA_TEST_SECURE_MOUNT_NOOP").is_none() {
-            let status = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "storage::block_handler::tests::test_secure_mount_noop_preserves_existing_mount",
-                    "--nocapture",
-                ])
-                .env("KATA_TEST_SECURE_MOUNT_NOOP", "1")
-                .status()
-                .unwrap();
-            assert!(status.success());
+        if run_in_fresh_process(
+            "storage::block_handler::tests::test_secure_mount_noop_preserves_existing_mount",
+        ) {
             return;
         }
 
@@ -229,6 +257,72 @@ mod tests {
             Some(&nix::errno::Errno::EROFS)
         );
         assert!(crate::mount::is_mounted(&storage.mount_point).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_secure_mount_acquired_mount_rollback_and_success() {
+        test_utils::skip_if_not_root!();
+
+        if run_in_fresh_process(
+            "storage::block_handler::tests::test_secure_mount_acquired_mount_rollback_and_success",
+        ) {
+            return;
+        }
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let root = tempfile::tempdir().unwrap();
+        let socket_uri = format!("unix://{}", root.path().join("cdh.sock").display());
+        let service = protocols::confidential_data_hub_ttrpc_async::create_secure_mount_service(
+            Arc::new(TestSecureMountService),
+        );
+        let mut server = ttrpc::asynchronous::Server::new()
+            .bind(&socket_uri)
+            .unwrap()
+            .register_service(service);
+        server.start().await.unwrap();
+        crate::confidential_data_hub::init_cdh_client(&socket_uri)
+            .await
+            .unwrap();
+
+        for fail_ownership in [true, false] {
+            let mount_point = root.path().join(format!("mount-{fail_ownership}"));
+            scopeguard::defer! {
+                if crate::mount::is_mounted(mount_point.to_str().unwrap()).unwrap() {
+                    nix::mount::umount(&mount_point).unwrap();
+                }
+            }
+            let storage = Storage {
+                mount_point: mount_point.to_str().unwrap().to_string(),
+                fs_group: fail_ownership
+                    .then_some(protocols::agent::FSGroup {
+                        group_id: 1234,
+                        ..Default::default()
+                    })
+                    .into(),
+                ..storage_with_driver_options(&[
+                    EPHEMERAL_ENCRYPTION_DRIVER_OPTION,
+                    KATA_BLOCK_VOLUME_CREATE_FS,
+                ])
+            };
+
+            let result = handle_block_storage(&logger, &storage, "1:3").await;
+            if fail_ownership {
+                let error = result
+                    .err()
+                    .expect("ownership change on the acquired read-only mount should fail");
+                assert_eq!(
+                    error.downcast_ref::<nix::errno::Errno>(),
+                    Some(&nix::errno::Errno::EROFS)
+                );
+                assert!(!crate::mount::is_mounted(&storage.mount_point).unwrap());
+            } else {
+                let device = result.unwrap();
+                assert_eq!(device.path(), Some(storage.mount_point.as_str()));
+                assert!(crate::mount::is_mounted(&storage.mount_point).unwrap());
+            }
+        }
+
+        server.shutdown().await.unwrap();
     }
 
     fn storage_with_driver_options(options: &[&str]) -> Storage {
