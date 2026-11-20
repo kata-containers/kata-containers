@@ -149,8 +149,7 @@ impl ConfigPlugin for QemuConfig {
                 }
             }
 
-            if (qemu.cpu_info.default_vcpus > 0.0
-                && qemu.cpu_info.default_vcpus as u32 > default::MAX_QEMU_VCPUS)
+            if qemu.cpu_info.default_vcpus > default::MAX_QEMU_VCPUS as f32
                 || qemu.cpu_info.default_maxvcpus > default::MAX_QEMU_VCPUS
             {
                 return Err(std::io::Error::other(format!(
@@ -180,5 +179,49 @@ impl ConfigPlugin for QemuConfig {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::hypervisor::Hypervisor;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_validate_cpu_limits() {
+        let plugin = QemuConfig::new();
+        let limit = default::MAX_QEMU_VCPUS;
+        let binary = NamedTempFile::new().unwrap();
+        let ctl = NamedTempFile::new().unwrap();
+        let mut qemu = Hypervisor {
+            path: binary.path().to_string_lossy().into_owned(),
+            ctlpath: ctl.path().to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        qemu.boot_info.kernel = "vmlinuz".to_string();
+        qemu.boot_info.image = "kata.img".to_string();
+        qemu.memory_info.default_memory = MIN_QEMU_MEMORY_SIZE_MB;
+
+        for (boot_vcpus, max_vcpus, valid) in [
+            (limit as f32 - 0.5, limit, true),
+            (limit as f32, limit, true),
+            (limit as f32 + 0.5, limit, false),
+            (limit as f32 + 1.0, limit, false),
+            (1.0, limit + 1, false),
+        ] {
+            qemu.cpu_info.default_vcpus = boot_vcpus;
+            qemu.cpu_info.default_maxvcpus = max_vcpus;
+            let mut config = TomlConfig::default();
+            config
+                .hypervisor
+                .insert(HYPERVISOR_NAME_QEMU.to_string(), qemu.clone());
+
+            assert_eq!(
+                plugin.validate(&config).is_ok(),
+                valid,
+                "boot_vcpus={boot_vcpus}, max_vcpus={max_vcpus}"
+            );
+        }
     }
 }

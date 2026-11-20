@@ -113,8 +113,7 @@ impl ConfigPlugin for FirecrackerConfig {
                 ));
             }
 
-            if (firecracker.cpu_info.default_vcpus > 0.0
-                && firecracker.cpu_info.default_vcpus as u32 > default::MAX_FIRECRACKER_VCPUS)
+            if firecracker.cpu_info.default_vcpus > default::MAX_FIRECRACKER_VCPUS as f32
                 || firecracker.cpu_info.default_maxvcpus > default::MAX_FIRECRACKER_VCPUS
             {
                 return Err(std::io::Error::other(format!(
@@ -138,10 +137,11 @@ impl ConfigPlugin for FirecrackerConfig {
 mod tests {
     use super::*;
     use crate::config::hypervisor::Hypervisor;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_validate_read_only_slots() {
-        let image = tempfile::NamedTempFile::new().unwrap();
+        let image = NamedTempFile::new().unwrap();
         let path = image.path().to_str().unwrap().to_string();
         for slots in [0, 1, 7, 8, u32::MAX] {
             let mut hypervisor = Hypervisor {
@@ -165,6 +165,42 @@ mod tests {
                 assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
                 assert!(error.to_string().contains("block_device_read_only_slots"));
             }
+        }
+    }
+
+    #[test]
+    fn test_validate_cpu_limits() {
+        let plugin = FirecrackerConfig::new();
+        let limit = default::MAX_FIRECRACKER_VCPUS;
+        let binary = NamedTempFile::new().unwrap();
+        let mut firecracker = Hypervisor {
+            path: binary.path().to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        firecracker.boot_info.kernel = "vmlinuz".to_string();
+        firecracker.boot_info.image = "kata.img".to_string();
+        firecracker.memory_info.default_memory = MIN_FIRECRACKER_MEMORY_SIZE_MB;
+
+        for (boot_vcpus, max_vcpus, valid) in [
+            (limit as f32 - 0.5, limit, true),
+            (limit as f32, limit, true),
+            (limit as f32 + 0.5, limit, false),
+            (limit as f32 + 1.0, limit, false),
+            (1.0, limit + 1, false),
+        ] {
+            firecracker.cpu_info.default_vcpus = boot_vcpus;
+            firecracker.cpu_info.default_maxvcpus = max_vcpus;
+            let mut config = TomlConfig::default();
+            config.hypervisor.insert(
+                HYPERVISOR_NAME_FIRECRACKER.to_string(),
+                firecracker.clone(),
+            );
+
+            assert_eq!(
+                plugin.validate(&config).is_ok(),
+                valid,
+                "boot_vcpus={boot_vcpus}, max_vcpus={max_vcpus}"
+            );
         }
     }
 }
