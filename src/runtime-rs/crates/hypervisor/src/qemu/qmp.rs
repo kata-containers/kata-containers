@@ -4,7 +4,9 @@
 //
 
 use crate::device::pci_path::PciPath;
-use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_block_source};
+use crate::qemu::block_source::{
+    block_fd_node_name, block_fd_opaque, prepare_block_source, PreparedBackingImage,
+};
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
 use crate::virtio_blk_modern::BlockSourceFormat;
@@ -12,6 +14,7 @@ use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
+use kata_types::qcow2::ImageFormat;
 use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
@@ -98,32 +101,79 @@ impl BlockFileSettings<'_> {
     }
 }
 
-/// Build the node of a qcow2 volume, used by both `blockdev-add` and the
+/// Build the node tree of a qcow2 volume, used by both `blockdev-add` and the
 /// `-blockdev` of a cold-plugged volume.
 ///
-/// `top_file` is the node reading the image. `backing` is set to null, so
-/// QEMU never opens a backing file named in the image header.
+/// `top_file` is the node reading the top image. `backing` is ordered base
+/// first, and every backing node is read-only and force-shared, so several pods
+/// can use the same images. Each qcow2 node names its backing node explicitly,
+/// so QEMU never opens a path stored in an image header. Only the top node is
+/// named, so deleting it removes the whole chain.
 pub(super) fn qcow2_chain_node(
     node_name: &str,
     top_file: BlockdevOptions,
     read_only: bool,
     discard: Option<BlockdevDiscardOptions>,
+    backing: &[PreparedBackingImage],
+    settings: &BlockFileSettings,
 ) -> BlockdevOptions {
-    BlockdevOptions::qcow2 {
-        base: BlockdevOptionsBase {
+    let mut below = None;
+    for image in backing {
+        let base = BlockdevOptionsBase {
             auto_read_only: None,
             cache: None,
             detect_zeroes: None,
-            discard,
-            force_share: read_only.then_some(true),
-            node_name: Some(node_name.to_owned()),
-            read_only: Some(read_only),
-        },
+            discard: None,
+            force_share: Some(true),
+            node_name: None,
+            read_only: Some(true),
+        };
+        let file = settings.file_node(&image.filename, image.is_regular_file, true, None);
+        below = Some(match image.format {
+            ImageFormat::Raw => BlockdevOptions::raw {
+                base,
+                raw: BlockdevOptionsRaw {
+                    base: BlockdevOptionsGenericFormat {
+                        file: BlockdevRef::definition(Box::new(file)),
+                    },
+                    offset: None,
+                    size: None,
+                },
+            },
+            ImageFormat::Qcow2 => qcow2_node(base, file, below.take()),
+        });
+    }
+
+    let base = BlockdevOptionsBase {
+        auto_read_only: None,
+        cache: None,
+        detect_zeroes: None,
+        discard,
+        force_share: read_only.then_some(true),
+        node_name: Some(node_name.to_owned()),
+        read_only: Some(read_only),
+    };
+    qcow2_node(base, top_file, below)
+}
+
+/// A qcow2 node over `file`. With no `backing` node, `backing` is set to null,
+/// so QEMU ignores any backing file named in the image header.
+fn qcow2_node(
+    base: BlockdevOptionsBase,
+    file: BlockdevOptions,
+    backing: Option<BlockdevOptions>,
+) -> BlockdevOptions {
+    let backing = match backing {
+        Some(node) => BlockdevRefOrNull::definition(Box::new(node)),
+        None => BlockdevRefOrNull::null(()),
+    };
+    BlockdevOptions::qcow2 {
+        base,
         qcow2: BlockdevOptionsQcow2::from(BlockdevOptionsGenericCOWFormat {
             base: BlockdevOptionsGenericFormat {
-                file: BlockdevRef::definition(Box::new(top_file)),
+                file: BlockdevRef::definition(Box::new(file)),
             },
-            backing: Some(BlockdevRefOrNull::null(())),
+            backing: Some(backing),
         }),
     }
 }
@@ -1415,9 +1465,14 @@ impl Qmp {
                     },
                 }
             }
-            BlockSourceFormat::Qcow2(_) => {
-                qcow2_chain_node(&node_name, blockdev_file, is_readonly, discard)
-            }
+            BlockSourceFormat::Qcow2(_) => qcow2_chain_node(
+                &node_name,
+                blockdev_file,
+                is_readonly,
+                discard,
+                &prepared_source.backing,
+                &settings,
+            ),
         };
 
         if !fdset_ids.is_empty() {
@@ -2007,20 +2062,33 @@ mod tests {
         );
     }
 
+    fn prepared(
+        filename: &str,
+        format: ImageFormat,
+        is_regular_file: bool,
+    ) -> PreparedBackingImage {
+        PreparedBackingImage {
+            filename: filename.to_string(),
+            format,
+            is_regular_file,
+        }
+    }
+
     const SETTINGS: BlockFileSettings = BlockFileSettings {
         is_direct: Some(false),
         aio: "threads",
         no_drop: false,
     };
 
-    /// The qcow2 node as QEMU receives it, with the image read from
+    /// The qcow2 node tree as QEMU receives it, with the top image read from
     /// /dev/fdset/1.
     fn qcow2_chain_json(
         read_only: bool,
         discard: Option<BlockdevDiscardOptions>,
+        backing: &[PreparedBackingImage],
     ) -> serde_json::Value {
         let top_file = SETTINGS.file_node("/dev/fdset/1", true, read_only, discard);
-        let node = qcow2_chain_node("drive-5", top_file, read_only, discard);
+        let node = qcow2_chain_node("drive-5", top_file, read_only, discard, backing, &SETTINGS);
         serde_json::to_value(&node).unwrap()
     }
 
@@ -2080,8 +2148,46 @@ mod tests {
     }
 
     #[test]
+    fn qcow2_chain_nests_read_only_layers_with_explicit_backing() {
+        let backing = [
+            prepared("/dev/fdset/2", ImageFormat::Raw, false),
+            prepared("/dev/fdset/3", ImageFormat::Qcow2, true),
+        ];
+        let v = qcow2_chain_json(false, None, &backing);
+
+        // Top: named, writable, explicit backing.
+        assert_eq!(v["driver"], "qcow2");
+        assert_eq!(v["node-name"], "drive-5");
+        assert_eq!(v["read-only"], false);
+        assert!(v.get("force-share").is_none());
+        assert_eq!(v["file"]["filename"], "/dev/fdset/1");
+        assert_eq!(v["file"]["read-only"], false);
+
+        // Middle qcow2 layer, then the raw base as a block device.
+        let mid = &v["backing"];
+        assert_eq!(mid["driver"], "qcow2");
+        assert_eq!(mid["file"]["filename"], "/dev/fdset/3");
+        assert_eq!(mid["file"]["driver"], "file");
+        let base = &mid["backing"];
+        assert_eq!(base["driver"], "raw");
+        assert_eq!(base["file"]["filename"], "/dev/fdset/2");
+        assert_eq!(base["file"]["driver"], "host_device");
+        assert!(base.get("backing").is_none());
+
+        // Every lower node, format and file alike, is read-only and shareable,
+        // and anonymous so blockdev-del on the top node removes them.
+        for node in [mid, base] {
+            assert_eq!(node["read-only"], true);
+            assert_eq!(node["force-share"], true);
+            assert!(node.get("node-name").is_none());
+            assert_eq!(node["file"]["read-only"], true);
+            assert_eq!(node["file"]["cache"]["direct"], false);
+        }
+    }
+
+    #[test]
     fn qcow2_without_chain_disables_backing_and_honours_read_only() {
-        let v = qcow2_chain_json(true, None);
+        let v = qcow2_chain_json(true, None, &[]);
         // An explicit null stops QEMU from following a path in the header.
         assert!(v.as_object().unwrap().contains_key("backing"));
         assert!(v["backing"].is_null());
@@ -2091,16 +2197,23 @@ mod tests {
     }
 
     #[test]
-    fn qcow2_discard() {
-        let v = qcow2_chain_json(false, Some(BlockdevDiscardOptions::unmap));
-        // Both nodes need it for discards to punch holes in the host file.
-        assert_eq!(v["node-name"], "drive-5");
-        assert_eq!(v["read-only"], false);
-        assert!(v.get("force-share").is_none());
+    fn qcow2_chain_discards_only_on_the_top_image() {
+        let backing = [
+            prepared("/dev/fdset/2", ImageFormat::Raw, true),
+            prepared("/dev/fdset/3", ImageFormat::Qcow2, true),
+        ];
+        let v = qcow2_chain_json(false, Some(BlockdevDiscardOptions::unmap), &backing);
+
+        // Both top nodes need it for discards to punch holes in the host file.
         assert_eq!(v["discard"], "unmap");
         assert_eq!(v["file"]["discard"], "unmap");
+        let mid = &v["backing"];
+        for node in [mid, &mid["backing"]] {
+            assert!(node.get("discard").is_none());
+            assert!(node["file"].get("discard").is_none());
+        }
 
-        let v = qcow2_chain_json(false, None);
+        let v = qcow2_chain_json(false, None, &backing);
         assert!(v.get("discard").is_none());
         assert!(v["file"].get("discard").is_none());
     }

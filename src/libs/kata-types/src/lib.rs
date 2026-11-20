@@ -67,7 +67,7 @@ pub mod vmdk;
 /// Opening the host files behind a block device
 pub mod block_source;
 
-/// qcow2 description for direct-assigned volumes
+/// qcow2 backing-chain description for direct-assigned volumes
 pub mod qcow2;
 
 use std::path::Path;

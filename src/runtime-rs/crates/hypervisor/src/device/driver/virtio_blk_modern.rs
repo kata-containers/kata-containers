@@ -62,7 +62,8 @@ impl std::fmt::Display for BlockDeviceAio {
 ///
 /// @BlockSourceFormat::Raw for a plain raw block source;
 /// @BlockSourceFormat::Vmdk for a structured multi-extent VMDK layout;
-/// @BlockSourceFormat::Qcow2 for a qcow2 image;
+/// @BlockSourceFormat::Qcow2 for a qcow2 top image, optionally layered on a
+/// chain of read-only backing images;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum BlockSourceFormat {
     /// Plain raw block device, the default.
@@ -70,7 +71,8 @@ pub enum BlockSourceFormat {
     Raw,
     /// Structured VMDK layout with extent metadata.
     Vmdk(VmdkConfig),
-    /// qcow2 image (`path_on_host`).
+    /// qcow2 top image (`path_on_host`) and its read-only backing chain.
+    /// Only the top image is ever opened writable.
     Qcow2(Qcow2Chain),
 }
 

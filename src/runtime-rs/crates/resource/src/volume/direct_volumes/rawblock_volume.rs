@@ -63,9 +63,11 @@ impl RawblockVolume {
             ));
         }
 
-        // The CSI declares the format; it is never probed from the image. The
-        // hypervisor checks the image when it opens it.
-        let qcow2 = parse_qcow2_chain(&mount_info.metadata)
+        // The CSI declares the format; it is never probed from the image. A
+        // qcow2 volume is a top image, optionally layered on read-only backing
+        // images that Kata only attaches and never creates. The hypervisor
+        // checks each image when it opens it.
+        let qcow2 = parse_qcow2_chain(&mount_info.metadata, &mount_info.device)
             .context("invalid qcow2 direct volume metadata")?;
 
         // For a real block device, honor its host read-only flag (BLKROGET) in
