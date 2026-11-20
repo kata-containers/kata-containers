@@ -6,7 +6,10 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use common::{config::load_config, RuntimeHandler};
+use common::{
+    config::{load_config, load_config_from},
+    RuntimeHandler,
+};
 use tokio::runtime::Runtime;
 use virt_container::{factory, VirtContainer};
 
@@ -14,8 +17,12 @@ use crate::args::{FactoryArgs, FactorySubCommand};
 
 pub fn handle_factory(factory_args: FactoryArgs) -> Result<()> {
     VirtContainer::init().context("failed to initialize virt container")?;
-    let toml_config =
-        load_config(&HashMap::new(), &None).context("failed to load runtime configuration")?;
+    let annotations = HashMap::new();
+    let toml_config = match factory_args.config.as_ref() {
+        Some(path) => load_config_from(&annotations, path).map(|(config, _)| config),
+        None => load_config(&annotations, &None),
+    }
+    .context("failed to load runtime configuration")?;
 
     let rt = Runtime::new().context("failed to create Tokio runtime")?;
     rt.block_on(async {

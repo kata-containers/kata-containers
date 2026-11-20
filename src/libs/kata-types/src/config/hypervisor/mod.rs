@@ -1716,6 +1716,10 @@ pub struct Factory {
     /// Example: "/run/vc/vm/template"
     #[serde(default)]
     pub template_path: String,
+
+    /// Optional absolute directory holding templates keyed by effective VM configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_pool: Option<String>,
 }
 
 /// Common configuration information for hypervisors.

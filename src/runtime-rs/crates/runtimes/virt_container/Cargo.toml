@@ -10,6 +10,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 awaitgroup = { workspace = true }
 containerd-shim-protos = { workspace = true }
+hex = { workspace = true }
 libc = { workspace = true }
 nix = { workspace = true }
 oci-spec = { workspace = true }
@@ -17,6 +18,7 @@ protobuf = { workspace = true }
 sendfd = { features = ["tokio"], version = "0.4.3" }
 serde = { features = ["derive"], workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 strum = { workspace = true }

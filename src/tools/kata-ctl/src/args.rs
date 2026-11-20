@@ -110,6 +110,10 @@ pub enum CheckSubCommand {
 
 #[derive(Parser, Debug)]
 pub struct FactoryArgs {
+    /// Use an explicit runtime configuration for this template.
+    #[arg(long, global = true)]
+    pub config: Option<std::path::PathBuf>,
+
     #[command(subcommand)]
     pub command: FactorySubCommand,
 }

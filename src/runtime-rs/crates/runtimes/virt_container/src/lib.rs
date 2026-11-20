@@ -71,7 +71,7 @@ use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 ))]
 use kata_types::config::OpenVmmConfig;
 
-use crate::factory::{check_template_vm_config, template_device_state_path};
+use crate::factory::{matching_template_path, template_device_state_path};
 use persist::sandbox_persist::Persist;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
@@ -151,15 +151,21 @@ impl RuntimeHandler for VirtContainer {
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
         let mut factory = config.get_factory();
-        if factory.enable_template {
-            if let Err(e) = check_template_vm_config(&config) {
-                info!(sl!(), "cannot use VM template, booting normally: {:#}", e);
-                factory.enable_template = false;
+        let template_path = if factory.enable_template {
+            match matching_template_path(&config) {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    info!(sl!(), "cannot use VM template, booting normally: {:#}", e);
+                    factory.enable_template = false;
+                    None
+                }
             }
-        }
+        } else {
+            None
+        };
 
-        let (hypervisor, agent) = if factory.enable_template {
-            build_vm_from_template(&config)
+        let (hypervisor, agent) = if let Some(path) = template_path {
+            build_vm_from_template(&config, &path)
                 .await
                 .context("build vm from template")?
         } else {
@@ -220,13 +226,13 @@ impl RuntimeHandler for VirtContainer {
 
 async fn build_vm_from_template(
     config: &TomlConfig,
+    path: &Path,
 ) -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>)> {
     let mut toml_config = config.clone();
     let hypervisor_name = toml_config.runtime.hypervisor_name.clone();
     if let Some(h) = toml_config.hypervisor.get_mut(&hypervisor_name) {
         h.vm_template.boot_to_be_template = false;
         h.vm_template.boot_from_template = true;
-        let path = Path::new(&h.factory.template_path);
         h.vm_template.memory_path = path.join("memory").to_string_lossy().to_string();
         h.vm_template.device_state_path = template_device_state_path(&hypervisor_name, path)
             .to_string_lossy()
