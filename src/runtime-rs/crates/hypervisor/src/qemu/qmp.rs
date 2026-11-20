@@ -17,7 +17,8 @@ use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevDiscardOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsFile, BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat,
-    BlockdevOptionsRaw, BlockdevRef, MigrationInfo, PciDeviceInfo,
+    BlockdevOptionsQcow2, BlockdevOptionsRaw, BlockdevRef, BlockdevRefOrNull, MigrationInfo,
+    PciDeviceInfo,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -194,6 +195,36 @@ impl BlockFileSettings<'_> {
                 host_device: file,
             }
         }
+    }
+}
+
+/// Build the node of a qcow2 volume, used by both `blockdev-add` and the
+/// `-blockdev` of a cold-plugged volume.
+///
+/// `image_file` is the node reading the image. `backing` is set to null, so
+/// QEMU never opens a backing file named in the image header.
+pub(super) fn qcow2_node(
+    node_name: &str,
+    image_file: BlockdevOptions,
+    read_only: bool,
+    discard: Option<BlockdevDiscardOptions>,
+) -> BlockdevOptions {
+    BlockdevOptions::qcow2 {
+        base: BlockdevOptionsBase {
+            auto_read_only: None,
+            cache: None,
+            detect_zeroes: None,
+            discard,
+            force_share: read_only.then_some(true),
+            node_name: Some(node_name.to_owned()),
+            read_only: Some(read_only),
+        },
+        qcow2: BlockdevOptionsQcow2::from(BlockdevOptionsGenericCOWFormat {
+            base: BlockdevOptionsGenericFormat {
+                file: BlockdevRef::definition(Box::new(image_file)),
+            },
+            backing: Some(BlockdevRefOrNull::null(())),
+        }),
     }
 }
 
@@ -1500,8 +1531,8 @@ impl Qmp {
             discard,
         );
 
-        let blockdev_options = if matches!(source, BlockSourceFormat::Raw) {
-            BlockdevOptions::raw {
+        let blockdev_options = match source {
+            BlockSourceFormat::Raw => BlockdevOptions::raw {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
                     cache: None,
@@ -1518,30 +1549,34 @@ impl Qmp {
                     offset: None,
                     size: None,
                 },
-            }
-        } else {
-            info!(
-                sl!(),
-                "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
-                path_on_host,
-                is_readonly
-            );
-            BlockdevOptions::vmdk {
-                base: BlockdevOptionsBase {
-                    detect_zeroes: None,
-                    cache: None,
-                    discard,
-                    force_share: Some(true),
-                    auto_read_only: None,
-                    node_name: Some(node_name.clone()),
-                    read_only: Some(is_readonly),
-                },
-                vmdk: BlockdevOptionsGenericCOWFormat {
-                    base: BlockdevOptionsGenericFormat {
-                        file: BlockdevRef::definition(Box::new(blockdev_file)),
+            },
+            BlockSourceFormat::Vmdk(_) => {
+                info!(
+                    sl!(),
+                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                    path_on_host,
+                    is_readonly
+                );
+                BlockdevOptions::vmdk {
+                    base: BlockdevOptionsBase {
+                        detect_zeroes: None,
+                        cache: None,
+                        discard,
+                        force_share: Some(true),
+                        auto_read_only: None,
+                        node_name: Some(node_name.clone()),
+                        read_only: Some(is_readonly),
                     },
-                    backing: None,
-                },
+                    vmdk: BlockdevOptionsGenericCOWFormat {
+                        base: BlockdevOptionsGenericFormat {
+                            file: BlockdevRef::definition(Box::new(blockdev_file)),
+                        },
+                        backing: None,
+                    },
+                }
+            }
+            BlockSourceFormat::Qcow2(_) => {
+                qcow2_node(&node_name, blockdev_file, is_readonly, discard)
             }
         };
 
@@ -2186,6 +2221,17 @@ mod tests {
         no_drop: false,
     };
 
+    /// The qcow2 node as QEMU receives it, with the image read from
+    /// /dev/fdset/1.
+    fn qcow2_node_json(
+        read_only: bool,
+        discard: Option<BlockdevDiscardOptions>,
+    ) -> serde_json::Value {
+        let image_file = SETTINGS.file_node("/dev/fdset/1", true, read_only, discard);
+        let node = qcow2_node("drive-5", image_file, read_only, discard);
+        serde_json::to_value(&node).unwrap()
+    }
+
     #[test]
     fn file_node_driver_and_settings() {
         // (is_regular_file, settings, expected node)
@@ -2239,5 +2285,31 @@ mod tests {
             let actual = serde_json::to_value(&node).unwrap();
             assert_eq!(&actual, expected, "test[{}]", i);
         }
+    }
+
+    #[test]
+    fn qcow2_disables_backing_and_honours_read_only() {
+        let v = qcow2_node_json(true, None);
+        // An explicit null stops QEMU from following a path in the header.
+        assert!(v.as_object().unwrap().contains_key("backing"));
+        assert!(v["backing"].is_null());
+        assert_eq!(v["read-only"], true);
+        assert_eq!(v["force-share"], true);
+        assert_eq!(v["file"]["read-only"], true);
+    }
+
+    #[test]
+    fn qcow2_discard() {
+        let v = qcow2_node_json(false, Some(BlockdevDiscardOptions::unmap));
+        // Both nodes need it for discards to punch holes in the host file.
+        assert_eq!(v["node-name"], "drive-5");
+        assert_eq!(v["read-only"], false);
+        assert!(v.get("force-share").is_none());
+        assert_eq!(v["discard"], "unmap");
+        assert_eq!(v["file"]["discard"], "unmap");
+
+        let v = qcow2_node_json(false, None);
+        assert!(v.get("discard").is_none());
+        assert!(v["file"].get("discard").is_none());
     }
 }

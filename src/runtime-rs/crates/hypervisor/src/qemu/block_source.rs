@@ -4,6 +4,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::block_source::open_block_source;
+use kata_types::qcow2::Qcow2Volume;
 use kata_types::vmdk::validate_vmdk_layout;
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
@@ -34,6 +35,32 @@ pub(super) fn block_fd_node_name(opaque: &str) -> Option<&str> {
 pub(super) struct PreparedBlockSource {
     pub filename: String,
     pub is_regular_file: bool,
+}
+
+/// Register the opened image of a qcow2 volume with QEMU.
+///
+/// `Qcow2Volume::open` opens and checks the image before QEMU sees it, so a
+/// rejected volume leaves nothing behind in QEMU.
+fn prepare_qcow2_source<F>(
+    path: &str,
+    qcow2: &Qcow2Volume,
+    is_readonly: bool,
+    is_direct: bool,
+    register: &mut F,
+) -> Result<PreparedBlockSource>
+where
+    F: FnMut(File, &str) -> Result<String>,
+{
+    let volume = qcow2.open(path, is_readonly, is_direct)?;
+
+    // The label tells the files of one volume apart, so they can be found and
+    // removed again, also after a shim restart (see `block_fd_opaque`).
+    let filename = register(volume.image.file, "block-source")?;
+
+    Ok(PreparedBlockSource {
+        filename,
+        is_regular_file: true,
+    })
 }
 
 fn create_vmdk_descriptor_file(
@@ -89,8 +116,8 @@ pub(super) fn prepare_block_source<F>(
 where
     F: FnMut(File, &str) -> Result<String>,
 {
-    if let BlockSourceFormat::Qcow2(_) = source {
-        return Err(anyhow!("qcow2 block sources are not supported by QEMU yet"));
+    if let BlockSourceFormat::Qcow2(qcow2) = source {
+        return prepare_qcow2_source(path, qcow2, is_readonly, is_direct, &mut register);
     }
 
     let BlockSourceFormat::Vmdk(vmdk) = source else {
@@ -148,6 +175,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_types::qcow2::QCOW2_MAGIC;
     use kata_types::vmdk::VmdkConfig;
     use nix::fcntl::{fcntl, FcntlArg, OFlag};
     use std::cell::RefCell;
@@ -390,32 +418,81 @@ mod tests {
     }
 
     #[test]
-    fn rejects_qcow2_source() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("disk.qcow2");
-        std::fs::write(&path, b"QFI\xfb").unwrap();
-
-        let error = prepare_block_source(
-            path.to_str().unwrap(),
-            &BlockSourceFormat::Qcow2(Default::default()),
-            false,
-            false,
-            |_, _| panic!("a qcow2 source must not reach QEMU"),
-        )
-        .unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "qcow2 block sources are not supported by QEMU yet"
-        );
-    }
-
-    #[test]
     fn identifies_owned_block_fdsets() {
         let opaque = block_fd_opaque("drive-3", "vmdk-extent-0");
 
         assert_eq!(block_fd_node_name(&opaque), Some("drive-3"));
         assert_eq!(block_fd_node_name("unrelated"), None);
         assert_eq!(block_fd_node_name("kata-block::source"), None);
+    }
+
+    fn qcow2_image(dir: &Path, name: &str, backing: bool) -> String {
+        let mut header = vec![0_u8; 104];
+        header[0..4].copy_from_slice(&QCOW2_MAGIC);
+        header[4..8].copy_from_slice(&3_u32.to_be_bytes());
+        if backing {
+            header[8..16].copy_from_slice(&512_u64.to_be_bytes());
+        }
+        let path = dir.join(name);
+        std::fs::write(&path, header).unwrap();
+        path.to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn thin_qcow2_registers_one_image() {
+        let dir = tempdir().unwrap();
+        let image = qcow2_image(dir.path(), "disk.qcow2", false);
+
+        // (is_readonly, expect a writable descriptor)
+        let tests = [(false, true), (true, false)];
+
+        for (i, (is_readonly, expect_writable)) in tests.iter().enumerate() {
+            let labels = RefCell::new(Vec::new());
+            let prepared = prepare_block_source(
+                &image,
+                &BlockSourceFormat::Qcow2(Qcow2Volume::default()),
+                *is_readonly,
+                false,
+                |file, label| {
+                    let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
+                    let writable = flags.contains(OFlag::O_RDWR);
+                    assert_eq!(writable, *expect_writable, "test[{}]", i);
+                    labels.borrow_mut().push(label.to_string());
+                    Ok("/dev/fdset/1".to_string())
+                },
+            );
+            let msg = format!("test[{}] read-only {}: {:?}", i, is_readonly, prepared);
+            let prepared = prepared.unwrap_or_else(|_| panic!("{}", msg));
+
+            assert_eq!(*labels.borrow(), ["block-source"], "{}", msg);
+            assert_eq!(prepared.filename, "/dev/fdset/1", "{}", msg);
+            assert!(prepared.is_regular_file, "{}", msg);
+        }
+    }
+
+    #[test]
+    fn rejected_qcow2_image_registers_nothing() {
+        let dir = tempdir().unwrap();
+        let image = qcow2_image(dir.path(), "disk.qcow2", true);
+
+        let registered = RefCell::new(0);
+        let result = prepare_block_source(
+            &image,
+            &BlockSourceFormat::Qcow2(Qcow2Volume::default()),
+            false,
+            false,
+            |_, _| {
+                *registered.borrow_mut() += 1;
+                Ok("/dev/fdset/1".to_string())
+            },
+        );
+
+        let error = format!("{:#}", result.unwrap_err());
+        assert!(
+            error.contains(&format!("check qcow2 header of {image}")),
+            "{}",
+            error
+        );
+        assert_eq!(*registered.borrow(), 0);
     }
 }
