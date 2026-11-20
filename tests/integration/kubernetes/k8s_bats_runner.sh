@@ -104,7 +104,19 @@ run_bats_file_with_mode() {
 	# passing-test output for humans reading the CI log.
 	bats --tap --timing --show-output-of-passing-tests \
 		"${extra_args[@]}" "${test_entry}" | tee "${out_file}"
-	return "${PIPESTATUS[0]}"
+	local bats_status="${PIPESTATUS[0]}"
+	[[ "${bats_status}" -eq 0 ]] || return "${bats_status}"
+
+	# An interrupted bats run can exit successfully without emitting a verdict.
+	# Require a complete TAP plan before reporting the file as passing.
+	if ! awk '
+		/^1\.\.[0-9]+([[:space:]]|$)/ { planned = substr($0, 4) + 0; plans++ }
+		/^(not )?ok [0-9]+([[:space:]]|$)/ { completed++ }
+		END { exit !(plans == 1 && completed == planned) }
+	' "${out_file}"; then
+		echo "# Incomplete TAP results for ${test_entry}" | tee -a "${out_file}"
+		return 1
+	fi
 }
 
 # Triage-only re-run of failed cases on the debug RuntimeClass.
