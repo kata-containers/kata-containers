@@ -142,6 +142,9 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
+    // A failed start may have consumed restore state or created resources.
+    // Reject retries even before stop() records the sandbox as stopped.
+    start_failed: bool,
     /// start_vm() can fail after creating a process, before a watcher exists.
     vmm_start_attempted: bool,
     vmm_exit_watched: bool,
@@ -153,9 +156,21 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
+            start_failed: false,
             vmm_start_attempted: false,
             vmm_exit_watched: false,
         }
+    }
+
+    fn needs_start(&self) -> Result<bool> {
+        if self.start_failed || self.state == SandboxState::Stopped {
+            return Err(common::error::Error::SandboxOperationPrecondition(
+                "cannot start a stopped sandbox or retry a failed sandbox start".to_string(),
+            )
+            .into());
+        }
+
+        Ok(self.state == SandboxState::Init)
     }
 }
 
@@ -1500,31 +1515,47 @@ impl Sandbox for VirtSandbox {
         }
         let sandbox_config = self.sandbox_config.as_ref().unwrap();
 
-        // if sandbox is not in SandboxState::Init then return,
-        // otherwise try to create sandbox
-
         let mut inner = self.inner.write().await;
-        if inner.state != SandboxState::Init {
+        if !inner.needs_start()? {
             warn!(sl!(), "sandbox is started");
             return Ok(());
         }
-        let started = self
-            .prepare_and_start_vm(&mut inner, sandbox_config)
-            .await?;
-        self.run_hooks_and_finalize_network(sandbox_config, started)
-            .await?;
-        self.initialize_guest(sandbox_config).await?;
-        inner.state = SandboxState::Running;
-        inner.created_at = Some(std::time::SystemTime::now());
 
-        // get and store guest details
-        self.store_guest_details()
-            .await
-            .context("failed to store guest details")?;
+        let result: Result<()> = async {
+            let started = self
+                .prepare_and_start_vm(&mut inner, sandbox_config)
+                .await?;
+            self.run_hooks_and_finalize_network(sandbox_config, started)
+                .await?;
+            self.initialize_guest(sandbox_config).await?;
+
+            // get and store guest details
+            self.store_guest_details()
+                .await
+                .context("failed to store guest details")?;
+
+            self.save().await.context("save state")?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(start_error) = result {
+            inner.start_failed = true;
+            drop(inner);
+            if let Err(stop_error) = self.stop().await {
+                return Err(start_error).context(format!(
+                    "failed to stop sandbox after start failure: {stop_error:#}"
+                ));
+            }
+            return Err(start_error);
+        }
+
+        inner.state = SandboxState::Running;
+        inner.created_at = Some(SystemTime::now());
 
         self.start_oom_watcher().await;
         self.start_health_monitor();
-        self.save().await.context("save state")?;
 
         Ok(())
     }
@@ -2654,6 +2685,23 @@ mod tests {
     use std::time::Duration;
 
     const NOTIFY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    #[test]
+    fn start_admission_rejects_stopped_and_failed_sandboxes() {
+        let mut inner = SandboxInner::new();
+        assert!(inner.needs_start().unwrap());
+
+        inner.state = SandboxState::Running;
+        assert!(!inner.needs_start().unwrap());
+
+        inner.state = SandboxState::Stopped;
+        assert!(inner.needs_start().is_err());
+
+        // Reject a retry during the gap between releasing inner and stop().
+        inner.state = SandboxState::Init;
+        inner.start_failed = true;
+        assert!(inner.needs_start().is_err());
+    }
 
     #[tokio::test]
     async fn test_sandbox_exit_reaches_a_waiter_that_subscribes_afterwards() {
