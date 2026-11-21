@@ -83,6 +83,9 @@ const (
 	// an encryption key for a Storage struct.
 	encryptionKeyDriverOption = "encryption_key"
 
+	// smbKrb5CcacheDriverOption carries the base64 Kerberos ccache for an SMB storage.
+	smbKrb5CcacheDriverOption = "krb5_ccache"
+
 	// Allocating an FSGroup that owns the pod's volumes
 	fsGid = "fsgid"
 
@@ -119,6 +122,7 @@ var (
 	typeVirtioFS                     = "virtiofs"
 	typeOverlayFS                    = "overlay"
 	kata9pDevType                    = "9p"
+	smbDevType                       = "smb"
 	kataMmioBlkDevType               = "mmioblk"
 	kataBlkDevType                   = "blk"
 	kataBlkCCWDevType                = "blk-ccw"
@@ -1669,6 +1673,12 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	ctrStorages = append(ctrStorages, volumeStorages...)
 
+	smbStorages, err := k.handleSMBMounts(c, ociSpec)
+	if err != nil {
+		return nil, err
+	}
+	ctrStorages = append(ctrStorages, smbStorages...)
+
 	// Layer storage objects are prepended to the list so that they come _before_ the
 	// rootfs because the rootfs depends on them (it's an overlay of the layers).
 	ctrStorages = append(layerStorages, ctrStorages...)
@@ -2091,6 +2101,63 @@ func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage
 	}
 
 	return vol, err
+}
+
+// handleSMBMounts will create a unique destination mountpoint in the guest for each volume in the
+// given container and will update the OCI spec to utilize this mount point as the new source for the
+// container volume. The container mount structure is updated to store the guest destination mountpoint.
+func (k *kataAgent) handleSMBMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, error) {
+	var volumeStorages []*grpc.Storage
+	for i, m := range c.mounts {
+		// Handle only cifs type of mounts
+		if m.Type != "cifs" {
+			continue
+		}
+		// Create Storage
+		vol, err := k.createSMBVolumeObject(c, m)
+		if vol == nil || err != nil {
+			return nil, err
+		}
+
+		// Each device will be mounted at a unique location within the VM only once. Mounting
+		// to the container specific location is handled within the OCI spec. Let's ensure that
+		// the storage mount point is unique for each device. This is then utilized as the source
+		filename := b64.URLEncoding.EncodeToString([]byte(vol.Source))
+		path := filepath.Join(kataGuestSandboxStorageDir(), filename)
+
+		// Update applicable OCI mount source
+		for idx, ociMount := range spec.Mounts {
+			if ociMount.Destination != vol.MountPoint {
+				continue
+			}
+			k.Logger().WithFields(logrus.Fields{
+				"original-source": ociMount.Source,
+				"new-source":      path,
+			}).Debug("Replacing OCI mount source")
+			spec.Mounts[idx].Source = path
+			break
+		}
+
+		// Update storage mountpoint, and save guest device mount path to container mount struct:
+		vol.MountPoint = path
+		c.mounts[i].GuestDeviceMount = path
+		volumeStorages = append(volumeStorages, vol)
+	}
+	return volumeStorages, nil
+}
+
+func (k *kataAgent) createSMBVolumeObject(c *Container, m Mount) (*grpc.Storage, error) {
+	vol := &grpc.Storage{}
+	vol.Source = m.Source
+	vol.MountPoint = m.Destination
+	vol.Fstype = m.Type
+	vol.Options = m.Options
+	if m.Krb5Ccache != "" {
+		vol.DriverOptions = append(vol.DriverOptions, fmt.Sprintf("%s=%s", smbKrb5CcacheDriverOption, m.Krb5Ccache))
+	}
+	// Todo: replace this with Confidential Data Hub driver
+	vol.Driver = smbDevType // This handler as of now calls a default storage handler in kata agent that does a baremount with these options
+	return vol, nil
 }
 
 // handleBlkOCIMounts will create a unique destination mountpoint in the guest for each volume in the

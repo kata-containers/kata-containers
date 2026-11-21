@@ -15,9 +15,9 @@ use tokio::sync::RwLock;
 
 use crate::volume::{
     direct_volumes::{
-        get_direct_volume_path, rawblock_volume, spdk_volume, vfio_volume, volume_mount_info,
-        KATA_DIRECT_VOLUME_TYPE, KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE,
-        KATA_VFIO_VOLUME_TYPE,
+        get_direct_volume_path, rawblock_volume, smb_volume, spdk_volume, vfio_volume,
+        volume_mount_info, KATA_DIRECT_VOLUME_TYPE, KATA_SMB_VOLUME_TYPE, KATA_SPDK_VOLUME_TYPE,
+        KATA_SPOOL_VOLUME_TYPE, KATA_VFIO_VOLUME_TYPE,
     },
     utils::KATA_MOUNT_BIND_TYPE,
     Volume,
@@ -27,14 +27,23 @@ enum DirectVolumeType {
     RawBlock,
     Spdk,
     Vfio,
+    Smb,
 }
 
 fn to_volume_type(volume_type: &str) -> DirectVolumeType {
-    match volume_type {
+    let t = match volume_type {
         KATA_SPDK_VOLUME_TYPE | KATA_SPOOL_VOLUME_TYPE => DirectVolumeType::Spdk,
         KATA_VFIO_VOLUME_TYPE => DirectVolumeType::Vfio,
+        KATA_SMB_VOLUME_TYPE => DirectVolumeType::Smb,
         _ => DirectVolumeType::RawBlock,
-    }
+    };
+    info!(
+        sl!(),
+        "+++++to_volume_type: input={} rawblock_fallback={}",
+        volume_type,
+        matches!(t, DirectVolumeType::RawBlock)
+    );
+    t
 }
 
 pub(crate) async fn handle_direct_volume(
@@ -76,7 +85,21 @@ pub(crate) async fn handle_direct_volume(
         }
     };
 
+    info!(
+        sl!(),
+        "+++++handle_direct_volume: source={:?} volume_type={} device={} fstype={}",
+        m.source(),
+        mount_info.volume_type,
+        mount_info.device,
+        mount_info.fs_type
+    );
+
     let direct_volume: Arc<dyn Volume> = match to_volume_type(mount_info.volume_type.as_str()) {
+        DirectVolumeType::Smb => Arc::new(
+            smb_volume::SmbVolume::new(m, &mount_info, read_only, sid)
+                .await
+                .context("create SMB direct volume")?,
+        ),
         DirectVolumeType::RawBlock => Arc::new(
             rawblock_volume::RawblockVolume::new(d, m, &mount_info, read_only, sid)
                 .await
@@ -95,6 +118,20 @@ pub(crate) async fn handle_direct_volume(
     };
 
     Ok(Some(direct_volume))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_azurefile_selects_smb() {
+        assert!(matches!(to_volume_type("azurefile"), DirectVolumeType::Smb));
+        assert!(matches!(
+            to_volume_type("directvol"),
+            DirectVolumeType::RawBlock
+        ));
+    }
 }
 
 pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {

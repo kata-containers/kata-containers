@@ -22,6 +22,8 @@ const (
 	FSGroupMetadataKey             = "fsGroup"
 	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
 	BlockVolumeCreateFsDriverKey   = "create_filesystem"
+	SensitiveMountOptions          = "sensitiveMountOptions"
+	Krb5CcacheMetadataKey          = "krb5Ccache"
 )
 
 // FSGroupChangePolicy holds policies that will be used for applying fsGroup to a volume.

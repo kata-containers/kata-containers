@@ -278,6 +278,9 @@ type Mount struct {
 	// to instruct the agent to generate a one-time key.
 	EncryptionKey string
 
+	// Krb5Ccache is a base64 Kerberos credential cache the guest uses to mount an SMB volume.
+	Krb5Ccache string
+
 	// BlockDeviceCreateFs requests filesystem creation before mounting a
 	// fresh block volume. The filesystem type comes from the Storage Fstype.
 	BlockDeviceCreateFs bool

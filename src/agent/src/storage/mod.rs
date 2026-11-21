@@ -24,7 +24,7 @@ use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
 pub use self::ephemeral_handler::update_ephemeral_mounts;
 use self::ephemeral_handler::EphemeralHandler;
-use self::fs_handler::{OverlayfsHandler, VirtioFsHandler};
+use self::fs_handler::{OverlayfsHandler, SmbHandler, VirtioFsHandler};
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 use self::multi_layer_erofs::{handle_multi_layer_erofs_group, is_multi_layer_storage};
@@ -143,6 +143,7 @@ lazy_static! {
             Arc::new(OverlayfsHandler {}),
             Arc::new(ScsiHandler {}),
             Arc::new(VirtioFsHandler {}),
+            Arc::new(SmbHandler {}),
             Arc::new(BindWatcherHandler {}),
             #[cfg(target_arch = "s390x")]
             Arc::new(self::block_handler::VirtioBlkCcwHandler {}),

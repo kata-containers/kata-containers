@@ -615,12 +615,54 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 	return
 }
 
+// applySMBDirectVolume rewrites a bind mount whose direct-volume mount info describes a cifs share,
+func (c *Container) applySMBDirectVolume(i int) bool {
+	// TODO: add a check for direct smb mount enablement via a labels check
+	m := &c.mounts[i]
+	// A mount already backed by a block device is not an SMB direct volume.
+	if len(m.BlockDeviceID) > 0 {
+		return false
+	}
+	if m.Type != "bind" {
+		return false
+	}
+
+	mntInfo, err := volume.VolumeMountInfo(m.Source)
+	if err != nil && !os.IsNotExist(err) {
+		c.Logger().WithError(err).WithField("mount-source", m.Source).
+			Error("failed to parse the mount info file for a direct assigned volume")
+	}
+	if err != nil || mntInfo == nil {
+		return false
+	}
+	if mntInfo.FsType != "cifs" {
+		return false
+	}
+	if err := volume.RecordSandboxID(c.sandboxID, m.Source); err != nil {
+		c.Logger().WithError(err).Error("error writing sandbox info")
+	}
+	m.Source = mntInfo.Device
+	m.Type = mntInfo.FsType
+	m.Options = mntInfo.Options
+	m.ReadOnly = slices.Contains(mntInfo.Options, "ro")
+	if opts, ok := mntInfo.Metadata[volume.SensitiveMountOptions]; ok {
+		m.Options = append(m.Options, opts)
+	}
+	m.Krb5Ccache = mntInfo.Metadata[volume.Krb5CcacheMetadataKey]
+	return true
+}
+
 // Add any mount based block devices to the device manager and Save the
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
 func (c *Container) createBlockDevices(ctx context.Context) error {
 	// iterate all mounts and create block device if it's block based.
 	for i := range c.mounts {
+		// SMB direct volumes are mounted by the guest and need no block device.
+		if c.applySMBDirectVolume(i) {
+			continue
+		}
+
 		// If block devices are disabled, we selectively only hotplug if
 		// the mount is a block-based emptyDir, to avoid
 		// cases that could regress 20ca4d2.

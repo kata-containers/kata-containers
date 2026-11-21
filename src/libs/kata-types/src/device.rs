@@ -37,6 +37,10 @@ pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
 /// DRIVER_VIRTIOFS_TYPE is the driver for Bind watch volume.
 pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
+/// DRIVER_SMB_TYPE is the driver for an SMB/cifs direct-assigned volume
+pub const DRIVER_SMB_TYPE: &str = "smb";
+/// Storage driver option carrying a base64 Kerberos ccache for an SMB volume.
+pub const SMB_KRB5_CCACHE_DRIVER_OPTION: &str = "krb5_ccache";
 
 /// Manager to manage registered device handlers.
 pub type DeviceHandlerManager<H> = HandlerManager<H>;

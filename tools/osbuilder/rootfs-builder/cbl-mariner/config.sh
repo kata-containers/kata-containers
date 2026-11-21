@@ -10,6 +10,8 @@ OS_VERSION=${OS_VERSION:-3.0}
 # shellcheck disable=SC2034
 LIBC="gnu"
 PACKAGES="kata-packages-uvm e2fsprogs"
+# Kerberos (sec=krb5) CIFS mounts of SMB direct volumes need the request-key upcall.
+PACKAGES+=" keyutils cifs-utils krb5"
 # shellcheck disable=SC2154
 if [[ "${AGENT_INIT}" = "no" ]]; then PACKAGES+=" systemd"; fi
 # shellcheck disable=SC2154
