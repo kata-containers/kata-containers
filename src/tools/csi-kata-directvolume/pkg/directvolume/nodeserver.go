@@ -69,6 +69,12 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	attrib := req.GetVolumeContext()
 
 	devicePath := dv.config.VolumeDevices[volumeID]
+	if devicePath == "" {
+		if vol, err := dv.state.GetVolumeByID(volumeID); err == nil {
+			devicePath = vol.Metadata["devicePath"]
+			dv.config.VolumeDevices[volumeID] = devicePath
+		}
+	}
 
 	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
 		if devicePath == "" {
@@ -139,7 +145,7 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
 		volName := req.VolumeContext[utils.DirectVolumeName]
 		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
+		vol, err := dv.restoreVolume(volumeID, volName, capInt64, kind)
 		if err != nil {
 			return nil, err
 		}
@@ -147,6 +153,9 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		vol.Published.Add(targetPath)
 		klog.Infof("create volume %v successfully", vol)
 
+		if err := dv.state.UpdateVolume(*vol); err != nil {
+			return nil, err
+		}
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
@@ -281,14 +290,8 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 		}
 	}
 
-	if deviceUpperPath, err := utils.GetStoragePath(dv.config.StoragePath, volumeID); err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("get device UpperPath %s failed: %v", deviceUpperPath, err))
-	} else {
-		if err = os.RemoveAll(deviceUpperPath); err != nil {
-			return nil, status.Error(codes.Internal, fmt.Sprintf("remove device upper path: %s failed %v", deviceUpperPath, err.Error()))
-		}
-		klog.Infof("direct volume %s has been removed.", deviceUpperPath)
-	}
+	// Unstaging removes only the mount. Backend data belongs to the volume
+	// and must remain until DeleteVolume, including across Pod recreation.
 
 	if err := os.RemoveAll(stagingTargetPath); err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("remove staging target path: %v", err))
@@ -467,11 +470,15 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 		capInt64, _ := strconv.ParseInt(req.VolumeContext[utils.CapabilityInBytes], 10, 64)
 		volName := req.VolumeContext[utils.DirectVolumeName]
 		kind := req.VolumeContext[storageKind]
-		vol, err := dv.createVolume(volumeID, volName, capInt64, kind)
+		vol, err := dv.restoreVolume(volumeID, volName, capInt64, kind)
 		if err != nil {
 			return nil, err
 		}
 		vol.Staged.Add(stagingTargetPath)
+		vol.Metadata = map[string]string{"devicePath": *devicePath}
+		if err := dv.state.UpdateVolume(*vol); err != nil {
+			return nil, err
+		}
 
 		klog.Infof("create volume %v successfully", vol)
 		return &csi.NodeStageVolumeResponse{}, nil
@@ -486,6 +493,10 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 		return nil, status.Errorf(codes.FailedPrecondition, "volume %q is already staged at %v", req.VolumeId, volInStat.Staged)
 	}
 
+	if volInStat.Metadata == nil {
+		volInStat.Metadata = map[string]string{}
+	}
+	volInStat.Metadata["devicePath"] = *devicePath
 	volInStat.Staged.Add(stagingTargetPath)
 	if err := dv.state.UpdateVolume(volInStat); err != nil {
 		return nil, err

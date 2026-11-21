@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Kata Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: capacity-first
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: csi-directvolume-capacity
+  resources:
+    requests:
+      storage: 4Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: capacity-first
+spec:
+  runtimeClassName: kata
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: [sh, -c, 'echo capacity-test > /data/probe; sleep 86400']
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: capacity-first

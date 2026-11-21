@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -90,14 +91,32 @@ func New(statefilePath string) (State, error) {
 	return s, s.restore()
 }
 
-func (s *state) dump() error {
-	data, err := json.Marshal(&s.resources)
+// commit writes a complete replacement before changing the in-memory ledger.
+// Failed writes must not lose reservations or consume quota until restart.
+func (s *state) commit(volumes []Volume) error {
+	data, err := json.Marshal(resources{Volumes: volumes})
 	if err != nil {
-		return status.Errorf(codes.Internal, "error encoding volumes: %v", err)
+		return status.Errorf(codes.Internal, "encode volumes: %v", err)
 	}
-	if err := os.WriteFile(s.statefilePath, data, 0600); err != nil {
-		return status.Errorf(codes.Internal, "error writing state file: %v", err)
+	file, err := os.CreateTemp(filepath.Dir(s.statefilePath), ".state-*")
+	if err != nil {
+		return status.Errorf(codes.Internal, "create state file: %v", err)
 	}
+	defer os.Remove(file.Name())
+	if _, err = file.Write(data); err == nil {
+		err = file.Sync()
+	}
+	closeErr := file.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(file.Name(), s.statefilePath)
+	}
+	if err != nil {
+		return status.Errorf(codes.Internal, "write state file: %v", err)
+	}
+	s.Volumes = volumes
 	return nil
 }
 
@@ -120,7 +139,7 @@ func (s *state) restore() error {
 func (s *state) GetVolumeByID(volID string) (Volume, error) {
 	for _, volume := range s.Volumes {
 		if volume.VolID == volID {
-			return volume, nil
+			return cloneVolume(volume), nil
 		}
 	}
 	return Volume{}, status.Errorf(codes.NotFound, "volume id %s does not exist in the volumes list", volID)
@@ -129,7 +148,7 @@ func (s *state) GetVolumeByID(volID string) (Volume, error) {
 func (s *state) GetVolumeByName(volName string) (Volume, error) {
 	for _, volume := range s.Volumes {
 		if volume.VolName == volName {
-			return volume, nil
+			return cloneVolume(volume), nil
 		}
 	}
 	return Volume{}, status.Errorf(codes.NotFound, "volume name %s does not exist in the volumes list", volName)
@@ -137,27 +156,43 @@ func (s *state) GetVolumeByName(volName string) (Volume, error) {
 
 func (s *state) GetVolumes() []Volume {
 	volumes := make([]Volume, len(s.Volumes))
-	copy(volumes, s.Volumes)
+	for i, volume := range s.Volumes {
+		volumes[i] = cloneVolume(volume)
+	}
 	return volumes
 }
 
 func (s *state) UpdateVolume(update Volume) error {
-	for i, volume := range s.Volumes {
+	update = cloneVolume(update)
+	volumes := s.GetVolumes()
+	for i, volume := range volumes {
 		if volume.VolID == update.VolID {
-			s.Volumes[i] = update
-			return s.dump()
+			volumes[i] = update
+			return s.commit(volumes)
 		}
 	}
-	s.Volumes = append(s.Volumes, update)
-	return s.dump()
+	return s.commit(append(volumes, update))
 }
 
 func (s *state) DeleteVolume(volID string) error {
-	for i, volume := range s.Volumes {
+	volumes := s.GetVolumes()
+	for i, volume := range volumes {
 		if volume.VolID == volID {
-			s.Volumes = append(s.Volumes[:i], s.Volumes[i+1:]...)
-			return s.dump()
+			return s.commit(append(volumes[:i], volumes[i+1:]...))
 		}
 	}
 	return nil
+}
+
+func cloneVolume(volume Volume) Volume {
+	volume.Staged = append(Strings(nil), volume.Staged...)
+	volume.Published = append(Strings(nil), volume.Published...)
+	if volume.Metadata != nil {
+		metadata := make(map[string]string, len(volume.Metadata))
+		for key, value := range volume.Metadata {
+			metadata[key] = value
+		}
+		volume.Metadata = metadata
+	}
+	return volume
 }

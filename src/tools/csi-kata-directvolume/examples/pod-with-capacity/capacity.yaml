@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Kata Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: csi-kata-directvol-capacity
+  namespace: kata-directvolume
+data:
+  # Replace these keys with the actual Kubernetes node names.
+  node-a: |
+    fast=2Gi
+  node-b: |
+    fast=8Gi

@@ -18,6 +18,11 @@ default_kubelet_data_dir=/var/lib/kubelet
 
 # namespace kata-directvolume
 DIRECTVOL_NAMESPACE="kata-directvolume"
+: "${CAPACITY_POLL_INTERVAL:=1m}"
+if [[ ! "${CAPACITY_POLL_INTERVAL}" =~ ^[1-9][0-9]*(ms|s|m|h)$ ]]; then
+    echo "CAPACITY_POLL_INTERVAL must be a positive duration (for example 10s)" >&2
+    exit 1
+fi
 
 # Some images are not affected by *_REGISTRY/*_TAG and IMAGE_* variables.
 # The default is to update unless explicitly excluded.
@@ -75,9 +80,8 @@ for i in $(find "${BASE_DIR}/kata-directvolume" -name 'csi-directvol-*.yaml' | s
             fi
             echo "kata-directvolume plugin        using ${line}" >&2
         fi
-        # shellcheck disable=SC2154
-        if ! ${have_csistoragecapacity}; then
-            line="$(echo "${line}" | grep -v -e 'storageCapacity: true' -e '--enable-capacity')"
+        if [[ "${line}" == *--capacity-poll-interval=* ]]; then
+            line="${line%%--capacity-poll-interval=*}--capacity-poll-interval=${CAPACITY_POLL_INTERVAL}"
         fi
         echo "${line}"
     done)"

@@ -8,6 +8,7 @@
 package state
 
 import (
+	"os"
 	"path"
 	"testing"
 
@@ -45,4 +46,22 @@ func TestVolumes(t *testing.T) {
 	require.NoError(t, err, "delete non-existent volume")
 
 	require.Empty(t, s.GetVolumes(), "final volumes")
+}
+
+// A failed state write must not release a reservation or create a phantom one.
+func TestFailedCommitPreservesReservations(t *testing.T) {
+	directory := t.TempDir()
+	filename := path.Join(directory, "state.json")
+	s, err := New(filename)
+	require.NoError(t, err)
+	require.NoError(t, s.UpdateVolume(Volume{VolID: "reserved", VolSize: 10, Kind: "fast"}))
+	// Renaming over a directory fails even when tests run as root.
+	require.NoError(t, os.Remove(filename))
+	require.NoError(t, os.Mkdir(filename, 0700))
+	require.Error(t, s.DeleteVolume("reserved"))
+	require.Error(t, s.UpdateVolume(Volume{VolID: "new", VolSize: 5, Kind: "fast"}))
+	require.Len(t, s.GetVolumes(), 1)
+	volume, err := s.GetVolumeByID("reserved")
+	require.NoError(t, err)
+	require.EqualValues(t, 10, volume.VolSize)
 }
