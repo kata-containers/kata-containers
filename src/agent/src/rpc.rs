@@ -2658,15 +2658,16 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
     Ok(())
 }
 
+/// Returns whether CDH acquired a mount, rather than skipping an uninitialized client.
 pub(crate) async fn cdh_secure_mount(
     device_type: &str,
     device_id: &str,
     encrypt_type: &str,
     mount_point: &str,
     mkfs_opts: &str,
-) -> Result<()> {
+) -> Result<bool> {
     if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
+        return Ok(false);
     }
 
     let integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
@@ -2700,7 +2701,7 @@ pub(crate) async fn cdh_secure_mount(
 
     confidential_data_hub::secure_mount(device_type, &options, vec![], mount_point).await?;
 
-    Ok(())
+    Ok(true)
 }
 
 async fn unseal_envs(envs: &mut [String]) {

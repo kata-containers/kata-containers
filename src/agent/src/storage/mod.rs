@@ -13,7 +13,8 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{
-    create_mount_destination, parse_mount_flags, parse_mount_options, Error as MountError,
+    create_mount_destination, get_linux_mount_info, parse_mount_flags, parse_mount_options,
+    Error as MountError,
 };
 use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
 use nix::mount::MsFlags;
@@ -367,10 +368,10 @@ pub async fn add_storages(
             };
             handler.create_device(storage.clone(), &mut ctx).await
         } else {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "Failed to find the storage handler {}",
                 storage.driver
-            ));
+            ))
         };
 
         match device {
@@ -402,9 +403,25 @@ pub(crate) fn new_device(path: String) -> Result<Arc<dyn StorageDevice>> {
 
 #[instrument]
 pub(crate) fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
-    mount_storage(logger, storage)?;
+    let mount = mount_storage(logger, storage)?;
     set_ownership(logger, storage)?;
+    scopeguard::ScopeGuard::into_inner(mount);
     Ok(storage.mount_point.clone())
+}
+
+fn mount_rollback_guard(
+    logger: &Logger,
+    path: Option<String>,
+) -> scopeguard::ScopeGuard<Option<String>, impl FnOnce(Option<String>)> {
+    let logger = logger.clone();
+    scopeguard::guard(path, move |path| {
+        if let Some(path) = path {
+            if let Err(e) = remove_mounts(std::slice::from_ref(&path)) {
+                error!(logger, "failed to roll back storage mount";
+                    "mount-point" => path, "error" => ?e);
+            }
+        }
+    })
 }
 
 fn split_lowerdirs(lowerdirs: &str) -> Vec<String> {
@@ -486,7 +503,10 @@ fn mount_overlay_new_api(storage: &Storage) -> Result<()> {
 
 // mount_storage performs the mount described by the storage structure.
 #[instrument]
-fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
+fn mount_storage(
+    logger: &Logger,
+    storage: &Storage,
+) -> Result<scopeguard::ScopeGuard<Option<String>, impl FnOnce(Option<String>)>> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
     // There's a special mechanism to create mountpoint from a `sharedfs` instance before
@@ -498,7 +518,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
             KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
             &storage.mount_point
         );
-        return Ok(());
+        return Ok(mount_rollback_guard(&logger, None));
     }
 
     let mount_path = Path::new(&storage.mount_point);
@@ -516,10 +536,16 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         })
     {
         mount_overlay_new_api(storage).context("failed to mount overlay with new mount API")?;
-        return Ok(());
+        return Ok(mount_rollback_guard(
+            &logger,
+            Some(storage.mount_point.clone()),
+        ));
     }
 
     let (flags, options) = mount_options?;
+    // baremount reuses matching mounts and remounts modify an existing mount.
+    let reused_mount = get_linux_mount_info(&storage.mount_point)
+        .is_ok_and(|mount| mount.fs_type == storage.fstype || flags.contains(MsFlags::MS_REMOUNT));
     info!(logger, "mounting storage";
         "mount-source" => src_path.display(),
         "mount-destination" => mount_path.display(),
@@ -534,7 +560,11 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         flags,
         options.as_str(),
         &logger,
-    )
+    )?;
+    Ok(mount_rollback_guard(
+        &logger,
+        (!reused_mount).then(|| storage.mount_point.clone()),
+    ))
 }
 
 #[instrument]
@@ -648,6 +678,148 @@ mod tests {
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
 
+    #[tokio::test]
+    async fn test_shared_storage_missing_handler_retry() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempdir().unwrap();
+        let storage = Storage {
+            driver: "missing-handler".to_string(),
+            mount_point: root.path().to_str().unwrap().to_string(),
+            shared: true,
+            ..Default::default()
+        };
+
+        for _ in 0..2 {
+            let error = add_storages(logger.clone(), vec![storage.clone()], &sandbox, None, false)
+                .await
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("Failed to find the storage handler"));
+            assert!(!sandbox
+                .lock()
+                .await
+                .storages
+                .contains_key(&storage.mount_point));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_shared_storage_mount_rollback_retry() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempdir().unwrap();
+        let storage = Storage {
+            driver: kata_types::device::DRIVER_VIRTIOFS_TYPE.to_string(),
+            source: "tmpfs".to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: root.path().join("mount").to_str().unwrap().to_string(),
+            options: vec!["ro".to_string()],
+            fs_group: Some(FSGroup {
+                group_id: 1234,
+                ..Default::default()
+            })
+            .into(),
+            shared: true,
+            ..Default::default()
+        };
+        scopeguard::defer! {
+            if is_mounted(&storage.mount_point).unwrap() {
+                nix::mount::umount(Path::new(&storage.mount_point)).unwrap();
+            }
+        }
+
+        assert!(
+            add_storages(logger.clone(), vec![storage.clone()], &sandbox, None, false,)
+                .await
+                .is_err()
+        );
+        assert!(!is_mounted(&storage.mount_point).unwrap());
+        assert!(!sandbox
+            .lock()
+            .await
+            .storages
+            .contains_key(&storage.mount_point));
+
+        let writable_storage = Storage {
+            options: vec![],
+            ..storage.clone()
+        };
+        let mounts = add_storages(
+            logger.clone(),
+            vec![writable_storage],
+            &sandbox,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(mounts, vec![storage.mount_point.clone()]);
+        assert!(is_mounted(&storage.mount_point).unwrap());
+
+        assert!(!sandbox
+            .lock()
+            .await
+            .remove_sandbox_storage(&storage.mount_point)
+            .await
+            .unwrap());
+        assert!(is_mounted(&storage.mount_point).unwrap());
+        let mounts = add_storages(logger, vec![storage.clone()], &sandbox, None, false)
+            .await
+            .unwrap();
+        assert_eq!(mounts, vec![storage.mount_point.clone()]);
+        assert!(is_mounted(&storage.mount_point).unwrap());
+    }
+
+    #[test]
+    fn test_storage_mount_rollback_on_ownership_error() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let root = tempdir().unwrap();
+        let mount_point = root.path().join("mount");
+        let storage = Storage {
+            source: "tmpfs".to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: mount_point.to_str().unwrap().to_string(),
+            options: vec!["ro".to_string()],
+            fs_group: Some(FSGroup {
+                group_id: 1234,
+                ..Default::default()
+            })
+            .into(),
+            ..Default::default()
+        };
+        scopeguard::defer! {
+            if is_mounted(&storage.mount_point).unwrap() {
+                nix::mount::umount(&mount_point).unwrap();
+            }
+        }
+
+        assert!(common_storage_handler(&logger, &storage).is_err());
+        assert!(!is_mounted(&storage.mount_point).unwrap());
+
+        nix::mount::mount(
+            Some("tmpfs"),
+            &mount_point,
+            Some("tmpfs"),
+            MsFlags::MS_RDONLY,
+            None::<&str>,
+        )
+        .unwrap();
+        for source in ["tmpfs", KATA_SHAREDFS_GUEST_PREMOUNT_TAG] {
+            let storage = Storage {
+                source: source.to_string(),
+                ..storage.clone()
+            };
+            assert!(common_storage_handler(&logger, &storage).is_err());
+            assert!(is_mounted(&storage.mount_point).unwrap());
+        }
+    }
+
     #[test]
     fn test_mount_storage() {
         #[derive(Debug)]
@@ -754,6 +926,7 @@ mod tests {
                 .unwrap();
             }
 
+            let result = result.map(scopeguard::ScopeGuard::into_inner);
             if result.is_ok() {
                 nix::mount::umount(&mount_point).unwrap();
             }

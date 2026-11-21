@@ -65,6 +65,7 @@ type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 pub struct StorageState {
     count: Arc<AtomicU32>,
     device: Arc<dyn StorageDevice>,
+    initialized: bool,
 
     /// Whether the storage is shared across multiple containers (e.g.
     /// block-based emptyDirs). Shared storages should not be cleaned up
@@ -84,6 +85,7 @@ impl StorageState {
         StorageState {
             count: Arc::new(AtomicU32::new(1)),
             device: Arc::new(StorageDeviceGeneric::default()),
+            initialized: false,
             shared,
         }
     }
@@ -208,6 +210,7 @@ impl Sandbox {
             Some(existing) => {
                 let state = StorageState {
                     device,
+                    initialized: true,
                     ..existing.clone()
                 };
                 // Safe to unwrap() because we have just ensured existence of entry via get().
@@ -219,9 +222,11 @@ impl Sandbox {
 
     /// Decrease reference count and destroy the storage object if reference count reaches zero.
     ///
-    /// For shared storages (e.g., emptyDir volumes), cleanup is skipped even when refcount
-    /// reaches zero. The storage entry is kept in the map so subsequent containers can reuse
-    /// the already-mounted storage. Actual cleanup happens when the sandbox is destroyed.
+    /// For initialized shared storages (e.g., emptyDir volumes), cleanup is skipped even
+    /// when refcount reaches zero. The storage entry is kept in the map so subsequent
+    /// containers can reuse the already-mounted storage. Uninitialized entries are removed
+    /// so failed device creation can be retried. Actual cleanup of initialized shared storage
+    /// happens when the sandbox is destroyed.
     ///
     /// Returns `Ok(true)` if the reference count has reached zero and the storage object has been
     /// removed.
@@ -231,7 +236,7 @@ impl Sandbox {
             None => Err(anyhow!("Sandbox storage with path {} not found", path)),
             Some(state) => {
                 if state.dec_and_test_ref_count().await {
-                    if state.is_shared() {
+                    if state.is_shared() && state.initialized {
                         state.count.store(1, Ordering::Release);
                         return Ok(false);
                     }
@@ -770,6 +775,28 @@ mod tests {
             ref_count, 2,
             "Invalid refcount, got {ref_count} expected 2."
         );
+    }
+
+    #[tokio::test]
+    async fn remove_failed_shared_sandbox_storage() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let root = tempdir().unwrap();
+        let path = root.path().to_str().unwrap();
+
+        sandbox.add_sandbox_storage(path, true).await;
+        assert!(sandbox.remove_sandbox_storage(path).await.unwrap());
+        assert!(!sandbox.storages.contains_key(path));
+
+        let state = sandbox.add_sandbox_storage(path, true).await;
+        assert_eq!(state.ref_count().await, 1);
+        // Successful handlers can return a device with an empty path.
+        let device = Arc::new(StorageDeviceGeneric::new(String::new()));
+        assert!(sandbox.update_sandbox_storage(path, device).is_ok());
+        assert!(!sandbox.remove_sandbox_storage(path).await.unwrap());
+        let state = sandbox.add_sandbox_storage(path, true).await;
+        assert_eq!(state.ref_count().await, 2);
+        assert_eq!(state.path(), Some(""));
     }
 
     #[tokio::test]
