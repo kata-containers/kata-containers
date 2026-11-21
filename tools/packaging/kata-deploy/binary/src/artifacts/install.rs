@@ -2166,6 +2166,7 @@ pub(crate) mod tests {
     #[case("-no-shared-fs", "kata-qemu-no-shared-fs")]
     #[case("-snp-experimental", "kata-qemu-snp-experimental")]
     #[case("-tdx-experimental", "kata-qemu-tdx-experimental")]
+    #[case("-cca-experimental", "kata-qemu-cca-experimental")]
     fn test_qemu_data_dir_follows_the_flavour(
         #[case] flavour_suffix: &str,
         #[case] expected_share_dir: &str,

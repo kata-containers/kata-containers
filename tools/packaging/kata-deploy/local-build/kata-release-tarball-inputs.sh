@@ -65,6 +65,7 @@ kata-static-kernel.tar.zst
 kata-static-nydus.tar.zst
 kata-static-openvmm.tar.zst
 kata-static-ovmf.tar.zst
+kata-static-qemu-cca-experimental.tar.zst
 kata-static-qemu-no-shared-fs.tar.zst
 kata-static-qemu.tar.zst
 kata-static-rootfs-image-coco-extension.tar.zst
