@@ -83,7 +83,7 @@ pub trait ShareFs: Send + Sync {
         d: &RwLock<DeviceManager>,
     ) -> Result<()>;
     async fn get_storages(&self) -> Result<Vec<Storage>>;
-    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>>;
 
     /// Stop the share fs daemon process (e.g., virtiofsd, nydusd).
     /// Called during sandbox cleanup before cleaning up mounts.
@@ -133,7 +133,29 @@ pub struct ShareFsMountResult {
     pub storages: Vec<agent::Storage>,
 }
 
-/// Save mounted info for sandbox-level shared files.
+/// ConfigMap/Secret mirrors belong to the guest container's bind watcher.
+/// Scope them by container so removing one container cannot delete another's files.
+/// Ordinary volumes remain shared across the sandbox.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct SharedVolumeKey {
+    pub(crate) source: String,
+    container_id: Option<String>,
+}
+
+impl SharedVolumeKey {
+    pub(crate) fn new(source: String, cid: &str) -> Self {
+        // The volume kind is stable; watchable eligibility changes with file count.
+        let container_id = (kata_types::k8s::is_configmap(&source)
+            || kata_types::k8s::is_secret(&source))
+        .then(|| cid.to_owned());
+        Self {
+            source,
+            container_id,
+        }
+    }
+}
+
+/// Save mounted info for shared files.
 #[derive(Clone, Debug)]
 pub struct MountedInfo {
     // Guest path
