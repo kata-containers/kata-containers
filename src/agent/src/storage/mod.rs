@@ -368,10 +368,10 @@ pub async fn add_storages(
             };
             handler.create_device(storage.clone(), &mut ctx).await
         } else {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "Failed to find the storage handler {}",
                 storage.driver
-            ));
+            ))
         };
 
         match device {
@@ -677,6 +677,102 @@ mod tests {
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
+
+    #[tokio::test]
+    async fn test_shared_storage_missing_handler_retry() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempdir().unwrap();
+        let storage = Storage {
+            driver: "missing-handler".to_string(),
+            mount_point: root.path().to_str().unwrap().to_string(),
+            shared: true,
+            ..Default::default()
+        };
+
+        for _ in 0..2 {
+            let error = add_storages(logger.clone(), vec![storage.clone()], &sandbox, None, false)
+                .await
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("Failed to find the storage handler"));
+            assert!(!sandbox
+                .lock()
+                .await
+                .storages
+                .contains_key(&storage.mount_point));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_shared_storage_mount_rollback_retry() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempdir().unwrap();
+        let storage = Storage {
+            driver: kata_types::device::DRIVER_VIRTIOFS_TYPE.to_string(),
+            source: "tmpfs".to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: root.path().join("mount").to_str().unwrap().to_string(),
+            options: vec!["ro".to_string()],
+            fs_group: Some(FSGroup {
+                group_id: 1234,
+                ..Default::default()
+            })
+            .into(),
+            shared: true,
+            ..Default::default()
+        };
+        scopeguard::defer! {
+            if is_mounted(&storage.mount_point).unwrap() {
+                nix::mount::umount(Path::new(&storage.mount_point)).unwrap();
+            }
+        }
+
+        assert!(
+            add_storages(logger.clone(), vec![storage.clone()], &sandbox, None, false,)
+                .await
+                .is_err()
+        );
+        assert!(!is_mounted(&storage.mount_point).unwrap());
+        assert!(!sandbox
+            .lock()
+            .await
+            .storages
+            .contains_key(&storage.mount_point));
+
+        let writable_storage = Storage {
+            options: vec![],
+            ..storage.clone()
+        };
+        let mounts = add_storages(
+            logger.clone(),
+            vec![writable_storage],
+            &sandbox,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(mounts, vec![storage.mount_point.clone()]);
+        assert!(is_mounted(&storage.mount_point).unwrap());
+
+        assert!(!sandbox
+            .lock()
+            .await
+            .remove_sandbox_storage(&storage.mount_point)
+            .await
+            .unwrap());
+        assert!(is_mounted(&storage.mount_point).unwrap());
+        let mounts = add_storages(logger, vec![storage.clone()], &sandbox, None, false)
+            .await
+            .unwrap();
+        assert_eq!(mounts, vec![storage.mount_point.clone()]);
+        assert!(is_mounted(&storage.mount_point).unwrap());
+    }
 
     #[test]
     fn test_storage_mount_rollback_on_ownership_error() {
