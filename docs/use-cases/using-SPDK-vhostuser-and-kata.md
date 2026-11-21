@@ -243,6 +243,7 @@ Inside the container, the SPDK volume will be available at `/disk001`.
 ## Additional Resources
 
 - [How to run Kata Containers with Kinds of Block Volumes](../how-to/how-to-run-kata-containers-with-kinds-of-Block-Volumes.md)
+- [SPDK vhost-user-blk with Cloud Hypervisor](../how-to/how-to-use-spdk-vhost-user-blk-with-cloud-hypervisor.md)
 - [CSI Direct Volume Driver README](../../src/tools/csi-kata-directvolume/README.md)
 - [SPDK Usage Guide for CSI](../../src/tools/csi-kata-directvolume/docs/spdk-usage.md)
 - [Direct Block Device Assignment Design](../design/direct-blk-device-assignment.md)

@@ -22,6 +22,7 @@ nav:
       - NUMA Support: how-to/how-to-use-numa-with-kata.md
       - Local Builds & Deployment: how-to/how-to-build-and-deploy-local-artifacts.md
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
+      - SPDK vhost-user-blk with Cloud Hypervisor: how-to/how-to-use-spdk-vhost-user-blk-with-cloud-hypervisor.md
       - Rootless VMM: how-to/how-to-run-rootless-vmm.md
     - Contributing:
       - Documentation: doc-contributing.md
