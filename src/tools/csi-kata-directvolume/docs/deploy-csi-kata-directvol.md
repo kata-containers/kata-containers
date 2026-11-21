@@ -2,9 +2,17 @@
 
 ## How to Deploy Kata Direct Volume CSI
 
-First, you need to make sure you have a healthy Kubernetes(1.20+) cluster and have the permissions to create Kata pods.
+First, you need to make sure you have a healthy Kubernetes(1.24+) cluster and have the permissions to create Kata pods.
 
 *WARNING* If you select a `K8S` with lower version, It cannot ensure that it will work well.
+
+Scheduler capacity filtering (`CSIDriver.spec.storageCapacity: true`) needs the `CSIStorageCapacity` API (v1 since Kubernetes 1.24). On older clusters the driver still deploys and provisions volumes, but the scheduler does not filter nodes by capacity.
+
+After deployment, the `csi-provisioner` sidecars publish each node's capacity as `CSIStorageCapacity` objects (see `CSIStorageCapacity` in the Kubernetes storage docs, and #14151 for the capacity-aware scheduling design):
+
+```shell
+kubectl get csistoragecapacity -n kata-directvolume
+```
 
 The `CSI driver` is deployed as a `daemonset` and the pods of the `daemonset` contain 4 containers:
 
@@ -99,6 +107,8 @@ kubectl apply -f ${BASE_DIR}/csi-storageclass.yaml
 kubectl apply -f ${BASE_DIR}/csi-pvc.yaml
 kubectl apply -f ${BASE_DIR}/csi-app.yaml
 ```
+
+`/examples/pod-with-capacity/` is the capacity-aware counterpart: a `WaitForFirstConsumer` storage class charging volumes to a `kind` pool, with the pool sizes configured per node — see its `README.md` for a walkthrough of capacity-aware placement.
 
 Let's validate the components are deployed:
 

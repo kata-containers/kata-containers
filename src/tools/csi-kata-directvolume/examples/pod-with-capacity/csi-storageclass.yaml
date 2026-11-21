@@ -1,0 +1,20 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-kata-directvolume-gold-sc
+parameters:
+  katacontainers.direct.volume/volumetype: directvol
+  katacontainers.direct.volume/fstype: ext4
+  # Charges the volume to the "gold" capacity pool of the node that
+  # provisions it. The pool sizes come from per-node entries of the
+  # csi-kata-directvol-capacity ConfigMap (capacity-configmap.yaml).
+  kind: gold
+provisioner: directvolume.csi.katacontainers.io
+reclaimPolicy: Delete
+# WaitForFirstConsumer, together with the driver's storageCapacity
+# feature (see the deployment docs), lets the scheduler pick a node
+# whose CSIStorageCapacity covers the PVC before the volume is
+# provisioned; with Immediate binding the volume is created first
+# and the pod may be unschedulable afterwards.
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
