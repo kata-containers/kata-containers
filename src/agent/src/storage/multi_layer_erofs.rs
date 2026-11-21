@@ -21,7 +21,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use crate::device::block_device_handler::{
-    get_virtio_blk_mmio_device_name, get_virtio_blk_pci_device_name,
+    get_virtio_blk_pci_device_name, wait_for_virtio_blk_mmio_device,
 };
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::linux_abi::pcipath_from_dev_tree_path;
@@ -950,11 +950,9 @@ async fn resolve_base_device_path(
             get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
         }
         DRIVER_BLK_MMIO_TYPE => {
-            if !Path::new(&layer.source).exists() {
-                get_virtio_blk_mmio_device_name(sandbox, &layer.source)
-                    .await
-                    .context("failed to get virtio-mmio block device")?;
-            }
+            wait_for_virtio_blk_mmio_device(sandbox, &layer.source)
+                .await
+                .context("failed to wait for virtio-mmio block device")?;
             layer.source.clone()
         }
         _ => {
