@@ -42,6 +42,7 @@ pub(crate) async fn handle_direct_volume(
     m: &oci::Mount,
     read_only: bool,
     sid: &str,
+    discard_supported: bool,
 ) -> Result<Option<Arc<dyn Volume>>> {
     // In the direct volume scenario, we check if the source of a mount is in the
     // /run/kata-containers/shared/direct-volumes/SID path by iterating over all the mounts.
@@ -78,9 +79,16 @@ pub(crate) async fn handle_direct_volume(
 
     let direct_volume: Arc<dyn Volume> = match to_volume_type(mount_info.volume_type.as_str()) {
         DirectVolumeType::RawBlock => Arc::new(
-            rawblock_volume::RawblockVolume::new(d, m, &mount_info, read_only, sid)
-                .await
-                .with_context(|| format!("new sid {:?} rawblock volume {:?}", sid, m))?,
+            rawblock_volume::RawblockVolume::new(
+                d,
+                m,
+                &mount_info,
+                read_only,
+                sid,
+                discard_supported,
+            )
+            .await
+            .with_context(|| format!("new sid {:?} rawblock volume {:?}", sid, m))?,
         ),
         DirectVolumeType::Spdk => Arc::new(
             spdk_volume::SPDKVolume::new(d, m, &mount_info, read_only, sid)

@@ -651,6 +651,11 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		}
 
 		if mntInfo != nil {
+			// Fail rather than attach a qcow2 image as a raw disk.
+			if err := volume.CheckRawImageFormat(mntInfo); err != nil {
+				return err
+			}
+
 			// Write out sandbox info file on the mount source to allow CSI to communicate with the runtime
 			if err := volume.RecordSandboxID(c.sandboxID, c.mounts[i].Source); err != nil {
 				c.Logger().WithError(err).Error("error writing sandbox info")
@@ -699,6 +704,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 						continue
 					}
 					c.mounts[i].FSGroupChangePolicy = volume.FSGroupChangePolicy(value)
+				case volume.ImageFormatMetadataKey:
+					// Checked by CheckRawImageFormat above; only "raw" gets here.
 				default:
 					c.Logger().Warnf("Ignoring unsupported direct-assignd volume metadata key: %s, value: %s", key, value)
 				}

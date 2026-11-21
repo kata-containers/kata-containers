@@ -311,6 +311,20 @@ impl DeviceManager {
             DeviceConfig::BlockCfgModern(config) => {
                 if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
                 {
+                    // A second user of the same host file shares the attached
+                    // device, so it must describe the file the same way.
+                    // Otherwise its format, and for qcow2 its backing chain,
+                    // would be silently ignored.
+                    if let DeviceType::BlockModern(existing) =
+                        self.get_device_info(&device_matched_id).await?
+                    {
+                        if existing.lock().await.config.source != config.source {
+                            return Err(anyhow!(
+                                "{} is already attached as a block device with a different format or backing chain",
+                                config.path_on_host
+                            ));
+                        }
+                    }
                     return Ok(device_matched_id);
                 }
 
@@ -697,6 +711,7 @@ mod tests {
     use crate::{
         device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
         qemu::Qemu,
+        virtio_blk_modern::BlockSourceFormat,
         BlockConfigModern, KATA_BLK_DEV_TYPE,
     };
     use anyhow::{anyhow, Context, Result};
@@ -914,6 +929,38 @@ mod tests {
         let device_info = d.read().await.get_device_info(&device_id).await.unwrap();
         assert!(
             matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_shared_block_device_must_have_the_same_source() {
+        let d = new_device_manager().await.unwrap();
+        let block_driver = get_block_device_info(&d).await.block_device_driver;
+        let config = |source| {
+            DeviceConfig::BlockCfgModern(BlockConfigModern {
+                path_on_host: "/csi/top.qcow2".to_string(),
+                driver_option: block_driver.clone(),
+                source,
+                ..Default::default()
+            })
+        };
+        let qcow2 = config(BlockSourceFormat::Qcow2(Default::default()));
+
+        let device_id = d.write().await.new_device(&qcow2).await.unwrap();
+        // The same declaration shares the device.
+        let matched_id = d.write().await.new_device(&qcow2).await.unwrap();
+        assert_eq!(device_id, matched_id);
+
+        // A different one is rejected rather than given the first one's.
+        let err = d
+            .write()
+            .await
+            .new_device(&config(BlockSourceFormat::Raw))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "/csi/top.qcow2 is already attached as a block device with a different format or backing chain"
         );
     }
 
