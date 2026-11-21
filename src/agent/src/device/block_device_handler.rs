@@ -17,6 +17,7 @@ use crate::linux_abi::{
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
+use crate::AGENT_CONFIG;
 use anyhow::{anyhow, Context, Result};
 #[cfg(target_arch = "s390x")]
 use std::str::FromStr;
@@ -26,10 +27,15 @@ use kata_types::device::DRIVER_BLK_CCW_TYPE;
 use kata_types::device::{DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE};
 use protocols::agent::Device;
 use regex::Regex;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::time::{sleep, Instant};
 use tracing::instrument;
+
+const MMIO_BLK_CAPACITY_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 #[derive(Debug)]
 pub struct VirtioBlkPciDeviceHandler {}
@@ -100,11 +106,9 @@ impl DeviceHandler for VirtioBlkMmioDeviceHandler {
         if device.vm_path.is_empty() {
             return Err(anyhow!("Invalid path for virtio mmio blk device"));
         }
-        if !Path::new(&device.vm_path).exists() {
-            get_virtio_blk_mmio_device_name(ctx.sandbox, &device.vm_path.to_string())
-                .await
-                .context("failed to get mmio device name")?;
-        }
+        wait_for_virtio_blk_mmio_device(ctx.sandbox, &device.vm_path)
+            .await
+            .context("failed to wait for virtio-mmio block device")?;
 
         Ok(DeviceInfo::new(device.vm_path(), true)
             .context("New device info")?
@@ -126,14 +130,25 @@ pub async fn get_virtio_blk_pci_device_name(
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, uev.devname))
 }
 
+fn parse_mmio_devname(devpath: &str) -> Result<&str> {
+    let devname = devpath
+        .strip_prefix("/dev/")
+        .ok_or_else(|| anyhow!("Storage source '{}' must start with /dev/", devpath))?;
+    if devname.is_empty() || devname == "." || devname == ".." || devname.contains('/') {
+        return Err(anyhow!(
+            "Invalid virtio-mmio block device path '{}'",
+            devpath
+        ));
+    }
+    Ok(devname)
+}
+
 #[instrument]
 pub async fn get_virtio_blk_mmio_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     devpath: &str,
 ) -> Result<()> {
-    let devname = devpath
-        .strip_prefix("/dev/")
-        .ok_or_else(|| anyhow!("Storage source '{}' must start with /dev/", devpath))?;
+    let devname = parse_mmio_devname(devpath)?;
 
     let matcher = VirtioBlkMmioMatcher::new(devname);
     let uev = wait_for_uevent(sandbox, matcher)
@@ -147,6 +162,113 @@ pub async fn get_virtio_blk_mmio_device_name(
         ));
     }
     Ok(())
+}
+
+/// Wait until a virtio-mmio block device node exists AND reports a non-zero
+/// sector count in sysfs (`/sys/class/block/<devname>/size`).
+///
+/// Hypervisors such as Firecracker pre-attach zero-length placeholder drives
+/// at boot (`/dev/vdb`..`/dev/vdi` with `0` sectors) and later swap in the
+/// container backing image via `PATCH /drives/drive_N`, which triggers an
+/// asynchronous `VIRTIO_MMIO_INT_CONFIG` interrupt in the guest. Because the
+/// `/dev/vdX` node already exists and Linux `set_capacity_and_notify()` does
+/// not emit a `change` uevent for `0 -> N` capacity transitions, checking path
+/// existence alone races with the guest `virtio_blk` capacity update and causes
+/// `mount(2)` to fail with `EIO` (`EXT4-fs: unable to read superblock`).
+#[instrument]
+pub async fn wait_for_virtio_blk_mmio_device(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    devpath: &str,
+) -> Result<()> {
+    let devname = parse_mmio_devname(devpath)?;
+    wait_for_virtio_blk_mmio_device_in(
+        sandbox,
+        Path::new(SYSTEM_DEV_PATH),
+        Path::new(SYSFS_DIR),
+        devname,
+        AGENT_CONFIG.hotplug_timeout,
+        MMIO_BLK_CAPACITY_POLL_INTERVAL,
+    )
+    .await
+}
+
+async fn wait_for_virtio_blk_mmio_device_in(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    dev_root: &Path,
+    sysfs_dir: &Path,
+    devname: &str,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> Result<()> {
+    let start = Instant::now();
+    let dev_node = dev_root.join(devname);
+
+    if !dev_node.exists() {
+        let canonical_devpath = format!("/dev/{devname}");
+        get_virtio_blk_mmio_device_name(sandbox, &canonical_devpath)
+            .await
+            .context("failed to get mmio device name")?;
+    }
+
+    let remaining_timeout = timeout.saturating_sub(start.elapsed());
+    wait_for_non_zero_block_capacity(sysfs_dir, devname, remaining_timeout, poll_interval).await?;
+
+    Ok(())
+}
+
+async fn wait_for_non_zero_block_capacity(
+    sysfs_dir: &Path,
+    devname: &str,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> Result<u64> {
+    let size_path = sysfs_dir.join("class/block").join(devname).join("size");
+    let deadline = Instant::now() + timeout;
+    let mut saw_zero_capacity = false;
+
+    loop {
+        match fs::read_to_string(&size_path) {
+            Ok(raw) => {
+                let sectors = raw.trim().parse::<u64>().with_context(|| {
+                    format!(
+                        "failed to parse sector count '{}' from {}",
+                        raw.trim(),
+                        size_path.display()
+                    )
+                })?;
+                if sectors > 0 {
+                    return Ok(sectors);
+                }
+                saw_zero_capacity = true;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(err).with_context(|| {
+                    format!("failed to read block capacity from {}", size_path.display())
+                });
+            }
+        }
+
+        let now = Instant::now();
+        if now >= deadline {
+            if saw_zero_capacity {
+                return Err(anyhow!(
+                    "Timeout after {:?} waiting for virtio-mmio block device /dev/{} to report non-zero capacity via {}",
+                    timeout,
+                    devname,
+                    size_path.display()
+                ));
+            }
+            return Err(anyhow!(
+                "Timeout after {:?} waiting for block capacity sysfs attribute {}",
+                timeout,
+                size_path.display()
+            ));
+        }
+
+        let remaining = deadline.saturating_duration_since(now);
+        sleep(poll_interval.min(remaining)).await;
+    }
 }
 
 #[cfg(target_arch = "s390x")]
@@ -532,5 +654,151 @@ mod tests {
             "Matcher should accept virtio{} number",
             virtio_id
         );
+    }
+
+    #[rstest]
+    #[case::missing_dev_prefix("vdb")]
+    #[case::empty_devname("/dev/")]
+    #[case::dot("/dev/.")]
+    #[case::dotdot("/dev/..")]
+    #[case::nested_path("/dev/foo/vdb")]
+    fn test_parse_mmio_devname_rejects_invalid_paths(#[case] invalid_path: &str) {
+        assert!(
+            parse_mmio_devname(invalid_path).is_err(),
+            "Path '{}' should be rejected",
+            invalid_path
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_mmio_device_existing_nonzero_capacity_returns_immediately() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dev_root = tmp.path().join("dev");
+        let sysfs_dir = tmp.path().join("sys");
+        let size_dir = sysfs_dir.join("class/block/vdb");
+        fs::create_dir_all(&dev_root).unwrap();
+        fs::create_dir_all(&size_dir).unwrap();
+        fs::write(dev_root.join("vdb"), b"").unwrap();
+        fs::write(size_dir.join("size"), "2097152\n").unwrap();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        wait_for_virtio_blk_mmio_device_in(
+            &sandbox,
+            &dev_root,
+            &sysfs_dir,
+            "vdb",
+            Duration::from_millis(200),
+            Duration::from_millis(5),
+        )
+        .await
+        .expect("non-zero capacity device should be ready immediately");
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_mmio_device_placeholder_zero_to_nonzero_capacity_race() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dev_root = tmp.path().join("dev");
+        let sysfs_dir = tmp.path().join("sys");
+        let size_dir = sysfs_dir.join("class/block/vdb");
+        fs::create_dir_all(&dev_root).unwrap();
+        fs::create_dir_all(&size_dir).unwrap();
+        // Pre-attached Firecracker placeholder drive: /dev/vdb already exists with 0 sectors.
+        fs::write(dev_root.join("vdb"), b"").unwrap();
+        let size_file = size_dir.join("size");
+        fs::write(&size_file, "0\n").unwrap();
+
+        let updater_size_file = size_file.clone();
+        let updater = tokio::spawn(async move {
+            sleep(Duration::from_millis(30)).await;
+            fs::write(updater_size_file, "2097152\n").unwrap();
+        });
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        let start = Instant::now();
+        wait_for_virtio_blk_mmio_device_in(
+            &sandbox,
+            &dev_root,
+            &sysfs_dir,
+            "vdb",
+            Duration::from_secs(1),
+            Duration::from_millis(5),
+        )
+        .await
+        .expect("should wait until placeholder drive capacity updates from 0 to non-zero");
+
+        assert!(
+            start.elapsed() >= Duration::from_millis(25),
+            "must not return while placeholder drive still reports 0 sectors"
+        );
+        updater.await.unwrap();
+        assert_eq!(fs::read_to_string(&size_file).unwrap().trim(), "2097152");
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_mmio_device_placeholder_stuck_at_zero_times_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dev_root = tmp.path().join("dev");
+        let sysfs_dir = tmp.path().join("sys");
+        let size_dir = sysfs_dir.join("class/block/vdb");
+        fs::create_dir_all(&dev_root).unwrap();
+        fs::create_dir_all(&size_dir).unwrap();
+        fs::write(dev_root.join("vdb"), b"").unwrap();
+        fs::write(size_dir.join("size"), "0\n").unwrap();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        let err = wait_for_virtio_blk_mmio_device_in(
+            &sandbox,
+            &dev_root,
+            &sysfs_dir,
+            "vdb",
+            Duration::from_millis(40),
+            Duration::from_millis(5),
+        )
+        .await
+        .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("non-zero capacity"),
+            "unexpected timeout error message: {}",
+            msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_mmio_device_missing_node_waits_for_uevent_and_capacity() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dev_root = tmp.path().join("dev");
+        let sysfs_dir = tmp.path().join("sys");
+        let size_dir = sysfs_dir.join("class/block/vdc");
+        fs::create_dir_all(&dev_root).unwrap();
+        fs::create_dir_all(&size_dir).unwrap();
+        fs::write(size_dir.join("size"), "1048576\n").unwrap();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        {
+            let uev = create_mmio_uevent("vdc", 1, 1);
+            let mut sb = sandbox.lock().await;
+            sb.uevent_map.insert(uev.devpath.clone(), uev);
+        }
+
+        // /dev/vdc does not exist in dev_root, so it exercises uevent lookup + sysfs capacity check.
+        wait_for_virtio_blk_mmio_device_in(
+            &sandbox,
+            &dev_root,
+            &sysfs_dir,
+            "vdc",
+            Duration::from_millis(200),
+            Duration::from_millis(5),
+        )
+        .await
+        .expect("should resolve via uevent and verify non-zero capacity");
     }
 }
