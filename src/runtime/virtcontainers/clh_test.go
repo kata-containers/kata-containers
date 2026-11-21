@@ -9,6 +9,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -151,6 +152,49 @@ func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
 func TestClhIommuType(t *testing.T) {
 	assert.Equal(t, chclient.IOMMUTYPE_OFF, clhIommuType(false))
 	assert.Equal(t, chclient.IOMMUTYPE_VIRTIO, clhIommuType(true))
+}
+
+func TestClhRtcConfig(t *testing.T) {
+	mshvDevice := filepath.Join(t.TempDir(), "mshv")
+	if err := os.WriteFile(mshvDevice, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		devicePath string
+		iommu      bool
+		wantRTC    bool
+		wantIommu  chclient.IommuType
+	}{
+		{"mshv", mshvDevice, false, true, chclient.IOMMUTYPE_OFF},
+		{"mshv with iommu", mshvDevice, true, true, chclient.IOMMUTYPE_VIRTIO},
+		{"kvm", mshvDevice + ".missing", false, false, chclient.IOMMUTYPE_OFF},
+		{"kvm with iommu", mshvDevice + ".missing", true, false, chclient.IOMMUTYPE_VIRTIO},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert := assert.New(t)
+			vmConfig := chclient.NewVmConfig(*chclient.NewPayloadConfig())
+			vmConfig.Rtc = clhRtcConfig(test.devicePath, test.iommu)
+			assert.Equal(test.wantRTC, vmConfig.HasRtc())
+
+			data, err := json.Marshal(vmConfig)
+			if !assert.NoError(err) {
+				return
+			}
+			var serialized map[string]json.RawMessage
+			if !assert.NoError(json.Unmarshal(data, &serialized)) {
+				return
+			}
+			rtcJSON, hasRTC := serialized["rtc"]
+			assert.Equal(test.wantRTC, hasRTC)
+			if test.wantRTC && assert.NotNil(vmConfig.Rtc) {
+				assert.Equal(test.wantIommu, vmConfig.Rtc.GetIommu())
+				assert.JSONEq(fmt.Sprintf(`{"iommu":%q}`, test.wantIommu), string(rtcJSON))
+			}
+		})
+	}
 }
 
 func TestCloudHypervisorAddVSock(t *testing.T) {
@@ -521,6 +565,10 @@ func TestClhCreateVM(t *testing.T) {
 	assert.NoError(err)
 	config6.DisableNestedVirtualization = true
 
+	config7, err := newClhConfig()
+	assert.NoError(err)
+	config7.IOMMU = true
+
 	type testData struct {
 		config      HypervisorConfig
 		expectError bool
@@ -536,6 +584,7 @@ func TestClhCreateVM(t *testing.T) {
 		{config4, false, true, true},
 		{config5, false, true, true},
 		{config6, false, true, false},
+		{config7, false, true, true},
 	}
 
 	for i, d := range data {
@@ -551,6 +600,10 @@ func TestClhCreateVM(t *testing.T) {
 		assert.NoError(err, msg)
 
 		assert.Equal(d.wantNested, clh.vmconfig.Cpus.GetNested(), msg)
+		assert.Equal(pathExists("/dev/mshv"), clh.vmconfig.HasRtc(), msg)
+		if clh.vmconfig.Rtc != nil {
+			assert.Equal(clhIommuType(d.config.IOMMU), clh.vmconfig.Rtc.GetIommu(), msg)
+		}
 
 		if d.configMatch {
 			assert.Exactly(d.config, clh.config, msg)

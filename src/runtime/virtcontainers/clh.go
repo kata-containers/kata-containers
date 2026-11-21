@@ -664,6 +664,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
 	clh.vmconfig.Rng.SetIommu(clhIommuType(clh.config.IOMMU))
 
+	clh.vmconfig.Rtc = clhRtcConfig("/dev/mshv", clh.config.IOMMU)
+
 	// set the initial root/boot disk of hypervisor
 	assetPath, assetType, err := clh.config.ImageOrInitrdAssetPath()
 	if err != nil {
@@ -2314,6 +2316,15 @@ func (clh *cloudHypervisor) vmInfo() (chclient.VmInfo, error) {
 
 func (clh *cloudHypervisor) IsRateLimiterBuiltin() bool {
 	return true
+}
+
+func clhRtcConfig(mshvDevice string, iommu bool) *chclient.RtcConfig {
+	if !pathExists(mshvDevice) {
+		return nil
+	}
+	rtc := chclient.NewRtcConfig()
+	rtc.SetIommu(clhIommuType(iommu))
+	return rtc
 }
 
 func pathExists(path string) bool {
