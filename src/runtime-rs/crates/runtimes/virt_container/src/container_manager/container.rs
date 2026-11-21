@@ -68,6 +68,15 @@ fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) ->
 }
 
 impl Container {
+    #[cfg(test)]
+    pub(super) async fn mark_stopped_for_test(&self) {
+        self.inner
+            .write()
+            .await
+            .set_state(ProcessStatus::Stopped)
+            .await;
+    }
+
     pub async fn new(
         pid: u32,
         config: ContainerConfig,
