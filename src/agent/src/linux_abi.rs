@@ -110,6 +110,12 @@ pub fn create_pci_root_bus_path(root_complex: &str) -> String {
     ret
 }
 
+/// Returns the absolute sysfs path of the PCI host bridge for `root_complex`,
+/// e.g. "/sys/devices/pci0000:00".
+pub fn create_pci_root_bus_sysfs_path(root_complex: &str) -> String {
+    format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex))
+}
+
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
         pub const CCW_ROOT_BUS_PATH: &str = "/devices/css0";
@@ -186,5 +192,18 @@ mod tests {
         assert_eq!(path.len(), 2);
         assert_eq!(path[0].slot(), 0x00);
         assert_eq!(path[1].slot(), 0x02);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "aarch64"))]
+    fn test_create_pci_root_bus_sysfs_path() {
+        assert_eq!(
+            create_pci_root_bus_sysfs_path("00"),
+            "/sys/devices/pci0000:00"
+        );
+        assert_eq!(
+            create_pci_root_bus_sysfs_path("20"),
+            "/sys/devices/pci0000:20"
+        );
     }
 }
