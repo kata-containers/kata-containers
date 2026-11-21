@@ -47,6 +47,7 @@ func buildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Clie
 	return client, nil
 }
 
+// DoGet returns the response body only when the shim endpoint responds with HTTP 200.
 func DoGet(sandboxID string, timeout time.Duration, urlPath string) ([]byte, error) {
 	client, err := BuildShimClient(sandboxID, timeout)
 	if err != nil {
@@ -65,6 +66,10 @@ func DoGet(sandboxID string, timeout time.Duration, urlPath string) ([]byte, err
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error sending get: url: %s, status code: %d, response data: %s", urlPath, resp.StatusCode, string(body))
 	}
 
 	return body, nil
