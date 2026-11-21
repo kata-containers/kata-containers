@@ -58,13 +58,30 @@ impl FactoryConfig {
 /// Returns an error if a sandbox VM with `config` cannot be restored from the template.
 pub(crate) fn check_template_vm_config(config: &TomlConfig) -> Result<()> {
     let template_path = PathBuf::from(config.get_factory().template_path);
-    let template_config = Template::load_vm_config(&template_path)?;
-
-    if template_config != vm_config_value(&VmConfig::new(config))? {
+    let template_filtered = without_memory_restore_mode(Template::load_vm_config(&template_path)?);
+    let current_filtered = without_memory_restore_mode(vm_config_value(&VmConfig::new(config))?);
+    if template_filtered != current_filtered {
         return Err(anyhow!("sandbox VM config does not match the template"));
     }
 
     Ok(())
+}
+
+/// Drops the flattened `memory_restore_mode` field from the hypervisor config.
+///
+/// The restore mode is a property of the restore operation, not of the snapshot,
+/// so it must not affect whether a sandbox config matches a saved template. This
+/// also keeps templates saved before the field existed (whose `vm_config.json`
+/// has no such key) comparable with the current serialization, which always
+/// emits the default value.
+fn without_memory_restore_mode(mut value: serde_json::Value) -> serde_json::Value {
+    if let Some(hypervisor_config) = value
+        .get_mut("hypervisor_config")
+        .and_then(|v| v.as_object_mut())
+    {
+        hypervisor_config.remove("memory_restore_mode");
+    }
+    value
 }
 
 /// The config used to match templates, ignoring the template paths and flags.
