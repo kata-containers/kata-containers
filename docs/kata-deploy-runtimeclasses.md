@@ -194,8 +194,11 @@ CPUs and GPUs configured for confidential computing.
 
 The standard GPU classes select nodes labeled `nvidia.com/cc.ready.state: "false"`;
 the confidential GPU classes select `"true"` together with the corresponding
-SNP or TDX label. Ensure the GPU Operator and Node Feature Discovery, or your
-own labeling process, advertise the appropriate state. See the
+SNP or TDX label. The `kata-device-provisioner` chart labels successfully
+provisioned nodes with their GPU readiness state, and Node Feature Discovery
+supplies CPU TEE labels. The `kata-device-plugin` advertises the VFIO-bound
+devices to Kubelet. Use KRAB to configure and deploy these components as
+described in the
 [GPU passthrough guide](use-cases/NVIDIA-GPU-passthrough-and-Kata-QEMU.md)
 and [NVIDIA guest settings](helm-configuration.md#nvidia-guest-settings).
 The [GPU preset](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml) provides
