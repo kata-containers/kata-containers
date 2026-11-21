@@ -858,6 +858,24 @@ EOF
 	[[ -x "${AGENT_DEST}" ]] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
 
+	if [[ ${AGENT_INIT} == "no" ]]; then
+		# shellcheck disable=SC1091
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+
+		agent_dir="${script_dir}/../../../src/agent/"
+
+		info "Build initdata-processor"
+		pushd "${script_dir}/../../../src/agent/initdata-processor"
+		make clean
+		make
+		make install DESTDIR="${ROOTFS_DIR}"
+		# TODO(burgerdev): why are we stripping here and not in the Makefiles?
+		"${stripping_tool}" "${ROOTFS_DIR}/usr/bin/initdata-processor"
+		OK "initdata-processor installed"
+		popd
+	fi
+
+
 	if [[ "${AGENT_INIT}" == "yes" ]]; then
 		setup_agent_init "${AGENT_DEST}" "${init}"
 	else
