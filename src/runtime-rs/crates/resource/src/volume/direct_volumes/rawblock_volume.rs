@@ -13,7 +13,7 @@ use hypervisor::{
     },
     BlockConfigModern, BlockDeviceAio,
 };
-use kata_types::mount::DirectVolumeMountInfo;
+use kata_types::{config::hypervisor::BlockDeviceInfo, mount::DirectVolumeMountInfo};
 use nix::sys::{stat, stat::SFlag};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
@@ -31,17 +31,12 @@ pub(crate) struct RawblockVolume {
     device_id: String,
 }
 
-/// RawblockVolume for raw block volume
 impl RawblockVolume {
-    pub(crate) async fn new(
-        d: &RwLock<DeviceManager>,
-        m: &oci::Mount,
+    fn block_device_config(
+        blkdev_info: &BlockDeviceInfo,
         mount_info: &DirectVolumeMountInfo,
         read_only: bool,
-        sid: &str,
-    ) -> Result<Self> {
-        let blkdev_info = get_block_device_info(d).await;
-
+    ) -> Result<BlockConfigModern> {
         // check volume type
         if mount_info.volume_type != KATA_DIRECT_VOLUME_TYPE {
             return Err(anyhow!(
@@ -78,17 +73,28 @@ impl RawblockVolume {
                     false
                 }));
 
-        let block_config = BlockConfigModern {
+        Ok(BlockConfigModern {
             path_on_host: mount_info.device.clone(),
             is_readonly: read_only,
-            driver_option: blkdev_info.block_device_driver,
+            driver_option: blkdev_info.block_device_driver.clone(),
             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             num_queues: blkdev_info.num_queues,
             queue_size: blkdev_info.queue_size,
             logical_sector_size: blkdev_info.block_device_logical_sector_size,
             physical_sector_size: blkdev_info.block_device_physical_sector_size,
             ..Default::default()
-        };
+        })
+    }
+
+    pub(crate) async fn new(
+        d: &RwLock<DeviceManager>,
+        m: &oci::Mount,
+        mount_info: &DirectVolumeMountInfo,
+        read_only: bool,
+        sid: &str,
+    ) -> Result<Self> {
+        let blkdev_info = get_block_device_info(d).await;
+        let block_config = Self::block_device_config(&blkdev_info, mount_info, read_only)?;
 
         // create and insert block device into Kata VM
         let device_info = do_handle_device(d, &DeviceConfig::BlockCfgModern(block_config.clone()))
@@ -112,6 +118,32 @@ impl RawblockVolume {
             device_id: block_volume.2,
         })
     }
+}
+
+pub fn pmem_volume_configs(
+    mounts: &[oci::Mount],
+    blkdev_info: &BlockDeviceInfo,
+) -> Result<Vec<BlockConfigModern>> {
+    let mut configs = Vec::new();
+    for mount in mounts {
+        if !crate::volume::direct_volume::is_direct_volume(mount)? {
+            continue;
+        }
+        let mount_info =
+            super::volume_mount_info(&kata_sys_util::mount::get_mount_path(mount.source()))?;
+        if mount_info.volume_type != KATA_DIRECT_VOLUME_TYPE {
+            continue;
+        }
+        let read_only = kata_sys_util::mount::get_mount_options(mount.options())
+            .iter()
+            .any(|option| option == "ro");
+        configs.push(RawblockVolume::block_device_config(
+            blkdev_info,
+            &mount_info,
+            read_only,
+        )?);
+    }
+    Ok(configs)
 }
 
 #[async_trait]
