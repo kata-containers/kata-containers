@@ -44,6 +44,7 @@ members = [
   "src/tools/agent-ctl",
   "src/tools/genpolicy",
   "src/tools/kata-ctl",
+  "src/tools/kata-dan-cni",
   "src/tools/trace-forwarder",
 
   # kata-deploy (Kubernetes installer binary)
@@ -176,6 +177,7 @@ epoll = "=4.3.1"
 flate2 = "1.1.5"
 fuse-backend-rs = "0.14.0"
 futures = "0.3.30"
+futures-util = "0.3"
 go-flag = "0.1.0"
 gpt = "4.1.0"
 hex = "0.4.3"
@@ -190,6 +192,11 @@ hyper-util = { features = [
 hyperlocal = "0.9.1"
 io-uring = "0.5.2"
 ipnetwork = "0.17.0"
+k8s-openapi = { features = ["v1_31"], version = "0.27.1" }
+kube = { default-features = false, features = [
+  "ring",
+  "rustls-tls",
+], version = "3.1.0" }
 lazy_static = "1.4"
 libc = "0.2.94"
 log = "0.4.14"
@@ -242,9 +249,11 @@ slog-async = "2.7.0"
 slog-scope = "4.4.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
+socket2 = "0.6"
 strum = { features = ["derive"], version = "0.24.0" }
 strum_macros = "0.26.2"
 sysinfo = "0.39.5"
+tappers = "0.4.2"
 tar = "0.4.46"
 tdx = "0.1.1"
 tempfile = "3.19.1"
@@ -262,6 +271,14 @@ ttrpc = "0.9.0"
 url = "2.5.4"
 vhost-rs = { package = "vhost", version = "0.15.0" }
 which = "4.3.0"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "deny"
 
 # Per-package release profile overrides for kata-deploy. The kata-deploy
 # binary runs once at pod start and then idles waiting for SIGTERM, so we

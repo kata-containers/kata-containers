@@ -1,0 +1,17 @@
+[package]
+authors.workspace = true
+edition = "2021"
+license.workspace = true
+name = "provider-fake"
+publish = false
+rust-version.workspace = true
+version = "0.1.0"
+
+[dependencies]
+dan-core = { path = "../../dan-core" }
+
+[dev-dependencies]
+tokio = { features = ["macros", "rt", "time"], workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,77 @@
+# Copyright (c) 2026 Kata Containers community
+# SPDX-License-Identifier: Apache-2.0
+
+name: Kata DAN CNI tests
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skipper:
+    uses: ./.github/workflows/gatekeeper-skipper.yaml
+    with:
+      commit-hash: ${{ github.event.pull_request.head.sha || github.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+
+  test-integration:
+    name: test-integration
+    needs: skipper
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.skipper.outputs.skip_static != 'yes' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      KATA_DAN_TEST_LOG_DIR: ${{ github.workspace }}/target/kata-dan-integration-logs
+      RUST_BACKTRACE: "1"
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential iproute2 jq kmod openvswitch-switch util-linux
+          sudo modprobe tun
+          sudo modprobe openvswitch
+          test -c /dev/net/tun
+
+      - name: Install yq
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Install rust
+        run: |
+          ./tests/install_rust.sh
+          echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Run TAP and OVS integration tests
+        shell: bash
+        run: |
+          mkdir -p "${KATA_DAN_TEST_LOG_DIR}"
+          make -C src/tools/kata-dan-cni test-integration 2>&1 | tee "${KATA_DAN_TEST_LOG_DIR}/ci.log"
+
+      - name: Archive failure logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kata-dan-cni-integration-logs
+          path: ${{ env.KATA_DAN_TEST_LOG_DIR }}
+          if-no-files-found: warn
+          retention-days: 7
