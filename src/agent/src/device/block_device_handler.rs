@@ -119,7 +119,7 @@ pub async fn get_virtio_blk_pci_device_name(
     pcipath: &pci::Path,
 ) -> Result<String> {
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, root_complex, pcipath)?;
     let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path, root_complex);
 
     let uev = wait_for_uevent(sandbox, matcher).await?;

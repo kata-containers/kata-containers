@@ -340,7 +340,7 @@ pub async fn wait_for_pci_device(
         logger,
         "wait_for_pci_device: root_bus_sysfs {} pcipath {}", &root_bus_sysfs, pcipath
     );
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?; // "/0000:00:06.0/0000:02:00.0"
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, root_complex, pcipath)?; // "/0000:00:06.0/0000:02:00.0"
 
     // "/sys/devices/pci0000:00/0000:00:06.0/0000:02:00.0"
     let sysfs_abs = format!("{root_bus_sysfs}{sysfs_rel_path}");
