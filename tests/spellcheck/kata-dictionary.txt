@@ -136,6 +136,7 @@ inodes
 libelf-dev
 loopless
 memcg
+mountpoint
 nydus
 patchset
 prestart
