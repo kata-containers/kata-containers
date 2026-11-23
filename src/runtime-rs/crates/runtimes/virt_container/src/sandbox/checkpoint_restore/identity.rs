@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 use crate::factory::vm::VmConfig;
 use crate::sandbox::VirtSandbox;
 
-use super::manifest::CheckpointManifest;
-
 pub(super) const RUNTIME_ASSET_IDENTITY_OPTION: &str =
     "io.katacontainers.checkpoint.runtime-assets";
 
@@ -174,11 +172,11 @@ fn runtime_config_fingerprint(
 impl VirtSandbox {
     pub(super) async fn verify_runtime_fingerprint(
         &self,
-        manifest: &CheckpointManifest,
+        runtime_fingerprint: &str,
         options: &HashMap<String, String>,
     ) -> Result<()> {
         let actual = self.runtime_fingerprint(options).await?;
-        if manifest.runtime_fingerprint != actual {
+        if runtime_fingerprint != actual {
             return Err(CommonError::SandboxOperationPrecondition(
                 "checkpoint runtime fingerprint does not match this runtime".to_string(),
             )

@@ -5,10 +5,11 @@
 use std::{
     collections::HashMap,
     fs,
+    io::{BufReader, Read},
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use common::error::Error as CommonError;
 use common::{
@@ -17,7 +18,7 @@ use common::{
     },
     SandboxCheckpointRestore,
 };
-use hypervisor;
+use ring::digest::{Context as Sha256Context, SHA256};
 
 use crate::sandbox::VirtSandbox;
 
@@ -30,6 +31,45 @@ mod sparse;
 mod validation;
 
 use manifest::{CheckpointManifest, WORKLOAD_CHECKPOINT_MANIFEST, WORKLOAD_CHECKPOINT_STATE};
+use restore::RestoreBoot;
+pub(super) use validation::RestoreInventoryValidation;
+use validation::{CheckpointInventoryValidation, CheckpointRequestValidation};
+
+pub(super) fn file_integrity(path: &Path) -> Result<(u64, String)> {
+    let file = fs::File::open(path)
+        .with_context(|| format!("open file for integrity check: {}", path.display()))?;
+    let size = file
+        .metadata()
+        .with_context(|| format!("inspect file for integrity check: {}", path.display()))?
+        .len();
+
+    let mut reader = BufReader::new(file);
+    let mut hasher = Sha256Context::new(&SHA256);
+
+    // This helper runs from Tokio worker tasks whose stacks are small.
+    // Keep the large I/O buffer on the heap to avoid aborting a deeply
+    // nested Restore call with a worker-stack overflow.
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    loop {
+        let count = reader
+            .read(&mut buffer)
+            .with_context(|| format!("read file for integrity check: {}", path.display()))?;
+        if count == 0 {
+            break;
+        }
+
+        hasher.update(&buffer[..count]);
+    }
+
+    let digest = hasher.finish();
+    let sha256 = digest
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+
+    Ok((size, sha256))
+}
 
 fn checkpoint_files(path: &str) -> Result<(PathBuf, PathBuf)> {
     let root = Path::new(path);
@@ -58,30 +98,6 @@ fn checkpoint_files(path: &str) -> Result<(PathBuf, PathBuf)> {
         root.join(WORKLOAD_CHECKPOINT_STATE),
         root.join(WORKLOAD_CHECKPOINT_MANIFEST),
     ))
-}
-
-fn publish_manifest(manifest: &CheckpointManifest, path: &Path) -> Result<()> {
-    let partial = path.with_extension("json.partial");
-    let result = (|| -> Result<()> {
-        fs::write(&partial, serde_json::to_vec_pretty(manifest)?)?;
-        fs::File::open(&partial)?.sync_all()?;
-        fs::rename(&partial, path)?;
-        fs::File::open(path.parent().unwrap())?.sync_all()?;
-
-        Ok(())
-    })();
-
-    if result.is_err() {
-        let _ = fs::remove_file(&partial);
-        let _ = fs::remove_file(path);
-    }
-
-    result
-}
-
-pub(super) struct RestoreBoot {
-    pub(super) options: hypervisor::VmRestoreOptions,
-    pub(super) blocks: Vec<hypervisor::BlockDeviceModern>,
 }
 
 pub(super) struct PendingRestore {
@@ -145,8 +161,21 @@ impl SandboxCheckpointRestore for VirtSandbox {
     }
 
     async fn validate_checkpoint_sandbox(&self, req: &CheckpointSandboxRequest) -> Result<()> {
-        self.validate_checkpoint_request(req).await?;
-        self.validate_checkpoint_devices(req).await.map(|_| ())
+        CheckpointRequestValidation {
+            sandbox_id: &self.sid,
+            request: req,
+            resources: self.resource_manager.as_ref(),
+        }
+        .validate()
+        .await?;
+
+        CheckpointInventoryValidation {
+            request: req,
+            resources: self.resource_manager.as_ref(),
+        }
+        .validate()
+        .await
+        .map(|_| ())
     }
 
     async fn checkpoint_sandbox(
@@ -163,5 +192,22 @@ impl SandboxCheckpointRestore for VirtSandbox {
 
     async fn restore_sandbox(&self, req: &RestoreSandboxRequest) -> Result<RestoreSandboxInfo> {
         self.restore_workload(req).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integrity_error_keeps_file_path_and_io_cause() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory.path().join("missing-artifact");
+        let err = file_integrity(&missing).unwrap_err();
+        assert!(err.to_string().contains(missing.to_str().unwrap()));
+        assert_eq!(
+            err.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::NotFound
+        );
     }
 }

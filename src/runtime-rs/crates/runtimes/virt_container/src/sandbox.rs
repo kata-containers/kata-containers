@@ -1533,11 +1533,9 @@ impl Sandbox for VirtSandbox {
 
         let mode = self.resolve_start_mode().await;
         let result: Result<()> = async {
-            if matches!(mode, StartMode::Restore) {
-                self.prepare_restore_start()
-                    .await
-                    .context("prepare sandbox restore before VM start")?;
-            }
+            self.prepare_restore_artifacts(mode)
+                .await
+                .context("prepare sandbox restore before VM start")?;
 
             let started = self
                 .prepare_and_start_vm(&mut inner, sandbox_config, mode)

@@ -6,7 +6,7 @@ use super::super::{
     manifest::{CheckpointRootfs, CheckpointTask, ImmutableRootfs, WORKLOAD_CHECKPOINT_STORAGE},
     sparse::{decode_sparse_artifact, encode_sparse_artifact, SparseMeta, SPARSE_FORMAT},
 };
-use super::{run_artifact_worker, IMMUTABLE_ROOTFS_OPTION};
+use super::run_artifact_worker;
 use anyhow::{Context, Result};
 use common::{error::Error as CommonError, types::SandboxCheckpointTask};
 use hypervisor::{BlockConfigModern, BlockDeviceAio, BlockDeviceModern, BlockSourceFormat};
@@ -19,6 +19,9 @@ use std::{
     time::Instant,
 };
 
+pub(in crate::sandbox::checkpoint_restore) const IMMUTABLE_ROOTFS_OPTION: &str =
+    "io.katacontainers.checkpoint.rootfs.immutable";
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ImmutableRootfsOption {
@@ -29,32 +32,34 @@ struct ImmutableRootfsOption {
     sha256: String,
 }
 
-fn immutable_rootfs_options(
-    options: &HashMap<String, String>,
-) -> Result<HashMap<String, ImmutableRootfsOption>> {
-    let Some(value) = options.get(IMMUTABLE_ROOTFS_OPTION) else {
-        return Ok(HashMap::new());
-    };
+impl ImmutableRootfsOption {
+    fn from_options(options: &HashMap<String, String>) -> Result<HashMap<String, Self>> {
+        let Some(value) = options.get(IMMUTABLE_ROOTFS_OPTION) else {
+            return Ok(HashMap::new());
+        };
 
-    let entries: Vec<ImmutableRootfsOption> = serde_json::from_str(value).map_err(|err| {
-        CommonError::InvalidSandboxOperation(format!("decode immutable rootfs inventory: {err}"))
-    })?;
-    let mut result = HashMap::with_capacity(entries.len());
-    for entry in entries {
-        if entry.checkpoint_key.is_empty()
-            || entry.size == 0
-            || entry.sha256.len() != 64
-            || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
-            || result.insert(entry.checkpoint_key.clone(), entry).is_some()
-        {
-            return Err(CommonError::InvalidSandboxOperation(
-                "invalid or duplicate immutable rootfs inventory".to_string(),
-            )
-            .into());
+        let entries: Vec<ImmutableRootfsOption> = serde_json::from_str(value).map_err(|err| {
+            CommonError::InvalidSandboxOperation(format!(
+                "decode immutable rootfs inventory: {err}"
+            ))
+        })?;
+        let mut result = HashMap::with_capacity(entries.len());
+        for entry in entries {
+            if entry.checkpoint_key.is_empty()
+                || entry.size == 0
+                || entry.sha256.len() != 64
+                || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+                || result.insert(entry.checkpoint_key.clone(), entry).is_some()
+            {
+                return Err(CommonError::InvalidSandboxOperation(
+                    "invalid or duplicate immutable rootfs inventory".to_string(),
+                )
+                .into());
+            }
         }
-    }
 
-    Ok(result)
+        Ok(result)
+    }
 }
 
 fn rootfs_artifact_name(task_count: usize, position: usize) -> String {
@@ -81,25 +86,62 @@ fn flush_managed_rootfs(source: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
-    checkpoint_root: &Path,
-    tasks: &[SandboxCheckpointTask],
-    options: &HashMap<String, String>,
-    blocks: Vec<BlockDeviceModern>,
-) -> Result<Vec<CheckpointRootfs>> {
-    let mut blocks_by_id = blocks
-        .into_iter()
-        .map(|block| (block.device_id.clone(), block))
-        .collect::<HashMap<_, _>>();
+/// Inputs for saving managed task rootfs devices into a checkpoint.
+pub(in crate::sandbox::checkpoint_restore) struct RootfsCheckpoint<'a> {
+    pub(in crate::sandbox::checkpoint_restore) checkpoint_root: &'a Path,
+    pub(in crate::sandbox::checkpoint_restore) tasks: &'a [SandboxCheckpointTask],
+    pub(in crate::sandbox::checkpoint_restore) options: &'a HashMap<String, String>,
+    pub(in crate::sandbox::checkpoint_restore) blocks: Vec<BlockDeviceModern>,
+}
 
-    let storage_dir = checkpoint_root.join(WORKLOAD_CHECKPOINT_STORAGE);
-    fs::create_dir(&storage_dir).context("create checkpoint rootfs storage directory")?;
+impl RootfsCheckpoint<'_> {
+    pub(in crate::sandbox::checkpoint_restore) fn write(mut self) -> Result<Vec<CheckpointRootfs>> {
+        let checkpoint_root = self.checkpoint_root;
+        let tasks = self.tasks;
+        let options = self.options;
+        let blocks = std::mem::take(&mut self.blocks);
+        let mut blocks_by_id = blocks
+            .into_iter()
+            .map(|block| (block.device_id.clone(), block))
+            .collect::<HashMap<_, _>>();
 
-    let mut immutable_options = immutable_rootfs_options(options)?;
-    let task_count = tasks.len();
-    let mut artifacts = Vec::with_capacity(task_count);
+        let storage_dir = checkpoint_root.join(WORKLOAD_CHECKPOINT_STORAGE);
+        fs::create_dir(&storage_dir).context("create checkpoint rootfs storage directory")?;
 
-    for (position, task) in tasks.iter().enumerate() {
+        let mut immutable_options = ImmutableRootfsOption::from_options(options)?;
+        let task_count = tasks.len();
+        let mut artifacts = Vec::with_capacity(task_count);
+
+        for (position, task) in tasks.iter().enumerate() {
+            artifacts.push(self.write_task(
+                task,
+                position,
+                &mut blocks_by_id,
+                &mut immutable_options,
+            )?);
+        }
+
+        if !immutable_options.is_empty() {
+            return Err(CommonError::InvalidSandboxOperation(
+                "immutable rootfs inventory contains unknown tasks".to_string(),
+            )
+            .into());
+        }
+
+        fs::File::open(&storage_dir)?.sync_all()?;
+
+        Ok(artifacts)
+    }
+
+    fn write_task(
+        &self,
+        task: &SandboxCheckpointTask,
+        position: usize,
+        blocks_by_id: &mut HashMap<String, BlockDeviceModern>,
+        immutable_options: &mut HashMap<String, ImmutableRootfsOption>,
+    ) -> Result<CheckpointRootfs> {
+        let checkpoint_root = self.checkpoint_root;
+        let task_count = self.tasks.len();
         if task.rootfs_device_ids.is_empty() || task.rootfs_device_ids.len() > 2 {
             return Err(CommonError::SandboxOperationUnsupported(format!(
                 "checkpoint task {} requires one writable rootfs and at most one immutable lower",
@@ -254,7 +296,7 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
             "elapsed_us" => encode_started.elapsed().as_micros(),
         );
 
-        artifacts.push(CheckpointRootfs {
+        Ok(CheckpointRootfs {
             checkpoint_key: task.checkpoint_key.clone(),
             file: relative,
             format: SPARSE_FORMAT.to_string(),
@@ -274,52 +316,84 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
             encoded_size: encoded.encoded_size,
             sha256: encoded.sha256,
             immutable_lower,
-        });
+        })
     }
-
-    if !immutable_options.is_empty() {
-        return Err(CommonError::InvalidSandboxOperation(
-            "immutable rootfs inventory contains unknown tasks".to_string(),
-        )
-        .into());
-    }
-
-    fs::File::open(&storage_dir)?.sync_all()?;
-
-    Ok(artifacts)
 }
 
-pub(in crate::sandbox::checkpoint_restore) async fn restore_rootfs_artifacts(
-    checkpoint_root: &Path,
-    tasks: &[CheckpointTask],
-    options: &HashMap<String, String>,
-    rootfs: &[CheckpointRootfs],
-    restore_dir: &Path,
-    sync_private_copy: bool,
-) -> Result<Vec<BlockDeviceModern>> {
-    if rootfs.len() != tasks.len() {
-        return Err(CommonError::InvalidSandboxOperation(
-            "restore rootfs inventory does not match tasks".to_string(),
-        )
-        .into());
+/// Inputs for decoding rootfs artifacts and rebuilding their device configurations.
+pub(in crate::sandbox::checkpoint_restore) struct RootfsRestore<'a> {
+    pub(in crate::sandbox::checkpoint_restore) checkpoint_root: &'a Path,
+    pub(in crate::sandbox::checkpoint_restore) tasks: &'a [CheckpointTask],
+    pub(in crate::sandbox::checkpoint_restore) options: &'a HashMap<String, String>,
+    pub(in crate::sandbox::checkpoint_restore) rootfs: &'a [CheckpointRootfs],
+    pub(in crate::sandbox::checkpoint_restore) restore_dir: &'a Path,
+    pub(in crate::sandbox::checkpoint_restore) sync_private_copy: bool,
+}
+
+impl RootfsRestore<'_> {
+    pub(in crate::sandbox::checkpoint_restore) async fn restore(
+        self,
+    ) -> Result<Vec<BlockDeviceModern>> {
+        let tasks = self.tasks;
+        let options = self.options;
+        let rootfs = self.rootfs;
+        let restore_dir = self.restore_dir;
+        if rootfs.len() != tasks.len() {
+            return Err(CommonError::InvalidSandboxOperation(
+                "restore rootfs inventory does not match tasks".to_string(),
+            )
+            .into());
+        }
+
+        let tasks = tasks
+            .iter()
+            .map(|task| (task.checkpoint_key.as_str(), task))
+            .collect::<HashMap<_, _>>();
+
+        let mut immutable_options = ImmutableRootfsOption::from_options(options)?;
+        let mut blocks = Vec::with_capacity(rootfs.len() * 2);
+
+        for (position, artifact) in rootfs.iter().enumerate() {
+            let task = tasks.get(artifact.checkpoint_key.as_str()).ok_or_else(|| {
+                CommonError::InvalidSandboxOperation(format!(
+                    "rootfs checkpoint key {} has no restored task",
+                    artifact.checkpoint_key
+                ))
+            })?;
+            self.restore_one(
+                artifact,
+                position,
+                task,
+                &mut immutable_options,
+                &mut blocks,
+            )
+            .await?;
+        }
+
+        if !immutable_options.is_empty() {
+            return Err(CommonError::InvalidSandboxOperation(
+                "immutable rootfs resolution contains unknown tasks".to_string(),
+            )
+            .into());
+        }
+
+        fs::File::open(restore_dir)?.sync_all()?;
+
+        Ok(blocks)
     }
 
-    let tasks = tasks
-        .iter()
-        .map(|task| (task.checkpoint_key.as_str(), task))
-        .collect::<HashMap<_, _>>();
-
-    let mut immutable_options = immutable_rootfs_options(options)?;
-    let mut blocks = Vec::with_capacity(rootfs.len() * 2);
-    let task_count = rootfs.len();
-
-    for (position, artifact) in rootfs.iter().enumerate() {
-        let task = tasks.get(artifact.checkpoint_key.as_str()).ok_or_else(|| {
-            CommonError::InvalidSandboxOperation(format!(
-                "rootfs checkpoint key {} has no restored task",
-                artifact.checkpoint_key
-            ))
-        })?;
+    async fn restore_one(
+        &self,
+        artifact: &CheckpointRootfs,
+        position: usize,
+        task: &CheckpointTask,
+        immutable_options: &mut HashMap<String, ImmutableRootfsOption>,
+        blocks: &mut Vec<BlockDeviceModern>,
+    ) -> Result<()> {
+        let checkpoint_root = self.checkpoint_root;
+        let restore_dir = self.restore_dir;
+        let sync_private_copy = self.sync_private_copy;
+        let task_count = self.rootfs.len();
         let expected = format!(
             "{WORKLOAD_CHECKPOINT_STORAGE}/{}",
             rootfs_artifact_name(task_count, position)
@@ -462,18 +536,8 @@ pub(in crate::sandbox::checkpoint_restore) async fn restore_rootfs_artifacts(
                 ..Default::default()
             });
         }
+        Ok(())
     }
-
-    if !immutable_options.is_empty() {
-        return Err(CommonError::InvalidSandboxOperation(
-            "immutable rootfs resolution contains unknown tasks".to_string(),
-        )
-        .into());
-    }
-
-    fs::File::open(restore_dir)?.sync_all()?;
-
-    Ok(blocks)
 }
 
 #[cfg(test)]
@@ -509,17 +573,24 @@ mod tests {
             ..Default::default()
         };
         let options = HashMap::new();
-        let artifacts =
-            write_rootfs_artifacts(&checkpoint_root, &tasks, &options, vec![block]).unwrap();
+        let artifacts = RootfsCheckpoint {
+            checkpoint_root: &checkpoint_root,
+            tasks: &tasks,
+            options: &options,
+            blocks: vec![block],
+        }
+        .write()
+        .unwrap();
 
-        let error = restore_rootfs_artifacts(
-            &checkpoint_root,
-            &[],
-            &options,
-            &artifacts,
-            &restore_root,
-            true,
-        )
+        let error = RootfsRestore {
+            checkpoint_root: &checkpoint_root,
+            tasks: &[],
+            options: &options,
+            rootfs: &artifacts,
+            restore_dir: &restore_root,
+            sync_private_copy: true,
+        }
+        .restore()
         .await
         .expect_err("task inventory mismatch must fail");
         assert!(matches!(
@@ -529,17 +600,18 @@ mod tests {
         ));
         assert!(!restore_root.join("rootfs.raw").exists());
 
-        let restored = restore_rootfs_artifacts(
-            &checkpoint_root,
-            &[CheckpointTask {
+        let restored = RootfsRestore {
+            checkpoint_root: &checkpoint_root,
+            tasks: &[CheckpointTask {
                 checkpoint_key: "app".into(),
                 task_id: "old-app".into(),
             }],
-            &options,
-            &artifacts,
-            &restore_root,
-            true,
-        )
+            options: &options,
+            rootfs: &artifacts,
+            restore_dir: &restore_root,
+            sync_private_copy: true,
+        }
+        .restore()
         .await
         .unwrap();
         assert_eq!(restored.len(), 1);
@@ -562,7 +634,7 @@ mod tests {
                 "a".repeat(64)
             ),
         );
-        let entries = immutable_rootfs_options(&options).unwrap();
+        let entries = ImmutableRootfsOption::from_options(&options).unwrap();
         let entry = entries.get("app").unwrap();
         assert_eq!(entry.size, 4096);
         assert!(entry.path.is_empty());
@@ -571,7 +643,7 @@ mod tests {
             IMMUTABLE_ROOTFS_OPTION.to_string(),
             r#"[{"checkpoint_key":"app","size":4096,"sha256":"bad"}]"#.to_string(),
         );
-        assert!(immutable_rootfs_options(&options).is_err());
+        assert!(ImmutableRootfsOption::from_options(&options).is_err());
     }
 
     #[test]

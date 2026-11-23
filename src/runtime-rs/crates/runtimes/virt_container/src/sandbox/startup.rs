@@ -20,6 +20,7 @@ use resource::network::{dan_config_path, NetworkConfig, NetworkWithNetNsConfig};
 
 use crate::UNKNOWN_EXIT_STATUS;
 
+use super::checkpoint_restore::RestoreInventoryValidation;
 use super::{SandboxInner, VirtSandbox};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +34,14 @@ pub(super) struct StartedVm {
 }
 
 impl VirtSandbox {
+    pub(in crate::sandbox) async fn resolve_start_mode(&self) -> StartMode {
+        if self.restore_state.read().await.is_restoring() {
+            StartMode::Restore
+        } else {
+            StartMode::Normal
+        }
+    }
+
     pub(super) async fn prepare_and_start_vm(
         &self,
         inner: &mut SandboxInner,
@@ -67,7 +76,9 @@ impl VirtSandbox {
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
         let mut resources = resources;
-        let restore_boot = self.prepare_restore_boot(&mut resources, mode).await;
+
+        // Adjust base devices for restore, append checkpointed disks, and take VM restore options.
+        let (restored_topology, restore) = self.prepare_vm_restore(&mut resources, mode).await;
 
         let set_up = self
             .resource_manager
@@ -76,14 +87,16 @@ impl VirtSandbox {
             .context("set up device before start vm");
         self.save_after(set_up).await?;
 
-        self.register_and_validate_restore_devices(mode).await?;
+        // validate restored device inventory if the sandbox is restoring from a checkpoint
+        RestoreInventoryValidation {
+            mode,
+            resources: self.resource_manager.as_ref(),
+        }
+        .validate()
+        .await?;
 
         // start vm
         inner.vmm_start_attempted = true;
-        let restored_topology = restore_boot
-            .as_ref()
-            .map(|boot| boot.options.resource_topology);
-        let restore = restore_boot.map(|boot| boot.options);
         let started = self
             .hypervisor
             .start_vm(hypervisor::VmStartOptions {
@@ -98,12 +111,7 @@ impl VirtSandbox {
         self.remember_vmm_process().await;
         self.save_after(started).await?;
 
-        if let Some(topology) = restored_topology {
-            self.resource_manager
-                .adopt_restored_vm(topology)
-                .await
-                .context("adopt restored VM resource topology")?;
-        }
+        self.adopt_restored_vm_resources(restored_topology).await?;
 
         info!(sl!(), "start vm");
 

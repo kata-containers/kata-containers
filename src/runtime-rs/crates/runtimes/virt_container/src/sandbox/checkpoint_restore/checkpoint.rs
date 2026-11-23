@@ -20,7 +20,7 @@ use super::{
         CheckpointManifest, CheckpointRootfs, CheckpointTask, WORKLOAD_CHECKPOINT_FORMAT_VERSION,
         WORKLOAD_CHECKPOINT_STATE, WORKLOAD_CHECKPOINT_STORAGE,
     },
-    publish_manifest,
+    validation::CheckpointInventoryValidation,
 };
 
 // Keep the saved memory handles alive until VM recovery has been attempted,
@@ -47,7 +47,12 @@ impl VirtSandbox {
 
         // Re-read the resource inventory after tasks are frozen. Static request
         // validation was already completed before the transaction paused them.
-        let network_macs = self.validate_checkpoint_devices(req).await?;
+        let network_macs = CheckpointInventoryValidation {
+            request: req,
+            resources: self.resource_manager.as_ref(),
+        }
+        .validate()
+        .await?;
 
         let (state_path, manifest_path) = checkpoint_files(&req.output_path)?;
         fs::create_dir(&state_path).context("create VM checkpoint directory")?;
@@ -163,7 +168,7 @@ impl VirtSandbox {
             template: self.template_identity.clone(),
         };
 
-        publish_manifest(&manifest, &manifest_path)?;
+        manifest.publish(&manifest_path)?;
         info!(
             sl!(),
             "checkpoint completed";
@@ -228,7 +233,13 @@ impl VirtSandbox {
         let options = options.clone();
 
         tokio::task::spawn_blocking(move || {
-            rootfs::write_rootfs_artifacts(&checkpoint_root, &tasks, &options, blocks)
+            rootfs::RootfsCheckpoint {
+                checkpoint_root: &checkpoint_root,
+                tasks: &tasks,
+                options: &options,
+                blocks,
+            }
+            .write()
         })
         .await
         .context("checkpoint rootfs artifact worker failed")?

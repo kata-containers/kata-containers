@@ -4,10 +4,9 @@
 
 //! Sparse-memory snapshot artifacts using the Dragonball memory codecs.
 
-use super::{
-    file_integrity, run_artifact_worker, ArtifactError, EncodedArtifact, VmCheckpointArtifact,
-    VM_ARTIFACT_RAW_FORMAT,
-};
+use super::super::file_integrity;
+use super::vm::{EncodedArtifact, VmArtifacts, VmCheckpointArtifact, VM_ARTIFACT_RAW_FORMAT};
+use super::{run_artifact_worker, ArtifactError};
 use anyhow::{anyhow, Context, Result};
 use dragonball::snapshot::memory::{
     copy_flat_sparse_file, encode_memory_overlay, memory_overlay_size, merge_flat_sparse_file,
@@ -49,7 +48,7 @@ pub(super) fn validate_artifacts(
     topology: VmResourceTopology,
     artifacts: &[VmCheckpointArtifact],
 ) -> Result<()> {
-    super::validate_artifacts(artifacts)?;
+    VmArtifacts::validate_metadata(artifacts)?;
 
     let expected_size = u64::from(topology.memory_mb) * 1024 * 1024;
     let mut memory = false;
@@ -141,14 +140,14 @@ pub(super) async fn prepare_restore_memory(
     artifacts: Vec<VmCheckpointArtifact>,
 ) -> Result<()> {
     // Inventory was checked before parallel restore work; recheck path safety here.
-    super::validate_artifacts(&artifacts)?;
+    VmArtifacts::validate_metadata(&artifacts)?;
 
     let mut state = false;
     let mut memory = None;
     let mut overlay = None;
 
     for artifact in artifacts {
-        let source = super::inspect_source(&source_dir, &artifact)?;
+        let source = artifact.inspect_source(&source_dir)?;
         let destination = destination_dir.join(&artifact.file);
 
         match (artifact.file.as_str(), artifact.format.as_str()) {
