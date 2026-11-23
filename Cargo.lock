@@ -6321,6 +6321,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "tempfile",
+ "test-utils",
  "tokio",
  "tracing",
  "tracing-opentelemetry 0.33.0",

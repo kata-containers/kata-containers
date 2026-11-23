@@ -11,6 +11,7 @@ import (
 	"expvar"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -32,6 +33,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -350,7 +352,78 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 
 	// start serve
 	svr := &http.Server{Handler: m}
-	svr.Serve(listener)
+	svr.Serve(newPeerCredListener(listener))
+}
+
+// isAuthorizedPeer reports whether a client may use the management API: root,
+// or the user the shim itself runs as.
+func isAuthorizedPeer(peerUID, selfEUID uint32) bool {
+	return peerUID == 0 || peerUID == selfEUID
+}
+
+// peerCredListener closes connections from unauthorized peers before they reach
+// the HTTP server, independently of the permissions on the socket file.
+// Rejected connections are not returned as Accept errors, because
+// http.Server.Serve stops serving on a non-temporary error.
+type peerCredListener struct {
+	net.Listener
+	authorized func(uid uint32) bool
+}
+
+func newPeerCredListener(l net.Listener) *peerCredListener {
+	selfEUID := uint32(os.Geteuid())
+	return &peerCredListener{
+		Listener: l,
+		authorized: func(uid uint32) bool {
+			return isAuthorizedPeer(uid, selfEUID)
+		},
+	}
+}
+
+func (l *peerCredListener) Accept() (net.Conn, error) {
+	for {
+		conn, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+
+		cred, err := peerCred(conn)
+		if err != nil {
+			shimMgtLog.WithError(err).Warn("rejecting management connection: failed to get peer credentials")
+			conn.Close()
+			continue
+		}
+		if !l.authorized(cred.Uid) {
+			shimMgtLog.WithFields(logrus.Fields{"uid": cred.Uid, "pid": cred.Pid}).
+				Warn("rejecting management connection from unauthorized peer")
+			conn.Close()
+			continue
+		}
+
+		return conn, nil
+	}
+}
+
+// peerCred returns the credentials the kernel recorded for the peer when it
+// connected.
+func peerCred(conn net.Conn) (*unix.Ucred, error) {
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		return nil, fmt.Errorf("unexpected connection type %T", conn)
+	}
+	raw, err := uc.SyscallConn()
+	if err != nil {
+		return nil, err
+	}
+
+	var cred *unix.Ucred
+	var credErr error
+	if err := raw.Control(func(fd uintptr) {
+		cred, credErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil {
+		return nil, err
+	}
+	return cred, credErr
 }
 
 // mountPprofHandle provides a debug endpoint
