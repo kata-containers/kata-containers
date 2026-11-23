@@ -5,7 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Kubernetes bats runner: plain RuntimeClass by default, with an optional
-# triage-only re-run on kata-<shim>-debug for each failed test case.
+# triage-only re-run on kata-<shim>-debug for failed test cases or failed
+# setup_file occurrences.
 #
 
 # The suites that cannot produce a verdict on the plain RuntimeClass, because
@@ -107,7 +108,8 @@ run_bats_file_with_mode() {
 	return "${PIPESTATUS[0]}"
 }
 
-# Triage-only re-run of failed cases on the debug RuntimeClass.
+# Triage-only re-run of failed test cases or failed setup_file occurrences on
+# the debug RuntimeClass.
 #
 # Never changes the caller's idea of pass/fail: triage exit codes are ignored.
 triage_failed_tests_with_debug() {
@@ -118,7 +120,7 @@ triage_failed_tests_with_debug() {
 	local name
 	local safe_name
 	local triage_out
-	local filter
+	local -a filter_args=()
 
 	mapfile -t failed < <(failed_bats_tests_from_tap "${tap_file}")
 	[[ ${#failed[@]} -eq 0 ]] && return 0
@@ -133,11 +135,16 @@ triage_failed_tests_with_debug() {
 		info "RETRY (triage only) on kata-${KATA_HYPERVISOR}-debug: ${name}; verdict remains FAIL"
 		safe_name=$(echo "${name}" | tr -c 'A-Za-z0-9._-' '_')
 		triage_out="${report_dir}/triage-debug-${test_entry}-${safe_name}.out"
-		filter="^$(escape_bats_filter_regex "${name}")$"
+		filter_args=()
+		# in case of a setup_file failure, assume no test could have been executed,
+		# thus repeat the test suite without test case specific filtering.
+		if [[ "${name}" != "setup_file failed" ]]; then
+			filter_args=(-f "^$(escape_bats_filter_regex "${name}")$")
+		fi
 
 		# Ignore triage status: the plain (or hard-require) run is the verdict.
 		run_bats_file_with_mode "${test_entry}" "debug" "${triage_out}" \
-			-f "${filter}" || true
+			"${filter_args[@]}" || true
 	done
 
 	# Restore plain fixtures for subsequent files in the union.
