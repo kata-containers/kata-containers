@@ -1,20 +1,23 @@
 // Copyright (c) 2026 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
+
 use super::super::{
-    manifest::{CheckpointRootfs, WORKLOAD_CHECKPOINT_STORAGE},
-    sparse::{encode_sparse_artifact, SPARSE_FORMAT},
+    manifest::{CheckpointRootfs, CheckpointTask, WORKLOAD_CHECKPOINT_STORAGE},
+    sparse::{decode_sparse_artifact, encode_sparse_artifact, SparseMeta, SPARSE_FORMAT},
 };
+use super::run_artifact_worker;
 use anyhow::{Context, Result};
 use common::{error::Error as CommonError, types::SandboxCheckpointTask};
-use hypervisor::{BlockDeviceModern, BlockSourceFormat};
+use hypervisor::{BlockConfigModern, BlockDeviceAio, BlockDeviceModern, BlockSourceFormat};
 use std::{
     collections::HashMap,
     fs::{self, OpenOptions},
-    os::unix::fs::OpenOptionsExt,
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::Path,
     time::Instant,
 };
+
 fn rootfs_artifact_name(task_count: usize, position: usize) -> String {
     if task_count == 1 {
         "rootfs-base.sparse".to_string()
@@ -173,16 +176,146 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
 
     Ok(artifacts)
 }
+
+pub(in crate::sandbox::checkpoint_restore) async fn restore_rootfs_artifacts(
+    checkpoint_root: &Path,
+    tasks: &[CheckpointTask],
+    _options: &HashMap<String, String>,
+    rootfs: &[CheckpointRootfs],
+    restore_dir: &Path,
+    sync_private_copy: bool,
+) -> Result<Vec<BlockDeviceModern>> {
+    if rootfs.len() != tasks.len() {
+        return Err(CommonError::InvalidSandboxOperation(
+            "restore rootfs inventory does not match tasks".to_string(),
+        )
+        .into());
+    }
+
+    let tasks = tasks
+        .iter()
+        .map(|task| (task.checkpoint_key.as_str(), task))
+        .collect::<HashMap<_, _>>();
+
+    let mut blocks = Vec::with_capacity(rootfs.len() * 2);
+    let task_count = rootfs.len();
+
+    for (position, artifact) in rootfs.iter().enumerate() {
+        let task = tasks.get(artifact.checkpoint_key.as_str()).ok_or_else(|| {
+            CommonError::InvalidSandboxOperation(format!(
+                "rootfs checkpoint key {} has no restored task",
+                artifact.checkpoint_key
+            ))
+        })?;
+        let expected = format!(
+            "{WORKLOAD_CHECKPOINT_STORAGE}/{}",
+            rootfs_artifact_name(task_count, position)
+        );
+
+        if artifact.file != expected
+            || artifact.format != SPARSE_FORMAT
+            || task.checkpoint_key.is_empty()
+        {
+            return Err(CommonError::InvalidSandboxOperation(
+                "invalid rootfs artifact path or task key".to_string(),
+            )
+            .into());
+        }
+
+        let source = checkpoint_root.join(&artifact.file);
+        let metadata = fs::symlink_metadata(&source)?;
+
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.permissions().mode() & 0o222 != 0
+        {
+            return Err(CommonError::InvalidSandboxOperation(format!(
+                "checkpoint rootfs artifact {} is invalid",
+                source.display()
+            ))
+            .into());
+        }
+
+        let private = if task_count == 1 {
+            restore_dir.join("rootfs.raw")
+        } else {
+            restore_dir.join(format!("rootfs-{position}.raw"))
+        };
+
+        let source_clone = source.clone();
+        let private_clone = private.clone();
+        let expected_sha256 = artifact.sha256.clone();
+        let encoded_size = artifact.encoded_size;
+        let logical_size = artifact.logical_size;
+
+        run_artifact_worker(move || {
+            let decode_started = Instant::now();
+            let decoded = decode_sparse_artifact(
+                &source_clone,
+                &private_clone,
+                SparseMeta {
+                    encoded_size,
+                    logical_size,
+                    sha256: &expected_sha256,
+                },
+                0o600,
+                sync_private_copy,
+            )?;
+
+            debug!(
+                sl!(),
+                "decoded canonical sparse rootfs artifact";
+                "logical_bytes" => logical_size,
+                "encoded_bytes" => encoded_size,
+                "records" => decoded.records,
+                "written_bytes" => decoded.written_bytes,
+                "elapsed_us" => decode_started.elapsed().as_micros(),
+            );
+
+            Ok(())
+        })
+        .await?;
+
+        let block = BlockDeviceModern {
+            device_id: artifact.device_id.clone(),
+            config: BlockConfigModern {
+                path_on_host: private.display().to_string(),
+                is_readonly: false,
+                discard_unmap: artifact.discard_unmap,
+                source: BlockSourceFormat::Raw,
+                is_direct: artifact.is_direct,
+                index: artifact.index,
+                blkdev_aio: BlockDeviceAio::new(&artifact.aio),
+                driver_option: artifact.driver_option.clone(),
+                virt_path: artifact.virt_path.clone(),
+                queue_size: artifact.queue_size,
+                num_queues: artifact.num_queues,
+                logical_sector_size: artifact.logical_sector_size,
+                physical_sector_size: artifact.physical_sector_size,
+                serial_override: artifact.serial_override.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        blocks.push(block);
+    }
+
+    fs::File::open(restore_dir)?.sync_all()?;
+
+    Ok(blocks)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hypervisor::BlockConfigModern;
 
-    #[test]
-    fn rootfs_capture_records_task_and_block_identity() {
+    #[tokio::test]
+    async fn rootfs_round_trip_uses_only_artifact_inputs() {
         let directory = tempfile::tempdir().unwrap();
         let checkpoint_root = directory.path().join("checkpoint");
+        let restore_root = directory.path().join("restore");
         fs::create_dir(&checkpoint_root).unwrap();
+        fs::create_dir(&restore_root).unwrap();
         let source = directory.path().join("writable.raw");
         let mut contents = vec![0; 128 * 1024];
         contents[65536..65548].copy_from_slice(b"rootfs-state");
@@ -208,17 +341,44 @@ mod tests {
         let artifacts =
             write_rootfs_artifacts(&checkpoint_root, &tasks, &options, vec![block]).unwrap();
 
-        assert_eq!(artifacts.len(), 1);
-        assert_eq!(artifacts[0].checkpoint_key, "app");
-        assert_eq!(artifacts[0].device_id, "rootfs-device");
-        assert_eq!(artifacts[0].index, 3);
-        assert_eq!(artifacts[0].logical_size, contents.len() as u64);
-        assert_eq!(
-            fs::metadata(checkpoint_root.join(&artifacts[0].file))
-                .unwrap()
-                .len(),
-            artifacts[0].encoded_size
-        );
+        let error = restore_rootfs_artifacts(
+            &checkpoint_root,
+            &[],
+            &options,
+            &artifacts,
+            &restore_root,
+            true,
+        )
+        .await
+        .expect_err("task inventory mismatch must fail");
+        assert!(matches!(
+            error.downcast_ref::<CommonError>(),
+            Some(CommonError::InvalidSandboxOperation(message))
+                if message == "restore rootfs inventory does not match tasks"
+        ));
+        assert!(!restore_root.join("rootfs.raw").exists());
+
+        let restored = restore_rootfs_artifacts(
+            &checkpoint_root,
+            &[CheckpointTask {
+                checkpoint_key: "app".into(),
+                task_id: "old-app".into(),
+            }],
+            &options,
+            &artifacts,
+            &restore_root,
+            true,
+        )
+        .await
+        .unwrap();
+        assert_eq!(restored.len(), 1);
+        let block = &restored[0];
+        assert_eq!(block.device_id, "rootfs-device");
+        assert_eq!(block.config.index, 3);
+        assert_eq!(block.config.driver_option, "virtio-blk");
+        assert_eq!(block.config.virt_path, "/dev/vdd");
+        assert!(!block.config.is_readonly);
+        assert_eq!(fs::read(&block.config.path_on_host).unwrap(), contents);
     }
 
     #[test]

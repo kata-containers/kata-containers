@@ -89,13 +89,12 @@ use resource::network::{
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use strum::Display;
+use tokio::io::AsyncReadExt;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
@@ -107,6 +106,8 @@ use crate::UNKNOWN_EXIT_STATUS;
 
 mod checkpoint_restore;
 mod startup;
+
+use startup::StartMode;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
 
@@ -245,6 +246,7 @@ pub struct VirtSandbox {
     // current value back into the record the cleanup exists to trust.
     restored_keep_abnormal: Option<bool>,
     template_identity: Option<TemplateIdentity>,
+    restore_state: Arc<RwLock<checkpoint_restore::RestoreState>>,
     oom_watcher_started: Arc<AtomicBool>,
 }
 
@@ -254,6 +256,7 @@ struct CleanupSteps {
     resources: bool,
     netns: bool,
     rootless_runtime_dir: bool,
+    restore_artifacts: bool,
 }
 
 // Clears exit_pending on drop, so an error path cannot leave Wait hanging.
@@ -479,7 +482,7 @@ impl VirtSandbox {
             vmm_process: Arc::new(RwLock::new(None)),
             restored_keep_abnormal: None,
             template_identity,
-
+            restore_state: Arc::new(RwLock::new(checkpoint_restore::RestoreState::default())),
             oom_watcher_started: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -1121,37 +1124,27 @@ impl VirtSandbox {
         Ok(configs)
     }
 
-    /// Reseeds a template-restored guest's RNG, which clones share with the snapshot.
-    async fn reseed_rng(agent: &dyn Agent, config: &HypervisorConfig) -> Result<()> {
-        if !config.vm_template.boot_from_template {
-            return Ok(());
-        }
-        if config.security_info.confidential_guest {
-            return Err(anyhow!(
-                "VM templating is not supported for confidential guests"
-            ));
-        }
-        let mut data = vec![0; 512];
-        File::open("/dev/urandom")
-            .context("open host entropy source")?
-            .read_exact(&mut data)
-            .context("read host entropy")?;
-        agent
-            .reseed_random_dev(agent::ReseedRandomDevRequest { data })
+    async fn reset_random_seed(&self) -> Result<()> {
+        let mut entropy = vec![0_u8; 512];
+        tokio::fs::File::open("/dev/urandom")
             .await
-            .context("reseed guest RNG")?;
+            .context("open host random source")?
+            .read_exact(&mut entropy)
+            .await
+            .context("read host random source")?;
+        self.agent
+            .reseed_random_dev(agent::ReseedRandomDevRequest { data: entropy })
+            .await
+            .context("reseed restored guest random generator")?;
+
         Ok(())
     }
 
-    /// Sets a template-restored guest's clock, which stops while the template is paused.
-    async fn sync_time(agent: &dyn Agent, config: &HypervisorConfig) -> Result<()> {
-        if !config.vm_template.boot_from_template {
-            return Ok(());
-        }
+    async fn set_guest_date_time(&self) -> Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .context("read host time")?;
-        agent
+        self.agent
             .set_guest_date_time(agent::SetGuestDateTimeRequest {
                 sec: now.as_secs() as i64,
                 usec: now.subsec_micros() as i64,
@@ -1389,6 +1382,13 @@ impl VirtSandbox {
             return Ok(false);
         }
 
+        // A workload restore already contains the NIC in the incoming VM
+        // state. Prepare the replacement CNI endpoint before loading that
+        // state so its file descriptors and checkpoint MAC can be rebound.
+        if self.restore_state.read().await.is_restoring() {
+            return Ok(false);
+        }
+
         Ok(self
             .hypervisor
             .capabilities()
@@ -1531,13 +1531,20 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
+        let mode = self.resolve_start_mode().await;
         let result: Result<()> = async {
+            if matches!(mode, StartMode::Restore) {
+                self.prepare_restore_start()
+                    .await
+                    .context("prepare sandbox restore before VM start")?;
+            }
+
             let started = self
-                .prepare_and_start_vm(&mut inner, sandbox_config)
+                .prepare_and_start_vm(&mut inner, sandbox_config, mode)
                 .await?;
             self.run_hooks_and_finalize_network(sandbox_config, started)
                 .await?;
-            self.initialize_guest(sandbox_config).await?;
+            self.initialize_guest(sandbox_config, mode).await?;
 
             // get and store guest details
             self.store_guest_details()
@@ -1564,7 +1571,9 @@ impl Sandbox for VirtSandbox {
         inner.state = SandboxState::Running;
         inner.created_at = Some(SystemTime::now());
 
-        self.start_health_monitor();
+        if matches!(mode, StartMode::Normal) {
+            self.start_health_monitor();
+        }
 
         Ok(())
     }
@@ -1817,7 +1826,12 @@ impl Sandbox for VirtSandbox {
         // that arrives later blocks rather than skipping, so the shim does not
         // exit on top of a teardown that is still running.
         let mut steps = self.cleanup_steps.lock().await;
-        if steps.hypervisor && steps.resources && steps.netns && steps.rootless_runtime_dir {
+        if steps.hypervisor
+            && steps.resources
+            && steps.netns
+            && steps.restore_artifacts
+            && steps.rootless_runtime_dir
+        {
             return Ok(());
         }
 
@@ -1888,7 +1902,18 @@ impl Sandbox for VirtSandbox {
             }
         }
 
-        if steps.netns && !steps.rootless_runtime_dir {
+        if steps.resources && steps.hypervisor && !steps.restore_artifacts {
+            match self
+                .cleanup_restore_files()
+                .await
+                .context("clean up private restore artifacts")
+            {
+                Ok(()) => steps.restore_artifacts = true,
+                Err(e) => errors.push(e),
+            }
+        }
+
+        if steps.netns && steps.restore_artifacts && !steps.rootless_runtime_dir {
             if let Some((uid, ref user_name)) = rootless_user {
                 let path = vmm_user_runtime_dir(uid);
                 // The hypervisor step removed the user, and a UID another
@@ -2217,6 +2242,7 @@ impl Persist for VirtSandbox {
             vmm_exit_confirmed: self.vmm_exit_confirmed.is_cancelled(),
             config_path: self.config_path.clone(),
             created_netns: self.created_netns.clone(),
+            restore_artifact_dir: self.restore_state.read().await.artifact_dir(),
             bootstrap: false,
             keep_abnormal: Some(keep_abnormal),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
@@ -2315,6 +2341,10 @@ impl Persist for VirtSandbox {
         if sandbox_state.vmm_exit_confirmed {
             vmm_exit_confirmed.cancel();
         }
+        let mut restore_state = checkpoint_restore::RestoreState::default();
+        if let Some(path) = sandbox_state.restore_artifact_dir {
+            restore_state.set_artifact_dir(path);
+        }
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(sandbox_args.sender)),
@@ -2345,7 +2375,7 @@ impl Persist for VirtSandbox {
             saving_state: Arc::new(Mutex::new(())),
             restored_keep_abnormal: sandbox_state.keep_abnormal,
             template_identity: None,
-
+            restore_state: Arc::new(RwLock::new(restore_state)),
             oom_watcher_started: Arc::new(AtomicBool::new(false)),
         })
     }

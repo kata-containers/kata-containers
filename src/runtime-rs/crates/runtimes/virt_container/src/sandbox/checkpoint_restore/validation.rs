@@ -136,6 +136,26 @@ impl VirtSandbox {
         Ok(())
     }
 
+    pub(in crate::sandbox) async fn validate_restore_device_inventory(&self) -> Result<()> {
+        let device_manager = self.resource_manager.get_device_manager().await;
+        let device_manager = device_manager.read().await;
+        let config = self.resource_manager.config().await;
+        let hypervisor_name = config.runtime.hypervisor_name.as_str();
+        let hypervisor_config = config.hypervisor.get(hypervisor_name).ok_or_else(|| {
+            CommonError::SandboxOperationPrecondition(format!(
+                "missing configuration for hypervisor {hypervisor_name}"
+            ))
+        })?;
+        let devices = device_manager.checkpoint_devices().await;
+
+        Self::validate_checkpoint_device_inventory(
+            &devices,
+            hypervisor_name,
+            &hypervisor_config.boot_info.initrd,
+        )
+        .await
+    }
+
     pub(super) fn validate_task_count(task_count: usize) -> Result<()> {
         if task_count == 0 {
             return Err(CommonError::SandboxOperationPrecondition(

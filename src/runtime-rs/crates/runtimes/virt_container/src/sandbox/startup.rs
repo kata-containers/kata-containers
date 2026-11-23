@@ -7,7 +7,7 @@ use std::{
 };
 
 use agent::types::KernelModule;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use common::{
     error::is_normal_oom_shutdown_error,
     message::{Action, Message},
@@ -22,6 +22,12 @@ use crate::UNKNOWN_EXIT_STATUS;
 
 use super::{SandboxInner, VirtSandbox};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum StartMode {
+    Normal,
+    Restore,
+}
+
 pub(super) struct StartedVm {
     defer_network: bool,
 }
@@ -31,6 +37,7 @@ impl VirtSandbox {
         &self,
         inner: &mut SandboxInner,
         sandbox_config: &SandboxConfig,
+        mode: StartMode,
     ) -> Result<StartedVm> {
         let id = &self.sid;
         let selinux_label = load_oci_spec().ok().and_then(|spec| {
@@ -59,6 +66,9 @@ impl VirtSandbox {
         self.setup_network_before_start_vm(sandbox_config).await?;
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
+        let mut resources = resources;
+        let mut restore_boot = self.prepare_restore_boot(&mut resources, mode).await;
+
         let set_up = self
             .resource_manager
             .prepare_before_start_vm(resources)
@@ -66,13 +76,20 @@ impl VirtSandbox {
             .context("set up device before start vm");
         self.save_after(set_up).await?;
 
+        self.register_and_validate_restore_devices(mode, restore_boot.as_mut())
+            .await?;
+
         // start vm
         inner.vmm_start_attempted = true;
+        let restored_topology = restore_boot
+            .as_ref()
+            .map(|boot| boot.options.resource_topology);
+        let restore = restore_boot.map(|boot| boot.options);
         let started = self
             .hypervisor
             .start_vm(hypervisor::VmStartOptions {
                 timeout: 10_000,
-                restore: None,
+                restore,
             })
             .await
             .context("start vm");
@@ -81,6 +98,13 @@ impl VirtSandbox {
         // before propagating the error so sandbox teardown can confirm exit.
         self.remember_vmm_process().await;
         self.save_after(started).await?;
+
+        if let Some(topology) = restored_topology {
+            self.resource_manager
+                .adopt_restored_vm(topology)
+                .await
+                .context("adopt restored VM resource topology")?;
+        }
 
         info!(sl!(), "start vm");
 
@@ -169,7 +193,11 @@ impl VirtSandbox {
         Ok(())
     }
 
-    pub(super) async fn initialize_guest(&self, sandbox_config: &SandboxConfig) -> Result<()> {
+    pub(super) async fn initialize_guest(
+        &self,
+        sandbox_config: &SandboxConfig,
+        mode: StartMode,
+    ) -> Result<()> {
         let id = &self.sid;
         // connect agent
         // set agent socket
@@ -179,14 +207,33 @@ impl VirtSandbox {
             .await
             .context("get agent socket")?;
 
-        self.agent
-            .start(&address)
-            .await
-            .context(format!("connect to address {:?}", address))?;
+        if matches!(mode, StartMode::Restore) {
+            self.connect_restored_agent(&address).await?;
+        } else {
+            self.agent
+                .start(&address)
+                .await
+                .context(format!("connect to address {:?}", address))?;
+        }
 
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        Self::reseed_rng(self.agent.as_ref(), &hypervisor_config).await?;
-        Self::sync_time(self.agent.as_ref(), &hypervisor_config).await?;
+        if hypervisor_config.vm_template.boot_from_template || matches!(mode, StartMode::Restore) {
+            if hypervisor_config.vm_template.boot_from_template
+                && hypervisor_config.security_info.confidential_guest
+            {
+                return Err(anyhow!(
+                    "VM templating is not supported for confidential guests"
+                ));
+            }
+
+            self.reset_random_seed()
+                .await
+                .context("reset random seed")?;
+            self.set_guest_date_time()
+                .await
+                .context("set guest date time")?;
+        }
+
         self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager
@@ -194,38 +241,54 @@ impl VirtSandbox {
             .await
             .context("setup device after start vm")?;
 
-        // create sandbox in vm
-        let agent_config = self.agent.agent_config().await;
-        let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
-        let req = agent::CreateSandboxRequest {
-            hostname: sandbox_config.hostname.clone(),
-            dns: sandbox_config.dns.clone(),
-            storages: self
-                .resource_manager
-                .get_storage_for_sandbox(self.shm_size)
-                .await
-                .context("get storages for sandbox")?,
-            sandbox_pidns: false,
-            sandbox_id: id.to_string(),
-            guest_hook_path: self
-                .hypervisor
-                .hypervisor_config()
-                .await
-                .security_info
-                .guest_hook_path,
-            kernel_modules,
-        };
+        if matches!(mode, StartMode::Normal) {
+            // create sandbox in vm
+            let agent_config = self.agent.agent_config().await;
+            let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
+            let req = agent::CreateSandboxRequest {
+                hostname: sandbox_config.hostname.clone(),
+                dns: sandbox_config.dns.clone(),
+                storages: self
+                    .resource_manager
+                    .get_storage_for_sandbox(self.shm_size)
+                    .await
+                    .context("get storages for sandbox")?,
+                sandbox_pidns: false,
+                sandbox_id: id.to_string(),
+                guest_hook_path: self
+                    .hypervisor
+                    .hypervisor_config()
+                    .await
+                    .security_info
+                    .guest_hook_path,
+                kernel_modules,
+            };
 
-        self.agent
-            .create_sandbox(req)
-            .await
-            .context("create sandbox")?;
+            self.agent
+                .create_sandbox(req)
+                .await
+                .context("create sandbox")?;
+        }
 
         Ok(())
     }
 
     pub async fn ensure_oom_watcher(&self) {
+        let restoring = self.restore_state.read().await.is_restoring();
+        if restoring {
+            debug!(
+                sl!(),
+                "defer oom watcher until restored sandbox rebind completes"
+            );
+            return;
+        }
+
         self.start_oom_watcher().await;
+    }
+
+    pub async fn start_restore_watchers(&self) {
+        self.start_oom_watcher().await;
+        self.start_health_monitor();
     }
 
     async fn start_oom_watcher(&self) {

@@ -2,26 +2,34 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sandbox::VirtSandbox;
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
+
 use anyhow::Result;
 use async_trait::async_trait;
+use common::error::Error as CommonError;
 use common::{
-    error::Error as CommonError,
     types::{
         CheckpointSandboxRequest, PrepareRestoreOptions, RestoreSandboxInfo, RestoreSandboxRequest,
     },
     SandboxCheckpointRestore,
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use hypervisor;
+
+use crate::sandbox::VirtSandbox;
+
 mod artifacts;
 mod checkpoint;
 mod identity;
 mod manifest;
+mod restore;
 mod sparse;
+mod startup;
 mod validation;
+
 use manifest::{CheckpointManifest, WORKLOAD_CHECKPOINT_MANIFEST, WORKLOAD_CHECKPOINT_STATE};
 
 fn checkpoint_files(path: &str) -> Result<(PathBuf, PathBuf)> {
@@ -72,13 +80,69 @@ fn publish_manifest(manifest: &CheckpointManifest, path: &Path) -> Result<()> {
     result
 }
 
+pub(super) struct RestoreBoot {
+    pub(super) options: hypervisor::VmRestoreOptions,
+    pub(super) blocks: Vec<hypervisor::BlockDeviceModern>,
+}
+
+pub(super) struct PendingRestore {
+    boot: Option<RestoreBoot>,
+    checkpoint_path: String,
+    options: HashMap<String, String>,
+    manifest: CheckpointManifest,
+}
+
+#[derive(Default)]
+pub(super) struct RestoreState {
+    prepare: Option<PrepareRestoreOptions>,
+    pending: Option<PendingRestore>,
+    artifact_dir: Option<PathBuf>,
+}
+
+impl RestoreState {
+    pub(super) fn is_restoring(&self) -> bool {
+        self.prepare.is_some() || self.pending.is_some()
+    }
+
+    pub(super) fn artifact_dir(&self) -> Option<PathBuf> {
+        self.artifact_dir.clone()
+    }
+
+    pub(super) fn take_boot(&mut self) -> Option<RestoreBoot> {
+        self.pending.as_mut()?.boot.take()
+    }
+
+    pub(super) fn set_artifact_dir(&mut self, path: PathBuf) {
+        self.artifact_dir = Some(path);
+    }
+
+    fn set_pending(&mut self, pending: PendingRestore) {
+        self.pending = Some(pending);
+    }
+
+    fn set_prepare(&mut self, prepare: PrepareRestoreOptions) {
+        self.prepare = Some(prepare);
+    }
+
+    fn take_prepare(&mut self) -> Option<PrepareRestoreOptions> {
+        self.prepare.take()
+    }
+
+    fn take_pending(&mut self) -> Option<PendingRestore> {
+        self.pending.take()
+    }
+
+    pub(super) fn reset(&mut self) {
+        self.prepare = None;
+        self.pending = None;
+        self.artifact_dir = None;
+    }
+}
+
 #[async_trait]
 impl SandboxCheckpointRestore for VirtSandbox {
-    async fn prepare_restore_sandbox(&self, _options: &PrepareRestoreOptions) -> Result<()> {
-        Err(CommonError::SandboxOperationUnsupported(
-            "sandbox restore artifacts are not supported yet".into(),
-        )
-        .into())
+    async fn prepare_restore_sandbox(&self, options: &PrepareRestoreOptions) -> Result<()> {
+        self.prepare_restore_request(options).await
     }
 
     async fn validate_checkpoint_sandbox(&self, req: &CheckpointSandboxRequest) -> Result<()> {
@@ -97,10 +161,8 @@ impl SandboxCheckpointRestore for VirtSandbox {
     async fn cleanup_sandbox_checkpoint(&self, req: &CheckpointSandboxRequest) -> Result<()> {
         self.cleanup_checkpoint(req).await
     }
-    async fn restore_sandbox(&self, _req: &RestoreSandboxRequest) -> Result<RestoreSandboxInfo> {
-        Err(CommonError::SandboxOperationUnsupported(
-            "sandbox restore artifacts are not supported yet".into(),
-        )
-        .into())
+
+    async fn restore_sandbox(&self, req: &RestoreSandboxRequest) -> Result<RestoreSandboxInfo> {
+        self.restore_workload(req).await
     }
 }

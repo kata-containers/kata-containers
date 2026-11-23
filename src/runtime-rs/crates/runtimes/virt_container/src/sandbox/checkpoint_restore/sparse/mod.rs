@@ -9,7 +9,7 @@ use ring::digest::Context as Sha256Context;
 
 mod canonical;
 
-pub(super) use canonical::encode_sparse_artifact;
+pub(super) use canonical::{decode_sparse_artifact, encode_sparse_artifact};
 
 pub(super) const SPARSE_FORMAT: &str = "kata-sparse-raw-v1";
 pub(super) const SPARSE_CHUNK_SIZE: usize = 1024 * 1024;
@@ -31,6 +31,17 @@ pub(super) struct SparseEncodeStats {
     pub(super) written_bytes: u64,
 }
 
+pub(super) struct SparseDecodeStats {
+    pub(super) records: u64,
+    pub(super) written_bytes: u64,
+}
+
+pub(super) struct SparseMeta<'a> {
+    pub(super) encoded_size: u64,
+    pub(super) logical_size: u64,
+    pub(super) sha256: &'a str,
+}
+
 fn digest_hex(hasher: Sha256Context) -> String {
     hasher
         .finish()
@@ -50,7 +61,7 @@ fn header(logical_size: u64) -> [u8; SPARSE_HEADER_SIZE] {
     value
 }
 
-use kata_sys_util::fs::read_exact_at as read_chunk;
+use kata_sys_util::fs::{read_exact_at as read_chunk, write_all_at};
 
 fn data_chunks(source: &fs::File, logical_size: u64) -> Result<Option<Vec<u64>>> {
     kata_sys_util::fs::sparse_file_chunks(source, logical_size, SPARSE_CHUNK_SIZE)

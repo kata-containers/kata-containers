@@ -13,6 +13,8 @@ use serde::Serialize;
 use crate::factory::vm::VmConfig;
 use crate::sandbox::VirtSandbox;
 
+use super::manifest::CheckpointManifest;
+
 #[derive(Serialize)]
 pub(super) struct RuntimeIdentity {
     pub(super) architecture: String,
@@ -63,6 +65,22 @@ fn runtime_config_fingerprint(config: HypervisorConfig) -> Result<String> {
 }
 
 impl VirtSandbox {
+    pub(super) async fn verify_runtime_fingerprint(
+        &self,
+        manifest: &CheckpointManifest,
+        options: &HashMap<String, String>,
+    ) -> Result<()> {
+        let actual = self.runtime_fingerprint(options).await?;
+        if manifest.runtime_fingerprint != actual {
+            return Err(CommonError::SandboxOperationPrecondition(
+                "checkpoint runtime fingerprint does not match this runtime".to_string(),
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+
     pub(super) async fn runtime_fingerprint(
         &self,
         _options: &HashMap<String, String>,

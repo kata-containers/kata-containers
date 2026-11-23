@@ -29,6 +29,9 @@ pub struct SandboxState {
     /// Network namespace the runtime created for the sandbox and has to remove.
     #[serde(default)]
     pub created_netns: Option<String>,
+    /// Private checkpoint files that cleanup must remove after shim death.
+    #[serde(default)]
+    pub restore_artifact_dir: Option<PathBuf>,
     /// The state was saved before the sandbox existed. States from shims
     /// that did not write the field marked that by having no resources.
     #[serde(default)]
@@ -75,6 +78,7 @@ impl SandboxState {
             vmm_exit_confirmed: false,
             config_path: config_path.map(Path::to_path_buf),
             created_netns: network_env.created_netns(),
+            restore_artifact_dir: None,
             bootstrap: true,
             keep_abnormal: None,
         }
@@ -118,6 +122,7 @@ mod tests {
         assert_eq!(r.endpoint.len(), 1);
         assert_eq!(state.config_path, None);
         assert_eq!(state.created_netns, None);
+        assert_eq!(state.restore_artifact_dir, None);
     }
 
     // Every field in state.json and what recovery does with it. A field that
@@ -136,6 +141,7 @@ mod tests {
         ),
         ("config_path", "cleanup_config() reloads the configuration"),
         ("created_netns", "VirtSandbox::cleanup() removes it"),
+        ("restore_artifact_dir", "cleanup_restore_files() removes it"),
         ("bootstrap", "is_bootstrap() picks the cleanup path"),
         (
             "keep_abnormal",
