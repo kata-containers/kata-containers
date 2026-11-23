@@ -1029,7 +1029,6 @@ pub enum HugePageType {
 pub enum MemoryRestoreMode {
     /// Copy all guest memory before restore completes.
     #[serde(rename = "copy")]
-    #[default]
     Copy,
 
     /// Populate guest memory on first access.
@@ -1038,6 +1037,7 @@ pub enum MemoryRestoreMode {
 
     /// Map the snapshot memory privately and copy pages on write.
     #[serde(rename = "copyonwrite")]
+    #[default]
     CopyOnWrite,
 }
 

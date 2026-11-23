@@ -120,10 +120,11 @@ overhead_memory = @DEFOVERHEADMEMSZ_CLH@
 #                        and copied into the cloud-hypervisor instance.
 #                        This is O(1) w.r.t. VM memory size on restore and
 #                        memory is deduplicated; only distinct copies of
-#                        written pages are kept.
+#                        written pages are kept. This is the recommended
+#                        configuration.
 #
-# Default "copy"
-memory_restore_mode = "copy"
+# Default "copyonwrite"
+memory_restore_mode = "copyonwrite"
 
 # Shared file system type:
 #   - virtio-fs

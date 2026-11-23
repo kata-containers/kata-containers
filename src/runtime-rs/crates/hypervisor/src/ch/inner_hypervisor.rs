@@ -57,14 +57,10 @@ const CH_NAME: &str = "clh";
 /// Number of milliseconds to wait before retrying a CH operation.
 const CH_POLL_TIME_MS: u64 = 50;
 
-/// Artifacts vm.snapshot writes into the snapshot directory. The template
-/// source boots with its RAM backed by `memory` in that directory, and the
-/// saved config.json keeps pointing clones at it.
+/// Artifacts vm.snapshot writes into the snapshot directory.
 const CLH_SNAPSHOT_STATE_FILE: &str = "state.json";
 const CLH_SNAPSHOT_CONFIG_FILE: &str = "config.json";
-const CLH_SNAPSHOT_MEMORY_FILE: &str = "memory";
-
-const MIB: u64 = 1024 * 1024;
+const CLH_SNAPSHOT_MEMORY_FILE: &str = "memory-ranges";
 
 #[derive(Debug, PartialEq)]
 enum CloudHypervisorLogLevel {
@@ -207,7 +203,6 @@ impl CloudHypervisorInner {
             host_devices,
             boot_disks,
             protection_device,
-            template_memory_path: self.template_memory_path.clone(),
             ..Default::default()
         };
 
@@ -303,36 +298,8 @@ impl CloudHypervisorInner {
         Self::write_json_file(config_path, &config)
     }
 
-    fn patch_snapshot_memory_shared(config_path: &Path, shared: bool) -> Result<()> {
-        let data =
-            fs::read(config_path).with_context(|| format!("read {}", config_path.display()))?;
-        let mut config: Value = serde_json::from_slice(&data)
-            .with_context(|| format!("parse {}", config_path.display()))?;
-
-        let memory = config
-            .get_mut("memory")
-            .and_then(Value::as_object_mut)
-            .ok_or_else(|| anyhow!("snapshot config missing memory section"))?;
-        memory.insert("shared".to_string(), Value::Bool(shared));
-
-        let zones = memory
-            .get_mut("zones")
-            .and_then(Value::as_array_mut)
-            .ok_or_else(|| anyhow!("snapshot config missing memory zones"))?;
-        for zone in zones {
-            let zone = zone
-                .as_object_mut()
-                .ok_or_else(|| anyhow!("snapshot config has invalid memory zone"))?;
-            zone.insert("shared".to_string(), Value::Bool(shared));
-        }
-
-        Self::write_json_file(config_path, &config)
-    }
-
     /// Stage the snapshot into this VM's directory: config and state are
-    /// copied and the config is rewritten for this sandbox. Guest memory is
-    /// not staged; the config's memory zone already points at the snapshot's
-    /// `memory` file, which the clone maps privately.
+    /// copied (the config is rewritten for this sandbox), memory is linked.
     fn prepare_restore_files(&self, snapshot_dir: &Path) -> Result<()> {
         let vm_path = PathBuf::from(&self.vm_path);
 
@@ -348,6 +315,24 @@ impl CloudHypervisorInner {
         Self::copy_template_artifact(&src_state, &dst_state).context("copy snapshot state")?;
         Self::update_vsock_socket_path(&dst_config, &self.id)
             .context("update restore vsock socket path")?;
+
+        // CLH reads memory-ranges from source_url; link rather than copy so every
+        // clone maps the one snapshot file and memory_restore_mode decides sharing.
+        let src_memory = snapshot_dir.join(CLH_SNAPSHOT_MEMORY_FILE);
+        let dst_memory = vm_path.join(CLH_SNAPSHOT_MEMORY_FILE);
+        fs::metadata(&src_memory)
+            .with_context(|| format!("snapshot memory is unavailable: {}", src_memory.display()))?;
+        if fs::symlink_metadata(&dst_memory).is_ok() {
+            fs::remove_file(&dst_memory)
+                .with_context(|| format!("remove {}", dst_memory.display()))?;
+        }
+        std::os::unix::fs::symlink(&src_memory, &dst_memory).with_context(|| {
+            format!(
+                "symlink snapshot memory {} to {}",
+                src_memory.display(),
+                dst_memory.display()
+            )
+        })?;
 
         Ok(())
     }
@@ -781,21 +766,6 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    /// Back the template source's RAM with `snapshot_dir/memory` so that the
-    /// guest memory is on disk by the time vm.snapshot runs.
-    pub(crate) fn prepare_template_source(&mut self, snapshot_dir: &Path) -> Result<()> {
-        let memory_path = snapshot_dir.join(CLH_SNAPSHOT_MEMORY_FILE);
-        let size = u64::from(self.config.memory_info.default_memory)
-            .checked_mul(MIB)
-            .ok_or_else(|| anyhow!("template memory size overflows u64"))?;
-        let file = fs::File::create(&memory_path)
-            .with_context(|| format!("create template memory {}", memory_path.display()))?;
-        file.set_len(size)
-            .with_context(|| format!("size template memory {}", memory_path.display()))?;
-        self.template_memory_path = Some(memory_path);
-        Ok(())
-    }
-
     pub(crate) async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
         let destination_url = format!("file://{}", snapshot_dir.display());
         let response =
@@ -803,12 +773,6 @@ impl CloudHypervisorInner {
                 .await?;
         if let Some(detail) = response {
             debug!(sl!(), "vm snapshot response: {:?}", detail);
-        }
-
-        // Clones must map the memory file privately, not share the template's pages.
-        if self.template_memory_path.is_some() {
-            Self::patch_snapshot_memory_shared(&snapshot_dir.join(CLH_SNAPSHOT_CONFIG_FILE), false)
-                .context("patch snapshot memory sharing")?;
         }
 
         Ok(())
@@ -1406,7 +1370,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_restore_files_stages_snapshot() {
+    fn test_prepare_restore_files_links_snapshot_memory() {
         let root = Builder::new().prefix("clh-snapshot").tempdir().unwrap();
         let snapshot_dir = root.path().join("snapshot");
         let vm_path = root.path().join("vm");
@@ -1423,6 +1387,9 @@ mod tests {
         fs::write(snapshot_dir.join(CLH_SNAPSHOT_STATE_FILE), b"{}").unwrap();
         let memory = snapshot_dir.join(CLH_SNAPSHOT_MEMORY_FILE);
         fs::write(&memory, b"snapshot memory").unwrap();
+        // A stale link must not survive a re-prepare.
+        fs::create_dir_all(&vm_path).unwrap();
+        fs::write(vm_path.join(CLH_SNAPSHOT_MEMORY_FILE), b"stale").unwrap();
 
         let clh = CloudHypervisorInner {
             id: "clone".to_string(),
@@ -1441,7 +1408,10 @@ mod tests {
             serde_json::json!({ "size": 134217728, "shared": false })
         );
         assert_eq!(config["vsock"]["socket"], get_vsock_path("clone").unwrap());
-        assert!(vm_path.join(CLH_SNAPSHOT_STATE_FILE).exists());
+        assert_eq!(
+            fs::read_link(vm_path.join(CLH_SNAPSHOT_MEMORY_FILE)).unwrap(),
+            memory
+        );
 
         let snapshot_config: Value =
             serde_json::from_slice(&fs::read(snapshot_dir.join(CLH_SNAPSHOT_CONFIG_FILE)).unwrap())
@@ -1451,19 +1421,6 @@ mod tests {
         fs::remove_file(&memory).unwrap();
         let error = CloudHypervisorInner::validate_snapshot(&snapshot_dir).unwrap_err();
         assert!(error.to_string().contains(CLH_SNAPSHOT_MEMORY_FILE));
-    }
-
-    #[test]
-    fn test_prepare_template_source_creates_memory_file() {
-        let root = Builder::new().prefix("clh-template").tempdir().unwrap();
-        let mut clh = CloudHypervisorInner::default();
-        clh.config.memory_info.default_memory = 3;
-
-        clh.prepare_template_source(root.path()).unwrap();
-
-        let memory = root.path().join(CLH_SNAPSHOT_MEMORY_FILE);
-        assert_eq!(clh.template_memory_path.as_deref(), Some(memory.as_path()));
-        assert_eq!(fs::metadata(&memory).unwrap().len(), 3 * MIB);
     }
 
     #[actix_rt::test]

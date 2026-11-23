@@ -28,9 +28,9 @@ pub struct RestoreVmRequest {
 #[async_trait]
 pub trait VmSnapshot: Send + Sync {
     /// Arrange, before the source VM boots, whatever the backend needs so a
-    /// later [`VmSnapshot::save_vm`] into `snapshot_dir` can succeed. Cloud
-    /// Hypervisor backs the source's RAM with a file there; Dragonball must
-    /// not let a template capture an established upcall connection.
+    /// later [`VmSnapshot::save_vm`] into `snapshot_dir` can succeed.
+    /// Dragonball, for example, must not let a template capture an
+    /// established upcall connection.
     ///
     /// Backends that can snapshot a normally booted VM need not implement this.
     async fn prepare_template_source(&self, _snapshot_dir: &Path) -> Result<()> {

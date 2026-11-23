@@ -229,11 +229,6 @@ impl Hypervisor for CloudHypervisor {
 
 #[async_trait]
 impl VmSnapshot for CloudHypervisor {
-    async fn prepare_template_source(&self, snapshot_dir: &Path) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        inner.prepare_template_source(snapshot_dir)
-    }
-
     async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
         let inner = self.inner.read().await;
         inner.save_vm(snapshot_dir).await

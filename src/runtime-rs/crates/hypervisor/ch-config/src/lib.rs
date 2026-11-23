@@ -564,9 +564,6 @@ pub struct NamedHypervisorConfig {
     pub boot_disks: Option<Vec<DiskConfig>>,
 
     pub protection_device: Option<ProtectionDevConfig>,
-
-    /// Back guest RAM with this file; set when booting a template source.
-    pub template_memory_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

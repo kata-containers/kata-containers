@@ -98,9 +98,9 @@ pub struct RestoreConfig {
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
 pub enum MemoryRestoreMode {
-    #[default]
     Copy,
     OnDemand,
+    #[default]
     CopyOnWrite,
 }
 
@@ -234,7 +234,7 @@ mod tests {
     fn test_restore_config_memory_modes() {
         assert_eq!(
             RestoreConfig::default().memory_restore_mode,
-            MemoryRestoreMode::Copy
+            MemoryRestoreMode::CopyOnWrite
         );
 
         let cases = [
