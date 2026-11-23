@@ -51,6 +51,27 @@ pub(super) struct CheckpointRootfs {
     pub(super) logical_size: u64,
     pub(super) encoded_size: u64,
     pub(super) sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) immutable_lower: Option<ImmutableRootfs>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ImmutableRootfs {
+    pub(super) device_id: String,
+    pub(super) index: u64,
+    pub(super) driver_option: String,
+    pub(super) virt_path: String,
+    pub(super) is_direct: Option<bool>,
+    pub(super) discard_unmap: bool,
+    pub(super) aio: String,
+    pub(super) queue_size: u32,
+    pub(super) num_queues: usize,
+    pub(super) logical_sector_size: u32,
+    pub(super) physical_sector_size: u32,
+    pub(super) serial_override: String,
+    pub(super) size: u64,
+    pub(super) sha256: String,
 }
 
 #[derive(Serialize, Deserialize)]

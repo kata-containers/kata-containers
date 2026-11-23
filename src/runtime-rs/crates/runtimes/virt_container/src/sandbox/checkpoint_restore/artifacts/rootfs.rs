@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::{
-    manifest::{CheckpointRootfs, CheckpointTask, WORKLOAD_CHECKPOINT_STORAGE},
+    manifest::{CheckpointRootfs, CheckpointTask, ImmutableRootfs, WORKLOAD_CHECKPOINT_STORAGE},
     sparse::{decode_sparse_artifact, encode_sparse_artifact, SparseMeta, SPARSE_FORMAT},
 };
-use super::run_artifact_worker;
+use super::{run_artifact_worker, IMMUTABLE_ROOTFS_OPTION};
 use anyhow::{Context, Result};
 use common::{error::Error as CommonError, types::SandboxCheckpointTask};
 use hypervisor::{BlockConfigModern, BlockDeviceAio, BlockDeviceModern, BlockSourceFormat};
+use serde::Deserialize;
 use std::{
     collections::HashMap,
     fs::{self, OpenOptions},
@@ -17,6 +18,44 @@ use std::{
     path::Path,
     time::Instant,
 };
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ImmutableRootfsOption {
+    checkpoint_key: String,
+    #[serde(default)]
+    path: String,
+    size: u64,
+    sha256: String,
+}
+
+fn immutable_rootfs_options(
+    options: &HashMap<String, String>,
+) -> Result<HashMap<String, ImmutableRootfsOption>> {
+    let Some(value) = options.get(IMMUTABLE_ROOTFS_OPTION) else {
+        return Ok(HashMap::new());
+    };
+
+    let entries: Vec<ImmutableRootfsOption> = serde_json::from_str(value).map_err(|err| {
+        CommonError::InvalidSandboxOperation(format!("decode immutable rootfs inventory: {err}"))
+    })?;
+    let mut result = HashMap::with_capacity(entries.len());
+    for entry in entries {
+        if entry.checkpoint_key.is_empty()
+            || entry.size == 0
+            || entry.sha256.len() != 64
+            || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || result.insert(entry.checkpoint_key.clone(), entry).is_some()
+        {
+            return Err(CommonError::InvalidSandboxOperation(
+                "invalid or duplicate immutable rootfs inventory".to_string(),
+            )
+            .into());
+        }
+    }
+
+    Ok(result)
+}
 
 fn rootfs_artifact_name(task_count: usize, position: usize) -> String {
     if task_count == 1 {
@@ -45,7 +84,7 @@ fn flush_managed_rootfs(source: &Path) -> Result<()> {
 pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
     checkpoint_root: &Path,
     tasks: &[SandboxCheckpointTask],
-    _options: &HashMap<String, String>,
+    options: &HashMap<String, String>,
     blocks: Vec<BlockDeviceModern>,
 ) -> Result<Vec<CheckpointRootfs>> {
     let mut blocks_by_id = blocks
@@ -56,13 +95,14 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
     let storage_dir = checkpoint_root.join(WORKLOAD_CHECKPOINT_STORAGE);
     fs::create_dir(&storage_dir).context("create checkpoint rootfs storage directory")?;
 
+    let mut immutable_options = immutable_rootfs_options(options)?;
     let task_count = tasks.len();
     let mut artifacts = Vec::with_capacity(task_count);
 
     for (position, task) in tasks.iter().enumerate() {
-        if task.rootfs_device_ids.len() != 1 {
+        if task.rootfs_device_ids.is_empty() || task.rootfs_device_ids.len() > 2 {
             return Err(CommonError::SandboxOperationUnsupported(format!(
-                "checkpoint task {} requires one writable rootfs",
+                "checkpoint task {} requires one writable rootfs and at most one immutable lower",
                 task.task_id
             ))
             .into());
@@ -104,6 +144,70 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
         }
 
         let block = task_blocks.remove(writable_position);
+        let immutable_lower = match task_blocks.pop() {
+            None => {
+                if immutable_options.remove(&task.checkpoint_key).is_some() {
+                    return Err(CommonError::InvalidSandboxOperation(format!(
+                        "task {} supplied immutable rootfs identity without a readonly device",
+                        task.task_id
+                    ))
+                    .into());
+                }
+                None
+            }
+            Some(lower) if lower.config.is_readonly => {
+                let identity = immutable_options
+                    .remove(&task.checkpoint_key)
+                    .ok_or_else(|| {
+                        CommonError::InvalidSandboxOperation(format!(
+                            "task {} is missing immutable rootfs identity",
+                            task.task_id
+                        ))
+                    })?;
+
+                let source = Path::new(&lower.config.path_on_host);
+                let metadata = fs::symlink_metadata(source)
+                    .context(format!("inspect immutable rootfs {}", source.display()))?;
+                if !source.is_absolute()
+                    || metadata.file_type().is_symlink()
+                    || !metadata.is_file()
+                    || metadata.len() != identity.size
+                    || metadata.permissions().mode() & 0o222 != 0
+                    || !identity.path.is_empty()
+                {
+                    return Err(CommonError::InvalidSandboxOperation(format!(
+                        "task {} immutable rootfs identity is invalid",
+                        task.task_id
+                    ))
+                    .into());
+                }
+
+                Some(ImmutableRootfs {
+                    device_id: lower.device_id,
+                    index: lower.config.index,
+                    driver_option: lower.config.driver_option,
+                    virt_path: lower.config.virt_path,
+                    is_direct: lower.config.is_direct,
+                    discard_unmap: lower.config.discard_unmap,
+                    aio: lower.config.blkdev_aio.to_string(),
+                    queue_size: lower.config.queue_size,
+                    num_queues: lower.config.num_queues,
+                    logical_sector_size: lower.config.logical_sector_size,
+                    physical_sector_size: lower.config.physical_sector_size,
+                    serial_override: lower.config.serial_override,
+                    size: identity.size,
+                    sha256: identity.sha256.to_lowercase(),
+                })
+            }
+            Some(_) => {
+                return Err(CommonError::SandboxOperationUnsupported(format!(
+                    "checkpoint task {} has multiple writable rootfs devices",
+                    task.task_id
+                ))
+                .into())
+            }
+        };
+
         let source = Path::new(&block.config.path_on_host);
         let metadata = fs::symlink_metadata(source)?;
 
@@ -169,7 +273,15 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
             logical_size: encoded.logical_size,
             encoded_size: encoded.encoded_size,
             sha256: encoded.sha256,
+            immutable_lower,
         });
+    }
+
+    if !immutable_options.is_empty() {
+        return Err(CommonError::InvalidSandboxOperation(
+            "immutable rootfs inventory contains unknown tasks".to_string(),
+        )
+        .into());
     }
 
     fs::File::open(&storage_dir)?.sync_all()?;
@@ -180,7 +292,7 @@ pub(in crate::sandbox::checkpoint_restore) fn write_rootfs_artifacts(
 pub(in crate::sandbox::checkpoint_restore) async fn restore_rootfs_artifacts(
     checkpoint_root: &Path,
     tasks: &[CheckpointTask],
-    _options: &HashMap<String, String>,
+    options: &HashMap<String, String>,
     rootfs: &[CheckpointRootfs],
     restore_dir: &Path,
     sync_private_copy: bool,
@@ -197,6 +309,7 @@ pub(in crate::sandbox::checkpoint_restore) async fn restore_rootfs_artifacts(
         .map(|task| (task.checkpoint_key.as_str(), task))
         .collect::<HashMap<_, _>>();
 
+    let mut immutable_options = immutable_rootfs_options(options)?;
     let mut blocks = Vec::with_capacity(rootfs.len() * 2);
     let task_count = rootfs.len();
 
@@ -298,6 +411,64 @@ pub(in crate::sandbox::checkpoint_restore) async fn restore_rootfs_artifacts(
             ..Default::default()
         };
         blocks.push(block);
+
+        if let Some(lower) = &artifact.immutable_lower {
+            let identity = immutable_options
+                .remove(&artifact.checkpoint_key)
+                .ok_or_else(|| {
+                    CommonError::InvalidSandboxOperation(format!(
+                        "rootfs {} is missing immutable lower resolution",
+                        artifact.checkpoint_key
+                    ))
+                })?;
+
+            let source = Path::new(&identity.path);
+            let metadata = fs::symlink_metadata(source)?;
+
+            if !source.is_absolute()
+                || metadata.file_type().is_symlink()
+                || !metadata.is_file()
+                || metadata.permissions().mode() & 0o222 != 0
+                || metadata.len() != lower.size
+                || identity.size != lower.size
+                || identity.sha256.to_lowercase() != lower.sha256
+            {
+                return Err(CommonError::InvalidSandboxOperation(format!(
+                    "rootfs {} immutable lower does not match checkpoint",
+                    artifact.checkpoint_key
+                ))
+                .into());
+            }
+
+            blocks.push(BlockDeviceModern {
+                device_id: lower.device_id.clone(),
+                config: BlockConfigModern {
+                    path_on_host: identity.path,
+                    is_readonly: true,
+                    discard_unmap: lower.discard_unmap,
+                    source: BlockSourceFormat::Raw,
+                    is_direct: lower.is_direct,
+                    index: lower.index,
+                    blkdev_aio: BlockDeviceAio::new(&lower.aio),
+                    driver_option: lower.driver_option.clone(),
+                    virt_path: lower.virt_path.clone(),
+                    queue_size: lower.queue_size,
+                    num_queues: lower.num_queues,
+                    logical_sector_size: lower.logical_sector_size,
+                    physical_sector_size: lower.physical_sector_size,
+                    serial_override: lower.serial_override.clone(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        }
+    }
+
+    if !immutable_options.is_empty() {
+        return Err(CommonError::InvalidSandboxOperation(
+            "immutable rootfs resolution contains unknown tasks".to_string(),
+        )
+        .into());
     }
 
     fs::File::open(restore_dir)?.sync_all()?;
@@ -379,6 +550,28 @@ mod tests {
         assert_eq!(block.config.virt_path, "/dev/vdd");
         assert!(!block.config.is_readonly);
         assert_eq!(fs::read(&block.config.path_on_host).unwrap(), contents);
+    }
+
+    #[test]
+    fn immutable_rootfs_inventory_is_strict_and_keyed() {
+        let mut options = HashMap::new();
+        options.insert(
+            IMMUTABLE_ROOTFS_OPTION.to_string(),
+            format!(
+                r#"[{{"checkpoint_key":"app","size":4096,"sha256":"{}"}}]"#,
+                "a".repeat(64)
+            ),
+        );
+        let entries = immutable_rootfs_options(&options).unwrap();
+        let entry = entries.get("app").unwrap();
+        assert_eq!(entry.size, 4096);
+        assert!(entry.path.is_empty());
+
+        options.insert(
+            IMMUTABLE_ROOTFS_OPTION.to_string(),
+            r#"[{"checkpoint_key":"app","size":4096,"sha256":"bad"}]"#.to_string(),
+        );
+        assert!(immutable_rootfs_options(&options).is_err());
     }
 
     #[test]

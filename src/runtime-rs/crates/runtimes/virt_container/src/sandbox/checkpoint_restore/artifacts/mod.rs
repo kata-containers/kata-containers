@@ -26,6 +26,7 @@ pub(super) mod rootfs;
 
 pub(super) mod vm;
 
+pub(super) const IMMUTABLE_ROOTFS_OPTION: &str = "io.katacontainers.checkpoint.rootfs.immutable";
 pub(super) const RESTORE_ARTIFACT_CONCURRENCY: usize = 2;
 pub(super) static RESTORE_ARTIFACT_SEMAPHORE: Semaphore =
     Semaphore::const_new(RESTORE_ARTIFACT_CONCURRENCY);

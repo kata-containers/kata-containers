@@ -16,6 +16,8 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use crate::sandbox::VirtSandbox;
 
+use super::artifacts::IMMUTABLE_ROOTFS_OPTION;
+
 impl VirtSandbox {
     fn validate_ckpt_profile_config(
         hypervisor_name: &str,
@@ -305,8 +307,8 @@ impl VirtSandbox {
     }
 }
 
-fn checkpoint_option_supported(_key: &str) -> bool {
-    false
+fn checkpoint_option_supported(key: &str) -> bool {
+    key == IMMUTABLE_ROOTFS_OPTION
 }
 
 #[cfg(test)]

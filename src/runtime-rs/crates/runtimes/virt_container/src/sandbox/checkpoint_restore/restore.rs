@@ -239,9 +239,13 @@ fn map_restore_tasks(
 
     if source_rootfs.len() != manifest.rootfs.len()
         || source_rootfs.len() != source_tasks.len()
-        || source_rootfs
-            .values()
-            .any(|rootfs| rootfs.device_id.is_empty())
+        || source_rootfs.values().any(|rootfs| {
+            rootfs.device_id.is_empty()
+                || rootfs
+                    .immutable_lower
+                    .as_ref()
+                    .is_some_and(|lower| lower.device_id.is_empty())
+        })
     {
         return Err(CommonError::InvalidSandboxOperation(
             "checkpoint contains invalid rootfs inventory".to_string(),
@@ -289,7 +293,12 @@ fn map_restore_tasks(
             .into());
         }
 
-        let rootfs_device_ids = vec![rootfs.device_id.clone()];
+        let mut rootfs_device_ids =
+            Vec::with_capacity(1 + usize::from(rootfs.immutable_lower.is_some()));
+        rootfs_device_ids.push(rootfs.device_id.clone());
+        if let Some(lower) = &rootfs.immutable_lower {
+            rootfs_device_ids.push(lower.device_id.clone());
+        }
 
         // Process and resource config is already in the checkpointed guest.
         mappings.push(agent::ContainerIDMapping {
@@ -323,7 +332,14 @@ mod tests {
                 "logical_size": 4096, "encoded_size": 32, "sha256": "a".repeat(64)
             })
         };
-        let a = rootfs("a");
+        let mut a = rootfs("a");
+        a["immutable_lower"] = serde_json::json!({
+            "device_id": "lower-a", "index": 2, "driver_option": "virtio-blk",
+            "virt_path": "/dev/vdc", "is_direct": null, "discard_unmap": false,
+            "aio": "threads", "queue_size": 128, "num_queues": 1,
+            "logical_sector_size": 512, "physical_sector_size": 512,
+            "serial_override": "", "size": 4096, "sha256": "b".repeat(64)
+        });
         let manifest = serde_json::from_value(serde_json::json!({
             "format_version": 16, "hypervisor": "qemu",
             "tasks": [
@@ -387,12 +403,12 @@ mod tests {
             [("b", "new-b"), ("a", "new-a")]
         );
         assert_eq!(tasks[0].rootfs_device_ids, ["dev-b"]);
-        assert_eq!(tasks[1].rootfs_device_ids, ["dev-a"]);
+        assert_eq!(tasks[1].rootfs_device_ids, ["dev-a", "lower-a"]);
     }
 
     #[test]
     fn restore_mapping_preserves_error_order() {
-        for case in (0..16).filter(|&case| case != 6) {
+        for case in 0..16 {
             let (mut request, mut manifest) = restore_inventory();
             let expected = match case {
                 0 => {
@@ -421,7 +437,15 @@ mod tests {
                     manifest.rootfs[0].device_id.clear();
                     "checkpoint contains invalid rootfs inventory"
                 }
-
+                6 => {
+                    manifest.rootfs[0]
+                        .immutable_lower
+                        .as_mut()
+                        .unwrap()
+                        .device_id
+                        .clear();
+                    "checkpoint contains invalid rootfs inventory"
+                }
                 7 => {
                     request.tasks[0].checkpoint_key = "missing".into();
                     "restore task key missing is absent"
