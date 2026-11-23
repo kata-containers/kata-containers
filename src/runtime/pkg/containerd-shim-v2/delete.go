@@ -8,22 +8,38 @@ package containerdshim
 import (
 	"context"
 	"path"
+	"time"
 
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/v2/core/mount"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
+const containerTeardownTimeout = 10 * time.Second
+
+func waitForContainerTeardown(ctx context.Context, done <-chan struct{}) error {
+	if done == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, containerTeardownTimeout)
+	defer cancel()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		select {
+		case <-done:
+			return nil
+		default:
+			return ctx.Err()
+		}
+	}
+}
+
 func deleteContainer(ctx context.Context, s *service, c *container) error {
 	if !c.cType.IsSandbox() {
-		if c.teardownDone != nil {
-			select {
-			case <-c.teardownDone:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-
 		if c.status != task.Status_STOPPED {
 			if _, err := s.sandbox.StopContainer(ctx, c.id, false); err != nil && !isNotFound(err) {
 				return err
