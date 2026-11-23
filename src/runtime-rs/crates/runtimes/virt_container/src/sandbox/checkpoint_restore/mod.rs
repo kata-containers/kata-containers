@@ -27,7 +27,6 @@ mod identity;
 mod manifest;
 mod restore;
 mod sparse;
-mod startup;
 mod validation;
 
 use manifest::{CheckpointManifest, WORKLOAD_CHECKPOINT_MANIFEST, WORKLOAD_CHECKPOINT_STATE};
