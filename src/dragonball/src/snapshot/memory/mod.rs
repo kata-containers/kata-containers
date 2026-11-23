@@ -12,8 +12,10 @@ use std::fs;
 pub use dbs_snapshot::MemoryRange;
 
 mod flat;
+mod overlay;
 
 pub use flat::{copy_flat_sparse_file, merge_flat_sparse_file, verify_flat_sparse_file};
+pub use overlay::{encode_memory_overlay, memory_overlay_size, OverlayReader, OVERLAY_FORMAT};
 
 /// Errors that callers must distinguish from native file I/O failures.
 #[derive(Debug, thiserror::Error)]
