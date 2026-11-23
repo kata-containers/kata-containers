@@ -193,12 +193,19 @@ async fn run_checkpoint_transaction(
         req.operation_timeout = Some(remaining);
     }
 
-    let checkpoint_result = sandbox_ckpt_restore.checkpoint_sandbox(&req).await;
+    let mut owns_output = false;
+    let checkpoint_result = sandbox_ckpt_restore
+        .checkpoint_sandbox(&req, &mut owns_output)
+        .await;
     let resume_result = cm.resume_checkpoint_tasks(&req.tasks).await;
 
-    if let Err(checkpoint_err) = checkpoint_result {
-        let cleanup_result = sandbox_ckpt_restore.cleanup_sandbox_checkpoint(&req).await;
+    let cleanup_result = if owns_output && (checkpoint_result.is_err() || resume_result.is_err()) {
+        sandbox_ckpt_restore.cleanup_sandbox_checkpoint(&req).await
+    } else {
+        Ok(())
+    };
 
+    if let Err(checkpoint_err) = checkpoint_result {
         let cleanup_context = match (resume_result, cleanup_result) {
             (Ok(()), Ok(())) => String::new(),
             (Err(resume_err), Ok(())) => {
@@ -216,8 +223,6 @@ async fn run_checkpoint_transaction(
     }
 
     if let Err(resume_err) = resume_result {
-        let cleanup_result = sandbox_ckpt_restore.cleanup_sandbox_checkpoint(&req).await;
-
         return match cleanup_result {
             Ok(()) => Err(resume_err).context("resume checkpoint tasks"),
             Err(cleanup_err) => Err(resume_err).context(format!(
@@ -253,6 +258,7 @@ mod tests {
 
     struct TestCheckpointSandbox {
         calls: Arc<Mutex<Vec<&'static str>>>,
+        owns_output: bool,
     }
 
     #[async_trait]
@@ -266,8 +272,13 @@ mod tests {
             Ok(())
         }
 
-        async fn checkpoint_sandbox(&self, _: &CheckpointSandboxRequest) -> Result<()> {
+        async fn checkpoint_sandbox(
+            &self,
+            _: &CheckpointSandboxRequest,
+            owns_output: &mut bool,
+        ) -> Result<()> {
             self.calls.lock().unwrap().push("checkpoint");
+            *owns_output = self.owns_output;
             Err(anyhow!("forced checkpoint failure"))
         }
 
@@ -348,10 +359,33 @@ mod tests {
 
     #[tokio::test]
     async fn checkpoint_failure_resumes_tasks_before_cleanup() {
+        assert_eq!(
+            checkpoint_failure_calls(true).await,
+            [
+                "prepare",
+                "validate",
+                "pause",
+                "checkpoint",
+                "resume",
+                "cleanup"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn checkpoint_failure_keeps_output_owned_by_another_attempt() {
+        assert_eq!(
+            checkpoint_failure_calls(false).await,
+            ["prepare", "validate", "pause", "checkpoint", "resume"]
+        );
+    }
+
+    async fn checkpoint_failure_calls(owns_output: bool) -> Vec<&'static str> {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let runtime = CheckpointRestoreRuntime {
             sandbox: Arc::new(TestCheckpointSandbox {
                 calls: calls.clone(),
+                owns_output,
             }),
             container_manager: Arc::new(TestCheckpointContainers {
                 calls: calls.clone(),
@@ -368,16 +402,7 @@ mod tests {
         let result = run_checkpoint_transaction(&runtime, request).await;
 
         assert!(result.is_err());
-        assert_eq!(
-            *calls.lock().unwrap(),
-            [
-                "prepare",
-                "validate",
-                "pause",
-                "checkpoint",
-                "resume",
-                "cleanup"
-            ]
-        );
+        let observed = calls.lock().unwrap();
+        observed.clone()
     }
 }

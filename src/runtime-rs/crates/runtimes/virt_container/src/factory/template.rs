@@ -32,7 +32,7 @@ const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8;
 const MIB: u64 = 1024 * 1024;
 const TEMPLATE_IDENTITY_FILE: &str = "template.json";
-const TEMPLATE_IDENTITY_FORMAT_VERSION: u32 = 1;
+const TEMPLATE_IDENTITY_FORMAT_VERSION: u32 = 2;
 /// Cloud Hypervisor already writes its own `config.json` in the template directory.
 const TEMPLATE_VM_CONFIG_FILE: &str = "vm_config.json";
 
@@ -48,6 +48,16 @@ pub(crate) struct TemplateIdentity {
     pub(crate) config_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) native_config_sha256: Option<String>,
+}
+
+impl TemplateIdentity {
+    /// Match the template configuration without reading deployed boot assets.
+    pub(crate) fn verify_vm_config(&self, config: &VmConfig) -> Result<()> {
+        if Template::config_sha256_for(config)? != self.config_sha256 {
+            return Err(anyhow!("VM template configuration does not match"));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -280,8 +290,8 @@ impl Template {
             ));
         }
 
-        let file = File::open(path)
-            .context(format!("open template artifact {}", path.display()))?;
+        let file =
+            File::open(path).context(format!("open template artifact {}", path.display()))?;
         let mut reader = BufReader::new(file);
         let mut hasher = Sha256Context::new(&SHA256);
         let mut buffer = vec![0_u8; 1024 * 1024];
@@ -307,29 +317,13 @@ impl Template {
     }
 
     fn config_sha256(&self) -> Result<String> {
-        Self::config_sha256_with_assets(&self.config, |path| {
-            Ok(Self::file_integrity(Path::new(path))?.1)
-        })
+        Self::config_sha256_for(&self.config)
     }
 
-    fn config_sha256_with_assets(
-        config: &VmConfig,
-        mut asset_sha256: impl FnMut(&str) -> Result<String>,
-    ) -> Result<String> {
+    fn config_sha256_for(config: &VmConfig) -> Result<String> {
         let mut config = config.clone();
-        // Bind the template to its boot assets, independent of installation paths.
+        // Deployed asset contents are validated by the asset manager.
         let hv = &mut config.hypervisor_config;
-        for path in [
-            &mut hv.path,
-            &mut hv.boot_info.kernel,
-            &mut hv.boot_info.initrd,
-            &mut hv.boot_info.image,
-        ] {
-            if !path.is_empty() {
-                *path = format!("sha256:{}", asset_sha256(path)?);
-            }
-        }
-
         hv.vm_template.memory_path.clear();
         hv.vm_template.device_state_path.clear();
         hv.factory.template_path.clear();
@@ -420,8 +414,7 @@ impl Template {
             return Err(anyhow!("VM template identity is not a regular file"));
         }
 
-        let identity: TemplateIdentity =
-            serde_json::from_slice(&std::fs::read(&identity_path)?)
+        let identity: TemplateIdentity = serde_json::from_slice(&std::fs::read(&identity_path)?)
             .context("decode template identity")?;
 
         if identity.format_version != TEMPLATE_IDENTITY_FORMAT_VERSION {
@@ -522,6 +515,25 @@ mod tests {
     }
 
     #[test]
+    fn template_identity_verifies_configuration_without_boot_assets() {
+        let mut template = test_template();
+        template.config.hypervisor_config.boot_info.initrd = template
+            .state_path
+            .join("missing-initrd")
+            .display()
+            .to_string();
+        template.save_vm_config().unwrap();
+        let identity = template.publish_identity().unwrap();
+        identity.verify_vm_config(&template.config).unwrap();
+        Template::fetch(template.config.clone(), template.state_path.clone()).unwrap();
+
+        let mut incompatible = template.config.clone();
+        incompatible.hypervisor_config.memory_info.default_memory += 128;
+        assert!(identity.verify_vm_config(&incompatible).is_err());
+        std::fs::remove_dir_all(&template.state_path).unwrap();
+    }
+
+    #[test]
     fn clh_template_binds_native_config() {
         let mut template = test_template();
         template.config.hypervisor_name = HYPERVISOR_NAME_CH.to_string();
@@ -577,23 +589,27 @@ mod tests {
     }
 
     #[test]
-    fn template_identity_allows_relocated_installation() {
+    fn template_identity_binds_paths_but_not_boot_asset_contents() {
         let mut template = test_template();
         let asset = template.state_path.join("initrd");
-        let relocated = template.state_path.join("relocated-initrd");
         std::fs::write(&asset, b"agent version A").unwrap();
-        std::fs::copy(&asset, &relocated).unwrap();
         template.config.hypervisor_config.boot_info.initrd = asset.display().to_string();
         template.publish_identity().unwrap();
         let original = template.config_sha256().unwrap();
-        template.config.hypervisor_config.boot_info.initrd = relocated.display().to_string();
-        template.config.hypervisor_config.factory.template_path = "/other/template".into();
+        std::fs::write(&asset, b"agent version B").unwrap();
         assert_eq!(original, template.config_sha256().unwrap());
         template.load_and_verify_identity().unwrap();
-        std::fs::write(&relocated, b"agent version B").unwrap();
-        assert!(template.load_and_verify_identity().is_err());
-        template.config.hypervisor_config.cpu_info.default_maxvcpus += 1;
+
+        template.config.hypervisor_config.factory.template_path = "/other/template".into();
+        assert_eq!(original, template.config_sha256().unwrap());
+        template
+            .config
+            .hypervisor_config
+            .boot_info
+            .initrd
+            .push_str(".relocated");
         assert_ne!(original, template.config_sha256().unwrap());
+        assert!(template.load_and_verify_identity().is_err());
         std::fs::remove_dir_all(&template.state_path).unwrap();
     }
 
@@ -633,18 +649,19 @@ mod tests {
     fn template_identity_rejects_unknown_format() {
         let template = test_template();
         let mut identity = template.publish_identity().unwrap();
-        identity.format_version += 1;
-        std::fs::write(
-            template.identity_path(),
-            serde_json::to_vec(&identity).unwrap(),
-        )
-        .unwrap();
-
-        let error = Template::fetch(template.config.clone(), template.state_path.clone())
-            .expect_err("unknown identity format must fail");
-        assert!(error
-            .to_string()
-            .contains("unsupported VM template identity format"));
+        for version in [1, TEMPLATE_IDENTITY_FORMAT_VERSION + 1] {
+            identity.format_version = version;
+            std::fs::write(
+                template.identity_path(),
+                serde_json::to_vec(&identity).unwrap(),
+            )
+            .unwrap();
+            let error = Template::fetch(template.config.clone(), template.state_path.clone())
+                .expect_err("old or unknown identity format must fail");
+            assert!(error
+                .to_string()
+                .contains("unsupported VM template identity format"));
+        }
         std::fs::remove_dir_all(&template.state_path).unwrap();
     }
 }

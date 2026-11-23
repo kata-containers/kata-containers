@@ -158,6 +158,18 @@ pub struct VmSaveResult {
     pub resource_topology: Option<VmResourceTopology>,
 }
 
+impl VmSaveResult {
+    /// A template save must publish persistent files instead of a memory capture.
+    pub fn validate_template(&self) -> Result<()> {
+        if self.transient_memory.is_some() {
+            return Err(anyhow::anyhow!(
+                "template save unexpectedly returned transient memory"
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VmResourceTopology {
     /// Total online vCPUs present in the checkpointed VM.

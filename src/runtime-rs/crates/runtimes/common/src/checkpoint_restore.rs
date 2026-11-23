@@ -17,7 +17,13 @@ use crate::types::{
 pub trait SandboxCheckpointRestore: Send + Sync {
     async fn prepare_restore_sandbox(&self, options: &PrepareRestoreOptions) -> Result<()>;
     async fn validate_checkpoint_sandbox(&self, req: &CheckpointSandboxRequest) -> Result<()>;
-    async fn checkpoint_sandbox(&self, req: &CheckpointSandboxRequest) -> Result<()>;
+    /// Set owns_output only after exclusively acquiring the checkpoint output.
+    /// The caller uses it to decide whether rollback may remove the artifacts.
+    async fn checkpoint_sandbox(
+        &self,
+        req: &CheckpointSandboxRequest,
+        owns_output: &mut bool,
+    ) -> Result<()>;
     async fn restore_sandbox(&self, req: &RestoreSandboxRequest) -> Result<RestoreSandboxInfo>;
     async fn cleanup_sandbox_checkpoint(&self, req: &CheckpointSandboxRequest) -> Result<()>;
 }

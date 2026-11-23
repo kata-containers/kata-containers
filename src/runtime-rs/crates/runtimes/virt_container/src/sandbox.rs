@@ -101,9 +101,11 @@ use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
+use crate::factory::template::TemplateIdentity;
 use crate::vmm_process::VmmProcessIdentity;
 use crate::UNKNOWN_EXIT_STATUS;
 
+mod checkpoint_restore;
 mod startup;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
@@ -242,6 +244,7 @@ pub struct VirtSandbox {
     // sampling the configuration there would launder the reloaded file's
     // current value back into the record the cleanup exists to trust.
     restored_keep_abnormal: Option<bool>,
+    template_identity: Option<TemplateIdentity>,
     oom_watcher_started: Arc<AtomicBool>,
 }
 
@@ -427,12 +430,14 @@ impl std::fmt::Debug for VirtSandbox {
             .field("exit_notify_tx", &"<watch::Sender<bool>>")
             .field("sandbox_config", &self.sandbox_config)
             .field("factory", &self.factory)
+            .field("template_identity", &self.template_identity)
             .finish()
     }
 }
 
 impl VirtSandbox {
-    pub async fn new(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn new(
         sid: &str,
         msg_sender: Sender<Message>,
         agent: Arc<dyn Agent>,
@@ -440,6 +445,7 @@ impl VirtSandbox {
         resource_manager: Arc<ResourceManager>,
         sandbox_config: SandboxConfig,
         factory: Factory,
+        template_identity: Option<TemplateIdentity>,
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
@@ -472,6 +478,7 @@ impl VirtSandbox {
             vmm_exit_confirmed: CancellationToken::new(),
             vmm_process: Arc::new(RwLock::new(None)),
             restored_keep_abnormal: None,
+            template_identity,
 
             oom_watcher_started: Arc::new(AtomicBool::new(false)),
         })
@@ -2337,6 +2344,7 @@ impl Persist for VirtSandbox {
             created_netns: sandbox_state.created_netns,
             saving_state: Arc::new(Mutex::new(())),
             restored_keep_abnormal: sandbox_state.keep_abnormal,
+            template_identity: None,
 
             oom_watcher_started: Arc::new(AtomicBool::new(false)),
         })

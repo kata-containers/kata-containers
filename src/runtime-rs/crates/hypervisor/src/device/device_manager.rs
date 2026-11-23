@@ -693,6 +693,15 @@ pub async fn find_cold_plugged_vfio_ap(
 
 /// Checkpoint and Restore
 impl DeviceManager {
+    pub async fn checkpoint_devices(&self) -> Vec<DeviceType> {
+        let mut devices = Vec::with_capacity(self.devices.len());
+        for device in self.devices.values() {
+            devices.push(device.lock().await.get_device_info().await);
+        }
+
+        devices
+    }
+
     pub async fn checkpoint_block_devices(&self) -> Vec<BlockDeviceModern> {
         let boot_image = self.hypervisor.hypervisor_config().await.boot_info.image;
         let mut blocks = Vec::new();

@@ -228,6 +228,7 @@ impl TemplateVm {
             resource_manager.clone(),
             sandbox_config,
             factory,
+            None,
         )
         .await
         .context("build sandbox")?;
@@ -333,13 +334,7 @@ impl TemplateVm {
             .await
             .context("save vm")?;
 
-        if result.transient_memory.is_some() {
-            return Err(anyhow::anyhow!(
-                "template save unexpectedly returned transient memory"
-            ));
-        }
-
-        Ok(())
+        result.validate_template()
     }
 
     /// Resume resumes a paused VM.

@@ -763,18 +763,18 @@ impl RuntimeHandlerManager {
             SandboxRequest::CheckpointSandbox(req) => req.operation_timeout,
             _ => unreachable!("checkpoint/restore request classification changed"),
         };
-        let (_operation_guard, remaining_timeout) = checkpoint_restore::acquire_operation_guard(
+        let (_operation_guard, operation_timeout) = checkpoint_restore::acquire_operation_guard(
             &self.sandbox_operation_guard,
             operation_timeout,
         )
         .await?;
         match req {
             SandboxRequest::RestoreSandbox(mut req) => {
-                req.operation_timeout = remaining_timeout;
+                req.operation_timeout = operation_timeout;
                 self.handle_restore_sandbox(req).await
             }
             SandboxRequest::CheckpointSandbox(mut req) => {
-                req.operation_timeout = remaining_timeout;
+                req.operation_timeout = operation_timeout;
                 self.handle_checkpoint_sandbox(req)
                     .await
                     .context("handler request")
