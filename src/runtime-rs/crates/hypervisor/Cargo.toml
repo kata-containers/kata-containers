@@ -44,6 +44,7 @@ virtio-bindings = { workspace = true }
 vmm-sys-util = "0.15.0"
 # Local dependencies
 ch-config = { optional = true, workspace = true }
+dbs-snapshot = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }
