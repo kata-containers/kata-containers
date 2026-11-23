@@ -18,10 +18,15 @@ paths:
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
   - "^\\.github/workflows/": []
+  # Docs: only prose counts, so docs-only changes skip the static matrix.
+  # Everything else under docs/ (scripts, data, Dockerfile, ...) is code or
+  # data that the static checks do act on, so it falls through to "static".
+  - "^docs/.*\\.(md|png|jpg|jpeg|svg|gif)$": ["docs"]
+  - "^docs/\\.nav\\.yml$": ["docs"]
+  - "^mkdocs\\.yaml$": ["docs"]
+  - "\\.md$": ["docs"]
+  - "^tests/spellcheck/kata-dictionary.txt": ["docs"]
   - "^docs/": ["static"]
-  - "^mkdocs\\.yaml$": ["static"]
-  - "\\.md$": ["static"]
-  - "^tests/spellcheck/kata-dictionary.txt": ["static"]
   - "^\\.claude/": []
   # TODO: Expand filters
   # Sources
@@ -176,3 +181,8 @@ mapping:
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-2...
     required-labels:
       - ok-to-test
+  docs:
+    # Checks that documentation-only changes are still valid
+    names:
+      - Spelling check / check-spelling
+      - Static checks / check-broken-symlinks
