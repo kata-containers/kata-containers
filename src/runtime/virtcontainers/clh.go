@@ -2157,6 +2157,13 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
 	net.SetIommu(clhIommuType(clh.config.IOMMU))
+	// Offer checksum and segmentation offload to the guest. The generated
+	// NetConfig defaults all three to false, and without them the guest has to
+	// send every MTU-sized segment through the VMM's virtio-net device on its
+	// own, which caps throughput well below the QEMU (vhost-net) path.
+	net.SetOffloadTso(true)
+	net.SetOffloadUfo(true)
+	net.SetOffloadCsum(true)
 
 	if clh.netDevices != nil {
 		*clh.netDevices = append(*clh.netDevices, *net)
