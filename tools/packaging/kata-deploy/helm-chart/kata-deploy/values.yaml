@@ -378,6 +378,8 @@ tolerations: []
 # until the CNI is up, so a pod on it cannot start, and the Kata runtime handler is
 # not installed, until then. On the host network it starts as soon as the node is
 # Ready. Applies to the daemonset deploymentMode.
+# The pod shares the node's ports: a second release on the same node (env.multiInstallSuffix)
+# or a rollout with maxSurge needs a different health.port.
 hostNetwork: false
 
 # Startup taints to remove from a node once Kata is installed on it and the node
