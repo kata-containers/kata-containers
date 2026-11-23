@@ -27,6 +27,7 @@ use shim_interface::shim_mgmt::{
 pub(crate) async fn handler_mux(
     sandbox: Arc<dyn Sandbox>,
     req: Request<Incoming>,
+    enable_metrics: bool,
 ) -> Result<Response<Full<Bytes>>> {
     info!(
         sl!(),
@@ -46,7 +47,7 @@ pub(crate) async fn handler_mux(
         (&Method::POST, DIRECT_VOLUME_RESIZE_URL) => {
             direct_volume_resize_handler(sandbox, req).await
         }
-        (&Method::GET, METRICS_URL) => metrics_url_handler(sandbox, req).await,
+        (&Method::GET, METRICS_URL) => metrics_url_handler(sandbox, req, enable_metrics).await,
         (&Method::PUT, AGENT_POLICY_URL) => set_agent_policy_handler(sandbox, req).await,
         _ => Ok(not_found(req).await),
     }
@@ -159,7 +160,12 @@ async fn direct_volume_resize_handler(
 async fn metrics_url_handler(
     sandbox: Arc<dyn Sandbox>,
     _req: Request<Incoming>,
+    enable_metrics: bool,
 ) -> Result<Response<Full<Bytes>>> {
+    if !enable_metrics {
+        return Ok(Response::new(Full::new(Bytes::new())));
+    }
+
     // get metrics from agent, hypervisor, and shim
     let agent_metrics = sandbox.agent_metrics().await.unwrap_or_default();
     let hypervisor_metrics = sandbox.hypervisor_metrics().await.unwrap_or_default();
