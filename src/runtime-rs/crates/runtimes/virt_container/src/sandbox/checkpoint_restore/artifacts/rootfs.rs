@@ -431,7 +431,6 @@ impl RootfsRestore<'_> {
 
         let source_clone = source.clone();
         let private_clone = private.clone();
-        let expected_sha256 = artifact.sha256.clone();
         let encoded_size = artifact.encoded_size;
         let logical_size = artifact.logical_size;
 
@@ -443,7 +442,6 @@ impl RootfsRestore<'_> {
                 SparseMeta {
                     encoded_size,
                     logical_size,
-                    sha256: &expected_sha256,
                 },
                 0o600,
                 sync_private_copy,

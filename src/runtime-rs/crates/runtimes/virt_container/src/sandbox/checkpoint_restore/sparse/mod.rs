@@ -36,10 +36,9 @@ pub(super) struct SparseDecodeStats {
     pub(super) written_bytes: u64,
 }
 
-pub(super) struct SparseMeta<'a> {
+pub(super) struct SparseMeta {
     pub(super) encoded_size: u64,
     pub(super) logical_size: u64,
-    pub(super) sha256: &'a str,
 }
 
 fn digest_hex(hasher: Sha256Context) -> String {

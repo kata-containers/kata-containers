@@ -14,7 +14,7 @@ use std::{
 };
 
 use super::super::{file_integrity, manifest::WORKLOAD_CHECKPOINT_STATE};
-use super::{clone_verified_artifacts, ArtifactError, RestoreArtifact};
+use super::{restore_private_artifacts, ArtifactError, RestoreArtifact};
 
 pub(super) const VM_ARTIFACT_RAW_FORMAT: &str = "raw";
 
@@ -80,13 +80,12 @@ impl VmCheckpointArtifact {
             .collect()
     }
 
-    /// Describe a verified private copy; the worker performs the actual I/O.
+    /// Describe a private restore copy; the worker performs the actual I/O.
     fn restore_copy(&self, source: PathBuf, destination: PathBuf) -> RestoreArtifact {
         RestoreArtifact {
             source,
             destination,
             expected_size: self.encoded_size,
-            expected_sha256: self.sha256.clone(),
             mode: 0o600,
             sync_destination: true,
         }
@@ -246,7 +245,7 @@ impl VmArtifacts<'_> {
                 }
             }
 
-            clone_verified_artifacts(copies)
+            restore_private_artifacts(copies)
                 .await
                 .map_err(map_artifact_error)?;
 
@@ -341,7 +340,7 @@ impl VmArtifacts<'_> {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        clone_verified_artifacts(copies).await?;
+        restore_private_artifacts(copies).await?;
         fs::File::open(destination_dir)?.sync_all()?;
 
         Ok(())

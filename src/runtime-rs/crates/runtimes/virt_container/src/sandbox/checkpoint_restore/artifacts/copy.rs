@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! Verified private copies of checkpoint files.
+//! Private copies of checkpoint files for restore.
 
 use anyhow::{anyhow, Context, Result};
-use ring::digest::{Context as Sha256Context, SHA256};
 use std::{
     fs::{self, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
@@ -18,24 +17,22 @@ use std::{
 };
 use tokio::task::JoinSet;
 
-use super::super::file_integrity;
 use super::{run_artifact_worker, ArtifactError, RESTORE_ARTIFACT_CONCURRENCY};
 
 pub(in crate::sandbox::checkpoint_restore) struct RestoreArtifact {
     pub(super) source: PathBuf,
     pub(super) destination: PathBuf,
     pub(super) expected_size: u64,
-    pub(super) expected_sha256: String,
     pub(super) mode: u32,
     pub(super) sync_destination: bool,
 }
 
 impl RestoreArtifact {
     async fn restore(self) -> Result<()> {
-        run_artifact_worker(move || self.restore_verified()).await
+        run_artifact_worker(move || self.restore_private()).await
     }
 
-    fn restore_verified(&self) -> Result<()> {
+    fn restore_private(&self) -> Result<()> {
         let started = Instant::now();
 
         let result = (|| -> Result<()> {
@@ -43,31 +40,23 @@ impl RestoreArtifact {
             if reflink {
                 debug!(
                     sl!(),
-                    "clone verified restore artifact with reflink";
+                    "clone private restore artifact with reflink";
                     "source" => self.source.display().to_string(),
                     "destination" => self.destination.display().to_string(),
                 );
-                let (size, sha256) = file_integrity(&self.destination)?;
-                if size != self.expected_size || sha256 != self.expected_sha256 {
-                    return Err(ArtifactError::Invalid(format!(
-                        "checkpoint artifact {} failed size or SHA-256 validation",
-                        self.source.display()
-                    ))
-                    .into());
-                }
             } else {
                 debug!(
                     sl!(),
-                    "copy verified restore artifact";
+                    "copy private restore artifact";
                     "source" => self.source.display().to_string(),
                     "destination" => self.destination.display().to_string(),
                 );
-                self.copy_verified()?;
+                self.copy_private(!self.sync_destination)?;
             }
 
             debug!(
                 sl!(),
-                "created verified private restore artifact";
+                "created private restore artifact";
                 "source" => self.source.display().to_string(),
                 "destination" => self.destination.display().to_string(),
                 "elapsed_us" => started.elapsed().as_micros(),
@@ -130,13 +119,22 @@ impl RestoreArtifact {
             return Err(clone_error).context("clone checkpoint artifact");
         }
 
+        let metadata = destination_file.metadata()?;
+        if !metadata.is_file() || metadata.len() != self.expected_size {
+            return Err(ArtifactError::Invalid(format!(
+                "checkpoint artifact {} has an invalid size",
+                self.source.display()
+            ))
+            .into());
+        }
+
         destination_file.set_permissions(fs::Permissions::from_mode(self.mode))?;
         destination_file.sync_all()?;
 
         Ok(true)
     }
 
-    fn copy_verified(&self) -> Result<()> {
+    pub(super) fn copy_private(&self, preserve_holes: bool) -> Result<()> {
         let mut source_file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW)
@@ -166,7 +164,6 @@ impl RestoreArtifact {
 
         let copy_result = (|| -> Result<()> {
             let mut size = 0_u64;
-            let mut hasher = Sha256Context::new(&SHA256);
             let mut buffer = vec![0_u8; 1024 * 1024];
 
             loop {
@@ -178,7 +175,7 @@ impl RestoreArtifact {
                     break;
                 }
 
-                if !self.sync_destination && buffer[..count].iter().all(|byte| *byte == 0) {
+                if preserve_holes && buffer[..count].iter().all(|byte| *byte == 0) {
                     destination_file
                         .seek(SeekFrom::Current(count as i64))
                         .context(format!(
@@ -195,28 +192,20 @@ impl RestoreArtifact {
                 }
 
                 size += count as u64;
-                hasher.update(&buffer[..count]);
+            }
+
+            if size != self.expected_size {
+                return Err(ArtifactError::Invalid(format!(
+                    "checkpoint artifact {} has an invalid size",
+                    self.source.display()
+                ))
+                .into());
             }
 
             destination_file.set_len(size)?;
 
             if self.sync_destination {
                 destination_file.sync_all()?;
-            }
-
-            let digest = hasher.finish();
-            let sha256: String = digest
-                .as_ref()
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect();
-
-            if size != self.expected_size || sha256 != self.expected_sha256 {
-                return Err(ArtifactError::Invalid(format!(
-                    "checkpoint artifact {} failed size or SHA-256 validation",
-                    self.source.display()
-                ))
-                .into());
             }
 
             Ok(())
@@ -230,7 +219,7 @@ impl RestoreArtifact {
     }
 }
 
-pub(in crate::sandbox::checkpoint_restore) async fn clone_verified_artifacts(
+pub(in crate::sandbox::checkpoint_restore) async fn restore_private_artifacts(
     artifacts: Vec<RestoreArtifact>,
 ) -> Result<()> {
     let mut artifacts = artifacts.into_iter();
@@ -277,17 +266,16 @@ mod tests {
         let mut contents = vec![0_u8; 2 * 1024 * 1024];
         contents[..15].copy_from_slice(b"rootfs contents");
         fs::write(&source, &contents).unwrap();
-        let (size, sha256) = file_integrity(&source).unwrap();
+        let size = fs::metadata(&source).unwrap().len();
 
         RestoreArtifact {
             source,
             destination: destination.clone(),
             expected_size: size,
-            expected_sha256: sha256,
             mode: 0o600,
             sync_destination: false,
         }
-        .copy_verified()
+        .copy_private(true)
         .unwrap();
 
         assert_eq!(fs::read(&destination).unwrap(), contents);
@@ -295,36 +283,41 @@ mod tests {
     }
 
     #[test]
-    fn ephemeral_restore_copy_removes_destination_after_verification_failure() {
+    fn ephemeral_restore_copy_removes_destination_after_size_failure() {
         let directory = tempfile::tempdir().unwrap();
         let source = directory.path().join("rootfs-base.raw");
         fs::write(&source, b"rootfs contents").unwrap();
-        let (size, sha256) = file_integrity(&source).unwrap();
+        let size = fs::metadata(&source).unwrap().len();
 
         let size_mismatch = directory.path().join("rootfs-size-mismatch.raw");
         assert!(RestoreArtifact {
             source: source.clone(),
             destination: size_mismatch.clone(),
             expected_size: size - 1,
-            expected_sha256: sha256,
             mode: 0o600,
             sync_destination: false,
         }
-        .copy_verified()
+        .copy_private(true)
         .is_err());
         assert!(!size_mismatch.exists());
+    }
 
-        let digest_mismatch = directory.path().join("rootfs-digest-mismatch.raw");
+    #[test]
+    fn private_restore_checks_target_size() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("state");
+        let destination = directory.path().join("restored-state");
+        fs::write(&source, b"state").unwrap();
+
         assert!(RestoreArtifact {
             source,
-            destination: digest_mismatch.clone(),
-            expected_size: size,
-            expected_sha256: "invalid".into(),
+            destination: destination.clone(),
+            expected_size: 4,
             mode: 0o600,
-            sync_destination: false,
+            sync_destination: true,
         }
-        .copy_verified()
+        .restore_private()
         .is_err());
-        assert!(!digest_mismatch.exists());
+        assert!(!destination.exists());
     }
 }

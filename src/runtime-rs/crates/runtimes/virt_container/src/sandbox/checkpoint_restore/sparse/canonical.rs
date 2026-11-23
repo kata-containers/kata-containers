@@ -148,7 +148,7 @@ fn encode_sparse_file(source: &mut fs::File, destination: &Path) -> Result<Spars
 pub(in crate::sandbox::checkpoint_restore) fn decode_sparse_artifact(
     source: &Path,
     destination: &Path,
-    expected: SparseMeta<'_>,
+    expected: SparseMeta,
     mode: u32,
     sync_destination: bool,
 ) -> Result<SparseDecodeStats> {
@@ -163,11 +163,9 @@ pub(in crate::sandbox::checkpoint_restore) fn decode_sparse_artifact(
             return Err(anyhow!("canonical sparse artifact encoded size mismatch"));
         }
 
-        let mut hasher = Sha256Context::new(&SHA256);
         let mut header = [0_u8; SPARSE_HEADER_SIZE];
 
         input.read_exact(&mut header)?;
-        hasher.update(&header);
         let logical_size = parse_header(&header)?;
         if logical_size != expected.logical_size {
             return Err(anyhow!("canonical sparse artifact logical size mismatch"));
@@ -215,7 +213,6 @@ pub(in crate::sandbox::checkpoint_restore) fn decode_sparse_artifact(
                 }
 
                 input.read_exact(&mut record[1..])?;
-                hasher.update(&record);
                 encoded_read = encoded_read
                     .checked_add(SPARSE_RECORD_SIZE as u64)
                     .ok_or_else(|| anyhow!("canonical sparse artifact encoded size overflow"))?;
@@ -241,7 +238,6 @@ pub(in crate::sandbox::checkpoint_restore) fn decode_sparse_artifact(
                     .recv()
                     .map_err(|_| anyhow!("sparse decode writer stopped"))?;
                 input.read_exact(&mut payload[..length])?;
-                hasher.update(&payload[..length]);
                 encoded_read = encoded_read
                     .checked_add(length as u64)
                     .ok_or_else(|| anyhow!("canonical sparse artifact encoded size overflow"))?;
@@ -268,11 +264,9 @@ pub(in crate::sandbox::checkpoint_restore) fn decode_sparse_artifact(
                     .ok_or_else(|| anyhow!("canonical sparse artifact written size overflow"))?;
             }
 
-            let digest = digest_hex(hasher);
-            let valid = encoded_read == expected.encoded_size && digest == expected.sha256;
-            if !valid {
+            if encoded_read != expected.encoded_size {
                 return Err(CommonError::InvalidSandboxOperation(
-                    "canonical sparse artifact failed size or SHA-256 validation".to_string(),
+                    "canonical sparse artifact encoded size mismatch".to_string(),
                 )
                 .into());
             }
@@ -319,12 +313,6 @@ mod tests {
     use std::io::{Seek, SeekFrom};
 
     use super::*;
-
-    fn sha256(bytes: &[u8]) -> String {
-        let mut hasher = Sha256Context::new(&SHA256);
-        hasher.update(bytes);
-        digest_hex(hasher)
-    }
 
     #[test]
     fn encoding_is_canonical_and_round_trips_sparse_content() {
@@ -377,7 +365,6 @@ mod tests {
             SparseMeta {
                 encoded_size: sparse_info.encoded_size,
                 logical_size: sparse_info.logical_size,
-                sha256: &sparse_info.sha256,
             },
             0o600,
             false,
@@ -389,7 +376,34 @@ mod tests {
     }
 
     #[test]
-    fn decoder_rejects_corruption_and_removes_partial_output() {
+    fn decoder_rejects_non_canonical_record_and_removes_partial_output() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("source.raw");
+        let artifact = directory.path().join("source.sparse");
+        let restored = directory.path().join("restored.raw");
+        fs::write(&source, b"not zero").unwrap();
+        let info = encode_sparse_artifact(&source, &artifact).unwrap();
+        let mut bytes = fs::read(&artifact).unwrap();
+        bytes[SPARSE_HEADER_SIZE + 12] = 1;
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&artifact, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::write(&artifact, bytes).unwrap();
+        assert!(decode_sparse_artifact(
+            &artifact,
+            &restored,
+            SparseMeta {
+                encoded_size: info.encoded_size,
+                logical_size: info.logical_size,
+            },
+            0o600,
+            false
+        )
+        .is_err());
+        assert!(!restored.exists());
+    }
+
+    #[test]
+    fn decoder_accepts_structurally_valid_payload_without_digest_check() {
         let directory = tempfile::tempdir().unwrap();
         let source = directory.path().join("source.raw");
         let artifact = directory.path().join("source.sparse");
@@ -401,19 +415,19 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&artifact, fs::Permissions::from_mode(0o600)).unwrap();
         fs::write(&artifact, bytes).unwrap();
-        assert!(decode_sparse_artifact(
+
+        decode_sparse_artifact(
             &artifact,
             &restored,
             SparseMeta {
                 encoded_size: info.encoded_size,
                 logical_size: info.logical_size,
-                sha256: &info.sha256,
             },
             0o600,
-            false
+            false,
         )
-        .is_err());
-        assert!(!restored.exists());
+        .unwrap();
+        assert_ne!(fs::read(restored).unwrap(), fs::read(source).unwrap());
     }
 
     #[test]
@@ -427,7 +441,6 @@ mod tests {
         let info = encode_sparse_artifact(&source, &artifact).unwrap();
         let mut bytes = fs::read(&artifact).unwrap();
         bytes.extend_from_within(SPARSE_HEADER_SIZE..);
-        let malformed_digest = sha256(&bytes);
         fs::write(&malformed, &bytes).unwrap();
         assert!(decode_sparse_artifact(
             &malformed,
@@ -435,7 +448,6 @@ mod tests {
             SparseMeta {
                 encoded_size: bytes.len() as u64,
                 logical_size: info.logical_size,
-                sha256: &malformed_digest,
             },
             0o600,
             false
