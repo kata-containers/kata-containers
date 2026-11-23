@@ -52,42 +52,26 @@ impl VirtSandbox {
             .runtime
             .hypervisor_name
             .clone();
-        let boot = self.restore_state.write().await.take_boot();
+        let mut boot = self.restore_state.write().await.take_boot();
         prepare_resources(resources, mode, &hypervisor_name);
+        if let Some(boot) = &mut boot {
+            resources.extend(
+                std::mem::take(&mut boot.blocks)
+                    .into_iter()
+                    .map(ResourceConfig::RestoredBlock),
+            );
+        }
 
         boot
     }
 
-    /// Register restored workload disks after the base devices exist, then
-    /// validate the complete device inventory before starting the VM.
+    /// Validate the complete inventory after base and restored devices exist.
     pub(in crate::sandbox) async fn register_and_validate_restore_devices(
         &self,
         mode: StartMode,
-        boot: Option<&mut RestoreBoot>,
     ) -> Result<()> {
-        if let Some(boot) = boot {
-            self.register_restore_blocks(boot).await?;
-        }
-
         if matches!(mode, StartMode::Restore) {
             self.validate_restore_device_inventory().await?;
-        }
-
-        Ok(())
-    }
-
-    async fn register_restore_blocks(&self, boot: &mut RestoreBoot) -> Result<()> {
-        // Preserve the cold-start device topology for snapshot restore. In particular, Dragonball assigns MMIO addresses and IRQs
-        // in device creation order, so managed workload disks must follow the VM's rootfs, network, and vsock devices just as they
-        // did originally.
-        let device_manager = self.resource_manager.get_device_manager().await;
-        for block in std::mem::take(&mut boot.blocks) {
-            device_manager
-                .write()
-                .await
-                .restore_block_device(block)
-                .await
-                .context("restore workload block device")?;
         }
 
         Ok(())

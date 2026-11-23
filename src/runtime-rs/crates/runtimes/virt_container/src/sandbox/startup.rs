@@ -67,7 +67,7 @@ impl VirtSandbox {
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
         let mut resources = resources;
-        let mut restore_boot = self.prepare_restore_boot(&mut resources, mode).await;
+        let restore_boot = self.prepare_restore_boot(&mut resources, mode).await;
 
         let set_up = self
             .resource_manager
@@ -76,8 +76,7 @@ impl VirtSandbox {
             .context("set up device before start vm");
         self.save_after(set_up).await?;
 
-        self.register_and_validate_restore_devices(mode, restore_boot.as_mut())
-            .await?;
+        self.register_and_validate_restore_devices(mode).await?;
 
         // start vm
         inner.vmm_start_attempted = true;

@@ -245,6 +245,14 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle device failed.")?;
                 }
+                ResourceConfig::RestoredBlock(block) => {
+                    self.device_manager
+                        .write()
+                        .await
+                        .restore_block_device(block)
+                        .await
+                        .context("restore workload block device")?;
+                }
                 ResourceConfig::GuestExtensionImage(r) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
                         .await
