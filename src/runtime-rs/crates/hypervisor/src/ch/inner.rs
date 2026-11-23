@@ -14,6 +14,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::{HYPERVISOR_NAME_CH, MAX_NETWORK_QUEUES};
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tokio::sync::watch::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::{process::Child, sync::mpsc};
@@ -63,6 +64,9 @@ pub struct CloudHypervisorInner {
     /// Size of memory block of guest OS in MB
     pub(crate) guest_memory_block_size_mb: u32,
 
+    /// RAM backing file this VM boots with when it is a template source.
+    pub(crate) template_memory_path: Option<PathBuf>,
+
     pub(crate) exit_notify: Option<mpsc::Sender<i32>>,
 }
 
@@ -103,6 +107,7 @@ impl CloudHypervisorInner {
             shutdown_rx: Some(rx),
             tasks: None,
             guest_memory_block_size_mb: 0,
+            template_memory_path: None,
 
             exit_notify,
         }

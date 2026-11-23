@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
+use std::path::Path;
 
 use anyhow::{anyhow, Context, Ok, Result};
 use dragonball::ALL_THREADS;
@@ -13,8 +14,13 @@ use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
 use crate::dragonball::seccomp::get_seccomp_filter;
+use crate::snapshot::require_snapshot_files;
 use crate::utils::{self, get_hvsock_path, get_jailer_root, get_sandbox_path};
-use crate::{VcpuThreadIds, VmmState};
+use crate::{RestoreVmRequest, VcpuThreadIds, VmmState};
+
+/// Snapshot artifacts written by save_vm() under the snapshot directory.
+const DRAGONBALL_SNAPSHOT_STATE_FILE: &str = "state";
+const DRAGONBALL_SNAPSHOT_MEMORY_FILE: &str = "memory";
 
 impl DragonballInner {
     pub(crate) async fn prepare_vm(
@@ -82,35 +88,72 @@ impl DragonballInner {
         Ok(())
     }
 
-    /// Save the microVM state into the VM template files configured in
-    /// `[hypervisor].vm_template` (boot-to-be-template flow): guest memory
-    /// contents to `memory_path`, vCPU/device state to `device_state_path`.
-    /// A running VM is paused while the state is captured and resumed
-    /// afterwards; an already-paused VM remains paused.
-    pub(crate) async fn save_vm(&self) -> Result<()> {
+    /// Save the paused microVM: guest memory to `<dir>/memory`, vCPU and
+    /// device state to `<dir>/state`.
+    pub(crate) async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
         #[cfg(target_arch = "x86_64")]
         {
-            let template = &self.config.vm_template;
-            if template.device_state_path.is_empty() || template.memory_path.is_empty() {
-                return Err(anyhow!(
-                    "vm_template memory_path/device_state_path are not configured"
-                ));
-            }
+            let state_path = snapshot_dir.join(DRAGONBALL_SNAPSHOT_STATE_FILE);
+            let memory_path = snapshot_dir.join(DRAGONBALL_SNAPSHOT_MEMORY_FILE);
             info!(
                 sl!(),
-                "saving microVM snapshot to template";
-                "device_state_path" => &template.device_state_path,
-                "memory_path" => &template.memory_path,
+                "saving microVM snapshot";
+                "state_path" => state_path.display().to_string(),
+                "memory_path" => memory_path.display().to_string(),
             );
             self.vmm_instance
                 .save_microvm(
-                    template.device_state_path.clone(),
-                    template.memory_path.clone(),
+                    state_path.to_string_lossy().into_owned(),
+                    memory_path.to_string_lossy().into_owned(),
                 )
                 .context("save microvm")
         }
         #[cfg(not(target_arch = "x86_64"))]
-        Err(anyhow!("save_vm is not supported on this architecture"))
+        {
+            let _ = snapshot_dir;
+            Err(anyhow!("save_vm is not supported on this architecture"))
+        }
+    }
+
+    pub(crate) async fn restore_vm(&mut self, request: RestoreVmRequest) -> Result<()> {
+        if request.timeout_secs <= 0 {
+            return Err(anyhow!("restore timeout must be positive"));
+        }
+        Self::validate_snapshot(&request.snapshot_dir)?;
+
+        #[cfg(target_arch = "x86_64")]
+        {
+            let state_path = request.snapshot_dir.join(DRAGONBALL_SNAPSHOT_STATE_FILE);
+            let memory_path = request.snapshot_dir.join(DRAGONBALL_SNAPSHOT_MEMORY_FILE);
+            self.run_vmm_server().context("start vmm server")?;
+            self.restore_vm_from_snapshot(
+                state_path.to_string_lossy().into_owned(),
+                memory_path.to_string_lossy().into_owned(),
+                request.timeout_secs,
+            )
+            .await
+            .inspect_err(|error| {
+                error!(sl!(), "restore micro vm error {:?}", error);
+                if let Err(stop_error) = self.stop_vm() {
+                    error!(
+                        sl!(),
+                        "failed to stop VM after restore error: {:?}", stop_error
+                    );
+                }
+            })
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        Err(anyhow!("restore_vm is not supported on this architecture"))
+    }
+
+    pub(crate) fn validate_snapshot(snapshot_dir: &Path) -> Result<()> {
+        require_snapshot_files(
+            snapshot_dir,
+            &[
+                DRAGONBALL_SNAPSHOT_STATE_FILE,
+                DRAGONBALL_SNAPSHOT_MEMORY_FILE,
+            ],
+        )
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {

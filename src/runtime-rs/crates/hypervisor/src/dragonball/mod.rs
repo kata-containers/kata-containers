@@ -14,6 +14,7 @@ mod seccomp;
 pub mod vmm_instance;
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -28,7 +29,10 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
 
-use crate::{DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds};
+use crate::{
+    DeviceType, Hypervisor, MemoryConfig, NetworkConfig, RestoreVmRequest, VcpuThreadIds,
+    VmSnapshot,
+};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -131,9 +135,8 @@ impl Hypervisor for Dragonball {
         inner.resume_vm()
     }
 
-    async fn save_vm(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        inner.save_vm().await
+    fn snapshot(&self) -> Option<&dyn VmSnapshot> {
+        Some(self)
     }
 
     // returns Result<(old_vcpus, new_vcpus)>
@@ -244,6 +247,29 @@ impl Hypervisor for Dragonball {
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
         let inner = self.inner.read().await;
         inner.get_passfd_listener_addr().await
+    }
+}
+
+#[async_trait]
+impl VmSnapshot for Dragonball {
+    async fn prepare_template_source(&self, _snapshot_dir: &Path) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.template_source = true;
+        Ok(())
+    }
+
+    async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
+        let inner = self.inner.read().await;
+        inner.save_vm(snapshot_dir).await
+    }
+
+    async fn restore_vm(&self, request: RestoreVmRequest) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.restore_vm(request).await
+    }
+
+    fn validate_snapshot(&self, snapshot_dir: &Path) -> Result<()> {
+        DragonballInner::validate_snapshot(snapshot_dir)
     }
 }
 

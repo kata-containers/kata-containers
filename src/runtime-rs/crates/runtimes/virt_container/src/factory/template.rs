@@ -4,29 +4,25 @@
 //
 
 use std::fmt::Debug;
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use nix::mount::{mount, MsFlags};
 use slog::warn;
 
 use crate::factory::{
-    template_device_state_path,
-    vm::{TemplateVm, VmConfig},
+    vm::{snapshot_support, TemplateVm, VmConfig},
     vm_config_value,
 };
 
 /// Maximum time to wait for the Kata Agent to become ready when initializing a template VM.
 const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 
-/// Preallocated size (in MB) for saving the device state snapshot of the template VM.
+/// Headroom (in MB) on top of guest memory for the hypervisor's device-state artifacts.
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8;
-const MIB: u64 = 1024 * 1024;
 
 /// Cloud Hypervisor already writes its own `config.json` here.
 const TEMPLATE_VM_CONFIG_FILE: &str = "vm_config.json";
@@ -46,13 +42,18 @@ impl Template {
         }
     }
 
-    pub fn fetch(config: VmConfig, template_path: PathBuf) -> Result<Box<Template>> {
+    /// Return the existing template at `template_path`, or an error if the
+    /// hypervisor does not recognise a complete snapshot there.
+    pub async fn fetch(
+        config: VmConfig,
+        toml_config: &TomlConfig,
+        template_path: PathBuf,
+    ) -> Result<Box<Template>> {
         let t = Template::new(config, template_path);
 
-        // Call template_vm_exists to validate the template's files
-        if !t.template_vm_exists() {
-            return Err(anyhow!("no template vm found"));
-        }
+        t.validate_template(toml_config)
+            .await
+            .context("no template vm found")?;
 
         Ok(Box::new(t))
     }
@@ -66,7 +67,7 @@ impl Template {
     ) -> Result<Box<Template>> {
         let t = Template::new(config, template_path);
 
-        if t.template_vm_exists() {
+        if t.validate_template(&toml_config).await.is_ok() {
             return Err(anyhow!(
                 "There is already a VM template in {:?}",
                 t.state_path
@@ -81,6 +82,15 @@ impl Template {
         t.save_vm_config().context("save template vm config")?;
 
         Ok(Box::new(t))
+    }
+
+    /// Ask the hypervisor whether `state_path` holds a complete template.
+    pub async fn validate_template(&self, toml_config: &TomlConfig) -> Result<()> {
+        let hypervisor = TemplateVm::new_hypervisor(&self.config, toml_config)
+            .await
+            .context("new hypervisor")?;
+        snapshot_support(hypervisor.as_ref(), &self.config.hypervisor_name)?
+            .validate_snapshot(&self.state_path)
     }
 
     /// Read as JSON: parsing it into `VmConfig` would change `create_container_timeout`.
@@ -101,29 +111,6 @@ impl Template {
             .with_context(|| format!("failed to write {}", path.display()))
     }
 
-    pub fn template_vm_exists(&self) -> bool {
-        if !self.memory_path().exists() || !self.device_state_path().exists() {
-            return false;
-        }
-
-        self.config_path().is_none_or(|path| path.exists())
-    }
-
-    fn memory_path(&self) -> PathBuf {
-        self.state_path.join("memory")
-    }
-
-    fn device_state_path(&self) -> PathBuf {
-        template_device_state_path(&self.config.hypervisor_name, &self.state_path)
-    }
-
-    fn config_path(&self) -> Option<PathBuf> {
-        match self.config.hypervisor_name.as_str() {
-            HYPERVISOR_NAME_CH => Some(self.state_path.join("config.json")),
-            _ => None,
-        }
-    }
-
     pub fn prepare_template_files(&self) -> Result<()> {
         // Create state directory
         std::fs::create_dir_all(&self.state_path)
@@ -140,7 +127,6 @@ impl Template {
         // Mount tmpfs to store template VM memory data in memory for:
         // - Accelerating VM cloning by avoiding disk I/O
         // - Enhancing security by keeping sensitive data in memory
-        // - Supporting QEMU's shared memory clone model
         let opts = format!(
             "size={}M",
             self.config.hypervisor_config.memory_info.default_memory
@@ -163,42 +149,11 @@ impl Template {
             ));
         }
 
-        // Create memory file
-        let memory_file = self.memory_path();
-        let file = File::create(&memory_file)
-            .context(format!("failed to create memory file: {memory_file:?}"))?;
-        let memory_size_bytes = u64::from(self.config.hypervisor_config.memory_info.default_memory)
-            .checked_mul(MIB)
-            .ok_or_else(|| anyhow!("template memory size overflows u64"))?;
-        file.set_len(memory_size_bytes)
-            .context(format!("failed to size memory file: {memory_file:?}"))?;
-
-        // Verify memory file was created successfully
-        if !memory_file.exists() {
-            return Err(anyhow!(
-                "memory file {:?} does not exist after creation",
-                memory_file
-            ));
-        }
-
         Ok(())
     }
 
-    /// Configures the VM configuration for template operations.
-    fn prepare_vm_config(&self, boot_to_be_template: bool) -> VmConfig {
-        let mut config = self.config.clone();
-        config.hypervisor_config.vm_template.boot_to_be_template = boot_to_be_template;
-        config.hypervisor_config.vm_template.boot_from_template = !boot_to_be_template;
-        config.hypervisor_config.vm_template.memory_path =
-            self.memory_path().to_string_lossy().to_string();
-        config.hypervisor_config.vm_template.device_state_path =
-            self.device_state_path().to_string_lossy().to_string();
-        config
-    }
-
     pub async fn save_to_template(&self, toml_config: TomlConfig) -> Result<()> {
-        let config = self.prepare_vm_config(true);
-        let vm = TemplateVm::new_vm(config, toml_config)
+        let vm = TemplateVm::new_vm(self.config.clone(), toml_config, &self.state_path)
             .await
             .context("new template vm")?;
 
@@ -217,7 +172,7 @@ impl Template {
             sleep(TEMPLATE_WAIT_FOR_AGENT);
 
             vm.pause().await.context("pause template vm")?;
-            vm.save().await.context("save template vm")
+            vm.save(&self.state_path).await.context("save template vm")
         }
         .await;
 

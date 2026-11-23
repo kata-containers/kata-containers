@@ -5,13 +5,14 @@
 
 use super::HypervisorState;
 use crate::device::DeviceType;
-use crate::{Hypervisor, MemoryConfig, VcpuThreadIds};
+use crate::{Hypervisor, MemoryConfig, RestoreVmRequest, VcpuThreadIds, VmSnapshot};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, RootlessUser};
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
@@ -92,18 +93,17 @@ impl Hypervisor for CloudHypervisor {
     }
 
     async fn pause_vm(&self) -> Result<()> {
-        let inner = self.inner.write().await;
+        let mut inner = self.inner.write().await;
         inner.pause_vm().await
     }
 
     async fn resume_vm(&self) -> Result<()> {
-        let inner = self.inner.write().await;
+        let mut inner = self.inner.write().await;
         inner.resume_vm().await
     }
 
-    async fn save_vm(&self) -> Result<()> {
-        let inner = self.inner.write().await;
-        inner.save_vm().await
+    fn snapshot(&self) -> Option<&dyn VmSnapshot> {
+        Some(self)
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
@@ -224,6 +224,28 @@ impl Hypervisor for CloudHypervisor {
 
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
         Err(anyhow::anyhow!("Not yet supported"))
+    }
+}
+
+#[async_trait]
+impl VmSnapshot for CloudHypervisor {
+    async fn prepare_template_source(&self, snapshot_dir: &Path) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.prepare_template_source(snapshot_dir)
+    }
+
+    async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
+        let inner = self.inner.read().await;
+        inner.save_vm(snapshot_dir).await
+    }
+
+    async fn restore_vm(&self, request: RestoreVmRequest) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.restore_vm(request).await
+    }
+
+    fn validate_snapshot(&self, snapshot_dir: &Path) -> Result<()> {
+        CloudHypervisorInner::validate_snapshot(snapshot_dir)
     }
 }
 
