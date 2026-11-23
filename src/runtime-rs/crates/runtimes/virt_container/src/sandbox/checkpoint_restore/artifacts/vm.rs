@@ -8,8 +8,8 @@ use hypervisor::{VmResourceTopology, VmSaveResult};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    fs,
-    os::unix::fs::PermissionsExt as _,
+    fs::{self, OpenOptions},
+    os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _},
     path::{Path, PathBuf},
 };
 
@@ -260,9 +260,14 @@ impl VmArtifacts<'_> {
             return Ok(restore_dir);
         }
 
-        Self::prepare_raw_restore(source_dir, restore_dir.clone(), artifacts)
-            .await
-            .map_err(map_artifact_error)?;
+        Self::prepare_raw_restore(
+            source_dir,
+            restore_dir.clone(),
+            artifacts,
+            self.hypervisor_name == hypervisor::HYPERVISOR_QEMU,
+        )
+        .await
+        .map_err(map_artifact_error)?;
 
         Ok(restore_dir)
     }
@@ -327,23 +332,75 @@ impl VmArtifacts<'_> {
         source_dir: PathBuf,
         destination_dir: PathBuf,
         artifacts: Vec<VmCheckpointArtifact>,
+        link_qemu_state: bool,
     ) -> Result<()> {
         Self::validate_raw_artifacts(&artifacts)?;
 
         fs::create_dir(&destination_dir)?;
 
-        let copies = artifacts
-            .iter()
-            .map(|artifact| {
-                let source = artifact.inspect_source(&source_dir)?;
-                Ok(artifact.restore_copy(source, destination_dir.join(&artifact.file)))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut copies = Vec::with_capacity(artifacts.len());
+        for artifact in &artifacts {
+            let source = artifact.inspect_source(&source_dir)?;
+            let destination = destination_dir.join(&artifact.file);
+            if link_qemu_state
+                && artifact.file == "state"
+                && Self::link_readonly_state(&source, &destination, artifact.encoded_size)?
+            {
+                continue;
+            }
+            copies.push(artifact.restore_copy(source, destination));
+        }
 
         restore_private_artifacts(copies).await?;
         fs::File::open(destination_dir)?.sync_all()?;
 
         Ok(())
+    }
+
+    fn link_readonly_state(source: &Path, destination: &Path, expected_size: u64) -> Result<bool> {
+        let source_file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(source)?;
+        let original = source_file.metadata()?;
+        if !original.is_file()
+            || original.len() != expected_size
+            || original.permissions().mode() & 0o222 != 0
+        {
+            return Err(
+                ArtifactError::Invalid("QEMU state source changed before linking".into()).into(),
+            );
+        }
+
+        match fs::hard_link(source, destination) {
+            Ok(()) => {}
+            Err(err) if err.raw_os_error() == Some(libc::EXDEV) => return Ok(false),
+            Err(err) => return Err(err).context("link QEMU state for restore"),
+        }
+
+        let checked = (|| -> Result<()> {
+            let linked = fs::symlink_metadata(destination)?;
+            let current = fs::symlink_metadata(source)?;
+            if !linked.is_file()
+                || linked.len() != expected_size
+                || linked.dev() != original.dev()
+                || linked.ino() != original.ino()
+                || current.dev() != original.dev()
+                || current.ino() != original.ino()
+                || linked.permissions().mode() & 0o222 != 0
+            {
+                return Err(
+                    ArtifactError::Invalid("QEMU state changed while linking".into()).into(),
+                );
+            }
+            Ok(())
+        })();
+        if checked.is_err() {
+            let _ = fs::remove_file(destination);
+        }
+        checked?;
+
+        Ok(true)
     }
 
     fn validate_raw_save(saved: &VmSaveResult) -> Result<()> {
@@ -455,13 +512,75 @@ mod tests {
                 fs::read(restored.join("state")).unwrap(),
                 b"native VM state"
             );
+            let source = fs::metadata(state_dir.join("state")).unwrap();
+            let private = fs::metadata(restored.join("state")).unwrap();
             if backend == hypervisor::HYPERVISOR_QEMU {
+                assert_eq!((source.dev(), source.ino()), (private.dev(), private.ino()));
+                assert_eq!(source.permissions().mode() & 0o777, 0o400);
+                assert_ne!(
+                    fs::metadata(state_dir.join("memory-topology.json"))
+                        .unwrap()
+                        .ino(),
+                    fs::metadata(restored.join("memory-topology.json"))
+                        .unwrap()
+                        .ino(),
+                );
                 assert_eq!(
                     fs::read(restored.join("memory-topology.json")).unwrap(),
                     b"{}"
                 );
+                fs::remove_file(restored.join("state")).unwrap();
+                assert_eq!(
+                    fs::read(state_dir.join("state")).unwrap(),
+                    b"native VM state"
+                );
+            } else {
+                assert_ne!(source.ino(), private.ino());
             }
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn qemu_state_link_falls_back_across_filesystems() {
+        let Ok(source_dir) = tempfile::Builder::new().tempdir_in("/dev/shm") else {
+            return;
+        };
+        let destination_dir = tempfile::tempdir().unwrap();
+        if fs::metadata(source_dir.path()).unwrap().dev()
+            == fs::metadata(destination_dir.path()).unwrap().dev()
+        {
+            return;
+        }
+
+        let source = source_dir.path().join("state");
+        fs::write(&source, b"native VM state").unwrap();
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o400)).unwrap();
+
+        VmArtifacts::prepare_raw_restore(
+            source_dir.path().to_path_buf(),
+            destination_dir.path().join("private"),
+            vec![VmCheckpointArtifact {
+                file: "state".into(),
+                format: VM_ARTIFACT_RAW_FORMAT.into(),
+                logical_size: 15,
+                encoded_size: 15,
+                sha256: "a".repeat(64),
+            }],
+            true,
+        )
+        .await
+        .unwrap();
+        let copied = fs::metadata(destination_dir.path().join("private/state")).unwrap();
+        assert_ne!(fs::metadata(&source).unwrap().dev(), copied.dev());
+        assert_eq!(
+            fs::read(destination_dir.path().join("private/state")).unwrap(),
+            b"native VM state"
+        );
+        assert_eq!(
+            fs::metadata(&source).unwrap().permissions().mode() & 0o777,
+            0o400
+        );
     }
 
     #[test]
