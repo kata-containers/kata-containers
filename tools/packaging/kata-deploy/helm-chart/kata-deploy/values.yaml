@@ -373,6 +373,13 @@ containerd:
 nodeSelector: {}
 tolerations: []
 
+# Run the kata-deploy DaemonSet pod on the node's network (hostNetwork: true) instead
+# of the pod network. On a freshly provisioned node the pod network does not exist
+# until the CNI is up, so a pod on it cannot start, and the Kata runtime handler is
+# not installed, until then. On the host network it starts as soon as the node is
+# Ready. Applies to the daemonset deploymentMode.
+hostNetwork: false
+
 # Startup taints to remove from a node once Kata is installed on it and the node
 # has been labeled katacontainers.io/kata-runtime=true (the final install step).
 #
