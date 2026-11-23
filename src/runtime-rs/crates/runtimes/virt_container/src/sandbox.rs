@@ -518,12 +518,7 @@ impl VirtSandbox {
         Ok(())
     }
 
-    async fn record_stop(
-        &self,
-        exit_status: u32,
-        exited_at: std::time::SystemTime,
-        vmm_exited: bool,
-    ) {
+    async fn record_stop(&self, exit_status: u32, exited_at: SystemTime, vmm_exited: bool) {
         let mut inner = self.inner.write().await;
         // A watcher can confirm exit after stop() has already recorded a
         // synthetic status. Keep that confirmation without replacing the
@@ -1500,7 +1495,38 @@ fn oci_spec_vfio_device_paths() -> Vec<String> {
 impl Sandbox for VirtSandbox {
     #[instrument(name = "sb: start")]
     async fn start(&self) -> Result<()> {
-        self.start_sandbox().await
+        if self.sandbox_config.is_none() {
+            return Err(anyhow!("sandbox config is missing"));
+        }
+        let sandbox_config = self.sandbox_config.as_ref().unwrap();
+
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
+
+        let mut inner = self.inner.write().await;
+        if inner.state != SandboxState::Init {
+            warn!(sl!(), "sandbox is started");
+            return Ok(());
+        }
+        let started = self
+            .prepare_and_start_vm(&mut inner, sandbox_config)
+            .await?;
+        self.run_hooks_and_finalize_network(sandbox_config, started)
+            .await?;
+        self.initialize_guest(sandbox_config).await?;
+        inner.state = SandboxState::Running;
+        inner.created_at = Some(std::time::SystemTime::now());
+
+        // get and store guest details
+        self.store_guest_details()
+            .await
+            .context("failed to store guest details")?;
+
+        self.start_oom_watcher().await;
+        self.start_health_monitor();
+        self.save().await.context("save state")?;
+
+        Ok(())
     }
 
     /// Core function for starting a VM from a template

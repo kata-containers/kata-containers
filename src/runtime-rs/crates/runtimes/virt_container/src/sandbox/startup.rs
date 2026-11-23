@@ -1,42 +1,35 @@
 // Copyright (c) 2026 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
-
 use std::{sync::Arc, time::SystemTime};
 
 use agent::types::KernelModule;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use common::{
     error::is_normal_oom_shutdown_error,
     message::{Action, Message},
+    types::SandboxConfig,
     Sandbox,
 };
 use containerd_shim_protos::events::task::TaskOOM;
 use kata_sys_util::spec::load_oci_spec;
-use persist::sandbox_persist::Persist;
 use resource::network::{dan_config_path, NetworkConfig, NetworkWithNetNsConfig};
 
 use crate::UNKNOWN_EXIT_STATUS;
 
-use super::{recordable_netns_path, SandboxState, VirtSandbox};
+use super::{SandboxInner, VirtSandbox};
+
+pub(super) struct StartedVm {
+    defer_network: bool,
+}
 
 impl VirtSandbox {
-    pub(super) async fn start_sandbox(&self) -> Result<()> {
+    pub(super) async fn prepare_and_start_vm(
+        &self,
+        inner: &mut SandboxInner,
+        sandbox_config: &SandboxConfig,
+    ) -> Result<StartedVm> {
         let id = &self.sid;
-
-        if self.sandbox_config.is_none() {
-            return Err(anyhow!("sandbox config is missing"));
-        }
-        let sandbox_config = self.sandbox_config.as_ref().unwrap();
-
-        // if sandbox is not in SandboxState::Init then return,
-        // otherwise try to create sandbox
-
-        let mut inner = self.inner.write().await;
-        if inner.state != SandboxState::Init {
-            warn!(sl!(), "sandbox is started");
-            return Ok(());
-        }
         let selinux_label = load_oci_spec().ok().and_then(|spec| {
             spec.process()
                 .as_ref()
@@ -53,6 +46,7 @@ impl VirtSandbox {
             )
             .await
             .context("prepare vm");
+
         self.save_after(prepared).await?;
 
         let defer_network = self.should_defer_network().await?;
@@ -80,11 +74,11 @@ impl VirtSandbox {
             .await
             .context("start vm");
 
-        // A start that fails after spawning the VMM gets no exit watcher.
-        // stop() then needs the identity to confirm the exit, or cleanup
-        // never runs.
+        // A failed start can still have spawned a VMM.  Record its identity
+        // before propagating the error so sandbox teardown can confirm exit.
         self.remember_vmm_process().await;
         self.save_after(started).await?;
+
         info!(sl!(), "start vm");
 
         let sandbox = self.clone();
@@ -96,6 +90,15 @@ impl VirtSandbox {
         });
         inner.vmm_exit_watched = true;
 
+        Ok(StartedVm { defer_network })
+    }
+
+    pub(super) async fn run_hooks_and_finalize_network(
+        &self,
+        sandbox_config: &SandboxConfig,
+        started: StartedVm,
+    ) -> Result<()> {
+        let StartedVm { defer_network } = started;
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
             if let Some(hooks) = sandbox_config.hooks.as_ref() {
@@ -129,7 +132,7 @@ impl VirtSandbox {
             if let Some(netns_path) = &sandbox_config.network_env.netns {
                 let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
                     network_model: config.runtime.internetworking_model.clone(),
-                    netns_path: recordable_netns_path(&self.sid, netns_path)?,
+                    netns_path: super::recordable_netns_path(&self.sid, netns_path)?,
                     queues: self
                         .hypervisor
                         .hypervisor_config()
@@ -138,24 +141,18 @@ impl VirtSandbox {
                         .network_queues as usize,
                     network_created: sandbox_config.network_env.network_created,
                 });
-                // Creating the network already makes host artifacts (the
-                // TAPs of pair-based endpoints), and attaching acts on the
-                // host and the VM endpoint by endpoint, so the created
-                // endpoints must reach the saved state before the attaching
-                // starts: recovery undoes a recorded endpoint however far it
-                // got, but cannot undo one it never heard of.
                 let created = self
                     .resource_manager
                     .create_network(network_resource)
                     .await
                     .context("create the network");
                 self.save_after(created).await?;
-                let set_up = self
+                let attached = self
                     .resource_manager
                     .attach_network()
                     .await
                     .context("set up device after start vm");
-                self.save_after(set_up).await?;
+                self.save_after(attached).await?;
             }
         }
 
@@ -166,6 +163,11 @@ impl VirtSandbox {
             self.save_after(set_up).await?;
         }
 
+        Ok(())
+    }
+
+    pub(super) async fn initialize_guest(&self, sandbox_config: &SandboxConfig) -> Result<()> {
+        let id = &self.sid;
         // connect agent
         // set agent socket
         let address = self
@@ -173,10 +175,12 @@ impl VirtSandbox {
             .get_agent_socket()
             .await
             .context("get agent socket")?;
+
         self.agent
             .start(&address)
             .await
             .context(format!("connect to address {:?}", address))?;
+
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
         Self::reseed_rng(self.agent.as_ref(), &hypervisor_config).await?;
         Self::sync_time(self.agent.as_ref(), &hypervisor_config).await?;
@@ -214,14 +218,10 @@ impl VirtSandbox {
             .await
             .context("create sandbox")?;
 
-        inner.state = SandboxState::Running;
-        inner.created_at = Some(std::time::SystemTime::now());
+        Ok(())
+    }
 
-        // get and store guest details
-        self.store_guest_details()
-            .await
-            .context("failed to store guest details")?;
-
+    pub(super) async fn start_oom_watcher(&self) {
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         let cancel_token = self.cancel_token.clone();
@@ -271,10 +271,12 @@ impl VirtSandbox {
                 }
             }
         });
+    }
 
+    pub fn start_health_monitor(&self) {
         let sandbox = self.clone();
         self.monitor
-            .start(id, self.agent.clone(), move || async move {
+            .start(&self.sid, self.agent.clone(), move || async move {
                 // Report the failure now: the stop waits for the VMM to exit,
                 // which a VMM stuck in uninterruptible sleep can hold back.
                 sandbox
@@ -285,8 +287,5 @@ impl VirtSandbox {
                 }
                 sandbox.vmm_exit_confirmed.is_cancelled()
             });
-        self.save().await.context("save state")?;
-
-        Ok(())
     }
 }
