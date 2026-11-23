@@ -58,6 +58,12 @@ pub(super) fn validate_artifacts(
                 if artifact.logical_size == expected_size
                     && artifact.encoded_size == expected_size =>
             {
+                if artifact.sha256.is_none() {
+                    return Err(ArtifactError::Invalid(
+                        "Dragonball memory base digest is missing".into(),
+                    )
+                    .into());
+                }
                 memory = true
             }
             ("state", VM_ARTIFACT_RAW_FORMAT) if artifact.logical_size == artifact.encoded_size => {
@@ -183,15 +189,12 @@ pub(super) async fn prepare_restore_memory(
         .into());
     }
 
-    run_artifact_worker(move || {
-        restore_memory(
-            &source,
-            &destination,
-            artifact.logical_size,
-            &artifact.sha256,
-        )
-    })
-    .await?;
+    let logical_size = artifact.logical_size;
+    let sha256 = artifact
+        .sha256
+        .ok_or_else(|| ArtifactError::Invalid("Dragonball memory base digest is missing".into()))?;
+    run_artifact_worker(move || restore_memory(&source, &destination, logical_size, &sha256))
+        .await?;
 
     if let Some((source, destination, artifact)) = overlay {
         run_artifact_worker(move || {
@@ -417,7 +420,6 @@ pub(super) fn checkpoint_memory(
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::file_integrity;
     use super::*;
     use dragonball::snapshot::memory::verify_flat_sparse_file;
     use std::fs::OpenOptions;
@@ -709,7 +711,7 @@ mod tests {
                 format: value.format,
                 logical_size: value.logical_size,
                 encoded_size: value.encoded_size,
-                sha256: value.sha256,
+                sha256: Some(value.sha256),
             })
             .collect::<Vec<_>>();
         fs::set_permissions(state_dir.join("state"), fs::Permissions::from_mode(0o400)).unwrap();
@@ -718,7 +720,7 @@ mod tests {
             format: VM_ARTIFACT_RAW_FORMAT.into(),
             logical_size: 16,
             encoded_size: 16,
-            sha256: file_integrity(&state_dir.join("state")).unwrap().1,
+            sha256: None,
         });
         assert!(memory.exists());
         assert_eq!(artifacts.len(), 2);
@@ -759,14 +761,14 @@ mod tests {
             format: FLAT_SPARSE_FORMAT.to_string(),
             logical_size: 128 << 20,
             encoded_size: 128 << 20,
-            sha256: "a".repeat(64),
+            sha256: Some("a".repeat(64)),
         };
         let state = VmCheckpointArtifact {
             file: "state".to_string(),
             format: VM_ARTIFACT_RAW_FORMAT.to_string(),
             logical_size: 128,
             encoded_size: 128,
-            sha256: "b".repeat(64),
+            sha256: None,
         };
         super::validate_artifacts(
             VmResourceTopology {

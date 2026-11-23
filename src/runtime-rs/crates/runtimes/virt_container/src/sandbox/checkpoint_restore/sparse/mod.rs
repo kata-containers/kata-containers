@@ -5,7 +5,6 @@
 use std::fs;
 
 use anyhow::Result;
-use ring::digest::Context as Sha256Context;
 
 mod canonical;
 
@@ -20,7 +19,6 @@ const SPARSE_RECORD_SIZE: usize = 16;
 pub(super) struct SparseArtifact {
     pub(super) logical_size: u64,
     pub(super) encoded_size: u64,
-    pub(super) sha256: String,
     pub(super) non_zero_chunks: u64,
     pub(super) stats: SparseEncodeStats,
 }
@@ -39,15 +37,6 @@ pub(super) struct SparseDecodeStats {
 pub(super) struct SparseMeta {
     pub(super) encoded_size: u64,
     pub(super) logical_size: u64,
-}
-
-fn digest_hex(hasher: Sha256Context) -> String {
-    hasher
-        .finish()
-        .as_ref()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
 }
 
 fn header(logical_size: u64) -> [u8; SPARSE_HEADER_SIZE] {

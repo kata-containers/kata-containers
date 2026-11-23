@@ -314,7 +314,6 @@ impl RootfsCheckpoint<'_> {
             serial_override: block.config.serial_override.clone(),
             logical_size: encoded.logical_size,
             encoded_size: encoded.encoded_size,
-            sha256: encoded.sha256,
             immutable_lower,
         })
     }

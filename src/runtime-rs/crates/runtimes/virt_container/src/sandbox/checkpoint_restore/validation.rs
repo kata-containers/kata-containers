@@ -711,7 +711,7 @@ mod tests {
                 "is_direct": null, "discard_unmap": false, "aio": "threads",
                 "queue_size": 128, "num_queues": 1, "logical_sector_size": 512,
                 "physical_sector_size": 512, "serial_override": "",
-                "logical_size": 4096, "encoded_size": 32, "sha256": "a".repeat(64)
+                "logical_size": 4096, "encoded_size": 32
             })
         };
         let mut a = rootfs("a");
@@ -723,7 +723,7 @@ mod tests {
             "serial_override": "", "size": 4096, "sha256": "b".repeat(64)
         });
         let manifest = serde_json::from_value(serde_json::json!({
-            "format_version": 16, "hypervisor": "qemu",
+            "format_version": WORKLOAD_CHECKPOINT_FORMAT_VERSION, "hypervisor": "qemu",
             "tasks": [
                 {"checkpoint_key": "a", "task_id": "old-a"},
                 {"checkpoint_key": "b", "task_id": "old-b"}

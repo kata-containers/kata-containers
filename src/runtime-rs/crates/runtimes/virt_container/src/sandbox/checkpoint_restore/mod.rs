@@ -5,11 +5,10 @@
 use std::{
     collections::HashMap,
     fs,
-    io::{BufReader, Read},
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use common::error::Error as CommonError;
 use common::{
@@ -18,7 +17,6 @@ use common::{
     },
     SandboxCheckpointRestore,
 };
-use ring::digest::{Context as Sha256Context, SHA256};
 
 use crate::sandbox::VirtSandbox;
 
@@ -34,42 +32,6 @@ use manifest::{CheckpointManifest, WORKLOAD_CHECKPOINT_MANIFEST, WORKLOAD_CHECKP
 use restore::RestoreBoot;
 pub(super) use validation::RestoreInventoryValidation;
 use validation::{CheckpointInventoryValidation, CheckpointRequestValidation};
-
-pub(super) fn file_integrity(path: &Path) -> Result<(u64, String)> {
-    let file = fs::File::open(path)
-        .with_context(|| format!("open file for integrity check: {}", path.display()))?;
-    let size = file
-        .metadata()
-        .with_context(|| format!("inspect file for integrity check: {}", path.display()))?
-        .len();
-
-    let mut reader = BufReader::new(file);
-    let mut hasher = Sha256Context::new(&SHA256);
-
-    // This helper runs from Tokio worker tasks whose stacks are small.
-    // Keep the large I/O buffer on the heap to avoid aborting a deeply
-    // nested Restore call with a worker-stack overflow.
-    let mut buffer = vec![0_u8; 1024 * 1024];
-    loop {
-        let count = reader
-            .read(&mut buffer)
-            .with_context(|| format!("read file for integrity check: {}", path.display()))?;
-        if count == 0 {
-            break;
-        }
-
-        hasher.update(&buffer[..count]);
-    }
-
-    let digest = hasher.finish();
-    let sha256 = digest
-        .as_ref()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-
-    Ok((size, sha256))
-}
 
 fn checkpoint_files(path: &str) -> Result<(PathBuf, PathBuf)> {
     let root = Path::new(path);
@@ -192,22 +154,5 @@ impl SandboxCheckpointRestore for VirtSandbox {
 
     async fn restore_sandbox(&self, req: &RestoreSandboxRequest) -> Result<RestoreSandboxInfo> {
         self.restore_workload(req).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn integrity_error_keeps_file_path_and_io_cause() {
-        let directory = tempfile::tempdir().unwrap();
-        let missing = directory.path().join("missing-artifact");
-        let err = file_integrity(&missing).unwrap_err();
-        assert!(err.to_string().contains(missing.to_str().unwrap()));
-        assert_eq!(
-            err.downcast_ref::<std::io::Error>().unwrap().kind(),
-            std::io::ErrorKind::NotFound
-        );
     }
 }

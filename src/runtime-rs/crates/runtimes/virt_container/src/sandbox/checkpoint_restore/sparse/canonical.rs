@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    data_chunks, digest_hex, header, read_chunk, write_all_at, SparseArtifact, SparseDecodeStats,
+    data_chunks, header, read_chunk, write_all_at, SparseArtifact, SparseDecodeStats,
     SparseEncodeStats, SparseMeta, SPARSE_CHUNK_SIZE, SPARSE_HEADER_SIZE, SPARSE_MAGIC,
     SPARSE_RECORD_SIZE,
 };
 use anyhow::{anyhow, Result};
 use common::error::Error as CommonError;
-use ring::digest::{Context as Sha256Context, SHA256};
 use std::{
     convert::TryInto,
     fs::{self, OpenOptions},
@@ -75,7 +74,6 @@ fn encode_sparse_file(source: &mut fs::File, destination: &Path) -> Result<Spars
         ));
     }
 
-    let mut hasher = Sha256Context::new(&SHA256);
     let sparse_header = header(logical_size);
 
     let mut output = OpenOptions::new()
@@ -86,7 +84,6 @@ fn encode_sparse_file(source: &mut fs::File, destination: &Path) -> Result<Spars
         .open(destination)?;
 
     output.write_all(&sparse_header)?;
-    hasher.update(&sparse_header);
 
     let chunk_count = logical_size.div_ceil(SPARSE_CHUNK_SIZE as u64);
     let chunks =
@@ -119,8 +116,6 @@ fn encode_sparse_file(source: &mut fs::File, destination: &Path) -> Result<Spars
         record[8..12].copy_from_slice(&(length as u32).to_le_bytes());
         output.write_all(&record)?;
         output.write_all(&buffer[..length])?;
-        hasher.update(&record);
-        hasher.update(&buffer[..length]);
         non_zero_chunks += 1;
 
         written_bytes = written_bytes
@@ -135,7 +130,6 @@ fn encode_sparse_file(source: &mut fs::File, destination: &Path) -> Result<Spars
     Ok(SparseArtifact {
         logical_size,
         encoded_size,
-        sha256: digest_hex(hasher),
         non_zero_chunks,
         stats: SparseEncodeStats {
             candidate_chunks,
@@ -341,8 +335,8 @@ mod tests {
         file.write_all(&[2]).unwrap();
 
         let sparse_info = encode_sparse_artifact(&sparse, &encoded_sparse).unwrap();
-        let file_info = encode_sparse_file(&mut file, &encoded_file).unwrap();
-        let dense_info = encode_sparse_artifact(&dense, &encoded_dense).unwrap();
+        encode_sparse_file(&mut file, &encoded_file).unwrap();
+        encode_sparse_artifact(&dense, &encoded_dense).unwrap();
         assert_eq!(
             fs::read(&encoded_sparse).unwrap(),
             fs::read(&encoded_dense).unwrap()
@@ -351,8 +345,6 @@ mod tests {
             fs::read(&encoded_sparse).unwrap(),
             fs::read(&encoded_file).unwrap()
         );
-        assert_eq!(sparse_info.sha256, dense_info.sha256);
-        assert_eq!(sparse_info.sha256, file_info.sha256);
         assert_eq!(sparse_info.non_zero_chunks, 2);
         assert_eq!(
             sparse_info.stats.written_bytes,

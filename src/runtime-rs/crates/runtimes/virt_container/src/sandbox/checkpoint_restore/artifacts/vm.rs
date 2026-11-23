@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::super::{file_integrity, manifest::WORKLOAD_CHECKPOINT_STATE};
+use super::super::manifest::WORKLOAD_CHECKPOINT_STATE;
 use super::{restore_private_artifacts, ArtifactError, RestoreArtifact};
 
 pub(super) const VM_ARTIFACT_RAW_FORMAT: &str = "raw";
@@ -35,7 +35,8 @@ pub(in crate::sandbox::checkpoint_restore) struct VmCheckpointArtifact {
     pub(in crate::sandbox::checkpoint_restore) format: String,
     pub(in crate::sandbox::checkpoint_restore) logical_size: u64,
     pub(in crate::sandbox::checkpoint_restore) encoded_size: u64,
-    pub(in crate::sandbox::checkpoint_restore) sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::sandbox::checkpoint_restore) sha256: Option<String>,
 }
 
 impl VmCheckpointArtifact {
@@ -146,16 +147,16 @@ impl VmCheckpointArtifact {
                     format: encoded.format.clone(),
                     logical_size: encoded.logical_size,
                     encoded_size: encoded.encoded_size,
-                    sha256: encoded.sha256.clone(),
+                    sha256: Some(encoded.sha256.clone()),
                 }
             } else {
-                let (size, sha256) = file_integrity(&path)?;
+                let size = metadata.len();
                 Self {
                     file,
                     format: VM_ARTIFACT_RAW_FORMAT.into(),
                     logical_size: size,
                     encoded_size: size,
-                    sha256,
+                    sha256: None,
                 }
             };
             artifacts.push(artifact);
@@ -272,7 +273,7 @@ impl VmArtifacts<'_> {
         Ok(restore_dir)
     }
 
-    /// Check names, uniqueness, sizes, and digests without interpreting backend formats.
+    /// Check artifact names, uniqueness and sizes before backend-specific validation.
     pub(super) fn validate_metadata(artifacts: &[VmCheckpointArtifact]) -> Result<()> {
         if artifacts.is_empty() {
             return Err(
@@ -297,13 +298,18 @@ impl VmArtifacts<'_> {
                 );
             }
 
-            if artifact.logical_size == 0
-                || artifact.encoded_size == 0
-                || artifact.sha256.len() != 64
-                || !artifact.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
-            {
+            if artifact.sha256.as_ref().is_some_and(|digest| {
+                digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            }) {
                 return Err(ArtifactError::Invalid(
-                    "checkpoint VM artifact has invalid size or SHA-256".into(),
+                    "checkpoint VM artifact has an invalid digest".into(),
+                )
+                .into());
+            }
+
+            if artifact.logical_size == 0 || artifact.encoded_size == 0 {
+                return Err(ArtifactError::Invalid(
+                    "checkpoint VM artifact has invalid size".into(),
                 )
                 .into());
             }
@@ -485,6 +491,12 @@ mod tests {
                 finalize_checkpoint_artifacts(backend, VmSaveResult::default(), state_dir.clone())
                     .await
                     .unwrap();
+            assert!(artifacts.iter().all(|artifact| {
+                serde_json::to_value(artifact)
+                    .unwrap()
+                    .get("sha256")
+                    .is_none()
+            }));
             let inventory = VmArtifacts {
                 hypervisor_name: backend,
                 artifacts,
@@ -565,7 +577,7 @@ mod tests {
                 format: VM_ARTIFACT_RAW_FORMAT.into(),
                 logical_size: 15,
                 encoded_size: 15,
-                sha256: "a".repeat(64),
+                sha256: None,
             }],
             true,
         )
@@ -590,7 +602,7 @@ mod tests {
             format: "native-format".into(),
             logical_size: 128,
             encoded_size: 64,
-            sha256: "a".repeat(64),
+            sha256: None,
         };
         let native = VmCheckpointArtifact::from_manifest(std::slice::from_ref(&original)).unwrap();
         assert_eq!(native[0].file, "memory");
@@ -632,7 +644,7 @@ mod tests {
             format: "kata-sparse-raw-v1".into(),
             logical_size: 128,
             encoded_size: 128,
-            sha256: "a".repeat(64),
+            sha256: None,
         };
         assert!(VmArtifacts::validate_raw_artifacts(std::slice::from_ref(&artifact)).is_err());
         artifact.format = VM_ARTIFACT_RAW_FORMAT.into();

@@ -15,7 +15,7 @@ use crate::sandbox::checkpoint_restore::artifacts::vm::VmCheckpointArtifact;
 
 use super::checkpoint_files;
 
-pub(super) const WORKLOAD_CHECKPOINT_FORMAT_VERSION: u32 = 2;
+pub(super) const WORKLOAD_CHECKPOINT_FORMAT_VERSION: u32 = 3;
 pub(super) const WORKLOAD_CHECKPOINT_MANIFEST: &str = "manifest.json";
 pub(super) const WORKLOAD_CHECKPOINT_STATE: &str = "vm";
 pub(super) const WORKLOAD_CHECKPOINT_STORAGE: &str = "storage";
@@ -47,7 +47,6 @@ pub(super) struct CheckpointRootfs {
     pub(super) serial_override: String,
     pub(super) logical_size: u64,
     pub(super) encoded_size: u64,
-    pub(super) sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) immutable_lower: Option<ImmutableRootfs>,
 }
