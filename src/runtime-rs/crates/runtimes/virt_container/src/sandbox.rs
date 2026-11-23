@@ -242,6 +242,7 @@ pub struct VirtSandbox {
     // sampling the configuration there would launder the reloaded file's
     // current value back into the record the cleanup exists to trust.
     restored_keep_abnormal: Option<bool>,
+    oom_watcher_started: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -471,6 +472,8 @@ impl VirtSandbox {
             vmm_exit_confirmed: CancellationToken::new(),
             vmm_process: Arc::new(RwLock::new(None)),
             restored_keep_abnormal: None,
+
+            oom_watcher_started: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -1554,7 +1557,6 @@ impl Sandbox for VirtSandbox {
         inner.state = SandboxState::Running;
         inner.created_at = Some(SystemTime::now());
 
-        self.start_oom_watcher().await;
         self.start_health_monitor();
 
         Ok(())
@@ -1686,6 +1688,10 @@ impl Sandbox for VirtSandbox {
         // Both teardown paths reach this, and the loser would ask an already
         // reaped hypervisor to stop.
         let _stopping = self.stopping.lock().await;
+
+        // Stop health probes before intentional VMM teardown, including when
+        // the exit watcher has already recorded the sandbox as stopped.
+        self.monitor.stop().await;
 
         let (state, vmm_start_attempted, vmm_exit_watched) = {
             let sandbox_inner = self.inner.read().await;
@@ -2015,6 +2021,8 @@ impl Sandbox for VirtSandbox {
         process_id: ContainerProcess,
         shim_pid: u32,
     ) -> Result<()> {
+        self.ensure_oom_watcher().await;
+
         let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
         let pending_exit = is_sandbox_container.then(|| PendingExit::new(&self.exit_pending));
         // Keep Shutdown behind the sandbox exit even while the agent wait is
@@ -2329,6 +2337,8 @@ impl Persist for VirtSandbox {
             created_netns: sandbox_state.created_netns,
             saving_state: Arc::new(Mutex::new(())),
             restored_keep_abnormal: sandbox_state.keep_abnormal,
+
+            oom_watcher_started: Arc::new(AtomicBool::new(false)),
         })
     }
 }

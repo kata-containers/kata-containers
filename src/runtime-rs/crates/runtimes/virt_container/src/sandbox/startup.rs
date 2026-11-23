@@ -1,7 +1,10 @@
 // Copyright (c) 2026 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    sync::{atomic::Ordering, Arc},
+    time::SystemTime,
+};
 
 use agent::types::KernelModule;
 use anyhow::{Context, Result};
@@ -221,7 +224,15 @@ impl VirtSandbox {
         Ok(())
     }
 
-    pub(super) async fn start_oom_watcher(&self) {
+    pub async fn ensure_oom_watcher(&self) {
+        self.start_oom_watcher().await;
+    }
+
+    async fn start_oom_watcher(&self) {
+        if self.oom_watcher_started.swap(true, Ordering::AcqRel) {
+            return;
+        }
+
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         let cancel_token = self.cancel_token.clone();
@@ -261,10 +272,9 @@ impl VirtSandbox {
                                 if is_normal_oom_shutdown_error(&err) {
                                     info!(sl!(), "oom watcher exit on sandbox shutdown: {:?}", err);
                                     break;
-                                } else {
-                                    warn!(sl!(), "failed to get oom event error {:?}", err);
-                                    continue;
                                 }
+                                warn!(sl!(), "failed to get oom event error {:?}", err);
+                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                             }
                         }
                     }
