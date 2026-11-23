@@ -9,8 +9,8 @@ RUN apk update && apk --no-cache add gpg gpg-agent coreutils bash curl make \
  	gcc g++ pkgconf libselinux-dev gpg-agent
 
 # Install ORAS CLI for tarball caching
-ARG ORAS_VERSION=1.3.0
-RUN ARCH=$(uname -m) && \
+ARG ORAS_VERSION
+RUN test -n "${ORAS_VERSION}" && ARCH=$(uname -m) && \
     case "${ARCH}" in \
         x86_64) ORAS_ARCH="amd64" ;; \
         aarch64) ORAS_ARCH="arm64" ;; \

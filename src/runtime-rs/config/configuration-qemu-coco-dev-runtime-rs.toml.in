@@ -19,9 +19,9 @@ image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
+#   - erofs (default)
 rootfs_type = @DEFROOTFSTYPE@
 
 # Block storage driver to be used for the VM rootfs is backed
@@ -98,6 +98,11 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 # comma-separated list of cpu features to pass to the cpu
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
+
+# CPU model
+# Guest CPU model, QEMU -cpu. Empty means host. A named QEMU CPU model (see
+# `qemu-system-<arch> -cpu help`) gives every guest the same CPU on every host generation.
+cpu_model = ""
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
@@ -372,8 +377,8 @@ disable_nesting_checks = false
 #
 # nvdimm is not supported when `confidential_guest = true`.
 #
-# Default is false
-disable_image_nvdimm = false
+# Default is true
+disable_image_nvdimm = true
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU

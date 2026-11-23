@@ -948,7 +948,7 @@ has_hadolint_or_install()
 	fi
 
 	if [[ -z "${has_linter}" ]]; then
-		local download_url="${linter_url}/releases/download/v${linter_version}/hadolint-Linux-x86_64"
+		local download_url="${linter_url}/releases/download/v${linter_version}/hadolint-linux-x86_64"
 		info "Installing ${linter_cmd} ${linter_version} at ${linter_dest}"
 
 		curl -sfL "${download_url}" -o "${linter_dest}" || \

@@ -17,11 +17,7 @@ use tokio::sync::{watch, RwLock};
 use super::container::Container;
 use super::io::{BinaryLogger, ContainerIo, PassfdIo, ShimIo};
 use super::logger_with_process;
-
-/// Exit status returned when containerd/shim is unable to determine
-/// the actual exit status of a process. This matches containerd's
-/// UnknownExitStatus constant.
-const UNKNOWN_EXIT_STATUS: i32 = 255;
+use crate::UNKNOWN_EXIT_STATUS;
 
 pub type ProcessWatcher = (
     Option<watch::Receiver<bool>>,

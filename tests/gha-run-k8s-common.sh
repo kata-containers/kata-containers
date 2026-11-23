@@ -885,7 +885,7 @@ function delete_test_cluster_namespace() {
 
 function delete_test_runners(){
 	echo "Delete test scripts"
-	local scripts_names=( "run_kubernetes_tests.sh" "bats" )
+	local scripts_names=( "run_kubernetes_tests.sh" "run_kubernetes_nv_tests.sh" "bats" )
 	for script_name in "${scripts_names[@]}"; do
 		pids=$(pgrep -f "${script_name}")
 		if [[ -n "${pids}" ]]; then

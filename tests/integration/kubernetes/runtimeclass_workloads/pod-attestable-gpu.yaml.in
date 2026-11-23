@@ -22,7 +22,7 @@ spec:
         - |
           set -e
           attempts=60
-          while ! curl -fsS http://127.0.0.1:8006/cdh/resource/default/aa/key; do
+          while ! curl -fsS --write-out '\n' http://127.0.0.1:8006/cdh/resource/default/aa/key; do
             attempts=$((attempts-1))
             [ "$attempts" -gt 0 ] || exit 1
             sleep 1

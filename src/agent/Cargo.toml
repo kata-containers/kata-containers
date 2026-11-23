@@ -8,7 +8,7 @@ version = "0.1.0"
 [dependencies]
 capctl.workspace = true
 const_format.workspace = true
-derivative.workspace = true
+derive-where.workspace = true
 lazy_static.workspace = true
 libc.workspace = true
 nix.workspace = true

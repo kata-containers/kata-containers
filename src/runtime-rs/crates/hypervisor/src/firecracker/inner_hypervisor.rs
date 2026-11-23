@@ -27,6 +27,10 @@ impl FcInner {
     ) -> Result<()> {
         debug!(sl(), "Preparing Firecracker");
 
+        // Also check direct callers that did not run configuration validation.
+        // Reject invalid pool sizes before creating mounts or spawning the VMM.
+        self.drive_slot_range(false)?;
+
         self.id = id.to_string();
 
         if !self.config.jailer_path.is_empty() {
@@ -181,18 +185,12 @@ impl FcInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         debug!(sl(), "Cleanup");
-        self.cleanup_resource();
+        self.cleanup_resource()?;
 
-        std::fs::remove_dir_all(self.vm_path.as_str())
-            .inspect_err(|err| {
-                error!(
-                    sl(),
-                    "failed to remove dir all for {} with error: {:?}", &self.vm_path, &err
-                )
-            })
-            .ok();
-
-        Ok(())
+        // A removal that failed must fail the step: the state is only kept
+        // for a retry while the cleanup reports what it could not do.
+        crate::utils::remove_vm_dir(&self.id, &self.vm_path)
+            .with_context(|| format!("remove the VM directory {}", self.vm_path))
     }
 
     pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
@@ -225,6 +223,25 @@ impl FcInner {
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn invalid_read_only_slots_fail_before_vm_setup() {
+        for slots in [8, u32::MAX] {
+            let (sender, _receiver) = mpsc::channel(1);
+            let mut fc = FcInner::new(sender);
+            fc.config.blockdev_info.block_device_read_only_slots = slots;
+
+            let error = fc
+                .prepare_vm("invalid-slots", None, None)
+                .await
+                .unwrap_err();
+            assert!(error.to_string().contains("block_device_read_only_slots"));
+            assert!(fc.id.is_empty());
+            assert!(fc.vm_path.is_empty());
+            assert!(fc.fc_process.lock().await.is_none());
+            assert_eq!(fc.state, VmmState::NotReady);
+        }
+    }
 
     #[tokio::test]
     async fn test_unsupported_hypervisor_metrics_are_empty() {

@@ -5,7 +5,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: direct-volume-sparse
+  name: direct-volume
 spec:
   runtimeClassName: kata
   restartPolicy: Never

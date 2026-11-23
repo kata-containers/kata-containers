@@ -18,16 +18,20 @@ use http_body_util::{BodyExt, Full};
 use hyper::{body::Incoming, Method, Request, Response};
 use hyperlocal::Uri;
 use kata_sys_util::mount;
-use kata_types::config::hypervisor::RateLimiterConfig;
+use kata_types::config::hypervisor::{
+    FirecrackerConfig, RateLimiterConfig, FIRECRACKER_DISK_POOL_SIZE,
+};
 use nix::mount::MsFlags;
 use serde_json::json;
+use std::collections::HashSet;
 use tokio::{fs, fs::File};
 
 const REQUEST_RETRY: u32 = 500;
 const FC_KERNEL: &str = "vmlinux";
 const FC_ROOT_FS: &str = "rootfs";
 const DRIVE_PREFIX: &str = "drive";
-const DISK_POOL_SIZE: u32 = 6;
+// Slot zero is the guest OS root disk. Attachment slots start at one.
+const DRIVE_POOL_END: u64 = FIRECRACKER_DISK_POOL_SIZE as u64 + 1;
 
 impl FcInner {
     pub(crate) fn get_resource(&self, src: &str, dst: &str) -> Result<String> {
@@ -147,7 +151,8 @@ impl FcInner {
 
         // We create some placeholder drives to be used for patching block devices while the vmm is
         // running, as firecracker does not support device hotplug.
-        for i in 1..DISK_POOL_SIZE {
+        let readonly_slots = self.drive_slot_range(true)?;
+        for i in 1..DRIVE_POOL_END {
             let full_path_name = format!("{abs_path}/drive{i}");
 
             let _ = File::create(&full_path_name)
@@ -162,7 +167,7 @@ impl FcInner {
                 "drive_id": format!("drive{}",i),
                 "path_on_host": format!("{}/drive{}", path_on_host, i),
                 "is_root_device": false,
-                "is_read_only": false
+                "is_read_only": readonly_slots.contains(&i)
             })
             .to_string();
 
@@ -206,6 +211,57 @@ impl FcInner {
         )
         .await?;
         Ok(())
+    }
+
+    pub(crate) fn drive_slot_range(&self, is_readonly: bool) -> Result<std::ops::Range<u64>> {
+        let read_only_slots = self.config.blockdev_info.block_device_read_only_slots;
+        FirecrackerConfig::validate_read_only_slots(read_only_slots)?;
+        let boundary = DRIVE_POOL_END - u64::from(read_only_slots);
+        Ok(if is_readonly {
+            boundary..DRIVE_POOL_END
+        } else {
+            1..boundary
+        })
+    }
+
+    pub(crate) fn drive_slot_for_block_device(
+        &mut self,
+        block_index: u64,
+        is_readonly: bool,
+    ) -> Result<u64> {
+        if block_index == 0 {
+            return Ok(0);
+        }
+
+        let range = self.drive_slot_range(is_readonly)?;
+        let slots = if is_readonly {
+            &mut self.readonly_drive_slots
+        } else {
+            &mut self.writable_drive_slots
+        };
+        if let Some(slot) = slots.get(&block_index) {
+            return Ok(*slot);
+        }
+
+        let used_slots = slots.values().copied().collect::<HashSet<_>>();
+        // Keep the logical index when it is free and has the requested mode.
+        let slot = Some(block_index)
+            .filter(|slot| range.contains(slot) && !used_slots.contains(slot))
+            .or_else(|| range.into_iter().find(|slot| !used_slots.contains(slot)))
+            .ok_or_else(|| {
+                anyhow!("no Firecracker block-device slots remain for read-only={is_readonly}")
+            })?;
+        slots.insert(block_index, slot);
+        Ok(slot)
+    }
+
+    // Removal only releases an existing assignment; it must never allocate one.
+    pub(crate) fn release_block_drive_slot(&mut self, block_index: u64, is_readonly: bool) {
+        if is_readonly {
+            self.readonly_drive_slots.remove(&block_index);
+        } else {
+            self.writable_drive_slots.remove(&block_index);
+        }
     }
 
     pub(crate) async fn add_net_device(
@@ -309,26 +365,23 @@ impl FcInner {
             REQUEST_RETRY
         ))
     }
-    pub(crate) fn cleanup_resource(&self) {
+    pub(crate) fn cleanup_resource(&self) -> Result<()> {
         if self.jailed {
-            self.umount_jail_resource(FC_KERNEL).ok();
-            self.umount_jail_resource(FC_ROOT_FS).ok();
+            // A failed unjail must fail the step too: the directory removal
+            // that follows must never walk over something still mounted.
+            self.umount_jail_resource(FC_KERNEL)?;
+            self.umount_jail_resource(FC_ROOT_FS)?;
 
-            for i in 1..DISK_POOL_SIZE {
-                self.umount_jail_resource(&[DRIVE_PREFIX, &i.to_string()].concat())
-                    .ok();
+            for i in 1..DRIVE_POOL_END {
+                self.umount_jail_resource(&[DRIVE_PREFIX, &i.to_string()].concat())?;
             }
 
-            self.umount_jail_resource("").ok();
+            self.umount_jail_resource("")?;
         }
-        std::fs::remove_dir_all(self.vm_path.as_str())
-            .inspect_err(|err| {
-                error!(
-                    sl(),
-                    "failed to remove dir all for {} with error: {:?}", &self.vm_path, &err
-                )
-            })
-            .ok();
+        // The VM directory itself is removed by cleanup() through
+        // remove_vm_dir(): an unjailed Firecracker shares it with the
+        // sandbox state, which has to outlive the rest of the cleanup.
+        Ok(())
     }
 
     pub(crate) fn umount_jail_resource(&self, jailed_path: &str) -> Result<()> {
@@ -344,7 +397,61 @@ impl FcInner {
             ]
             .join("/"),
         };
-        nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", path))
+        // Lazy, and tolerant of a resource that is not mounted any more: a
+        // retried cleanup meets its own earlier work.
+        match nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH) {
+            Ok(()) | Err(nix::errno::Errno::EINVAL | nix::errno::Errno::ENOENT) => Ok(()),
+            Err(e) => Err(e).with_context(|| format!("umount path {}", path)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drive_slots_are_partitioned_reusable_and_bounded() {
+        for readonly_count in 0..FIRECRACKER_DISK_POOL_SIZE {
+            let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+            let mut fc = FcInner::new(sender);
+            fc.config.blockdev_info.block_device_read_only_slots = readonly_count;
+            let mut allocated = HashSet::new();
+
+            for is_readonly in [true, false] {
+                let range = fc.drive_slot_range(is_readonly).unwrap();
+                let capacity = range.end - range.start;
+                // Logical indices outside the physical pool must be remapped.
+                for index in 10..10 + capacity {
+                    let slot = fc.drive_slot_for_block_device(index, is_readonly).unwrap();
+                    assert!(range.contains(&slot));
+                    assert!(allocated.insert(slot));
+                    assert_eq!(
+                        fc.drive_slot_for_block_device(index, is_readonly).unwrap(),
+                        slot
+                    );
+                }
+                assert!(fc.drive_slot_for_block_device(100, is_readonly).is_err());
+                if capacity > 0 {
+                    let slot = fc.drive_slot_for_block_device(10, is_readonly).unwrap();
+                    fc.release_block_drive_slot(10, is_readonly);
+                    assert_eq!(
+                        fc.drive_slot_for_block_device(100, is_readonly).unwrap(),
+                        slot
+                    );
+                }
+            }
+            assert_eq!(allocated.len(), FIRECRACKER_DISK_POOL_SIZE as usize);
+        }
+    }
+
+    #[test]
+    fn writable_slots_preserve_available_indices() {
+        let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+        let mut fc = FcInner::new(sender);
+        assert_eq!(fc.drive_slot_for_block_device(1, false).unwrap(), 1);
+        assert_eq!(fc.drive_slot_for_block_device(2, false).unwrap(), 2);
+        assert_eq!(fc.drive_slot_for_block_device(8, false).unwrap(), 3);
+        assert_eq!(fc.drive_slot_for_block_device(3, true).unwrap(), 8);
     }
 }

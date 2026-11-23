@@ -1613,6 +1613,9 @@ impl Qmp {
 
         let (vfio_device_add, early_return) = match driver {
             "vfio-ap" => {
+                // Like PCI hot-plug, AP hot-plug does not pass an iommufd object or
+                // fds over QMP, so `sysfsdev` is used for both legacy-group and
+                // IOMMUFD-cdev discovered devices.
                 vfio_args.insert("sysfsdev".to_owned(), sysfs_path.to_string().into());
                 let device_add = qmp::device_add {
                     driver: driver.to_string(),

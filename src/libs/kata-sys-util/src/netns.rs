@@ -69,6 +69,65 @@ pub fn generate_netns_name() -> String {
     )
 }
 
+/// Bind-mount the network namespace `netns` (for example /proc/<pid>/ns/net)
+/// onto `pin_path`, the way `ip netns` pins namespaces: the namespace stays
+/// reachable there after the process it came from is gone. An earlier pin at
+/// the path is replaced rather than stacked on; remove_netns() releases it.
+pub fn pin_netns(netns: &Path, pin_path: &Path) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    // The nsfs inode identifies the namespace, and it is taken before
+    // anything else: a source that is already gone must not cost whatever
+    // pin is there.
+    let src =
+        std::fs::metadata(netns).with_context(|| format!("stat the netns {}", netns.display()))?;
+    // A pin that already holds this namespace is kept: replacing it would
+    // leave a moment with no pin at all.
+    if is_pinned_netns(pin_path) {
+        if let Ok(cur) = std::fs::metadata(pin_path) {
+            if (cur.dev(), cur.ino()) == (src.dev(), src.ino()) {
+                return Ok(());
+            }
+        }
+    }
+    remove_netns(pin_path)?;
+    File::create(pin_path)
+        .with_context(|| format!("create the netns pin {}", pin_path.display()))?;
+    if let Err(e) = nix::mount::mount(
+        Some(netns),
+        pin_path,
+        None::<&str>,
+        nix::mount::MsFlags::MS_BIND,
+        None::<&str>,
+    ) {
+        // A plain file is not a pin: nothing must mistake it for a
+        // namespace later.
+        let _ = std::fs::remove_file(pin_path);
+        return Err(e)
+            .with_context(|| format!("bind {} onto {}", netns.display(), pin_path.display()));
+    }
+    Ok(())
+}
+
+// from linux.git/include/uapi/linux/magic.h
+const NSFS_MAGIC: crate::fs::FsType = 0x6e736673;
+
+/// Whether the path names a process's network namespace through /proc: a
+/// reference that holds only while that process lives, never across a shim
+/// death, and that pid reuse can point at somebody else entirely.
+pub fn is_proc_pid_netns(path: &str) -> bool {
+    path.strip_prefix("/proc/")
+        .and_then(|rest| rest.strip_suffix("/ns/net"))
+        .is_some_and(|pid| !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Whether the path holds a pinned network namespace: an nsfs file, the way
+/// pin_netns() leaves one. A missing path, or a plain file left by an
+/// interrupted pin, is not one.
+pub fn is_pinned_netns(path: &Path) -> bool {
+    crate::fs::has_fs_magic(path, NSFS_MAGIC)
+}
+
 /// Unmount a network namespace and remove its file, ignoring an absent mount or file.
 ///
 /// The caller must verify that Kata owns the namespace before calling this function;
@@ -112,6 +171,45 @@ mod tests {
         assert_ne!(name1, name2);
         assert_ne!(name2, name3);
         assert_ne!(name1, name3);
+    }
+
+    #[test]
+    fn test_is_proc_pid_netns() {
+        assert!(is_proc_pid_netns("/proc/42/ns/net"));
+        assert!(!is_proc_pid_netns("/run/netns/cni-1"));
+        assert!(!is_proc_pid_netns("/proc/self/ns/net"));
+        assert!(!is_proc_pid_netns("/proc//ns/net"));
+    }
+
+    #[test]
+    fn test_pin_netns() {
+        skip_if_not_root!();
+
+        let dir = tempfile::tempdir().unwrap();
+        let pin = dir.path().join("netns-pin");
+        assert!(!is_pinned_netns(&pin));
+        pin_netns(Path::new("/proc/self/ns/net"), &pin).unwrap();
+        assert!(is_pinned_netns(&pin));
+
+        // The pin is a namespace of its own to enter, and a second pin of
+        // the same namespace keeps the mount instead of stacking another.
+        drop(NetnsGuard::new(pin.to_str().unwrap()).unwrap());
+        pin_netns(Path::new("/proc/self/ns/net"), &pin).unwrap();
+
+        // A pin whose source is gone fails without costing the pin that is
+        // there.
+        pin_netns(Path::new("/proc/0/ns/net"), &pin).unwrap_err();
+        assert!(is_pinned_netns(&pin));
+
+        remove_netns(&pin).unwrap();
+        assert!(!pin.exists());
+
+        // A failed pin leaves no file behind to be mistaken for a
+        // namespace, and a plain file is not a pin.
+        pin_netns(Path::new("/proc/0/ns/net"), &pin).unwrap_err();
+        assert!(!pin.exists());
+        std::fs::File::create(&pin).unwrap();
+        assert!(!is_pinned_netns(&pin));
     }
 
     #[test]

@@ -9,3 +9,4 @@ pillow==13.0.0
 click==8.3.3
 idna==3.15
 pymdown-extensions==11.0.1
+certifi==2026.10.18

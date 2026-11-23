@@ -2,7 +2,8 @@
 
 Kata Containers can run the virtual machine monitor (VMM) as an unprivileged
 user instead of `root`. Each sandbox gets a throwaway user and group of its own
-(`kata-123`), the VMM is started as that user, and the VMM's runtime files live
+(`kata-1a2b3c4d-123`, carrying the start of the sandbox id), the VMM is started
+as that user, and the VMM's runtime files live
 under `/run/user/[uid]/` where only that user can reach them.
 
 !!! info "What this covers, and what it does not"

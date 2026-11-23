@@ -132,26 +132,39 @@ pub async fn wait_for_uevent(
     // The key of the watchers map is the device we are interested in.
     // Note this is done inside the lock, not to miss any events from the
     // global udev listener.
-    let (tx, rx) = tokio::sync::oneshot::channel::<Uevent>();
+    let (tx, mut rx) = tokio::sync::oneshot::channel::<Uevent>();
     let idx = sb.uevent_watchers.len();
     sb.uevent_watchers.push(Some((Box::new(matcher), tx)));
+    // Request deadlines can drop this future while it is waiting for the device.
+    let _watcher_guard = scopeguard::guard((sandbox.clone(), idx), |(sandbox, idx)| {
+        tokio::spawn(async move {
+            let mut sb = sandbox.lock().await;
+            if let Some(watcher) = sb.uevent_watchers.get_mut(idx) {
+                watcher.take();
+            }
+        });
+    });
     drop(sb); // unlock
 
     info!(sl(), "{}: waiting on channel", logprefix);
 
     let hotplug_timeout = AGENT_CONFIG.hotplug_timeout;
 
-    let uev = match tokio::time::timeout(hotplug_timeout, rx).await {
+    let uev = match tokio::time::timeout(hotplug_timeout, &mut rx).await {
         Ok(v) => v?,
         Err(_) => {
             let mut sb = sandbox.lock().await;
-            let matcher = sb.uevent_watchers[idx].take().unwrap().0;
+            if let Some((matcher, _)) = sb.uevent_watchers[idx].take() {
+                return Err(anyhow!(
+                    "Timeout after {:?} waiting for uevent {:?}",
+                    hotplug_timeout,
+                    matcher
+                ));
+            }
+            drop(sb);
 
-            return Err(anyhow!(
-                "Timeout after {:?} waiting for uevent {:?}",
-                hotplug_timeout,
-                matcher
-            ));
+            // Delivery won the sandbox lock while timeout cleanup was waiting.
+            rx.await?
         }
     };
 
@@ -260,6 +273,113 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_timeout_cleanup_after_event_delivery() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let waiting_sandbox = Arc::clone(&sandbox);
+        let waiter =
+            tokio::spawn(async move { wait_for_uevent(&waiting_sandbox, AlwaysMatch()).await });
+
+        let mut sb = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                let sb = sandbox.lock().await;
+                if !sb.uevent_watchers.is_empty() {
+                    break sb;
+                }
+                drop(sb);
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("waiter did not register");
+
+        // Keep timeout cleanup waiting for the lock, then simulate process_add's delivery.
+        tokio::time::sleep(AGENT_CONFIG.hotplug_timeout + std::time::Duration::from_millis(50))
+            .await;
+        let event = Uevent {
+            action: U_EVENT_ACTION_ADD.to_string(),
+            devpath: "/test/timeout-race".to_string(),
+            ..Default::default()
+        };
+        let (_, sender) = sb.uevent_watchers[0].take().unwrap();
+        let _ = sender.send(event.clone());
+        drop(sb);
+
+        let received = tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+            .await
+            .expect("waiter did not finish")
+            .expect("waiter panicked")
+            .expect("delivered event was lost");
+        assert_eq!(received, event);
+        assert!(sandbox.lock().await.uevent_watchers[0].is_none());
+    }
+
+    #[tokio::test]
+    async fn test_timeout_cleans_watcher_and_allows_retry() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        let err = wait_for_uevent(&sandbox, AlwaysMatch()).await.unwrap_err();
+        assert!(err.to_string().contains("waiting for uevent AlwaysMatch"));
+        assert!(err.to_string().starts_with("Timeout after "));
+        {
+            let sb = sandbox.lock().await;
+            assert!(sb.uevent_watchers[0].is_none());
+        }
+
+        let event = Uevent {
+            action: U_EVENT_ACTION_ADD.to_string(),
+            devpath: "/test/late-add".to_string(),
+            ..Default::default()
+        };
+        event.process_add(&logger, &sandbox).await;
+        assert_eq!(
+            wait_for_uevent(&sandbox, AlwaysMatch()).await.unwrap(),
+            event
+        );
+        assert_eq!(sandbox.lock().await.uevent_watchers.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_cancelled_waiter_cleanup_after_event_delivery() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let mut wait = Box::pin(wait_for_uevent(&sandbox, AlwaysMatch()));
+        assert!(futures::poll!(wait.as_mut()).is_pending());
+
+        let event = Uevent {
+            action: U_EVENT_ACTION_ADD.to_string(),
+            devpath: "/test/late-add".to_string(),
+            ..Default::default()
+        };
+        // Hold the lock so delivery consumes the watcher before cancellation cleanup.
+        let mut sb = sandbox.lock().await;
+        drop(wait);
+        let (_, sender) = sb.uevent_watchers[0].take().unwrap();
+        assert_eq!(sender.send(event.clone()).unwrap_err(), event);
+        drop(sb);
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if Arc::strong_count(&sandbox) == 1 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("cancellation cleanup did not finish");
+        assert!(sandbox.lock().await.uevent_watchers[0].is_none());
+
+        event.process_add(&logger, &sandbox).await;
+        assert_eq!(
+            wait_for_uevent(&sandbox, AlwaysMatch()).await.unwrap(),
+            event
+        );
+        assert_eq!(sandbox.lock().await.uevent_watchers.len(), 1);
+    }
+
+    #[tokio::test]
     async fn test_wait_for_uevent() {
         let uev = Uevent {
             action: crate::linux_abi::U_EVENT_ACTION_ADD.to_string(),
@@ -291,5 +411,48 @@ mod tests {
         let uev2 = wait_for_uevent(&sandbox, matcher).await;
         assert!(uev2.is_ok());
         assert_eq!(uev2.unwrap(), uev);
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_uevent_cancelled() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            wait_for_uevent(&sandbox, AlwaysMatch())
+        )
+        .await
+        .is_err());
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if sandbox.lock().await.uevent_watchers[0].is_none() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        let uev = Uevent {
+            action: U_EVENT_ACTION_ADD.to_string(),
+            devpath: "/test/cancelled".to_string(),
+            ..Default::default()
+        };
+        uev.process(&logger, &sandbox).await;
+        assert!(sandbox.lock().await.uevent_watchers[0].is_none());
+        assert_eq!(wait_for_uevent(&sandbox, AlwaysMatch()).await.unwrap(), uev);
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_uevent_channel_closed() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let mut wait = Box::pin(wait_for_uevent(&sandbox, AlwaysMatch()));
+        assert!(futures::poll!(wait.as_mut()).is_pending());
+
+        sandbox.lock().await.uevent_watchers.clear();
+        assert!(wait.await.is_err());
     }
 }

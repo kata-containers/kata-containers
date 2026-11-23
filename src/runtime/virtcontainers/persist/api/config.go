@@ -43,6 +43,10 @@ type HypervisorConfig struct {
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
 	BlockDeviceDriver string
 
+	// BlockDeviceReadOnlySlots reserves the last N Firecracker disk slots as
+	// read-only before boot. Zero disables read-only attachments.
+	BlockDeviceReadOnlySlots uint32
+
 	// HypervisorMachineType specifies the type of machine being
 	// emulated.
 	HypervisorMachineType string

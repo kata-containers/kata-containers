@@ -39,7 +39,12 @@ pub fn partition_uuids(
     );
 
     let entries = &mbr[446..510];
-    if entries.chunks_exact(16).any(|entry| entry[4] == 0xee) {
+    if entries
+        .as_chunks::<16>()
+        .0
+        .iter()
+        .any(|entry| entry[4] == 0xee)
+    {
         let disk = gpt::GptConfig::new()
             .logical_block_size(gpt::disk::LogicalBlockSize::Lb512)
             .open(path)
@@ -56,7 +61,7 @@ pub fn partition_uuids(
     // are attached. Fail before starting the VM instead of risking a collision.
     ensure!(signature != 0, "rootfs image has no DOS disk signature");
     let mut uuids = BTreeMap::new();
-    for (index, entry) in entries.chunks_exact(16).enumerate() {
+    for (index, entry) in entries.as_chunks::<16>().0.iter().enumerate() {
         if entry[4] != 0 && entry[12..16] != [0; 4] {
             let number = index as u32 + 1;
             uuids.insert(number, format!("{signature:08x}-{number:02x}"));

@@ -13,6 +13,7 @@ pub mod utils;
 use std::{
     collections::{hash_map::RandomState, HashMap},
     fmt,
+    path::PathBuf,
 };
 
 use crate::SandboxNetworkEnv;
@@ -181,6 +182,14 @@ pub struct SandboxConfig {
     pub hooks: Option<oci::Hooks>,
     pub state: runtime_spec::State,
     pub shm_size: u64,
+    /// Path of the configuration file the sandbox is created with, set once
+    /// try_init() has loaded it. The sandbox records it in state.json so that
+    /// the shim's `delete` subcommand, which runs in a fresh process after
+    /// the shim died and never sees the annotations or the containerd handler
+    /// options that selected the file, cleans up with the same configuration:
+    /// the same hypervisor, rootless settings and sandbox bind mounts.
+    /// `None` until the configuration is loaded.
+    pub config_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]

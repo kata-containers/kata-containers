@@ -31,7 +31,7 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
         let mut vcpu: f32 = 0.0;
 
         let annotation = Annotation::new(an.clone());
-        let (period, quota, memory) =
+        let (period, quota, shares, memory) =
             get_sizing_info(annotation).context("failed to get sizing info")?;
         let mut cpu = oci::LinuxCpu::default();
         cpu.set_period(Some(period));
@@ -41,6 +41,11 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
         // LinuxContainerCpuResources::try_from to generate our vcpu number
         if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
             vcpu = get_nr_vcpu(&cpu_resource);
+        }
+
+        // Exclusive CPUs come with quota -1; a zero quota (BestEffort) must not use shares.
+        if quota < 0 && vcpu == 0.0 && shares > 0 {
+            vcpu = (shares as f64 / 1024.0).ceil() as f32;
         }
         let mem_mb = convert_memory_to_mb(memory);
 
@@ -226,25 +231,31 @@ fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
 }
 
 // from the upper layer runtime's annotation (e.g. crio, k8s), get the *cpu quota,
-// cpu period and memory limit* for a sandbox/container
-fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
+// cpu period, cpu shares and memory limit* for a sandbox/container
+fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, u64, i64)> {
     // since we are *adding* our result to the config, a value of 0 will cause no change
     // and if the annotation is not assigned (but static resource management is), we will
     // log a *warning* to fill that with zero value
     let period = annotation.get_sandbox_cpu_period();
     let quota = annotation.get_sandbox_cpu_quota();
+    let shares = annotation.get_sandbox_cpu_shares();
     let memory = annotation.get_sandbox_mem();
 
     // CRI-O states the same sizing as one JSON annotation and sets none of the
     // keys read above, so a sandbox under it would otherwise be sized from the
     // configuration defaults alone.
-    if period == 0 && quota == 0 && memory == 0 {
+    if period == 0 && quota == 0 && shares == 0 && memory == 0 {
         if let Some(crio) = annotation.get_crio_pod_linux_resources() {
-            return Ok((crio.cpu_period, crio.cpu_quota, crio.memory_limit_in_bytes));
+            return Ok((
+                crio.cpu_period,
+                crio.cpu_quota,
+                crio.cpu_shares,
+                crio.memory_limit_in_bytes,
+            ));
         }
     }
 
-    Ok((period, quota, memory))
+    Ok((period, quota, shares, memory))
 }
 
 #[cfg(test)]
@@ -647,6 +658,100 @@ mod tests {
         let initial_size = InitialSize::try_from(&spec).unwrap();
         assert_eq!(initial_size.vcpu, 0.0);
         assert_eq!(initial_size.mem_mb, 0);
+    }
+
+    #[rstest]
+    #[case::exclusive_cpus(Some("-1"), "4096", 4.0)]
+    #[case::exclusive_cpus_partial_shares(Some("-1"), "2560", 3.0)]
+    #[case::quota_set_ignores_shares(Some("150000"), "4096", 2.0)]
+    #[case::best_effort_floor_shares(Some("0"), "2", 0.0)]
+    #[case::quota_absent(None, "4096", 0.0)]
+    fn test_initial_size_sandbox_cpu_shares_fallback(
+        #[case] quota: Option<&str>,
+        #[case] shares: &str,
+        #[case] expected_vcpu: f32,
+    ) {
+        let mut annotations = HashMap::from([
+            (
+                cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                cri_containerd::SANDBOX.to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                "100000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                shares.to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                (512 * MIB).to_string(),
+            ),
+        ]);
+        if let Some(quota) = quota {
+            annotations.insert(
+                cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                quota.to_string(),
+            );
+        }
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(annotations));
+
+        let initial_size = InitialSize::try_from(&spec).unwrap();
+        assert_eq!(initial_size.vcpu.ceil(), expected_vcpu);
+        assert_eq!(initial_size.mem_mb, 512);
+    }
+
+    #[test]
+    fn test_initial_size_sandbox_crio_cpu_shares_fallback() {
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(HashMap::from([
+            (
+                crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                crio::SANDBOX.to_string(),
+            ),
+            (
+                crio::POD_LINUX_RESOURCES_KEY.to_string(),
+                r#"{"cpu_period":100000,"cpu_quota":-1,"cpu_shares":4096,
+                    "memory_limit_in_bytes":536870912}"#
+                    .to_string(),
+            ),
+        ])));
+
+        let initial_size = InitialSize::try_from(&spec).unwrap();
+        assert_eq!(initial_size.vcpu, 4.0);
+        assert_eq!(initial_size.mem_mb, 512);
+    }
+
+    #[test]
+    fn test_setup_config_static_exclusive_cpus_sizes_from_shares() {
+        let ann = HashMap::from([
+            (
+                cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                "100000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                "-1".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                "4096".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                (1024 * MIB).to_string(),
+            ),
+        ]);
+        let mut config = make_config(1.0, 0.0, 8, 256, 0, 4096, true);
+        let mut mgr = InitialSizeManager::new_from(&ann).unwrap();
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus, 4.0);
+        assert_eq!(hv.cpu_info.default_maxvcpus, 4);
+        assert_eq!(hv.memory_info.default_memory, 1024);
     }
 
     #[test]

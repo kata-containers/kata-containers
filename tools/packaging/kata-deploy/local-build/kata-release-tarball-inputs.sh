@@ -51,6 +51,7 @@ kata-static-rootfs-image.tar.zst
 kata-static-rootfs-initrd-confidential.tar.zst
 kata-static-rootfs-initrd.tar.zst
 kata-static-shim-v2-rust.tar.zst
+kata-static-td-shim.tar.zst
 kata-static-virtiofsd.tar.zst
 EOF
 			;;

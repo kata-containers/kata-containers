@@ -404,6 +404,21 @@ policy_data := {
 }
 ```
 
+## `RemoveContainerRequest`
+
+If policy state contains a binding for `input.container_id`, removal returns a
+patch deleting that binding. If there is no binding, removal is allowed with an
+empty patch, so the agent can clean up a failed create without changing another
+container's policy state. Repeated removal is also allowed.
+
+The agent evaluates this policy using a typed `RemoveContainerRequest`, whose
+`container_id` is a protobuf string. An omitted ID defaults to an empty string.
+The policy allows an empty ID with an empty patch; the agent's container lookup
+rejects it because container creation requires a valid, non-empty ID.
+
+This policy decision permits the agent's cleanup handler to run; it does not
+guarantee that guest cleanup succeeds.
+
 ## `WriteStreamRequest`
 
 By default, `WriteStream` requests are rejected by the auto-generated Policy. A user can allow the Kata Containers Shim to send input to the `stdin` of Guest VM containers by allowing these requests using a modified [`genpolicy-settings.json`](genpolicy-settings.json) - e.g.,

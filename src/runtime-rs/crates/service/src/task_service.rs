@@ -10,7 +10,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::types::{TaskRequest, TaskResponse};
+use common::{
+    error::Error as RuntimeError,
+    types::{TaskRequest, TaskResponse},
+};
 use containerd_shim_protos::{api, shim_async};
 use ttrpc::{self, r#async::TtrpcContext};
 
@@ -45,10 +48,25 @@ impl TaskService {
             .handler
             .handler_task_message(r)
             .await
-            .map_err(|err| ttrpc::Error::Others(format!("failed to handle message {err:?}")))?;
+            .map_err(task_error_to_ttrpc)?;
         debug!(logger, "<==== task service {:?}", &resp);
         resp.try_into()
             .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {err:?}")))
+    }
+}
+
+fn task_error_to_ttrpc(err: anyhow::Error) -> ttrpc::Error {
+    match err.downcast_ref::<RuntimeError>() {
+        // The agent's NOT_FOUND response becomes ProcessAlreadyTerminated.
+        Some(
+            RuntimeError::ContainerNotFound(_)
+            | RuntimeError::ProcessNotFound(_)
+            | RuntimeError::ProcessAlreadyTerminated,
+        ) => ttrpc::Error::RpcStatus(ttrpc::get_status(
+            ttrpc::Code::NOT_FOUND,
+            format!("{err:#}"),
+        )),
+        _ => ttrpc::Error::Others(format!("failed to handle message {err:?}")),
     }
 }
 
@@ -81,3 +99,49 @@ impl_service!(
     shutdown | api::ShutdownRequest | api::Empty,
     close_io | api::CloseIORequest | api::Empty
 );
+
+#[cfg(test)]
+mod tests {
+    use common::types::ContainerProcess;
+
+    use super::*;
+
+    #[test]
+    fn missing_tasks_keep_not_found_status() {
+        let process = ContainerProcess::new("container", "exec").unwrap();
+        for err in [
+            RuntimeError::ContainerNotFound("container".to_owned()),
+            RuntimeError::ProcessNotFound(process),
+            RuntimeError::ProcessAlreadyTerminated,
+        ] {
+            let message = format!("handler TaskRequest: kill process: {err}");
+            let err = anyhow::Error::new(err)
+                .context("kill process")
+                .context("handler TaskRequest");
+
+            match task_error_to_ttrpc(err) {
+                ttrpc::Error::RpcStatus(status) => {
+                    assert_eq!(status.code(), ttrpc::Code::NOT_FOUND);
+                    assert_eq!(status.message(), message);
+                }
+                err => panic!("expected NOT_FOUND, got {:?}", err),
+            }
+        }
+    }
+
+    #[test]
+    fn other_task_errors_keep_generic_status() {
+        for err in [
+            anyhow::anyhow!("failed to find container container"),
+            anyhow::Error::new(RuntimeError::AgentConnectionClosed),
+            anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+        ] {
+            let err = err.context("kill process");
+            let message = format!("failed to handle message {err:?}");
+            match task_error_to_ttrpc(err) {
+                ttrpc::Error::Others(actual) => assert_eq!(actual, message),
+                err => panic!("expected the generic error, got {:?}", err),
+            }
+        }
+    }
+}

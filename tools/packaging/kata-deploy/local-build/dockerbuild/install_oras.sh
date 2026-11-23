@@ -24,7 +24,10 @@ function get_installed_oras_version() {
 	oras version | grep Version | sed -e s/Version:// | tr -d '[:blank:]'
 }
 
-oras_required_version="v1.2.0"
+# Docker stages versions.yaml separately; direct callers use the repository copy.
+script_dir=$(dirname "$(readlink -f "$0")")
+versions_file="${1:-${script_dir}/../../../../../versions.yaml}"
+oras_required_version="v$(yq -r '.externals.oras.version' "${versions_file}")"
 if command -v oras; then
 	if [[ "${oras_required_version}" == "v$(get_installed_oras_version)" ]]; then
 		echo "ORAS is already installed in the system"
@@ -46,7 +49,7 @@ fi
 oras_tarball="oras_${oras_required_version#v}_linux_${arch}.tar.gz"
 
 echo "Downloading ORAS ${oras_required_version}"
-curl -OL "https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}"
+curl --fail -OL "https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}"
 
 echo "Installing ORAS to ${install_dest}"
 run_as_root mkdir -p "${install_dest}"

@@ -18,18 +18,21 @@ use hypervisor::{
         DeviceConfig, DeviceType,
     },
     utils::uses_native_ccw_bus,
-    vfio_device::is_vfio_ap_device,
-    BlockConfigModern, BlockDeviceAio, Hypervisor, VfioConfig,
+    vfio_device::{is_iommufd_devices_cdev_path, is_vfio_ap_device, VfioDeviceBase},
+    BlockConfigModern, BlockDeviceAio, Hypervisor,
 };
 use kata_types::mount::{kata_guest_sandbox_dir, Mount, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR};
 use kata_types::{
     config::{hypervisor::TopologyConfigInfo, TomlConfig},
-    device::DRIVER_VFIO_AP_COLD_TYPE,
+    device::{
+        DRIVER_VFIO_AP_COLD_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE,
+        DRIVER_VFIO_PCI_TYPE,
+    },
     mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
 };
 use libc::NUD_PERMANENT;
 use oci::{Linux, LinuxCpu, LinuxResources};
-use oci_spec::runtime::{self as oci, LinuxDeviceType};
+use oci_spec::runtime::{self as oci, LinuxDevice, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
 use std::path::{Path, PathBuf};
 use tokio::{
@@ -59,6 +62,10 @@ pub(crate) struct ResourceManagerInner {
     hypervisor: Arc<dyn Hypervisor>,
     device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
+    /// Whether the registered network's endpoints were attached. A created
+    /// network is registered before its attach so a save can record it, and
+    /// the network rescan must not take such a network for a configured one.
+    network_applied: bool,
     share_fs: Option<Arc<dyn ShareFs>>,
     nydus_share_fs: Option<Arc<dyn NydusShareFs>>,
 
@@ -69,6 +76,10 @@ pub(crate) struct ResourceManagerInner {
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
     cleanup_steps: Mutex<ResourceCleanupSteps>,
+    /// Whether cleanup has started. The network is created by a task that
+    /// outlives a cancelled caller, so a late creation could otherwise
+    /// register a network after the cleanup that would have removed it.
+    cleaned: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Default)]
@@ -97,7 +108,6 @@ impl ResourceManagerInner {
             .context("failed to create device manager")?;
         let device_manager = Arc::new(RwLock::new(dev_manager));
 
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
         let mem_resource = MemResource::new(init_size_manager)?;
         let swap_resource = if hypervisor
@@ -136,6 +146,27 @@ impl ResourceManagerInner {
         } else {
             None
         };
+        // Of everything created here, only the swap resource and the cgroups
+        // touch the host: the swap resource makes its runtime directory, the
+        // cgroups are created and the shim is moved into them. Neither is
+        // recorded until the sandbox exists and saves its state, so a failure
+        // after either leaves it behind. Create the cgroups last, when nothing
+        // else can fail, and remove the swap directory if they fail.
+        let cgroups_resource = match CgroupsResource::new(sid, &toml_config) {
+            Ok(cgroups_resource) => cgroups_resource,
+            Err(e) => {
+                if let Some(swap) = &swap_resource {
+                    if let Err(clean_err) = swap.clean().await {
+                        warn!(
+                            sl!(),
+                            "failed to remove the swap directory after the cgroups failed: {:#}",
+                            clean_err
+                        );
+                    }
+                }
+                return Err(e);
+            }
+        };
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
@@ -143,6 +174,7 @@ impl ResourceManagerInner {
             hypervisor,
             device_manager,
             network: None,
+            network_applied: false,
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -152,6 +184,7 @@ impl ResourceManagerInner {
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            cleaned: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -195,10 +228,14 @@ impl ResourceManagerInner {
                         self.nydus_share_fs = instance.nydus_share_fs;
                     };
                 }
-                ResourceConfig::Network(c) => {
-                    self.handle_network(c)
-                        .await
-                        .context("failed to handle network")?;
+                ResourceConfig::Network(_) => {
+                    // Nothing sends the network through this batch: the
+                    // sandbox creates it, saves the state and only then
+                    // attaches, via create_network() and attach_network().
+                    // Handling it here would skip the save in between.
+                    return Err(anyhow!(
+                        "the network is set up through create_network and attach_network"
+                    ));
                 }
                 ResourceConfig::VmRootfs(r) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
@@ -249,7 +286,47 @@ impl ResourceManagerInner {
         Ok(())
     }
 
-    pub async fn handle_network(&mut self, network_config: NetworkConfig) -> Result<()> {
+    /// Create the network and register it as the sandbox's, without
+    /// attaching anything. Construction already makes host artifacts, the
+    /// TAP of every pair-based endpoint among them, so the caller must put
+    /// the created network in the saved state before attach_network() acts
+    /// on the host and the VM. A construction that failed part way is
+    /// registered too, with the endpoints it got to build: its error is
+    /// surfaced by the attach, after those made it into a save.
+    pub async fn create_network(&mut self, network_config: NetworkConfig) -> Result<()> {
+        // A caller that outlived its cancellation must not build a network
+        // the finished cleanup can no longer remove. Refusing here, before
+        // anything is made on the host, is always safe.
+        if self.cleaned.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(anyhow!("the sandbox cleanup has started"));
+        }
+        // A created network whose attach did not finish holds the only
+        // record of endpoints that may already have acted on the host, a
+        // NIC moved to vfio-pci among them. Replacing it would drop them
+        // from the next save, and a fresh scan cannot rediscover a device
+        // that no longer shows up as a netdev; only the sandbox cleanup
+        // releases them. A retried rescan fails here instead.
+        if let Some(network) = self.network.as_ref() {
+            if !self.network_applied {
+                return Err(anyhow!(
+                    "a created network with unattached endpoints is already registered"
+                ));
+            }
+            // An applied network is replaced by the rescans, which build a
+            // fresh scan of the same namespace. The same argument holds for
+            // what it recorded: a passed-through NIC sits on vfio-pci and
+            // no rescan finds it again, so the network holding such a
+            // record stays.
+            if network
+                .save()
+                .await
+                .is_some_and(|states| !states.is_empty())
+            {
+                return Err(anyhow!(
+                    "the registered network records passed-through devices; it cannot be replaced"
+                ));
+            }
+        }
         // 1. When using Rust asynchronous programming, we use .await to
         //    allow other task to run instead of waiting for the completion of the current task.
         // 2. Also, when handling the pod network, we need to set the shim threads
@@ -262,21 +339,39 @@ impl ResourceManagerInner {
         //    In Rust Async, if the current thread is taken over by other task, the netns is dropped on another thread,
         //    but it is not in netns. So, the previous thread would still remain in the pod netns.
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
-        // tokio runtime, and block the task on it.
+        // tokio runtime, and block the task on it. The caller awaits that
+        // thread's result instead of joining it; see on_network_thread().
         let device_manager = self.device_manager.clone();
-        let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
+        let network = on_network_thread(move || {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
-            let d = rt
-                .block_on(network::new(&network_config, device_manager))
-                .context("new network")?;
-            rt.block_on(d.setup()).context("setup network")?;
-            Ok(d)
+            rt.block_on(network::new(&network_config, device_manager))
+                .context("new network")
         })
-        .join()
-        .map_err(|e| anyhow!("{:?}", e))
-        .context("Couldn't join on the associated thread")?
-        .context("failed to set up network")?;
+        .await?;
         self.network = Some(network);
+        self.network_applied = false;
+        Ok(())
+    }
+
+    /// Attach the created network's endpoints. The network stays registered
+    /// when attaching fails: the state records how far the attaching got and
+    /// the cleanup detaches that much. Runs on its own thread for the netns
+    /// reasons create_network() explains. A retried attach resumes after the
+    /// endpoints the failed one finished; a construction error fails every
+    /// attempt, so a partially constructed network is never attached.
+    pub async fn attach_network(&mut self) -> Result<()> {
+        let network = self
+            .network
+            .as_ref()
+            .ok_or_else(|| anyhow!("no network was created"))?
+            .clone();
+        on_network_thread(move || {
+            let rt = runtime::Builder::new_current_thread().enable_io().build()?;
+            rt.block_on(network.setup()).context("setup network")
+        })
+        .await
+        .context("failed to set up network")?;
+        self.network_applied = true;
         Ok(())
     }
 
@@ -408,8 +503,14 @@ impl ResourceManagerInner {
             || dan_config_path(&self.toml_config, &self.sid).exists()
     }
 
-    /// Check whether the network already has interfaces configured.
+    /// Check whether the network already has interfaces configured. A
+    /// created network whose attach never finished does not count, whatever
+    /// its construction scanned: taking it for a configured one would skip
+    /// every later rescan and leave the guest without its interfaces.
     pub async fn network_has_interfaces(&self) -> Result<bool> {
+        if !self.network_applied {
+            return Ok(false);
+        }
         match self.network.as_ref() {
             Some(n) => Ok(!n
                 .interfaces()
@@ -420,28 +521,14 @@ impl ResourceManagerInner {
         }
     }
 
-    /// Perform a single network scan attempt.  Returns `Some(network)` when
-    /// new interfaces were found and need to be applied to the guest agent,
-    /// `None` when no interfaces were found yet (caller should retry).
-    /// The caller is responsible for calling `apply_network_to_agent` on
-    /// the returned network **after** releasing the write lock.
-    pub async fn rescan_network_once(
-        &mut self,
-        net_cfg: NetworkWithNetNsConfig,
-    ) -> Result<Option<Arc<dyn Network>>> {
-        self.handle_network(NetworkConfig::NetNs(net_cfg))
-            .await
-            .context("rescan handle network")?;
+    /// The sandbox's network, when one was created or restored.
+    pub fn network(&self) -> Option<Arc<dyn Network>> {
+        self.network.clone()
+    }
 
-        let n = self
-            .network
-            .as_ref()
-            .ok_or_else(|| anyhow!("network missing after rescan setup"))?;
-        let ifs = n.interfaces().await.context("rescan get interfaces")?;
-        if !ifs.is_empty() {
-            return Ok(Some(Arc::clone(n)));
-        }
-        Ok(None)
+    /// Whether a created network is still waiting for its attach.
+    pub fn network_pending_attach(&self) -> bool {
+        self.network.is_some() && !self.network_applied
     }
 
     pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
@@ -506,6 +593,20 @@ impl ResourceManagerInner {
                 annotations,
             )
             .await
+    }
+
+    /// Record the host artifacts creating a container from `spec` will make,
+    /// before any of them exists. Returns the record generation a save would
+    /// cover, or 0 when nothing waits for one.
+    pub async fn register_container_intents(&self, spec: &oci::Spec) -> Result<u64> {
+        self.volume_resource
+            .register_ephemeral_disks(&self.toml_config.runtime.emptydir_mode, spec)
+            .await
+    }
+
+    /// Confirm that a save wrote the state out covering `generation`.
+    pub async fn container_intents_saved(&self, generation: u64) {
+        self.volume_resource.ephemeral_disks_saved(generation).await
     }
 
     pub async fn handler_volumes(
@@ -642,10 +743,7 @@ impl ResourceManagerInner {
                         continue;
                     }
 
-                    let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-                        "vfio" => "vfio-pci",
-                        _ => "vfio-pci-gk",
-                    };
+                    let vfio_mode = vfio_pci_driver(&self.toml_config.runtime.vfio_mode);
 
                     // If this VFIO char device belongs to a cold-plugged
                     // physical endpoint, it is already present in QEMU.  We
@@ -695,41 +793,12 @@ impl ResourceManagerInner {
                         continue;
                     }
 
-                    // VFIO-AP devices have no PCIe BDF, so cold_plug_bdfs above
-                    // cannot catch them.  If this device was registered in the
-                    // device manager during cold-plug (prepare_coldplug_raw_vfio_devices
-                    // or CDI), retrieve its APQN list and build the agent device
-                    // directly — calling do_handle_device on an already-present
-                    // device would attempt a QMP device_add and fail.
-                    if is_vfio_ap_device(Path::new(&host_path)) {
-                        if let Some(ap_devs) =
-                            find_cold_plugged_vfio_ap(&self.device_manager, &host_path).await
-                        {
-                            let container_path = d.path().display().to_string();
-                            let group_num = d
-                                .path()
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or_default()
-                                .to_string();
-                            let agent_device = Device {
-                                id: group_num,
-                                container_path,
-                                field_type: DRIVER_VFIO_AP_COLD_TYPE.to_string(),
-                                options: ap_devs,
-                                ..Default::default()
-                            };
-                            info!(
-                                sl!(),
-                                "vfio-ap cold-plugged agent device: {:?}", agent_device
-                            );
-                            devices.push(ContainerDevice {
-                                device_info: None,
-                                device: agent_device,
-                            });
-                            continue;
-                        }
-                        // Not registered as cold-plugged — fall through to do_handle_device.
+                    if let Some(container_device) = self
+                        .handle_vfio_ap_device(&host_path, d, device_ids)
+                        .await?
+                    {
+                        devices.push(container_device);
+                        continue;
                     }
 
                     let bus_type = if uses_native_ccw_bus() {
@@ -737,7 +806,7 @@ impl ResourceManagerInner {
                     } else {
                         "pci".to_string()
                     };
-                    let dev_info = DeviceConfig::VfioCfg(VfioConfig {
+                    let dev_info = DeviceConfig::VfioModernCfg(VfioDeviceBase {
                         host_path,
                         dev_type: "c".to_string(),
                         bus_type: bus_type.clone(),
@@ -749,8 +818,7 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle device")?;
 
-                    if let DeviceType::VfioModern(vfio_dev) = device_info.clone() {
-                        info!(sl!(), "device info: {:?}", vfio_dev.lock().await);
+                    if let DeviceType::VfioModern(vfio_dev) = device_info {
                         let vfio_device = vfio_dev.lock().await;
                         device_ids.push(vfio_device.device_id.clone());
 
@@ -761,27 +829,28 @@ impl ResourceManagerInner {
                             .unwrap_or_default()
                             .to_string();
 
-                        let guest_pci_path = vfio_device
-                            .config
-                            .guest_pci_path
-                            .clone()
-                            .context("VFIO device has no guest PCI path assigned")?;
-                        let host_bdf = vfio_device.device.primary.addr.to_string();
-                        info!(
-                            sl!(),
-                            "vfio device guest pci path: {:?}, host bdf: {:?}",
-                            guest_pci_path,
-                            &host_bdf
-                        );
-
-                        // vfio mode: vfio-pci and vfio-pci-gk for x86_64
-                        // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
-                        // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
-                        let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-                            "vfio" => "vfio-pci".to_string(),
-                            _ => "vfio-pci-gk".to_string(),
+                        let is_ap = vfio_device.device.device_type
+                            == hypervisor::vfio_device::VfioDeviceType::MediatedAp;
+                        let vfio_mode = if is_ap {
+                            DRIVER_VFIO_AP_TYPE.to_string()
+                        } else {
+                            vfio_pci_driver(&self.toml_config.runtime.vfio_mode).to_string()
                         };
-                        let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
+                        let device_options = if is_ap {
+                            vfio_device.config.ap_devices.clone()
+                        } else if !vfio_device.device_options.is_empty() {
+                            sort_options_by_pcipath(vfio_device.device_options.clone())
+                        } else {
+                            let guest_pci_path = vfio_device
+                                .config
+                                .guest_pci_path
+                                .clone()
+                                .context("VFIO device has no guest PCI path assigned")?;
+                            vec![format!(
+                                "{}={}",
+                                vfio_device.device.primary.addr, guest_pci_path
+                            )]
+                        };
                         // The Go runtime sets the device Id to
                         // filepath.Base(dev.ContainerPath), e.g. "vfio0".
                         // The agent policy validates this with:
@@ -794,7 +863,7 @@ impl ResourceManagerInner {
                             ..Default::default()
                         };
 
-                        let device_info = Some(DeviceInfo {
+                        let device_info = (!is_ap).then(|| DeviceInfo {
                             vendor_id: vfio_device
                                 .device
                                 .primary
@@ -822,58 +891,7 @@ impl ResourceManagerInner {
                             device: agent_device,
                         });
                     } else {
-                        // vfio mode: vfio-pci and vfio-pci-gk for x86_64
-                        // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
-                        // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
-                        // - vfio-ap, devices appear as VFIO character devices under /dev/vfio in container for ccw devices.
-                        let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-                            "vfio" => {
-                                if bus_type == "ccw" {
-                                    "vfio-ap".to_string()
-                                } else {
-                                    "vfio-pci".to_string()
-                                }
-                            }
-                            _ => "vfio-pci-gk".to_string(),
-                        };
-
-                        // create agent device
-                        if let DeviceType::Vfio(device) = device_info {
-                            device_ids.push(device.device_id.clone());
-                            let device_options = sort_options_by_pcipath(device.device_options);
-                            let group_num = d
-                                .path()
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or_default()
-                                .to_string();
-                            let agent_device = Device {
-                                id: group_num,
-                                container_path: d.path().display().to_string().clone(),
-                                field_type: vfio_mode,
-                                options: device_options,
-                                ..Default::default()
-                            };
-
-                            let device_info = if let Some(device_vendor_class) =
-                                &device.devices.first().unwrap().device_vendor_class
-                            {
-                                let vendor_class = device_vendor_class
-                                    .get_vendor_class_id()
-                                    .context("get vendor class failed")?;
-                                Some(DeviceInfo {
-                                    vendor_id: vendor_class.0.to_owned(),
-                                    class_id: vendor_class.1.to_owned(),
-                                    host_path: d.path().clone(),
-                                })
-                            } else {
-                                None
-                            };
-                            devices.push(ContainerDevice {
-                                device_info,
-                                device: agent_device,
-                            });
-                        }
+                        return Err(anyhow!("unexpected non-modern VFIO device"));
                     }
                 }
                 _ => {
@@ -906,10 +924,7 @@ impl ResourceManagerInner {
             })
             .collect();
 
-        let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-            "vfio" => "vfio-pci",
-            _ => "vfio-pci-gk",
-        };
+        let vfio_mode = vfio_pci_driver(&self.toml_config.runtime.vfio_mode);
 
         for (host_bdf, maybe_guest_path) in &cold_plug_bdfs {
             if seen_bdfs.contains(host_bdf) {
@@ -964,9 +979,115 @@ impl ResourceManagerInner {
         Ok(devices)
     }
 
+    /// Handles VFIO-AP (s390x Crypto Adapter) devices.
+    ///
+    /// Returns `Ok(Some(ContainerDevice))` if the device is a VFIO-AP cold-plugged
+    /// device or an IOMMUFD cdev hot-plugged device, or `Ok(None)` if the device
+    /// is not an AP device or is a legacy group node that should fall through
+    /// to the standard `VfioCfg` hot-plug handler.
+    async fn handle_vfio_ap_device(
+        &self,
+        host_path: &str,
+        d: &LinuxDevice,
+        device_ids: &mut Vec<String>,
+    ) -> Result<Option<ContainerDevice>> {
+        if !is_vfio_ap_device(Path::new(host_path)) {
+            return Ok(None);
+        }
+
+        // VFIO-AP devices have no PCIe BDF, so cold_plug_bdfs cannot catch them.
+        // If this device was registered in the device manager during cold-plug
+        // (prepare_coldplug_raw_vfio_devices or CDI), retrieve its APQN list and
+        // build the agent device directly — calling do_handle_device on an
+        // already-present device would attempt a QMP device_add and fail.
+        if let Some(ap_devs) = find_cold_plugged_vfio_ap(&self.device_manager, host_path).await {
+            let container_path = d.path().display().to_string();
+            let group_num = d
+                .path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            let agent_device = Device {
+                id: group_num,
+                container_path,
+                field_type: DRIVER_VFIO_AP_COLD_TYPE.to_string(),
+                options: ap_devs,
+                ..Default::default()
+            };
+            info!(
+                sl!(),
+                "vfio-ap cold-plugged agent device: {:?}", agent_device
+            );
+            return Ok(Some(ContainerDevice {
+                device_info: None,
+                device: agent_device,
+            }));
+        }
+
+        // Not registered as cold-plugged: hot-plug it.
+        //
+        // An IOMMUFD cdev (/dev/vfio/devices/vfioN) has no IOMMU group
+        // number, which the legacy VfioCfg path requires, so hot-plug it
+        // through the modern VFIO device instead.
+        //
+        // Only the cdev node is passed here; the AP mdev sysfs path is not
+        // known at this point. VfioDeviceModern::new() resolves the cdev to
+        // its mdev sysfs directory (and reads the APQNs from its `matrix`
+        // file), and the hypervisor passes that path to QEMU as `sysfsdev`
+        // in device_add. No iommufd object or fds are sent over QMP.
+        if is_iommufd_devices_cdev_path(Path::new(host_path)) {
+            let dev_info = DeviceConfig::VfioModernCfg(VfioDeviceBase {
+                host_path: host_path.to_string(),
+                iommu_group_devnode: PathBuf::from(host_path),
+                dev_type: "c".to_string(),
+                bus_type: "ccw".to_string(),
+                hostdev_prefix: "vfio_device".to_owned(),
+                ..Default::default()
+            });
+            let device_info = do_handle_device(&self.device_manager, &dev_info)
+                .await
+                .context("do handle vfio-ap cdev device")?;
+            if let DeviceType::VfioModern(vfio_dev) = device_info {
+                let vfio_dev_locked = vfio_dev.lock().await;
+                device_ids.push(vfio_dev_locked.device_id.clone());
+                let ap_devs = vfio_dev_locked.config.ap_devices.clone();
+                drop(vfio_dev_locked);
+                let group_num = d
+                    .path()
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let agent_device = Device {
+                    id: group_num,
+                    container_path: d.path().display().to_string(),
+                    field_type: DRIVER_VFIO_AP_TYPE.to_string(),
+                    options: ap_devs,
+                    ..Default::default()
+                };
+                info!(
+                    sl!(),
+                    "vfio-ap hot-plugged cdev agent device: {:?}", agent_device
+                );
+                return Ok(Some(ContainerDevice {
+                    device_info: None,
+                    device: agent_device,
+                }));
+            }
+        }
+
+        // Legacy group node — fall through to caller's do_handle_device.
+        Ok(None)
+    }
+
     async fn handle_sandbox_bindmounts(&self, setup: bool) -> Result<()> {
         let bindmounts = self.toml_config.runtime.sandbox_bind_mounts.clone();
-        if bindmounts.is_empty() {
+        // Nothing to set up without configured bind mounts. The cleanup
+        // still runs: it sweeps the sandbox's own mounts directory without
+        // consulting the configuration, which may not say what it said when
+        // the sandbox started, and it is a no-op when nothing was mounted.
+        if setup && bindmounts.is_empty() {
             info!(sl!(), "sandbox bindmounts empty, just skip it.");
             return Ok(());
         }
@@ -993,29 +1114,29 @@ impl ResourceManagerInner {
         // Hold this lock across the attempt: a concurrent caller can retry
         // failed stages, but cannot run them while the first attempt is active.
         let mut steps = self.cleanup_steps.lock().await;
+        // From here on, creating a network is refused: its detached task
+        // could otherwise register one after the pass that would have
+        // removed it.
+        self.cleaned
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         let mut errors = Vec::new();
-        // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
+        // Detach the network endpoints. A live network detaches them from
+        // the VM and binds VFs from vfio-pci back to their host drivers; the
+        // network of a restored sandbox only has the latter left to do.
         if !steps.network {
             if let Some(network) = &self.network {
                 // remove() holds a per-thread NetnsGuard across awaits, run it on
                 // a dedicated thread so the netns never leaks onto Tokio workers.
                 let network = network.clone();
                 let hypervisor = self.hypervisor.clone();
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                thread::spawn(move || {
-                    let remove = || -> Result<()> {
-                        let rt = runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()?;
-                        rt.block_on(network.remove(hypervisor.as_ref()))
-                    };
-                    let _ = tx.send(remove());
-                });
-                match rx
-                    .await
-                    .unwrap_or_else(|e| Err(e.into()))
-                    .context("remove network")
-                {
+                let removed = on_network_thread(move || {
+                    let rt = runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()?;
+                    rt.block_on(network.remove(hypervisor.as_ref()))
+                })
+                .await;
+                match removed.context("remove network") {
                     Ok(()) => steps.network = true,
                     Err(e) => errors.push(e),
                 }
@@ -1200,15 +1321,19 @@ impl Persist for ResourceManagerInner {
     /// Save a state of ResourceManagerInner
     async fn save(&self) -> Result<Self::State> {
         let mut endpoint_state = vec![];
+        let mut netns_path = None;
         if let Some(network) = &self.network {
             if let Some(ens) = network.save().await {
                 endpoint_state = ens;
             }
+            netns_path = network.netns_path().await;
         }
         let cgroup_state = self.cgroups_resource.save().await?;
         Ok(ResourceState {
             endpoint: endpoint_state,
+            netns_path,
             cgroup_state: Some(cgroup_state),
+            ephemeral_disks: self.volume_resource.ephemeral_disks().await,
         })
     }
 
@@ -1217,6 +1342,8 @@ impl Persist for ResourceManagerInner {
         resource_args: Self::ConstructorArgs,
         resource_state: Self::State,
     ) -> Result<Self> {
+        // Cleanup reads it, for the sandbox bind mounts to unmount for one.
+        let toml_config = Arc::new(resource_args.config.clone());
         let args = CgroupArgs {
             sid: resource_args.sid.clone(),
             config: resource_args.config,
@@ -1254,21 +1381,29 @@ impl Persist for ResourceManagerInner {
             agent: resource_args.agent,
             hypervisor: resource_args.hypervisor,
             device_manager,
-            network: None,
+            // The endpoints the state recorded, for cleanup to bind
+            // passed-through devices back to their host drivers and remove
+            // the TAPs of endpoints that were never attached.
+            network: Some(Arc::new(network::RestoredNetwork::new(
+                resource_state.endpoint,
+                resource_state.netns_path,
+            ))),
+            network_applied: true,
             share_fs: None,
             nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
-            volume_resource: VolumeResource::new(),
+            volume_resource: VolumeResource::restore(resource_state.ephemeral_disks),
             cgroups_resource: CgroupsResource::restore(
                 args,
                 resource_state.cgroup_state.unwrap_or_default(),
             )
             .await?,
-            toml_config: Arc::new(TomlConfig::default()),
+            toml_config,
             cpu_resource: CpuResource::default(),
             mem_resource,
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
+            cleaned: std::sync::atomic::AtomicBool::new(false),
         })
     }
 }
@@ -1304,7 +1439,7 @@ fn bdf_to_vfio_group_path(bdf: &str) -> Option<String> {
 ///   Reads `/sys/kernel/iommu_groups/343/devices/` and returns every BDF in
 ///   the group (a group may contain more than one device).
 /// - iommufd cdev interface: `/dev/vfio/devices/vfio1`
-///   Reads `/sys/class/vfio_device/vfio1/device` symlink to find the BDF.
+///   Reads `/sys/class/vfio-dev/vfio1/device` symlink to find the BDF.
 ///
 /// Returns an empty vector if the path cannot be resolved.  Returning all
 /// BDFs (rather than just the first) makes cold-plug endpoint matching
@@ -1321,8 +1456,10 @@ fn vfio_path_to_bdfs(vfio_path: &str) -> Vec<String> {
     // iommufd cdev path: /dev/vfio/devices/vfioN — file name starts with "vfio"
     // and cannot be parsed as a plain integer.
     if file_name.parse::<u32>().is_err() {
-        // /sys/class/vfio_device/<name>/device -> ../../../../bus/pci/devices/<bdf>
-        let dev_link = format!("/sys/class/vfio_device/{}/device", file_name);
+        // /sys/class/vfio-dev/<name>/device -> ../../../../bus/pci/devices/<bdf>
+        // (for a VFIO-AP cdev this resolves to the mdev uuid, which is not a BDF and
+        // therefore never matches a cold-plugged physical endpoint)
+        let dev_link = format!("/sys/class/vfio-dev/{}/device", file_name);
         match std::fs::read_link(&dev_link)
             .ok()
             .and_then(|t| t.file_name().and_then(|n| n.to_str()).map(String::from))
@@ -1429,6 +1566,24 @@ fn device_cgroup_access_is_readonly(
     false
 }
 
+/// Run `f` on its own OS thread, for the netns reasons create_network()
+/// explains, and await its result instead of joining the thread: a parked
+/// executor thread can stall every task scheduled on it, or deadlock the
+/// runtime under contention. A caller cancelled mid-wait leaves the thread
+/// to finish on its own and drop the unclaimed result.
+async fn on_network_thread<T, F>(f: F) -> Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T> + Send + 'static,
+{
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.await
+        .context("the network thread exited without a result")?
+}
+
 /// block_device_node_is_readonly reports whether the host block device
 /// identified by major:minor advertises the read-only flag (BLKROGET). This is
 /// the ground truth for a device's writability: block-mode volumes frequently
@@ -1455,6 +1610,14 @@ fn block_device_node_is_readonly(major: i64, minor: i64) -> bool {
         );
         false
     })
+}
+
+/// map mode to vfio driver
+fn vfio_pci_driver(mode: &str) -> &'static str {
+    match mode {
+        "vfio" => DRIVER_VFIO_PCI_TYPE,
+        _ => DRIVER_VFIO_PCI_GK_TYPE,
+    }
 }
 
 #[cfg(test)]

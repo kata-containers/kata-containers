@@ -451,6 +451,8 @@ setup_selinux() {
 }
 
 setup_systemd() {
+		local mount_dir="$1"
+		local fs_type="${2:-}"
 		# Extension content images (e.g. the gpu extension) carry no /etc and are not
 		# bootable systemd rootfses, so there is nothing to set up here.
 		if [[ ! -d "${mount_dir}/etc" ]]; then
@@ -459,6 +461,32 @@ setup_systemd() {
 		fi
 		info "Creating empty machine-id to allow systemd to bind-mount it"
 		touch "${mount_dir}/etc/machine-id"
+
+		# systemd needs writable state even when the image cannot be remounted
+		# read-write. Set this up when packing the image so -f erofs works with
+		# rootfs directories built without knowing the final filesystem type.
+		# Agent-as-init and extension images do not boot the systemd target.
+		if [[ "${fs_type}" != "erofs" || "${AGENT_INIT}" == "yes" ||
+			! -f "${mount_dir}/usr/lib/systemd/system/kata-containers.target" ||
+			"${BUILD_VARIANT}" == nvidia* ]]; then
+			return 0
+		fi
+
+		mkdir -p "${mount_dir}/var/lib/systemd" \
+			"${mount_dir}/etc/systemd/system/local-fs.target.wants"
+		cat > "${mount_dir}/etc/systemd/system/var-lib-systemd.mount" <<'EOF'
+[Unit]
+Description=Volatile systemd state for the read-only guest rootfs
+Before=systemd-random-seed.service
+
+[Mount]
+What=tmpfs
+Where=/var/lib/systemd
+Type=tmpfs
+Options=mode=0755,nodev,nosuid
+EOF
+		ln -sf ../var-lib-systemd.mount \
+			"${mount_dir}/etc/systemd/system/local-fs.target.wants/var-lib-systemd.mount"
 }
 
 # Parse veritysetup output and format as kernel parameters.
@@ -498,6 +526,22 @@ build_kernel_verity_params() {
 		"${hash_block_size}"
 }
 
+# Write the verity parameters the kernel needs, as printed by veritysetup, to
+# the root hash file of the image.
+# $1: output of veritysetup format
+# $2: image path
+write_root_hash_file() {
+	local -r verity_output="$1"
+	local -r image="$2"
+	local -r image_dir=$(dirname "${image}")
+
+	local kernel_verity_params
+	kernel_verity_params="$(build_kernel_verity_params "${verity_output}" "${image}")"
+
+	printf '%s\n' "${kernel_verity_params}" > "${image_dir}"/root_hash_"${BUILD_VARIANT}".txt
+	OK "Root hash file created for variant: ${BUILD_VARIANT}"
+}
+
 # Run veritysetup on an image's rootfs (p1) and hash (p2) partitions,
 # then write the resulting verity parameters to a file.
 # $1: loop device (e.g. /dev/loop0)
@@ -506,20 +550,105 @@ setup_verity() {
 	local -r device="$1"
 	local -r image="$2"
 
-	if [[ "${MEASURED_ROOTFS}" != "yes" ]] || [[ ! -b "${device}p2" ]]; then
+	if [[ "${MEASURED_ROOTFS}" != "yes" ]]; then
 		return 0
 	fi
 
+	# veritysetup creates a regular file where it finds no hash device.
+	[[ -b "${device}p2" ]] || die "No hash partition ${device}p2 for ${image}"
+
 	info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
-	local -r image_dir=$(dirname "${image}")
 	local verity_output
 	verity_output=$(veritysetup format --no-superblock "${device}p1" "${device}p2" 2>&1)
 
-	local kernel_verity_params
-	kernel_verity_params="$(build_kernel_verity_params "${verity_output}" "${image}")"
+	write_root_hash_file "${verity_output}" "${image}"
+}
 
-	printf '%s\n' "${kernel_verity_params}" > "${image_dir}"/root_hash_"${BUILD_VARIANT}".txt
-	OK "Root hash file created for variant: ${BUILD_VARIANT}"
+# Print the start and the size, in bytes, of a partition of an image file.
+# $1: image path
+# $2: partition number
+partition_extent() {
+	local -r image="$1"
+	local -r number="$2"
+
+	parted -s -m "${image}" unit B print | awk -F: -v number="${number}" \
+		'$1 == number { gsub("B", "", $2); gsub("B", "", $4); print $2, $4 }'
+}
+
+# Copy a file to a partition of an image file, and check that it got there.
+#
+# The image file is written to directly. A partition node of a loop device,
+# such as /dev/loop0p1, goes away for a moment whenever the partition table is
+# read again, which udev does on its own, and a dd that opens it right then
+# creates a regular file in /dev and fills that instead of the image.
+# $1: file to copy
+# $2: image path
+# $3: partition number
+write_partition() {
+	local -r source="$1"
+	local -r image="$2"
+	local -r number="$3"
+	local start size source_size
+
+	read -r start size <<< "$(partition_extent "${image}" "${number}")"
+	[[ -n "${start}" && -n "${size}" ]] || die "No partition ${number} in ${image}"
+
+	source_size="$(stat -c "%s" "${source}")"
+	(( source_size <= size )) \
+		|| die "${source} (${source_size} bytes) does not fit partition ${number} of ${image} (${size} bytes)"
+
+	dd if="${source}" of="${image}" bs=1M oflag=seek_bytes seek="${start}" conv=notrunc,fsync status=none
+
+	cmp -s -n "${source_size}" -i "0:${start}" "${source}" "${image}" \
+		|| die "Partition ${number} of ${image} does not hold the content of ${source}"
+}
+
+# Run veritysetup on the erofs filesystem of an image, store the hash tree in
+# the hash partition (p2) and write the resulting verity parameters to a file.
+# $1: erofs filesystem image, already copied to the rootfs partition (p1)
+# $2: image path
+setup_erofs_verity() {
+	local -r fsimage="$1"
+	local -r image="$2"
+
+	if [[ "${MEASURED_ROOTFS}" != "yes" ]]; then
+		return 0
+	fi
+
+	local _start data_size
+	read -r _start data_size <<< "$(partition_extent "${image}" 1)"
+	[[ -n "${data_size}" ]] || die "No rootfs partition in ${image}"
+
+	# The guest maps the whole partition, so hash all of it: the rest of the
+	# partition is zeroes, as create_disk left it.
+	truncate -s "${data_size}" "${fsimage}"
+
+	info "veritysetup format rootfs: ${fsimage}"
+	local hash_image
+	hash_image="$(mktemp)"
+	local verity_output
+	verity_output=$(veritysetup format --no-superblock "${fsimage}" "${hash_image}" 2>&1)
+
+	write_partition "${hash_image}" "${image}" 2
+	rm -f "${hash_image}"
+
+	write_root_hash_file "${verity_output}" "${image}"
+}
+
+# Fail unless an image file has an erofs superblock where its rootfs starts.
+# $1: image path
+# $2: start of the rootfs partition, in MiB
+check_erofs_superblock() {
+	local -r image="$1"
+	local -r start_mb="$2"
+	# The superblock is 1024 bytes into the filesystem and starts with the
+	# little-endian magic number 0xE0F5E1E2.
+	local -r offset=$((start_mb * 1024 * 1024 + 1024))
+	local magic
+
+	magic="$(od -An -tx1 -j "${offset}" -N 4 "${image}" | tr -d ' \n')"
+	[[ "${magic}" == "e2e1f5e0" ]] \
+		|| die "No erofs filesystem at ${start_mb}MiB of ${image}: found '${magic}'"
 }
 
 create_rootfs_image() {
@@ -556,7 +685,7 @@ create_rootfs_image() {
 	OK "rootfs copied"
 
 	info "Setup systemd"
-	setup_systemd "${mount_dir}"
+	setup_systemd "${mount_dir}" "${fs_type}"
 
 	info "Unmounting root partition"
 	umount "${mount_dir}"
@@ -586,16 +715,19 @@ create_erofs_rootfs_image() {
 	mount_dir=$(mktemp -p "${TMPDIR:-/tmp}" -d osbuilder-mount-dir.XXXX)
 
 	info "Copying content from rootfs to root partition"
-	cp -a "${rootfs}"/* "${mount_dir}"
+	# Preserve the root directory's permissions too: mktemp creates a 0700
+	# directory, which would prevent unprivileged services from traversing /.
+	cp -a "${rootfs}/." "${mount_dir}/"
+
+	# Include the generated systemd files when applying SELinux labels.
+	info "Setup systemd"
+	setup_systemd "${mount_dir}" erofs
 
 	info "Setup SELinux"
 	setup_selinux "${mount_dir}" "${agent_bin}"
 
 	sync
 	OK "rootfs copied"
-
-	info "Setup systemd"
-	setup_systemd "${mount_dir}"
 
 	local -r fsimage="$(mktemp)"
 	mkfs.erofs -zlz4hc -Enoinline_data "${fsimage}" "${mount_dir}"
@@ -611,18 +743,10 @@ create_erofs_rootfs_image() {
 
 	create_disk "${image}" "${img_size_mb}" "ext4" "${rootfs_start}"
 
-	if ! device="$(setup_loop_device "${image}")"; then
-		die "Could not setup loop device"
-	fi
+	write_partition "${fsimage}" "${image}" 1
+	setup_erofs_verity "${fsimage}" "${image}"
 
-	# losetup -d does not flush the partition's page cache, so without fsync
-	# the erofs data can be lost while the verity hash written next survives.
-	dd if="${fsimage}" of="${device}p1" conv=fsync
 	rm -f "${fsimage}"
-
-	setup_verity "${device}" "${image}"
-
-	losetup -d "${device}"
 	rm -rf "${mount_dir}"
 
 	erofs_img_size_mb="${img_size_mb}"
@@ -805,6 +929,10 @@ main() {
 	if [[ "${skip_dax}" != "yes" ]]; then
 		# insert at the beginning of the image the MBR + DAX header
 		set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+	fi
+
+	if [[ "${fs_type}" == 'erofs' ]]; then
+		check_erofs_superblock "${image}" "$((dax_overhead + rootfs_start))"
 	fi
 
 	# shellcheck disable=SC2154

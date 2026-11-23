@@ -27,14 +27,14 @@
 //!
 //! …consequently `zbus-xmlgen` did not generate code for the above interfaces.
 
-use zbus::dbus_proxy;
+use zbus::proxy;
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1"
 )]
-trait Manager {
+pub(crate) trait Manager {
     /// AbandonScope method
     fn abandon_scope(&self, name: &str) -> zbus::Result<()>;
 
@@ -512,12 +512,12 @@ trait Manager {
     fn unsubscribe(&self) -> zbus::Result<()>;
 
     /// JobNew signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn job_new(&self, id: u32, job: zbus::zvariant::ObjectPath<'_>, unit: &str)
         -> zbus::Result<()>;
 
     /// JobRemoved signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn job_removed(
         &self,
         id: u32,
@@ -527,11 +527,11 @@ trait Manager {
     ) -> zbus::Result<()>;
 
     /// Reloading signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn reloading(&self, active: bool) -> zbus::Result<()>;
 
     /// StartupFinished signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn startup_finished(
         &self,
         firmware: u64,
@@ -543,462 +543,462 @@ trait Manager {
     ) -> zbus::Result<()>;
 
     /// UnitFilesChanged signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn unit_files_changed(&self) -> zbus::Result<()>;
 
     /// UnitNew signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn unit_new(&self, id: &str, unit: zbus::zvariant::ObjectPath<'_>) -> zbus::Result<()>;
 
     /// UnitRemoved signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn unit_removed(&self, id: &str, unit: zbus::zvariant::ObjectPath<'_>) -> zbus::Result<()>;
 
     /// Architecture property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn architecture(&self) -> zbus::Result<String>;
 
     /// ConfirmSpawn property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn confirm_spawn(&self) -> zbus::Result<bool>;
 
     /// ControlGroup property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn control_group(&self) -> zbus::Result<String>;
 
     /// CtrlAltDelBurstAction property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn ctrl_alt_del_burst_action(&self) -> zbus::Result<String>;
 
     /// DefaultBlockIOAccounting property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_block_ioaccounting(&self) -> zbus::Result<bool>;
 
     /// DefaultCPUAccounting property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_cpuaccounting(&self) -> zbus::Result<bool>;
 
     /// DefaultLimitAS property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_as(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitASSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_assoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitCORE property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_core(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitCORESoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_coresoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitCPU property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_cpu(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitCPUSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_cpusoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitDATA property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_data(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitDATASoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_datasoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitFSIZE property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_fsize(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitFSIZESoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_fsizesoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitLOCKS property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_locks(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitLOCKSSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_lockssoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitMEMLOCK property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_memlock(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitMEMLOCKSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_memlocksoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitMSGQUEUE property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_msgqueue(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitMSGQUEUESoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_msgqueuesoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitNICE property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_nice(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitNICESoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_nicesoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitNOFILE property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_nofile(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitNOFILESoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_nofilesoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitNPROC property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_nproc(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitNPROCSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_nprocsoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitRSS property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_rss(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitRSSSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_rsssoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitRTPRIO property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_rtprio(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitRTPRIOSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_rtpriosoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitRTTIME property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_rttime(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitRTTIMESoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_rttimesoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitSIGPENDING property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_sigpending(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitSIGPENDINGSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_sigpendingsoft(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitSTACK property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_stack(&self) -> zbus::Result<u64>;
 
     /// DefaultLimitSTACKSoft property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_limit_stacksoft(&self) -> zbus::Result<u64>;
 
     /// DefaultMemoryAccounting property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_memory_accounting(&self) -> zbus::Result<bool>;
 
     /// DefaultOOMPolicy property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_oompolicy(&self) -> zbus::Result<String>;
 
     /// DefaultRestartUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_restart_usec(&self) -> zbus::Result<u64>;
 
     /// DefaultStandardError property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_standard_error(&self) -> zbus::Result<String>;
 
     /// DefaultStandardOutput property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_standard_output(&self) -> zbus::Result<String>;
 
     /// DefaultStartLimitBurst property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_start_limit_burst(&self) -> zbus::Result<u32>;
 
     /// DefaultStartLimitIntervalUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_start_limit_interval_usec(&self) -> zbus::Result<u64>;
 
     /// DefaultTasksAccounting property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_tasks_accounting(&self) -> zbus::Result<bool>;
 
     /// DefaultTasksMax property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_tasks_max(&self) -> zbus::Result<u64>;
 
     /// DefaultTimeoutAbortUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_timeout_abort_usec(&self) -> zbus::Result<u64>;
 
     /// DefaultTimeoutStartUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_timeout_start_usec(&self) -> zbus::Result<u64>;
 
     /// DefaultTimeoutStopUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_timeout_stop_usec(&self) -> zbus::Result<u64>;
 
     /// DefaultTimerAccuracyUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn default_timer_accuracy_usec(&self) -> zbus::Result<u64>;
 
     /// Environment property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn environment(&self) -> zbus::Result<Vec<String>>;
 
     /// ExitCode property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn exit_code(&self) -> zbus::Result<u8>;
 
     /// Features property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn features(&self) -> zbus::Result<String>;
 
     /// FinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// FinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// FirmwareTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn firmware_timestamp(&self) -> zbus::Result<u64>;
 
     /// FirmwareTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn firmware_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// GeneratorsFinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn generators_finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// GeneratorsFinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn generators_finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// GeneratorsStartTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn generators_start_timestamp(&self) -> zbus::Result<u64>;
 
     /// GeneratorsStartTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn generators_start_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDGeneratorsFinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdgenerators_finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDGeneratorsFinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdgenerators_finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDGeneratorsStartTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdgenerators_start_timestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDGeneratorsStartTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdgenerators_start_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDSecurityFinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdsecurity_finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDSecurityFinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdsecurity_finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDSecurityStartTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdsecurity_start_timestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDSecurityStartTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdsecurity_start_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdtimestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdtimestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDUnitsLoadFinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdunits_load_finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDUnitsLoadFinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdunits_load_finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// InitRDUnitsLoadStartTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdunits_load_start_timestamp(&self) -> zbus::Result<u64>;
 
     /// InitRDUnitsLoadStartTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn init_rdunits_load_start_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// KExecWatchdogUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn kexec_watchdog_usec(&self) -> zbus::Result<u64>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_kexec_watchdog_usec(&self, value: u64) -> zbus::Result<()>;
 
     /// KernelTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn kernel_timestamp(&self) -> zbus::Result<u64>;
 
     /// KernelTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn kernel_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// LoaderTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn loader_timestamp(&self) -> zbus::Result<u64>;
 
     /// LoaderTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn loader_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// LogLevel property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn log_level(&self) -> zbus::Result<String>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_log_level(&self, value: &str) -> zbus::Result<()>;
 
     /// LogTarget property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn log_target(&self) -> zbus::Result<String>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_log_target(&self, value: &str) -> zbus::Result<()>;
 
     /// NFailedJobs property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn nfailed_jobs(&self) -> zbus::Result<u32>;
 
     /// NFailedUnits property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn nfailed_units(&self) -> zbus::Result<u32>;
 
     /// NInstalledJobs property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn ninstalled_jobs(&self) -> zbus::Result<u32>;
 
     /// NJobs property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn njobs(&self) -> zbus::Result<u32>;
 
     /// NNames property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn nnames(&self) -> zbus::Result<u32>;
 
     /// Progress property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn progress(&self) -> zbus::Result<f64>;
 
     /// RebootWatchdogUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn reboot_watchdog_usec(&self) -> zbus::Result<u64>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_reboot_watchdog_usec(&self, value: u64) -> zbus::Result<()>;
 
     /// RuntimeWatchdogUSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn runtime_watchdog_usec(&self) -> zbus::Result<u64>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_runtime_watchdog_usec(&self, value: u64) -> zbus::Result<()>;
 
     /// SecurityFinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn security_finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// SecurityFinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn security_finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// SecurityStartTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn security_start_timestamp(&self) -> zbus::Result<u64>;
 
     /// SecurityStartTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn security_start_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// ServiceWatchdogs property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn service_watchdogs(&self) -> zbus::Result<bool>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_service_watchdogs(&self, value: bool) -> zbus::Result<()>;
 
     /// ShowStatus property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn show_status(&self) -> zbus::Result<bool>;
 
     /// SystemState property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn system_state(&self) -> zbus::Result<String>;
 
     /// Tainted property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn tainted(&self) -> zbus::Result<String>;
 
     /// TimerSlackNSec property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn timer_slack_nsec(&self) -> zbus::Result<u64>;
 
     /// UnitPath property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn unit_path(&self) -> zbus::Result<Vec<String>>;
 
     /// UnitsLoadFinishTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn units_load_finish_timestamp(&self) -> zbus::Result<u64>;
 
     /// UnitsLoadFinishTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn units_load_finish_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// UnitsLoadStartTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn units_load_start_timestamp(&self) -> zbus::Result<u64>;
 
     /// UnitsLoadStartTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn units_load_start_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// UserspaceTimestamp property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn userspace_timestamp(&self) -> zbus::Result<u64>;
 
     /// UserspaceTimestampMonotonic property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn userspace_timestamp_monotonic(&self) -> zbus::Result<u64>;
 
     /// Version property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn version(&self) -> zbus::Result<String>;
 
     /// Virtualization property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn virtualization(&self) -> zbus::Result<String>;
 }

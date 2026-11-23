@@ -90,7 +90,7 @@ mod tests {
         assert_eq!(name, cgroups_path.name.as_str());
 
         let (parent_slice, unit_name) = cgroups_path.parse().unwrap();
-        assert_eq!(format!("{}", slice), parent_slice);
+        assert_eq!(slice.to_string(), parent_slice);
         assert_eq!(format!("{}-{}.scope", prefix, name), unit_name);
     }
 }

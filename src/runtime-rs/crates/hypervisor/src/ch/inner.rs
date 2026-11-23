@@ -147,9 +147,7 @@ impl Persist for CloudHypervisorInner {
             vm_path: self.vm_path.clone(),
             jailed: false,
             jailer_root: String::default(),
-            netns: self.netns.clone(),
             config: self.hypervisor_config(),
-            run_dir: self.run_dir.clone(),
 
             ..Default::default()
         })
@@ -167,8 +165,6 @@ impl Persist for CloudHypervisorInner {
             state: VmmState::NotReady,
             id: hypervisor_state.id,
             vm_path: hypervisor_state.vm_path,
-            run_dir: hypervisor_state.run_dir,
-            netns: hypervisor_state.netns,
 
             pending_devices: vec![],
             device_ids: HashMap::<String, String>::new(),
@@ -197,17 +193,13 @@ mod tests {
 
         let mut clh = CloudHypervisorInner::new(Some(exit_notify.clone()));
         clh.id = String::from("123456");
-        clh.netns = Some(String::from("/var/run/netns/testnet"));
         clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
-        clh.run_dir = String::from("/var/run/kata-containers/") + &clh.id;
         clh.config.cpu_info.default_vcpus = 2.0;
         clh.config.network_info.network_queues = 8;
 
         let state = clh.save().await.unwrap();
         assert_eq!(state.id, clh.id);
-        assert_eq!(state.netns, clh.netns);
         assert_eq!(state.vm_path, clh.vm_path);
-        assert_eq!(state.run_dir, clh.run_dir);
         assert_eq!(state.config.network_info.network_queues, 8);
         assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
@@ -216,9 +208,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(clh.id, state.id);
-        assert_eq!(clh.netns, state.netns);
         assert_eq!(clh.vm_path, state.vm_path);
-        assert_eq!(clh.run_dir, state.run_dir);
         assert_eq!(clh.hypervisor_config().network_info.network_queues, 8);
         assert_eq!(clh.network_queue_limit(), 2);
     }

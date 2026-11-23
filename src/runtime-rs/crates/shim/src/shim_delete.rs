@@ -49,12 +49,20 @@ impl ShimExecutor {
         let Err(err) = std::env::set_current_dir(&self.args.bundle) else {
             return;
         };
-        warn!(
-            sl!(),
-            "cannot enter bundle {:?}, cleaning up from the persisted sandbox state: {}",
-            self.args.bundle,
-            err
-        );
+        if err.kind() == std::io::ErrorKind::NotFound {
+            debug!(
+                sl!(),
+                "bundle {:?} is already absent, checking for persisted runtime state",
+                self.args.bundle
+            );
+        } else {
+            warn!(
+                sl!(),
+                "cannot enter bundle {:?}, checking for persisted runtime state: {}",
+                self.args.bundle,
+                err
+            );
+        }
         if let Err(err) = std::env::set_current_dir("/") {
             warn!(sl!(), "failed to change directory to \"/\": {}", err);
         }

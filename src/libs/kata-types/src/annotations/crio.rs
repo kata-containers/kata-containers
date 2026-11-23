@@ -39,5 +39,7 @@ pub struct PodLinuxResources {
     #[serde(default)]
     pub cpu_quota: i64,
     #[serde(default)]
+    pub cpu_shares: u64,
+    #[serde(default)]
     pub memory_limit_in_bytes: i64,
 }

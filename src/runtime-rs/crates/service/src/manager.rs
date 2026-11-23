@@ -6,14 +6,12 @@
 
 use std::fs;
 use std::os::unix::io::RawFd;
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use common::message::{Action, Message};
 use containerd_shim_protos::shim_async;
-use kata_types::config::KATA_PATH;
-use runtimes::RuntimeHandlerManager;
+use runtimes::{CleanupOutcome, RuntimeHandlerManager};
 use tokio::sync::mpsc::{channel, Receiver};
 use ttrpc::asynchronous::Server;
 
@@ -123,23 +121,50 @@ impl ServiceManager {
     pub async fn cleanup(sid: &str) -> Result<()> {
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
-        let temp_dir = [KATA_PATH, sid].join("/");
-        if let Err(e) = handler.cleanup().await {
-            // The state is the only record of what is left on the host, so a
-            // later delete can still retry.
-            if Path::new(&temp_dir).join(persist::PERSIST_FILE).exists() {
+        let state_dir = persist::state_dir(sid).context("sandbox state directory")?;
+        // Whether there was a state to clean up from is decided before the
+        // attempt: a failed cleanup keeps the state for a retry, but if it
+        // could not, a missing state after the failure is not a reason to
+        // remove the directory as well. Without a state to begin with there
+        // is nothing to retry from, so the directory goes either way.
+        let had_state = state_dir.join(persist::PERSIST_FILE).exists();
+        let outcome = handler.cleanup().await;
+        if let Ok(CleanupOutcome::Skipped) = outcome {
+            // keep_abnormal left the sandbox's resources where they are, and
+            // the state is the only record of them: whoever inspects the
+            // sandbox, or cleans it up later, needs it.
+            info!(
+                sl!(),
+                "cleanup skipped, keeping {} as the record of what is left",
+                state_dir.display()
+            );
+            return Ok(());
+        }
+        if let Err(e) = outcome {
+            if had_state {
+                // The state is the only record of what is left on the host, so a
+                // later delete can still retry.
                 error!(
                     sl!(),
-                    "failed to clean up runtime state, keeping {} for a retry: {:#}", temp_dir, e
+                    "failed to clean up runtime state, keeping {} for a retry: {:#}",
+                    state_dir.display(),
+                    e
                 );
+                if !state_dir.join(persist::PERSIST_FILE).exists() {
+                    error!(
+                        sl!(),
+                        "the sandbox state of {} is gone, a retry cannot recover what is left",
+                        state_dir.display()
+                    );
+                }
                 return Ok(());
             }
             warn!(sl!(), "failed to clean up runtime state, {}", e);
         }
 
-        if fs::metadata(temp_dir.as_str()).is_ok() {
+        if fs::metadata(&state_dir).is_ok() {
             // try to remove dir and skip the result
-            if let Err(e) = fs::remove_dir_all(temp_dir) {
+            if let Err(e) = fs::remove_dir_all(&state_dir) {
                 warn!(sl!(), "failed to clean up sandbox tmp dir, {}", e);
             }
         }

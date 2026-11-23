@@ -198,7 +198,7 @@ fn real_main() -> Result<()> {
     }
     Ok(())
 }
-fn main() {
+fn main() -> std::process::ExitCode {
     // When enabling systemd cgroup driver and sandbox cgroup only, the
     // shim is under a systemd unit. When the unit is stopping, systemd
     // sends SIGTERM to the shim. The shim can't exit immediately, as there
@@ -212,7 +212,9 @@ fn main() {
 
     if let Err(err) = real_main() {
         show_version(Some(err));
+        return std::process::ExitCode::FAILURE;
     }
+    std::process::ExitCode::SUCCESS
 }
 
 fn setup_mnt() -> Result<()> {

@@ -177,6 +177,7 @@ impl TemplateVm {
                 annotations: Default::default(),
             },
             shm_size: 0,
+            config_path: None,
         }
     }
 

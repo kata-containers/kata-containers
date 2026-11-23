@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent::{Agent, Storage};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::Hypervisor;
@@ -79,9 +79,40 @@ impl ResourceManager {
         inner.prepare_before_start_vm(device_configs).await
     }
 
-    pub async fn handle_network(&self, network_config: NetworkConfig) -> Result<()> {
+    /// Create the network without attaching anything, so the caller can put
+    /// what construction made in the saved state before attach_network()
+    /// acts on the host and the VM. A created network whose attach did not
+    /// finish is never replaced: it holds the only record of its endpoints.
+    pub async fn create_network(&self, network_config: NetworkConfig) -> Result<()> {
+        // Construction and registration run detached from this caller. A
+        // caller cancelled at its await would otherwise let the network
+        // thread finish and drop a built network — its host-side links
+        // already made — before anything a cleanup can find had hold of it.
+        // A dropped JoinHandle does not abort the task, so the network is
+        // registered however the caller fares.
+        let inner = self.inner.clone();
+        tokio::spawn(async move {
+            let mut inner = inner.write().await;
+            inner.create_network(network_config).await
+        })
+        .await
+        .context("await the network creation task")?
+    }
+
+    /// Attach the created network's endpoints. A retry after a failure
+    /// resumes after the endpoints that attached; nothing here keeps a
+    /// concurrent cleanup from detaching endpoints mid-attach, so callers
+    /// must not race it against one.
+    pub async fn attach_network(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.handle_network(network_config).await
+        inner.attach_network().await
+    }
+
+    /// Whether a created network is still waiting for its attach, so its
+    /// setup can be resumed rather than redone.
+    pub async fn network_pending_attach(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.network_pending_attach()
     }
 
     #[instrument]
@@ -90,39 +121,33 @@ impl ResourceManager {
         inner.setup_after_start_vm().await
     }
 
-    /// Poll the netns until interfaces exist, then configure the guest (Docker 26+).
-    ///
-    /// The polling phase uses a lightweight netlink scan (no endpoint creation,
-    /// no hypervisor attachment) run via `spawn_blocking` so the async executor
-    /// and the resource-manager lock are not held during the probe.  Once
-    /// interfaces are detected, a single `handle_network` call creates and
-    /// attaches them.  Agent RPCs run under a read lock so other
-    /// resource-manager operations are not blocked.
-    pub async fn rescan_network_if_unconfigured(
-        &self,
-        net_cfg: NetworkWithNetNsConfig,
-    ) -> Result<()> {
-        use anyhow::{anyhow, Context};
+    /// Poll the netns until interfaces exist (Docker 26+). Returns whether
+    /// the sandbox still needs its network set up: false when rescanning
+    /// does not apply, the network is already configured, or no interface
+    /// showed up within the window. The poll is a lightweight netlink scan
+    /// (no endpoint creation, no hypervisor attachment) run via
+    /// `spawn_blocking`, so the async executor and the resource-manager lock
+    /// are not held during it. The caller then creates, records and attaches
+    /// the network, and pushes it to the agent with
+    /// [`Self::apply_rescanned_network`].
+    pub async fn rescan_found_interfaces(&self, net_cfg: &NetworkWithNetNsConfig) -> Result<bool> {
+        use anyhow::anyhow;
         use std::time::{Duration, Instant};
 
         // Fast early-out checks (read lock only).
         {
             let inner = self.inner.read().await;
-            if inner.rescan_should_skip(&net_cfg) {
-                return Ok(());
+            if inner.rescan_should_skip(net_cfg) {
+                return Ok(false);
             }
             if inner.network_has_interfaces().await? {
-                return Ok(());
+                return Ok(false);
             }
         }
 
         const POLL: Duration = Duration::from_millis(50);
         let deadline = Instant::now() + Duration::from_secs(5);
 
-        // Phase 1: lightweight poll — run the entire poll loop inside a
-        // single spawn_blocking task with one reusable tokio runtime so we
-        // don't create a new runtime per iteration and don't block the
-        // async executor or hold any lock.
         let netns_path = net_cfg.netns_path.clone();
         let found = tokio::task::spawn_blocking(move || -> Result<bool> {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -148,27 +173,28 @@ impl ResourceManager {
                 sl!(),
                 "no network interfaces after rescan timeout; networking may rely on hooks only"
             );
+        }
+        Ok(found)
+    }
+
+    /// Push the rescanned, attached network's configuration to the guest
+    /// agent (read lock only).
+    pub async fn apply_rescanned_network(&self) -> Result<()> {
+        let inner = self.inner.read().await;
+        let Some(network) = inner.network() else {
+            return Ok(());
+        };
+        let ifs = network
+            .interfaces()
+            .await
+            .context("rescan get interfaces")?;
+        if ifs.is_empty() {
             return Ok(());
         }
-
-        // Phase 2: interfaces detected — do the expensive setup once.
-        let network = {
-            let mut inner = self.inner.write().await;
-            inner
-                .rescan_network_once(net_cfg)
-                .await
-                .context("rescan network once")?
-        };
-
-        // Phase 3: push config to guest agent (read lock only).
-        if let Some(network) = network {
-            let inner = self.inner.read().await;
-            inner
-                .apply_network_to_agent(network.as_ref())
-                .await
-                .context("apply network to agent")?;
-        }
-        Ok(())
+        inner
+            .apply_network_to_agent(network.as_ref())
+            .await
+            .context("apply network to agent")
     }
 
     pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
@@ -188,6 +214,20 @@ impl ResourceManager {
         inner
             .handler_rootfs(cid, root, bundle_path, rootfs_mounts, annotations)
             .await
+    }
+
+    /// Record the host artifacts creating a container from `spec` will make,
+    /// before any of them exists. Returns the record generation a save would
+    /// cover, or 0 when nothing waits for one.
+    pub async fn register_container_intents(&self, spec: &oci::Spec) -> Result<u64> {
+        let inner = self.inner.read().await;
+        inner.register_container_intents(spec).await
+    }
+
+    /// Confirm that a save wrote the state out covering `generation`.
+    pub async fn container_intents_saved(&self, generation: u64) {
+        let inner = self.inner.read().await;
+        inner.container_intents_saved(generation).await
     }
 
     pub async fn handler_volumes(

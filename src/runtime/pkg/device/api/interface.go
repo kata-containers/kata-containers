@@ -34,7 +34,7 @@ type DeviceReceiver interface {
 	HotplugRemoveDevice(context.Context, Device, config.DeviceType) error
 
 	// this is only for virtio-blk and virtio-scsi support
-	GetAndSetSandboxBlockIndex() (int, error)
+	GetAndSetSandboxBlockIndex(readOnly bool) (int, error)
 	UnsetSandboxBlockIndex(int) error
 	GetHypervisorType() string
 

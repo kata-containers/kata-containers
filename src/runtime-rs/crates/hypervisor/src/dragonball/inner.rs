@@ -258,18 +258,21 @@ impl DragonballInner {
         Ok(())
     }
 
-    pub(crate) fn cleanup_resource(&self) {
+    pub(crate) fn cleanup_resource(&self) -> Result<()> {
         if self.jailed {
-            self.umount_jail_resource(DRAGONBALL_KERNEL).ok();
-            self.umount_jail_resource(DRAGONBALL_ROOT_FS).ok();
+            // A failed unjail must fail the step too: the directory removal
+            // below must never walk over something still mounted.
+            self.umount_jail_resource(DRAGONBALL_KERNEL)?;
+            self.umount_jail_resource(DRAGONBALL_ROOT_FS)?;
             for id in &self.cached_block_devices {
-                self.umount_jail_resource(id.as_str()).ok();
+                self.umount_jail_resource(id.as_str())?;
             }
         }
 
-        std::fs::remove_dir_all(&self.vm_path)
-            .inspect_err(|_| error!(sl!(), "failed to remove dir all for {}", &self.vm_path))
-            .ok();
+        // A removal that failed must fail the step: the state is only kept
+        // for a retry while the cleanup reports what it could not do.
+        crate::utils::remove_vm_dir(&self.id, &self.vm_path)
+            .with_context(|| format!("remove the VM directory {}", self.vm_path))
     }
 
     fn set_vm_base_config(&mut self) -> Result<()> {
@@ -301,8 +304,12 @@ impl DragonballInner {
 
     pub(crate) fn umount_jail_resource(&self, jailed_path: &str) -> Result<()> {
         let path = [self.jailer_root.as_str(), jailed_path].join("/");
-        nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH)
-            .with_context(|| format!("umount path {}", path))
+        // Lazy, and tolerant of a resource that is not mounted any more: a
+        // retried cleanup meets its own earlier work.
+        match nix::mount::umount2(path.as_str(), nix::mount::MntFlags::MNT_DETACH) {
+            Ok(()) | Err(nix::errno::Errno::EINVAL | nix::errno::Errno::ENOENT) => Ok(()),
+            Err(e) => Err(e).with_context(|| format!("umount path {}", path)),
+        }
     }
 
     pub(crate) fn get_resource(&self, src: &str, dst: &str) -> Result<String> {
@@ -614,12 +621,8 @@ impl Persist for DragonballInner {
             vm_path: self.vm_path.clone(),
             jailed: self.jailed,
             jailer_root: self.jailer_root.clone(),
-            netns: self.netns.clone(),
             config: self.hypervisor_config(),
-            run_dir: self.run_dir.clone(),
             cached_block_devices: self.cached_block_devices.clone(),
-            passfd_listener_port: self.passfd_listener_port,
-            ..Default::default()
         })
     }
 
@@ -633,18 +636,18 @@ impl Persist for DragonballInner {
             vm_path: hypervisor_state.vm_path,
             jailed: hypervisor_state.jailed,
             jailer_root: hypervisor_state.jailer_root,
-            netns: hypervisor_state.netns,
+            netns: None,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
             vmm_instance: VmmInstance::new("", hypervisor_args),
-            run_dir: hypervisor_state.run_dir,
+            run_dir: String::new(),
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),
             guest_memory_block_size_mb: 0,
             mem_hotplug_size_mb: 0,
             balloon_size: 0,
-            passfd_listener_port: hypervisor_state.passfd_listener_port,
+            passfd_listener_port: None,
         })
     }
 }

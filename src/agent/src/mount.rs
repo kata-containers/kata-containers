@@ -316,6 +316,18 @@ pub fn remove_mounts<P: AsRef<str> + std::fmt::Debug>(mounts: &[P]) -> Result<()
     Ok(())
 }
 
+/// Ensure debugfs is mounted for features, such as mem-agent's MGLRU support, that consume kernel debug interfaces.
+pub fn mount_debugfs(logger: &Logger) -> Result<()> {
+    let debugfs = InitMount {
+        fstype: "debugfs",
+        src: "debugfs",
+        dest: "/sys/kernel/debug",
+        options: vec!["nosuid", "nodev", "noexec"],
+    };
+
+    mount_to_rootfs(logger, &debugfs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,7 +336,6 @@ mod tests {
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
     use tempfile::tempdir;
     use test_utils::TestUserType;
     use test_utils::{
@@ -464,31 +475,25 @@ mod tests {
 
             skip_loop_by_user!(msg, d.test_user);
 
-            let src: PathBuf;
-            let dest: PathBuf;
-
-            let src_filename: String;
-            let dest_filename: String;
-
-            if !d.src.is_empty() {
-                src = dir.path().join(d.src);
-                src_filename = src
+            let src_filename: String = if !d.src.is_empty() {
+                dir.path()
+                    .join(d.src)
                     .to_str()
                     .expect("failed to convert src to filename")
-                    .to_string();
+                    .to_string()
             } else {
-                src_filename = "".to_owned();
-            }
+                "".to_owned()
+            };
 
-            if !d.dest.is_empty() {
-                dest = dir.path().join(d.dest);
-                dest_filename = dest
+            let dest_filename: String = if !d.dest.is_empty() {
+                dir.path()
+                    .join(d.dest)
                     .to_str()
                     .expect("failed to convert dest to filename")
-                    .to_string();
+                    .to_string()
             } else {
-                dest_filename = "".to_owned();
-            }
+                "".to_owned()
+            };
 
             // Create the mount directories
             for d in [src_filename.clone(), dest_filename.clone()].iter() {

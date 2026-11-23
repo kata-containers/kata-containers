@@ -132,6 +132,23 @@ firmware = "/path/to/kata-containers/tools/packaging/static-build/ovmf/opt/kata/
 snp_certs_path = "/path/to/cert-chain"
 ```
 
+### Guest CPU model and the launch measurement
+
+The guest CPU model is part of the SNP launch measurement. It is set with `cpu_model` in the `[hypervisor.qemu]` section and is passed to QEMU as `-cpu <cpu_model>`. The SNP runtime-rs configuration files set it to `EPYC-Milan-v2`:
+```toml
+cpu_model = "EPYC-Milan-v2"
+```
+- The default used to be the hardcoded `EPYC-v4`. Moving to `EPYC-Milan-v2` changes the launch measurement of every SNP guest, so reference values calculated with the old model have to be recalculated.
+- When calculating a measurement with `sev-snp-measure`, `--vcpu-type` must match `cpu_model`, for example `--vcpu-type=EPYC-Milan-v2`.
+- The Go runtime ignores `cpu_model` and keeps `-cpu EPYC-v4`, so use `--vcpu-type=EPYC-v4` there.
+- `cpu_features` does not change the measurement calculated by `sev-snp-measure`.
+- Add `enforce` to `cpu_features` to make QEMU fail to start the guest when the host lacks a requested feature. Without it, QEMU silently drops the features the host does not have.
+- The model is not validated by Kata Containers. A model newer than the host CPU makes QEMU fail at launch.
+- A named CPU model only exposes the CPU features defined for that model. If the model is older than the host CPU, the guest does not see the newer instruction set extensions the host supports, and workloads that depend on them can run slower. For example, `EPYC-Milan-v2` does not expose AVX-512, which Zen 4 and newer hosts have. In one test on a Zen 4 host with an NVIDIA GPU in confidential computing mode, host-to-GPU copy bandwidth with `EPYC-Milan-v2` was about half of that with `EPYC-Genoa` or `host` (3.5 GB/s vs 7.1 GB/s). The impact depends on the workload, so benchmark before choosing a model.
+- Choosing the model is a trade-off. A model that matches the oldest CPU generation in the fleet lets guests run on any host and gives a reproducible measurement. A newer model, such as `EPYC-Genoa` on Zen 4 or newer hosts, can perform better, but guests then fail to launch on older hosts.
+- If `cpu_model` is empty or missing, for example in a configuration copied from an older release, QEMU uses `-cpu host`, which does not match a measurement calculated for a named model. Set `cpu_model` explicitly in such configurations.
+- The model can be overridden per pod with the `io.katacontainers.config.hypervisor.cpu_model` annotation. The annotation is not enabled by default and has to be added to `enable_annotations`.
+
 ## Test Kata Containers with Containerd
 
 With Kata Containers configured to support SNP-VMs, we use containerd to test and deploy containers in these VMs.

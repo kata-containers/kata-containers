@@ -199,7 +199,7 @@ elif [[ "${ARCH}" == "s390x" ]]; then
 	# s390x uses CCW bus (no PCI virtio); VIRTIO_CCW replaces VIRTIO_PCI and
 	# selects VIRTIO_MD_SUPPORTED.  Passthrough is via VFIO_CCW / VFIO_AP.
 	# VFIO_PCI is still required: the VFIO core references its symbols.
-	printf 'CONFIG_S390_CCW_VIRTIO=y\n%s\n%s\n%s\n%s\nCONFIG_VIRTIO_CCW=y\nCONFIG_VFIO_CCW=y\nCONFIG_VFIO_AP=y\nCONFIG_VFIO_PCI=y\n' \
+	printf 'CONFIG_S390_CCW_VIRTIO=y\n%s\n%s\n%s\n%s\nCONFIG_VIRTIO_CCW=y\nCONFIG_VFIO_CCW=y\nCONFIG_VFIO_AP=y\nCONFIG_VFIO_PCI=y\nCONFIG_IOMMUFD=y\n' \
 		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
 		"${_SHARED_FS_DEVS}" \
 		>> configs/devices/s390x-softmmu/default.mak

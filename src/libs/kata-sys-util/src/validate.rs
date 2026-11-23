@@ -41,7 +41,7 @@ pub fn valid_env(e: &str) -> Option<(&str, &str)> {
     if let Some((key, value)) = e.split_once('=') {
         if !key.is_empty() && !key.as_bytes().contains(&b'\0') && !value.as_bytes().contains(&b'\0')
         {
-            return Some((key.trim(), value.trim()));
+            return Some((key, value));
         }
     }
 
@@ -287,18 +287,30 @@ mod tests {
         let env = valid_env("a=b");
         assert_eq!(Some(("a", "b")), env);
         let env = valid_env("a =b");
-        assert_eq!(Some(("a", "b")), env);
+        assert_eq!(Some(("a ", "b")), env);
 
         let env = valid_env(" a =b");
-        assert_eq!(Some(("a", "b")), env);
+        assert_eq!(Some((" a ", "b")), env);
 
         let env = valid_env("a= b");
-        assert_eq!(Some(("a", "b")), env);
+        assert_eq!(Some(("a", " b")), env);
 
         let env = valid_env("a=b ");
-        assert_eq!(Some(("a", "b")), env);
+        assert_eq!(Some(("a", "b ")), env);
         let env = valid_env("a=b c ");
-        assert_eq!(Some(("a", "b c")), env);
+        assert_eq!(Some(("a", "b c ")), env);
+
+        let env = valid_env(" = b ");
+        assert_eq!(Some((" ", " b ")), env);
+
+        let env = valid_env("a=value\n");
+        assert_eq!(Some(("a", "value\n")), env);
+
+        let env = valid_env("a= \n ");
+        assert_eq!(Some(("a", " \n ")), env);
+
+        let env = valid_env("a=\u{a0}value\u{2003}");
+        assert_eq!(Some(("a", "\u{a0}value\u{2003}")), env);
 
         let env = valid_env("=b");
         assert_eq!(None, env);

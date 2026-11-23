@@ -14,7 +14,6 @@ use hypervisor::device::DeviceType;
 use hypervisor::{Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
-use super::endpoint_persist::TapEndpointState;
 use super::{attach_network_device, Endpoint};
 use crate::network::network_pair::{get_link_by_name, NetworkInterface};
 use crate::network::{utils, EndpointState};
@@ -109,11 +108,8 @@ impl Endpoint for TapEndpoint {
     }
 
     async fn save(&self) -> Option<EndpointState> {
-        Some(EndpointState {
-            tap_endpoint: Some(TapEndpointState {
-                if_name: self.name.clone(),
-            }),
-            ..Default::default()
-        })
+        // The TAP is handed in from the outside; recovery has nothing of
+        // this endpoint's on the host to act on.
+        None
     }
 }

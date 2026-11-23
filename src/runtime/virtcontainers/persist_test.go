@@ -24,6 +24,7 @@ func TestSandboxRestore(t *testing.T) {
 		ID: "test-exp",
 		HypervisorConfig: HypervisorConfig{
 			DisableNestedVirtualization: true,
+			BlockDeviceReadOnlySlots:    1,
 		},
 	}
 	container := make(map[string]*Container)
@@ -74,6 +75,10 @@ func TestSandboxRestore(t *testing.T) {
 	// flush data to disk
 	err = sandbox.Save()
 	assert.Nil(err)
+
+	savedConfig, loadErr := loadSandboxConfig(sandbox.id)
+	assert.NoError(loadErr)
+	assert.Equal(uint32(1), savedConfig.HypervisorConfig.BlockDeviceReadOnlySlots)
 
 	// empty the sandbox
 	sandbox.state = types.SandboxState{}

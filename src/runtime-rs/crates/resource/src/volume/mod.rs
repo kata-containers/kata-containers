@@ -17,13 +17,14 @@ pub mod utils;
 pub mod direct_volume;
 use crate::volume::{direct_volume::is_direct_volume, share_fs_volume::VolumeManager};
 pub mod direct_volumes;
+pub use block_emptydir_volume::EphemeralDiskInfo;
 
 use std::{sync::Arc, vec::Vec};
 
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 use agent::Agent;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::{k8s::is_disk_empty_dir, mount::get_mount_options};
@@ -53,7 +54,7 @@ pub trait Volume: Send + Sync {
 #[derive(Default)]
 pub struct VolumeResourceInner {
     volumes: Vec<Arc<dyn Volume>>,
-    ephemeral_disks: Vec<block_emptydir_volume::EphemeralDiskInfo>,
+    ephemeral_disks: block_emptydir_volume::EphemeralDisks,
 }
 
 #[derive(Default)]
@@ -121,20 +122,22 @@ impl VolumeResource {
                         .with_context(|| format!("new ephemeral volume {m:?}"))?,
                 )
             } else if block_emptydir_volume::is_block_emptydir_volume(m, emptydir_mode) {
-                let vol = block_emptydir_volume::BlockEmptyDirVolume::new(
-                    d,
-                    m,
-                    sid,
-                    emptydir_mode,
-                    ctx.block_device_discard_supported,
+                self.inner
+                    .write()
+                    .await
+                    .ephemeral_disks
+                    .record(block_emptydir_volume::disk_info(m)?);
+                Arc::new(
+                    block_emptydir_volume::BlockEmptyDirVolume::new(
+                        d,
+                        m,
+                        sid,
+                        emptydir_mode,
+                        ctx.block_device_discard_supported,
+                    )
+                    .await
+                    .with_context(|| format!("new block emptydir volume {m:?}"))?,
                 )
-                .await
-                .with_context(|| format!("new block emptydir volume {m:?}"))?;
-                let vol_arc: Arc<dyn Volume> = Arc::new(vol.clone());
-                let mut inner = self.inner.write().await;
-                inner.ephemeral_disks.push(vol.disk_info);
-                drop(inner);
-                vol_arc
             } else if need_local_volume(m, fs_sharing_supported, emptydir_mode) {
                 // This branch comes after is_block_emptydir_volume() so
                 // block-encrypted and block-plain emptyDirs are handled as
@@ -205,34 +208,53 @@ impl VolumeResource {
         Ok(())
     }
 
+    /// The block emptyDir disks the sandbox made, for its state.
+    pub async fn ephemeral_disks(&self) -> Vec<EphemeralDiskInfo> {
+        self.inner.read().await.ephemeral_disks.list()
+    }
+
+    /// Record the block emptyDir disks that creating a container from `spec`
+    /// will make, before any of them exists, so the caller can put them in
+    /// the saved state first. Returns the generation a save would cover, or
+    /// 0 when every recorded disk, this call's and earlier ones', already
+    /// reached the saved state.
+    pub async fn register_ephemeral_disks(
+        &self,
+        emptydir_mode: &str,
+        spec: &oci::Spec,
+    ) -> Result<u64> {
+        let oci_mounts = spec.mounts().clone().unwrap_or_default();
+        let mut inner = self.inner.write().await;
+        for m in &oci_mounts {
+            if block_emptydir_volume::is_block_emptydir_volume(m, emptydir_mode) {
+                inner
+                    .ephemeral_disks
+                    .record(block_emptydir_volume::disk_info(m)?);
+            }
+        }
+        Ok(inner.ephemeral_disks.unsaved())
+    }
+
+    /// Confirm that the saved state now holds the disks up to the generation
+    /// a registration handed out.
+    pub async fn ephemeral_disks_saved(&self, generation: u64) {
+        self.inner.write().await.ephemeral_disks.saved(generation);
+    }
+
+    /// Restore the disks a sandbox created before its shim went away, so
+    /// that recovery removes them.
+    pub fn restore(ephemeral_disks: Vec<EphemeralDiskInfo>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(VolumeResourceInner {
+                volumes: Vec::new(),
+                ephemeral_disks: block_emptydir_volume::EphemeralDisks::restore(ephemeral_disks),
+            })),
+            volume_manager: Arc::new(VolumeManager::new()),
+        }
+    }
+
     pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        let mut failures = 0;
-        for disk in &inner.ephemeral_disks {
-            if let Err(e) = std::fs::remove_file(&disk.disk_path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    failures += 1;
-                    warn!(
-                        sl!(),
-                        "failed to remove ephemeral disk {:?}: {}", disk.disk_path, e
-                    );
-                }
-            }
-            if let Err(e) = kata_types::mount::remove_volume_path(&disk.source_path) {
-                failures += 1;
-                warn!(
-                    sl!(),
-                    "failed to remove direct-volume path for {}: {}", disk.source_path, e
-                );
-            }
-        }
-        if failures == 0 {
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "{failures} ephemeral disk cleanup operation(s) failed"
-            ))
-        }
+        self.inner.read().await.ephemeral_disks.cleanup()
     }
 
     pub async fn dump(&self) {
@@ -281,16 +303,161 @@ mod cleanup_tests {
         std::fs::create_dir(&disk_path).unwrap();
 
         let resource = VolumeResource::new();
-        resource.inner.write().await.ephemeral_disks.push(
-            block_emptydir_volume::EphemeralDiskInfo {
+        resource
+            .inner
+            .write()
+            .await
+            .ephemeral_disks
+            .record(EphemeralDiskInfo {
                 disk_path: disk_path.clone(),
                 source_path: format!(
                     "ephemeral-test-{}",
                     dir.path().file_name().unwrap().to_string_lossy()
                 ),
-            },
-        );
+            });
 
         assert!(resource.cleanup_ephemeral_disks().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn disks_in_the_saved_state_are_removed_by_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk = EphemeralDiskInfo {
+            disk_path: dir.path().join("disk.img"),
+            source_path: format!(
+                "ephemeral-test-{}",
+                dir.path().file_name().unwrap().to_string_lossy()
+            ),
+        };
+        std::fs::write(&disk.disk_path, b"").unwrap();
+
+        let resource = VolumeResource::new();
+        resource
+            .inner
+            .write()
+            .await
+            .ephemeral_disks
+            .record(disk.clone());
+        let state = crate::resource_persist::ResourceState {
+            ephemeral_disks: resource.ephemeral_disks().await,
+            ..Default::default()
+        };
+        let state: crate::resource_persist::ResourceState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(state.ephemeral_disks, vec![disk.clone()]);
+
+        let restored = VolumeResource::restore(state.ephemeral_disks);
+        restored.cleanup_ephemeral_disks().await.unwrap();
+        assert!(!disk.disk_path.exists());
+        // A retry after a partial cleanup finds nothing left to remove.
+        restored.cleanup_ephemeral_disks().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_disk_recorded_before_it_was_made_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut m = oci::Mount::default();
+        m.set_source(Some(dir.path().join("scratch")));
+        let disk = block_emptydir_volume::disk_info(&m).unwrap();
+        assert_eq!(disk.disk_path, dir.path().join("scratch/disk.img"));
+
+        let mut disks = block_emptydir_volume::EphemeralDisks::default();
+        disks.record(disk.clone());
+        disks.record(disk.clone());
+        assert_eq!(disks.unsaved(), 1);
+        assert_eq!(disks.list(), vec![disk]);
+        disks.cleanup().unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_stale_save_confirmation_hides_no_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk_info = |name: &str| {
+            let mut m = oci::Mount::default();
+            m.set_source(Some(dir.path().join(name)));
+            block_emptydir_volume::disk_info(&m).unwrap()
+        };
+
+        let mut disks = block_emptydir_volume::EphemeralDisks::default();
+        // Two creates overlap: both their saves cover the first disk, and
+        // the confirmation of the earlier save arrives last, after a third
+        // disk whose own save failed was recorded. It must not pass for the
+        // third disk's missing save.
+        disks.record(disk_info("one"));
+        let first = disks.unsaved();
+        disks.record(disk_info("two"));
+        let second = disks.unsaved();
+        disks.saved(second);
+        disks.record(disk_info("three"));
+        disks.saved(first);
+        assert!(disks.unsaved() > 0, "the third disk still waits for a save");
+
+        // Its retried registration asks again, and the confirmation of a
+        // covering save clears it.
+        let third = disks.unsaved();
+        disks.saved(third);
+        assert_eq!(disks.unsaved(), 0);
+    }
+
+    #[tokio::test]
+    async fn container_intents_name_the_disks_before_they_exist() {
+        let source = "/var/lib/kubelet/pods/uid-1/volumes/kubernetes.io~empty-dir/cache";
+        let mount = oci::MountBuilder::default()
+            .destination("/cache")
+            .typ("bind")
+            .source(source)
+            .build()
+            .unwrap();
+        let spec = oci::SpecBuilder::default()
+            .mounts(vec![mount])
+            .build()
+            .unwrap();
+
+        let resource = VolumeResource::new();
+        // Nothing recorded while emptyDirs are not disk-backed.
+        assert_eq!(
+            resource
+                .register_ephemeral_disks(kata_types::config::EMPTYDIR_MODE_SHARED_FS, &spec)
+                .await
+                .unwrap(),
+            0
+        );
+
+        assert_eq!(
+            resource
+                .register_ephemeral_disks(kata_types::config::EMPTYDIR_MODE_BLOCK_PLAIN, &spec)
+                .await
+                .unwrap(),
+            1
+        );
+        // While no save was confirmed, every registration keeps asking for
+        // one: a failed save must not let a retried container creation make
+        // the disk without persisted intent.
+        assert_eq!(
+            resource
+                .register_ephemeral_disks(kata_types::config::EMPTYDIR_MODE_BLOCK_PLAIN, &spec)
+                .await
+                .unwrap(),
+            1
+        );
+        resource.ephemeral_disks_saved(1).await;
+        // The next container of the pod shares the emptyDir, and its saved
+        // disk needs no further save.
+        assert_eq!(
+            resource
+                .register_ephemeral_disks(kata_types::config::EMPTYDIR_MODE_BLOCK_PLAIN, &spec)
+                .await
+                .unwrap(),
+            0
+        );
+
+        let disks = resource.ephemeral_disks().await;
+        assert_eq!(
+            disks,
+            vec![EphemeralDiskInfo {
+                disk_path: std::path::Path::new(source).join("disk.img"),
+                source_path: source.to_string(),
+            }]
+        );
     }
 }

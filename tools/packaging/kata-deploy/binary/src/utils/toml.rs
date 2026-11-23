@@ -1175,7 +1175,7 @@ kernel_params = "console=hvc0"
                         "@IMAGEPATH@",
                         "/opt/kata/share/kata-containers/kata-containers.img",
                     )
-                    .replace("@DEFROOTFSTYPE@", "\"ext4\"")
+                    .replace("@DEFROOTFSTYPE@", "\"erofs\"")
                     .replace("@VMROOTFSDRIVER_CLH@", "virtio-blk")
                     .replace("@FIRMWAREPATH@", "")
                     .replace("@DEFENABLEANNOTATIONS@", "[]")
@@ -1257,7 +1257,7 @@ kernel_params = "console=hvc0"
                         "@IMAGEPATH@",
                         "/opt/kata/share/kata-containers/kata-containers.img",
                     )
-                    .replace("@DEFROOTFSTYPE@", "\"ext4\"")
+                    .replace("@DEFROOTFSTYPE@", "\"erofs\"")
                     .replace("@KERNELPARAMS_DB@", "")
                     .replace("@DEFVCPUS@", "1")
                     .replace("@DEFMAXVCPUS_DB@", "0")
@@ -1354,7 +1354,7 @@ kernel_params = "console=hvc0"
                         "/opt/kata/share/kata-containers/kata-containers.img",
                     )
                     .replace("@MACHINETYPE@", "q35")
-                    .replace("@DEFROOTFSTYPE@", "\"ext4\"")
+                    .replace("@DEFROOTFSTYPE@", "\"erofs\"")
                     .replace("@DEFENABLEANNOTATIONS@", "[]")
                     .replace("@QEMUVALIDHYPERVISORPATHS@", "[]")
                     .replace("@KERNELPARAMS@", "")
@@ -1433,7 +1433,7 @@ kernel_params = "console=hvc0"
                         "@IMAGEPATH@",
                         "/opt/kata/share/kata-containers/kata-containers.img",
                     )
-                    .replace("@DEFROOTFSTYPE@", "\"ext4\"")
+                    .replace("@DEFROOTFSTYPE@", "\"erofs\"")
                     .replace("@VMROOTFSDRIVER_CLH@", "virtio-blk")
                     .replace("@FIRMWAREPATH@", "")
                     .replace("@DEFENABLEANNOTATIONS@", "[]")

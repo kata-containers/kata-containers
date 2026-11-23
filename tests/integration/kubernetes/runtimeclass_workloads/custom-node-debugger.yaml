@@ -8,6 +8,9 @@ kind: Pod
 metadata:
   name: ${POD_NAME}
 spec:
+  # Lets exec_host signal host processes: the PIDs it reads in the host's
+  # /proc are only valid in the host PID namespace.
+  hostPID: true
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

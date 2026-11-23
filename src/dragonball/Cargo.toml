@@ -29,7 +29,7 @@ dbs-utils = { workspace = true }
 dbs-virtio-devices = { features = [
   "virtio-mmio",
 ], optional = true, workspace = true }
-derivative = { workspace = true }
+derive-where = { workspace = true }
 kata-sys-util = { workspace = true }
 kvm-bindings = { features = ["fam-wrappers", "serde"], workspace = true }
 kvm-ioctls = { workspace = true }

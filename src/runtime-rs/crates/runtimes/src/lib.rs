@@ -13,7 +13,7 @@ extern crate slog;
 logging::logger_with_subsystem!(sl, "runtimes");
 
 pub mod manager;
-pub use manager::RuntimeHandlerManager;
+pub use manager::{CleanupOutcome, RuntimeHandlerManager};
 pub use shim_interface;
 mod shim_metrics;
 mod shim_mgmt;

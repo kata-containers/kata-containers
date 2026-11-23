@@ -26,6 +26,7 @@ use kata_types::mount::{
 };
 use nix::sys::statfs::statfs;
 use oci_spec::runtime as oci;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::volume::utils::KATA_MOUNT_BIND_TYPE;
@@ -38,12 +39,120 @@ const METADATA_ENCRYPTION_KEY: &str = "encryptionKey";
 const METADATA_FS_GROUP: &str = "fsGroup";
 const DISCARD_MOUNT_OPTION: &str = "discard";
 
-/// Information about an ephemeral disk created on the host, needed for
-/// sandbox-level cleanup.
-#[derive(Debug, Clone)]
-pub(crate) struct EphemeralDiskInfo {
+/// A disk created for a block emptyDir, and its direct-volume record. Both
+/// live on the host and only the sandbox cleanup removes them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EphemeralDiskInfo {
     pub disk_path: PathBuf,
     pub source_path: String,
+}
+
+/// The disks of a sandbox's block emptyDirs. They outlive the volumes that
+/// made them: a container's volumes go with the container, while its disk is
+/// removed when the sandbox is, and after a shim died they are all a
+/// recovery knows about the sandbox's emptyDirs, so they are what the
+/// resource state saves and restores.
+#[derive(Debug, Default)]
+pub(crate) struct EphemeralDisks {
+    disks: Vec<EphemeralDiskInfo>,
+    /// The generation of the latest recorded disk: the list is append-only,
+    /// so one number names everything recorded so far.
+    generation: u64,
+    /// The latest generation confirmed written to the saved state. A failed
+    /// save leaves it behind `generation`, so a retried container creation
+    /// asks for a save again instead of trusting the record alone. Saves can
+    /// overlap, and a late confirmation of an early save must not hide disks
+    /// it did not cover, which is why these are generations and not a count:
+    /// a confirmation only ever moves the watermark up to its own save.
+    saved_generation: u64,
+}
+
+impl EphemeralDisks {
+    pub(crate) fn restore(disks: Vec<EphemeralDiskInfo>) -> Self {
+        Self {
+            disks,
+            generation: 0,
+            saved_generation: 0,
+        }
+    }
+
+    /// Record a disk, before it is made, so that a creation that fails part
+    /// way leaves the cleanup to remove what was made. Containers that share
+    /// an emptyDir share its disk, so a disk is recorded once.
+    pub(crate) fn record(&mut self, disk: EphemeralDiskInfo) {
+        if self.disks.contains(&disk) {
+            return;
+        }
+        self.disks.push(disk);
+        self.generation += 1;
+    }
+
+    /// The generation a save started now would cover, or 0 when every
+    /// recorded disk already reached the saved state.
+    pub(crate) fn unsaved(&self) -> u64 {
+        if self.generation > self.saved_generation {
+            self.generation
+        } else {
+            0
+        }
+    }
+
+    /// Confirm that a save wrote the state out covering `generation`. A save
+    /// snapshots the whole list, so it covers every generation up to the one
+    /// its caller was handed; later generations stay pending, and a stale
+    /// confirmation arriving after a newer one changes nothing.
+    pub(crate) fn saved(&mut self, generation: u64) {
+        self.saved_generation = self.saved_generation.max(generation.min(self.generation));
+    }
+
+    pub(crate) fn list(&self) -> Vec<EphemeralDiskInfo> {
+        self.disks.clone()
+    }
+
+    /// Remove every disk and its direct-volume record. A disk that is
+    /// already gone is fine, so a retry after a partial cleanup succeeds.
+    pub(crate) fn cleanup(&self) -> Result<()> {
+        let mut failures = 0;
+        for disk in &self.disks {
+            if let Err(e) = std::fs::remove_file(&disk.disk_path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    failures += 1;
+                    warn!(
+                        sl!(),
+                        "failed to remove ephemeral disk {:?}: {}", disk.disk_path, e
+                    );
+                }
+            }
+            if let Err(e) = kata_types::mount::remove_volume_path(&disk.source_path) {
+                failures += 1;
+                warn!(
+                    sl!(),
+                    "failed to remove direct-volume path for {}: {}", disk.source_path, e
+                );
+            }
+        }
+        if failures == 0 {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "{failures} ephemeral disk cleanup operation(s) failed"
+            ))
+        }
+    }
+}
+
+/// The disk BlockEmptyDirVolume::new() creates for the mount.
+pub(crate) fn disk_info(m: &oci::Mount) -> Result<EphemeralDiskInfo> {
+    let source = m
+        .source()
+        .as_ref()
+        .ok_or_else(|| anyhow!("block emptyDir mount has no source"))?
+        .display()
+        .to_string();
+    Ok(EphemeralDiskInfo {
+        disk_path: Path::new(&source).join(DISK_IMG),
+        source_path: source,
+    })
 }
 
 #[derive(Clone)]
@@ -51,7 +160,6 @@ pub(crate) struct BlockEmptyDirVolume {
     storage: Option<agent::Storage>,
     mount: oci::Mount,
     device_id: String,
-    pub(crate) disk_info: EphemeralDiskInfo,
 }
 
 impl BlockEmptyDirVolume {
@@ -65,15 +173,11 @@ impl BlockEmptyDirVolume {
         let encrypted = emptydir_mode == EMPTYDIR_MODE_BLOCK_ENCRYPTED;
         let discard_unmap =
             emptydir_mode == EMPTYDIR_MODE_BLOCK_PLAIN && block_device_discard_supported;
-        let source = m
-            .source()
-            .as_ref()
-            .ok_or_else(|| anyhow!("block emptyDir mount has no source"))?
-            .display()
-            .to_string();
-
+        let EphemeralDiskInfo {
+            disk_path,
+            source_path: source,
+        } = disk_info(m)?;
         let emptydir_path = Path::new(&source);
-        let disk_path = emptydir_path.join(DISK_IMG);
 
         // Stat the emptyDir now; kubelet sets its GID to the pod's fsGroup so
         // we need the value both for mountInfo.json metadata and for the agent
@@ -159,16 +263,10 @@ impl BlockEmptyDirVolume {
             });
         }
 
-        let disk_info = EphemeralDiskInfo {
-            disk_path,
-            source_path: source,
-        };
-
         Ok(Self {
             storage: Some(storage),
             mount,
             device_id,
-            disk_info,
         })
     }
 }

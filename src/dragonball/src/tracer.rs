@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use derivative::Derivative;
+use derive_where::derive_where;
 use log::{info, warn};
 use tracing::subscriber::DefaultGuard;
 use tracing::{span::EnteredSpan, subscriber::NoSubscriber, trace_span, Subscriber};
@@ -18,13 +18,13 @@ pub enum TraceError {
 }
 
 /// Configuration information for tracing feature.
-#[derive(Clone, Derivative)]
-#[derivative(Debug, PartialEq, Eq)]
+#[derive(Clone)]
+#[derive_where(Debug, PartialEq, Eq)]
 pub struct TraceInfo {
     /// Sandbox id.
     pub sid: String,
     /// subscriber from runtime.
-    #[derivative(Debug = "ignore", PartialEq = "ignore")]
+    #[derive_where(skip(Debug, EqHashOrd))]
     pub subscriber: Arc<dyn Subscriber + Send + Sync>,
 }
 

@@ -244,3 +244,132 @@ impl Persist for Firecracker {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::{
+        device_manager::{do_handle_device, DeviceManager},
+        DeviceConfig,
+    };
+    use crate::{BlockConfigModern, VmmState, VIRTIO_BLOCK_MMIO};
+    use bytes::Bytes;
+    use http_body_util::{BodyExt, Empty};
+    use hyper::{server::conn::http1, service::service_fn, Response, StatusCode};
+    use hyper_util::rt::TokioIo;
+    use std::convert::Infallible;
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    #[tokio::test]
+    async fn shared_block_device_releases_slot_on_final_detach(#[case] is_readonly: bool) {
+        let tmp = tempfile::tempdir().unwrap();
+        let socket = tmp.path().join("fc.sock");
+        let listener = tokio::net::UnixListener::bind(&socket).unwrap();
+        let (requests, mut received) = mpsc::unbounded_channel();
+        let server = tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                let requests = requests.clone();
+                http1::Builder::new()
+                    .keep_alive(false)
+                    .serve_connection(
+                        TokioIo::new(stream),
+                        service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
+                            let requests = requests.clone();
+                            async move {
+                                assert_eq!(request.method(), hyper::Method::PATCH);
+                                let body = request.into_body().collect().await.unwrap().to_bytes();
+                                requests
+                                    .send(
+                                        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+                                    )
+                                    .unwrap();
+                                Ok::<_, Infallible>(
+                                    Response::builder()
+                                        .status(StatusCode::NO_CONTENT)
+                                        .body(Empty::<Bytes>::new())
+                                        .unwrap(),
+                                )
+                            }
+                        }),
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+
+        let fc = Arc::new(Firecracker::new());
+        {
+            let mut inner = fc.inner.write().await;
+            inner.state = VmmState::VmRunning;
+            inner.asock_path = socket.to_string_lossy().into_owned();
+        }
+        let manager = RwLock::new(DeviceManager::new(fc.clone(), None).await.unwrap());
+        let config = |path: &str| {
+            DeviceConfig::BlockCfgModern(BlockConfigModern {
+                path_on_host: path.into(),
+                is_readonly,
+                driver_option: VIRTIO_BLOCK_MMIO.into(),
+                ..Default::default()
+            })
+        };
+        // Reserve logical index zero for the guest OS disk, as sandbox startup does.
+        do_handle_device(&manager, &config("guest-root"))
+            .await
+            .unwrap();
+        let DeviceType::BlockModern(shared) = do_handle_device(&manager, &config("shared-volume"))
+            .await
+            .unwrap()
+        else {
+            panic!("expected a block device");
+        };
+        let first_request = received.recv().await.unwrap();
+        do_handle_device(&manager, &config("shared-volume"))
+            .await
+            .unwrap();
+        let (id, index) = {
+            let block = shared.lock().await;
+            (block.device_id.clone(), block.config.index)
+        };
+
+        manager.write().await.try_remove_device(&id).await.unwrap();
+        assert_eq!(shared.lock().await.attach_count, 1);
+        // A new user must find the still-attached device without consuming another slot.
+        let DeviceType::BlockModern(reused) = do_handle_device(&manager, &config("shared-volume"))
+            .await
+            .unwrap()
+        else {
+            panic!("expected a block device");
+        };
+        assert!(Arc::ptr_eq(&shared, &reused));
+        assert_eq!(shared.lock().await.attach_count, 2);
+        assert!(received.try_recv().is_err());
+
+        manager.write().await.try_remove_device(&id).await.unwrap();
+        manager.write().await.try_remove_device(&id).await.unwrap();
+        assert_eq!(shared.lock().await.attach_count, 0);
+        // Check before the logical index is reused: a stale mapping would also
+        // let the next attachment select the same physical slot.
+        {
+            let inner = fc.inner.read().await;
+            assert!(!inner.readonly_drive_slots.contains_key(&index));
+            assert!(!inner.writable_drive_slots.contains_key(&index));
+        }
+
+        let DeviceType::BlockModern(next) = do_handle_device(&manager, &config("next-volume"))
+            .await
+            .unwrap()
+        else {
+            panic!("expected a block device");
+        };
+        let next_request = received.recv().await.unwrap();
+        assert_eq!(next_request["drive_id"], first_request["drive_id"]);
+        assert_eq!(next_request["path_on_host"], "next-volume");
+        assert_eq!(
+            next.lock().await.config.virt_path,
+            shared.lock().await.config.virt_path
+        );
+        server.abort();
+    }
+}

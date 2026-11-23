@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -18,12 +19,20 @@ use crate::network::NetworkPair;
 const QDISC_ADD_ATTEMPTS: u64 = 5; // Number of attempts when adding an ingress qdisc
 const QDISC_ADD_BACKOFF_MS: u64 = 10; // Base delay for the linear backoff between qdisc add retries on EBUSY
 
-#[derive(Debug)]
-pub(crate) struct TcFilterModel {}
+/// One model per NetworkPair, so the flags below are this pair's history:
+/// whether an attach of this pair added the ingress qdisc on its TAP and
+/// virt device. A retried attach forgives EEXIST only for a qdisc it added
+/// itself; one somebody else put on the device fails the attach loudly, as
+/// a first attach always did.
+#[derive(Debug, Default)]
+pub(crate) struct TcFilterModel {
+    tap_qdisc_added: AtomicBool,
+    virt_qdisc_added: AtomicBool,
+}
 
 impl TcFilterModel {
     pub fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self::default())
     }
 }
 
@@ -48,14 +57,18 @@ impl NetworkModel for TcFilterModel {
             .await
             .context("fetch virt by index")?;
 
-        add_ingress_qdisc(&handle, tap_index as i32)
+        add_ingress_qdisc(&handle, tap_index as i32, &self.tap_qdisc_added)
             .await
             .context("add tap ingress")?;
 
-        add_ingress_qdisc(&handle, virt_index as i32)
+        add_ingress_qdisc(&handle, virt_index as i32, &self.virt_qdisc_added)
             .await
             .context("add virt ingress")?;
 
+        // A retried attach can add a redirect its failed predecessor already
+        // added. The kernel appends it as another filter instance; the
+        // earlier one steals every matching packet first, so the duplicate
+        // changes nothing and goes away with the qdisc.
         handle
             .traffic_filter(tap_index as i32)
             .add()
@@ -118,24 +131,45 @@ fn is_absent(err: &rtnetlink::Error) -> bool {
 }
 
 /// Add an ingress qdisc to the device at the given index, retrying on EBUSY
-/// with linear backoff (10ms, 20ms, ...).
-async fn add_ingress_qdisc(handle: &Handle, index: i32) -> Result<(), rtnetlink::Error> {
+/// with linear backoff (10ms, 20ms, ...). An EEXIST is forgiven only when
+/// `added_before` says an earlier attempt of this attach added the qdisc,
+/// which a retry after a failure between the TC setup and the device
+/// hotplug finds again; a qdisc somebody else put there fails the attach.
+async fn add_ingress_qdisc(
+    handle: &Handle,
+    index: i32,
+    added_before: &AtomicBool,
+) -> Result<(), rtnetlink::Error> {
     let mut last_err = handle.qdisc().add(index).ingress().execute().await;
     for i in 1..QDISC_ADD_ATTEMPTS {
         match &last_err {
-            Ok(()) => return Ok(()),
+            Ok(()) => break,
             Err(e) if !is_ebusy(e) => break,
             Err(_) => {}
         }
         tokio::time::sleep(Duration::from_millis(QDISC_ADD_BACKOFF_MS * i)).await;
         last_err = handle.qdisc().add(index).ingress().execute().await;
     }
-    last_err
+    match last_err {
+        Ok(()) => {
+            added_before.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+        Err(ref e) if is_eexist(e) && added_before.load(Ordering::SeqCst) => Ok(()),
+        other => other,
+    }
 }
 
 fn is_ebusy(err: &rtnetlink::Error) -> bool {
     match err {
         rtnetlink::Error::NetlinkError(msg) => msg.code.is_some_and(|c| c.get() == -libc::EBUSY),
+        _ => false,
+    }
+}
+
+fn is_eexist(err: &rtnetlink::Error) -> bool {
+    match err {
+        rtnetlink::Error::NetlinkError(msg) => msg.code.is_some_and(|c| c.get() == -libc::EEXIST),
         _ => false,
     }
 }
@@ -152,8 +186,40 @@ pub async fn fetch_index(handle: &Handle, name: &str) -> Result<u32> {
 mod tests {
     use std::sync::Arc;
 
+    use test_utils::skip_if_not_root;
+
     use super::*;
     use crate::network::network_pair::{NetworkInterface, TapInterface};
+    use crate::network::utils::link::{create_link, net_test_utils::delete_link, LinkType};
+
+    // Runs in the sudo test pass; a retried attach after one that failed
+    // between the TC setup and the device hotplug finds the ingress qdisc
+    // it added before, and only that must not fail the retry: a qdisc
+    // somebody else put on the device is not Kata's to adopt.
+    #[tokio::test]
+    async fn a_retried_qdisc_add_forgives_only_its_own_earlier_work() {
+        skip_if_not_root!();
+        let name = "___test_qdisc";
+        let (connection, handle, _) = rtnetlink::new_connection().unwrap();
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+
+        create_link(name, LinkType::Tap, 1).unwrap();
+        let index = fetch_index(&handle, name).await.unwrap() as i32;
+        let added = AtomicBool::new(false);
+        add_ingress_qdisc(&handle, index, &added).await.unwrap();
+        assert!(added.load(Ordering::SeqCst));
+        add_ingress_qdisc(&handle, index, &added).await.unwrap();
+
+        // To a fresh attach the same qdisc is foreign, and the loud failure
+        // tells the admin that Kata and something else want the same hook.
+        let foreign = AtomicBool::new(false);
+        assert!(add_ingress_qdisc(&handle, index, &foreign).await.is_err());
+        assert!(!foreign.load(Ordering::SeqCst));
+        delete_link(&handle, name).await.unwrap();
+    }
 
     #[tokio::test]
     async fn deleting_tc_filter_after_cni_removes_interface_is_idempotent() {

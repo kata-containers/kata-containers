@@ -77,7 +77,9 @@ pub struct PipeStream(AsyncFd<StreamFd>);
 impl PipeStream {
     pub fn new(fd: RawFd) -> Result<Self> {
         set_nonblocking(fd);
-        Ok(Self(AsyncFd::new(StreamFd(fd))?))
+        // SAFETY: StreamFd owns fd, keeps it open until it is dropped, and
+        // as_raw_fd() always returns the same fd.
+        Ok(Self(unsafe { AsyncFd::register(StreamFd(fd))? }))
     }
 
     pub fn from_fd(fd: RawFd) -> Self {

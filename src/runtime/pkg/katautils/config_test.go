@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
@@ -835,6 +836,39 @@ func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 
 	if config.TxRateLimiterMaxRate != txRateLimiterMaxRate {
 		t.Errorf("Expected value for tx rate limiter %v, got %v", txRateLimiterMaxRate, config.TxRateLimiterMaxRate)
+	}
+
+	for _, tc := range []struct {
+		input   string
+		want    uint32
+		invalid bool
+	}{
+		{"", 1, false},
+		{"block_device_read_only_slots = 0", 0, false},
+		{"block_device_read_only_slots = 1", 1, false},
+		{"block_device_read_only_slots = 7", 7, false},
+		{"block_device_read_only_slots = 8", 0, true},
+		{"block_device_read_only_slots = 4294967295", 0, true},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			h := hypervisor
+			if _, err := toml.Decode(tc.input, &h); err != nil {
+				t.Fatal(err)
+			}
+			got, err := newFirecrackerHypervisorConfig(h)
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("invalid read-only pool accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.BlockDeviceReadOnlySlots != tc.want {
+				t.Fatalf("read-only slots: got %d, want %d", got.BlockDeviceReadOnlySlots, tc.want)
+			}
+		})
 	}
 }
 

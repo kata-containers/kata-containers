@@ -98,6 +98,7 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2-tee"
 		"numa-topology-test"
 		"numa-topology-gpu-test"
+		"shim-kill-cleanup"
 		"test-e2e"
 		"vllm-qwen2-5-0-5b-instruct"
 		"vllm-qwen2-5-0-5b-instruct-tee"
@@ -164,7 +165,8 @@ else
 		"k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-dcgm.bats" \
 		"k8s-nvidia-vllm.bats" \
-		"k8s-rootless-vmm.bats")
+		"k8s-rootless-vmm.bats" \
+		"k8s-shim-kill-cleanup.bats")
 
 	# NIM requests 16 CPUs per pod; the two-model path runs both together.
 	# Require headroom for cluster services regardless of runner architecture.

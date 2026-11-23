@@ -8,7 +8,7 @@
 //! it one call at a time. That rules out everything a general D-Bus library
 //! spends its complexity on: no bus daemon, no name resolution, no signal
 //! subscriptions, no concurrent calls to demultiplex. What is left is the wire
-//! format, which `zvariant` implements for us, plus the handshake and framing
+//! format, which `zbus::wire` implements for us, plus the handshake and framing
 //! in this module.
 //!
 //! Blocking sockets with timeouts are a deliberate choice. An async client
@@ -27,8 +27,8 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use zvariant::serialized::{Context as EncodingContext, Data};
-use zvariant::{DynamicType, Endian, ObjectPath, OwnedValue, Signature, Type, Value};
+use zbus::wire::serialized::{Context as EncodingContext, Data};
+use zbus::wire::{DynamicType, Endian, ObjectPath, OwnedVariant, Signature, Type, Variant};
 
 const PROTOCOL_VERSION: u8 = 1;
 
@@ -82,11 +82,11 @@ impl Reply {
     /// Deserialize the reply body as `T`.
     pub fn body<T>(&self) -> Result<T>
     where
-        T: serde::de::DeserializeOwned + zvariant::Type,
+        T: serde::de::DeserializeOwned + zbus::wire::Type,
     {
         // The body starts on an 8 byte boundary, so its alignment is the same
         // whether it is counted from the start of the message or of the body.
-        let ctxt = EncodingContext::new_dbus(self.endian, 0);
+        let ctxt = EncodingContext::new(self.endian, 0);
         let data = Data::new(&self.bytes[self.body_offset..], ctxt);
 
         data.deserialize()
@@ -352,10 +352,10 @@ impl Connection {
             .map_err(describe_read_error)
             .context("Failed to read a message body")?;
 
-        let ctxt = EncodingContext::new_dbus(endian, PRIMARY_HEADER_LEN - 4);
+        let ctxt = EncodingContext::new(endian, PRIMARY_HEADER_LEN - 4);
         let data = Data::new(&bytes[PRIMARY_HEADER_LEN - 4..fields_end], ctxt);
         let (fields, _) = data
-            .deserialize::<Vec<(u8, OwnedValue)>>()
+            .deserialize::<Vec<(u8, OwnedVariant)>>()
             .context("Failed to deserialize the message header fields")?;
 
         let mut reply_serial = None;
@@ -454,20 +454,20 @@ where
     B: Serialize + DynamicType + ?Sized,
 {
     let endian = Endian::native();
-    let ctxt = EncodingContext::new_dbus(endian, 0);
+    let ctxt = EncodingContext::new(endian, 0);
 
-    let body_bytes = zvariant::to_bytes(ctxt, body)
+    let body_bytes = zbus::wire::to_bytes(ctxt, body)
         .with_context(|| format!("Failed to serialize the {} call arguments", method.member))?;
     let body_bytes = body_bytes.bytes();
 
     let mut fields = vec![
         Field::value(
             FIELD_PATH,
-            Value::ObjectPath(ObjectPath::try_from(method.path).context("Invalid object path")?),
+            Variant::ObjectPath(ObjectPath::try_from(method.path).context("Invalid object path")?),
         ),
-        Field::value(FIELD_INTERFACE, Value::Str(method.interface.into())),
-        Field::value(FIELD_MEMBER, Value::Str(method.member.into())),
-        Field::value(FIELD_DESTINATION, Value::Str(method.destination.into())),
+        Field::value(FIELD_INTERFACE, Variant::Str(method.interface.into())),
+        Field::value(FIELD_MEMBER, Variant::Str(method.member.into())),
+        Field::value(FIELD_DESTINATION, Variant::Str(method.destination.into())),
     ];
     let signature = body.signature();
     if !body_bytes.is_empty() {
@@ -486,7 +486,7 @@ where
     );
 
     let header_bytes =
-        zvariant::to_bytes(ctxt, &header).context("Failed to serialize the message header")?;
+        zbus::wire::to_bytes(ctxt, &header).context("Failed to serialize the message header")?;
     let header_bytes = header_bytes.bytes();
 
     let mut message = Vec::with_capacity(
@@ -508,12 +508,12 @@ struct Field<'a> {
 }
 
 enum FieldValue<'a> {
-    Value(Value<'a>),
+    Value(Variant<'a>),
     Signature(&'a Signature),
 }
 
 impl<'a> Field<'a> {
-    fn value(code: u8, value: Value<'a>) -> Self {
+    fn value(code: u8, value: Variant<'a>) -> Self {
         Self {
             code,
             value: FieldValue::Value(value),
@@ -571,10 +571,10 @@ impl Serialize for BodySignature<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zvariant::OwnedObjectPath;
+    use zbus::wire::OwnedObjectPath;
 
     /// Parse a message the way `receive` does, without a socket.
-    fn parse(bytes: &[u8]) -> (u8, u32, Vec<(u8, OwnedValue)>, Reply) {
+    fn parse(bytes: &[u8]) -> (u8, u32, Vec<(u8, OwnedVariant)>, Reply) {
         let endian = match bytes[0] {
             b'l' => Endian::Little,
             _ => Endian::Big,
@@ -587,9 +587,9 @@ mod tests {
         let body_offset = fields_end + padding_to_8(fields_end);
         assert_eq!(bytes.len(), body_offset + body_len as usize);
 
-        let ctxt = EncodingContext::new_dbus(endian, PRIMARY_HEADER_LEN - 4);
+        let ctxt = EncodingContext::new(endian, PRIMARY_HEADER_LEN - 4);
         let data = Data::new(&bytes[PRIMARY_HEADER_LEN - 4..fields_end], ctxt);
-        let (fields, _) = data.deserialize::<Vec<(u8, OwnedValue)>>().unwrap();
+        let (fields, _) = data.deserialize::<Vec<(u8, OwnedVariant)>>().unwrap();
 
         (
             bytes[1],
@@ -603,14 +603,14 @@ mod tests {
         )
     }
 
-    fn field(fields: &[(u8, OwnedValue)], code: u8) -> Option<String> {
+    fn field(fields: &[(u8, OwnedVariant)], code: u8) -> Option<String> {
         fields
             .iter()
             .find(|(field_code, _)| *field_code == code)
             .map(|(_, value)| match &**value {
-                Value::Str(value) => value.to_string(),
-                Value::ObjectPath(value) => value.to_string(),
-                Value::Signature(value) => value.to_string_no_parens(),
+                Variant::Str(value) => value.to_string(),
+                Variant::ObjectPath(value) => value.to_string(),
+                Variant::Signature(value) => value.to_string_no_parens(),
                 value => value.to_string(),
             })
     }

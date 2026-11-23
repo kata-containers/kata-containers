@@ -51,10 +51,10 @@ tokio = { features = [
 ], workspace = true }
 toml_edit = "0.22"
 walkdir = "2"
-zstd = "0.13.3"
 # We speak D-Bus to systemd ourselves (see src/utils/dbus.rs) and only need the
 # wire format, not a D-Bus library.
-zvariant = "5"
+zbus = { default-features = false, version = "6" }
+zstd = "0.13.3"
 
 [dev-dependencies]
 rstest.workspace = true

@@ -148,7 +148,7 @@ VMM and guest configurations differ considerably:
 | --- | --- | --- |
 | QEMU build | General-purpose Kata QEMU build with shared-filesystem and resource-resizing support. | Minimal `qemu-no-shared-fs` build. Omits shared-filesystem devices, memory hotplug and balloon devices, DAX rootfs support, virtual IOMMU, and confidential-guest backends to reduce the exposed VMM code. |
 | QEMU sandbox | QEMU seccomp sandbox is disabled by default. | Enables QEMU seccomp sandbox restrictions on obsolete operations, privilege elevation, process spawning, and resource control. |
-| Guest root filesystem | Standard Kata guest image; ext4 is the default root filesystem type. | Minimal NVIDIA base guest driven by NVRC, using a compressed, read-only EROFS root filesystem with dm-verity parameters supplied by the image build. |
+| Guest root filesystem | Standard Kata guest image using a compressed, read-only EROFS root filesystem. | Minimal NVIDIA base guest driven by NVRC, using a compressed, read-only EROFS root filesystem with dm-verity parameters supplied by the image build. |
 | Host-to-guest filesystem sharing | Uses virtio-fs by default, with a host `virtiofsd` process. | Sets `shared_fs = "none"`; container storage must use a compatible block-based path. The CPU preset selects the EROFS snapshotter. |
 | Resource flexibility | QEMU build retains memory-resizing devices for configurations that use them. | Disables virtio-mem and guest memory reclamation; the minimal VMM omits memory-resizing devices. Choose it for workloads that fit that resource model. |
 

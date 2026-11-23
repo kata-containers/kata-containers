@@ -61,9 +61,9 @@ snp_id_auth = ""
 snp_guest_policy = 196608
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
+#   - erofs (default)
 rootfs_type = @DEFROOTFSTYPE@
 
 # Block storage driver to be used for the VM rootfs is backed
@@ -124,6 +124,11 @@ seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 # comma-separated list of cpu features to pass to the cpu
 # For example, `cpu_features = "pmu=off,vmx=off"
 cpu_features = "@CPUFEATURES@"
+
+# CPU model
+# Guest CPU model, QEMU -cpu. Part of the SNP launch measurement:
+# sev-snp-measure --vcpu-type must match. Milan is the oldest SNP generation.
+cpu_model = "EPYC-Milan-v2"
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@

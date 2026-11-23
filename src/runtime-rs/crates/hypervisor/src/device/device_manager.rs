@@ -21,8 +21,8 @@ use crate::{
     vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
     BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor, NetworkDevice,
-    PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
-    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    PCIePortDevice, ProtectionDevice, ShareFsDevice, VhostUserConfig, VhostUserNetDevice,
+    VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
     KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
     VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
@@ -160,13 +160,12 @@ impl DeviceManager {
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
-                DeviceType::Vfio(device) => {
-                    // safe here:
-                    // Only when vfio dev_type is `b`, virt_path MUST be Some(X),
-                    // and needs do release_device_index. otherwise, let it go.
-                    if device.config.dev_type == DEVICE_TYPE_BLOCK {
-                        self.shared_info
-                            .release_device_index(device.config.virt_path.unwrap().0, false);
+                DeviceType::VfioModern(device) => {
+                    let config = &device.lock().await.config;
+                    if config.dev_type == DEVICE_TYPE_BLOCK {
+                        if let Some((index, _)) = config.virt_path.as_ref() {
+                            self.shared_info.release_device_index(*index, false);
+                        }
                     }
                 }
                 DeviceType::VhostUserBlk(device) => {
@@ -240,11 +239,6 @@ impl DeviceManager {
     async fn find_device(&self, host_path: String) -> Option<String> {
         for (device_id, dev) in &self.devices {
             match dev.lock().await.get_device_info().await {
-                DeviceType::Vfio(device) => {
-                    if device.config.host_path == host_path {
-                        return Some(device_id.to_string());
-                    }
-                }
                 DeviceType::VhostUserBlk(device) => {
                     if device.config.socket_path == host_path {
                         return Some(device_id.to_string());
@@ -324,20 +318,6 @@ impl DeviceManager {
                     .await
                     .context("failed to create block device modern")?
             }
-            DeviceConfig::VfioCfg(config) => {
-                let mut vfio_dev_config = config.clone();
-                let dev_host_path = vfio_dev_config.host_path.clone();
-                if let Some(device_matched_id) = self.find_device(dev_host_path).await {
-                    return Ok(device_matched_id);
-                }
-                let virt_path = self.get_dev_virt_path(vfio_dev_config.dev_type.as_str(), false)?;
-                vfio_dev_config.virt_path = virt_path;
-
-                Arc::new(Mutex::new(VfioDevice::new(
-                    device_id.clone(),
-                    &vfio_dev_config,
-                )?))
-            }
             DeviceConfig::VfioModernCfg(config) => {
                 let dev_host_path = config.host_path.clone();
                 if let Some(device_matched_id) = self.find_device(dev_host_path.clone()).await {
@@ -349,10 +329,15 @@ impl DeviceManager {
                 vfio_base.iommu_group_devnode = PathBuf::from(dev_host_path);
                 vfio_base.virt_path = virt_path;
 
-                Arc::new(Mutex::new(VfioDeviceModernHandle::new(
-                    device_id.clone(),
-                    &vfio_base,
-                )?))
+                match VfioDeviceModernHandle::new(device_id.clone(), &vfio_base) {
+                    Ok(device) => Arc::new(Mutex::new(device)),
+                    Err(err) => {
+                        if let Some((index, _)) = vfio_base.virt_path.as_ref() {
+                            self.shared_info.release_device_index(*index, false);
+                        }
+                        return Err(err);
+                    }
+                }
             }
             DeviceConfig::VhostUserBlkCfg(config) => {
                 // try to find the device, found and just return id.
@@ -539,7 +524,11 @@ impl DeviceManager {
     fn new_device_id(&self) -> Result<String> {
         for _ in 0..5 {
             let rand_bytes = RandomBytes::new(8);
-            let id = format!("{rand_bytes:x}");
+            // Keep the "dev_" prefix so the ID always starts with an alphabetic
+            // character. Some hypervisors, e.g. QEMU (see id_wellformed() in
+            // util/id.c), reject IDs starting with a digit, which would make
+            // device_add intermittently fail with "Invalid qdev ID '<id>'".
+            let id = format!("dev_{rand_bytes:x}");
 
             // check collision in devices
             if !self.devices.contains_key(&id) {
@@ -617,27 +606,23 @@ pub async fn do_handle_device(
     d: &RwLock<DeviceManager>,
     dev_info: &DeviceConfig,
 ) -> Result<DeviceType> {
-    let device_id = d
-        .write()
-        .await
+    // One lock for all three steps: new_device() may hand back the id of a
+    // device another owner is detaching, and the final detach removes it.
+    let mut device_manager = d.write().await;
+    let device_id = device_manager
         .new_device(dev_info)
         .await
         .context("failed to create device")?;
 
-    d.write()
-        .await
+    device_manager
         .try_add_device(&device_id)
         .await
         .context("failed to add device")?;
 
-    let device_info = d
-        .read()
-        .await
+    device_manager
         .get_device_info(&device_id)
         .await
-        .context("failed to get device info")?;
-
-    Ok(device_info)
+        .context("failed to get device info")
 }
 
 pub async fn do_update_device(
@@ -671,7 +656,6 @@ async fn detach_metadata(device_info: &DeviceType) -> (bool, bool) {
                 device.config.driver_option == *KATA_NVDIMM_DEV_TYPE,
             )
         }
-        DeviceType::Vfio(device) => (device.attach_count > 1, false),
         DeviceType::VfioModern(device) => (device.lock().await.attach_count > 1, false),
         _ => (false, false),
     }
@@ -709,7 +693,7 @@ pub async fn find_cold_plugged_vfio_ap(
 
 #[cfg(test)]
 mod tests {
-    use super::DeviceManager;
+    use super::{do_handle_device, Device, DeviceManager, PCIeTopology};
     use crate::{
         device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
         qemu::Qemu,
@@ -719,7 +703,103 @@ mod tests {
     use kata_types::config::hypervisor::TopologyConfigInfo;
     use std::sync::Arc;
     use tests_utils::load_test_config;
-    use tokio::sync::RwLock;
+    use tokio::sync::{Mutex, RwLock};
+
+    #[derive(Debug)]
+    struct SharedTestDevice(Arc<Mutex<crate::BlockDeviceModern>>);
+
+    #[async_trait::async_trait]
+    impl Device for SharedTestDevice {
+        async fn attach(
+            &mut self,
+            _: &mut Option<&mut PCIeTopology>,
+            _: &dyn crate::Hypervisor,
+        ) -> Result<()> {
+            self.0.lock().await.attach_count += 1;
+            Ok(())
+        }
+
+        async fn detach(
+            &mut self,
+            _: &mut Option<&mut PCIeTopology>,
+            _: &dyn crate::Hypervisor,
+        ) -> Result<Option<u64>> {
+            let mut device = self.0.lock().await;
+            device.attach_count -= 1;
+            Ok((device.attach_count == 0).then_some(device.config.index))
+        }
+
+        async fn update(&mut self, _: &dyn crate::Hypervisor) -> Result<()> {
+            unreachable!()
+        }
+
+        async fn get_device_info(&self) -> DeviceType {
+            DeviceType::BlockModern(self.0.clone())
+        }
+
+        async fn increase_attach_count(&mut self) -> Result<bool> {
+            unreachable!()
+        }
+
+        async fn decrease_attach_count(&mut self) -> Result<bool> {
+            unreachable!()
+        }
+    }
+
+    #[tokio::test]
+    async fn attach_keeps_shared_device_alive_during_another_owners_detach() {
+        let config = BlockConfigModern {
+            path_on_host: "/dev/shared-attach-race-test".into(),
+            driver_option: "virtio-blk-pci".into(),
+            ..Default::default()
+        };
+        let block = Arc::new(Mutex::new(crate::BlockDeviceModern {
+            device_id: "shared".into(),
+            attach_count: 1,
+            config: config.clone(),
+        }));
+        let mut manager = DeviceManager::new(Arc::new(Qemu::new()), None)
+            .await
+            .unwrap();
+        manager.devices.insert(
+            "shared".into(),
+            Arc::new(Mutex::new(SharedTestDevice(block.clone()))),
+        );
+        let manager = RwLock::new(manager);
+        let device_config = DeviceConfig::BlockCfgModern(config);
+
+        // Pause lookup at the shared device while it holds the manager lock.
+        let block_guard = block.lock().await;
+        let attach = do_handle_device(&manager, &device_config);
+        tokio::pin!(attach);
+        tokio::select! {
+            biased;
+            result = &mut attach => panic!("lookup should be pending: {:?}", result),
+            _ = std::future::ready(()) => {}
+        }
+
+        // Queue the other owner's final detach before allowing lookup to finish.
+        let detach = async { manager.write().await.try_remove_device("shared").await };
+        tokio::pin!(detach);
+        tokio::select! {
+            biased;
+            result = &mut detach => panic!("detach should be pending: {:?}", result),
+            _ = std::future::ready(()) => {}
+        }
+        drop(block_guard);
+
+        let (attached, detached) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(attach, detach)
+        })
+        .await
+        .unwrap();
+        assert!(
+            matches!(attached.unwrap(), DeviceType::BlockModern(device) if Arc::ptr_eq(&device, &block))
+        );
+        detached.unwrap();
+        assert_eq!(block.lock().await.attach_count, 1);
+        assert!(manager.read().await.devices.contains_key("shared"));
+    }
 
     #[cfg(all(
         feature = "cloud-hypervisor",
@@ -835,5 +915,19 @@ mod tests {
         assert!(
             matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
         );
+    }
+
+    #[tokio::test]
+    async fn test_new_device_id_format() {
+        let dm = new_device_manager().await.unwrap();
+        let guard = dm.read().await;
+        for _ in 0..100 {
+            let id = guard.new_device_id().unwrap();
+            assert!(id.starts_with("dev_"));
+            assert!(
+                id.chars().next().unwrap().is_ascii_alphabetic(),
+                "qdev ID must start with an ASCII alphabetic character for QEMU"
+            );
+        }
     }
 }

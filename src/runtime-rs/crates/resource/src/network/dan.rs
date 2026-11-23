@@ -34,7 +34,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
-use super::{EndpointState, Network};
+use super::{AttachProgress, EndpointState, Network};
 use crate::network::endpoint::{TapEndpoint, VhostUserEndpoint};
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;
@@ -43,7 +43,19 @@ use crate::network::Endpoint;
 /// Directly attachable network
 pub struct Dan {
     inner: Arc<RwLock<DanInner>>,
-    detached: Mutex<HashSet<usize>>,
+    /// The endpoints setup() got to attaching; see `AttachProgress`.
+    attach_progress: AttachProgress,
+    cleanup: Mutex<DanCleanup>,
+}
+
+#[derive(Default)]
+struct DanCleanup {
+    /// Once a removal has begun, nothing may attach any more: setup() runs
+    /// on a thread the caller may have been cancelled away from, and an
+    /// attach after (or interleaved with) the removal would leave devices
+    /// attached with their records gone.
+    removal_started: bool,
+    detached: HashSet<usize>,
 }
 
 pub struct DanInner {
@@ -58,7 +70,8 @@ impl Dan {
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(DanInner::new(config, &dev_mgr).await?)),
-            detached: Mutex::new(HashSet::new()),
+            attach_progress: AttachProgress::default(),
+            cleanup: Mutex::new(DanCleanup::default()),
         })
     }
 }
@@ -131,18 +144,32 @@ impl DanInner {
 #[async_trait]
 impl Network for Dan {
     async fn setup(&self) -> Result<()> {
+        // Held for the whole attach, so the removal of a sandbox whose
+        // attach_network() caller was cancelled waits for this thread
+        // instead of racing it, and an attach can never follow a removal.
+        let cleanup = self.cleanup.lock().await;
+        if cleanup.removal_started {
+            return Err(anyhow!("the network is being removed, nothing may attach"));
+        }
         let inner = self.inner.read().await;
         let _netns_guard;
         if let Some(netns) = inner.netns.as_ref() {
             _netns_guard = NetnsGuard::new(netns).context("New netns guard")?;
         }
-        for e in inner.entity_list.iter() {
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            // A retried setup resumes after the endpoints it finished:
+            // replaying an attach would hotplug its device a second time.
+            if self.attach_progress.is_finished(index) {
+                continue;
+            }
+            self.attach_progress.begin(index);
             if let Some(device_path) = e.endpoint.attach().await.context("Attach")? {
                 e.network_info
                     .set_device_path(device_path)
                     .await
                     .context("set device path")?;
             }
+            self.attach_progress.finish(index);
         }
         Ok(())
     }
@@ -179,7 +206,10 @@ impl Network for Dan {
     async fn save(&self) -> Option<Vec<EndpointState>> {
         let inner = self.inner.read().await;
         let mut ep_states = vec![];
-        for e in &inner.entity_list {
+        for (index, e) in inner.entity_list.iter().enumerate() {
+            if !self.attach_progress.includes(index) {
+                break;
+            }
             if let Some(state) = e.endpoint.save().await {
                 ep_states.push(state);
             }
@@ -188,9 +218,14 @@ impl Network for Dan {
     }
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
-        let mut detached = self.detached.lock().await;
+        let mut cleanup = self.cleanup.lock().await;
+        cleanup.removal_started = true;
+        let detached = &mut cleanup.detached;
         let inner = self.inner.read().await;
-        if detached.len() == inner.entity_list.len() {
+        if (0..inner.entity_list.len())
+            .filter(|index| self.attach_progress.includes(*index))
+            .all(|index| detached.contains(&index))
+        {
             return Ok(());
         }
         let _netns_guard;
@@ -199,7 +234,7 @@ impl Network for Dan {
         }
         let mut errors = Vec::new();
         for (index, e) in inner.entity_list.iter().enumerate() {
-            if detached.contains(&index) {
+            if detached.contains(&index) || !self.attach_progress.includes(index) {
                 continue;
             }
             match e.endpoint.detach(h).await {

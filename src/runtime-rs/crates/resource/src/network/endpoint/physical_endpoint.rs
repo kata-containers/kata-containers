@@ -13,7 +13,7 @@ use futures_lite::stream::StreamExt;
 use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::DeviceConfig;
 use hypervisor::{device::driver, Hypervisor};
-use hypervisor::{get_vfio_device, VfioConfig};
+use hypervisor::{get_vfio_device, VfioDeviceBase};
 use kata_sys_util::netns::NetnsGuard;
 use netlink_packet_core::{NetlinkMessage, NLM_F_ACK, NLM_F_CREATE, NLM_F_EXCL, NLM_F_REQUEST};
 use netlink_packet_route::{
@@ -29,43 +29,13 @@ use crate::network::utils::{self, link};
 pub const SYS_PCI_DEVICES_PATH: &str = "/sys/bus/pci/devices";
 
 #[derive(Debug)]
-pub struct VendorDevice {
-    vendor_id: String,
-    device_id: String,
-}
-
-impl VendorDevice {
-    pub fn new(vendor_id: &str, device_id: &str) -> Result<Self> {
-        if vendor_id.is_empty() || device_id.is_empty() {
-            return Err(anyhow!(
-                "invalid parameters vendor_id {} device_id {}",
-                vendor_id,
-                device_id
-            ));
-        }
-        Ok(Self {
-            vendor_id: vendor_id.to_string(),
-            device_id: device_id.to_string(),
-        })
-    }
-
-    pub fn vendor_device_id(&self) -> String {
-        format!("{}_{}", self.vendor_id, self.device_id)
-    }
-}
-
-#[derive(Debug)]
 pub struct PhysicalEndpoint {
     iface_name: String,
     hard_addr: String,
     bdf: String,
     driver: String,
-    vendor_device_id: VendorDevice,
     d: Arc<RwLock<DeviceManager>>,
     /// Guest PCI path — populated after QMP resolution in setup_after_start_vm.
-    /// The pre-computed topology path from attach() is WRONG for physical
-    /// endpoints because the root port has no explicit addr; the correct path
-    /// requires QMP query-pci after VM boots.
     guest_pci_path: std::sync::Mutex<Option<String>>,
     /// QEMU device ID for the cold-plugged VF (e.g. "physical_nic__346_0").
     /// Stored during attach() for use in QMP-based path resolution.
@@ -84,20 +54,9 @@ impl PhysicalEndpoint {
             .file_name()
             .map_or(String::new(), |v| v.to_str().unwrap().to_owned());
 
-        // get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
-        let iface_device_path = sys_pci_devices_path.join(&bdf).join("device");
-        let device_id = std::fs::read_to_string(&iface_device_path)
-            .with_context(|| format!("read device path {:?}", iface_device_path))?;
-
-        let iface_vendor_path = sys_pci_devices_path.join(&bdf).join("vendor");
-        let vendor_id = std::fs::read_to_string(&iface_vendor_path)
-            .with_context(|| format!("read vendor path {:?}", iface_vendor_path))?;
-
         Ok(Self {
             iface_name: name.to_string(),
             hard_addr: utils::get_mac_addr(hardware_addr).context("get mac addr")?,
-            vendor_device_id: VendorDevice::new(&vendor_id, &device_id)
-                .context("new vendor device")?,
             driver,
             bdf,
             d,
@@ -146,38 +105,29 @@ impl Endpoint for PhysicalEndpoint {
         }
 
         // bind physical interface from host driver and bind to vfio
-        driver::bind_device_to_vfio(
-            &self.bdf,
-            &self.driver,
-            &self.vendor_device_id.vendor_device_id(),
-        )
-        .with_context(|| format!("bind physical endpoint from {} to vfio", self.driver))?;
+        driver::bind_device_to_vfio(&self.bdf, &self.driver)
+            .with_context(|| format!("bind physical endpoint from {} to vfio", self.driver))?;
 
         let vfio_device = get_vfio_device(self.bdf.clone()).context("get vfio device failed.")?;
-        let vfio_dev_config = &mut VfioConfig {
+        let vfio_dev_config = VfioDeviceBase {
             host_path: vfio_device.clone(),
             dev_type: "pci".to_string(),
+            bus_type: "pci".to_string(),
             hostdev_prefix: "physical_nic_".to_owned(),
             ..Default::default()
         };
 
         // create and insert VFIO device into Kata VM; do_handle_device returns
-        // the DeviceType with guest_pci_path already computed by
-        // do_add_pcie_endpoint() inside VfioDevice::register().
-        let device_type =
-            do_handle_device(&self.d, &DeviceConfig::VfioCfg(vfio_dev_config.clone()))
-                .await
-                .context("do handle device failed.")?;
+        // the modern DeviceType with its topology assignment completed.
+        let device_type = do_handle_device(&self.d, &DeviceConfig::VfioModernCfg(vfio_dev_config))
+            .await
+            .context("do handle device failed.")?;
 
-        // Store the QEMU hostdev_id for later QMP-based PCI path resolution.
-        // The topology-computed guest_pci_path from do_add_pcie_endpoint() is
-        // WRONG for physical endpoints (root port has no explicit addr so QEMU
-        // auto-assigns its slot; the correct path requires QMP after VM boot).
-        if let hypervisor::device::DeviceType::Vfio(vfio_dev) = device_type {
-            if let Some(hostdev) = vfio_dev.devices.first() {
-                if let Ok(mut guard) = self.hostdev_id.lock() {
-                    *guard = Some(hostdev.hostdev_id.clone());
-                }
+        // Store the QEMU hostdev_id for the existing post-boot PCI path lookup.
+        if let hypervisor::device::DeviceType::VfioModern(vfio_dev) = device_type {
+            let device_id = vfio_dev.lock().await.device_id.clone();
+            if let Ok(mut guard) = self.hostdev_id.lock() {
+                *guard = Some(device_id);
             }
         }
 
@@ -193,12 +143,9 @@ impl Endpoint for PhysicalEndpoint {
 
         // we do not need to enter the network namespace to bind back the
         // physical interface to host driver.
-        driver::bind_device_to_host(
-            &self.bdf,
-            &self.driver,
-            &self.vendor_device_id.vendor_device_id(),
-        )
-        .with_context(|| format!("bind physical endpoint device from vfio to {}", self.driver))?;
+        driver::bind_device_to_host(&self.bdf, &self.driver).with_context(|| {
+            format!("bind physical endpoint device from vfio to {}", self.driver)
+        })?;
         Ok(())
     }
 
@@ -207,11 +154,7 @@ impl Endpoint for PhysicalEndpoint {
             physical_endpoint: Some(PhysicalEndpointState {
                 bdf: self.bdf.clone(),
                 driver: self.driver.clone(),
-                vendor_id: self.vendor_device_id.vendor_id.clone(),
-                device_id: self.vendor_device_id.device_id.clone(),
-                hard_addr: self.hard_addr.clone(),
             }),
-            ..Default::default()
         })
     }
 
@@ -365,5 +308,79 @@ fn pf_netdev_name(pf_bdf: &str) -> Result<String> {
             );
             Ok(names.remove(0))
         }
+    }
+}
+
+/// A shim that went away left its passed-through network devices bound to
+/// vfio-pci. Hand them back to their host drivers, as detach() would have.
+/// Every device is tried, so one failure does not strand the others.
+pub(crate) fn rebind_saved_physical_endpoints(
+    endpoints: &[EndpointState],
+    bind: impl Fn(&str, &str) -> Result<()>,
+) -> Result<()> {
+    let mut failures = 0;
+    for p in endpoints
+        .iter()
+        // Every recorded device is tried, however far its attach got:
+        // binding back one that never left its host driver is a no-op.
+        .filter_map(|e| e.physical_endpoint.as_ref())
+    {
+        if let Err(e) = bind(&p.bdf, &p.driver) {
+            failures += 1;
+            warn!(
+                sl!(),
+                "failed to bind physical endpoint {} back to {}: {:#}", p.bdf, p.driver, e
+            );
+        }
+    }
+    if failures == 0 {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "{failures} physical endpoint(s) not bound back to the host"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod rebind_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    fn physical(bdf: &str) -> EndpointState {
+        EndpointState {
+            physical_endpoint: Some(PhysicalEndpointState {
+                bdf: bdf.to_string(),
+                driver: "mlx5_core".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn only_physical_endpoints_are_bound_back_and_all_are_tried() {
+        let endpoints = vec![
+            physical("0000:41:00.2"),
+            EndpointState::default(),
+            physical("0000:41:00.3"),
+            physical("0000:41:00.4"),
+        ];
+        let bound = Mutex::new(Vec::new());
+        let result = rebind_saved_physical_endpoints(&endpoints, |bdf, driver| {
+            bound.lock().unwrap().push(format!("{bdf} {driver}"));
+            if bdf.ends_with(".2") {
+                return Err(anyhow!("busy"));
+            }
+            Ok(())
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            *bound.lock().unwrap(),
+            vec![
+                "0000:41:00.2 mlx5_core",
+                "0000:41:00.3 mlx5_core",
+                "0000:41:00.4 mlx5_core"
+            ]
+        );
     }
 }

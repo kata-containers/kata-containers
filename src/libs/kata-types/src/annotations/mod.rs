@@ -17,7 +17,9 @@ use crate::config::TomlConfig;
 use crate::initdata::add_hypervisor_initdata_overrides;
 use crate::sl;
 
-use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
+use self::cri_containerd::{
+    SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_CPU_SHARE_KEY, SANDBOX_MEM_KEY,
+};
 
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
@@ -177,6 +179,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FIRMWARE_HASH: &str =
 /// A sandbox annotation to specify cpu specific features.
 pub const KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES: &str =
     "io.katacontainers.config.hypervisor.cpu_features";
+/// A sandbox annotation to specify the guest CPU model passed to the hypervisor (e.g. QEMU `-cpu`).
+pub const KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL: &str =
+    "io.katacontainers.config.hypervisor.cpu_model";
 /// A sandbox annotation for passing the default vCPUs assigned for a VM by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_vcpus";
@@ -445,6 +450,14 @@ impl Annotation {
         value.unwrap_or(0)
     }
 
+    /// Get the annotation of cpu shares for sandbox
+    pub fn get_sandbox_cpu_shares(&self) -> u64 {
+        let value = self
+            .get_value::<u64>(SANDBOX_CPU_SHARE_KEY)
+            .unwrap_or(Some(0));
+        value.unwrap_or(0)
+    }
+
     /// Get the annotation of memory for sandbox
     pub fn get_sandbox_mem(&self) -> i64 {
         let value = self.get_value::<i64>(SANDBOX_MEM_KEY).unwrap_or(Some(0));
@@ -678,6 +691,9 @@ impl Annotation {
                     // Hypervisor CPU related annotations
                     KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES => {
                         hv.cpu_info.cpu_features = value.to_string();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL => {
+                        hv.cpu_info.cpu_model = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS => match self.get_value::<f32>(key) {
                         Ok(num_cpus) => {

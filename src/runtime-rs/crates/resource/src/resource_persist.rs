@@ -5,11 +5,17 @@
 //
 
 use crate::network::EndpointState;
+use crate::volume::EphemeralDiskInfo;
 use serde::{Deserialize, Serialize};
 
 use crate::cgroups::cgroup_persist::CgroupState;
 #[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct ResourceState {
     pub endpoint: Vec<EndpointState>,
+    /// The network namespace the endpoints live in. Without it a recovery
+    /// cannot reach what an endpoint's constructor left there.
+    pub netns_path: Option<String>,
     pub cgroup_state: Option<CgroupState>,
+    pub ephemeral_disks: Vec<EphemeralDiskInfo>,
 }

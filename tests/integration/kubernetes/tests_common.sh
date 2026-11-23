@@ -201,6 +201,28 @@ is_nvidia_gpu_platform() {
 	esac
 }
 
+# Whether a test pod can ask for a GPU: the NVIDIA GPU runtime-rs handlers,
+# where a GPU reaches the VMM through the VFIO file-descriptor path.
+nvidia_gpu_request_supported() {
+	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
+	is_runtime_rs || return 1
+	is_nvidia_gpu_platform || return 1
+}
+
+# Request one GPU for the first container of the pod in $1, on ${node}.
+request_gpu_for_nvidia_gpu_runtime_rs() {
+	local available_gpus
+	local config="$1"
+
+	available_gpus="$(kubectl get node "${node}" \
+		-o jsonpath='{.status.allocatable.nvidia\.com/gpu}')"
+	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
+		die "${node} has no allocatable nvidia.com/gpu resource"
+
+	yq -i '.spec.containers[0].resources.limits."nvidia.com/gpu" = "1"' \
+		"${config}"
+}
+
 is_aks_cluster() {
 	if [[ "${RUNS_ON_AKS}" = "true" ]]; then
 		return 0
@@ -356,6 +378,145 @@ shim_pid_for_pod() {
 	pid="$(exec_host "${node_name}" "for p in \$(pgrep -f '[c]ontainerd-shim-kata-v2'); do grep -qE 'pod(${uid_dashed}|${uid_underscored})' /proc/\$p/cgroup 2>/dev/null && echo \$p && break; done; true")"
 	[[ -n "${pid}" ]] || return 1
 	echo "${pid}"
+}
+
+# Check that sandbox $2 on node $1 has something to clean up, and record in
+# sandbox_cleanup_paths the host paths that have to go with it. Without these
+# checks the wait for the cleanup also succeeds when the sandbox never had a
+# VMM process or a state.json, and a test would pass without testing anything.
+#
+# exec_host returns the status of its pipeline's last command, not of the
+# command on the host, so the checks look at what the command prints.
+expect_sandbox_resources() {
+	local node_name="$1"
+	local sandbox_id="$2"
+	# The pattern must not hold the sandbox id in one piece, or pgrep matches
+	# the `bash -c` running it and the `kubectl exec` that started it.
+	local pattern="[${sandbox_id:0:1}]${sandbox_id:1}"
+	local vmm_procs
+	local state
+	local disk
+	local src
+	local initdata_image
+
+	sandbox_cleanup_paths=("/run/kata/${sandbox_id}")
+
+	[[ "$(exec_host "${node_name}" \
+		"test -s '/run/kata/${sandbox_id}/state.json' && echo present")" == "present" ]] || \
+		die "No state.json for sandbox ${sandbox_id}"
+	if has_separate_vmm; then
+		# Processes that name the sandbox, other than the shim itself: the
+		# VMM and, with filesystem sharing, virtiofsd.
+		vmm_procs="$(exec_host "${node_name}" \
+			"pgrep -af '${pattern}' | grep -v 'containerd-shim-kata-v2' || true")"
+		[[ -n "${vmm_procs}" ]] || \
+			die "No VMM or helper process names sandbox ${sandbox_id}"
+	fi
+
+	# A block emptyDir leaves a disk image and a direct-volume record that only
+	# the sandbox cleanup removes, keyed by the URL-safe base64 of its source.
+	state="$(exec_host "${node_name}" "cat '/run/kata/${sandbox_id}/state.json'")"
+	while IFS=$'\t' read -r disk src; do
+		[[ -n "${disk}" ]] || continue
+		sandbox_cleanup_paths+=("${disk}")
+		sandbox_cleanup_paths+=("/run/kata-containers/shared/direct-volumes/$(printf '%s' "${src}" | base64 -w0 | tr '+/' '-_')")
+	done < <(jq -r '.resource.ephemeral_disks[]? | [.disk_path, .source_path] | @tsv' <<<"${state}")
+
+	# A sandbox configured with initdata, which is how a generated policy
+	# reaches the guest, has an image of it on the host. A rootless VMM's sits
+	# under its runtime directory, which the rootless test watches as a whole.
+	if [[ "$(jq -r '((.hypervisor.config.security_info.initdata // "") != "") and
+		((.hypervisor.config.security_info.rootless // false) | not)' <<<"${state}")" == "true" ]]; then
+		initdata_image="/run/kata-containers/shared/initdata/${sandbox_id}/initdata.image"
+		[[ "$(exec_host "${node_name}" \
+			"test -s '${initdata_image}' && echo present")" == "present" ]] || \
+			die "No initdata image for sandbox ${sandbox_id}, which was configured with initdata"
+		sandbox_cleanup_paths+=("${initdata_image%/*}")
+	fi
+
+	echo "Host paths to be removed with sandbox ${sandbox_id}: ${sandbox_cleanup_paths[*]}"
+}
+
+# Wait until nothing of sandbox $2 is left on node $1: no process names it any
+# more, and the paths expect_sandbox_resources() recorded are gone.
+wait_for_sandbox_cleanup() {
+	local node_name="$1"
+	local sandbox_id="$2"
+	local timeout_seconds="${SANDBOX_CLEANUP_TIMEOUT_SECONDS:-90}"
+	local attempt
+	local leftovers
+	local query
+	local path
+	# As for the pattern, the query must not hold the sandbox id in one
+	# piece: the paths name it through a variable set from a split id.
+	local pattern="[${sandbox_id:0:1}]${sandbox_id:1}"
+	local split_id="${sandbox_id:0:1}'${sandbox_id:1}'"
+	# shellcheck disable=SC2016 # expanded on the node, by the query
+	local id_ref='${id}'
+
+	query="id=${split_id}; pgrep -af '${pattern}' || true"
+	for path in "${sandbox_cleanup_paths[@]}"; do
+		path="${path//${sandbox_id}/${id_ref}}"
+		query+="; test ! -e \"${path}\" || echo \"${path}\""
+	done
+	for ((attempt = 0; attempt < timeout_seconds; attempt++)); do
+		leftovers="$(exec_host "${node_name}" "${query}")"
+		[[ -z "${leftovers}" ]] && return 0
+		sleep 1
+	done
+
+	echo "Left behind ${timeout_seconds}s after sandbox ${sandbox_id} should have been cleaned up:"
+	echo "${leftovers}"
+	exec_host "${node_name}" "ls -la /run/kata/${sandbox_id} && cat /run/kata/${sandbox_id}/state.json" || true
+	return 1
+}
+
+# Kill the shim of sandbox $2 on node $1 with SIGKILL, so none of its own
+# teardown runs, and wait until the container runtime has cleaned up after it
+# through the shim's delete command.
+#
+# The callers pin restartPolicy to Never so no replacement sandbox races the
+# cleanup; only what belonged to the killed one is checked.
+kill_shim_and_wait_for_cleanup() {
+	local node_name="$1"
+	local sandbox_id="$2"
+	local shim_pid
+
+	shim_pid="$(exec_host "${node_name}" \
+		"pgrep -f '[c]ontainerd-shim-kata-v2 -id ${sandbox_id} ' || true")"
+	[[ "${shim_pid}" =~ ^[0-9]+$ ]] || \
+		die "No single shim found for sandbox ${sandbox_id}: '${shim_pid}'"
+	expect_sandbox_resources "${node_name}" "${sandbox_id}"
+
+	exec_host "${node_name}" "kill -KILL ${shim_pid}"
+
+	wait_for_sandbox_cleanup "${node_name}" "${sandbox_id}"
+}
+
+# Kill the VMM of pod $3, whose sandbox is $2, on node $1 with SIGKILL and
+# leave the shim alive: the teardown is then the shim's own. The shim has to
+# notice the VMM is gone and report the pod as no longer running, and once
+# the pod is deleted, which is when the container runtime lets go of the
+# sandbox, nothing of it may be left.
+#
+# As for a killed shim, the callers pin restartPolicy to Never.
+kill_vmm_and_wait_for_cleanup() {
+	local node_name="$1"
+	local sandbox_id="$2"
+	local pod="$3"
+	local vmm_pid
+
+	vmm_pid="$(get_vmm_pid_for_pod "${pod}")"
+	[[ "${vmm_pid}" =~ ^[0-9]+$ ]] || \
+		die "No single VMM found for pod ${pod}: '${vmm_pid}'"
+	expect_sandbox_resources "${node_name}" "${sandbox_id}"
+
+	exec_host "${node_name}" "kill -KILL ${vmm_pid}"
+
+	kubectl wait --for=condition=Ready=false --timeout="${timeout}" "pod/${pod}"
+	kubectl delete pod "${pod}" --wait=true --timeout="${timeout}"
+
+	wait_for_sandbox_cleanup "${node_name}" "${sandbox_id}"
 }
 
 # Copy the right combination of drop-ins from drop-in-examples/ into
