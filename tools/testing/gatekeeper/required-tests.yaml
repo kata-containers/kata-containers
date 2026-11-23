@@ -12,26 +12,47 @@ required_tests:
 required_regexps:
   # Always required regexps
 
+# Integration selection and required checks share the suite names in mapping.
+# Path rules are ordered fnmatch patterns; an unmatched path runs every suite.
+# Keep shared runtime, agent, rootfs and binary sources unmatched.
+dependencies:
+  coco-guest-components: [tee]
+  coco-trustee: [tee]
 paths:
-  # Mapping of path (python) regexps to set-of-tests (sort by order of importance)
-  # CI
-  - "^ci/openshift-ci/": []
-  - "^\\.github/workflows/static-checks": ["static"]
-  - "^\\.github/workflows/": []
-  - "^docs/": ["static"]
-  - "^mkdocs\\.yaml$": ["static"]
-  - "\\.md$": ["static"]
-  - "^tests/spellcheck/kata-dictionary.txt": ["static"]
-  - "^\\.claude/": []
-  # TODO: Expand filters
-  # Sources
-  #- "^src/": ["static", "build", "test"]
+  - paths: [docs/*, '*.md', mkdocs.yaml, tests/spellcheck/kata-dictionary.txt, .claude/*, ci/openshift-ci/*]
+    suites: []
+    build: false
+  - paths: [tests/integration/nerdctl/*]
+    suites: [nerdctl]
+  - paths: [tests/integration/docker/*]
+    suites: [docker]
+  - paths: [tests/integration/nydus/*]
+    suites: [nydus]
+  - paths: [tests/integration/cri-containerd/*]
+    suites: [cri, sandboxapi]
+  - paths: [tests/stability/*]
+    suites: [stability]
+  - paths: [tests/functional/kata-agent-apis/*]
+    suites: [agent-api]
+  - paths: [tests/functional/kata-monitor/*]
+    suites: [monitor]
+  - paths: [tests/functional/kata-deploy/*]
+    suites: [deploy, monitor]
+  - paths: [tests/integration/substrate/*]
+    suites: [substrate]
+  - paths: [src/tools/log-parser/*]
+    suites: []
+  - paths: [src/tools/genpolicy/*]
+    suites: [kubernetes, tee, gpu]
+  - paths: [tests/integration/kubernetes/*]
+    suites: [kubernetes, tee, gpu]
 
 mapping:
   # Mapping of set-of-tests to required test names and/or test name regexps
   #
   # Format is (test name includes workflow!):
   # {set-of-tests-label}:
+  #   jobs: [workflow-file/job-id, ...] # Jobs to schedule for an integration suite
   #   names:
   #     - {required-test-name1}
   #     - {required-test-name2}
@@ -42,11 +63,18 @@ mapping:
   # TODO: Add support for "depends" to automatically add dependant set-of-tests
   #       (eg. "build" is required for "test")
   # TODO: Add support for "ignore:" to remove individual tests from regexps
-  test:
-    # Checks the basic functional tests work
+  build:
     names:
-      # ci-on-push.yaml (ci.yaml)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-arm64 / build-asset (openvmm)
+    required-labels:
+      - ok-to-test
+  stability:
+    jobs:
+      - ci/run-basic-amd64-tests
+      - ci/run-basic-s390x-tests
+      - basic-ci-amd64/run-containerd-stability
+      - basic-ci-s390x/run-containerd-stability
+    names:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (latest, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (latest, clh-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (latest, dragonball)
@@ -57,17 +85,46 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (minimum, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (minimum, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (minimum, qemu-runtime-rs)
+    required-labels:
+      - ok-to-test
+  agent-api:
+    jobs:
+      - ci/run-basic-amd64-tests
+      - basic-ci-amd64/run-kata-agent-apis
+    names:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-kata-agent-apis
+    required-labels:
+      - ok-to-test
+  nerdctl:
+    jobs:
+      - ci/run-basic-amd64-tests
+      - basic-ci-amd64/run-nerdctl-tests
+    names: []
     # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (clh-runtime-rs) # See #14410
     # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
     # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu) # See #14409
     # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu-runtime-rs)
+    required-labels:
+      - ok-to-test
+  nydus:
+    jobs:
+      - ci/run-basic-amd64-tests
+      - basic-ci-amd64/run-nydus
+    names:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (latest, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (latest, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (latest, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (minimum, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (minimum, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (minimum, qemu)
+    required-labels:
+      - ok-to-test
+  cri:
+    jobs:
+      - ci/run-cri-containerd-tests-amd64
+      - ci/run-cri-containerd-tests-s390x
+      - ci/run-cri-containerd-tests-ppc64le
+    names:
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (latest, clh-runtime-rs) / run-cri-containerd-amd64 (latest, clh-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (latest, clh) / run-cri-containerd-amd64 (latest, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (latest, dragonball) / run-cri-containerd-amd64 (latest, dragonball)
@@ -79,7 +136,18 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (minimum, qemu-runtime-rs) / run-cri-containerd-amd64 (minimum, qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-amd64 (minimum, qemu) / run-cri-containerd-amd64 (minimum, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-s390x (latest, qemu-runtime-rs) / run-cri-containerd-s390x (latest, qemu-runtime-rs)
-      #- Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-arm64 / run-k8s-tests-on-arm64 (qemu, kubeadm)
+    required-labels:
+      - ok-to-test
+  kubernetes:
+    jobs:
+      - ci/run-k8s-tests-on-aks
+      - ci/run-k8s-tests-on-free-runner
+      - ci/run-k8s-tests-crio
+      - ci/run-k8s-tests-on-nvidia-cpu-arm64
+      - ci/run-k8s-tests-on-zvsi
+      - ci/run-k8s-tests-on-ppc64le
+      - ci/build-and-publish-tee-confidential-unencrypted-image
+    names:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, small, containerd)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, small, oci-distribution)
@@ -98,17 +166,60 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh-runtime-rs, minimum)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh-runtime-rs, latest)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (overlayfs, qemu-runtime-rs, kubeadm)
+    required-labels:
+      - ok-to-test
+  tee:
+    jobs:
+      - ci/run-kata-coco-tests
+      - ci/run-kata-coco-tests-on-arm64
+      - ci/run-k8s-tests-on-zvsi
+      - ci/run-k8s-tests-on-nvidia-gpu
+      - ci/build-and-publish-tee-confidential-unencrypted-image
+    names:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (nydus, qemu-coco-dev-runtime-rs, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-on-tee (sev-snp, qemu-snp)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-on-tee (sev-snp, qemu-snp-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev, nydus, guest-pull)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev-runtime-rs, nydus, guest-pull)
-      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k0s)
-      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k3s)
-      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
-      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
-      # - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-nvidia-gpu / run-nvidia-gpu-tests-on-amd64
-      # - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-nvidia-gpu / run-nvidia-gpu-snp-tests-on-amd64
+    required-labels:
+      - ok-to-test
+  sandboxapi:
+    jobs:
+      - ci/run-basic-amd64-tests
+      - ci/run-basic-s390x-tests
+      - basic-ci-amd64/run-containerd-sandboxapi
+      - basic-ci-s390x/run-containerd-sandboxapi
+    required-labels:
+      - ok-to-test
+  docker:
+    jobs:
+      - ci/run-basic-amd64-tests
+      - ci/run-basic-s390x-tests
+      - basic-ci-amd64/run-docker-tests
+      - basic-ci-s390x/run-docker-tests
+    required-labels:
+      - ok-to-test
+  gpu:
+    jobs:
+      - ci/run-k8s-tests-on-nvidia-gpu
+      - ci/run-k8s-tests-on-nvidia-gpu-arm64
+      - ci/build-and-publish-tee-confidential-unencrypted-image
+    required-labels:
+      - ok-to-test
+  monitor:
+    jobs:
+      - ci/run-kata-monitor-tests
+      - ci/run-kata-monitor-k8s-tests
+    required-labels:
+      - ok-to-test
+  deploy:
+    jobs:
+      - ci/run-kata-deploy-tests
+    required-labels:
+      - ok-to-test
+  substrate:
+    jobs:
+      - ci/run-substrate-tests
     required-labels:
       - ok-to-test
   static:

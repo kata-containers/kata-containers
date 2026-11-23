@@ -2,6 +2,11 @@ name: CI | Basic s390x tests
 on:
   workflow_call:
     inputs:
+      test-jobs:
+        description: JSON list of integration jobs selected by Gatekeeper
+        required: false
+        type: string
+        default: '["all"]'
       tarball-suffix:
         required: false
         type: string
@@ -92,6 +97,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-s390x/run-containerd-stability')) }}
     name: run-containerd-stability
     strategy:
       fail-fast: false
@@ -139,6 +145,7 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-docker-tests:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-s390x/run-docker-tests')) }}
     name: run-docker-tests
     strategy:
       # We can set this to true whenever we're 100% sure that

@@ -2,6 +2,11 @@ name: CI | Basic amd64 tests
 on:
   workflow_call:
     inputs:
+      test-jobs:
+        description: JSON list of integration jobs selected by Gatekeeper
+        required: false
+        type: string
+        default: '["all"]'
       tarball-suffix:
         required: false
         type: string
@@ -21,6 +26,7 @@ concurrency:
 
 jobs:
   run-containerd-sandboxapi:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-amd64/run-containerd-sandboxapi')) }}
     name: run-containerd-sandboxapi
     strategy:
       # We can set this to true whenever we're 100% sure that
@@ -85,6 +91,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-amd64/run-containerd-stability')) }}
     name: run-containerd-stability
     strategy:
       fail-fast: false
@@ -142,6 +149,7 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-nydus:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-amd64/run-nydus')) }}
     name: run-nydus
     strategy:
       # We can set this to true whenever we're 100% sure that
@@ -202,6 +210,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-docker-tests:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-amd64/run-docker-tests')) }}
     name: run-docker-tests
     strategy:
       # We can set this to true whenever we're 100% sure that
@@ -253,6 +262,7 @@ jobs:
         run: bash tests/integration/docker/gha-run.sh run
 
   run-nerdctl-tests:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-amd64/run-nerdctl-tests')) }}
     name: run-nerdctl-tests
     strategy:
       # We can set this to true whenever we're 100% sure that
@@ -323,6 +333,7 @@ jobs:
           retention-days: 1
 
   run-kata-agent-apis:
+    if: ${{ (contains(fromJSON(inputs.test-jobs), 'all') || contains(fromJSON(inputs.test-jobs), 'basic-ci-amd64/run-kata-agent-apis')) }}
     name: run-kata-agent-apis
     runs-on: ubuntu-24.04
     concurrency:
