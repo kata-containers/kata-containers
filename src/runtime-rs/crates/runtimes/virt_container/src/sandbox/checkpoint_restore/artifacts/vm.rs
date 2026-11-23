@@ -71,6 +71,24 @@ pub(in crate::sandbox::checkpoint_restore) fn validate_checkpoint_artifacts(
     artifacts: &[VmCheckpointArtifact],
     _topology: VmResourceTopology,
 ) -> Result<()> {
+    if hypervisor_name == hypervisor::HYPERVISOR_DRAGONBALL {
+        #[cfg(all(
+            feature = "dragonball",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        return super::sparse_memory::validate_artifacts(_topology, artifacts)
+            .map_err(map_artifact_error);
+
+        #[cfg(not(all(
+            feature = "dragonball",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        )))]
+        return Err(CommonError::SandboxOperationUnsupported(
+            "Dragonball support is not enabled".into(),
+        )
+        .into());
+    }
+
     if hypervisor_name == hypervisor::HYPERVISOR_QEMU
         && !artifacts
             .iter()
@@ -86,11 +104,31 @@ pub(in crate::sandbox::checkpoint_restore) fn validate_checkpoint_artifacts(
 }
 
 pub(in crate::sandbox::checkpoint_restore) async fn finalize_checkpoint_artifacts(
-    _hypervisor_name: &str,
+    hypervisor_name: &str,
     saved: VmSaveResult,
     state_dir: PathBuf,
 ) -> Result<Vec<VmCheckpointArtifact>> {
+    let hypervisor_name = hypervisor_name.to_owned();
     tokio::task::spawn_blocking(move || {
+        if hypervisor_name == hypervisor::HYPERVISOR_DRAGONBALL {
+            #[cfg(all(
+                feature = "dragonball",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ))]
+            {
+                let encoded = super::sparse_memory::finalize_checkpoint_memory(saved, &state_dir)?;
+                return collect_vm_artifacts(&state_dir, &encoded);
+            }
+            #[cfg(not(all(
+                feature = "dragonball",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            )))]
+            return Err(CommonError::SandboxOperationUnsupported(
+                "Dragonball support is not enabled".into(),
+            )
+            .into());
+        }
+
         super::validate_raw_save(&saved)?;
 
         collect_vm_artifacts(&state_dir, &HashMap::new())
@@ -112,6 +150,36 @@ pub(in crate::sandbox::checkpoint_restore) async fn restore_vm_artifacts(
 
     let restore_dir = restore_root.join(WORKLOAD_CHECKPOINT_STATE);
     let source_dir = checkpoint_root.join(WORKLOAD_CHECKPOINT_STATE);
+    #[cfg(all(
+        feature = "dragonball",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    if hypervisor_name == hypervisor::HYPERVISOR_DRAGONBALL {
+        fs::create_dir(&restore_dir)?;
+
+        let mut copies = Vec::new();
+        for artifact in &artifacts {
+            let source =
+                super::inspect_source(&source_dir, artifact).map_err(map_artifact_error)?;
+            if artifact.format == VM_ARTIFACT_RAW_FORMAT {
+                copies.push(raw_restore_artifact(
+                    source,
+                    restore_dir.join(&artifact.file),
+                    artifact,
+                ));
+            }
+        }
+
+        clone_verified_artifacts(copies)
+            .await
+            .map_err(map_artifact_error)?;
+
+        super::sparse_memory::prepare_restore_memory(source_dir, restore_dir.clone(), artifacts)
+            .await
+            .map_err(map_artifact_error)?;
+
+        return Ok(restore_dir);
+    }
 
     prepare_raw_restore(source_dir, restore_dir.clone(), artifacts)
         .await

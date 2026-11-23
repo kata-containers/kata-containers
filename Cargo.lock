@@ -8433,6 +8433,7 @@ dependencies = [
  "awaitgroup",
  "common",
  "containerd-shim-protos",
+ "dragonball",
  "hypervisor",
  "kata-sys-util",
  "kata-types",

@@ -24,6 +24,11 @@ use std::{
 use tokio::{sync::Semaphore, task::JoinSet};
 pub(super) mod rootfs;
 
+#[cfg(all(
+    feature = "dragonball",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub(super) mod sparse_memory;
 pub(super) mod vm;
 
 pub(super) const IMMUTABLE_ROOTFS_OPTION: &str = "io.katacontainers.checkpoint.rootfs.immutable";

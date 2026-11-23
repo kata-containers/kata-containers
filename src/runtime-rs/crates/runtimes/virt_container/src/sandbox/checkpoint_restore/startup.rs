@@ -5,6 +5,7 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use hypervisor::HYPERVISOR_DRAGONBALL;
 use resource::ResourceConfig;
 use tokio::time::timeout;
 
@@ -13,8 +14,8 @@ use crate::sandbox::VirtSandbox;
 
 use super::RestoreBoot;
 
-fn prepare_resources(resources: &mut Vec<ResourceConfig>, mode: StartMode) {
-    if matches!(mode, StartMode::Restore) {
+fn prepare_resources(resources: &mut Vec<ResourceConfig>, mode: StartMode, hypervisor_name: &str) {
+    if matches!(mode, StartMode::Restore) && hypervisor_name != HYPERVISOR_DRAGONBALL {
         resources.retain(|r| !matches!(r, ResourceConfig::VmRootfs(_)));
     }
 }
@@ -44,8 +45,15 @@ impl VirtSandbox {
         resources: &mut Vec<ResourceConfig>,
         mode: StartMode,
     ) -> Option<RestoreBoot> {
+        let hypervisor_name = self
+            .resource_manager
+            .config()
+            .await
+            .runtime
+            .hypervisor_name
+            .clone();
         let boot = self.restore_state.write().await.take_boot();
-        prepare_resources(resources, mode);
+        prepare_resources(resources, mode, &hypervisor_name);
 
         boot
     }
@@ -69,6 +77,9 @@ impl VirtSandbox {
     }
 
     async fn register_restore_blocks(&self, boot: &mut RestoreBoot) -> Result<()> {
+        // Preserve the cold-start device topology for snapshot restore. In particular, Dragonball assigns MMIO addresses and IRQs
+        // in device creation order, so managed workload disks must follow the VM's rootfs, network, and vsock devices just as they
+        // did originally.
         let device_manager = self.resource_manager.get_device_manager().await;
         for block in std::mem::take(&mut boot.blocks) {
             device_manager
@@ -126,45 +137,47 @@ mod resource_tests {
 
     #[test]
     fn preserves_resource_order() {
-        for mode in [StartMode::Normal, StartMode::Restore] {
-            let mut resources = vec![
-                ResourceConfig::GuestExtensionImage(BlockConfigModern {
-                    path_on_host: "extension".into(),
-                    ..Default::default()
-                }),
-                ResourceConfig::VmRootfs(BlockConfigModern::default()),
-                ResourceConfig::Network(NetworkConfig::NetNs(NetworkWithNetNsConfig {
-                    network_model: "tcfilter".into(),
-                    netns_path: String::new(),
-                    queues: 1,
-                    network_created: false,
-                })),
-                ResourceConfig::InitData(BlockConfigModern {
-                    path_on_host: "initdata".into(),
-                    ..Default::default()
-                }),
-            ];
+        for name in [HYPERVISOR_DRAGONBALL, "qemu", "cloud-hypervisor"] {
+            for mode in [StartMode::Normal, StartMode::Restore] {
+                let mut resources = vec![
+                    ResourceConfig::GuestExtensionImage(BlockConfigModern {
+                        path_on_host: "extension".into(),
+                        ..Default::default()
+                    }),
+                    ResourceConfig::VmRootfs(BlockConfigModern::default()),
+                    ResourceConfig::Network(NetworkConfig::NetNs(NetworkWithNetNsConfig {
+                        network_model: "tcfilter".into(),
+                        netns_path: String::new(),
+                        queues: 1,
+                        network_created: false,
+                    })),
+                    ResourceConfig::InitData(BlockConfigModern {
+                        path_on_host: "initdata".into(),
+                        ..Default::default()
+                    }),
+                ];
 
-            prepare_resources(&mut resources, mode);
+                prepare_resources(&mut resources, mode, name);
 
-            let keep_rootfs = mode != StartMode::Restore;
-            assert_eq!(resources.len(), if keep_rootfs { 4 } else { 3 });
-            assert!(
-                matches!(&resources[0], ResourceConfig::GuestExtensionImage(c)
-                    if c.path_on_host == "extension")
-            );
-            if keep_rootfs {
-                assert!(matches!(&resources[1], ResourceConfig::VmRootfs(_)));
+                let keep_rootfs = mode != StartMode::Restore || name == HYPERVISOR_DRAGONBALL;
+                assert_eq!(resources.len(), if keep_rootfs { 4 } else { 3 });
+                assert!(
+                    matches!(&resources[0], ResourceConfig::GuestExtensionImage(c)
+                        if c.path_on_host == "extension")
+                );
+                if keep_rootfs {
+                    assert!(matches!(&resources[1], ResourceConfig::VmRootfs(_)));
+                }
+                let network = if keep_rootfs { 2 } else { 1 };
+                assert!(matches!(
+                    &resources[network],
+                    ResourceConfig::Network { .. }
+                ));
+                assert!(
+                    matches!(&resources[network + 1], ResourceConfig::InitData(c)
+                        if c.path_on_host == "initdata")
+                );
             }
-            let network = if keep_rootfs { 2 } else { 1 };
-            assert!(matches!(
-                &resources[network],
-                ResourceConfig::Network { .. }
-            ));
-            assert!(
-                matches!(&resources[network + 1], ResourceConfig::InitData(c)
-                    if c.path_on_host == "initdata")
-            );
         }
     }
 

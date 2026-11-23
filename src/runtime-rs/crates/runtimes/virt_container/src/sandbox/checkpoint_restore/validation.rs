@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use common::error::Error as CommonError;
 use common::types::CheckpointSandboxRequest;
 use hypervisor::device::DeviceType;
-use hypervisor::{self, BlockDeviceModern, KATA_BLK_DEV_TYPE, VIRTIO_BLOCK_PCI};
+use hypervisor::{self, BlockDeviceModern, KATA_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use crate::sandbox::VirtSandbox;
@@ -57,7 +57,37 @@ impl VirtSandbox {
                     .into());
                 }
             }
-
+            hypervisor::HYPERVISOR_DRAGONBALL => {
+                if config.blockdev_info.block_device_driver != VIRTIO_BLOCK_MMIO
+                    || config.boot_info.vm_rootfs_driver != VIRTIO_BLOCK_MMIO
+                {
+                    return Err(CommonError::SandboxOperationPrecondition(
+                        "Dragonball checkpoint/restore requires block_device_driver and vm_rootfs_driver to use virtio-blk-mmio"
+                            .to_string(),
+                    )
+                    .into());
+                }
+                if !config.network_info.disable_vhost_net {
+                    return Err(CommonError::SandboxOperationPrecondition(
+                        "Dragonball checkpoint/restore requires disable_vhost_net=true".to_string(),
+                    )
+                    .into());
+                }
+                if !config.machine_info.entropy_source.is_empty() {
+                    return Err(CommonError::SandboxOperationPrecondition(
+                        "Dragonball checkpoint/restore does not support a virtio-rng device"
+                            .to_string(),
+                    )
+                    .into());
+                }
+                if config.device_info.reclaim_guest_freed_memory {
+                    return Err(CommonError::SandboxOperationPrecondition(
+                        "Dragonball checkpoint/restore does not support a balloon device"
+                            .to_string(),
+                    )
+                    .into());
+                }
+            }
             other => {
                 return Err(CommonError::SandboxOperationUnsupported(format!(
                     "workload checkpoint/restore is unsupported by hypervisor {other}"
@@ -94,7 +124,8 @@ impl VirtSandbox {
         hypervisor_name: &str,
         initrd: &str,
     ) -> Result<()> {
-        // Preserve the existing QEMU device allowlist.
+        // Preserve the existing QEMU device allowlist. Cloud Hypervisor and
+        // Dragonball did not previously impose a VMM-side device allowlist.
         if hypervisor_name != hypervisor::HYPERVISOR_QEMU {
             return Ok(());
         }
@@ -326,6 +357,21 @@ mod tests {
         assert!(
             VirtSandbox::validate_ckpt_profile_config(hypervisor::HYPERVISOR_QEMU, &qemu).is_err()
         );
+
+        let mut dragonball = HypervisorConfig::default();
+        dragonball.blockdev_info.block_device_driver = VIRTIO_BLOCK_MMIO.to_string();
+        dragonball.boot_info.vm_rootfs_driver = VIRTIO_BLOCK_MMIO.to_string();
+        dragonball.network_info.disable_vhost_net = true;
+        dragonball.machine_info.entropy_source.clear();
+        dragonball.device_info.reclaim_guest_freed_memory = false;
+        VirtSandbox::validate_ckpt_profile_config(hypervisor::HYPERVISOR_DRAGONBALL, &dragonball)
+            .expect("valid Dragonball checkpoint profile");
+        dragonball.machine_info.entropy_source = "/dev/urandom".to_string();
+        assert!(VirtSandbox::validate_ckpt_profile_config(
+            hypervisor::HYPERVISOR_DRAGONBALL,
+            &dragonball,
+        )
+        .is_err());
 
         assert!(VirtSandbox::validate_ckpt_profile_config("unsupported-vmm", &qemu).is_err());
     }

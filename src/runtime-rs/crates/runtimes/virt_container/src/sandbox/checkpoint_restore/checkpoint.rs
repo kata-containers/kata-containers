@@ -78,6 +78,31 @@ impl VirtSandbox {
             );
         }
 
+        let prepare_result = async {
+            if hypervisor_name == hypervisor::HYPERVISOR_DRAGONBALL {
+                let agent_config = self.agent.agent_config().await;
+                agent::kata::wait_snapshot_ready(&agent_address, &agent_config)
+                    .await
+                    .context("wait for Dragonball agent before checkpoint")?;
+            }
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(prepare_err) = prepare_result {
+            return match self
+                .agent
+                .start(&agent_address)
+                .await
+            {
+                Ok(()) => Err(prepare_err),
+                Err(reconnect_err) => Err(prepare_err).context(format!(
+                    "reconnect agent after checkpoint preparation failure also failed: {reconnect_err:#}"
+                )),
+            };
+        }
+
         if let Err(pause_err) = self.hypervisor.pause_vm().await {
             return match self.agent.start(&agent_address).await {
                 Ok(()) => Err(pause_err).context("pause VM"),
