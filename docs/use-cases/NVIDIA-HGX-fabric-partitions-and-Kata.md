@@ -1,10 +1,9 @@
 # NVIDIA HGX fabric partitions and Kata
 
-On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch mode* Fabric Manager (FM) runs in a Service VM that holds only the switch fabric, and it activates *partitions*: sets of GPUs that may reach each other over NVLink. A tenant VM must receive exactly one active partition's GPUs. Two tenants inside one partition would share an NVLink domain, so the partition is the isolation boundary. The switches' PCI face differs by generation: on H100 and H200 the NVSwitches are PCIe devices of their own; from B200 on they are reached through ConnectX management functions.
+On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch mode* Fabric Manager runs in a Service VM that holds only the switch fabric, and it activates *partitions*: sets of GPUs that may reach each other over NVLink. A tenant VM must receive exactly one active partition's GPUs. Two tenants inside one partition would share an NVLink domain, so the partition is the isolation boundary. The switches' PCI face differs by generation: on H100 and H200 the NVSwitches are PCIe devices of their own; from B200 on they are reached through ConnectX management functions.
 
 This page describes the trust model, the components that make a Kata cluster do this, the prerequisites and known limitations, the configurations a node can run in, deployment, day-to-day operation, and the readiness markers and failure signatures. Everything here was run on a DGX with eight GPUs and four ConnectX management PFs, Kubernetes 1.37, Kata 4.3.1 and Fabric Manager 615.
 
-*[FM]: Fabric Manager
 *[PF]: PCI physical function
 *[PFs]: PCI physical functions
 *[CDI]: Container Device Interface
@@ -54,7 +53,7 @@ flowchart LR
     fmc -->|view over gRPC, token| plugin
     plugin -->|nvidia.com/nvlink-4gpu, nvswitch-fabric| kubelet
     prov -->|binds to vfio-pci| host
-    tenant["Tenant VM: 4 GPUs of partition 2"] -->|NVLink inband probe| FM
+    tenant["Tenant VM: 4 GPUs of partition 2"] -->|NVLink in-band probe| FM
 ```
 
 ### kata-device-provisioner: binding the GPUs and the fabric
@@ -65,7 +64,7 @@ Persistence is written as `/etc/modprobe.d/kata-device-provisioner.conf` for the
 
 ### kata-device-plugin: the fabric as one resource
 
-The plugin advertises the node's whole NVSwitch fabric as one extended resource, `nvidia.com/nvswitch-fabric`, with capacity 1 or 0. On H100 systems that is the four NVSwitch chips; on B200, B300 and Rubin systems it is the ConnectX management PFs through which NVLSM and FM manage the switches. The fabric is advertised only when every function of it is bound to `vfio-pci`; a half-bound fabric is withheld, because a Service VM with half a fabric cannot manage anything.
+The plugin advertises the node's whole NVSwitch fabric as one extended resource, `nvidia.com/nvswitch-fabric`, with capacity 1 or 0. On H100 systems that is the four NVSwitch chips; on B200, B300 and Rubin systems it is the ConnectX management PFs through which NVLSM and Fabric Manager manage the switches. The fabric is advertised only when every function of it is bound to `vfio-pci`; a half-bound fabric is withheld, because a Service VM with half a fabric cannot manage anything.
 
 Its only consumer is the Service VM, which requests `nvidia.com/nvswitch-fabric: 1`. The plugin's `Allocate` for this device does one extra thing: it mints a fresh token and hands the container two environment variables, `KATA_FABRIC_VIEW_ENDPOINT` and `KATA_FABRIC_VIEW_TOKEN`. Only the fabric's holder learns where to publish and with which token.
 
@@ -105,7 +104,7 @@ No fabric service on the host of a Service VM node
 :   The host runs no fabric service in this model. A node whose OS image ships Fabric Manager and NVLSM, as a DGX OS does, disables them before the management PFs are unbound, since they use those PFs.
 
 Stale Fabric Manager sessions on the GPUs
-:   GPUs keep a session with the Fabric Manager that last configured them, and a VFIO reset does not clear it. After another Fabric Manager has run against the GPUs, the one a DGX OS ships on the host for example, the Service VM's Fabric Manager rejects the GPUs' inband responses with `previous session ID ... does not match the expected session ID` and lists no supported partitions. A node power cycle clears the sessions. Seen once, after the host's Fabric Manager had configured the GPUs before the Service VM's took over; a restart of the Service VM's own Fabric Manager was not tested, and FM's restart mode (`FABRIC_MODE_RESTART=1`, `fmclient --set-activated-list`) is the documented path for that.
+:   GPUs keep a session with the Fabric Manager that last configured them, and a VFIO reset does not clear it. After another Fabric Manager has run against the GPUs, the one a DGX OS ships on the host for example, the Service VM's Fabric Manager rejects the GPUs' in-band responses with `previous session ID ... does not match the expected session ID` and lists no supported partitions. A node power cycle clears the sessions. Seen once, after the host's Fabric Manager had configured the GPUs before the Service VM's took over; a restart of the Service VM's own Fabric Manager was not tested, and Fabric Manager's restart mode (`FABRIC_MODE_RESTART=1`, `fmclient --set-activated-list`) is the documented path for that.
 
 `DevicePluginCDIDevices`
 :   The kubelet forwards a device plugin's CDI names to the container runtime only with `DevicePluginCDIDevices`, which is on in every supported Kubernetes release. On a kubelet without it the VM still boots with the GPUs, since the shim learns them from the PodResources API, but the container inside sees no device.
@@ -334,7 +333,7 @@ NVRC starts a service and then blocks on the one syslog line that service writes
 | Fabric Manager | B200, B300 and Rubin, ConnectX management PFs | ``fabric manager state is `3` (configured)`` |
 | nvidia-persistenced | tenant and GPU-mode VMs | `Local RPC services initialized` |
 
-NVLSM is not waited for on its own. On these systems the subnet manager becomes master only after Fabric Manager has connected to it and synced partitions, 70 ms after FM's request on this box, so a wait for OpenSM's `Entering MASTER state` before FM starts never ends. FM configured implies NVLSM master.
+NVLSM is not waited for on its own. On these systems the subnet manager becomes master only after Fabric Manager has connected to it and synced partitions, 70 ms after Fabric Manager's request on this box, so a wait for OpenSM's `Entering MASTER state` before Fabric Manager starts never ends. Fabric Manager configured implies NVLSM master.
 
 ### The persistenced sequence
 
@@ -347,7 +346,7 @@ nvidia-persistenced: device 0000:03:00.0 - persistence mode enabled.
 nvidia-persistenced: device 0000:03:00.0 - NUMA memory onlined.
 ```
 
-The NVLink fabric for a tenant GPU is ready only after Fabric Manager in the Service VM has accepted the GPU's inband probe on its partition; a tenant VM started while the Service VM is restarting waits here.
+The NVLink fabric for a tenant GPU is ready only after Fabric Manager in the Service VM has accepted the GPU's in-band probe on its partition; a tenant VM started while the Service VM is restarting waits here.
 
 ### Capturing the guest console
 
@@ -363,7 +362,7 @@ sudo journalctl --since "10 min ago" -o cat | grep -a -oE 'vmconsole="[^"]*"|vm 
 | Where | Line | Meaning |
 | --- | --- | --- |
 | NVRC console | `NVRC panic: ... timeout waiting for: <marker>` | the service did not reach the marker; the lines before it say what it did instead |
-| FM in the Service VM | `specified partition id N is not supported` | the partition list is empty or lacks N; see the stale-session case |
+| Fabric Manager in the Service VM | `specified partition id N is not supported` | the partition list is empty or lacks N; see the stale-session case |
 | kata-deploy install job | `DEFAULT_SHIM 'qemu-runtime-rs' must be one of the configured SHIMS` | the chart's `defaultShim` names a shim the values disabled |
 | kata-deploy host check | `Required host command mkfs.erofs is not available` | the values ask for the erofs snapshotter on a node without `erofs-utils` |
 | containerd | `PodResources API Get method disabled` | Kubernetes before 1.34 without the `KubeletPodResourcesGet` feature gate, which both runtimes call during cold plug; default on from 1.34 |
