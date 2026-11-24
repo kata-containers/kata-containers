@@ -257,8 +257,10 @@ type ContainerConfig struct {
 	Annotations map[string]string
 	// Resources for recoding update
 	Resources specs.LinuxResources
-	ID        string
-	RootFs    string
+	// GuestMemoryCeiling preserves the limit for later admission checks.
+	GuestMemoryCeiling *uint64 `json:",omitempty"`
+	ID                 string
+	RootFs             string
 }
 
 // SandboxConfig is a sandbox configuration.

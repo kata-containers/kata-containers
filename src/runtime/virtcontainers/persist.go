@@ -269,10 +269,11 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 
 	for _, contConf := range s.containerConfigs() {
 		ss.Config.ContainerConfigs = append(ss.Config.ContainerConfigs, persistapi.ContainerConfig{
-			ID:          contConf.ID,
-			Annotations: contConf.Annotations,
-			RootFs:      contConf.RootFs.Target,
-			Resources:   contConf.Resources,
+			ID:                 contConf.ID,
+			Annotations:        contConf.Annotations,
+			RootFs:             contConf.RootFs.Target,
+			Resources:          contConf.Resources,
+			GuestMemoryCeiling: contConf.GuestMemoryCeiling,
 		})
 	}
 }
@@ -516,9 +517,10 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 	for _, contConf := range savedConf.ContainerConfigs {
 		sconfig.Containers = append(sconfig.Containers, ContainerConfig{
-			ID:          contConf.ID,
-			Annotations: contConf.Annotations,
-			Resources:   contConf.Resources,
+			ID:                 contConf.ID,
+			Annotations:        contConf.Annotations,
+			Resources:          contConf.Resources,
+			GuestMemoryCeiling: contConf.GuestMemoryCeiling,
 			RootFs: RootFs{
 				Target: contConf.RootFs,
 			},

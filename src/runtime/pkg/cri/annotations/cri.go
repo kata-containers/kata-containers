@@ -21,6 +21,9 @@ const (
 
 	ContainerTypeContainer = "container"
 
+	// ContainerName is the name the container has in its pod spec.
+	ContainerName = "io.kubernetes.cri.container-name"
+
 	SandboxID = "io.kubernetes.cri.sandbox-id"
 
 	SandboxName = "io.kubernetes.cri.sandbox-name"
