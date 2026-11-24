@@ -82,6 +82,7 @@ impl Manager {
         cpath: &str,
         _spec: &Spec,
         _devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
+        _pod_memory_max_bytes: u64,
     ) -> Result<Self> {
         Ok(Self {
             paths: HashMap::new(),

@@ -1787,11 +1787,19 @@ impl LinuxContainer {
         };
 
         let cgroup_manager: Arc<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
-            Arc::new(SystemdManager::new(cpath.as_str()).context("Create systemd manager")?)
+            Arc::new(
+                SystemdManager::new(cpath.as_str(), config.pod_memory_max_bytes)
+                    .context("Create systemd manager")?,
+            )
         } else {
             Arc::new(
-                FsManager::new(cpath.as_str(), spec, devcg_info)
-                    .context("Create cgroupfs manager")?,
+                FsManager::new(
+                    cpath.as_str(),
+                    spec,
+                    devcg_info,
+                    config.pod_memory_max_bytes,
+                )
+                .context("Create cgroupfs manager")?,
             )
         };
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
@@ -2064,6 +2072,7 @@ mod tests {
             rootless_euid: false,
             rootless_cgroup: false,
             container_name: "".to_string(),
+            pod_memory_max_bytes: 0,
         }
     }
 
@@ -2109,7 +2118,7 @@ mod tests {
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager =
-                Arc::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                Arc::new(FsManager::new("", &Spec::default(), None, 0).map_err(|e| {
                     anyhow!(format!("fail to create cgroup manager with path: {:}", e))
                 })?);
             c.pause().map_err(|e| anyhow!(e))
@@ -2134,7 +2143,7 @@ mod tests {
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager =
-                Arc::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                Arc::new(FsManager::new("", &Spec::default(), None, 0).map_err(|e| {
                     anyhow!(format!("fail to create cgroup manager with path: {:}", e))
                 })?);
             // Change status to paused, this way we can resume it
