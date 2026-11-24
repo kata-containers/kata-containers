@@ -21,7 +21,7 @@ use qapi_qmp::{
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
 use std::io::{self, BufRead, BufReader, Read};
@@ -1024,6 +1024,47 @@ impl Qmp {
             .with_context(|| format!("add QEMU block fd for {opaque}"))
     }
 
+    // When QEMU is slow to reply, a hotplug or a hotunplug can time out half
+    // way. The block node, or its file descriptors, then stay in QEMU as a
+    // second disk reference to the volume, and nothing else removes them.
+    fn remove_leftover_block_nodes(&mut self) -> Result<()> {
+        let disks: HashSet<String> = self
+            .qmp
+            .execute(&qapi_qmp::qom_list {
+                path: "/machine/peripheral".to_owned(),
+            })?
+            .into_iter()
+            .map(|device| device.name)
+            .collect();
+        let nodes: HashSet<String> = self
+            .qmp
+            .execute(&qmp::query_named_block_nodes { flat: Some(true) })?
+            .into_iter()
+            .filter_map(|node| node.node_name)
+            .collect();
+
+        let leftovers: HashSet<String> = nodes
+            .iter()
+            .chain(self.block_fdsets.keys())
+            .filter(|name| name.starts_with(BLOCK_NODE_PREFIX) && !disks.contains(*name))
+            .cloned()
+            .collect();
+
+        for name in leftovers {
+            if nodes.contains(&name) {
+                let node_name = name.clone();
+                if let Err(err) = self.qmp.execute(&qapi_qmp::blockdev_del { node_name }) {
+                    warn!(sl!(), "leftover block node {} stays: {:?}", name, err);
+                    continue;
+                }
+            }
+            info!(sl!(), "removed what was left of block device {}", name);
+            self.remove_block_fdsets(&name);
+        }
+
+        Ok(())
+    }
+
     fn remove_block_fdsets(&mut self, node_name: &str) {
         let Some(fdset_ids) = self.block_fdsets.remove(node_name) else {
             return;
@@ -1357,6 +1398,8 @@ impl Qmp {
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = block_node_name(index);
+        self.remove_leftover_block_nodes()
+            .context("remove leftover block nodes")?;
         if self.block_fdsets.contains_key(&node_name) {
             return Err(anyhow!("duplicate QEMU block device ID {node_name}"));
         }
@@ -1988,8 +2031,10 @@ pub fn get_qmp_socket_path(sid: &str) -> String {
 }
 
 /// Generate a blockdev node name based on the given index.
+const BLOCK_NODE_PREFIX: &str = "drive-";
+
 fn block_node_name(index: u64) -> String {
-    format!("drive-{index}")
+    format!("{BLOCK_NODE_PREFIX}{index}")
 }
 
 #[cfg(test)]
