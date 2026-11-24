@@ -733,6 +733,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	// After validation, so MemorySize is what the VM would boot with.
+	if err := s.sizeHugepageBackedVMFromPod(&sandboxConfig, factory != nil); err != nil {
+		return nil, err
+	}
+
 	// Start the event loop if not already started when fs sharing is not used
 	if sandboxConfig.HypervisorConfig.SharedFS == config.NoSharedFS {
 		// Start the StartFileEventWatcher method as a goroutine
@@ -847,6 +852,98 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	return coldPlugVFIO, nil
+}
+
+// Variables so tests can stand in for the host.
+var (
+	readPodHugetlbLimit = resCtrl.HugetlbLimitBytes
+	readVMHugepageSize  = func() (uint64, error) {
+		return hugetlbfsPageSize(defaultHugepagesMountpoint)
+	}
+)
+
+// default_memory cannot be the floor: by now the runtime cannot tell a
+// configured value from the default it substituted.
+const minHugePageBackedVMMiB = 1024
+
+// hugetlb.<size>.max on the pod's cgroup caps the mapping the VM's RAM comes
+// from, and the CRI does not pass the reservation
+// (kubernetes/enhancements#4113), so the VM's size is read from that file.
+func (s *Sandbox) sizeHugepageBackedVMFromPod(sandboxConfig *SandboxConfig, vmFactory bool) error {
+	hc := &sandboxConfig.HypervisorConfig
+	// A restored sandbox already runs a VM of the size it was created with.
+	if !hugePagePodSized(hc) || s.state.State != "" {
+		return nil
+	}
+	if err := CheckHugePagesPodSizing(sandboxConfig.HypervisorType, sandboxConfig.StaticResourceMgmt, sandboxConfig.SandboxCgroupOnly, vmFactory); err != nil {
+		return err
+	}
+
+	spec := s.GetPatchedOCISpec()
+	if spec == nil || spec.Linux == nil || spec.Linux.CgroupsPath == "" {
+		return errors.New("enable_hugepages_pod_sizing needs the sandbox's cgroup path to find its pod's cgroup")
+	}
+	podCgroup, err := resCtrl.PodCgroupPath(spec.Linux.CgroupsPath)
+	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot find the pod's cgroup from %q: %w", spec.Linux.CgroupsPath, err)
+	}
+
+	pageSize, err := readVMHugepageSize()
+	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot tell the VM's huge page size: %w", err)
+	}
+	if _, err := resCtrl.HugetlbSizeName(pageSize); err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot tell the VM's huge page size: %w", err)
+	}
+	podResource := resCtrl.HugepagesResourceName(pageSize)
+
+	reserved, stated, err := readPodHugetlbLimit(podCgroup, pageSize)
+	if errors.Is(err, resCtrl.ErrHugetlbCgroupV1) {
+		return errors.New("enable_hugepages_pod_sizing needs cgroup v2: the pod's huge page reservation is read from the unified hierarchy")
+	}
+	if err != nil {
+		return fmt.Errorf("enable_hugepages_pod_sizing cannot read the pod's %s reservation (pod cgroup %s): %w", podResource, podCgroup, err)
+	}
+	// An unlimited cgroup can also read back as a byte count near 2^63. The bound
+	// is a shift because the s390x compiler drops a compare of a shifted value
+	// with math.MaxUint32.
+	reservedMB := reserved >> utils.MibToBytesShift
+	if !stated || reservedMB>>32 != 0 {
+		value := resCtrl.HugetlbUnlimited
+		if stated {
+			value = fmt.Sprint(reserved)
+		}
+		return fmt.Errorf("the pod's cgroup %s has no finite %s limit the VM can be sized from (it reads %s): set a finite %s limit on the pod's cgroup, as the kubelet does", podCgroup, podResource, value, podResource)
+	}
+
+	switch {
+	case reservedMB == 0:
+		return fmt.Errorf("the VM is backed by huge pages but its pod reserved none: request %s on a container of the pod, or give the runtime class a pod overhead of %s (pod cgroup %s)", podResource, podResource, podCgroup)
+	case hc.DefaultMaxMemorySize > 0 && reservedMB > hc.DefaultMaxMemorySize:
+		return fmt.Errorf("the pod reserved %d MiB of %s, more than the %d MiB of default_maxmemory the VM may have: raise default_maxmemory or reserve less (pod cgroup %s)", reservedMB, podResource, hc.DefaultMaxMemorySize, podCgroup)
+	case reservedMB < minHugePageBackedVMMiB:
+		return fmt.Errorf("the pod reserved %d MiB of %s, less than the %d MiB a guest needs: reserve more on a container of the pod or as the runtime class's pod overhead (pod cgroup %s)", reservedMB, podResource, minHugePageBackedVMMiB, podCgroup)
+	}
+
+	if reservedMB < uint64(hc.MemorySize) {
+		// Not an error: default_memory does not size these guests.
+		s.Logger().WithFields(logrus.Fields{
+			"pod-resource":      podResource,
+			"reserved-mb":       reservedMB,
+			"default-memory-mb": hc.MemorySize,
+		}).Info("the pod reserved fewer huge pages than default_memory: its guest is smaller than the ones this configuration boots by default")
+	}
+
+	s.Logger().WithFields(logrus.Fields{
+		"pod-cgroup":        podCgroup,
+		"pod-resource":      podResource,
+		"reserved-mb":       reservedMB,
+		"default-memory-mb": hc.MemorySize,
+	}).Info("sizing the huge page backed VM from the pod's huge page reservation")
+	hc.MemorySize = uint32(reservedMB)
+	hc.PodSizedHugePageSize = pageSize
+
+	return nil
 }
 
 func (s *Sandbox) createResourceController() error {

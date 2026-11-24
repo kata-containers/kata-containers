@@ -184,6 +184,14 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
+	// HugePagesPodSizing is persisted so a restored sandbox bounds its containers
+	// the way it did when it was created.
+	HugePagesPodSizing bool
+
+	// PodSizedHugePageSize preserves the backing page size in bytes
+	// across shim restarts.
+	PodSizedHugePageSize uint64
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 

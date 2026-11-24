@@ -558,6 +558,40 @@ func TestClhCreateVM(t *testing.T) {
 	}
 }
 
+func TestClhCreateVMHugePageSize(t *testing.T) {
+	assert := assert.New(t)
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	network, err := NewNetwork()
+	assert.NoError(err)
+
+	for _, tc := range []struct {
+		hugePages bool
+		podSized  uint64
+		want      *int64
+	}{
+		{hugePages: true, podSized: 1 << 30, want: func(i int64) *int64 { return &i }(1 << 30)},
+		{hugePages: true, podSized: 0, want: nil},
+		{hugePages: false, podSized: 1 << 30, want: nil},
+	} {
+		clh := &cloudHypervisor{
+			config: HypervisorConfig{
+				VMStorePath:  store.RunVMStoragePath(),
+				RunStorePath: store.RunStoragePath(),
+			},
+		}
+		hc, err := newClhConfig()
+		assert.NoError(err)
+		hc.HugePages = tc.hugePages
+		hc.PodSizedHugePageSize = tc.podSized
+
+		assert.NoError(clh.CreateVM(context.Background(), "testSandbox", network, &hc))
+		assert.Equal(tc.want, clh.vmconfig.Memory.HugepageSize, "hugePages=%v podSized=%d", tc.hugePages, tc.podSized)
+	}
+}
+
 func TestClhRestoreVM(t *testing.T) {
 	assert := assert.New(t)
 
