@@ -10,6 +10,7 @@ use api_client::simple_api_full_command_with_fds_and_response;
 
 use serde::{Deserialize, Serialize};
 use std::os::{fd::RawFd, unix::net::UnixStream};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task;
 
@@ -21,6 +22,8 @@ use tokio::task;
 /// Wrapping the socket in a `Mutex` ensures only one request-response cycle
 /// is in flight at a time.
 pub type ApiSocket = Mutex<Option<UnixStream>>;
+
+const API_IO_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Execute a CH API command while holding the API socket lock.
 ///
@@ -40,6 +43,13 @@ async fn api_command(
         .ok_or_else(|| anyhow!("missing api socket"))?
         .try_clone()
         .context("clone api socket")?;
+
+    socket
+        .set_read_timeout(Some(API_IO_TIMEOUT))
+        .context("set Cloud Hypervisor API read timeout")?;
+    socket
+        .set_write_timeout(Some(API_IO_TIMEOUT))
+        .context("set Cloud Hypervisor API write timeout")?;
 
     let result = task::spawn_blocking(move || -> Result<Option<String>> {
         let response = simple_api_full_command_with_fds_and_response(

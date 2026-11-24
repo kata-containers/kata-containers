@@ -10,6 +10,9 @@ pub enum VmConfigError {
     #[error("empty sandbox path")]
     EmptySandboxPath,
 
+    #[error("invalid VM template configuration: {0}")]
+    InvalidTemplateConfig(String),
+
     #[error("cannot specify image and initrd")]
     MultipleBootFiles,
 
