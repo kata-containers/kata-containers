@@ -17,11 +17,16 @@ paths:
   # CI
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
-  - "^\\.github/workflows/": []
+  - "^\\.github/workflows/": ["build"]
+  # Docs: only prose counts, so docs-only changes skip the static matrix.
+  # Everything else under docs/ (scripts, data, Dockerfile, ...) is code or
+  # data that the static checks do act on, so it falls through to "static".
+  - "^docs/.*\\.(md|png|jpg|jpeg|svg|gif)$": ["docs"]
+  - "^docs/\\.nav\\.yml$": ["docs"]
+  - "^mkdocs\\.yaml$": ["docs"]
+  - "\\.md$": ["docs"]
+  - "^tests/spellcheck/kata-dictionary.txt": ["docs"]
   - "^docs/": ["static"]
-  - "^mkdocs\\.yaml$": ["static"]
-  - "\\.md$": ["static"]
-  - "^tests/spellcheck/kata-dictionary.txt": ["static"]
   - "^\\.claude/": []
   # TODO: Expand filters
   # Sources
@@ -42,6 +47,9 @@ mapping:
   # TODO: Add support for "depends" to automatically add dependant set-of-tests
   #       (eg. "build" is required for "test")
   # TODO: Add support for "ignore:" to remove individual tests from regexps
+  build:
+    # Gates the CI build stage (skip_build) and has no required names
+    {}
   test:
     # Checks the basic functional tests work
     names:
@@ -176,3 +184,8 @@ mapping:
       - Static checks self-hosted / build-checks (ubuntu-26.04-s390x) / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-2...
     required-labels:
       - ok-to-test
+  docs:
+    # Checks that documentation-only changes are still valid
+    names:
+      - Spelling check / check-spelling
+      - Static checks / check-broken-symlinks

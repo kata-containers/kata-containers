@@ -325,7 +325,7 @@ jobs:
   check-broken-symlinks:
     name: check-broken-symlinks
     needs: skipper
-    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' || needs.skipper.outputs.skip_docs != 'yes' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
