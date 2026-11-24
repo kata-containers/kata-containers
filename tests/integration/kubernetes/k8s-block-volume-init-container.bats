@@ -80,6 +80,18 @@ wait_for_init_container() {
 	waitForProcess 180 "${sleep_time}" "${cmd}"
 }
 
+# The name of the hypervisor's section in the runtime configuration.
+hypervisor_config_section() {
+	case "${KATA_HYPERVISOR}" in
+		qemu*) echo "qemu" ;;
+		clh*|cloud-hypervisor*) echo "clh" ;;
+		fc*|firecracker*) echo "firecracker" ;;
+		dragonball*) echo "dragonball" ;;
+		stratovirt*) echo "stratovirt" ;;
+		*) echo "${KATA_HYPERVISOR%%-*}" ;;
+	esac
+}
+
 setup() {
 	is_runtime_rs || skip "block volume reuse is tested for runtime-rs only (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
 
@@ -145,6 +157,31 @@ setup() {
 		die "The sandbox holds $(sandbox_volume_descriptors) descriptors on the volume, ${one_disk} are needed for one disk"
 }
 
+# The volume is slow to open while the main container is first created, so
+# the VMM's answer comes after the shim stopped waiting for it.
+# Once the storage is fast again the kubelet's next attempt has to succeed.
+@test "The main container starts once a volume that was slow to open has recovered" {
+	# With direct I/O the VMM reads from the volume when it opens it.
+	local_dropin="$(mktemp --tmpdir 60-block-volume-direct.XXXXX.toml)"
+	cat > "${local_dropin}" <<-EOF
+		[hypervisor.$(hypervisor_config_section)]
+		block_device_cache_direct = true
+	EOF
+	runtime_config_dropin="$(set_kata_runtime_config_dropin_file "${node}" "${local_dropin}")" || \
+		die "failed to write the direct I/O drop-in for ${KATA_HYPERVISOR}"
+
+	create_pod "dd if=/dev/zero of=/dev/xda bs=1M count=4; sleep 20"
+	wait_for_init_container running
+	set_volume_delays 12000 0 0
+	wait_for_init_container terminated
+
+	# Long enough for the first attempt to create the main container.
+	sleep 30
+	set_volume_delays 0 0 0
+
+	kubectl wait --for=condition=Ready --timeout=180s "pod/${pod_name}"
+}
+
 teardown() {
 	is_runtime_rs || skip "block volume reuse is tested for runtime-rs only (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
 
@@ -157,7 +194,8 @@ teardown() {
 	kubectl delete pvc "${volume_claim}" --ignore-not-found=true
 	kubectl delete pv "${volume_name}" --ignore-not-found=true
 	kubectl delete storageclass local-storage --ignore-not-found=true
-	rm -f "${pv_config:-}" "${pvc_config:-}" "${pod_config:-}"
+	rm -f "${pv_config:-}" "${pvc_config:-}" "${pod_config:-}" "${local_dropin:-}"
+	remove_kata_runtime_config_dropin_file "${node}" "${runtime_config_dropin:-}"
 
 	if [[ -n "${loop_dev:-}" ]]; then
 		# The kubelet lets go of the volume a little after the pod is gone.
