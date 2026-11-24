@@ -16,14 +16,14 @@ Provider-owned
 Colocation
 :   The tenant owns the hardware and the Service VM and carves partitions themselves, outside the infrastructure's reach. The host must have no Fabric Manager control path, and has none: Fabric Manager listens on the guest's loopback only, and its API has no read-only mode that a host could be given.
 
-The host holds no control path into the Service VM in either trust model: a host-side mode over vsock was built and withdrawn, since the host is not a control plane for the Service VM, the Kubernetes API is. The plugin never reads anything from the Service VM's filesystem or from the shim's private state: what it knows of the partitions arrives as a protocol message or not at all.
+The host holds no control path into the Service VM in either trust model. The control plane for the Service VM is the Kubernetes API. The plugin never reads anything from the Service VM's filesystem or from the shim's private state: what it knows of the partitions arrives as a protocol message or not at all.
 
 !!! warning "Only the fabric owner may request the fabric"
     Whoever holds `nvidia.com/nvswitch-fabric` decides which GPUs share NVLink and publishes the view the node advertises, so a tenant holding it has a data path into other tenants' GPUs. The plugin cannot refuse a requester: the kubelet's Allocate carries device IDs and no pod identity. The kata-device-plugin chart ships a `ValidatingAdmissionPolicy` that denies the request outside the namespaces in its `fabricOwnerNamespaces` value (Kubernetes 1.30 or later). Tenants hold no `pods/exec` in the owner namespace. In the colocation model the owner namespace is the tenant's own; the gate is the same.
 
 ## Components
 
-Four components, four repositories, one contract between them.
+Four components share one contract.
 
 kata-device-provisioner
 :   Runs once per node as a Job on the trusted side. Binds the GPUs and the fabric's management functions to `vfio-pci`, writes the boot persistence for that binding, and publishes a node fact for the fabric. It changes host state; nothing else does.
@@ -35,9 +35,9 @@ NVRC
 :   The init of the Kata guest image for NVIDIA systems. It detects what the VM received, starts Fabric Manager and NVLSM in a Service VM or the GPU driver and persistenced in a tenant VM, waits for each service to be ready, and only then starts the kata-agent.
 
 fmclient
-:   A client for Fabric Manager's SDK. It lists, activates and deactivates partitions, and every change publishes the partition view to the plugin in one call. It runs inside the Service VM's container, through `kubectl exec`. It also owns the Service VM manifest.
+:   A client for Fabric Manager's SDK. It lists, activates and deactivates partitions, and every change publishes the partition view to the plugin in one call. It runs inside the Service VM's container, through `kubectl exec`. A reference Service VM manifest ships with it.
 
-The shared vocabulary lives in `pcilibs-rs`: which PCI identities are GPUs, NVSwitches or management functions, the partition view's wire format, the contract constants (environment variable names, socket path, port, the Service VM's CID), and the resolution from Fabric Manager's physical IDs to host PCI addresses.
+`pcilibs-rs` holds what the components share about the hardware: which PCI identities are GPUs, NVSwitches or management functions, and the resolution from Fabric Manager's physical IDs to host PCI addresses. The partition view's wire format and the names of the two environment variables below are the plugin's API.
 
 ```mermaid
 flowchart LR
@@ -226,7 +226,7 @@ kata-device-provisioner apply --mode off --bind-fabric
 
 ### Bootstrapping the Service VM
 
-```yaml title="deploy/service-vm.yaml (fmclient repository), the parts that matter"
+```yaml title="the Service VM manifest that ships with fmclient, the parts that matter"
 runtimeClassName: kata-qemu-nvidia-gpu
 nodeSelector:
   kata.feature.node.kubernetes.io/managed-fabric: "true"
