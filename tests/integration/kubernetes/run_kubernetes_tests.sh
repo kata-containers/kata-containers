@@ -71,6 +71,7 @@ else
 		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-block-volume.bats" \
+		"k8s-block-volume-init-container.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \
 		"k8s-copy-file.bats" \
