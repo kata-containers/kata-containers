@@ -42,6 +42,12 @@ kernel_params = ""
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWAREPATH@"
 
+# Path to the firmware volume.
+# firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
+# store) and FIRMWARE_CODE.fd (UEFI program image). This is the path to the
+# FIRMWARE_VARS.fd file.
+firmware_volume = "@FIRMWAREVOLUMEPATH@"
+
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
