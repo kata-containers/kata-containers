@@ -1,0 +1,36 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-block-pv-init-container
+spec:
+  runtimeClassName: kata
+  terminationGracePeriodSeconds: 0
+  # The image's own groups, stated here so that a generated policy does not
+  # depend on what a guest-pulled image reports.
+  securityContext:
+    supplementalGroups: [10]
+  initContainers:
+    - name: init
+      image: quay.io/prometheus/busybox:latest
+      command: ["sh", "-c", "INIT_COMMAND"]
+      volumeDevices:
+        - devicePath: /dev/xda
+          name: my-volume
+      imagePullPolicy: IfNotPresent
+  containers:
+    - name: main
+      image: quay.io/prometheus/busybox:latest
+      command: ["tail", "-f", "/dev/null"]
+      volumeDevices:
+        - devicePath: /dev/xda
+          name: my-volume
+      imagePullPolicy: IfNotPresent
+  volumes:
+    - name: my-volume
+      persistentVolumeClaim:
+        claimName: block-loop-pvc
