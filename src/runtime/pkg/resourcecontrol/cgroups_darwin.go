@@ -25,7 +25,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	return &DarwinResourceController{}, nil
 }
 
-func LoadResourceController(path string) (ResourceController, error) {
+func LoadResourceController(path string, sandboxCgroupOnly bool) (ResourceController, error) {
 	return &DarwinResourceController{}, nil
 }
 
