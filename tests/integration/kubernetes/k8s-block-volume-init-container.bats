@@ -60,6 +60,26 @@ failed_events() {
 		-o jsonpath='{range .items[*]}{.message}{"\n"}{end}'
 }
 
+# How many descriptors the pod's sandbox holds on the volume: the VMM's, or the
+# shim's when the VMM runs inside it. A disk that was let go of holds none.
+sandbox_volume_descriptors() {
+	local sandbox_id
+
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
+	# The descriptors name the device either way, depending on how it was
+	# opened.
+	exec_host "${node}" "for pid in \$(pgrep -f '${sandbox_id}'); do ls -l /proc/\${pid}/fd 2>/dev/null; done | \
+		grep -c -E -- \"-> (/dev/mapper/${dm_name}|/dev/dm-\$(dmsetup info -c --noheadings -o minor ${dm_name}))\\\$\" || true"
+}
+
+wait_for_init_container() {
+	local state="$1"
+	local cmd="kubectl get pod ${pod_name} -o jsonpath='{.status.initContainerStatuses[0].state.${state}}' | grep -q ."
+
+	waitForProcess 180 "${sleep_time}" "${cmd}"
+}
+
 setup() {
 	is_runtime_rs || skip "block volume reuse is tested for runtime-rs only (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
 
@@ -105,6 +125,24 @@ setup() {
 	[[ -z "${failed}" ]] || die "The main container failed before it started: ${failed}"
 	restarts="$(main_container_restarts)"
 	[[ "${restarts}" == "0" ]] || die "The main container was restarted ${restarts} time(s)"
+}
+
+# A flush that takes 45 seconds outlasts every attempt to unplug the init
+# container's disk before that container is deleted. The disk still has to be
+# released afterwards: the main container needs one disk, not two.
+@test "The init container's disk is released after a flush that outlasts its cleanup" {
+	set_volume_delays 0 0 45000
+
+	create_pod "dd if=/dev/zero of=/dev/xda bs=1M count=16; sleep 30"
+	wait_for_init_container running
+	one_disk="$(sandbox_volume_descriptors)"
+	[[ "${one_disk}" -gt 0 ]] || die "The sandbox holds no descriptor on the init container's disk"
+
+	kubectl wait --for=condition=Ready --timeout=300s "pod/${pod_name}"
+
+	cmd="[[ \$(sandbox_volume_descriptors) -eq ${one_disk} ]]"
+	waitForProcess 60 5 "${cmd}" || \
+		die "The sandbox holds $(sandbox_volume_descriptors) descriptors on the volume, ${one_disk} are needed for one disk"
 }
 
 teardown() {
