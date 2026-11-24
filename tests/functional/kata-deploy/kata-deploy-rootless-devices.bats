@@ -130,7 +130,8 @@ EOF
 }
 
 @test "Turning rootless off removes the rule, and back on records it again" {
-	deploy_kata "" --set deploymentMode=job
+	deploy_kata "" --set deploymentMode=job \
+		--set "shims.${KATA_HYPERVISOR}.hypervisor.rootless=false"
 	run run_on_host "test -e ${UDEV_RULE} && echo PRESENT || echo GONE"
 	echo "# udev rule with rootless off: ${output}" >&3
 	[[ "${output}" == *GONE* ]]
