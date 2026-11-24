@@ -36,6 +36,9 @@ pub struct ContainerInner {
     pub(crate) devices: Vec<String>, // device ids of devices hotplugged to the container
     pub(crate) linux_resources: Option<LinuxResources>,
     removed_from_agent: bool,
+    /// The memory.max the container was given in a guest sized from the pod.
+    /// Later containers are checked against it.
+    pub(crate) applied_ceiling: Option<u64>,
 }
 
 impl ContainerInner {
@@ -55,6 +58,7 @@ impl ContainerInner {
             devices: vec![],
             linux_resources,
             removed_from_agent: false,
+            applied_ceiling: None,
         }
     }
 
