@@ -212,7 +212,7 @@ mod test {
         vmfd.create_irq_chip().unwrap();
 
         let rounting = Arc::new(KvmIrqRouting::new(vmfd.clone()));
-        rounting.initialize().unwrap();
+        rounting.initialize(false).unwrap();
 
         let base = 168;
         let count = 32;
