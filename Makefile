@@ -17,6 +17,7 @@ TOOLS =
 
 TOOLS += agent-ctl
 TOOLS += kata-ctl
+TOOLS += kata-dan-cni
 TOOLS += log-parser
 TOOLS += trace-forwarder
 

@@ -1,0 +1,23 @@
+[package]
+authors.workspace = true
+edition = "2021"
+license.workspace = true
+name = "backend-host-tap"
+publish = false
+rust-version.workspace = true
+version = "0.1.0"
+
+[dependencies]
+dan-core = { path = "../../dan-core" }
+futures-util.workspace = true
+libc.workspace = true
+ovs = { path = "../../ovs" }
+rtnetlink.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tappers.workspace = true
+tokio = { features = ["macros", "rt", "time"], workspace = true }
+
+[lints]
+workspace = true
