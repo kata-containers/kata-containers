@@ -48,7 +48,11 @@ and [CNI](https://github.com/containernetworking/cni) for networking management.
 
 With L3 forwarding, we modify the route table on the host-side network namespace to route traffic to the pod IP through the tap device.
 This is useful for integrating with service meshes such as Istio Ambient, where the CNI sets up iptables rules and a node proxy listens on the host-side network namespace.
-This model only supports IPv4 and only one IP address per pod.
+This model only supports IPv4. Each pod interface gets its own tap device, with these limitations:
+
+- The guest gets the routes of every pod interface in its main routing table, without the routing table or priority they have in the pod network namespace, and without any policy routing rules. If more than one interface has a default route of the same address family, the routes overwrite each other in the guest and only one is kept, so give each address family a single default route. The TC-filter model has the same limitation.
+- Port forwarding (`kubectl port-forward`) only reaches the first interface with an IPv4 address.
+- `vlan` and `ipvlan` interfaces always use the TC-filter model, whatever the configured model, so their traffic bypasses the host-side network namespace's routing and iptables. Physical interfaces are passed through to the guest.
 
 ## Network Hotplug
 
