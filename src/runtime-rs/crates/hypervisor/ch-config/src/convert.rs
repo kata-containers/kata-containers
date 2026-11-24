@@ -7,15 +7,13 @@ use crate::ProtectionDevConfig;
 use crate::VmConfig;
 use crate::{
     ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DiskConfig, ImageType,
-    MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig, VsockConfig,
+    MemoryConfig, PayloadConfig, PmemConfig, RngConfig, VsockConfig,
 };
 use anyhow::Result;
 use kata_types::config::default::DEFAULT_CH_ENTROPY_SOURCE;
-use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::{CpuInfo, MachineInfo, MemoryInfo};
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
-use std::fs;
 use std::path::PathBuf;
 
 use crate::errors::*;
@@ -61,12 +59,6 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let host_devices = n.host_devices;
         let boot_disks = n.boot_disks;
         let protection_dev = n.protection_device;
-
-        let template_memory = if cfg.vm_template.boot_to_be_template {
-            Some(template_memory_config(&cfg).map_err(VmConfigError::MemoryError)?)
-        } else {
-            None
-        };
 
         let cpus = CpusConfig::try_from(cfg.cpu_info).map_err(VmConfigError::CPUError)?;
 
@@ -114,10 +106,13 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let serial = get_serial_cfg(debug);
         let console = get_console_cfg();
 
-        let memory = match template_memory {
-            Some(memory) => memory,
-            None => MemoryConfig::try_from(cfg.memory_info).map_err(VmConfigError::MemoryError)?,
-        };
+        // Only vhost-user backends (virtio-fs) and hugepages need guest RAM in a
+        // shared mapping.
+        let shared_memory = fs.as_ref().is_some_and(|devices| !devices.is_empty())
+            || cfg.memory_info.enable_hugepages;
+        let mut memory =
+            MemoryConfig::try_from(cfg.memory_info).map_err(VmConfigError::MemoryError)?;
+        memory.shared = shared_memory;
 
         std::fs::create_dir_all(sandbox_path.clone())
             .map_err(|e| VmConfigError::SandboxError(sandbox_path, e.to_string()))?;
@@ -215,10 +210,6 @@ impl TryFrom<MemoryInfo> for MemoryConfig {
 
         let cfg = MemoryConfig {
             size: mem_bytes,
-
-            // Required
-            shared: true,
-
             hotplug_size,
 
             prefault: mem.enable_mem_prealloc,
@@ -228,50 +219,6 @@ impl TryFrom<MemoryInfo> for MemoryConfig {
 
         Ok(cfg)
     }
-}
-
-/// Builds the file-backed memory configuration for creating a source template VM.
-fn template_memory_config(cfg: &HypervisorConfig) -> Result<MemoryConfig, MemoryConfigError> {
-    let mem = cfg.memory_info.clone();
-
-    if mem.default_memory == 0 {
-        return Err(MemoryConfigError::NoDefaultMemory);
-    }
-
-    if cfg.vm_template.memory_path.is_empty() {
-        return Err(MemoryConfigError::NoTemplateMemoryPath);
-    }
-
-    fs::metadata(&cfg.vm_template.memory_path).map_err(|e| {
-        MemoryConfigError::TemplateMemoryPathNotAccessible(format!(
-            "{}: {}",
-            cfg.vm_template.memory_path, e
-        ))
-    })?;
-
-    if cfg.shared_fs.shared_fs.is_some() {
-        return Err(MemoryConfigError::TemplateRequiresNoSharedFs);
-    }
-
-    let mem_bytes = MIB
-        .checked_mul(u64::from(mem.default_memory))
-        .ok_or(MemoryConfigError::BadDefaultMemSize(mem.default_memory))?;
-    let zone = MemoryZoneConfig {
-        id: "mem0".to_string(),
-        size: mem_bytes,
-        file: Some(PathBuf::from(&cfg.vm_template.memory_path)),
-        shared: true,
-        prefault: mem.enable_mem_prealloc,
-        ..Default::default()
-    };
-
-    Ok(MemoryConfig {
-        size: 0,
-        shared: true,
-        prefault: mem.enable_mem_prealloc,
-        zones: Some(vec![zone]),
-        ..Default::default()
-    })
 }
 
 // Return the next multiple of 'multiple' starting from the specified value
@@ -497,8 +444,6 @@ fn get_console_cfg() -> ConsoleConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::HotplugMethod;
-
     use super::*;
     use kata_types::config::default::MAX_CH_VCPUS;
     use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
@@ -522,7 +467,7 @@ mod tests {
 
         let mem_cfg = MemoryConfig {
             size: default_memory_mib as u64 * MIB,
-            shared: true,
+            shared: false,
             hotplug_size,
 
             ..Default::default()
@@ -1248,7 +1193,7 @@ mod tests {
                 },
                 result: Ok(MemoryConfig {
                     size: 1024_u64 * MIB,
-                    shared: true,
+                    shared: false,
                     hotplug_size: checked_next_multiple_of(
                         usable_max_mem_bytes - (1024 * MIB),
                         PMEM_ALIGN_BYTES,
@@ -1287,40 +1232,50 @@ mod tests {
     }
 
     #[test]
-    fn test_template_memory_config() {
-        let memory_path =
-            std::env::temp_dir().join(format!("kata-clh-template-memory-{}", std::process::id()));
-        fs::write(&memory_path, []).unwrap();
-
-        let mut cfg = HypervisorConfig {
+    fn test_vmconfig_shares_memory_only_for_vhost_user_or_hugepages() {
+        let sandbox_path =
+            std::env::temp_dir().join(format!("kata-clh-private-memory-{}", std::process::id()));
+        let cfg = HypervisorConfig {
+            cpu_info: CpuInfo {
+                default_vcpus: 1.0,
+                default_maxvcpus: 1,
+                ..Default::default()
+            },
             memory_info: MemoryInfo {
-                default_memory: 512,
-                default_maxmemory: 0,
-                enable_hugepages: true,
+                default_memory: 128,
+                ..Default::default()
+            },
+            boot_info: BootInfo {
+                kernel: "kernel".to_string(),
+                initrd: "initrd".to_string(),
                 ..Default::default()
             },
             ..Default::default()
         };
-        cfg.vm_template.boot_to_be_template = true;
-        cfg.vm_template.memory_path = memory_path.to_string_lossy().to_string();
 
-        let memory = template_memory_config(&cfg).unwrap();
-        let zones = memory.zones.as_ref().unwrap();
+        for (shared_fs_devices, hugepages, shared) in [
+            (None, false, false),
+            (Some(vec![]), false, false),
+            (Some(vec![crate::FsConfig::default()]), false, true),
+            (None, true, true),
+        ] {
+            let mut cfg = cfg.clone();
+            cfg.memory_info.enable_hugepages = hugepages;
+            let config = VmConfig::try_from(NamedHypervisorConfig {
+                sandbox_path: sandbox_path.to_string_lossy().into_owned(),
+                vsock_socket_path: "vsock.sock".to_string(),
+                cfg,
+                shared_fs_devices,
+                ..Default::default()
+            })
+            .unwrap();
 
-        assert_eq!(memory.size, 0);
-        assert_eq!(memory.hotplug_method, HotplugMethod::Acpi);
-        assert!(memory.hotplug_size.is_none());
-        assert!(memory.shared);
-        assert!(!memory.hugepages);
-        assert_eq!(zones.len(), 1);
-        assert_eq!(zones[0].id, "mem0");
-        assert_eq!(zones[0].size, 512 * MIB);
-        assert_eq!(zones[0].file, Some(memory_path.clone()));
-        assert!(zones[0].shared);
-        assert!(!zones[0].hugepages);
-        assert!(zones[0].hotplug_size.is_none());
+            assert_eq!(config.memory.size, 128 * MIB);
+            assert_eq!(config.memory.shared, shared);
+            assert!(config.memory.zones.is_none());
+        }
 
-        fs::remove_file(memory_path).unwrap();
+        std::fs::remove_dir_all(sandbox_path).unwrap();
     }
 
     #[test]

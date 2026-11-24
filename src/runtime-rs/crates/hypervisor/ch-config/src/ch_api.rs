@@ -93,6 +93,25 @@ pub struct VmSnapshotConfig {
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct RestoreConfig {
     pub source_url: String,
+    pub memory_restore_mode: MemoryRestoreMode,
+}
+
+#[derive(Clone, Deserialize, Serialize, Default, Debug, PartialEq, Eq)]
+pub enum MemoryRestoreMode {
+    Copy,
+    OnDemand,
+    #[default]
+    CopyOnWrite,
+}
+
+impl From<kata_types::config::hypervisor::MemoryRestoreMode> for MemoryRestoreMode {
+    fn from(value: kata_types::config::hypervisor::MemoryRestoreMode) -> Self {
+        match value {
+            kata_types::config::hypervisor::MemoryRestoreMode::Copy => Self::Copy,
+            kata_types::config::hypervisor::MemoryRestoreMode::OnDemand => Self::OnDemand,
+            kata_types::config::hypervisor::MemoryRestoreMode::CopyOnWrite => Self::CopyOnWrite,
+        }
+    }
 }
 
 pub async fn cloud_hypervisor_vm_snapshot(
@@ -205,4 +224,49 @@ pub async fn cloud_hypervisor_vm_resize(
 ) -> Result<Option<String>> {
     let body = serde_json::to_string(&vmresize)?;
     api_command(api_socket, "PUT", "vm.resize", Some(body), None).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_restore_config_memory_modes() {
+        assert_eq!(
+            RestoreConfig::default().memory_restore_mode,
+            MemoryRestoreMode::CopyOnWrite
+        );
+
+        let cases = [
+            (MemoryRestoreMode::Copy, "Copy"),
+            (MemoryRestoreMode::OnDemand, "OnDemand"),
+            (MemoryRestoreMode::CopyOnWrite, "CopyOnWrite"),
+        ];
+
+        for (mode, expected) in cases {
+            let value = serde_json::to_value(RestoreConfig {
+                source_url: "file:///snapshot".to_string(),
+                memory_restore_mode: mode,
+            })
+            .unwrap();
+
+            assert_eq!(value["source_url"], "file:///snapshot");
+            assert_eq!(value["memory_restore_mode"], expected);
+        }
+    }
+
+    #[test]
+    fn test_memory_restore_mode_from_kata_config() {
+        use kata_types::config::hypervisor::MemoryRestoreMode as Cfg;
+
+        assert_eq!(MemoryRestoreMode::from(Cfg::Copy), MemoryRestoreMode::Copy);
+        assert_eq!(
+            MemoryRestoreMode::from(Cfg::OnDemand),
+            MemoryRestoreMode::OnDemand
+        );
+        assert_eq!(
+            MemoryRestoreMode::from(Cfg::CopyOnWrite),
+            MemoryRestoreMode::CopyOnWrite
+        );
+    }
 }

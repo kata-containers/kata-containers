@@ -89,11 +89,6 @@ impl Hypervisor for Remote {
         inner.resume_vm().await
     }
 
-    async fn save_vm(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        inner.save_vm().await
-    }
-
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
         let inner = self.inner.write().await;
         inner.add_device(device).await

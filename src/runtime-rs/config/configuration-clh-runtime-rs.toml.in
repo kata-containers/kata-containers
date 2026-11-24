@@ -105,6 +105,27 @@ default_memory = @DEFMEMSZ@
 # See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
 overhead_memory = @DEFOVERHEADMEMSZ_CLH@
 
+# Cloud Hypervisor memory population strategy for VM snapshot restore:
+#   - copy         --> The full snapshot memory payload is copied into the
+#                        new instance of cloud-hypervisor on restore.
+#                        This is O(N) w.r.t. VM memory size and
+#                        every VM has a distinct copy of memory.
+#   - ondemand     --> Uses userfaultfd to page in all read/written pages
+#                        to the cloud-hypervisor instance. This is
+#                        O(1) w.r.t. VM memory size on restore and
+#                        every VM has a distinct copy of memory.
+#                        Note that this mode only works on KVM, not MSHV.
+#   - copyonwrite  --> All reads fall through to the backing file.
+#                        Only written pages are handled as a page fault
+#                        and copied into the cloud-hypervisor instance.
+#                        This is O(1) w.r.t. VM memory size on restore and
+#                        memory is deduplicated; only distinct copies of
+#                        written pages are kept. This is the recommended
+#                        configuration.
+#
+# Default "copyonwrite"
+memory_restore_mode = "copyonwrite"
+
 # Shared file system type:
 #   - virtio-fs
 #   - virtio-fs-nydus

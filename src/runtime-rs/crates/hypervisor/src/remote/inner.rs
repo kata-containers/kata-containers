@@ -237,10 +237,6 @@ impl RemoteInner {
         ))
     }
 
-    pub(crate) async fn save_vm(&self) -> Result<()> {
-        Err(anyhow::anyhow!("save not supported for remote hypervisor"))
-    }
-
     pub(crate) async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
         warn!(sl!(), "RemoteInner::add_device(): NOT YET IMPLEMENTED");
         Ok(device)

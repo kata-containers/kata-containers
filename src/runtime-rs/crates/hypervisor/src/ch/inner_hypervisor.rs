@@ -8,12 +8,14 @@ use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
+use crate::snapshot::require_snapshot_files;
 use crate::utils::create_dir_all_with_inherit_owner;
 use crate::utils::exit_code_from_status;
 use crate::utils::set_process_credentials;
 use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
+use crate::RestoreVmRequest;
 use crate::VM_ROOTFS_DRIVER_BLK;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
@@ -23,7 +25,7 @@ use ch_config::{
         cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_pause,
         cloud_hypervisor_vm_resize, cloud_hypervisor_vm_restore, cloud_hypervisor_vm_resume,
         cloud_hypervisor_vm_snapshot, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
-        cloud_hypervisor_vmm_shutdown, RestoreConfig, VmSnapshotConfig,
+        cloud_hypervisor_vmm_shutdown, MemoryRestoreMode, RestoreConfig, VmSnapshotConfig,
     },
     VmResize,
 };
@@ -55,8 +57,10 @@ const CH_NAME: &str = "clh";
 /// Number of milliseconds to wait before retrying a CH operation.
 const CH_POLL_TIME_MS: u64 = 50;
 
-const CLH_TEMPLATE_STATE_FILE: &str = "state.json";
-const CLH_TEMPLATE_CONFIG_FILE: &str = "config.json";
+/// Artifacts vm.snapshot writes into the snapshot directory.
+const CLH_SNAPSHOT_STATE_FILE: &str = "state.json";
+const CLH_SNAPSHOT_CONFIG_FILE: &str = "config.json";
+const CLH_SNAPSHOT_MEMORY_FILE: &str = "memory-ranges";
 
 #[derive(Debug, PartialEq)]
 enum CloudHypervisorLogLevel {
@@ -262,37 +266,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    fn template_dir(&self) -> Option<PathBuf> {
-        let memory_path = Path::new(&self.config.vm_template.memory_path);
-
-        memory_path.parent().map(Path::to_path_buf)
-    }
-
-    fn should_restore_from_template(&self) -> bool {
-        let Some(template_dir) = self.template_dir() else {
-            debug!(sl!(), "template memory path has no parent directory"; "memory-path" => self.config.vm_template.memory_path.clone());
-            return false;
-        };
-
-        let required_files = [
-            PathBuf::from(&self.config.vm_template.memory_path),
-            template_dir.join(CLH_TEMPLATE_STATE_FILE),
-            template_dir.join(CLH_TEMPLATE_CONFIG_FILE),
-        ];
-
-        for path in required_files {
-            if let Err(err) = fs::metadata(&path) {
-                debug!(sl!(), "template artifact not accessible"; "path" => path.display().to_string(), "error" => err.to_string());
-                return false;
-            }
-        }
-
-        info!(sl!(), "Template files found, can restore VM from template");
-
-        true
-    }
-
-    /// Copy a CLH template artifact while preserving the source file permissions.
+    /// Copy a CLH snapshot artifact while preserving the source file permissions.
     fn copy_template_artifact(src: &Path, dst: &Path) -> Result<()> {
         let metadata = fs::metadata(src).with_context(|| format!("stat {}", src.display()))?;
         fs::copy(src, dst)
@@ -324,58 +298,49 @@ impl CloudHypervisorInner {
         Self::write_json_file(config_path, &config)
     }
 
-    fn patch_snapshot_memory_shared(config_path: &Path, shared: bool) -> Result<()> {
-        let data =
-            fs::read(config_path).with_context(|| format!("read {}", config_path.display()))?;
-        let mut config: Value = serde_json::from_slice(&data)
-            .with_context(|| format!("parse {}", config_path.display()))?;
-
-        let memory = config
-            .get_mut("memory")
-            .and_then(Value::as_object_mut)
-            .ok_or_else(|| anyhow!("snapshot config missing memory section"))?;
-        memory.insert("shared".to_string(), Value::Bool(shared));
-
-        let zones = memory
-            .get_mut("zones")
-            .and_then(Value::as_array_mut)
-            .ok_or_else(|| anyhow!("snapshot config missing memory zones"))?;
-        for zone in zones {
-            let zone = zone
-                .as_object_mut()
-                .ok_or_else(|| anyhow!("snapshot config has invalid memory zone"))?;
-            zone.insert("shared".to_string(), Value::Bool(shared));
-        }
-
-        Self::write_json_file(config_path, &config)
-    }
-
-    fn prepare_restore_files(&self) -> Result<()> {
-        let template_dir = self
-            .template_dir()
-            .ok_or_else(|| anyhow!("template memory path has no parent directory"))?;
+    /// Stage the snapshot into this VM's directory: config and state are
+    /// copied (the config is rewritten for this sandbox), memory is linked.
+    fn prepare_restore_files(&self, snapshot_dir: &Path) -> Result<()> {
         let vm_path = PathBuf::from(&self.vm_path);
 
         create_dir_all_with_inherit_owner(&vm_path, 0o750)
             .with_context(|| format!("failed to create VM path {}", vm_path.display()))?;
 
-        let src_config = template_dir.join(CLH_TEMPLATE_CONFIG_FILE);
-        let src_state = template_dir.join(CLH_TEMPLATE_STATE_FILE);
-        let dst_config = vm_path.join(CLH_TEMPLATE_CONFIG_FILE);
-        let dst_state = vm_path.join(CLH_TEMPLATE_STATE_FILE);
+        let src_config = snapshot_dir.join(CLH_SNAPSHOT_CONFIG_FILE);
+        let src_state = snapshot_dir.join(CLH_SNAPSHOT_STATE_FILE);
+        let dst_config = vm_path.join(CLH_SNAPSHOT_CONFIG_FILE);
+        let dst_state = vm_path.join(CLH_SNAPSHOT_STATE_FILE);
 
-        Self::copy_template_artifact(&src_config, &dst_config).context("copy template config")?;
-        Self::copy_template_artifact(&src_state, &dst_state).context("copy template state")?;
+        Self::copy_template_artifact(&src_config, &dst_config).context("copy snapshot config")?;
+        Self::copy_template_artifact(&src_state, &dst_state).context("copy snapshot state")?;
         Self::update_vsock_socket_path(&dst_config, &self.id)
             .context("update restore vsock socket path")?;
+
+        // CLH reads memory-ranges from source_url; link rather than copy so every
+        // clone maps the one snapshot file and memory_restore_mode decides sharing.
+        let src_memory = snapshot_dir.join(CLH_SNAPSHOT_MEMORY_FILE);
+        let dst_memory = vm_path.join(CLH_SNAPSHOT_MEMORY_FILE);
+        fs::metadata(&src_memory)
+            .with_context(|| format!("snapshot memory is unavailable: {}", src_memory.display()))?;
+        if fs::symlink_metadata(&dst_memory).is_ok() {
+            fs::remove_file(&dst_memory)
+                .with_context(|| format!("remove {}", dst_memory.display()))?;
+        }
+        std::os::unix::fs::symlink(&src_memory, &dst_memory).with_context(|| {
+            format!(
+                "symlink snapshot memory {} to {}",
+                src_memory.display(),
+                dst_memory.display()
+            )
+        })?;
 
         Ok(())
     }
 
-    async fn restore_vm(&self) -> Result<()> {
+    async fn restore_snapshot(&self) -> Result<()> {
         let vm_path = PathBuf::from(&self.vm_path);
-        let state_file = vm_path.join(CLH_TEMPLATE_STATE_FILE);
-        let config_file = vm_path.join(CLH_TEMPLATE_CONFIG_FILE);
+        let state_file = vm_path.join(CLH_SNAPSHOT_STATE_FILE);
+        let config_file = vm_path.join(CLH_SNAPSHOT_CONFIG_FILE);
 
         fs::metadata(&state_file)
             .with_context(|| format!("access state file {}", state_file.display()))?;
@@ -387,6 +352,9 @@ impl CloudHypervisorInner {
             &self.api_socket,
             RestoreConfig {
                 source_url: source_url.clone(),
+                memory_restore_mode: MemoryRestoreMode::from(
+                    self.config.memory_info.memory_restore_mode.clone(),
+                ),
             },
         )
         .await?;
@@ -394,14 +362,50 @@ impl CloudHypervisorInner {
             debug!(sl!(), "vm restore response: {:?}", detail);
         }
 
+        // VmSnapshot::restore_vm promises a paused VM; the caller resumes it.
         let info = cloud_hypervisor_vm_info(&self.api_socket).await?;
         if !matches!(info.state, State::Paused) {
-            warn!(sl!(), "restored VM is not paused"; "state" => format!("{:?}", info.state));
+            return Err(anyhow!(
+                "restored VM is in state {:?}, expected Paused",
+                info.state
+            ));
         }
 
-        info!(sl!(), "Successfully restored VM from template");
+        info!(sl!(), "Successfully restored VM from snapshot");
 
         Ok(())
+    }
+
+    pub(crate) async fn restore_vm(&mut self, request: RestoreVmRequest) -> Result<()> {
+        if request.timeout_secs <= 0 {
+            return Err(anyhow!("restore timeout must be positive"));
+        }
+        if self.state != VmmState::NotReady {
+            return Err(anyhow!(
+                "cannot restore VM in state {:?}; expected NotReady",
+                self.state
+            ));
+        }
+        Self::validate_snapshot(&request.snapshot_dir)?;
+
+        self.timeout_secs = request.timeout_secs;
+        self.prepare_restore_files(&request.snapshot_dir)?;
+        self.start_hypervisor(self.timeout_secs).await?;
+        self.state = VmmState::VmmServerReady;
+        self.restore_snapshot().await?;
+        self.state = VmmState::VmPaused;
+        Ok(())
+    }
+
+    pub(crate) fn validate_snapshot(snapshot_dir: &Path) -> Result<()> {
+        require_snapshot_files(
+            snapshot_dir,
+            &[
+                CLH_SNAPSHOT_CONFIG_FILE,
+                CLH_SNAPSHOT_STATE_FILE,
+                CLH_SNAPSHOT_MEMORY_FILE,
+            ],
+        )
     }
 
     async fn cloud_hypervisor_setup_comms(&mut self) -> Result<()> {
@@ -715,16 +719,7 @@ impl CloudHypervisorInner {
 
         self.state = VmmState::VmmServerReady;
 
-        if self.config.vm_template.boot_from_template && self.should_restore_from_template() {
-            self.prepare_restore_files()?;
-            self.restore_vm().await?;
-            self.resume_vm().await?;
-        } else {
-            if self.config.vm_template.boot_from_template {
-                self.config.vm_template.boot_from_template = false;
-            }
-            self.boot_vm().await?;
-        }
+        self.boot_vm().await?;
 
         self.state = VmmState::VmRunning;
 
@@ -737,7 +732,7 @@ impl CloudHypervisorInner {
         // which results in this method being called potentially a second
         // time. Without this check, we'll return an error representing EPIPE
         // since the CH API socket is at that point invalid.
-        if self.state != VmmState::VmRunning {
+        if !matches!(self.state, VmmState::VmRunning | VmmState::VmPaused) {
             return Ok(());
         }
 
@@ -753,37 +748,31 @@ impl CloudHypervisorInner {
         Ok(0)
     }
 
-    pub(crate) async fn pause_vm(&self) -> Result<()> {
+    pub(crate) async fn pause_vm(&mut self) -> Result<()> {
         let response = cloud_hypervisor_vm_pause(&self.api_socket).await?;
         if let Some(detail) = response {
             debug!(sl!(), "vm pause response: {:?}", detail);
         }
+        self.state = VmmState::VmPaused;
         Ok(())
     }
 
-    pub(crate) async fn resume_vm(&self) -> Result<()> {
+    pub(crate) async fn resume_vm(&mut self) -> Result<()> {
         let response = cloud_hypervisor_vm_resume(&self.api_socket).await?;
         if let Some(detail) = response {
             debug!(sl!(), "vm resume response: {:?}", detail);
         }
+        self.state = VmmState::VmRunning;
         Ok(())
     }
 
-    pub(crate) async fn save_vm(&self) -> Result<()> {
-        let snapshot_dir = self
-            .template_dir()
-            .ok_or_else(|| anyhow!("template memory path has no parent directory"))?;
+    pub(crate) async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
         let destination_url = format!("file://{}", snapshot_dir.display());
         let response =
             cloud_hypervisor_vm_snapshot(&self.api_socket, VmSnapshotConfig { destination_url })
                 .await?;
         if let Some(detail) = response {
             debug!(sl!(), "vm snapshot response: {:?}", detail);
-        }
-
-        if self.config.vm_template.boot_to_be_template {
-            Self::patch_snapshot_memory_shared(&snapshot_dir.join(CLH_TEMPLATE_CONFIG_FILE), false)
-                .context("patch snapshot memory sharing")?;
         }
 
         Ok(())
@@ -1378,6 +1367,60 @@ mod tests {
             nix::sys::signal::kill(pid, None),
             Err(nix::errno::Errno::ESRCH)
         );
+    }
+
+    #[test]
+    fn test_prepare_restore_files_links_snapshot_memory() {
+        let root = Builder::new().prefix("clh-snapshot").tempdir().unwrap();
+        let snapshot_dir = root.path().join("snapshot");
+        let vm_path = root.path().join("vm");
+        fs::create_dir_all(&snapshot_dir).unwrap();
+        fs::write(
+            snapshot_dir.join(CLH_SNAPSHOT_CONFIG_FILE),
+            serde_json::to_vec(&serde_json::json!({
+                "memory": { "size": 134217728, "shared": false },
+                "vsock": { "socket": "template.sock" },
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        fs::write(snapshot_dir.join(CLH_SNAPSHOT_STATE_FILE), b"{}").unwrap();
+        let memory = snapshot_dir.join(CLH_SNAPSHOT_MEMORY_FILE);
+        fs::write(&memory, b"snapshot memory").unwrap();
+        // A stale link must not survive a re-prepare.
+        fs::create_dir_all(&vm_path).unwrap();
+        fs::write(vm_path.join(CLH_SNAPSHOT_MEMORY_FILE), b"stale").unwrap();
+
+        let clh = CloudHypervisorInner {
+            id: "clone".to_string(),
+            vm_path: vm_path.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        CloudHypervisorInner::validate_snapshot(&snapshot_dir).unwrap();
+
+        clh.prepare_restore_files(&snapshot_dir).unwrap();
+
+        let config: Value =
+            serde_json::from_slice(&fs::read(vm_path.join(CLH_SNAPSHOT_CONFIG_FILE)).unwrap())
+                .unwrap();
+        assert_eq!(
+            config["memory"],
+            serde_json::json!({ "size": 134217728, "shared": false })
+        );
+        assert_eq!(config["vsock"]["socket"], get_vsock_path("clone").unwrap());
+        assert_eq!(
+            fs::read_link(vm_path.join(CLH_SNAPSHOT_MEMORY_FILE)).unwrap(),
+            memory
+        );
+
+        let snapshot_config: Value =
+            serde_json::from_slice(&fs::read(snapshot_dir.join(CLH_SNAPSHOT_CONFIG_FILE)).unwrap())
+                .unwrap();
+        assert_eq!(snapshot_config["vsock"]["socket"], "template.sock");
+
+        fs::remove_file(&memory).unwrap();
+        let error = CloudHypervisorInner::validate_snapshot(&snapshot_dir).unwrap_err();
+        assert!(error.to_string().contains(CLH_SNAPSHOT_MEMORY_FILE));
     }
 
     #[actix_rt::test]

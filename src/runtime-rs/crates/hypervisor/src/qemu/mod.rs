@@ -12,7 +12,7 @@ use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
 use crate::utils::{exit_code_from_status, SocketAddress};
-use crate::{Hypervisor, MemoryConfig, TdxConfig};
+use crate::{Hypervisor, MemoryConfig, RestoreVmRequest, TdxConfig, VmSnapshot};
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -23,7 +23,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, Mutex};
@@ -112,9 +112,8 @@ impl Hypervisor for Qemu {
         inner.resume_vm()
     }
 
-    async fn save_vm(&self) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        inner.save_vm().await
+    fn snapshot(&self) -> Option<&dyn VmSnapshot> {
+        Some(self)
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
@@ -247,6 +246,23 @@ impl Hypervisor for Qemu {
             .write()
             .await
             .resolve_vfio_device_pci_path(hostdev_id)
+    }
+}
+
+#[async_trait]
+impl VmSnapshot for Qemu {
+    async fn save_vm(&self, snapshot_dir: &Path) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.save_vm(snapshot_dir).await
+    }
+
+    async fn restore_vm(&self, request: RestoreVmRequest) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.restore_vm(request).await
+    }
+
+    fn validate_snapshot(&self, snapshot_dir: &Path) -> Result<()> {
+        QemuInner::validate_snapshot(snapshot_dir)
     }
 }
 

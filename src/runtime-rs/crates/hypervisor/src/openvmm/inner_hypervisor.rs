@@ -499,10 +499,6 @@ impl OpenVmmInner {
         self.vmm_instance.resume().await
     }
 
-    pub(crate) async fn save_vm(&self) -> Result<()> {
-        Err(anyhow!("openvmm save_vm not yet implemented"))
-    }
-
     pub(crate) async fn resize_vcpu(&self, old_vcpus: u32, _new_vcpus: u32) -> Result<(u32, u32)> {
         Ok((old_vcpus, old_vcpus))
     }
