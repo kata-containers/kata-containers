@@ -1644,33 +1644,9 @@ impl Qmp {
         };
         info!(sl!(), "vfio_device_add: {:?}", vfio_device_add.clone());
 
-        // We've chosen to set a 5-second read timeout on Unix sockets for QMP operations. We consider set_read_timeout()
-        // a lightweight operation that shouldn't significantly impact performance, even with multiple VFIO devices.
-        // However, we also need to ensure its debuggability.
-        // As it could obscure the root cause of connection failures as set an excessively long QMP timeout.
-        // For example, if QEMU fails to launch, a 5-second QMP timeout will immediately provide a "QMP connection failed" log message,
-        // clearly pinpointing the issue. Conversely, a prolonged timeout might only result in vague error messages, making debugging
-        // difficult as it won't explicitly indicate where the problem lies.
-
-        // Given our current inability to comprehensively test across a wide range of hardware and configurations, we've made a pragmatic
-        // decision: we'll maintain the 5-second timeout for now. A configurable timeout option will be introduced if future use cases
-        // clearly demonstrate a justified need.
-        {
-            // set read timeout with 5000
-            self.qmp
-                .inner_mut()
-                .get_mut_write()
-                .set_read_timeout(Some(Duration::from_millis(5000)))?;
-            // send the VFIO hotplug request
-            self.qmp
-                .execute(&vfio_device_add)
-                .map_err(|e| anyhow!("device_add vfio device failed {:?}", e))?;
-            // reset the read timeout
-            self.qmp
-                .inner_mut()
-                .get_mut_write()
-                .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))?;
-        }
+        self.qmp
+            .execute(&vfio_device_add)
+            .map_err(|e| anyhow!("device_add vfio device failed {:?}", e))?;
 
         // For AP devices, we don't need to get the PCI path as it's not available.
         if let Some(result) = early_return {
