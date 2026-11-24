@@ -4,6 +4,8 @@ On an HGX system the GPUs are connected through NVSwitches. In *shared NVSwitch 
 
 This page describes the trust model, the components that make a Kata cluster do this, the prerequisites and known limitations, the configurations a node can run in, deployment, day-to-day operation, and the readiness markers and failure signatures. Everything here was run on a DGX with eight GPUs and four ConnectX management PFs, Kubernetes 1.37, Kata 4.3.1 and Fabric Manager 615.
 
+[Enabling NVIDIA GPU workloads using GPU passthrough with Kata Containers](NVIDIA-GPU-passthrough-and-Kata-QEMU.md) stays the guide for the Kata runtime classes, the guest image and a deployment through the NVIDIA GPU Operator. This page covers only the NVSwitch fabric, with kata-device-provisioner as the VFIO binder and kata-device-plugin as the device plugin.
+
 *[PF]: PCI physical function
 *[PFs]: PCI physical functions
 *[CDI]: Container Device Interface
