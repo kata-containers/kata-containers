@@ -66,6 +66,12 @@ impl NetworkInfoFromLink {
                 .context("handle routes")?,
         })
     }
+
+    /// Drops the neighbours collected from the pod netns, so none are handed to the guest.
+    pub(crate) fn without_neighbours(mut self) -> Self {
+        self.neighs.clear();
+        self
+    }
 }
 
 pub async fn handle_addresses(
