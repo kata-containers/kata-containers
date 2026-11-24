@@ -32,7 +32,7 @@ use kata_types::{
 };
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
-use std::{cmp::Ordering, time::Duration};
+use std::{cmp::Ordering, path::PathBuf, time::Duration};
 use std::{collections::HashSet, fs::create_dir_all};
 use tokio::sync::mpsc;
 
@@ -78,6 +78,9 @@ pub struct DragonballInner {
     /// pending device
     pub(crate) pending_devices: Vec<DeviceType>,
 
+    /// Private workload checkpoint directory used by the next VM start.
+    pub(crate) restore_path: Option<PathBuf>,
+
     /// cached block device
     pub(crate) cached_block_devices: HashSet<String>,
 
@@ -117,6 +120,7 @@ impl DragonballInner {
             netns: None,
             config: Default::default(),
             pending_devices: vec![],
+            restore_path: None,
             state: VmmState::NotReady,
             jailed: false,
             vmm_instance: VmmInstance::new("", exit_notify),
@@ -377,6 +381,23 @@ impl DragonballInner {
 
     fn start_vmm_instance(&mut self) -> Result<()> {
         info!(sl!(), "Starting VM");
+        #[cfg(target_arch = "x86_64")]
+        if let Some(state_dir) = self.restore_path.as_ref() {
+            let state_path = state_dir.join("state");
+            let memory_path = state_dir.join("memory");
+            self.vmm_instance
+                .instance_start_from_snapshot(
+                    state_path.to_string_lossy().to_string(),
+                    memory_path.to_string_lossy().to_string(),
+                    true,
+                )
+                .context("Failed to restore vmm from workload checkpoint")?;
+            self.vmm_instance
+                .wait_vsock_ready(Duration::from_secs(5))
+                .context("wait for workload-restore virtio-vsock readiness")?;
+            self.state = VmmState::VmRunning;
+            return Ok(());
+        }
         // Boot from a VM template snapshot instead of cold booting when
         // configured (mirrors the QEMU boot_from_template flow).
         #[cfg(target_arch = "x86_64")]
@@ -397,8 +418,12 @@ impl DragonballInner {
                 .instance_start_from_snapshot(
                     template.device_state_path.clone(),
                     template.memory_path.clone(),
+                    false,
                 )
                 .context("Failed to start vmm from template snapshot")?;
+            self.vmm_instance
+                .wait_vsock_ready(Duration::from_secs(5))
+                .context("wait for template virtio-vsock readiness")?;
             self.state = VmmState::VmRunning;
             return Ok(());
         }
@@ -643,6 +668,7 @@ impl Persist for DragonballInner {
             vmm_instance: VmmInstance::new("", hypervisor_args),
             run_dir: String::new(),
             pending_devices: vec![],
+            restore_path: None,
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),
             guest_memory_block_size_mb: 0,

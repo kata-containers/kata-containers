@@ -29,8 +29,8 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
 
 use crate::{
-    DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds, VmSaveOptions,
-    VmSaveResult, VmStartOptions,
+    DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds, VmResourceTopology,
+    VmSaveOptions, VmSaveResult, VmStartOptions,
 };
 
 pub struct Dragonball {
@@ -87,12 +87,15 @@ impl Hypervisor for Dragonball {
 
     #[instrument]
     async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
-        let timeout = options.regular_timeout()?;
-
         let mut inner = self.inner.write().await;
-        let ret = inner.start_vm(timeout).await;
+        let expected_topology = options.restore.as_ref().map(VmResourceTopology::from);
+        inner.configure_restore(options.restore)?;
+        inner.start_vm(options.timeout).await?;
+        if let Some(expected) = expected_topology {
+            expected.validate_restored(inner.current_resource_topology()?)?;
+        }
 
-        if ret.is_ok() && inner.config.device_info.reclaim_guest_freed_memory {
+        if inner.config.device_info.reclaim_guest_freed_memory {
             // The virtio-balloon device must be inserted into dragonball and
             // recognized by the guest kernel only after the dragonball upcall is ready.
             // The dragonball upcall is not ready immediately after the VM starts,
@@ -109,7 +112,7 @@ impl Hypervisor for Dragonball {
             });
         }
 
-        ret
+        Ok(())
     }
 
     async fn stop_vm(&self) -> Result<()> {
@@ -137,12 +140,17 @@ impl Hypervisor for Dragonball {
     }
 
     async fn save_vm(&self, options: VmSaveOptions) -> Result<VmSaveResult> {
-        options.require_template()?;
-
         let inner = self.inner.read().await;
-        inner.save_vm().await?;
-
-        Ok(VmSaveResult::default())
+        match options {
+            VmSaveOptions::Template => {
+                inner.save_vm().await?;
+                Ok(VmSaveResult::default())
+            }
+            VmSaveOptions::Workload {
+                state_path,
+                timeout,
+            } => inner.checkpoint_vm_state_to(&state_path, timeout).await,
+        }
     }
 
     // returns Result<(old_vcpus, new_vcpus)>

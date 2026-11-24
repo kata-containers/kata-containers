@@ -10,7 +10,7 @@ use std::{
     os::unix::io::IntoRawFd,
     sync::{Arc, Mutex, RwLock},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -18,8 +18,9 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
-        InstanceInfo, InstanceState, NetworkInterfaceConfig, VcpuResizeInfo, VmmAction,
-        VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
+        InstanceInfo, InstanceState, NetworkInterfaceConfig, SnapshotMemory, SnapshotMemoryMode,
+        VcpuResizeInfo, VmmAction, VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService,
+        VsockDeviceConfigInfo,
     },
     device_manager::{
         balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
@@ -193,14 +194,40 @@ impl VmmInstance {
     /// Start the microVM by restoring it from a snapshot (VM template)
     /// instead of cold booting.
     #[cfg(target_arch = "x86_64")]
-    pub fn instance_start_from_snapshot(&self, state_path: String, mem_path: String) -> Result<()> {
+    pub fn instance_start_from_snapshot(
+        &self,
+        state_path: String,
+        mem_path: String,
+        reset_vsock_pending: bool,
+    ) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::StartMicroVmFromSnapshot {
             state_path,
             mem_path,
-            reset_vsock_pending: false,
+            reset_vsock_pending,
         }))
         .context("Failed to start MicroVm from snapshot")?;
         Ok(())
+    }
+
+    /// Poll outside the snapshot-start action so the VMM event loop can first
+    /// dispatch the restored vsock subscriber's readiness barrier.
+    pub fn wait_vsock_ready(&self, timeout: Duration) -> Result<()> {
+        const POLL_INTERVAL: Duration = Duration::from_millis(1);
+        let deadline = Instant::now() + timeout;
+        loop {
+            match self.handle_request(Request::Sync(VmmAction::FinalizeVsockRestore))? {
+                VmmData::VsockRestoreReady(true) => return Ok(()),
+                VmmData::VsockRestoreReady(false) => {}
+                data => return Err(anyhow!("unexpected vsock restore response: {data:?}")),
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return Err(anyhow!(
+                    "timed out waiting for restored virtio-vsock handler readiness"
+                ));
+            }
+            thread::sleep(POLL_INTERVAL.min(deadline - now));
+        }
     }
 
     pub fn is_uninitialized(&self) -> bool {
@@ -385,14 +412,35 @@ impl VmmInstance {
     /// metadata, JSON) plus a guest memory contents file. Preserves whether
     /// the VM was running or already paused.
     #[cfg(target_arch = "x86_64")]
-    pub fn save_microvm(&self, state_path: String, mem_path: String) -> Result<()> {
-        self.handle_request(Request::Sync(VmmAction::SaveMicrovm {
-            state_path,
-            mem_path,
-            reset_vsock_transport: false,
-        }))
-        .context("Failed to save microvm")?;
-        Ok(())
+    pub fn save_microvm(
+        &self,
+        state_path: String,
+        mem_path: String,
+        memory_mode: SnapshotMemoryMode,
+        reset_vsock_transport: bool,
+    ) -> Result<Option<SnapshotMemory>> {
+        let response = self
+            .handle_request(Request::Sync(VmmAction::SaveMicrovm {
+                state_path,
+                mem_path,
+                memory_mode,
+                reset_vsock_transport,
+            }))
+            .context("Failed to save microvm")?;
+        match (memory_mode, response) {
+            (SnapshotMemoryMode::PersistentPath, VmmData::Empty) => Ok(None),
+            (SnapshotMemoryMode::TransientUnlinked, VmmData::SnapshotMemoryFile(file)) => {
+                if file.base.is_some() != file.delta_ranges.is_some() {
+                    return Err(anyhow!(
+                        "snapshot memory base and delta ranges must be supplied together"
+                    ));
+                }
+                Ok(Some(file))
+            }
+            (mode, response) => Err(anyhow!(
+                "unexpected save microvm response {response:?} for mode {mode:?}"
+            )),
+        }
     }
 
     pub fn pid(&self) -> u32 {

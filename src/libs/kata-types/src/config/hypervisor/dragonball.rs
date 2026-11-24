@@ -68,10 +68,11 @@ impl ConfigPlugin for DragonballConfig {
                 db.cpu_info.default_vcpus = db.cpu_info.default_maxvcpus as f32;
             }
 
-            if db.machine_info.entropy_source.is_empty() {
-                db.machine_info.entropy_source =
-                    default::DEFAULT_DRAGONBALL_ENTROPY_SOURCE.to_string();
-            }
+            // FIXME: it's not used correctly in dragonball, Why?
+            // if db.machine_info.entropy_source.is_empty() {
+            //     db.machine_info.entropy_source =
+            //         default::DEFAULT_DRAGONBALL_ENTROPY_SOURCE.to_string();
+            // }
 
             if db.memory_info.default_memory == 0 {
                 db.memory_info.default_memory = default::DEFAULT_DRAGONBALL_MEMORY_SIZE_MB;
@@ -228,5 +229,24 @@ mod tests {
                 .template_path,
             default::DEFAULT_TEMPLATE_PATH
         );
+    }
+
+    #[test]
+    fn test_adjust_config_preserves_disabled_entropy_source() {
+        let mut config = TomlConfig::default();
+        config.hypervisor.insert(
+            HYPERVISOR_NAME_DRAGONBALL.to_string(),
+            Hypervisor::default(),
+        );
+
+        DragonballConfig::new().adjust_config(&mut config).unwrap();
+
+        assert!(config
+            .hypervisor
+            .get(HYPERVISOR_NAME_DRAGONBALL)
+            .unwrap()
+            .machine_info
+            .entropy_source
+            .is_empty());
     }
 }

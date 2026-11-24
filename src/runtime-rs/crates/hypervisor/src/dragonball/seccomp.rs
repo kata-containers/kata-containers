@@ -87,12 +87,15 @@ pub fn get_process_seccomp_rules() -> Vec<(i64, Vec<seccompiler::SeccompRule>)> 
         (libc::SYS_fcntl, vec![]),
         (libc::SYS_fsync, vec![]),
         (libc::SYS_fdatasync, vec![]),
+        (libc::SYS_sync_file_range, vec![]),
         (libc::SYS_ftruncate, vec![]),
         (libc::SYS_getcwd, vec![]),
         #[cfg(target_arch = "x86_64")]
         (libc::SYS_mkdir, vec![]),
         #[cfg(target_arch = "x86_64")]
         (libc::SYS_rmdir, vec![]),
+        #[cfg(target_arch = "x86_64")]
+        (libc::SYS_rename, vec![]),
         #[cfg(target_arch = "x86_64")]
         (libc::SYS_unlink, vec![]),
         #[cfg(target_arch = "x86_64")]

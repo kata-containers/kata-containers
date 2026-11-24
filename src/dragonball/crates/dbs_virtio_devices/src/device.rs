@@ -385,6 +385,14 @@ pub trait VirtioDevice<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>: 
     /// Removes this devices.
     fn remove(&mut self) {}
 
+    /// Starts device removal without waiting for worker threads to exit.
+    fn prepare_remove(&mut self) {}
+
+    /// Completes device removal after [`VirtioDevice::prepare_remove`].
+    fn finish_remove(&mut self) {
+        self.remove();
+    }
+
     /// every new device object has its resource requirements
     fn get_resource_requirements(
         &self,
