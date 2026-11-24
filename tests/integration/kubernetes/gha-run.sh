@@ -373,17 +373,23 @@ function report_tests() {
 	report_bats_tests "${kubernetes_dir}"
 }
 
+# Collect artifacts for later archiving.
+#
+# Clear the artifacts directory first if it exists.
+# When the test start time is not defined, this prevents
+# later archiving from possibly archiving stale information.
 function collect_artifacts() {
-	if [[ -z "${start_time:-}" ]]; then
-		warn "tests start time is not defined. Cannot gather journal information"
-		return
-	fi
-
 	local artifacts_dir
 	artifacts_dir="/tmp/artifacts"
 	if [[ -d "${artifacts_dir}" ]]; then
 		rm -rf "${artifacts_dir}"
 	fi
+
+	if [[ -z "${start_time:-}" ]]; then
+		warn "tests start time is not defined. Cannot gather journal information"
+		return
+	fi
+
 	mkdir -p "${artifacts_dir}"
 	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
 	local journalctl_log_filename

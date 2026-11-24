@@ -64,16 +64,22 @@ function install_dependencies() {
 	fi
 }
 
+# Collect artifacts for later archiving.
+#
+# Clear the artifacts directory first if it exists.
+# When the test start time is not defined, this prevents
+# later archiving from possibly archiving stale information.
 function collect_artifacts() {
+	local artifacts_dir="/tmp/artifacts"
+	if [[ -d "${artifacts_dir}" ]]; then
+		rm -rf "${artifacts_dir}"
+	fi
+
 	if [[ -z "${start_time:-}" ]]; then
 		warn "tests start time is not defined. Cannot gather journal information"
 		return
 	fi
 
-	local artifacts_dir="/tmp/artifacts"
-	if [[ -d "${artifacts_dir}" ]]; then
-		rm -rf "${artifacts_dir}"
-	fi
 	mkdir -p "${artifacts_dir}"
 	# shellcheck disable=SC2154
 	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
