@@ -269,7 +269,7 @@ kubectl -n kata-system exec $P -- fmclient -d 15    # -d deactivates
 Each command publishes the view it leaves behind and prints it; within one plugin poll the node's capacity follows:
 
 ```text
-fmclient: published to http://10.86.129.206:9877: unit "partition", active partitions (id x gpus): 2x4 6x2
+fmclient: published to http://<node-ip>:9877: unit "partition", active partitions (id x gpus): 2x4 6x2
 ```
 
 Nothing here needs a person at `kubectl exec`. An owner that wants a fixed layout makes the container's command activate it before idling, `command: ["sh", "-c", "fmclient -a 2 && fmclient -a 6 && sleep infinity"]`, or runs the same calls from a Job in the owner namespace. A controller that turns node labels into these calls is possible on top; this page stops at the calls.
