@@ -532,11 +532,22 @@ async fn create_endpoint(
         }
     };
 
-    let network_info = Arc::new(
+    let mut network_info =
         NetworkInfoFromLink::new(handle, link, addrs, &endpoint.hardware_addr().await)
             .await
-            .context("network info from link")?,
-    );
+            .context("network info from link")?;
+    // l3forwarding routes the guest through the tap, so the pod netns' neighbours are
+    // unreachable from it: their MACs are on the node side of the pod link, and the tap drops
+    // frames addressed to them as PACKET_OTHERHOST. The guest resolves its next hops on the tap
+    // instead, which answers through proxy ARP and proxy NDP. Decided per endpoint: VLAN, IPVLAN
+    // and physical endpoints never use l3forwarding, so their guests still need the neighbours.
+    if matches!(
+        endpoint.network_model_type().await,
+        Some(crate::network::network_model::NetworkModelType::L3Forwarding)
+    ) {
+        network_info = network_info.without_neighbours();
+    }
+    let network_info = Arc::new(network_info);
 
     info!(sl!(), "network info {:?}", network_info);
 
@@ -552,6 +563,153 @@ fn is_physical_iface(name: &str) -> Result<bool> {
         return Ok(false);
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod neighbour_tests {
+    use super::*;
+    use crate::network::network_model::{L3_FORWARDING_NET_MODEL_STR, TC_FILTER_NET_MODEL_STR};
+    use std::net::{IpAddr, Ipv4Addr};
+
+    const POD_IF: &str = "kata-n-eth0";
+    const PEER_IF: &str = "kata-n-peer";
+    const VLAN_IF: &str = "kata-n-vlan";
+    const GATEWAY: Ipv4Addr = Ipv4Addr::new(169, 254, 1, 1);
+
+    /// Builds a pod netns the way the AWS VPC CNI leaves it on an IPv4 cluster (a /32 address
+    /// and a PERMANENT neighbour for the dummy gateway, pointing at the node side of the pod
+    /// link), runs entity discovery with `model`, and returns the neighbours handed to the guest.
+    ///
+    /// The peer stays down, so the pod interface has no carrier and no IPv6 link-local address,
+    /// and it is the only interface discovery picks up. With `over_vlan`, the address and the
+    /// neighbour go on a VLAN on top of the veth instead, and the VLAN is the one picked up.
+    async fn guest_neighbours(model: &str, over_vlan: bool) -> Vec<agent::ARPNeighbor> {
+        let ns_name = format!("kata-neigh-{}-{}-{}", model, over_vlan, std::process::id());
+        let netns = netns_rs::NetNs::new(&ns_name).expect("create netns");
+        let netns_path = netns.path().to_str().unwrap().to_string();
+        defer!({
+            let _ = netns.remove();
+        });
+
+        {
+            let _guard = netns::NetnsGuard::new(&netns_path).expect("enter netns");
+            let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+            let connection = tokio::spawn(connection);
+            defer!({
+                connection.abort();
+            });
+
+            handle
+                .link()
+                .add(rtnetlink::LinkVeth::new(POD_IF, PEER_IF).build())
+                .execute()
+                .await
+                .expect("create veth pair");
+            let index = handle
+                .link()
+                .get()
+                .match_name(POD_IF.to_string())
+                .execute()
+                .try_next()
+                .await
+                .expect("look up pod interface")
+                .expect("pod interface exists")
+                .header
+                .index;
+            let index = if over_vlan {
+                handle
+                    .link()
+                    .add(rtnetlink::LinkVlan::new(VLAN_IF, index, 100).build())
+                    .execute()
+                    .await
+                    .expect("create vlan");
+                handle
+                    .link()
+                    .get()
+                    .match_name(VLAN_IF.to_string())
+                    .execute()
+                    .try_next()
+                    .await
+                    .expect("look up vlan interface")
+                    .expect("vlan interface exists")
+                    .header
+                    .index
+            } else {
+                index
+            };
+            handle
+                .address()
+                .add(index, IpAddr::V4(Ipv4Addr::new(10, 0, 1, 5)), 32)
+                .execute()
+                .await
+                .expect("assign pod address");
+            handle
+                .neighbours()
+                .add(index, IpAddr::V4(GATEWAY))
+                .link_layer_address(&[0x02, 0, 0, 0, 0, 0x01])
+                .state(netlink_packet_route::neighbour::NeighbourState::Permanent)
+                .execute()
+                .await
+                .expect("add permanent gateway neighbour");
+        }
+
+        let config = NetworkWithNetNsConfig {
+            network_model: model.to_string(),
+            netns_path,
+            queues: 1,
+            network_created: false,
+        };
+        let d = Arc::new(crate::test_utils::device_manager().await);
+        let (entities, failure) = get_entity_from_netns(&config, d)
+            .await
+            .expect("discover entities");
+        assert!(failure.is_none(), "discovery failed: {:?}", failure);
+        assert_eq!(entities.len(), 1, "expected a single pod interface");
+        entities[0].network_info.neighs().await.expect("neighbours")
+    }
+
+    fn has_gateway(neighbours: &[agent::ARPNeighbor]) -> bool {
+        neighbours.iter().any(|n| {
+            n.to_ip_address
+                .as_ref()
+                .is_some_and(|a| a.address == GATEWAY.to_string())
+        })
+    }
+
+    // Requires root: creating a netns, a veth pair and a TAP needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn the_pod_gateway_neighbour_reaches_the_guest_under_tcfilter() {
+        test_utils::skip_if_not_root!();
+        // Control for the test below: discovery does see the CNI's neighbour.
+        assert!(has_gateway(
+            &guest_neighbours(TC_FILTER_NET_MODEL_STR, false).await
+        ));
+    }
+
+    // Requires root: creating a netns, a veth pair and a TAP needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn l3forwarding_hands_the_guest_no_pod_netns_neighbours() {
+        test_utils::skip_if_not_root!();
+        // The neighbour's MAC is on the node side of the pod link, which the guest never sees:
+        // the tap drops frames addressed to it as PACKET_OTHERHOST.
+        let neighbours = guest_neighbours(L3_FORWARDING_NET_MODEL_STR, false).await;
+        assert!(
+            neighbours.is_empty(),
+            "l3forwarding must not give the guest pod netns neighbours, got {:?}",
+            neighbours
+        );
+    }
+
+    // Requires root: creating a netns, a veth pair, a VLAN and a TAP needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn a_vlan_keeps_its_neighbours_under_l3forwarding() {
+        test_utils::skip_if_not_root!();
+        // A VLAN endpoint always uses tcfilter, so its guest reaches the neighbour's MAC
+        // directly and still needs the entry.
+        assert!(has_gateway(
+            &guest_neighbours(L3_FORWARDING_NET_MODEL_STR, true).await
+        ));
+    }
 }
 
 #[cfg(test)]
