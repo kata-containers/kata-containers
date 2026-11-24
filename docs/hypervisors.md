@@ -50,4 +50,4 @@ QEMU is the best supported hypervisor for NVIDIA-based GPUs and for confidential
 
 ## Dragonball
 
-Dragonball is a special hypervisor created by the Ant Group that runs in the same process as the Rust-based containerd shim.
+Dragonball is a special hypervisor created by the Ant Group and Alibaba Cloud that runs in the same process as the Rust-based containerd shim.
