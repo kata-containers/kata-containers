@@ -78,7 +78,7 @@ Fabric Manager knows the eight GPUs of this box as fifteen partitions: one of al
 | 2 GPUs | `nvidia.com/nvlink-2gpu: 1` |
 | 1 GPU | `nvidia.com/gpu: 1` |
 
-Each unit is one device whose CDI entry carries every GPU function of the partition, in Fabric Manager's member order. A pod requesting `nvidia.com/nvlink-4gpu: 1` gets those four GPUs and no others. `nvidia.com/gpu: N` was rejected for partitions: the count cannot say whether four GPUs are NVLinked, standalone or PCIe, and only a per-shape resource lets the scheduler see how many partitions of a shape remain.
+Each unit is one device whose CDI entry carries every GPU function of the partition, in Fabric Manager's member order. A pod requesting `nvidia.com/nvlink-4gpu: 1` gets those four GPUs and no others. A count under `nvidia.com/gpu: N` cannot say whether four GPUs are NVLinked, standalone or PCIe, and only a per-shape resource lets the scheduler see how many partitions of a shape remain.
 
 An active partition is advertised Healthy when it is supported by Fabric Manager, exclusive (no other active partition claims one of its GPUs) and complete (every member GPU is bound to `vfio-pci` and carries a readable slot label). Otherwise it is advertised Unhealthy under the same name: counted in capacity, left out of allocatable, and the plugin logs the reason. An active partition with no member bound on this host is not advertised.
 
