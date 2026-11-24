@@ -77,6 +77,11 @@ pgpu
 PPCIE
 Quadro
 RCAR
+NVLSM
+fmclient
+kmsg
+persistenced
+precheck
 
 # Storage & Filesystems
 AUFS
@@ -166,8 +171,3 @@ Rego
 kcli
 podvm
 eMudhra
-NVLSM
-fmclient
-kmsg
-persistenced
-precheck
