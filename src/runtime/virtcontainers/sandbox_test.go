@@ -645,7 +645,7 @@ func TestSandboxGetContainer(t *testing.T) {
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
-	nc, err := newContainer(context.Background(), p, &contConfig)
+	nc, err := newContainer(context.Background(), p, contConfig)
 	assert.NoError(err)
 
 	err = p.addContainer(nc)
@@ -1086,7 +1086,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 			DevType:       "",
 		},
 	}
-	_, err = newContainer(context.Background(), p, &contConfig)
+	_, err = newContainer(context.Background(), p, contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
 	storePath := filepath.Join(p.store.RunStoragePath(), testSandboxID, contID)
 	_, err = os.Stat(storePath)
@@ -1482,17 +1482,17 @@ func TestSandboxUpdateResources(t *testing.T) {
 	containerMemLimit := int64(4 * 1024 * 1024 * 1024)
 	containerCPUPeriod := uint64(1000)
 	containerCPUQouta := int64(5)
-	for idx := range s.config.Containers {
-		s.config.Containers[idx].Resources.Memory = &specs.LinuxMemory{
+	for _, c := range s.containers {
+		c.config.Resources.Memory = &specs.LinuxMemory{
 			Limit: new(int64),
 		}
-		s.config.Containers[idx].Resources.CPU = &specs.LinuxCPU{
+		c.config.Resources.CPU = &specs.LinuxCPU{
 			Period: new(uint64),
 			Quota:  new(int64),
 		}
-		s.config.Containers[idx].Resources.Memory.Limit = &containerMemLimit
-		s.config.Containers[idx].Resources.CPU.Period = &containerCPUPeriod
-		s.config.Containers[idx].Resources.CPU.Quota = &containerCPUQouta
+		c.config.Resources.Memory.Limit = &containerMemLimit
+		c.config.Resources.CPU.Period = &containerCPUPeriod
+		c.config.Resources.CPU.Quota = &containerCPUQouta
 	}
 	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
@@ -1791,8 +1791,8 @@ func TestSandboxHugepageLimit(t *testing.T) {
 		},
 	}
 
-	for i := range s.config.Containers {
-		s.config.Containers[i].Resources.HugepageLimits = hugepageLimits
+	for _, c := range s.containers {
+		c.config.Resources.HugepageLimits = hugepageLimits
 	}
 	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
@@ -1913,4 +1913,45 @@ func TestHotplugVfioNetworkDevicePortConfigured(t *testing.T) {
 	err := s.hotplugVfioNetworkDevice(context.Background(), ep)
 	assert.Error(err)
 	assert.Contains(err.Error(), "failed to resolve VFIO device path")
+}
+
+func TestContainerConfigsAfterDelete(t *testing.T) {
+	assert := assert.New(t)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NetworkConfig{}, nil, nil)
+	assert.NoError(err)
+	defer cleanUp()
+
+	for _, id := range []string{"a", "b", "c"} {
+		_, err = s.CreateContainer(context.Background(), newTestContainerConfigNoop(id))
+		assert.NoError(err)
+	}
+	_, err = s.DeleteContainer(context.Background(), "a")
+	assert.NoError(err)
+	limit := int64(512 << 20)
+	s.containers["b"].config.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+
+	cfgs := s.containerConfigs()
+	assert.Len(cfgs, 2)
+	for i, id := range []string{"b", "c"} {
+		assert.Same(s.containers[id].config, cfgs[i])
+	}
+	mem, _, _ := s.calculateSandboxMemory()
+	assert.Equal(uint64(limit), mem)
+}
+
+func TestRefusedDuplicateKeepsConfig(t *testing.T) {
+	assert := assert.New(t)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NetworkConfig{}, nil, nil)
+	assert.NoError(err)
+	defer cleanUp()
+
+	kept := newTestContainerConfigNoop("a")
+	kept.Annotations = map[string]string{"v": "kept"}
+	_, err = s.CreateContainer(context.Background(), kept)
+	assert.NoError(err)
+	refused := newTestContainerConfigNoop("a")
+	refused.Annotations = map[string]string{"v": "refused"}
+	_, err = s.CreateContainer(context.Background(), refused)
+	assert.Error(err)
+	assert.Equal("kept", s.containers["a"].config.Annotations["v"])
 }

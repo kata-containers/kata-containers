@@ -1793,6 +1793,20 @@ func (s *Sandbox) addContainer(c *Container) error {
 	return nil
 }
 
+// A container owns its config once it exists, so s.config.Containers is read
+// only for the order and for entries that have no container yet.
+func (s *Sandbox) containerConfigs() []*ContainerConfig {
+	cfgs := make([]*ContainerConfig, 0, len(s.config.Containers))
+	for i := range s.config.Containers {
+		if c, ok := s.containers[s.config.Containers[i].ID]; ok {
+			cfgs = append(cfgs, c.config)
+		} else {
+			cfgs = append(cfgs, &s.config.Containers[i])
+		}
+	}
+	return cfgs
+}
+
 // CreateContainer creates a new container in the sandbox
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
@@ -1812,7 +1826,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 	}()
 
 	// Create the container object, add devices to the sandbox's device-manager:
-	c, err := newContainer(ctx, s, &s.config.Containers[len(s.config.Containers)-1])
+	c, err := newContainer(ctx, s, contConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -2134,7 +2148,7 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	defer span.End()
 
 	for i := range s.config.Containers {
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, s.config.Containers[i])
 		if err != nil {
 			return err
 		}
@@ -2772,7 +2786,7 @@ func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
 	memorySandbox := uint64(0)
 	needPodSwap := false
 	swapSandbox := int64(0)
-	for _, c := range s.config.Containers {
+	for _, c := range s.containerConfigs() {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
 			s.Logger().WithField("container", c.ID).Debug("Do not taking into account memory resources of not running containers")
@@ -2819,7 +2833,7 @@ func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
 	floatCPU := float32(0)
 	cpusetCount := int(0)
 
-	for _, c := range s.config.Containers {
+	for _, c := range s.containerConfigs() {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
 			s.Logger().WithField("container", c.ID).Debug("Do not taking into account CPU resources of not running containers")
@@ -3071,7 +3085,7 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 
 	cpuResult := cpuset.NewCPUSet()
 	memResult := cpuset.NewCPUSet()
-	for _, ctr := range s.config.Containers {
+	for _, ctr := range s.containerConfigs() {
 		if ctr.Resources.CPU != nil {
 			currCPUSet, err := cpuset.Parse(ctr.Resources.CPU.Cpus)
 			if err != nil {
@@ -3137,7 +3151,7 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 		contConfig.CustomSpec = &spec
 		s.config.Containers[i] = contConfig
 
-		c, err := newContainer(ctx, s, &s.config.Containers[i])
+		c, err := newContainer(ctx, s, s.config.Containers[i])
 		if err != nil {
 			return err
 		}

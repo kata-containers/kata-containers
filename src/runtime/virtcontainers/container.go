@@ -735,7 +735,8 @@ func (c *Container) initConfigResourcesMemory() {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
+func newContainer(ctx context.Context, sandbox *Sandbox, config ContainerConfig) (*Container, error) {
+	contConfig := &config
 	span, ctx := katatrace.Trace(ctx, nil, "newContainer", containerTracingTags, map[string]string{"container_id": contConfig.ID, "sandbox_id": sandbox.id})
 	defer span.End()
 

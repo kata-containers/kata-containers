@@ -265,7 +265,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		LongLiveConn: sconfig.AgentConfig.LongLiveConn,
 	}
 
-	for _, contConf := range sconfig.Containers {
+	for _, contConf := range s.containerConfigs() {
 		ss.Config.ContainerConfigs = append(ss.Config.ContainerConfigs, persistapi.ContainerConfig{
 			ID:          contConf.ID,
 			Annotations: contConf.Annotations,
