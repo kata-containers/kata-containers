@@ -1671,38 +1671,6 @@ pub struct RemoteInfo {
     pub default_gpu_model: String,
 }
 
-/// Configuration information for vm template.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct VmTemplateInfo {
-    /// Indicate whether the VM is being created as a template VM.
-    #[serde(default)]
-    pub boot_to_be_template: bool,
-
-    /// Indicate whether the VM should be created from an existing template VM.
-    #[serde(default)]
-    pub boot_from_template: bool,
-
-    /// memory_path is the memory file path of VM memory.
-    #[serde(default)]
-    pub memory_path: String,
-
-    /// device_state_path is the VM device state file path.
-    #[serde(default)]
-    pub device_state_path: String,
-}
-
-impl VmTemplateInfo {
-    /// Adjust the configuration information after loading from configuration file.
-    pub fn adjust_config(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    /// Validate the configuration information.
-    pub fn validate(&self) -> Result<()> {
-        Ok(())
-    }
-}
-
 /// Configuration information for VM factory (templating, caches, etc.).
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1822,10 +1790,6 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub remote_info: RemoteInfo,
 
-    /// vm template configuration information.
-    #[serde(default, flatten)]
-    pub vm_template: VmTemplateInfo,
-
     /// VM factory configuration information.
     #[serde(default)]
     pub factory: Factory,
@@ -1924,7 +1888,6 @@ impl ConfigOps for Hypervisor {
                 hv.network_info.adjust_config()?;
                 hv.security_info.adjust_config()?;
                 hv.shared_fs.adjust_config()?;
-                hv.vm_template.adjust_config()?;
                 resolve_path!(
                     hv.prefetch_list_path,
                     "prefetch_list_path `{}` is invalid: {}"
@@ -1993,7 +1956,6 @@ impl ConfigOps for Hypervisor {
                 hv.network_info.validate()?;
                 hv.security_info.validate()?;
                 hv.shared_fs.validate()?;
-                hv.vm_template.validate()?;
                 validate_path!(hv.path, "Hypervisor binary path `{}` is invalid: {}")?;
                 validate_path!(
                     hv.ctlpath,

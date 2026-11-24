@@ -43,7 +43,9 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
-use hypervisor::{is_vfio_ap_device, BlockConfigModern, Hypervisor, VfioDeviceBase};
+use hypervisor::{
+    is_vfio_ap_device, BlockConfigModern, Hypervisor, RestoreVmRequest, VfioDeviceBase,
+};
 #[cfg(all(
     feature = "openvmm",
     any(target_arch = "x86_64", target_arch = "aarch64")
@@ -1102,9 +1104,6 @@ impl VirtSandbox {
 
     /// Reseeds a template-restored guest's RNG, which clones share with the snapshot.
     async fn reseed_rng(agent: &dyn Agent, config: &HypervisorConfig) -> Result<()> {
-        if !config.vm_template.boot_from_template {
-            return Ok(());
-        }
         if config.security_info.confidential_guest {
             return Err(anyhow!(
                 "VM templating is not supported for confidential guests"
@@ -1123,10 +1122,7 @@ impl VirtSandbox {
     }
 
     /// Sets a template-restored guest's clock, which stops while the template is paused.
-    async fn sync_time(agent: &dyn Agent, config: &HypervisorConfig) -> Result<()> {
-        if !config.vm_template.boot_from_template {
-            return Ok(());
-        }
+    async fn sync_time(agent: &dyn Agent) -> Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .context("read host time")?;
@@ -1363,6 +1359,28 @@ impl VirtSandbox {
             .unwrap_or(false)
     }
 
+    /// Restores the sandbox VM from the factory template and resumes it.
+    async fn restore_from_template(&self, timeout_secs: i32) -> Result<()> {
+        let template_path = self
+            .factory
+            .as_ref()
+            .map(|factory| PathBuf::from(&factory.template_path))
+            .ok_or_else(|| anyhow!("factory is not configured"))?;
+        self.hypervisor
+            .snapshot()
+            .ok_or_else(|| anyhow!("hypervisor does not support VM snapshots"))?
+            .restore_vm(RestoreVmRequest {
+                snapshot_dir: template_path,
+                timeout_secs,
+            })
+            .await
+            .context("restore factory vm")?;
+        self.hypervisor
+            .resume_vm()
+            .await
+            .context("resume factory vm")
+    }
+
     async fn should_defer_network(&self) -> Result<bool> {
         if !self.is_factory_enabled() {
             return Ok(false);
@@ -1548,7 +1566,13 @@ impl Sandbox for VirtSandbox {
 
         // start vm
         inner.vmm_start_attempted = true;
-        let started = self.hypervisor.start_vm(10_000).await.context("start vm");
+        // Factory clones restore from the template snapshot; everything else
+        // cold boots. restore_vm() hands back a paused VM.
+        let started = if self.is_factory_enabled() {
+            self.restore_from_template(10_000).await
+        } else {
+            self.hypervisor.start_vm(10_000).await.context("start vm")
+        };
         // A start that fails after spawning the VMM gets no exit watcher.
         // stop() then needs the identity to confirm the exit, or cleanup
         // never runs.
@@ -1647,8 +1671,10 @@ impl Sandbox for VirtSandbox {
             .await
             .context(format!("connect to address {:?}", address))?;
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        Self::reseed_rng(self.agent.as_ref(), &hypervisor_config).await?;
-        Self::sync_time(self.agent.as_ref(), &hypervisor_config).await?;
+        if self.is_factory_enabled() {
+            Self::reseed_rng(self.agent.as_ref(), &hypervisor_config).await?;
+            Self::sync_time(self.agent.as_ref()).await?;
+        }
         self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager

@@ -96,9 +96,6 @@ pub enum MemoryConfigError {
     #[error("Failed to query system memory information: {0}")]
     SysInfoFail(#[source] nix::errno::Errno),
 
-    #[error("Template memory path is empty")]
-    NoTemplateMemoryPath,
-
     #[error("Template memory path is not accessible: {0}")]
     TemplateMemoryPathNotAccessible(String),
 

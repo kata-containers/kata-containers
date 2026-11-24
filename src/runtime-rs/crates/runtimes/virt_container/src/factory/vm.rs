@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
 #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
-use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
+use hypervisor::{qemu::Qemu, Hypervisor, VmSnapshot, HYPERVISOR_QEMU};
 use kata_types::config::{Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig};
 use resource::{cpu_mem::initial_size::InitialSizeManager, ResourceManager};
 use runtime_spec;
@@ -21,6 +21,16 @@ use uuid::Uuid;
 use crate::sandbox::VirtSandbox;
 
 const MESSAGE_BUFFER_SIZE: usize = 8;
+
+/// Return the snapshot implementation for `hypervisor`, or an error if it has none.
+pub(crate) fn snapshot_support<'a>(
+    hypervisor: &'a dyn Hypervisor,
+    name: &str,
+) -> Result<&'a dyn VmSnapshot> {
+    hypervisor
+        .snapshot()
+        .ok_or_else(|| anyhow!("hypervisor '{name}' does not support VM snapshots"))
+}
 
 /// VM is an abstraction of a virtual machine.
 #[derive(Clone)]
@@ -108,7 +118,7 @@ impl TemplateVm {
     }
 
     /// Initializes the configured hypervisor for Kata.
-    async fn new_hypervisor(
+    pub(crate) async fn new_hypervisor(
         config: &VmConfig,
         _toml_config: &TomlConfig,
     ) -> Result<Arc<dyn Hypervisor>> {
@@ -182,7 +192,11 @@ impl TemplateVm {
     }
 
     /// Creates a new VM based on the provided configuration.
-    pub async fn new_vm(config: VmConfig, toml_config: TomlConfig) -> Result<Self> {
+    pub async fn new_vm(
+        config: VmConfig,
+        toml_config: TomlConfig,
+        snapshot_dir: &std::path::Path,
+    ) -> Result<Self> {
         let sid = Uuid::new_v4().to_string();
 
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
@@ -190,6 +204,10 @@ impl TemplateVm {
         let hypervisor = Self::new_hypervisor(&config, &toml_config)
             .await
             .context("new hypervisor")?;
+        snapshot_support(hypervisor.as_ref(), &config.hypervisor_name)?
+            .prepare_template_source(snapshot_dir)
+            .await
+            .context("prepare template source")?;
 
         let agent = Self::new_agent(&config).context("new agent")?;
 
@@ -326,8 +344,13 @@ impl TemplateVm {
     }
 
     /// Save a VM to persistent disk.
-    pub async fn save(&self) -> Result<()> {
-        self.hypervisor.save_vm().await.context("save vm")
+    pub async fn save(&self, snapshot_dir: &std::path::Path) -> Result<()> {
+        self.hypervisor
+            .snapshot()
+            .ok_or_else(|| anyhow!("hypervisor does not support VM snapshots"))?
+            .save_vm(snapshot_dir)
+            .await
+            .context("save vm")
     }
 
     /// Resume resumes a paused VM.

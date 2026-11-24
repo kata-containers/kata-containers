@@ -80,8 +80,10 @@ pub trait Hypervisor: Send + Sync {
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
     async fn pause_vm(&self) -> Result<()>;
-    async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;
+
+    // snapshot/restore, if supported (see VmSnapshot below)
+    fn snapshot(&self) -> Option<&dyn VmSnapshot> { None }
 
     // device manager
     async fn add_device(&self, device: device::Device) -> Result<()>;
@@ -98,6 +100,21 @@ pub trait Hypervisor: Send + Sync {
     async fn get_jailer_root(&self) -> Result<String>;
     async fn save_state(&self) -> Result<HypervisorState>;
    }
+```
+
+Hypervisors that can snapshot and restore a VM additionally implement
+[`VmSnapshot`](./src/snapshot.rs) and return `Some(self)` from
+`Hypervisor::snapshot()`. All artifacts for one snapshot live under a single
+directory whose layout is owned by the hypervisor that wrote it; `restore_vm`
+leaves the VM paused for the caller to resume.
+
+```rust
+pub trait VmSnapshot: Send + Sync {
+    async fn prepare_template_source(&self, snapshot_dir: &Path) -> Result<()> { Ok(()) }
+    async fn save_vm(&self, snapshot_dir: &Path) -> Result<()>;
+    async fn restore_vm(&self, request: RestoreVmRequest) -> Result<()>;
+    fn validate_snapshot(&self, snapshot_dir: &Path) -> Result<()>;
+}
 ```
 
 In the current design, the VM startup process follows these steps:

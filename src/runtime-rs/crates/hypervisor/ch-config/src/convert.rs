@@ -16,7 +16,7 @@ use kata_types::config::hypervisor::{CpuInfo, MachineInfo, MemoryInfo};
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::errors::*;
 
@@ -62,10 +62,11 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let boot_disks = n.boot_disks;
         let protection_dev = n.protection_device;
 
-        let template_memory = if cfg.vm_template.boot_to_be_template {
-            Some(template_memory_config(&cfg).map_err(VmConfigError::MemoryError)?)
-        } else {
-            None
+        let template_memory = match n.template_memory_path {
+            Some(memory_path) => Some(
+                template_memory_config(&cfg, &memory_path).map_err(VmConfigError::MemoryError)?,
+            ),
+            None => None,
         };
 
         let cpus = CpusConfig::try_from(cfg.cpu_info).map_err(VmConfigError::CPUError)?;
@@ -231,21 +232,21 @@ impl TryFrom<MemoryInfo> for MemoryConfig {
 }
 
 /// Builds the file-backed memory configuration for creating a source template VM.
-fn template_memory_config(cfg: &HypervisorConfig) -> Result<MemoryConfig, MemoryConfigError> {
+fn template_memory_config(
+    cfg: &HypervisorConfig,
+    memory_path: &Path,
+) -> Result<MemoryConfig, MemoryConfigError> {
     let mem = cfg.memory_info.clone();
 
     if mem.default_memory == 0 {
         return Err(MemoryConfigError::NoDefaultMemory);
     }
 
-    if cfg.vm_template.memory_path.is_empty() {
-        return Err(MemoryConfigError::NoTemplateMemoryPath);
-    }
-
-    fs::metadata(&cfg.vm_template.memory_path).map_err(|e| {
+    fs::metadata(memory_path).map_err(|e| {
         MemoryConfigError::TemplateMemoryPathNotAccessible(format!(
             "{}: {}",
-            cfg.vm_template.memory_path, e
+            memory_path.display(),
+            e
         ))
     })?;
 
@@ -259,7 +260,7 @@ fn template_memory_config(cfg: &HypervisorConfig) -> Result<MemoryConfig, Memory
     let zone = MemoryZoneConfig {
         id: "mem0".to_string(),
         size: mem_bytes,
-        file: Some(PathBuf::from(&cfg.vm_template.memory_path)),
+        file: Some(memory_path.to_path_buf()),
         shared: true,
         prefault: mem.enable_mem_prealloc,
         ..Default::default()
@@ -1292,7 +1293,7 @@ mod tests {
             std::env::temp_dir().join(format!("kata-clh-template-memory-{}", std::process::id()));
         fs::write(&memory_path, []).unwrap();
 
-        let mut cfg = HypervisorConfig {
+        let cfg = HypervisorConfig {
             memory_info: MemoryInfo {
                 default_memory: 512,
                 default_maxmemory: 0,
@@ -1301,10 +1302,8 @@ mod tests {
             },
             ..Default::default()
         };
-        cfg.vm_template.boot_to_be_template = true;
-        cfg.vm_template.memory_path = memory_path.to_string_lossy().to_string();
 
-        let memory = template_memory_config(&cfg).unwrap();
+        let memory = template_memory_config(&cfg, &memory_path).unwrap();
         let zones = memory.zones.as_ref().unwrap();
 
         assert_eq!(memory.size, 0);

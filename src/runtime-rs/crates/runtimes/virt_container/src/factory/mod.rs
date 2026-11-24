@@ -8,7 +8,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
-use hypervisor::HYPERVISOR_NAME_CH;
 use kata_sys_util::mount::umount_all;
 use kata_types::config::TomlConfig;
 use resource::cpu_mem::initial_size::InitialSizeManager;
@@ -19,16 +18,6 @@ use crate::factory::{template::Template, vm::VmConfig};
 
 pub mod template;
 pub mod vm;
-
-/// Returns the path to the hypervisor's device-state artifact in the template directory.
-pub(crate) fn template_device_state_path(hypervisor_name: &str, template_path: &Path) -> PathBuf {
-    let state_file = match hypervisor_name {
-        HYPERVISOR_NAME_CH => "state.json",
-        _ => "state",
-    };
-
-    template_path.join(state_file)
-}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FactoryConfig {
@@ -67,11 +56,8 @@ pub(crate) fn check_template_vm_config(config: &TomlConfig) -> Result<()> {
     Ok(())
 }
 
-/// The config used to match templates, ignoring the template paths and flags.
+/// The config used to match a sandbox against a saved template.
 pub(crate) fn vm_config_value(config: &VmConfig) -> Result<serde_json::Value> {
-    let mut config = config.clone();
-    config.hypervisor_config.vm_template = Default::default();
-
     Ok(serde_json::to_value(config)?)
 }
 
@@ -140,7 +126,9 @@ pub async fn new_factory(
     } else {
         let path: PathBuf = config.template_path.clone().into();
         if fetch_only {
-            Template::fetch(config.vm_config.clone(), path).context("fetch VM template")?;
+            Template::fetch(config.vm_config.clone(), &toml_config, path)
+                .await
+                .context("fetch VM template")?;
         } else {
             Template::create(config.vm_config.clone(), toml_config, path)
                 .await
