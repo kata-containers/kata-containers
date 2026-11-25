@@ -6415,7 +6415,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "awaitgroup",
- "bit-vec 0.8.0",
+ "bit-vec 0.10.2",
  "capctl",
  "caps",
  "cfg-if 1.0.4",
