@@ -288,6 +288,23 @@ impl QemuInner {
         // 'cmdline' has to live at least until spawn() is called
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
+        let mut passthrough = Vec::new();
+        for device in &self.devices {
+            if let DeviceType::VfioModern(vfio_dev) = device {
+                let vfio_device = vfio_dev.lock().await;
+                if vfio_device.device.device_type == VfioDeviceType::MediatedAp {
+                    continue;
+                }
+                if let Some(iommufd) = &vfio_device.device.iommufd {
+                    passthrough.extend(iommufd.cdevs.iter().map(|cdev| cdev.devnode.clone()));
+                }
+            }
+        }
+        wait_until_released(passthrough)
+            .await
+            .context("wait for passthrough devices")
+            .map_err(VmmNotSpawned)?;
+
         for device in &mut self.devices {
             match device {
                 DeviceType::ShareFs(share_fs_dev) => {
@@ -1319,7 +1336,8 @@ async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> 
 }
 
 use crate::device::DeviceType;
-use crate::vfio_device::VfioDeviceType;
+use crate::vfio_device::{wait_until_released, VfioDeviceType};
+use crate::VmmNotSpawned;
 
 // device manager part of Hypervisor
 impl QemuInner {

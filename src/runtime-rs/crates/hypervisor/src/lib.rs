@@ -60,6 +60,12 @@ pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 ))]
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_OPENVMM;
 
+/// A start that fails with this spawned no VMM, so its caller has no exit
+/// to confirm before it cleans up.
+#[derive(Debug, thiserror::Error)]
+#[error("{0:#}")]
+pub struct VmmNotSpawned(pub anyhow::Error);
+
 // Config which driver to use as vm root dev
 const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk-pci";
 const VM_ROOTFS_DRIVER_BLK_CCW: &str = "virtio-blk-ccw";
