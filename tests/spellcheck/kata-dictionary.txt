@@ -3,6 +3,7 @@
 # Project-Specific Terms
 devkit
 Dragonball
+envd
 genpolicy
 kata
 katacontainers
