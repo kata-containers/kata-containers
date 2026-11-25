@@ -116,10 +116,13 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
     )?;
 
     // Erofs differ plugin options (requires erofs-utils >= 1.8.2 on the host).
+    // The block size is pinned to 4K: mkfs.erofs defaults to the host page
+    // size, and a layer made with 16K blocks on a 64K-page host cannot be
+    // mounted by the 4K-page guest kernel ("blkszbits 14 isn't supported").
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.differ.v1.erofs\".mkfs_options",
-        "[\"-T0\",\"--mkfs-time\",\"--sort=none\"]",
+        "[\"-b4096\",\"-T0\",\"--mkfs-time\",\"--sort=none\"]",
     )?;
     toml_utils::set_toml_value(
         configuration_file,
