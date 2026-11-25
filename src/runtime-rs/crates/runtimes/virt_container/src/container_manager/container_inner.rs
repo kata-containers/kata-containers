@@ -18,7 +18,7 @@ use resource::{rootfs::Rootfs, volume::Volume};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::container_manager::{convert_agent_error, logger_with_process};
+use crate::container_manager::{convert_agent_error, is_termination_signal, logger_with_process};
 
 use super::{
     container::Container,
@@ -152,33 +152,22 @@ impl ContainerInner {
         .await;
 
         if result.is_err() {
-            let cleanup_succeeded = match self
+            if let Err(err) = self
                 .signal_process(process, Signal::SIGKILL as u32, false)
                 .await
             {
-                Ok(()) => true,
-                Err(err) if is_no_such_process_error(&err) => true,
-                Err(err) => {
+                if !is_no_such_process_error(&err) {
                     warn!(
                         self.logger,
                         "failed to stop exec after start failure: {:?}", err
                     );
-                    false
                 }
-            };
+            }
             let exec = self
                 .exec_processes
                 .get_mut(&process.exec_id)
                 .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-            // Keep a started guest killable when cleanup could not terminate it.
-            let status = if !cleanup_succeeded
-                && exec.process.get_status().await == ProcessStatus::Running
-            {
-                ProcessStatus::Running
-            } else {
-                ProcessStatus::Stopped
-            };
-            exec.process.fail_start(status).await;
+            exec.process.fail_exec_start(self.agent.clone()).await;
         }
         result
     }
@@ -406,6 +395,67 @@ impl ContainerInner {
         Ok(())
     }
 
+    pub(crate) async fn kill_process(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        container_process: &ContainerProcess,
+        signal: u32,
+        all: bool,
+    ) -> Result<()> {
+        // Check if process is already stopped before signaling.
+        // For SIGKILL/SIGTERM, if the process is already stopped, return success immediately.
+        // This is critical for proper cleanup when VM dies - the wait thread sets status to
+        // Stopped even on error, so subsequent Kill() calls will see it as already stopped.
+        let is_term_signal = is_termination_signal(signal);
+        let process_status = if container_process.exec_id.is_empty() {
+            self.init_process.get_status().await
+        } else if let Some(exec) = self.exec_processes.get(&container_process.exec_id) {
+            exec.process.get_status().await
+        } else {
+            ProcessStatus::Unknown
+        };
+
+        if is_term_signal && process_status == ProcessStatus::Stopped {
+            info!(
+                self.logger,
+                "process has already stopped, skipping signal";
+                "container" => &self.container_id(),
+                "process" => ?container_process,
+                "signal" => signal
+            );
+            return Ok(());
+        }
+
+        match self.signal_process(container_process, signal, all).await {
+            Ok(()) => {}
+            Err(e) if is_term_signal && is_no_such_process_error(&e) => {
+                info!(
+                    self.logger,
+                    "process already gone during kill, treating as success";
+                    "container" => &self.container_id(),
+                    "process" => ?container_process,
+                    "signal" => signal
+                );
+            }
+            Err(e) => return Err(e),
+        }
+
+        // Without a waiter, killing a Created task leaves Wait and force-delete blocked.
+        // Start has not set up IO, so this waiter must not copy it.
+        if is_term_signal
+            && container_process.exec_id.is_empty()
+            && process_status == ProcessStatus::Created
+            && self.init_process.exit_watcher_tx.is_some()
+        {
+            self.init_process
+                .passfd_io_wait(containers, self.agent.clone())
+                .await
+                .context("wait for killed created container")?;
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn signal_process(
         &mut self,
         process: &ContainerProcess,
@@ -558,6 +608,22 @@ mod tests {
         NotFound,
     }
 
+    impl SignalFailure {
+        fn error(self) -> anyhow::Error {
+            match self {
+                Self::ConnectionClosed => Error::AgentConnectionClosed.into(),
+                Self::Io(errno) => std::io::Error::from_raw_os_error(errno).into(),
+                Self::NotFound => containerd_shim_protos::ttrpc::Error::RpcStatus(
+                    containerd_shim_protos::ttrpc::get_status(
+                        containerd_shim_protos::ttrpc::Code::NOT_FOUND,
+                        "process not found",
+                    ),
+                )
+                .into(),
+            }
+        }
+    }
+
     #[derive(Default)]
     struct FakeAgent {
         removed: AtomicUsize,
@@ -566,6 +632,8 @@ mod tests {
         exec_failures: usize,
         reject_duplicate: bool,
         wait_calls: AtomicUsize,
+        wait_failures: usize,
+        wait_failure: Option<SignalFailure>,
         wait_blocked: bool,
         wait_release: tokio::sync::Notify,
         signals: std::sync::Mutex<Vec<(String, u32)>>,
@@ -615,11 +683,7 @@ mod tests {
             // Only the cleanup attempt fails; a subsequent Kill can succeed.
             if signals.len() == 1 {
                 if let Some(failure) = self.signal_failure {
-                    return Err(match failure {
-                        SignalFailure::ConnectionClosed => Error::AgentConnectionClosed.into(),
-                        SignalFailure::Io(errno) => std::io::Error::from_raw_os_error(errno).into(),
-                        SignalFailure::NotFound => Error::ProcessAlreadyTerminated.into(),
-                    });
+                    return Err(failure.error());
                 }
             }
             Ok(agent::Empty::new())
@@ -699,7 +763,10 @@ mod tests {
             &self,
             _: agent::WaitProcessRequest,
         ) -> Result<agent::WaitProcessResponse> {
-            self.wait_calls.fetch_add(1, Ordering::SeqCst);
+            let attempt = self.wait_calls.fetch_add(1, Ordering::SeqCst);
+            if attempt < self.wait_failures {
+                return Err(self.wait_failure.unwrap().error());
+            }
             if self.wait_blocked {
                 self.wait_release.notified().await;
             }
@@ -1218,89 +1285,211 @@ mod tests {
         }
     }
 
+    async fn wait_for_guest_exit(inner: &ContainerInner, process: &ContainerProcess) {
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            while inner.exec_processes[&process.exec_id]
+                .process
+                .get_status()
+                .await
+                != ProcessStatus::Stopped
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("guest exit was not observed");
+    }
+
+    async fn wait_for_agent_wait(agent: &FakeAgent, calls: usize) {
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            while agent.wait_calls.load(Ordering::SeqCst) < calls {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("agent WaitProcess was not called");
+    }
+
+    async fn fail_started_exec(inner: &mut ContainerInner, passfd: bool) -> ContainerProcess {
+        let process = add_test_exec(inner);
+        let exec = &mut inner
+            .exec_processes
+            .get_mut(&process.exec_id)
+            .unwrap()
+            .process;
+        if passfd {
+            // Fail after ExecProcess succeeds, without needing a real vsock.
+            exec.height = 1;
+            exec.width = 1;
+        } else {
+            exec.stdout = Some("/nonexistent-kata-start-test/stdout".to_string());
+        }
+        let addr = ("unused-without-stdio".to_string(), 1);
+        assert!(inner
+            .start_exec(Arc::default(), &process, passfd.then_some(&addr))
+            .await
+            .is_err());
+        process
+    }
+
     #[tokio::test]
-    async fn failed_start_preserves_live_exec_when_cleanup_signal_fails() {
+    async fn failed_start_cleanup_observes_exit_without_replacing_wait_result() {
         for passfd in [false, true] {
             for guest_started in [false, true] {
-                for (failure, process_missing) in [
-                    (SignalFailure::ConnectionClosed, false),
-                    (SignalFailure::Io(libc::EIO), false),
-                    (SignalFailure::Io(libc::ESRCH), true),
-                    (SignalFailure::NotFound, true),
+                for failure in [
+                    None,
+                    Some(SignalFailure::ConnectionClosed),
+                    Some(SignalFailure::Io(libc::EIO)),
+                    Some(SignalFailure::Io(libc::ESRCH)),
+                    Some(SignalFailure::NotFound),
                 ] {
                     let agent = Arc::new(FakeAgent {
                         exec_failures: usize::from(!guest_started),
-                        signal_failure: Some(failure),
+                        signal_failure: failure,
+                        wait_blocked: true,
                         ..Default::default()
                     });
                     let (mut inner, _) = new_container(agent.clone()).await;
-                    let process = add_test_exec(&mut inner);
-                    let exec = &mut inner
-                        .exec_processes
-                        .get_mut(&process.exec_id)
-                        .unwrap()
-                        .process;
-                    if passfd {
-                        // Fail after ExecProcess succeeds, without needing a real vsock.
-                        exec.height = 1;
-                        exec.width = 1;
-                    } else {
-                        exec.stdout = Some("/nonexistent-kata-start-test/stdout".to_string());
-                    }
-                    let addr = ("unused-without-stdio".to_string(), 1);
-                    let addr = passfd.then_some(&addr);
-                    let (watcher, _) = inner.fetch_exit_watcher(&process).unwrap();
-                    let mut watcher = watcher.unwrap();
-                    assert!(inner
-                        .start_exec(Arc::default(), &process, addr)
-                        .await
-                        .is_err());
-                    let state = inner.exec_processes[&process.exec_id]
-                        .process
-                        .state()
-                        .await
-                        .unwrap();
-                    let expected = if guest_started && !process_missing {
+                    let process = fail_started_exec(&mut inner, passfd).await;
+                    let exit = wait_for_exit(&inner, &process).await;
+                    assert_eq!(exit.exit_code, crate::UNKNOWN_EXIT_STATUS);
+                    assert!(exit.exit_time.is_some());
+                    let expected = if guest_started {
                         ProcessStatus::Running
                     } else {
                         ProcessStatus::Stopped
                     };
                     assert_eq!(
-                        state.status, expected,
-                        "passfd={passfd}, guest_started={guest_started}, failure={failure:?}"
+                        inner.exec_processes[&process.exec_id]
+                            .process
+                            .get_status()
+                            .await,
+                        expected
                     );
-                    tokio::time::timeout(std::time::Duration::from_secs(1), watcher.changed())
-                        .await
-                        .expect("existing Wait did not finish")
-                        .unwrap_err();
-                    let exit = wait_for_exit(&inner, &process).await;
-                    assert_eq!(exit.exit_code, crate::UNKNOWN_EXIT_STATUS);
-                    assert!(exit.exit_time.is_some());
 
                     // Reject Start without repeating either the agent call or cleanup.
                     assert!(inner
-                        .start_exec(Arc::default(), &process, addr)
+                        .start_exec(Arc::default(), &process, None)
                         .await
                         .is_err());
                     assert_eq!(agent.exec_calls.load(Ordering::SeqCst), 1);
                     assert_eq!(agent.signals.lock().unwrap().len(), 1);
-                    assert_eq!(agent.wait_calls.load(Ordering::SeqCst), 0);
-
-                    if expected == ProcessStatus::Running {
-                        // Kill's STOPPED fast path must not suppress this retry.
-                        inner
-                            .signal_process(&process, Signal::SIGKILL as u32, false)
-                            .await
-                            .unwrap();
-                        assert_eq!(agent.signals.lock().unwrap().len(), 2);
+                    if guest_started {
+                        wait_for_agent_wait(&agent, 1).await;
+                    } else {
+                        assert_eq!(agent.wait_calls.load(Ordering::SeqCst), 0);
                     }
+
+                    // Exercise the same Kill path as the RPC, including its STOPPED guard.
+                    inner
+                        .kill_process(Arc::default(), &process, Signal::SIGKILL as u32, false)
+                        .await
+                        .unwrap();
                     assert_eq!(
-                        wait_for_exit(&inner, &process).await.exit_time,
-                        exit.exit_time
+                        agent.signals.lock().unwrap().len(),
+                        1 + usize::from(guest_started)
                     );
+                    if guest_started {
+                        agent.wait_release.notify_one();
+                        wait_for_guest_exit(&inner, &process).await;
+                        assert_eq!(agent.wait_calls.load(Ordering::SeqCst), 1);
+                    }
+                    let after = wait_for_exit(&inner, &process).await;
+                    assert_eq!(after.exit_code, exit.exit_code);
+                    assert_eq!(after.exit_time, exit.exit_time);
+                    inner
+                        .kill_process(Arc::default(), &process, Signal::SIGKILL as u32, false)
+                        .await
+                        .unwrap();
+                    assert_eq!(
+                        agent.signals.lock().unwrap().len(),
+                        1 + usize::from(guest_started)
+                    );
+                    inner.delete_exec_process(&process.exec_id).await.unwrap();
+                    assert!(!inner.exec_processes.contains_key(&process.exec_id));
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn failed_start_wait_retries_transient_errors_and_observes_natural_exit() {
+        for passfd in [false, true] {
+            for failure in [
+                SignalFailure::ConnectionClosed,
+                SignalFailure::Io(libc::EIO),
+            ] {
+                let agent = Arc::new(FakeAgent {
+                    signal_failure: Some(SignalFailure::Io(libc::EIO)),
+                    wait_failures: 1,
+                    wait_failure: Some(failure),
+                    wait_blocked: true,
+                    ..Default::default()
+                });
+                let (mut inner, _) = new_container(agent.clone()).await;
+                let process = fail_started_exec(&mut inner, passfd).await;
+                let exit = wait_for_exit(&inner, &process).await;
+                wait_for_agent_wait(&agent, 2).await;
+                assert_eq!(
+                    inner.exec_processes[&process.exec_id]
+                        .process
+                        .get_status()
+                        .await,
+                    ProcessStatus::Running
+                );
+                assert!(inner
+                    .start_exec(Arc::default(), &process, None)
+                    .await
+                    .is_err());
+                // The guest can exit by itself while the failed cleanup remains unresolved.
+                agent.wait_release.notify_one();
+                wait_for_guest_exit(&inner, &process).await;
+                let after = wait_for_exit(&inner, &process).await;
+                assert_eq!(after.exit_code, exit.exit_code);
+                assert_eq!(after.exit_time, exit.exit_time);
+                assert_eq!(agent.signals.lock().unwrap().len(), 1);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_start_wait_accepts_a_missing_guest() {
+        for passfd in [false, true] {
+            let agent = Arc::new(FakeAgent {
+                wait_failures: usize::MAX,
+                wait_failure: Some(SignalFailure::NotFound),
+                ..Default::default()
+            });
+            let (mut inner, _) = new_container(agent.clone()).await;
+            let process = fail_started_exec(&mut inner, passfd).await;
+            let exit = wait_for_exit(&inner, &process).await;
+            wait_for_guest_exit(&inner, &process).await;
+            assert_eq!(agent.wait_calls.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                wait_for_exit(&inner, &process).await.exit_time,
+                exit.exit_time
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn deleting_failed_start_cancels_its_guest_wait() {
+        let agent = Arc::new(FakeAgent {
+            wait_blocked: true,
+            ..Default::default()
+        });
+        let (mut inner, _) = new_container(agent.clone()).await;
+        let process = fail_started_exec(&mut inner, false).await;
+        wait_for_agent_wait(&agent, 1).await;
+        // Low-level deletion can also happen during teardown while the agent is gone.
+        inner.delete_exec_process(&process.exec_id).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while Arc::strong_count(&agent) != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("guest waiter retained the agent after process deletion");
     }
 
     #[tokio::test]
@@ -1377,11 +1566,14 @@ mod tests {
         inner.init_process.set_status(ProcessStatus::Created).await;
         // Killing a Created container installs this waiter before its exit is known.
         inner
-            .init_process
-            .passfd_io_wait(Arc::default(), agent.clone())
+            .kill_process(Arc::default(), &process, Signal::SIGKILL as u32, false)
             .await
             .unwrap();
-        assert!(inner.init_process.check_start().await.is_err());
+        let err = inner.init_process.check_start().await.unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::FailedPrecondition(_))
+        ));
         assert!(inner
             .init_process
             .exit_status

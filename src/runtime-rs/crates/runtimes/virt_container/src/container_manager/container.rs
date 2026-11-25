@@ -10,7 +10,7 @@ use std::sync::Arc;
 use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use common::{
-    error::{is_no_such_process_error, Error},
+    error::Error,
     types::{
         ContainerConfig, ContainerID, ContainerProcess, ProcessStateInfo, ProcessStatus,
         ProcessType,
@@ -35,7 +35,7 @@ use super::{
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
-use crate::container_manager::{is_termination_signal, logger_with_process};
+use crate::container_manager::logger_with_process;
 
 pub struct Exec {
     pub(crate) process: Process,
@@ -422,61 +422,11 @@ impl Container {
         signal: u32,
         all: bool,
     ) -> Result<()> {
-        let mut inner = self.inner.write().await;
-
-        // Check if process is already stopped before signaling.
-        // For SIGKILL/SIGTERM, if the process is already stopped, return success immediately.
-        // This is critical for proper cleanup when VM dies - the wait thread sets status to
-        // Stopped even on error, so subsequent Kill() calls will see it as already stopped.
-        let is_term_signal = is_termination_signal(signal);
-        let process_status = if container_process.exec_id.is_empty() {
-            inner.init_process.get_status().await
-        } else if let Some(exec) = inner.exec_processes.get(&container_process.exec_id) {
-            exec.process.get_status().await
-        } else {
-            ProcessStatus::Unknown
-        };
-
-        if is_term_signal && process_status == ProcessStatus::Stopped {
-            info!(
-                self.logger,
-                "process has already stopped, skipping signal";
-                "container" => &self.container_id.container_id,
-                "process" => ?container_process,
-                "signal" => signal
-            );
-            return Ok(());
-        }
-
-        match inner.signal_process(container_process, signal, all).await {
-            Ok(()) => {}
-            Err(e) if is_term_signal && is_no_such_process_error(&e) => {
-                info!(
-                    self.logger,
-                    "process already gone during kill, treating as success";
-                    "container" => &self.container_id.container_id,
-                    "process" => ?container_process,
-                    "signal" => signal
-                );
-            }
-            Err(e) => return Err(e),
-        }
-
-        // Without a waiter, killing a Created task leaves Wait and force-delete blocked.
-        // Start has not set up IO, so this waiter must not copy it.
-        if is_term_signal
-            && container_process.exec_id.is_empty()
-            && process_status == ProcessStatus::Created
-            && inner.init_process.exit_watcher_tx.is_some()
-        {
-            inner
-                .init_process
-                .passfd_io_wait(containers, self.agent.clone())
-                .await
-                .context("wait for killed created container")?;
-        }
-
-        Ok(())
+        self.inner
+            .write()
+            .await
+            .kill_process(containers, container_process, signal, all)
+            .await
     }
 
     pub async fn exec_process(
