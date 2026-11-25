@@ -86,7 +86,7 @@ for req_type in "${request_types[@]}"; do
     fi
 
     # --- Check rules.rego ---
-    if ! grep -q "default ${req_type} " "${RULES_REGO}"; then
+    if ! grep -Eq "^[[:space:]]*default[[:space:]]+${req_type}[[:space:]]*(:=|=)" "${RULES_REGO}"; then
         missing_rego+=("${req_type}")
     fi
 done
