@@ -1,0 +1,36 @@
+name: CI | Concurrency probe (nested, throwaway)
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  nested-a:
+    name: nested-a
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    concurrency:
+      group: ${{ github.workflow }}-probe-nested-${{ github.job }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Hold the concurrency group for a while
+        run: |
+          echo "runtime github.job=${GITHUB_JOB}"
+          sleep 60
+          echo "finished without being cancelled"
+
+  nested-b:
+    name: nested-b
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    concurrency:
+      group: ${{ github.workflow }}-probe-nested-${{ github.job }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Hold the concurrency group for a while
+        run: |
+          echo "runtime github.job=${GITHUB_JOB}"
+          sleep 60
+          echo "finished without being cancelled"
