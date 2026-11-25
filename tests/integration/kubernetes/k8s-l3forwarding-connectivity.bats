@@ -12,7 +12,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	# The l3forwarding network model is only implemented in runtime-rs.
 	is_runtime_rs || skip "l3forwarding is only supported by runtime-rs"
-	[[ "${K8S_IP_FAMILY:-ipv4}" == "ipv4" ]] || skip "l3forwarding only supports IPv4 pod networking"
 
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
 
@@ -40,6 +39,7 @@ EOF
 	# Create test .yaml
 	yaml_file="${pod_config_dir}/test-${deployment}.yaml"
 	set_nginx_image "${pod_config_dir}/nginx-deployment.yaml" "${yaml_file}"
+	enable_nginx_ipv6_listener "${yaml_file}"
 
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }
@@ -50,19 +50,35 @@ EOF
 	kubectl expose deployment/${deployment}
 
 	busybox_pod="test-nginx-l3fwd"
-	# We need to use `-O index.html` as the busybox' wget has a different behaviour
-	# than GNU's wget, which would just append a .n to the file name instead of bailing.
-	kubectl run $busybox_pod --restart=Never -it --image="$busybox_image" \
-		-- sh -c 'i=1; while [ $i -le '"$wait_time"' ]; do wget -O index.html --timeout=5 '"$deployment"' && break; sleep 1; i=$(expr $i + 1); done'
+	# Fetch through the Service, and from every address of every nginx pod, so a dual-stack
+	# cluster checks both families. The client runs on the same pod network, so this also
+	# covers peers on the pod's on-link prefix.
+	local -a pod_ips
+	read -r -a pod_ips <<< "$(kubectl get pods -l app=nginx -o jsonpath='{.items[*].status.podIPs[*].ip}')"
+	local targets="${deployment}"
+	local ip
+	for ip in "${pod_ips[@]}"; do
+		[[ "${ip}" == *:* ]] && ip="[${ip}]"
+		targets+=" ${ip}"
+	done
+	info "Fetching from ${targets}"
+
+	# BusyBox wget has no retry option; the Service may not answer until kube-proxy has
+	# programmed the endpoints of pods that only just became Ready.
+	# shellcheck disable=SC2016
+	local fetch_all='fetch() { i=1; while [ $i -le '"${wait_time}"' ]; do wget -q -O /dev/null -T 5 "http://$1/" && echo "fetched $1" && return 0; sleep 1; i=$((i + 1)); done; echo "cannot fetch $1"; return 1; }; for target in '"${targets}"'; do fetch "$target" || exit 1; done'
+	kubectl run "$busybox_pod" --restart=Never -it --image="$busybox_image" -- sh -c "${fetch_all}"
 
 	# check pod's status, it should be Succeeded.
-	[ $(kubectl get pods/$busybox_pod -o jsonpath="{.status.phase}") = "Succeeded" ]
-	kubectl logs "$busybox_pod" | grep "index.html"
+	[ "$(kubectl get pods/$busybox_pod -o jsonpath="{.status.phase}")" = "Succeeded" ]
+	# The pod has a TTY, so its log lines may end in a carriage return.
+	for target in ${targets}; do
+		kubectl logs "$busybox_pod" | tr -d '\r' | grep -qxF "fetched ${target}"
+	done
 }
 
 teardown() {
 	is_runtime_rs || skip "l3forwarding is only supported by runtime-rs"
-	[[ "${K8S_IP_FAMILY:-ipv4}" == "ipv4" ]] || skip "l3forwarding only supports IPv4 pod networking"
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
 
 	# Debugging information
