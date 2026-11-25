@@ -33,14 +33,14 @@ require (
 	github.com/go-openapi/strfmt v0.23.0
 	github.com/go-openapi/swag v0.23.1
 	github.com/go-openapi/validate v0.24.0
-	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 	github.com/mdlayher/vsock v1.2.1
 	github.com/moby/sys/mountinfo v0.7.2
-	github.com/moby/sys/userns v0.1.0
-	github.com/opencontainers/cgroups v0.0.4
-	github.com/opencontainers/runc v1.3.6
+	github.com/moby/sys/userns v0.2.1
+	github.com/opencontainers/cgroups v0.1.0
+	github.com/opencontainers/runc v1.5.3
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/opencontainers/selinux v1.13.1
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
@@ -70,13 +70,13 @@ require (
 )
 
 require (
-	github.com/moby/sys/capability v0.4.0 // indirect
+	github.com/moby/sys/capability v0.5.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 )
 
 require (
-	cyphar.com/go-pathrs v0.2.1 // indirect
+	cyphar.com/go-pathrs v0.2.6 // indirect
 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // indirect
 	github.com/Microsoft/hcsshim v0.15.0-rc.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -88,7 +88,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containernetworking/cni v1.3.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/cyphar/filepath-securejoin v0.6.0 // indirect
+	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -106,6 +106,7 @@ require (
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/moby/sys/devices v0.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
