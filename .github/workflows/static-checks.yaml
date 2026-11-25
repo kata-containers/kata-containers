@@ -337,6 +337,21 @@ jobs:
       - name: Check for broken symbolic links
         run: bash ci/check_broken_symlinks.sh
 
+  gatekeeper-tests:
+    name: gatekeeper-tests
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run the gatekeeper tests
+        run: python3 -B -m unittest discover -s tools/testing/gatekeeper
+
   check-nvrc-is-released:
     name: check-nvrc-is-released
     needs: skipper
