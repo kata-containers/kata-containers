@@ -24,6 +24,8 @@ use crate::network::NetworkPair;
 const ROUTE_TABLE_LOCAL: u8 = 255;
 const IPV4_HOST_PREFIX: u8 = 32;
 const IPV6_HOST_PREFIX: u8 = 128;
+// The metric the kernel gives the prefix route of an address.
+const IP6_RT_PRIO_ADDRCONF: u32 = 256;
 
 #[derive(Debug)]
 pub(crate) struct L3ForwardingModel {}
@@ -56,7 +58,7 @@ impl NetworkModel for L3ForwardingModel {
             .context("fetch virt by index")?;
 
         let (pod_v4_addrs, pod_v6_addrs) =
-            workload_addresses(pair.virt_iface.addrs.iter().map(|a| (a.addr, a.perfix_len)))?;
+            workload_addresses(pair.virt_iface.addrs.iter().map(|a| a.addr));
         if pod_v4_addrs.is_empty() && pod_v6_addrs.is_empty() {
             anyhow::bail!("no IP addresses found on virt iface");
         }
@@ -244,8 +246,9 @@ async fn configure_ipv6(
     // guest's replies leave the sandbox at all.
     //
     // This only works when the guest routes via a gateway rather than treating peers as
-    // on-link, which `workload_addresses` and `check_ipv6_routes` have made sure of: on-link
-    // peers would need `proxy_arp`'s catch-all behaviour, which NDP cannot express.
+    // on-link: on-link peers would need `proxy_arp`'s catch-all behaviour, which NDP cannot
+    // express. `check_ipv6_routes` has refused on-link routes, and the guest gets its addresses
+    // as /128s with a host route to each gateway (`NetworkInfoFromLink::with_ipv6_host_addresses`).
     for gateway in gateways {
         ignore_eexist(
             handle
@@ -289,6 +292,34 @@ async fn configure_ipv6(
         )
         .with_context(|| format!("add proxy neighbour {pod_addr} on {virt_name}"))?;
     }
+    // The prefix routes the kernel keeps on virt. Removing an address takes its prefix route with
+    // it, and only a route that was there is put back below: a CNI that assigned the address
+    // without one (IFA_F_NOPREFIXROUTE), or removed it, routes the prefix through its gateway.
+    let mut kernel_prefixes: Vec<(Ipv6Addr, u8)> = Vec::new();
+    let mut routes = handle
+        .route()
+        .get(RouteMessageBuilder::<Ipv6Addr>::new().build())
+        .execute();
+    while let Some(route) = routes.try_next().await? {
+        if route.header.table != libc::RT_TABLE_MAIN
+            || route.header.protocol != RouteProtocol::Kernel
+        {
+            continue;
+        }
+        let mut via_virt = false;
+        let mut destination = None;
+        for attr in &route.attributes {
+            match attr {
+                RouteAttribute::Oif(index) if *index == virt_index => via_virt = true,
+                RouteAttribute::Destination(RouteAddress::Inet6(addr)) => destination = Some(*addr),
+                _ => {}
+            }
+        }
+        if let (true, Some(destination)) = (via_virt, destination) {
+            kernel_prefixes.push((destination, route.header.destination_prefix_length));
+        }
+    }
+
     let mut addresses = handle
         .address()
         .get()
@@ -304,12 +335,34 @@ async fn configure_ipv6(
         }
     }
     for address in assigned {
+        let prefix_len = address.header.prefix_len;
+        let pod_addr = address.attributes.iter().find_map(|attr| match attr {
+            AddressAttribute::Address(IpAddr::V6(addr)) => Some(*addr),
+            _ => None,
+        });
         handle
             .address()
             .del(address)
             .execute()
             .await
             .with_context(|| format!("remove pod address from {virt_name}"))?;
+        // An on-link prefix loses its route with the address, and the pod netns still needs it
+        // to reach the guest's same-prefix peers, so put it back as the kernel had it.
+        let had_prefix_route = |addr: &Ipv6Addr| {
+            prefix_len < IPV6_HOST_PREFIX
+                && kernel_prefixes.contains(&(ipv6_network(*addr, prefix_len), prefix_len))
+        };
+        if let Some(pod_addr) = pod_addr.filter(had_prefix_route) {
+            let route_msg = RouteMessageBuilder::<Ipv6Addr>::new()
+                .destination_prefix(ipv6_network(pod_addr, prefix_len), prefix_len)
+                .output_interface(virt_index)
+                .protocol(RouteProtocol::Kernel)
+                .priority(IP6_RT_PRIO_ADDRCONF)
+                .build();
+            ignore_eexist(handle.route().add(route_msg).execute().await).with_context(|| {
+                format!("restore the route for {pod_addr}/{prefix_len} on {virt_name}")
+            })?;
+        }
     }
 
     // Add a route for each pod ip via the tap interface.
@@ -355,7 +408,8 @@ async fn route_gateways(handle: &Handle, virt_index: u32) -> Result<Vec<Ipv6Addr
     Ok(gateways)
 }
 
-/// Refuse IPv6 routes on the virt interface that l3forwarding cannot serve.
+/// Refuse IPv6 routes on the virt interface that l3forwarding cannot serve, and a virt interface
+/// without an IPv6 route via a gateway.
 ///
 /// The guest gets every non-kernel route of the pod interface, so each would fail silently:
 /// - A route without a gateway makes the guest solicit the destinations directly, and proxy NDP
@@ -437,6 +491,12 @@ async fn check_ipv6_routes(handle: &Handle, virt_index: u32, gateways: &[Ipv6Add
             );
         }
     }
+    if gateways.is_empty() {
+        anyhow::bail!(
+            "l3forwarding needs an IPv6 route via a gateway on the virt iface: the guest \
+             reaches everything through one"
+        );
+    }
     Ok(())
 }
 
@@ -463,30 +523,27 @@ fn check_ipv6_link_local(addresses: impl IntoIterator<Item = IpAddr>) -> Result<
 ///
 /// IPv6 link-local addresses are not workload addresses -- every interface has one -- so they
 /// are skipped rather than forwarded.
-///
-/// An IPv6 workload address must be a /128. With an on-link prefix the guest would solicit its
-/// same-prefix peers directly, and proxy NDP only answers for the gateways, so that traffic
-/// would be dropped while setup reported success. IPv4 has no such limit: proxy ARP answers for
-/// anything the pod netns has a route to.
 fn workload_addresses(
-    addresses: impl IntoIterator<Item = (IpAddr, u8)>,
-) -> Result<(Vec<Ipv4Addr>, Vec<Ipv6Addr>)> {
+    addresses: impl IntoIterator<Item = IpAddr>,
+) -> (Vec<Ipv4Addr>, Vec<Ipv6Addr>) {
     let mut ipv4_addresses = Vec::new();
     let mut ipv6_addresses = Vec::new();
-    for (address, prefix_len) in addresses {
+    for address in addresses {
         match address {
             IpAddr::V4(address) => ipv4_addresses.push(address),
             IpAddr::V6(address) if address.is_unicast_link_local() => {}
-            IpAddr::V6(address) if prefix_len != IPV6_HOST_PREFIX => anyhow::bail!(
-                "l3forwarding needs a /{} for an IPv6 pod address, but the virt iface has {}/{}",
-                IPV6_HOST_PREFIX,
-                address,
-                prefix_len
-            ),
             IpAddr::V6(address) => ipv6_addresses.push(address),
         }
     }
-    Ok((ipv4_addresses, ipv6_addresses))
+    (ipv4_addresses, ipv6_addresses)
+}
+
+/// The network address of `address` with a prefix of `prefix_len` bits.
+fn ipv6_network(address: Ipv6Addr, prefix_len: u8) -> Ipv6Addr {
+    let mask = u128::MAX
+        .checked_shl(128 - u32::from(prefix_len))
+        .unwrap_or(0);
+    Ipv6Addr::from(u128::from(address) & mask)
 }
 
 fn ignore_eexist(result: Result<(), rtnetlink::Error>) -> Result<(), rtnetlink::Error> {
@@ -522,11 +579,10 @@ mod tests {
     #[test]
     fn splits_addresses_by_family_and_skips_link_local() {
         let (v4, v6) = workload_addresses([
-            ("10.244.0.8".parse().unwrap(), 24),
-            ("fe80::1234".parse().unwrap(), 64),
-            ("fd00::8".parse().unwrap(), 128),
-        ])
-        .unwrap();
+            "10.244.0.8".parse().unwrap(),
+            "fe80::1234".parse().unwrap(),
+            "fd00::8".parse().unwrap(),
+        ]);
 
         assert_eq!(v4, vec!["10.244.0.8".parse::<Ipv4Addr>().unwrap()]);
         assert_eq!(v6, vec!["fd00::8".parse::<Ipv6Addr>().unwrap()]);
@@ -534,30 +590,29 @@ mod tests {
 
     #[test]
     fn accepts_ipv6_only_workloads() {
-        let (v4, v6) = workload_addresses([
-            ("2001:db8::8".parse().unwrap(), 128),
-            ("fe80::1".parse().unwrap(), 64),
-        ])
-        .unwrap();
+        let (v4, v6) =
+            workload_addresses(["2001:db8::8".parse().unwrap(), "fe80::1".parse().unwrap()]);
 
         assert!(v4.is_empty());
         assert_eq!(v6, vec!["2001:db8::8".parse::<Ipv6Addr>().unwrap()]);
     }
 
     #[test]
-    fn rejects_ipv6_on_link_prefixes() {
-        // Proxy NDP cannot answer for a whole prefix, so a /64 has to be refused up front rather
-        // than leaving the guest unable to reach its same-prefix peers.
-        let err = workload_addresses([
-            ("10.244.0.8".parse().unwrap(), 24),
-            ("2001:db8::8".parse().unwrap(), 64),
-        ])
-        .unwrap_err();
-        assert!(
-            err.to_string().contains("2001:db8::8/64"),
-            "unexpected error: {}",
-            err
-        );
+    fn ipv6_network_clears_the_host_bits() {
+        let address: Ipv6Addr = "fd00:10:244::5".parse().unwrap();
+        for (prefix_len, network) in [
+            (64, "fd00:10:244::"),
+            (40, "fd00:10:200::"),
+            (128, "fd00:10:244::5"),
+            (0, "::"),
+        ] {
+            assert_eq!(
+                ipv6_network(address, prefix_len),
+                network.parse::<Ipv6Addr>().unwrap(),
+                "/{}",
+                prefix_len
+            );
+        }
     }
 
     #[test]
@@ -785,26 +840,105 @@ mod tests {
     /// The pod netns resolves the gateway itself, as with any CNI that does not install a
     /// permanent neighbour entry for it, and the guest reaches it both ways.
     ///
-    /// A veth stands in for the tap, with a netns behind it configured the way the agent
-    /// configures the guest, and another netns plays the node. If the pod address stayed on
-    /// virt, the pod netns would solicit the gateway from it and the answer would be routed to
-    /// the guest, so neither ping would get through.
+    /// If the pod address stayed on virt, the pod netns would solicit the gateway from it and
+    /// the answer would be routed to the guest, so no ping would get through.
     ///
     /// Requires root: creating netns and veth pairs needs CAP_NET_ADMIN.
     #[actix_rt::test]
     async fn ipv6_guest_reaches_a_gateway_the_pod_netns_resolves() {
         test_utils::skip_if_not_root!();
+        guest_traffic_through_the_pod_netns(IPV6_HOST_PREFIX).await;
+    }
 
+    /// With an on-link /64, as the bridge CNI assigns it, the guest also reaches a same-prefix
+    /// peer directly, which needs the prefix route that removing the address took with it.
+    ///
+    /// Requires root: creating netns and veth pairs needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn ipv6_on_link_pod_reaches_its_peers() {
+        test_utils::skip_if_not_root!();
+        guest_traffic_through_the_pod_netns(64).await;
+    }
+
+    /// An on-link prefix whose route the CNI left out (IFA_F_NOPREFIXROUTE) does not get one
+    /// when the address is moved off virt: the CNI routes that prefix through its gateway.
+    ///
+    /// Requires root: creating a netns and veth pair needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn ipv6_prefix_without_a_route_stays_without_one() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-p-eth0";
+        const TAP: &str = "kata-p-tap";
+        let pod_addr: Ipv6Addr = "fd00:dead:beef::8".parse().unwrap();
+        let ns_name = format!("kata-l3fwd-noprefix-{}", std::process::id());
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        for args in [
+            format!("netns add {ns_name}"),
+            format!("-n {ns_name} link add {VIRT} type veth peer {TAP}"),
+            format!("-n {ns_name} link set {TAP} up"),
+            format!("-n {ns_name} link set {VIRT} up"),
+            format!("-n {ns_name} addr add {pod_addr}/64 dev {VIRT} nodad noprefixroute"),
+        ] {
+            let status = std::process::Command::new("ip")
+                .args(args.split_whitespace())
+                .status()
+                .expect("run ip");
+            assert!(status.success(), "ip {} failed", args);
+        }
+
+        let _guard = kata_sys_util::netns::NetnsGuard::new(&format!("/run/netns/{ns_name}"))
+            .expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+        let tap_index = fetch_index(&handle, TAP).await.expect("tap index");
+        let virt_index = fetch_index(&handle, VIRT).await.expect("virt index");
+        configure_ipv6(&handle, TAP, VIRT, tap_index, virt_index, &[pod_addr], &[])
+            .await
+            .expect("configure_ipv6");
+
+        let mut routes = handle
+            .route()
+            .get(RouteMessageBuilder::<Ipv6Addr>::new().build())
+            .execute();
+        while let Some(route) = routes.try_next().await.expect("list routes") {
+            let to_prefix = route.header.destination_prefix_length == 64
+                && route.attributes.iter().any(|a| {
+                    matches!(a, RouteAttribute::Destination(RouteAddress::Inet6(v6))
+                        if *v6 == ipv6_network(pod_addr, 64))
+                });
+            assert!(!to_prefix, "an on-link route was added: {:?}", route);
+        }
+    }
+
+    /// Builds a node netns with a bridge that owns the gateway, a peer pod and the pod on it,
+    /// and a guest behind a veth standing in for the tap, configured the way the agent
+    /// configures an l3forwarding guest: the pod address as a /128, a host route to the
+    /// gateway, and a default route via it. No neighbour entries are static. Then runs the
+    /// model's IPv6 setup in the pod netns and checks traffic between the guest, the gateway
+    /// and the peer.
+    ///
+    /// The node only forwards for a /128 pod, which reaches everything through it; a pod with
+    /// an on-link prefix reaches its peers directly.
+    async fn guest_traffic_through_the_pod_netns(pod_prefix_len: u8) {
         const VIRT: &str = "kata-g-eth0";
         const TAP: &str = "kata-g-tap";
         let pod_addr = "fd00:dead:beef::8";
+        let peer_addr = "fd00:dead:beef::7";
         let gateway = "fd00:dead:beef::1";
 
         let pid = std::process::id();
-        let [pod_ns, node_ns, guest_ns] =
-            ["pod", "node", "guest"].map(|role| format!("kata-l3fwd-{role}-{pid}"));
+        let [pod_ns, node_ns, peer_ns, guest_ns] = ["pod", "node", "peer", "guest"]
+            .map(|role| format!("kata-l3fwd-{role}-{pod_prefix_len}-{pid}"));
         defer!({
-            for ns in [&pod_ns, &node_ns, &guest_ns] {
+            for ns in [&pod_ns, &node_ns, &peer_ns, &guest_ns] {
                 let _ = std::process::Command::new("ip")
                     .args(["netns", "del", ns])
                     .status();
@@ -826,25 +960,43 @@ mod tests {
                 .success()
         };
 
-        for ns in [&pod_ns, &node_ns, &guest_ns] {
+        for ns in [&pod_ns, &node_ns, &peer_ns, &guest_ns] {
             ip(format!("netns add {ns}"));
         }
-        // The node owns the gateway, on-link with the pod address.
+        // The node: a bridge that owns the gateway, with the pod and the peer on it.
+        ip(format!("-n {node_ns} link add br0 type bridge"));
+        ip(format!("-n {node_ns} addr add {gateway}/64 dev br0 nodad"));
+        ip(format!("-n {node_ns} link set br0 up"));
+        let forwarding = u8::from(pod_prefix_len == IPV6_HOST_PREFIX);
         ip(format!(
-            "-n {node_ns} link add gw type veth peer {VIRT} netns {pod_ns}"
+            "netns exec {node_ns} sysctl -qw net.ipv6.conf.all.forwarding={forwarding}"
         ));
-        ip(format!("-n {node_ns} addr add {gateway}/64 dev gw nodad"));
-        ip(format!("-n {node_ns} link set gw up"));
-        // The pod netns as a /128 CNI leaves it, with no neighbour entries.
+        for (ns, ifname, host_side) in
+            [(&pod_ns, VIRT, "veth-pod"), (&peer_ns, "eth0", "veth-peer")]
+        {
+            ip(format!(
+                "-n {node_ns} link add {host_side} type veth peer {ifname} netns {ns}"
+            ));
+            ip(format!("-n {node_ns} link set {host_side} master br0 up"));
+            ip(format!("-n {ns} link set {ifname} up"));
+        }
         ip(format!(
-            "-n {pod_ns} addr add {pod_addr}/128 dev {VIRT} nodad"
+            "-n {peer_ns} addr add {peer_addr}/64 dev eth0 nodad"
         ));
-        ip(format!("-n {pod_ns} link set {VIRT} up"));
-        ip(format!("-n {pod_ns} -6 route add {gateway}/128 dev {VIRT}"));
+        ip(format!(
+            "-n {peer_ns} -6 route add default via {gateway} dev eth0"
+        ));
+        // The pod netns as the CNI leaves it.
+        ip(format!(
+            "-n {pod_ns} addr add {pod_addr}/{pod_prefix_len} dev {VIRT} nodad"
+        ));
+        if pod_prefix_len == IPV6_HOST_PREFIX {
+            ip(format!("-n {pod_ns} -6 route add {gateway}/128 dev {VIRT}"));
+        }
         ip(format!(
             "-n {pod_ns} -6 route add default via {gateway} dev {VIRT}"
         ));
-        // The guest, behind the stand-in tap, with the same address and routes.
+        // The guest, behind the stand-in tap.
         ip(format!(
             "-n {pod_ns} link add {TAP} type veth peer eth0 netns {guest_ns}"
         ));
@@ -871,6 +1023,9 @@ mod tests {
             let gateways = route_gateways(&handle, virt_index)
                 .await
                 .expect("collect gateways");
+            check_ipv6_routes(&handle, virt_index, &gateways)
+                .await
+                .expect("check routes");
             configure_ipv6(
                 &handle,
                 TAP,
@@ -887,7 +1042,7 @@ mod tests {
         // Wait for duplicate address detection to finish: until it does, the link-local
         // addresses are tentative and the kernel sends no solicitations from them. A CNI brings
         // the pod interface up long before the sandbox starts.
-        for ns in [&pod_ns, &node_ns, &guest_ns] {
+        for ns in [&pod_ns, &node_ns, &peer_ns, &guest_ns] {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
             loop {
                 let output = std::process::Command::new("ip")
@@ -906,13 +1061,67 @@ mod tests {
             }
         }
 
-        // The guest goes first, so the pod netns cannot have learned the gateway from the
-        // node's own solicitation.
+        // The guest goes first, so the pod netns cannot have learned its neighbours from their
+        // own solicitations.
         assert!(
             ping(&guest_ns, gateway),
             "the guest cannot reach its gateway"
         );
+        assert!(
+            ping(&guest_ns, peer_addr),
+            "the guest cannot reach the peer"
+        );
         assert!(ping(&node_ns, pod_addr), "the node cannot reach the guest");
+        assert!(ping(&peer_ns, pod_addr), "the peer cannot reach the guest");
+    }
+
+    /// A pod with IPv6 addresses but no IPv6 route via a gateway is refused: the guest reaches
+    /// everything through a gateway, so it would have no route at all.
+    ///
+    /// Requires root: creating a netns and veth pair needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn ipv6_without_a_gateway_is_refused() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-n-eth0";
+        let ns_name = format!("kata-l3fwd-nogw-{}", std::process::id());
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        for args in [
+            format!("netns add {ns_name}"),
+            format!("-n {ns_name} link add {VIRT} type veth peer kata-n-peer"),
+            format!("-n {ns_name} addr add fd00:dead:beef::8/64 dev {VIRT} nodad"),
+            format!("-n {ns_name} link set {VIRT} up"),
+        ] {
+            let status = std::process::Command::new("ip")
+                .args(args.split_whitespace())
+                .status()
+                .expect("run ip");
+            assert!(status.success(), "ip {} failed", args);
+        }
+
+        let _guard = kata_sys_util::netns::NetnsGuard::new(&format!("/run/netns/{ns_name}"))
+            .expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+        let virt_index = fetch_index(&handle, VIRT).await.expect("virt index");
+        let gateways = route_gateways(&handle, virt_index)
+            .await
+            .expect("collect gateways");
+        let err = check_ipv6_routes(&handle, virt_index, &gateways)
+            .await
+            .expect_err("a pod without an IPv6 gateway must be refused");
+        assert!(
+            format!("{:#}", err).contains("needs an IPv6 route via a gateway"),
+            "unexpected error: {:#}",
+            err
+        );
     }
 
     /// A dual-stack pod interface with an on-link IPv6 route that proxy NDP cannot serve is

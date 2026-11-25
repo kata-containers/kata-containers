@@ -72,6 +72,45 @@ impl NetworkInfoFromLink {
         self.neighs.clear();
         self
     }
+
+    /// Hands the guest each IPv6 address that is not link-local as a /128, plus a host route to
+    /// each IPv6 gateway that is not link-local.
+    ///
+    /// l3forwarding answers the guest's Neighbour Solicitations only for its gateways, so the
+    /// guest has to send everything through one. With the CNI's on-link prefix it would solicit
+    /// its same-prefix peers directly and get no answer. Without the prefix the gateway is no
+    /// longer on-link either, hence the host routes; a link-local gateway stays reachable through
+    /// the guest's own fe80::/64.
+    pub(crate) fn with_ipv6_host_addresses(mut self) -> Self {
+        let is_global_v6 = |address: &str| {
+            address
+                .parse::<Ipv6Addr>()
+                .is_ok_and(|address| !address.is_unicast_link_local())
+        };
+        for address in &mut self.interface.ip_addresses {
+            if address.family == IPFamily::V6 && is_global_v6(&address.address) {
+                address.mask = "128".to_string();
+            }
+        }
+        let mut host_routes: Vec<Route> = Vec::new();
+        for route in &self.routes {
+            if route.family != IPFamily::V6 || !is_global_v6(&route.gateway) {
+                continue;
+            }
+            let dest = format!("{}/128", route.gateway);
+            let known = |r: &Route| r.dest == dest && r.device == route.device;
+            if !self.routes.iter().any(known) && !host_routes.iter().any(known) {
+                host_routes.push(Route {
+                    dest,
+                    device: route.device.clone(),
+                    family: IPFamily::V6,
+                    ..Default::default()
+                });
+            }
+        }
+        self.routes.extend(host_routes);
+        self
+    }
 }
 
 pub async fn handle_addresses(
@@ -302,6 +341,98 @@ fn parse_route_addr(ra: &RouteAddress) -> Result<IpAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn address(family: IPFamily, address: &str, mask: &str) -> IPAddress {
+        IPAddress {
+            family,
+            address: address.to_string(),
+            mask: mask.to_string(),
+        }
+    }
+
+    fn route(family: IPFamily, dest: &str, gateway: &str) -> Route {
+        Route {
+            dest: dest.to_string(),
+            gateway: gateway.to_string(),
+            device: "eth0".to_string(),
+            family,
+            ..Default::default()
+        }
+    }
+
+    fn network_info(ip_addresses: Vec<IPAddress>, routes: Vec<Route>) -> NetworkInfoFromLink {
+        NetworkInfoFromLink {
+            interface: Interface {
+                name: "eth0".to_string(),
+                ip_addresses,
+                ..Default::default()
+            },
+            device_path: Default::default(),
+            neighs: vec![],
+            routes,
+        }
+    }
+
+    #[test]
+    fn ipv6_host_addresses_for_an_on_link_pod() {
+        // A dual-stack pod as the bridge CNI sets it up.
+        let info = network_info(
+            vec![
+                address(IPFamily::V4, "10.244.0.5", "24"),
+                address(IPFamily::V6, "fd00:10:244::5", "64"),
+                address(IPFamily::V6, "fe80::5", "64"),
+            ],
+            vec![
+                route(IPFamily::V4, "", "10.244.0.1"),
+                route(IPFamily::V6, "", "fd00:10:244::1"),
+                route(IPFamily::V6, "fd00:10:96::/112", "fd00:10:244::1"),
+            ],
+        )
+        .with_ipv6_host_addresses();
+
+        // Only the IPv6 address that is not link-local becomes a /128.
+        assert_eq!(
+            info.interface.ip_addresses,
+            vec![
+                address(IPFamily::V4, "10.244.0.5", "24"),
+                address(IPFamily::V6, "fd00:10:244::5", "128"),
+                address(IPFamily::V6, "fe80::5", "64"),
+            ]
+        );
+        // One host route for the gateway, however many routes use it, and none for IPv4.
+        assert_eq!(
+            info.routes,
+            vec![
+                route(IPFamily::V4, "", "10.244.0.1"),
+                route(IPFamily::V6, "", "fd00:10:244::1"),
+                route(IPFamily::V6, "fd00:10:96::/112", "fd00:10:244::1"),
+                route(IPFamily::V6, "fd00:10:244::1/128", ""),
+            ]
+        );
+    }
+
+    #[test]
+    fn ipv6_host_addresses_keep_a_link_local_gateway_and_existing_host_routes() {
+        // The AWS VPC CNI: a /128, a link-local gateway and its host route.
+        let vpc_cni_routes = vec![
+            route(IPFamily::V6, "fe80::1/128", ""),
+            route(IPFamily::V6, "", "fe80::1"),
+        ];
+        let info = network_info(
+            vec![address(IPFamily::V6, "2a05:d014::5", "128")],
+            vpc_cni_routes.clone(),
+        )
+        .with_ipv6_host_addresses();
+        assert_eq!(info.routes, vpc_cni_routes);
+
+        // A global gateway that already has its host route gets no second one.
+        let routes = vec![
+            route(IPFamily::V6, "2001:db8::1/128", ""),
+            route(IPFamily::V6, "", "2001:db8::1"),
+        ];
+        let info = network_info(vec![], routes.clone()).with_ipv6_host_addresses();
+        assert_eq!(info.routes, routes);
+    }
 
     #[test]
     fn generate_route_preserves_destination_prefix_length() {

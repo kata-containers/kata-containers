@@ -539,13 +539,15 @@ async fn create_endpoint(
     // l3forwarding routes the guest through the tap, so the pod netns' neighbours are
     // unreachable from it: their MACs are on the node side of the pod link, and the tap drops
     // frames addressed to them as PACKET_OTHERHOST. The guest resolves its next hops on the tap
-    // instead, which answers through proxy ARP and proxy NDP. Decided per endpoint: VLAN, IPVLAN
-    // and physical endpoints never use l3forwarding, so their guests still need the neighbours.
+    // instead, which answers through proxy ARP and proxy NDP. Proxy NDP only answers for the
+    // gateways, so the guest also gets its IPv6 addresses without their on-link prefix. Decided
+    // per endpoint: VLAN, IPVLAN and physical endpoints never use l3forwarding, so their guests
+    // still need the neighbours and the prefixes.
     if matches!(
         endpoint.network_model_type().await,
         Some(crate::network::network_model::NetworkModelType::L3Forwarding)
     ) {
-        network_info = network_info.without_neighbours();
+        network_info = network_info.without_neighbours().with_ipv6_host_addresses();
     }
     let network_info = Arc::new(network_info);
 
@@ -709,6 +711,101 @@ mod neighbour_tests {
         assert!(has_gateway(
             &guest_neighbours(L3_FORWARDING_NET_MODEL_STR, true).await
         ));
+    }
+}
+
+#[cfg(test)]
+mod guest_view_tests {
+    use super::*;
+    use crate::network::network_model::{L3_FORWARDING_NET_MODEL_STR, TC_FILTER_NET_MODEL_STR};
+
+    const POD_ADDR: &str = "fd00:10:244::5";
+    const GATEWAY: &str = "fd00:10:244::1";
+
+    /// Builds a pod netns the way the bridge CNI leaves it on an IPv6 cluster (an on-link /64
+    /// and a default route via the bridge), runs entity discovery with `model`, and returns the
+    /// addresses and routes handed to the guest.
+    async fn guest_view(model: &str) -> (Vec<agent::IPAddress>, Vec<agent::Route>) {
+        let pid = std::process::id();
+        let pod_ns = format!("kata-view-{model}-{pid}");
+        let node_ns = format!("kata-view-node-{model}-{pid}");
+        defer!({
+            for ns in [&pod_ns, &node_ns] {
+                let _ = std::process::Command::new("ip")
+                    .args(["netns", "del", ns])
+                    .status();
+            }
+        });
+        for args in [
+            format!("netns add {pod_ns}"),
+            format!("netns add {node_ns}"),
+            format!("-n {pod_ns} link add eth0 type veth peer veth0 netns {node_ns}"),
+            format!("-n {node_ns} link set veth0 up"),
+            format!("-n {pod_ns} addr add {POD_ADDR}/64 dev eth0 nodad"),
+            format!("-n {pod_ns} link set eth0 up"),
+            format!("-n {pod_ns} -6 route add default via {GATEWAY} dev eth0"),
+        ] {
+            let status = std::process::Command::new("ip")
+                .args(args.split_whitespace())
+                .status()
+                .expect("run ip");
+            assert!(status.success(), "ip {} failed", args);
+        }
+
+        let config = NetworkWithNetNsConfig {
+            network_model: model.to_string(),
+            netns_path: format!("/run/netns/{pod_ns}"),
+            queues: 1,
+            network_created: false,
+        };
+        let d = Arc::new(crate::test_utils::device_manager().await);
+        let (entities, failure) = get_entity_from_netns(&config, d)
+            .await
+            .expect("discover entities");
+        assert!(failure.is_none(), "discovery failed: {:?}", failure);
+        assert_eq!(entities.len(), 1, "expected a single pod interface");
+        let info = &entities[0].network_info;
+        (
+            info.interface().await.expect("interface").ip_addresses,
+            info.routes().await.expect("routes"),
+        )
+    }
+
+    fn pod_address_mask(addresses: &[agent::IPAddress]) -> Option<String> {
+        addresses
+            .iter()
+            .find(|a| a.address == POD_ADDR)
+            .map(|a| a.mask.clone())
+    }
+
+    fn has_gateway_host_route(routes: &[agent::Route]) -> bool {
+        routes
+            .iter()
+            .any(|r| r.dest == format!("{GATEWAY}/128") && r.gateway.is_empty())
+    }
+
+    // Requires root: creating netns, a veth pair and a TAP needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn tcfilter_hands_the_guest_the_on_link_prefix() {
+        test_utils::skip_if_not_root!();
+        // Control for the test below.
+        let (addresses, routes) = guest_view(TC_FILTER_NET_MODEL_STR).await;
+        assert_eq!(pod_address_mask(&addresses).as_deref(), Some("64"));
+        assert!(!has_gateway_host_route(&routes), "routes: {:?}", routes);
+    }
+
+    // Requires root: creating netns, a veth pair and a TAP needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn l3forwarding_hands_the_guest_a_host_address_and_a_route_to_the_gateway() {
+        test_utils::skip_if_not_root!();
+        let (addresses, routes) = guest_view(L3_FORWARDING_NET_MODEL_STR).await;
+        assert_eq!(
+            pod_address_mask(&addresses).as_deref(),
+            Some("128"),
+            "addresses: {:?}",
+            addresses
+        );
+        assert!(has_gateway_host_route(&routes), "routes: {:?}", routes);
     }
 }
 
