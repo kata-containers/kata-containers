@@ -885,7 +885,38 @@ async fn wait_and_mount_layer(
         "dmverity-enabled" => dmverity_enabled,
     );
 
-    create_mount_destination(Path::new(&dev_path), layer_mount, "", &layer.fstype)
+    let verity_device = scopeguard::guard(verity_device_path, |path| {
+        #[cfg(feature = "devicemapper")]
+        if let Some(path) = path {
+            let logger = logger.clone();
+            tokio::task::spawn_blocking(move || cleanup_dmverity_devices(&[path], &logger));
+        }
+        #[cfg(not(feature = "devicemapper"))]
+        let _ = path;
+    });
+    mount_and_track_layer(
+        layer,
+        layer_mount,
+        sandbox,
+        logger,
+        &dev_path,
+        verity_device,
+    )
+    .await
+}
+
+async fn mount_and_track_layer<F>(
+    layer: &Storage,
+    layer_mount: &Path,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    logger: &Logger,
+    dev_path: &str,
+    verity_device: scopeguard::ScopeGuard<Option<String>, F>,
+) -> Result<LayerMountInfo>
+where
+    F: FnOnce(Option<String>),
+{
+    create_mount_destination(Path::new(dev_path), layer_mount, "", &layer.fstype)
         .context("failed to create layer mount destination")?;
 
     let (flags, options) = if layer.fstype == EROFS_TYPE {
@@ -918,8 +949,14 @@ async fn wait_and_mount_layer(
         kata_sys_util::mount::parse_mount_options(&mount_options)?
     };
 
+    let reused_mount = kata_sys_util::mount::get_linux_mount_info(
+        &layer_mount.display().to_string(),
+    )
+    .is_ok_and(|mount| {
+        mount.fs_type == layer.fstype || flags.contains(nix::mount::MsFlags::MS_REMOUNT)
+    });
     baremount(
-        Path::new(&dev_path),
+        Path::new(dev_path),
         layer_mount,
         &layer.fstype,
         flags,
@@ -927,12 +964,17 @@ async fn wait_and_mount_layer(
         logger,
     )
     .context("failed to mount layer")?;
+    let mount = super::mount_rollback_guard(
+        logger,
+        (!reused_mount).then(|| layer_mount.display().to_string()),
+    );
 
     // After successfully mounting the layer, we track the mount point for cleanup.
     track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
+    scopeguard::ScopeGuard::into_inner(mount);
 
     Ok(LayerMountInfo {
-        verity_device: verity_device_path,
+        verity_device: scopeguard::ScopeGuard::into_inner(verity_device),
     })
 }
 
@@ -1044,6 +1086,133 @@ async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    #[tokio::test]
+    async fn test_layer_mapper_cleanup_on_mount_failure() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempfile::tempdir().unwrap();
+        let blocker = root.path().join("not-a-directory");
+        fs::write(&blocker, "").unwrap();
+
+        for (index, mount_point) in [
+            blocker.join("mount"),
+            root.path().join("unsupported-filesystem"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let mapper_path = root.path().join(format!("mapping-{index}"));
+            fs::write(&mapper_path, "").unwrap();
+            let mapper_path_str = mapper_path.display().to_string();
+            let cleanup = scopeguard::guard(Some(mapper_path_str.clone()), |path| {
+                fs::remove_file(path.unwrap()).unwrap();
+            });
+            let layer = Storage {
+                fstype: "kata-invalid-filesystem".to_string(),
+                ..Default::default()
+            };
+
+            let error = mount_and_track_layer(
+                &layer,
+                mount_point,
+                &sandbox,
+                &logger,
+                &mapper_path_str,
+                cleanup,
+            )
+            .await
+            .unwrap_err();
+            let expected = if index == 0 {
+                "failed to create layer mount destination"
+            } else {
+                "failed to mount layer"
+            };
+            assert!(error.to_string().contains(expected), "{:#}", error);
+            assert!(!mapper_path.exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_layer_mapper_ownership_during_registration() {
+        test_utils::skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempfile::tempdir().unwrap();
+
+        for (cancel, reused_mount) in [(true, false), (true, true), (false, false)] {
+            let mount_point = root.path().join(format!("mount-{cancel}-{reused_mount}"));
+            let mapper_path = root.path().join(format!("mapping-{cancel}-{reused_mount}"));
+            fs::write(&mapper_path, "").unwrap();
+            let mapper_path_str = mapper_path.display().to_string();
+            let cleanup_mount = mount_point.clone();
+            let cleanup = scopeguard::guard(Some(mapper_path_str.clone()), move |path| {
+                assert_eq!(
+                    crate::mount::is_mounted(cleanup_mount.to_str().unwrap()).unwrap(),
+                    reused_mount,
+                );
+                fs::remove_file(path.unwrap()).unwrap();
+            });
+            scopeguard::defer! {
+                if crate::mount::is_mounted(mount_point.to_str().unwrap()).unwrap() {
+                    nix::mount::umount(&mount_point).unwrap();
+                }
+            }
+            let layer = Storage {
+                fstype: "tmpfs".to_string(),
+                ..Default::default()
+            };
+            if reused_mount {
+                fs::create_dir(&mount_point).unwrap();
+                nix::mount::mount(
+                    Some("tmpfs"),
+                    &mount_point,
+                    Some("tmpfs"),
+                    nix::mount::MsFlags::empty(),
+                    None::<&str>,
+                )
+                .unwrap();
+            }
+            let locked_sandbox = sandbox.lock().await;
+            let mut pending = Box::pin(mount_and_track_layer(
+                &layer,
+                &mount_point,
+                &sandbox,
+                &logger,
+                &mapper_path_str,
+                cleanup,
+            ));
+            std::future::poll_fn(|cx| {
+                use std::future::Future;
+                assert!(pending.as_mut().poll(cx).is_pending());
+                std::task::Poll::Ready(())
+            })
+            .await;
+            assert!(crate::mount::is_mounted(mount_point.to_str().unwrap()).unwrap());
+            assert!(mapper_path.exists());
+
+            if cancel {
+                drop(pending);
+                assert_eq!(
+                    crate::mount::is_mounted(mount_point.to_str().unwrap()).unwrap(),
+                    reused_mount,
+                );
+                assert!(!mapper_path.exists());
+            } else {
+                drop(locked_sandbox);
+                let result = pending.await.unwrap();
+                assert_eq!(result.verity_device, Some(mapper_path_str));
+                assert!(mapper_path.exists());
+                assert!(crate::mount::is_mounted(mount_point.to_str().unwrap()).unwrap());
+                assert!(sandbox
+                    .lock()
+                    .await
+                    .storages
+                    .contains_key(mount_point.to_str().unwrap()));
+            }
+        }
+    }
 
     // --- validate_container_id ---
 
