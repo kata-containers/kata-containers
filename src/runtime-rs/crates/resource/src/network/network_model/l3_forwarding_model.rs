@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use futures::TryStreamExt;
 use netlink_packet_route::address::AddressAttribute;
 use netlink_packet_route::neighbour::NeighbourFlags;
-use netlink_packet_route::route::{RouteAddress, RouteAttribute, RouteScope};
+use netlink_packet_route::route::{RouteAddress, RouteAttribute, RouteProtocol, RouteScope};
 use rtnetlink::{Handle, RouteMessageBuilder};
 use scopeguard::defer;
 
@@ -62,12 +62,20 @@ impl NetworkModel for L3ForwardingModel {
         }
         let pod_ipv4 = pod_v4_addrs.first().copied();
 
+        // Check the IPv6 routes before configuring either family, so that a refusal leaves the
+        // pod netns as the CNI set it up.
         let ipv6_gateways = if pod_v6_addrs.is_empty() {
             Vec::new()
         } else {
-            route_gateways(&handle, virt_index)
+            check_ipv6_link_local(pair.virt_iface.addrs.iter().map(|a| a.addr))
+                .context("check virt iface for an ipv6 link-local address")?;
+            let gateways = route_gateways(&handle, virt_index)
                 .await
-                .context("collect ipv6 route gateways")?
+                .context("collect ipv6 route gateways")?;
+            check_ipv6_routes(&handle, virt_index, &gateways)
+                .await
+                .context("check ipv6 routes on virt iface")?;
+            gateways
         };
 
         if !pod_v4_addrs.is_empty() {
@@ -236,7 +244,7 @@ async fn configure_ipv6(
     // guest's replies leave the sandbox at all.
     //
     // This only works when the guest routes via a gateway rather than treating peers as
-    // on-link, which `workload_addresses` has made sure of for the pod addresses: on-link
+    // on-link, which `workload_addresses` and `check_ipv6_routes` have made sure of: on-link
     // peers would need `proxy_arp`'s catch-all behaviour, which NDP cannot express.
     for gateway in gateways {
         ignore_eexist(
@@ -347,6 +355,110 @@ async fn route_gateways(handle: &Handle, virt_index: u32) -> Result<Vec<Ipv6Addr
     Ok(gateways)
 }
 
+/// Refuse IPv6 routes on the virt interface that l3forwarding cannot serve.
+///
+/// The guest gets every non-kernel route of the pod interface, so each would fail silently:
+/// - A route without a gateway makes the guest solicit the destinations directly, and proxy NDP
+///   only answers for the gateways. The one such route that works is the host route to a
+///   gateway, which the AWS VPC CNI installs for fe80::1.
+/// - A route learned from a Router Advertisement expires unless further Router Advertisements
+///   refresh it, and once IPv6 forwarding is on the pod netns ignores them (accept_ra=1). The
+///   guest's copy, which has no lifetime, would then point at a gateway the host no longer
+///   routes through.
+/// - Any other route that expires fails the same way.
+/// - A multipath route keeps its interfaces and gateways inside its next hops, where neither
+///   the gateway proxying nor the routes handed to the guest look, so the guest would get no
+///   route at all.
+async fn check_ipv6_routes(handle: &Handle, virt_index: u32, gateways: &[Ipv6Addr]) -> Result<()> {
+    let query = RouteMessageBuilder::<Ipv6Addr>::new().build();
+    let mut routes = handle.route().get(query).execute();
+    while let Some(route) = routes.try_next().await? {
+        // Kernel routes are not handed to the guest.
+        if u8::from(route.header.protocol) == libc::RTPROT_KERNEL {
+            continue;
+        }
+        let mut via_virt = false;
+        let mut multipath_via_virt = false;
+        let mut has_gateway = false;
+        let mut expires = 0;
+        let mut destination = Ipv6Addr::UNSPECIFIED;
+        for attr in &route.attributes {
+            match attr {
+                RouteAttribute::Oif(index) if *index == virt_index => via_virt = true,
+                RouteAttribute::MultiPath(next_hops) => {
+                    multipath_via_virt = next_hops
+                        .iter()
+                        .any(|next_hop| next_hop.interface_index == virt_index)
+                }
+                RouteAttribute::Gateway(_) => has_gateway = true,
+                RouteAttribute::CacheInfo(info) => expires = info.expires,
+                RouteAttribute::Destination(RouteAddress::Inet6(addr)) => destination = *addr,
+                _ => {}
+            }
+        }
+        let prefix_len = route.header.destination_prefix_length;
+        if multipath_via_virt {
+            anyhow::bail!(
+                "l3forwarding cannot serve the multipath IPv6 route {}/{} on the virt iface: \
+                 it only supports routes with a single next hop",
+                destination,
+                prefix_len
+            );
+        }
+        if !via_virt {
+            continue;
+        }
+        if route.header.protocol == RouteProtocol::Ra {
+            anyhow::bail!(
+                "l3forwarding cannot keep the IPv6 route {}/{} on the virt iface: it was learned \
+                 from a Router Advertisement, and the pod netns stops accepting those once \
+                 forwarding is enabled",
+                destination,
+                prefix_len
+            );
+        }
+        if expires != 0 {
+            anyhow::bail!(
+                "l3forwarding cannot keep the IPv6 route {}/{} on the virt iface: it expires, \
+                 and the guest's copy would not",
+                destination,
+                prefix_len
+            );
+        }
+        if has_gateway {
+            continue;
+        }
+        if prefix_len != IPV6_HOST_PREFIX || !gateways.contains(&destination) {
+            anyhow::bail!(
+                "l3forwarding cannot serve the on-link IPv6 route {}/{} on the virt iface: \
+                 proxy NDP only answers for gateways",
+                destination,
+                prefix_len
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Refuse a virt interface without an IPv6 link-local address.
+///
+/// `configure_ipv6` moves the pod addresses off virt, and from then on the pod netns solicits its
+/// neighbours on virt from virt's link-local address. Without one, the kernel sends no
+/// solicitations at all (ndisc_send_ns()), and the guest's traffic stops at the first neighbour
+/// the pod netns has to resolve.
+fn check_ipv6_link_local(addresses: impl IntoIterator<Item = IpAddr>) -> Result<()> {
+    let has_link_local = addresses
+        .into_iter()
+        .any(|address| matches!(address, IpAddr::V6(v6) if v6.is_unicast_link_local()));
+    if !has_link_local {
+        anyhow::bail!(
+            "l3forwarding needs an IPv6 link-local address on the virt iface: the pod netns \
+             solicits its neighbours from it"
+        );
+    }
+    Ok(())
+}
+
 /// Split the virt interface addresses into the workload addresses of each family.
 ///
 /// IPv6 link-local addresses are not workload addresses -- every interface has one -- so they
@@ -448,6 +560,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn requires_an_ipv6_link_local_address() {
+        check_ipv6_link_local(["2001:db8::8".parse().unwrap(), "fe80::8".parse().unwrap()])
+            .expect("a link-local address is there");
+
+        // An IPv4 link-local address does not count.
+        let err = check_ipv6_link_local([
+            "2001:db8::8".parse().unwrap(),
+            "169.254.0.8".parse().unwrap(),
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("link-local"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
     /// Exercises the real netlink/sysctl paths inside a throwaway netns.
     ///
     /// Requires root: creating a netns and veth pair needs CAP_NET_ADMIN.
@@ -507,8 +637,20 @@ mod tests {
             .expect("assign pod address");
 
         // A default route via a gateway, as a CNI would install. The gateway is the address
-        // the guest resolves, so it is what must end up proxied on the tap.
+        // the guest resolves, so it is what must end up proxied on the tap. The AWS VPC CNI also
+        // adds a host route to the gateway, an on-link route that must be accepted.
         let gateway: Ipv6Addr = "fe80::1".parse().unwrap();
+        handle
+            .route()
+            .add(
+                RouteMessageBuilder::<Ipv6Addr>::new()
+                    .destination_prefix(gateway, IPV6_HOST_PREFIX)
+                    .output_interface(virt_index)
+                    .build(),
+            )
+            .execute()
+            .await
+            .expect("add host route to the gateway");
         handle
             .route()
             .add(
@@ -524,6 +666,9 @@ mod tests {
         let gateways = route_gateways(&handle, virt_index)
             .await
             .expect("collect gateways");
+        check_ipv6_routes(&handle, virt_index, &gateways)
+            .await
+            .expect("the host route to the gateway must be accepted");
         configure_ipv6(
             &handle,
             TAP,
@@ -768,5 +913,457 @@ mod tests {
             "the guest cannot reach its gateway"
         );
         assert!(ping(&node_ns, pod_addr), "the node cannot reach the guest");
+    }
+
+    /// A dual-stack pod interface with an on-link IPv6 route that proxy NDP cannot serve is
+    /// refused before either family is configured, so the IPv4 side is left as the CNI set it
+    /// up too.
+    ///
+    /// Requires root: creating a netns, a veth pair and a TAP needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn on_link_ipv6_route_is_refused_before_anything_is_configured() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-d-eth0";
+        const PEER: &str = "kata-d-peer";
+        let pod_v4: Ipv4Addr = "10.0.1.5".parse().unwrap();
+        let pod_v6: Ipv6Addr = "fd00:dead:beef::8".parse().unwrap();
+        let gateway: Ipv6Addr = "fe80::1".parse().unwrap();
+        let on_link: Ipv6Addr = "2001:db8:2::".parse().unwrap();
+
+        let ns_name = format!("kata-l3fwd-dual-{}", std::process::id());
+        let netns = netns_rs::NetNs::new(&ns_name).expect("create netns");
+        let ns_path = netns.path().to_path_buf();
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        let _guard =
+            kata_sys_util::netns::NetnsGuard::new(ns_path.to_str().unwrap()).expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+
+        handle
+            .link()
+            .add(rtnetlink::LinkVeth::new(VIRT, PEER).build())
+            .execute()
+            .await
+            .expect("create veth pair");
+        let virt_index = fetch_index(&handle, VIRT).await.expect("virt index");
+        let peer_index = fetch_index(&handle, PEER).await.expect("peer index");
+        for index in [virt_index, peer_index] {
+            handle
+                .link()
+                .set(rtnetlink::LinkUnspec::new_with_index(index).up().build())
+                .execute()
+                .await
+                .expect("set link up");
+        }
+        handle
+            .address()
+            .add(virt_index, IpAddr::V4(pod_v4), IPV4_HOST_PREFIX)
+            .execute()
+            .await
+            .expect("assign pod IPv4 address");
+        handle
+            .address()
+            .add(virt_index, IpAddr::V6(pod_v6), IPV6_HOST_PREFIX)
+            .execute()
+            .await
+            .expect("assign pod IPv6 address");
+        for (destination, prefix_len) in [(gateway, IPV6_HOST_PREFIX), (on_link, 64)] {
+            handle
+                .route()
+                .add(
+                    RouteMessageBuilder::<Ipv6Addr>::new()
+                        .destination_prefix(destination, prefix_len)
+                        .output_interface(virt_index)
+                        .build(),
+                )
+                .execute()
+                .await
+                .expect("add on-link route");
+        }
+        handle
+            .route()
+            .add(
+                RouteMessageBuilder::<Ipv6Addr>::new()
+                    .gateway(gateway)
+                    .output_interface(virt_index)
+                    .build(),
+            )
+            .execute()
+            .await
+            .expect("add default route via gateway");
+
+        let pair = crate::network::NetworkPair::new(
+            &handle,
+            0,
+            VIRT,
+            crate::network::network_model::L3_FORWARDING_NET_MODEL_STR,
+            1,
+        )
+        .await
+        .expect("new network pair");
+        let tap = pair.tap.tap_iface.name.clone();
+        let err = pair
+            .add_network_model()
+            .await
+            .expect_err("an on-link /64 must be refused");
+        assert!(
+            format!("{:#}", err).contains("2001:db8:2::/64"),
+            "unexpected error: {:#}",
+            err
+        );
+
+        // Neither family was configured: the IPv4 local route is still on virt, nothing routes
+        // the pod address via the tap, and the tap has neither proxy ARP nor proxy NDP.
+        let tap_index = fetch_index(&handle, &tap).await.expect("tap index");
+        let mut local_on_virt = false;
+        let mut via_tap = false;
+        let mut routes = handle
+            .route()
+            .get(RouteMessageBuilder::<Ipv4Addr>::new().build())
+            .execute();
+        while let Some(route) = routes.try_next().await.expect("list routes") {
+            let to_pod = route.attributes.iter().any(|a| {
+                matches!(a, RouteAttribute::Destination(RouteAddress::Inet(v4)) if *v4 == pod_v4)
+            });
+            let oif = route.attributes.iter().find_map(|a| match a {
+                RouteAttribute::Oif(index) => Some(*index),
+                _ => None,
+            });
+            if to_pod && route.header.table == ROUTE_TABLE_LOCAL && oif == Some(virt_index) {
+                local_on_virt = true;
+            }
+            if to_pod && oif == Some(tap_index) {
+                via_tap = true;
+            }
+        }
+        assert!(
+            local_on_virt,
+            "the IPv4 local route for the pod address was deleted"
+        );
+        assert!(!via_tap, "the pod IPv4 address was routed via the tap");
+        for (family, knob) in [("ipv4", "proxy_arp"), ("ipv6", "proxy_ndp")] {
+            let value =
+                std::fs::read_to_string(format!("/proc/sys/net/{family}/conf/{tap}/{knob}"))
+                    .expect("read tap sysctl");
+            assert_eq!(value.trim(), "0", "{} was enabled on the tap", knob);
+        }
+    }
+
+    /// A default route learned from a Router Advertisement is refused: once forwarding is on,
+    /// the pod netns stops accepting the Router Advertisements that keep it alive.
+    ///
+    /// Requires root: creating a netns and veth pair needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn ipv6_route_from_a_router_advertisement_is_refused() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-r-eth0";
+        const PEER: &str = "kata-r-peer";
+        let pod_addr: Ipv6Addr = "fd00:dead:beef::8".parse().unwrap();
+        let gateway: Ipv6Addr = "fe80::1".parse().unwrap();
+
+        let ns_name = format!("kata-l3fwd-ra-{}", std::process::id());
+        let netns = netns_rs::NetNs::new(&ns_name).expect("create netns");
+        let ns_path = netns.path().to_path_buf();
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        let _guard =
+            kata_sys_util::netns::NetnsGuard::new(ns_path.to_str().unwrap()).expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+
+        handle
+            .link()
+            .add(rtnetlink::LinkVeth::new(VIRT, PEER).build())
+            .execute()
+            .await
+            .expect("create veth pair");
+        let virt_index = fetch_index(&handle, VIRT).await.expect("virt index");
+        let peer_index = fetch_index(&handle, PEER).await.expect("peer index");
+        for index in [virt_index, peer_index] {
+            handle
+                .link()
+                .set(rtnetlink::LinkUnspec::new_with_index(index).up().build())
+                .execute()
+                .await
+                .expect("set link up");
+        }
+        handle
+            .address()
+            .add(virt_index, IpAddr::V6(pod_addr), IPV6_HOST_PREFIX)
+            .execute()
+            .await
+            .expect("assign pod address");
+        handle
+            .route()
+            .add(
+                RouteMessageBuilder::<Ipv6Addr>::new()
+                    .gateway(gateway)
+                    .output_interface(virt_index)
+                    .protocol(RouteProtocol::Ra)
+                    .build(),
+            )
+            .execute()
+            .await
+            .expect("add default route learned from a Router Advertisement");
+
+        let gateways = route_gateways(&handle, virt_index)
+            .await
+            .expect("collect gateways");
+        let err = check_ipv6_routes(&handle, virt_index, &gateways)
+            .await
+            .expect_err("a Router Advertisement route must be refused");
+        assert!(
+            format!("{:#}", err).contains("Router Advertisement"),
+            "unexpected error: {:#}",
+            err
+        );
+    }
+
+    /// A pod interface without an IPv6 link-local address is refused before anything is
+    /// configured: once the pod address is moved off it, the pod netns could not solicit its
+    /// neighbours from any address.
+    ///
+    /// Requires root: creating a netns, a veth pair and a TAP needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn ipv6_pod_interface_without_link_local_is_refused() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-l-eth0";
+        let ns_name = format!("kata-l3fwd-noll-{}", std::process::id());
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        // A /128 with a host route to the gateway and a default route via it, as the AWS VPC
+        // CNI sets it up, but with no link-local address on the pod interface.
+        for args in [
+            format!("netns add {ns_name}"),
+            format!("-n {ns_name} link add {VIRT} type veth peer kata-l-peer"),
+            format!("-n {ns_name} link set {VIRT} addrgenmode none"),
+            format!("-n {ns_name} link set kata-l-peer up"),
+            format!("-n {ns_name} link set {VIRT} up"),
+            format!("-n {ns_name} addr add fd00:dead:beef::8/128 dev {VIRT} nodad"),
+            format!("-n {ns_name} -6 route add fe80::1/128 dev {VIRT}"),
+            format!("-n {ns_name} -6 route add default via fe80::1 dev {VIRT}"),
+        ] {
+            let status = std::process::Command::new("ip")
+                .args(args.split_whitespace())
+                .status()
+                .expect("run ip");
+            assert!(status.success(), "ip {} failed", args);
+        }
+
+        let _guard = kata_sys_util::netns::NetnsGuard::new(&format!("/run/netns/{ns_name}"))
+            .expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+        let pair = crate::network::NetworkPair::new(
+            &handle,
+            0,
+            VIRT,
+            crate::network::network_model::L3_FORWARDING_NET_MODEL_STR,
+            1,
+        )
+        .await
+        .expect("new network pair");
+        let err = pair
+            .add_network_model()
+            .await
+            .expect_err("a pod interface without a link-local address must be refused");
+        assert!(
+            format!("{:#}", err).contains("link-local"),
+            "unexpected error: {:#}",
+            err
+        );
+        // Nothing was configured: the pod address is still on the pod interface.
+        let output = std::process::Command::new("ip")
+            .args(["-n", &ns_name, "-6", "addr", "show", "dev", VIRT])
+            .output()
+            .expect("run ip");
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("fd00:dead:beef::8/128"),
+            "the pod address was moved off the pod interface"
+        );
+    }
+
+    /// A default route that expires is refused: the guest's copy of it would not.
+    ///
+    /// Requires root: creating a netns and veth pair needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn expiring_ipv6_route_is_refused() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-x-eth0";
+        const PEER: &str = "kata-x-peer";
+        let pod_addr: Ipv6Addr = "fd00:dead:beef::8".parse().unwrap();
+        let gateway: Ipv6Addr = "fe80::1".parse().unwrap();
+
+        let ns_name = format!("kata-l3fwd-expiring-{}", std::process::id());
+        let netns = netns_rs::NetNs::new(&ns_name).expect("create netns");
+        let ns_path = netns.path().to_path_buf();
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        let _guard =
+            kata_sys_util::netns::NetnsGuard::new(ns_path.to_str().unwrap()).expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+
+        handle
+            .link()
+            .add(rtnetlink::LinkVeth::new(VIRT, PEER).build())
+            .execute()
+            .await
+            .expect("create veth pair");
+        let virt_index = fetch_index(&handle, VIRT).await.expect("virt index");
+        let peer_index = fetch_index(&handle, PEER).await.expect("peer index");
+        for index in [virt_index, peer_index] {
+            handle
+                .link()
+                .set(rtnetlink::LinkUnspec::new_with_index(index).up().build())
+                .execute()
+                .await
+                .expect("set link up");
+        }
+        handle
+            .address()
+            .add(virt_index, IpAddr::V6(pod_addr), IPV6_HOST_PREFIX)
+            .execute()
+            .await
+            .expect("assign pod address");
+        let mut route = RouteMessageBuilder::<Ipv6Addr>::new()
+            .gateway(gateway)
+            .output_interface(virt_index)
+            .build();
+        route.attributes.push(RouteAttribute::Expires(600));
+        handle
+            .route()
+            .add(route)
+            .execute()
+            .await
+            .expect("add expiring default route");
+
+        let gateways = route_gateways(&handle, virt_index)
+            .await
+            .expect("collect gateways");
+        let err = check_ipv6_routes(&handle, virt_index, &gateways)
+            .await
+            .expect_err("an expiring route must be refused");
+        assert!(
+            format!("{:#}", err).contains("it expires"),
+            "unexpected error: {:#}",
+            err
+        );
+    }
+
+    /// An ECMP default route is refused: the kernel reports its interfaces and gateways only
+    /// inside RTA_MULTIPATH, so the gateways would not be proxied and the guest would get no
+    /// default route.
+    ///
+    /// Requires root: creating a netns and veth pair needs CAP_NET_ADMIN.
+    #[actix_rt::test]
+    async fn multipath_ipv6_route_is_refused() {
+        test_utils::skip_if_not_root!();
+
+        const VIRT: &str = "kata-m-eth0";
+        const PEER: &str = "kata-m-peer";
+        let pod_addr: Ipv6Addr = "fd00:dead:beef::8".parse().unwrap();
+        let gateways: [Ipv6Addr; 2] = ["fe80::1".parse().unwrap(), "fe80::2".parse().unwrap()];
+
+        let ns_name = format!("kata-l3fwd-ecmp-{}", std::process::id());
+        let netns = netns_rs::NetNs::new(&ns_name).expect("create netns");
+        let ns_path = netns.path().to_path_buf();
+        defer!({
+            let _ = std::process::Command::new("ip")
+                .args(["netns", "del", &ns_name])
+                .status();
+        });
+        let _guard =
+            kata_sys_util::netns::NetnsGuard::new(ns_path.to_str().unwrap()).expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let thread_handler = tokio::spawn(connection);
+        defer!({
+            thread_handler.abort();
+        });
+
+        handle
+            .link()
+            .add(rtnetlink::LinkVeth::new(VIRT, PEER).build())
+            .execute()
+            .await
+            .expect("create veth pair");
+        let virt_index = fetch_index(&handle, VIRT).await.expect("virt index");
+        let peer_index = fetch_index(&handle, PEER).await.expect("peer index");
+        for index in [virt_index, peer_index] {
+            handle
+                .link()
+                .set(rtnetlink::LinkUnspec::new_with_index(index).up().build())
+                .execute()
+                .await
+                .expect("set link up");
+        }
+        handle
+            .address()
+            .add(virt_index, IpAddr::V6(pod_addr), IPV6_HOST_PREFIX)
+            .execute()
+            .await
+            .expect("assign pod address");
+        let next_hops = gateways
+            .iter()
+            .map(|gateway| {
+                let mut next_hop = netlink_packet_route::route::RouteNextHop::default();
+                next_hop.interface_index = virt_index;
+                next_hop
+                    .attributes
+                    .push(RouteAttribute::Gateway(RouteAddress::Inet6(*gateway)));
+                next_hop
+            })
+            .collect();
+        handle
+            .route()
+            .add(
+                RouteMessageBuilder::<Ipv6Addr>::new()
+                    .multipath(next_hops)
+                    .build(),
+            )
+            .execute()
+            .await
+            .expect("add ECMP default route");
+
+        let gateways = route_gateways(&handle, virt_index)
+            .await
+            .expect("collect gateways");
+        let err = check_ipv6_routes(&handle, virt_index, &gateways)
+            .await
+            .expect_err("a multipath route must be refused");
+        assert!(
+            format!("{:#}", err).contains("multipath IPv6 route ::/0"),
+            "unexpected error: {:#}",
+            err
+        );
     }
 }
