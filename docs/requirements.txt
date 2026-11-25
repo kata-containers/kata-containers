@@ -10,3 +10,4 @@ click==8.3.3
 idna==3.15
 pymdown-extensions==11.0.1
 certifi==2026.10.18
+wcmatch==12.0.4
