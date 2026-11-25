@@ -28,6 +28,15 @@ type SafeMountFormater struct {
 	*mountutils.SafeFormatAndMount
 }
 
+// getDiskFormat is the device-format probe used by
+// SafeFormatWithFstype. It is a variable so tests can replace the
+// probe without needing a real block device. Swapping the variable is
+// not concurrency-safe: tests that replace it must remain sequential
+// (no t.Parallel()).
+var getDiskFormat = func(mounter *SafeMountFormater, source string) (string, error) {
+	return mounter.GetDiskFormat(source)
+}
+
 func NewSafeMountFormater() SafeMountFormater {
 	return SafeMountFormater{
 		&mountutils.SafeFormatAndMount{
@@ -65,7 +74,7 @@ func (mounter *SafeMountFormater) SafeFormatWithFstype(source string, fstype str
 	}
 
 	// Check if the disk is already formatted
-	existingFormat, err := mounter.GetDiskFormat(source)
+	existingFormat, err := getDiskFormat(mounter, source)
 	if err != nil {
 		return mountutils.NewMountError(mountutils.GetDiskFormatFailed, "failed to get disk format of disk %s: %v", source, err)
 	}
@@ -102,8 +111,12 @@ func (mounter *SafeMountFormater) SafeFormatWithFstype(source string, fstype str
 		klog.Infof("Disk successfully formatted (mkfs): %s - %s", fstype, source)
 	} else {
 		if fstype != existingFormat {
-			// Do verify the disk formatted with expected fs type.
-			return mountutils.NewMountError(mountutils.FilesystemMismatch, "%s", err.Error())
+			// The disk is already formatted with a different filesystem
+			// than requested. GetDiskFormat succeeded (err == nil, checked
+			// above), so err.Error() here dereferenced a nil error and
+			// panicked; report the actual formats instead.
+			return mountutils.NewMountError(mountutils.FilesystemMismatch,
+				"disk %s was formatted with %q but %q was requested", source, existingFormat, fstype)
 		}
 
 		if !readOnly {
