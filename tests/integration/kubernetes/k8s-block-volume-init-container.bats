@@ -60,6 +60,25 @@ failed_events() {
 		-o jsonpath='{range .items[*]}{.message}{"\n"}{end}'
 }
 
+# A disk that the VMM has let go of holds no descriptor on the volume.
+sandbox_volume_descriptors() {
+	local sandbox_id
+
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
+	# The descriptors name the device either way, depending on how it was
+	# opened.
+	exec_host "${node}" "for pid in \$(pgrep -f '${sandbox_id}'); do ls -l /proc/\${pid}/fd 2>/dev/null; done | \
+		grep -c -E -- \"-> (/dev/mapper/${dm_name}|/dev/dm-\$(dmsetup info -c --noheadings -o minor ${dm_name}))\\\$\" || true"
+}
+
+wait_for_init_container() {
+	local state="$1"
+	local cmd="kubectl get pod ${pod_name} -o jsonpath='{.status.initContainerStatuses[0].state.${state}}' | grep -q ."
+
+	waitForProcess 180 "${sleep_time}" "${cmd}"
+}
+
 setup() {
 	[[ "${KATA_HYPERVISOR}" == qemu*-runtime-rs ]] || skip "block volume reuse is tested for QEMU on runtime-rs only (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
 
@@ -107,6 +126,55 @@ setup() {
 	[[ "${restarts}" == "0" ]] || die "The main container was restarted ${restarts} time(s)"
 }
 
+# A flush that takes 45 seconds outlasts every attempt to hotunplug the init
+# container's disk before that container is deleted. The disk still has to be
+# released afterwards. Both containers use the same volume, so once the init
+# container is gone the sandbox must hold only one disk reference to it, the
+# main container's. If the init container's disk is never released, the
+# sandbox keeps two.
+@test "The init container's disk is released after a flush that outlasts its cleanup" {
+	set_volume_delays 0 0 45000
+
+	create_pod "dd if=/dev/zero of=/dev/xda bs=1M count=16; sleep 30"
+	wait_for_init_container running
+	one_disk="$(sandbox_volume_descriptors)"
+	[[ "${one_disk}" -gt 0 ]] || die "The sandbox holds no descriptor on the init container's disk"
+
+	kubectl wait --for=condition=Ready --timeout=300s "pod/${pod_name}"
+
+	cmd="[[ \$(sandbox_volume_descriptors) -eq ${one_disk} ]]"
+	waitForProcess 60 5 "${cmd}" || \
+		die "The sandbox holds $(sandbox_volume_descriptors) descriptors on the volume, ${one_disk} are needed for one disk"
+}
+
+# The volume is slow to open while the main container is first created, so
+# the VMM's answer comes after the shim stopped waiting for it.
+# Once the storage is fast again the kubelet's next attempt has to succeed.
+@test "The main container starts once a volume that was slow to open has recovered" {
+	# With direct I/O the VMM reads from the volume when it opens it.
+	local_dropin="$(mktemp --tmpdir 60-block-volume-direct.XXXXX.toml)"
+	cat > "${local_dropin}" <<-EOF
+		[hypervisor.qemu]
+		block_device_cache_direct = true
+	EOF
+	runtime_config_dropin="$(set_kata_runtime_config_dropin_file "${node}" "${local_dropin}")" || \
+		die "failed to write the direct I/O drop-in for ${KATA_HYPERVISOR}"
+
+	create_pod "dd if=/dev/zero of=/dev/xda bs=1M count=4; sleep 20"
+	wait_for_init_container running
+	set_volume_delays 12000 0 0
+	wait_for_init_container terminated
+
+	# Making the volume fast before an attempt has failed on it would leave
+	# nothing to recover from.
+	cmd="[[ -n \"\$(failed_events)\" ]]"
+	waitForProcess 180 5 "${cmd}" || \
+		die "No attempt to create the main container failed while the volume was slow"
+	set_volume_delays 0 0 0
+
+	kubectl wait --for=condition=Ready --timeout=180s "pod/${pod_name}"
+}
+
 teardown() {
 	[[ "${KATA_HYPERVISOR}" == qemu*-runtime-rs ]] || skip "block volume reuse is tested for QEMU on runtime-rs only (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
 
@@ -119,7 +187,8 @@ teardown() {
 	kubectl delete pvc "${volume_claim}" --ignore-not-found=true
 	kubectl delete pv "${volume_name}" --ignore-not-found=true
 	kubectl delete storageclass local-storage --ignore-not-found=true
-	rm -f "${pv_config:-}" "${pvc_config:-}" "${pod_config:-}"
+	rm -f "${pv_config:-}" "${pvc_config:-}" "${pod_config:-}" "${local_dropin:-}"
+	remove_kata_runtime_config_dropin_file "${node}" "${runtime_config_dropin:-}"
 
 	if [[ -n "${loop_dev:-}" ]]; then
 		# The kubelet lets go of the volume a little after the pod is gone.
