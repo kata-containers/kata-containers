@@ -48,7 +48,14 @@ and [CNI](https://github.com/containernetworking/cni) for networking management.
 
 With L3 forwarding, we modify the route table on the host-side network namespace to route traffic to the pod IP through the tap device.
 This is useful for integrating with service meshes such as Istio Ambient, where the CNI sets up iptables rules and a node proxy listens on the host-side network namespace.
-This model only supports IPv4 and only one IP address per pod.
+This model supports IPv4 and IPv6.
+For IPv6 the CNI must route the pod through a gateway (a `/128` address plus a default route): proxy NDP answers only for the gateway addresses, not for a whole on-link prefix, so an IPv6 pod address with any other prefix length is rejected, and so is an IPv6 route without a gateway other than the host route to a gateway.
+An IPv6 pod address is moved off the pod interface, and the pod network namespace answers for it with proxy NDP instead: while it keeps the address, it would solicit its own neighbours from it, and their answers would be routed to the VM.
+It solicits them from the pod interface's link-local address instead, so a pod interface without one is rejected.
+IPv6 routes learned from Router Advertisements are rejected too: once forwarding is enabled, the pod network namespace ignores the Router Advertisements that keep those routes alive.
+So are other IPv6 routes that expire, since the VM's copy of a route has no lifetime.
+So are multipath (ECMP) IPv6 routes: only routes with a single next hop are passed to the guest.
+Port forwarding (`kubectl port-forward`) works over IPv4 only.
 
 ## Network Hotplug
 

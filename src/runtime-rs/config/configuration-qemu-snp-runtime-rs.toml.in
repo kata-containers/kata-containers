@@ -630,12 +630,12 @@ enable_debug = false
 #     provided by plugin to a tap interface connected to the VM.
 #
 #   - l3forwarding
-#     Uses L3 routing and proxy ARP to forward traffic between the network
+#     Uses L3 routing and proxy ARP/NDP to forward traffic between the network
 #     interface provided by the plugin and a tap interface connected to the
 #     VM.
 #     Useful for Istio Ambient-style service mesh integration with node
 #     proxies. Supports a single network interface per network namespace.
-#     Experimental feature, IPv4 only.
+#     Experimental feature.
 #
 internetworking_model="@DEFNETWORKMODEL_QEMU@"
 

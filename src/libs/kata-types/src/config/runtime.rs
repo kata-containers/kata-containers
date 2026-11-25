@@ -69,7 +69,7 @@ pub struct Runtime {
     /// Options:
     /// - macvtap: used when the Container network interface can be bridged using macvtap.
     /// - l3forwarding: for Istio Ambient-style service mesh integration with node proxies.
-    ///   Experimental, IPv4 only.
+    ///   Experimental. Forwards IPv4 and IPv6.
     /// - none: used when customize network. Only creates a tap device. No veth pair.
     /// - tcfilter: uses tc filter rules to redirect traffic from the network interface provided
     ///   by plugin to a tap interface connected to the VM.
