@@ -19,6 +19,9 @@ use super::{
 };
 use crate::network::NetworkPair;
 
+const ROUTE_TABLE_LOCAL: u8 = 255;
+const IPV4_HOST_PREFIX: u8 = 32;
+
 #[derive(Debug)]
 pub(crate) struct L3ForwardingModel {}
 
@@ -56,84 +59,16 @@ impl NetworkModel for L3ForwardingModel {
         }
         let pod_ipv4 = pod_addrs.first().copied();
 
-        // Enable proxy arp so we can respond to ARP requests using the tap and virt interfaces.
-        fs::write(
-            format!(
-                "/proc/sys/net/ipv4/conf/{}/proxy_arp",
-                pair.tap.tap_iface.name
-            ),
-            "1",
+        configure_ipv4(
+            &handle,
+            &pair.tap.tap_iface.name,
+            &pair.virt_iface.name,
+            tap_index,
+            virt_index,
+            &pod_addrs,
         )
-        .context(format!("enable proxy arp on {}", pair.tap.tap_iface.name))?;
-        fs::write(
-            format!("/proc/sys/net/ipv4/conf/{}/proxy_arp", pair.virt_iface.name),
-            "1",
-        )
-        .context(format!("enable proxy arp on {}", pair.virt_iface.name))?;
-        fs::write("/proc/sys/net/ipv4/ip_forward", "1").context("enable ip forward")?;
-
-        // We need the tap interface to have an address different from the pod ip for arp proxying
-        // to work. If this didn't have an ip, when the host-side netns gets an arp request it will
-        // forward it into the guest. However, it will set the src ip of the arp request to the pod
-        // ip. This is a gratuitous ARP request since the request and response address are the same,
-        // and the guest will not respond.
-        // This also allows for SNATing link local connections from the host.
-        // TODO: What if there are multiple tap interfaces? They would get the same address?
-        //  Maybe that's fine?
-        ignore_eexist(
-            handle
-                .address()
-                .add(tap_index, IpAddr::V4(TAP_IPV4_ADDR), 32)
-                .execute()
-                .await,
-        )
-        .context("add link-local address to tap")?;
-
-        // Remove rules in the local route table that have to do with our pod ips.
-        const ROUTE_TABLE_LOCAL: u8 = 255;
-        let local_query = RouteMessageBuilder::<std::net::Ipv4Addr>::new()
-            .table_id(ROUTE_TABLE_LOCAL as u32)
-            .build();
-        let mut local_routes = handle.route().get(local_query).execute();
-        while let Some(route) = local_routes.try_next().await? {
-            if route.header.table != ROUTE_TABLE_LOCAL {
-                continue;
-            }
-            let mut dst_matches = false;
-            let mut oif_matches = false;
-            for attr in &route.attributes {
-                match attr {
-                    RouteAttribute::Destination(RouteAddress::Inet(v4))
-                        if pod_addrs.contains(v4) =>
-                    {
-                        dst_matches = true;
-                    }
-                    RouteAttribute::Oif(idx) if *idx == virt_index => {
-                        oif_matches = true;
-                    }
-                    _ => {}
-                }
-            }
-            if dst_matches && oif_matches && route.header.destination_prefix_length == 32 {
-                handle
-                    .route()
-                    .del(route)
-                    .execute()
-                    .await
-                    .context("delete local route for pod ip on virt iface")?;
-            }
-        }
-
-        // Add a route for each pod ip via the tap interface.
-        for pod_addr in pod_addrs {
-            let route_msg = RouteMessageBuilder::<std::net::Ipv4Addr>::new()
-                .destination_prefix(pod_addr, 32)
-                .output_interface(tap_index)
-                .scope(RouteScope::Link)
-                .build();
-            ignore_eexist(handle.route().add(route_msg).execute().await)
-                .with_context(|| format!("add route for pod ip {pod_addr} via tap"))?;
-        }
+        .await
+        .context("configure ipv4 l3 forwarding")?;
 
         configure_port_forwarding(&pair.tap.tap_iface.name, pod_ipv4, TAP_IPV4_ADDR).await;
 
@@ -147,6 +82,89 @@ impl NetworkModel for L3ForwardingModel {
         // is torn down with the sandbox.
         Ok(())
     }
+}
+
+/// IPv4: proxy ARP plus a /32 route via the tap for each pod address.
+async fn configure_ipv4(
+    handle: &Handle,
+    tap_name: &str,
+    virt_name: &str,
+    tap_index: u32,
+    virt_index: u32,
+    pod_addrs: &[Ipv4Addr],
+) -> Result<()> {
+    // Enable proxy arp so we can respond to ARP requests using the tap and virt interfaces.
+    fs::write(format!("/proc/sys/net/ipv4/conf/{tap_name}/proxy_arp"), "1")
+        .context(format!("enable proxy arp on {tap_name}"))?;
+    fs::write(
+        format!("/proc/sys/net/ipv4/conf/{virt_name}/proxy_arp"),
+        "1",
+    )
+    .context(format!("enable proxy arp on {virt_name}"))?;
+    fs::write("/proc/sys/net/ipv4/ip_forward", "1").context("enable ip forward")?;
+
+    // We need the tap interface to have an address different from the pod ip for arp proxying
+    // to work. If this didn't have an ip, when the host-side netns gets an arp request it will
+    // forward it into the guest. However, it will set the src ip of the arp request to the pod
+    // ip. This is a gratuitous ARP request since the request and response address are the same,
+    // and the guest will not respond.
+    // This also allows for SNATing link local connections from the host.
+    // TODO: What if there are multiple tap interfaces? They would get the same address?
+    //  Maybe that's fine?
+    ignore_eexist(
+        handle
+            .address()
+            .add(tap_index, IpAddr::V4(TAP_IPV4_ADDR), 32)
+            .execute()
+            .await,
+    )
+    .context("add link-local address to tap")?;
+
+    // Remove rules in the local route table that have to do with our pod ips.
+    let local_query = RouteMessageBuilder::<Ipv4Addr>::new()
+        .table_id(ROUTE_TABLE_LOCAL as u32)
+        .build();
+    let mut local_routes = handle.route().get(local_query).execute();
+    while let Some(route) = local_routes.try_next().await? {
+        if route.header.table != ROUTE_TABLE_LOCAL {
+            continue;
+        }
+        let mut dst_matches = false;
+        let mut oif_matches = false;
+        for attr in &route.attributes {
+            match attr {
+                RouteAttribute::Destination(RouteAddress::Inet(v4)) if pod_addrs.contains(v4) => {
+                    dst_matches = true;
+                }
+                RouteAttribute::Oif(idx) if *idx == virt_index => {
+                    oif_matches = true;
+                }
+                _ => {}
+            }
+        }
+        if dst_matches && oif_matches && route.header.destination_prefix_length == IPV4_HOST_PREFIX
+        {
+            handle
+                .route()
+                .del(route)
+                .execute()
+                .await
+                .context("delete local route for pod ip on virt iface")?;
+        }
+    }
+
+    // Add a route for each pod ip via the tap interface.
+    for pod_addr in pod_addrs {
+        let route_msg = RouteMessageBuilder::<Ipv4Addr>::new()
+            .destination_prefix(*pod_addr, IPV4_HOST_PREFIX)
+            .output_interface(tap_index)
+            .scope(RouteScope::Link)
+            .build();
+        ignore_eexist(handle.route().add(route_msg).execute().await)
+            .with_context(|| format!("add route for pod ip {pod_addr} via tap"))?;
+    }
+
+    Ok(())
 }
 
 fn ipv4_workload_addresses(addresses: impl IntoIterator<Item = IpAddr>) -> Result<Vec<Ipv4Addr>> {
