@@ -31,9 +31,18 @@ setup() {
     auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
-@test "Trusted ephemeral data storage" {
+@test "Trusted ephemeral data storage preserves data across container reuse" {
     kubectl apply -f "${yaml_file}"
     kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+
+    pod_uid="$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.uid}')"
+    sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+    [[ -n "${sandbox_id}" ]]
+    container_id="$(kubectl get pod "${pod_name}" -o jsonpath='{.status.containerStatuses[0].containerID}')"
+    [[ -n "${container_id}" ]]
+    [[ "$(kubectl get pod "${pod_name}" -o jsonpath='{.status.initContainerStatuses[0].state.terminated.exitCode}')" == "0" ]]
+    [[ "$(kubectl get pod "${pod_name}" -o jsonpath='{.status.containerStatuses[0].restartCount}')" == "0" ]]
+    [[ "$(kubectl exec "${pod_name}" -c busybox -- cat "${mountpoint}/init.txt")" == "shared-storage-sentinel" ]]
 
     # With long device names, df adds line breaks by default, so we pass -P to prevent that.
     emptydir_df="$(kubectl exec "${pod_name}" -- df -PT -B1 "${mountpoint}" | tail -n +2)"
@@ -82,6 +91,18 @@ setup() {
 
     kubectl exec "${pod_name}" -- sh -c "echo foo > '${mountpoint}/foo.txt'"
     [[ "$(kubectl exec "${pod_name}" -- cat "${mountpoint}/foo.txt")" == "foo" ]]
+
+    kubectl exec "${pod_name}" -c busybox -- touch /tmp/restart
+    kubectl wait --for=jsonpath='{.status.containerStatuses[0].restartCount}'=1 \
+        --timeout="${timeout}" pod "${pod_name}"
+    kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+
+    [[ "$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.uid}')" == "${pod_uid}" ]]
+    [[ "$(get_pod_sandbox_id "${pod_name}")" == "${sandbox_id}" ]]
+    restarted_container_id="$(kubectl get pod "${pod_name}" -o jsonpath='{.status.containerStatuses[0].containerID}')"
+    [[ -n "${restarted_container_id}" && "${restarted_container_id}" != "${container_id}" ]]
+    [[ "$(kubectl exec "${pod_name}" -c busybox -- cat "${mountpoint}/init.txt")" == "shared-storage-sentinel" ]]
+    [[ "$(kubectl exec "${pod_name}" -c busybox -- cat "${mountpoint}/foo.txt")" == "foo" ]]
 }
 
 teardown() {

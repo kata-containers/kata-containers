@@ -11,11 +11,22 @@ spec:
     runAsGroup: 0
     supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
   runtimeClassName: kata
-  restartPolicy: Never
+  restartPolicy: Always
+  initContainers:
+  - image: quay.io/kata-containers/alpine:3.22.1-cryptsetup
+    name: init
+    command:
+    - sh
+    - -c
+    - echo shared-storage-sentinel > /mnt/temp-encrypted/init.txt
+    volumeMounts:
+    - name: temp-encrypted
+      mountPath: /mnt/temp-encrypted
   containers:
   - image: quay.io/kata-containers/alpine:3.22.1-cryptsetup
     name: busybox
-    command: ["sleep", "infinity"]
+    # The restart trigger is container-private, not on the shared volume.
+    command: ["sh", "-c", "while [ ! -f /tmp/restart ]; do sleep 1; done"]
     securityContext:
       capabilities:
         # Only needed to use cryptsetup in the test code (to access /dev/mapper/control).
