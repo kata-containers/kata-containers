@@ -57,9 +57,6 @@ const (
 	// DragonballHypervisor is the Dragonball hypervisor.
 	DragonballHypervisor HypervisorType = "dragonball"
 
-	// VirtFrameworkHypervisor is the Darwin Virtualization.framework hypervisor
-	VirtframeworkHypervisor HypervisorType = "virtframework"
-
 	// RemoteHypervisor is the Remote hypervisor.
 	RemoteHypervisor HypervisorType = "remote"
 
@@ -100,8 +97,6 @@ var (
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
-// TODO (dcantah): Find a suitable value for darwin/vfw. Seems perf degrades if > number of host
-// cores.
 var defaultMaxVCPUs = govmm.MaxVCPUs()
 
 // MaxVCPUs returns the vCPU limit supported by Kata for this hypervisor.
@@ -400,9 +395,6 @@ func (hType *HypervisorType) Set(value string) error {
 		return nil
 	case "dragonball":
 		*hType = DragonballHypervisor
-		return nil
-	case "virtframework":
-		*hType = VirtframeworkHypervisor
 		return nil
 	case "remote":
 		*hType = RemoteHypervisor
