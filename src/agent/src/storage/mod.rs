@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::fd::AsFd;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Weak};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{
@@ -26,7 +26,7 @@ use rustix::mount::{
     FsMountFlags, FsOpenFlags, MountAttrFlags, MoveMountFlags,
 };
 use slog::Logger;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::instrument;
 
 use self::bind_watcher_handler::BindWatcherHandler;
@@ -52,6 +52,11 @@ const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
 const EXEC_MASK: u32 = 0o110;
 const MODE_SETGID: u32 = 0o2000;
+
+lazy_static! {
+    static ref STORAGE_MOUNT_LOCKS: std::sync::Mutex<HashMap<PathBuf, Weak<Mutex<()>>>> =
+        std::sync::Mutex::new(HashMap::new());
+}
 
 #[derive(Debug)]
 pub struct StorageContext<'a> {
@@ -340,6 +345,8 @@ pub async fn add_storages(
 
         // Standard storage handling
         let path = storage.mount_point.clone();
+        // Wait before reserving storage so cancellation cannot leave a placeholder.
+        let _setup_lock = lock_storage_target(&path).await?;
         let state = sandbox
             .lock()
             .await
@@ -498,6 +505,26 @@ fn mount_overlay_new_api(storage: &Storage) -> Result<()> {
         MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
     )?;
     Ok(())
+}
+
+async fn lock_storage_target(path: &str) -> Result<OwnedMutexGuard<()>> {
+    let absolute_path = std::path::absolute(path).context("Could not resolve mountpoint")?;
+    // Resolve aliases even when the destination has not been created yet.
+    let canonical_path =
+        safe_path::scoped_join("/", absolute_path).context("Could not resolve mountpoint")?;
+    let lock = {
+        let mut locks = STORAGE_MOUNT_LOCKS
+            .lock()
+            .map_err(|e| anyhow!("storage mount lock registry poisoned: {}", e))?;
+        locks.retain(|_, lock| lock.strong_count() != 0);
+        let lock = locks
+            .get(&canonical_path)
+            .and_then(Weak::upgrade)
+            .unwrap_or_else(|| Arc::new(Mutex::new(())));
+        locks.insert(canonical_path, Arc::downgrade(&lock));
+        lock
+    };
+    Ok(lock.lock_owned().await)
 }
 
 // mount_storage performs the mount described by the storage structure.
@@ -789,8 +816,8 @@ mod tests {
         assert!(is_mounted(&storage.mount_point).unwrap());
     }
 
-    #[test]
-    fn test_storage_mount_rollback_on_ownership_error() {
+    #[tokio::test]
+    async fn test_storage_mount_rollback_on_ownership_error() {
         skip_if_not_root!();
 
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -873,8 +900,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_storage_mount_rollback_on_bind_with_propagation() {
+    #[tokio::test]
+    async fn test_storage_mount_rollback_on_bind_with_propagation() {
         skip_if_not_root!();
 
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -922,9 +949,179 @@ mod tests {
     }
 
     #[rstest::rstest]
+    #[case::ownership(false, true, false, false)]
+    #[case::ephemeral_fsgid(true, true, false, false)]
+    #[case::independent_target(false, false, false, false)]
+    #[case::cancelled_waiter(false, true, true, false)]
+    #[case::cancelled_symlink_waiter(false, true, true, true)]
+    #[tokio::test]
+    async fn test_storage_mount_rollback_with_concurrent_alias_setup(
+        #[case] ephemeral: bool,
+        #[case] aliased: bool,
+        #[case] cancel_waiter: bool,
+        #[case] symlink: bool,
+    ) {
+        struct PauseOwnership {
+            ready: std::sync::mpsc::Sender<()>,
+            resume: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+        }
+
+        impl slog::Drain for PauseOwnership {
+            type Ok = ();
+            type Err = slog::Never;
+
+            fn log(
+                &self,
+                record: &slog::Record,
+                _values: &slog::OwnedKVList,
+            ) -> std::result::Result<(), slog::Never> {
+                if record.msg().to_string() == "performing recursive ownership change" {
+                    self.ready.send(()).unwrap();
+                    self.resume
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(std::time::Duration::from_secs(10))
+                        .unwrap();
+                }
+                Ok(())
+            }
+        }
+
+        skip_if_not_root!();
+
+        let logger = Logger::root(slog::Discard, o!());
+        let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+        let root = tempdir().unwrap();
+        let mount_point = root.path().join("mount");
+        let storage = Storage {
+            driver: if ephemeral {
+                kata_types::device::DRIVER_EPHEMERAL_TYPE
+            } else {
+                kata_types::device::DRIVER_VIRTIOFS_TYPE
+            }
+            .to_string(),
+            source: "tmpfs".to_string(),
+            fstype: "tmpfs".to_string(),
+            mount_point: mount_point.to_str().unwrap().to_string(),
+            options: vec![if ephemeral { "fsgid=invalid" } else { "ro" }.to_string()],
+            fs_group: Some(FSGroup {
+                group_id: 1234,
+                ..Default::default()
+            })
+            .into(),
+            shared: true,
+            ..Default::default()
+        };
+        scopeguard::defer! {
+            if is_mounted(&storage.mount_point).unwrap() {
+                nix::mount::umount(&mount_point).unwrap();
+            }
+        }
+
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        let failing_logger = Logger::root(
+            PauseOwnership {
+                ready: ready_tx,
+                resume: std::sync::Mutex::new(resume_rx),
+            },
+            o!(),
+        );
+        let failing_sandbox = sandbox.clone();
+        let failing_storage = storage.clone();
+        let failing_setup = std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(add_storages(
+                    failing_logger,
+                    vec![failing_storage],
+                    &failing_sandbox,
+                    None,
+                    false,
+                ))
+        });
+        ready_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
+
+        let alias = if symlink {
+            let parent_alias = root.path().join("parent-alias");
+            std::os::unix::fs::symlink(root.path(), &parent_alias).unwrap();
+            parent_alias.join("mount")
+        } else if aliased {
+            root.path().join(".").join("mount")
+        } else {
+            root.path().join("other")
+        }
+        .display()
+        .to_string();
+        scopeguard::defer! {
+            if is_mounted(&alias).unwrap() {
+                nix::mount::umount(alias.as_str()).unwrap();
+            }
+        }
+        let adopting_storage = Storage {
+            driver: kata_types::device::DRIVER_VIRTIOFS_TYPE.to_string(),
+            mount_point: alias.clone(),
+            options: if ephemeral {
+                vec![]
+            } else {
+                vec!["ro".to_string()]
+            },
+            fs_group: None.into(),
+            ..storage.clone()
+        };
+        let mut adopting_setup = Box::pin(add_storages(
+            logger.clone(),
+            vec![adopting_storage.clone()],
+            &sandbox,
+            None,
+            false,
+        ));
+        let first_poll = futures::poll!(adopting_setup.as_mut());
+        let was_pending = first_poll.is_pending();
+        if cancel_waiter {
+            drop(adopting_setup);
+            resume_tx.send(()).unwrap();
+            assert!(failing_setup.join().unwrap().is_err());
+            assert!(was_pending);
+            assert!(!sandbox.lock().await.storages.contains_key(&alias));
+            assert!(!is_mounted(&alias).unwrap());
+            let mounts = add_storages(logger, vec![adopting_storage], &sandbox, None, false)
+                .await
+                .unwrap();
+            assert_eq!(mounts, vec![alias.clone()]);
+            assert!(is_mounted(&alias).unwrap());
+            return;
+        }
+        resume_tx.send(()).unwrap();
+        let error = failing_setup.join().unwrap().unwrap_err();
+        if ephemeral {
+            assert!(error.downcast_ref::<std::num::ParseIntError>().is_some());
+        } else {
+            assert_eq!(
+                error.downcast_ref::<nix::errno::Errno>(),
+                Some(&nix::errno::Errno::EROFS)
+            );
+        }
+        assert_eq!(was_pending, aliased);
+        let mounts = match first_poll {
+            std::task::Poll::Ready(result) => result,
+            std::task::Poll::Pending => adopting_setup.await,
+        }
+        .unwrap();
+        assert_eq!(mounts, vec![alias.clone()]);
+        assert!(sandbox.lock().await.storages.contains_key(&alias));
+        assert!(is_mounted(&alias).unwrap());
+    }
+
+    #[rstest::rstest]
     #[case::new_mount(false)]
     #[case::remount(true)]
-    fn test_storage_mount_rollback_preserves_interleaved_alias_mount(#[case] remount: bool) {
+    #[tokio::test]
+    async fn test_storage_mount_rollback_preserves_interleaved_alias_mount(#[case] remount: bool) {
         struct MountBeforeBaremount {
             mount_point: std::path::PathBuf,
         }
@@ -993,8 +1190,8 @@ mod tests {
         assert!(is_mounted(&storage.mount_point).unwrap());
     }
 
-    #[test]
-    fn test_mount_storage() {
+    #[tokio::test]
+    async fn test_mount_storage() {
         #[derive(Debug)]
         struct TestData<'a> {
             test_user: TestUserType,
