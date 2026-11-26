@@ -10,7 +10,6 @@ use std::convert::TryFrom;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::handler::HandlerManager;
-use crate::prefix_with_rootless_dir;
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -34,8 +33,8 @@ pub const KATA_MOUNT_INFO_FILE_NAME: &str = "mountInfo.json";
 /// Specify `fsgid` for a volume or mount, `fsgid=1`.
 pub const KATA_MOUNT_OPTION_FS_GID: &str = "fsgid";
 
-/// DEFAULT_KATA_DIRECT_VOLUME_ROOT_PATH is the default root path used for concatenating with the direct-volume mount info file path
-pub const DEFAULT_KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/direct-volumes";
+/// KATA_DIRECT_VOLUME_ROOT_PATH is the root path used for concatenating with the direct-volume mount info file path
+pub const KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/direct-volumes";
 
 /// Key to indentify directory creation in `Storage.driver_options`.
 pub const KATA_VOLUME_OVERLAYFS_CREATE_DIR: &str =
@@ -83,11 +82,6 @@ pub const SHM_DEVICE: &str = "/dev/shm";
 
 /// Manager to manage registered storage device handlers.
 pub type StorageHandlerManager<H> = HandlerManager<H>;
-
-/// Get the root path used for concatenating with the direct-volume mount info file path.
-pub fn kata_direct_volume_root_path() -> String {
-    prefix_with_rootless_dir(DEFAULT_KATA_DIRECT_VOLUME_ROOT_PATH)
-}
 
 /// Get the sandbox bind mounts directory.
 pub fn kata_guest_sandbox_dir() -> String {
@@ -524,7 +518,7 @@ pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
 /// `safe_path` is OS-specific.
 #[cfg(feature = "safe-path")]
 pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
-    let volume_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
+    let volume_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
     let mount_info_file_path = volume_path.join(KATA_MOUNT_INFO_FILE_NAME);
     let mount_info_file = std::fs::read_to_string(mount_info_file_path)?;
     let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
@@ -536,12 +530,12 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
 /// for the given `volume_path`.
 #[cfg(feature = "safe-path")]
 pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountInfo) -> Result<()> {
-    let root = kata_direct_volume_root_path();
+    let root = KATA_DIRECT_VOLUME_ROOT_PATH;
     // safe_path::scoped_join requires the root to exist; ensure it does before
     // calling join_path (mirrors Go's os.MkdirAll behaviour in AddMountInfo).
-    std::fs::create_dir_all(&root)
+    std::fs::create_dir_all(root)
         .with_context(|| format!("failed to create direct-volume root {:?}", root))?;
-    let dir = join_path(&root, volume_path)?;
+    let dir = join_path(root, volume_path)?;
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create direct-volume dir {:?}", dir))?;
     let file_path = dir.join(KATA_MOUNT_INFO_FILE_NAME);
@@ -561,9 +555,9 @@ pub fn is_volume_mounted(volume_path: &str) -> bool {
 /// Removes the direct-volume metadata directory for the given `volume_path`.
 #[cfg(feature = "safe-path")]
 pub fn remove_volume_path(volume_path: &str) -> Result<()> {
-    let root = kata_direct_volume_root_path();
+    let root = KATA_DIRECT_VOLUME_ROOT_PATH;
     // join_path() fails on a missing root, which holds nothing to remove.
-    match std::fs::metadata(&root) {
+    match std::fs::metadata(root) {
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => {
@@ -571,7 +565,7 @@ pub fn remove_volume_path(volume_path: &str) -> Result<()> {
                 .with_context(|| format!("failed to inspect direct-volume root {:?}", root))
         }
     }
-    let dir = join_path(root.as_str(), volume_path)?;
+    let dir = join_path(root, volume_path)?;
     if dir.exists() {
         std::fs::remove_dir_all(&dir)
             .with_context(|| format!("failed to remove direct-volume dir {:?}", dir))?;
