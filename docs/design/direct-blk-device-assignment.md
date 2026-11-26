@@ -77,7 +77,7 @@ type MountInfo struct {
 `metadata` is not passed to the agent as a whole. The runtime reads the keys it knows and ignores the rest, for example:
 
 - `num_queues` and `queue_size` set up an SPDK vhost-user block volume.
-- `io.katacontainers.volume.format` and `io.katacontainers.volume.discard` describe a qcow2 volume. Only `runtime-rs` with QEMU supports these; see [qcow2 volumes](../how-to/how-to-run-kata-containers-with-kinds-of-Block-Volumes.md#qcow2-volumes-and-thin-provisioning).
+- `io.katacontainers.volume.format`, `io.katacontainers.volume.backing-chain` and `io.katacontainers.volume.discard` describe a qcow2 volume. Only `runtime-rs` with QEMU supports these; see [qcow2 volumes](../how-to/how-to-run-kata-containers-with-kinds-of-Block-Volumes.md#qcow2-volumes-thin-provisioning-and-read-only-backing-images).
 Notes: given that the `mountInfo` is persisted to the disk by the Kata runtime, it shouldn't container any secrets (such as SMB mount password).
 
 ## Implementation Details
