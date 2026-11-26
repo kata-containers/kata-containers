@@ -52,7 +52,7 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.arch }}-${{ toJSON(matrix) }}
+      group: ${{ github.workflow }}-build-tools-asset-${{ github.event.pull_request.number || github.ref }}-${{ inputs.arch }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
@@ -110,7 +110,7 @@ jobs:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.arch }}
+      group: ${{ github.workflow }}-create-kata-tools-tarball-${{ github.event.pull_request.number || github.ref }}-${{ inputs.arch }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
