@@ -19,6 +19,25 @@ import sys
 import yaml
 
 
+def changed_files(target_branch):
+    """
+    Get the files changed in HEAD since it diverged from `target_branch`
+
+    Diffing against the merge base, rather than the tip of the target branch,
+    means that changes merged upstream after the branch was created are not
+    counted as part of this change. Uncommitted edits are ignored as well.
+
+    :param target_branch: branch to compare to
+    :returns: List of changed file paths
+    """
+    base = subprocess.check_output(
+        ["git", "merge-base", "HEAD", f"origin/{target_branch}"]).decode().strip()
+    # Disabling rename detection reports both sides of a move
+    cmd = ["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"]
+    return [os.fsdecode(_) for _ in subprocess.check_output(cmd).split(b'\0')
+            if _]
+
+
 class Checks:
     def __init__(self):
         config_path = os.path.join(os.path.dirname(__file__), "required-tests.yaml")
@@ -81,14 +100,11 @@ class Checks:
         :param target_branch: branch/commit to compare to
         :returns: List of set-of-tests
         """
-        cmd = ["git", "diff", "--name-only", f"origin/{target_branch}"]
-        changed_files = [_.decode("utf-8")
-                         for _ in subprocess.check_output(cmd).split(b'\n')
-                         if _.strip()]
-        print('\n'.join(changed_files), file=sys.stderr)
+        changed = changed_files(target_branch)
+        print('\n'.join(changed), file=sys.stderr)
         enabled_features = set()
         # Go through lines and find what features should be covered
-        for changed_file in changed_files:
+        for changed_file in changed:
             for regexp, features in self.paths.items():
                 if regexp.search(changed_file):
                     for feature in features:
