@@ -904,7 +904,34 @@ impl Qmp {
                     }
                 };
 
-                self.qmp.execute(&qmp::device_del { id: frontend_id })?;
+                self.qmp.execute(&qmp::device_del {
+                    id: frontend_id.clone(),
+                })?;
+
+                if let Err(wait_err) =
+                    self.wait_for_device_deleted(&frontend_id, DEVICE_DELETED_TIMEOUT)
+                {
+                    match self.device_exists(&frontend_id) {
+                        // The device is gone, the error from wait_for_device_deleted()
+                        // was either a timeout and the device was removed in the
+                        // meantime between the timeout and now, or DEVICE_DELETED event
+                        // was missed for whatever reason.  Fall through to reap the backend.
+                        Ok(false) => {}
+                        Ok(true) => return Err(wait_err).context(
+                            format!(
+                                "hotunplug_pc_dimm(): waiting for memory device hotunplug {}",
+                                frontend_id
+                            )
+                        ),
+                        Err(query_err) => return Err(anyhow!(
+                            "waiting for memory device {} hotunplug failed: {:#}; state reconciliation failed: {:#}",
+                            frontend_id,
+                            wait_err,
+                            query_err
+                        )),
+                    };
+                }
+
                 self.qmp.execute(&qmp::object_del { id: backend_id })?;
             } else {
                 // This shouldn't happen as it was checked by find() above already.
