@@ -367,10 +367,10 @@ pub async fn add_storages(
             };
             handler.create_device(storage.clone(), &mut ctx).await
         } else {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "Failed to find the storage handler {}",
                 storage.driver
-            ));
+            ))
         };
 
         match device {
@@ -647,6 +647,41 @@ mod tests {
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
+
+    #[tokio::test]
+    async fn test_failed_shared_storage_retry() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        for (driver, expected_error) in [
+            ("missing-handler", "Failed to find the storage handler"),
+            (
+                kata_types::device::DRIVER_VIRTIOFS_TYPE,
+                "need mount FS type",
+            ),
+        ] {
+            let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
+            let root = tempdir().unwrap();
+            let storage = Storage {
+                driver: driver.to_string(),
+                source: "tmpfs".to_string(),
+                mount_point: root.path().join("mount").display().to_string(),
+                shared: true,
+                ..Default::default()
+            };
+
+            for _ in 0..2 {
+                let error =
+                    add_storages(logger.clone(), vec![storage.clone()], &sandbox, None, false)
+                        .await
+                        .unwrap_err();
+                assert!(error.to_string().contains(expected_error), "{:#}", error);
+                assert!(!sandbox
+                    .lock()
+                    .await
+                    .storages
+                    .contains_key(&storage.mount_point));
+            }
+        }
+    }
 
     #[test]
     fn test_mount_storage() {
