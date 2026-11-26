@@ -177,6 +177,7 @@ impl RuntimeHandler for VirtContainer {
                 hypervisor.clone(),
                 config,
                 init_size_manager,
+                true,
             )
             .await?,
         );

@@ -215,6 +215,7 @@ impl TemplateVm {
                 hypervisor.clone(),
                 toml_config_arc,
                 initial_size_manager,
+                config.hypervisor_name != hypervisor::HYPERVISOR_DRAGONBALL,
             )
             .await
             .context("build resource manager")?,
