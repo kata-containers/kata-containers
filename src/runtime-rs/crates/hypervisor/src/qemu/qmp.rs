@@ -1313,16 +1313,35 @@ impl Qmp {
                 warn!(sl!(), "The QMP nop() failed for {}: {:?}", device_id, e);
             }
 
-            let found = self.qmp.events().any(|event| {
-                matches!(event, qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
-                    if data.device.as_deref() == Some(device_id))
+            // Wait for device removal can end with the guest signaling either
+            // completion with DEVICE_DELETED, or a detectable guest-side
+            // failure with DEVICE_UNPLUG_GUEST_ERROR. Some guest-side failures
+            // cannot be detected at all and only show up as a timeout.
+            let outcome = self.qmp.events().find_map(|event| match event {
+                qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
+                    if data.device.as_deref() == Some(device_id) =>
+                {
+                    Some(Ok(()))
+                }
+                qapi_qmp::Event::DEVICE_UNPLUG_GUEST_ERROR { ref data, .. }
+                    if data.device.as_deref() == Some(device_id) =>
+                {
+                    Some(Err(anyhow!(
+                        "guest reported an error unplugging {}, it will not be removed",
+                        device_id
+                    )))
+                }
+                _ => None,
             });
-            if found {
-                info!(
-                    sl!(),
-                    "The QMP received DEVICE_DELETED event for {}", device_id
-                );
-                break Ok(());
+            if let Some(outcome) = outcome {
+                match &outcome {
+                    Ok(()) => info!(
+                        sl!(),
+                        "The QMP received DEVICE_DELETED event for {}", device_id
+                    ),
+                    Err(e) => warn!(sl!(), "{}", e),
+                }
+                break outcome;
             }
 
             let now = Instant::now();
