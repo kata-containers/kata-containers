@@ -517,6 +517,7 @@ impl RuntimeHandlerManager {
             let tracer = self.get_kata_tracer().await;
             let root = tracer.lock().await.root_span();
             let Some(root) = root else {
+                let _ = tokio::time::timeout(TRACING_DRAIN_TIMEOUT, drain_requests).await;
                 return Ok(());
             };
             let drain_deadline = tokio::time::Instant::now() + TRACING_DRAIN_TIMEOUT;
@@ -1657,11 +1658,11 @@ mod tests {
         assert!(matches!(msg.action, Action::Shutdown));
 
         tokio::time::timeout(
-            Duration::from_millis(500),
+            TRACING_DRAIN_TIMEOUT + Duration::from_millis(500),
             manager.finish_tracing(std::future::pending()),
         )
         .await
-        .expect("disabled tracing must not delay service shutdown");
+        .expect("disabled tracing must bound the request drain");
     }
 
     // Records every process a waiter is spawned for.
