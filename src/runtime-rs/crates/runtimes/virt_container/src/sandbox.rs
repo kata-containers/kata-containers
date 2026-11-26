@@ -205,6 +205,9 @@ pub struct VirtSandbox {
     rescan_lock: Arc<Mutex<()>>,
     cleanup_steps: Arc<Mutex<CleanupSteps>>,
     shutdown_started: Arc<AtomicBool>,
+    // Cancelled when the teardown spawned by shutdown() is done and
+    // Action::Shutdown is queued.
+    shutdown_done: CancellationToken,
     teardown_started: Arc<AtomicBool>,
     // Held until the container exit is on the channel, which shutdown() waits
     // for before it breaks the service loop.
@@ -449,6 +452,7 @@ impl VirtSandbox {
             rescan_lock: Arc::new(Mutex::new(())),
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
+            shutdown_done: CancellationToken::new(),
             teardown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
             exit_pending: Arc::new(watch::channel(false).0),
@@ -1982,8 +1986,12 @@ impl Sandbox for VirtSandbox {
                 if let Err(e) = sender.send(Message::new(Action::Shutdown)).await {
                     error!(sl!(), "failed to send shutdown message: {:?}", e);
                 }
+                sandbox.shutdown_done.cancel();
             });
         }
+        // `shim delete` follows the reply and kills what is left in the
+        // sandbox cgroup, this shim included, so reply after the teardown.
+        self.shutdown_done.cancelled().await;
         Ok(())
     }
 
@@ -2517,6 +2525,7 @@ impl Persist for VirtSandbox {
             rescan_lock: Arc::new(Mutex::new(())),
             cleanup_steps: Arc::new(Mutex::new(CleanupSteps::default())),
             shutdown_started: Arc::new(AtomicBool::new(false)),
+            shutdown_done: CancellationToken::new(),
             teardown_started: Arc::new(AtomicBool::new(false)),
             publishing_exit: Arc::new(Mutex::new(())),
             exit_pending: Arc::new(watch::channel(false).0),
