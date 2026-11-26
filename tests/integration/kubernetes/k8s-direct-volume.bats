@@ -74,22 +74,22 @@ require_qcow2_support() {
 		die "Direct-volume qcow2 tool qemu-img is not installed on ${node}"
 }
 
-# Register a thin qcow2 direct volume whose filesystem holds the given marker.
-# The filesystem is built in a raw image, which is then converted to qcow2.
+# Register a qcow2 direct volume whose filesystem holds the given marker.
+#
+# chain: the filesystem is in a raw base image, under an empty qcow2 top that
+#        takes all writes.
+# thin:  the filesystem is converted into a thin qcow2 image of its own.
+#
 # With "unmap" as the discard mode, QEMU frees the clusters the guest discards,
 # and the guest mounts the filesystem with "discard" so that it sends them.
 prepare_qcow2_volume() {
-	local marker="$1"
-	local discard="${2:-}"
+	local layout="$1"
+	local marker="$2"
+	local discard="${3:-}"
+	local chain
 	local info
 	local metadata='{"io.katacontainers.volume.format": "qcow2"}'
 	local options='[]'
-
-	if [[ -n "${discard}" ]]; then
-		metadata="$(jq -cn --arg discard "${discard}" \
-			'{"io.katacontainers.volume.format": "qcow2", "io.katacontainers.volume.discard": $discard}')"
-		options='["discard"]'
-	fi
 
 	exec_host "${node}" "set -e; \
 		rm -rf '${volume_path}' '${disk_path}' '${base_path}' '${seed_path}'; \
@@ -98,9 +98,24 @@ prepare_qcow2_volume() {
 		truncate -s 64M '${base_path}'; \
 		mkfs.ext4 -F -q -d '${seed_path}' '${base_path}'; \
 		rm -rf '${seed_path}'; \
-		qemu-img convert -q -f raw -O qcow2 '${base_path}' '${disk_path}'; \
-		rm -f '${base_path}'; \
+		if [ '${layout}' = chain ]; then \
+			qemu-img create -q -f qcow2 -F raw -b '${base_path}' '${disk_path}'; \
+		else \
+			qemu-img convert -q -f raw -O qcow2 '${base_path}' '${disk_path}'; \
+			rm -f '${base_path}'; \
+		fi; \
 		echo qcow2-ready" | grep -qx qcow2-ready
+
+	if [[ "${layout}" == chain ]]; then
+		chain="$(jq -cn --arg path "${base_path}" '[{path: $path, format: "raw"}]')"
+		metadata="$(jq -cn --argjson metadata "${metadata}" --arg chain "${chain}" \
+			'$metadata + {"io.katacontainers.volume.backing-chain": $chain}')"
+	fi
+	if [[ -n "${discard}" ]]; then
+		metadata="$(jq -cn --argjson metadata "${metadata}" --arg discard "${discard}" \
+			'$metadata + {"io.katacontainers.volume.discard": $discard}')"
+		options='["discard"]'
+	fi
 
 	info="$(jq -cn --arg device "${disk_path}" --argjson metadata "${metadata}" \
 		--argjson options "${options}" \
@@ -109,6 +124,17 @@ prepare_qcow2_volume() {
 	exec_host "${node}" \
 		"/opt/kata/bin/kata-ctl direct-volume add '${volume_path}' '${info}' && echo direct-volume-ready" | \
 		grep -qx direct-volume-ready
+}
+
+# Without sha256sum both digests would be empty and compare equal, so reject
+# anything that is not a digest.
+host_sha256() {
+	local digest
+
+	digest="$(exec_host "${node}" "sha256sum '$1' | cut -d' ' -f1")"
+	[[ "${digest}" =~ ^[0-9a-f]{64}$ ]] || \
+		die "Cannot compute the sha256 of $1 on ${node}: '${digest}'"
+	echo "${digest}"
 }
 
 setup() {
@@ -184,6 +210,29 @@ setup() {
 		die "Direct-volume backing file was preallocated during attach"
 }
 
+@test "DAV mounts a qcow2 volume over a read-only raw base" {
+	local backing_marker="dav-qcow2-chain-${volume_id}"
+	local base_before
+	local base_after
+
+	require_qcow2_support
+	prepare_qcow2_volume chain "${backing_marker}"
+	base_before="$(host_sha256 "${base_path}")"
+
+	kubectl apply -f "${yaml_file}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	# The marker can only come from the base image.
+	assert_guest_direct_volume "${backing_marker}"
+	pod_exec "${pod_name}" sh -c \
+		"printf '%s\n' direct-volume-ready > '${mountpoint}/probe' && sync && \
+		grep -qx direct-volume-ready '${mountpoint}/probe'"
+
+	# Writes land in the qcow2 top, never in the shared base.
+	base_after="$(host_sha256 "${base_path}")"
+	info "qcow2 base sha256 before: ${base_before}, after: ${base_after}"
+	[[ "${base_before}" == "${base_after}" ]] || die "The read-only base image was modified"
+}
+
 @test "DAV mounts a thin qcow2 volume" {
 	local backing_marker="dav-qcow2-thin-${volume_id}"
 	local allocated_after
@@ -191,7 +240,7 @@ setup() {
 	local virtual_size=$((64 * 1024 * 1024))
 
 	require_qcow2_support
-	prepare_qcow2_volume "${backing_marker}"
+	prepare_qcow2_volume thin "${backing_marker}"
 	allocated_before="$(host_allocated_bytes "${disk_path}")"
 	info "thin qcow2 allocated bytes before attach: ${allocated_before} of ${virtual_size}"
 	(( allocated_before < virtual_size / 2 )) || die "Test qcow2 image is not thin before attach"
@@ -221,7 +270,7 @@ setup() {
 	local deadline
 
 	require_qcow2_support
-	prepare_qcow2_volume "${backing_marker}" unmap
+	prepare_qcow2_volume thin "${backing_marker}" unmap
 
 	kubectl apply -f "${yaml_file}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
