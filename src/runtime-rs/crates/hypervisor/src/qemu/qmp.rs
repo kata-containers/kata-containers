@@ -19,7 +19,10 @@ use qapi_qmp::{
     BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
     MigrationInfo, PciDeviceInfo,
 };
-use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
+use qapi_qmp::{
+    migrate, migrate_incoming, migrate_set_capabilities, migrate_set_parameters,
+    MigrateSetParameters,
+};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -32,8 +35,21 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use qapi_spec::Dictionary;
+use serde::Serialize;
 use std::thread;
 use std::time::Instant;
+
+#[derive(Serialize)]
+struct MigrateSetMode {
+    mode: &'static str,
+}
+
+impl qapi_spec::Command for MigrateSetMode {
+    type Ok = qapi_spec::Empty;
+
+    const NAME: &'static str = "migrate-set-parameters";
+    const ALLOW_OOB: bool = false;
+}
 
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 5000;
@@ -286,12 +302,122 @@ impl Qmp {
         }
     }
 
-    pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
+    fn hotplugged_pci_path(
+        &mut self,
+        qdev_id: &str,
+        bridge_id: &str,
+        slot: i64,
+    ) -> Result<PciPath> {
+        match self.get_device_by_qdev_id(qdev_id) {
+            Ok(path) => Ok(path),
+            Err(device_err) => {
+                let bridge_path = self.get_device_by_qdev_id(bridge_id).with_context(|| {
+                    format!(
+                        "get hotplugged device {qdev_id} failed ({device_err:#}); bridge {bridge_id} was not found"
+                    )
+                })?;
+                append_pci_slot(&bridge_path, slot).with_context(|| {
+                    format!(
+                        "derive PCI path for hotplugged device {qdev_id} on {bridge_id} slot {slot}"
+                    )
+                })
+            }
+        }
+    }
+
+    pub fn set_migration_bandwidth(&mut self, bytes_per_second: u64) -> Result<()> {
+        self.qmp
+            .execute(&migrate_set_parameters(MigrateSetParameters {
+                max_bandwidth: Some(bytes_per_second),
+                ..Default::default()
+            }))
+            .map(|_| ())
+            .context("set migration bandwidth")
+    }
+
+    pub fn set_cpr_reboot_mode(&mut self) -> Result<()> {
+        self.qmp
+            .execute(&MigrateSetMode { mode: "cpr-reboot" })
+            .map(|_| ())
+            .context("set CPR reboot migration mode")
+    }
+
+    pub fn set_normal_migration_mode(&mut self) -> Result<()> {
+        self.qmp
+            .execute(&MigrateSetMode { mode: "normal" })
+            .map(|_| ())
+            .context("set normal migration mode")
+    }
+
+    pub fn cancel_migration(&mut self) -> Result<()> {
+        self.qmp
+            .execute(&qmp::migrate_cancel {})
+            .map(|_| ())
+            .context("cancel migration")
+    }
+
+    /// Save the hotplugged DIMM topology for workload restore.
+    pub(crate) fn save_memory_topology(&mut self, path: &std::path::Path) -> Result<()> {
+        let dimms = self
+            .qmp
+            .execute(&qapi_qmp::query_memory_devices {})?
+            .into_iter()
+            .filter_map(|device| match device {
+                qapi_qmp::MemoryDeviceInfo::dimm(info) if info.data.hotplugged => Some(info.data),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        std::fs::write(path, serde_json::to_vec(&dimms)?)?;
+        std::fs::File::open(path)?.sync_all()?;
+
+        Ok(())
+    }
+
+    pub(crate) fn restore_memory_topology(&mut self, path: &std::path::Path) -> Result<()> {
+        let bytes = std::fs::read(path)
+            .with_context(|| format!("read checkpoint memory topology {}", path.display()))?;
+
+        let mut dimms: Vec<qapi_qmp::PCDIMMDeviceInfo> = serde_json::from_slice(&bytes)?;
+        dimms.sort_by_key(|dimm| dimm.slot);
+        for dimm in dimms {
+            let backend = dimm
+                .memdev
+                .strip_prefix("/objects/")
+                .context("invalid checkpoint memory backend")?;
+            let index = backend
+                .strip_prefix("hotplugged-")
+                .context("unsupported checkpoint memory backend")?;
+            index
+                .parse::<usize>()
+                .context("invalid checkpoint memory backend index")?;
+            let id = dimm.id.as_deref().context("checkpoint DIMM has no id")?;
+            if id != format!("frontend-to-{backend}")
+                || dimm.size <= 0
+                || dimm.slot < 0
+                || dimm.addr < 0
+                || dimm.node < 0
+            {
+                return Err(anyhow!("invalid checkpoint DIMM topology"));
+            }
+
+            let mut properties = Dictionary::new();
+            properties.insert("slot".to_owned(), dimm.slot.into());
+            properties.insert("addr".to_owned(), dimm.addr.into());
+            properties.insert("node".to_owned(), dimm.node.into());
+
+            self.add_pc_dimm(dimm.size as u64, backend, id, properties)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_ignore_shared_memory_capability(&mut self, enabled: bool) -> Result<()> {
         self.qmp
             .execute(&migrate_set_capabilities {
                 capabilities: vec![MigrationCapabilityStatus {
                     capability: MigrationCapability::x_ignore_shared,
-                    state: true,
+                    state: enabled,
                 }],
             })
             .map(|_| ())
@@ -561,8 +687,23 @@ impl Qmp {
 
         let memory_backend_id = format!("hotplugged-{memdev_idx}");
 
+        self.add_pc_dimm(
+            size,
+            &memory_backend_id,
+            &format!("frontend-to-{memory_backend_id}"),
+            Dictionary::new(),
+        )
+    }
+
+    fn add_pc_dimm(
+        &mut self,
+        size: u64,
+        memory_backend_id: &str,
+        memory_frontend_id: &str,
+        mut mem_frontend_args: Dictionary,
+    ) -> Result<()> {
         let memory_backend = qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
-            id: memory_backend_id.clone(),
+            id: memory_backend_id.to_owned(),
             memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
                 base: qapi_qmp::MemoryBackendProperties {
                     dump: None,
@@ -588,13 +729,10 @@ impl Qmp {
         });
         self.qmp.execute(&memory_backend)?;
 
-        let memory_frontend_id = format!("frontend-to-{memory_backend_id}");
-
-        let mut mem_frontend_args = Dictionary::new();
-        mem_frontend_args.insert("memdev".to_owned(), memory_backend_id.into());
+        mem_frontend_args.insert("memdev".to_owned(), memory_backend_id.to_owned().into());
         self.qmp.execute(&qmp::device_add {
             bus: None,
-            id: Some(memory_frontend_id),
+            id: Some(memory_frontend_id.to_owned()),
             driver: "pc-dimm".to_owned(),
             arguments: mem_frontend_args,
         })?;
@@ -1395,6 +1533,7 @@ impl Qmp {
         physical_block_size: u32,
         source: &BlockSourceFormat,
         iothread: Option<&str>,
+        defer_pci_path_lookup: bool,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = block_node_name(index);
@@ -1500,7 +1639,7 @@ impl Qmp {
                     detect_zeroes: None,
                     cache: None,
                     discard: discard_option(),
-                    force_share: Some(true),
+                    force_share: if is_readonly { Some(true) } else { None },
                     auto_read_only: None,
                     node_name: Some(node_name.clone()),
                     read_only: Some(is_readonly),
@@ -1684,16 +1823,21 @@ impl Qmp {
                 blkdev_add_args,
             )?;
 
-            let pci_path = self
-                .get_device_by_qdev_id(&node_name)
-                .context("get device by qdev_id failed")?;
+            let pci_path = if defer_pci_path_lookup {
+                None
+            } else {
+                Some(
+                    self.hotplugged_pci_path(&node_name, &bus, slot)
+                        .context("get device by qdev_id failed")?,
+                )
+            };
             self.record_pci_bridge_slot(&bus, slot, &node_name);
             info!(
                 sl!(),
                 "hotplug block device return pci path: {:?}", &pci_path
             );
 
-            Ok((Some(pci_path), None))
+            Ok((pci_path, None))
         }
     }
 
@@ -2037,6 +2181,13 @@ fn block_node_name(index: u64) -> String {
     format!("{BLOCK_NODE_PREFIX}{index}")
 }
 
+fn append_pci_slot(bridge_path: &PciPath, slot: i64) -> Result<PciPath> {
+    if !(0..=0x1f).contains(&slot) {
+        return Err(anyhow!("PCI slot {slot} is outside the valid range"));
+    }
+    PciPath::try_from(format!("{bridge_path}/{slot:02x}").as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2109,6 +2260,50 @@ mod tests {
         assert!(qmp.qmp_stop().is_err());
         thread::sleep(Duration::from_millis(400));
         assert!(!qmp.device_exists("drive-1").unwrap());
+    }
+
+    #[test]
+    fn restore_requires_memory_topology() {
+        let (stream, _peer) = UnixStream::pair().unwrap();
+        let mut qmp = Qmp {
+            qmp: QmpClient {
+                stream: qapi::Qmp::new(qapi::Stream::new(
+                    QmpReader {
+                        stream: BufReader::new(stream.try_clone().unwrap()),
+                        line: Vec::new(),
+                        complete: false,
+                    },
+                    stream,
+                )),
+                late_reply: false,
+            },
+            guest_memory_block_size: 0,
+            ccw_subchannel: None,
+            pci_bridge_devices: HashMap::new(),
+            block_fdsets: HashMap::new(),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("memory-topology.json");
+
+        let err = qmp.restore_memory_topology(&path).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::NotFound
+        );
+
+        std::fs::write(&path, b"[]").unwrap();
+        qmp.restore_memory_topology(&path).unwrap();
+    }
+
+    #[test]
+    fn derives_hotplugged_device_path_from_bridge_slot() {
+        let bridge_path = PciPath::try_from("02/00").unwrap();
+
+        assert_eq!(
+            append_pci_slot(&bridge_path, 1).unwrap().to_string(),
+            "02/00/01"
+        );
+        assert!(append_pci_slot(&bridge_path, 0x20).is_err());
     }
 
     #[test]

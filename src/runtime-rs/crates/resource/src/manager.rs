@@ -11,7 +11,7 @@ use agent::{Agent, Storage};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
-use hypervisor::Hypervisor;
+use hypervisor::{Hypervisor, VmResourceTopology};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxResources};
@@ -287,6 +287,27 @@ impl ResourceManager {
     pub async fn kill_sandbox_processes(&self, wait: std::time::Duration) -> Result<()> {
         let inner = self.inner.read().await;
         inner.cgroups_resource.kill_all_processes(wait).await
+    }
+
+    pub async fn adopt_restored_vm(&self, topology: VmResourceTopology) -> Result<()> {
+        self.inner.read().await.adopt_restored_vm(topology).await
+    }
+
+    pub async fn adopt_restored_rootfs(&self, device_ids: &[String]) -> Result<Arc<dyn Rootfs>> {
+        let inner = self.inner.read().await;
+        inner.adopt_restored_rootfs(device_ids).await
+    }
+
+    pub async fn adopt_restored_container(
+        &self,
+        cid: &str,
+        resources: Option<&LinuxResources>,
+    ) -> Result<()> {
+        self.inner
+            .read()
+            .await
+            .adopt_restored_container(cid, resources)
+            .await
     }
 }
 

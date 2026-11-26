@@ -6,8 +6,10 @@
 
 use std::{
     fs,
+    fs::OpenOptions,
+    io::Write,
     os::unix::{
-        fs::MetadataExt,
+        fs::{MetadataExt, OpenOptionsExt},
         io::{BorrowedFd, RawFd},
     },
     path::Path,
@@ -29,18 +31,16 @@ impl ShimExecutor {
         let sid = self.args.id.clone();
         let bundle_path = get_bundle_path().context("get bundle")?;
         let path = bundle_path.join("log");
-        let _logger_guard =
-            logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug).context("set logger");
+        let _logger_guard = logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug)
+            .context("set logger")?;
         // Regist shim logger for later use.
         logging::register_subsystem_logger("runtimes", "shim");
 
-        self.do_run()
-            .await
-            .map_err(|err| {
-                error!(sl!(), "failed run shim {:?}", err);
-                err
-            })
-            .context("run shim")?;
+        if let Err(err) = self.do_run().await {
+            error!(sl!(), "failed run shim {:?}", err);
+            write_fatal_error(&bundle_path, &err);
+            return Err(err).context("run shim");
+        }
 
         Ok(())
     }
@@ -86,6 +86,18 @@ fn remove_socket_if_unchanged(path: &Path, id: Option<(u64, u64)>) {
         if let Err(e) = fs::remove_file(path) {
             warn!(sl!(), "failed to remove socket {:?}: {}", path, e);
         }
+    }
+}
+
+fn write_fatal_error(bundle_path: &Path, err: &anyhow::Error) {
+    let path = bundle_path.join("shim-fatal.log");
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(path)
+    {
+        let _ = writeln!(file, "failed run shim: {err:#}");
     }
 }
 

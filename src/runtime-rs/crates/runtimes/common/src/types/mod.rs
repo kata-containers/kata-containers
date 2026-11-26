@@ -14,6 +14,7 @@ use std::{
     collections::{hash_map::RandomState, HashMap},
     fmt,
     path::PathBuf,
+    time::Duration,
 };
 
 use crate::SandboxNetworkEnv;
@@ -134,6 +135,7 @@ impl ContainerProcess {
         &self.exec_id
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct ContainerConfig {
     pub container_id: String,
@@ -148,7 +150,7 @@ pub struct ContainerConfig {
 
 #[derive(Debug, Clone, Display)]
 pub enum SandboxRequest {
-    CreateSandbox(Box<SandboxConfig>),
+    CreateSandbox(Box<CreateSandboxRequest>),
     StartSandbox(SandboxID),
     Platform(SandboxID),
     StopSandbox(StopSandboxRequest),
@@ -156,6 +158,20 @@ pub enum SandboxRequest {
     SandboxStatus(SandboxStatusRequest),
     Ping(SandboxID),
     ShutdownSandbox(SandboxID),
+    CheckpointSandbox(CheckpointSandboxRequest),
+    RestoreSandbox(Box<RestoreSandboxRequest>),
+}
+
+#[derive(Clone, Debug)]
+pub struct PrepareRestoreOptions {
+    pub checkpoint_path: String,
+    pub options: HashMap<String, String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CreateSandboxRequest {
+    pub sandbox_config: SandboxConfig,
+    pub prepare_restore: Option<PrepareRestoreOptions>,
 }
 
 /// Response: sandbox response to shim
@@ -170,6 +186,55 @@ pub enum SandboxResponse {
     SandboxStatus(SandboxStatusInfo),
     Ping,
     ShutdownSandbox,
+    CheckpointSandbox,
+    RestoreSandbox(RestoreSandboxInfo),
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxCheckpointTask {
+    pub checkpoint_key: String,
+    pub task_id: String,
+    // Resolved by the runtime container manager before tasks are frozen. This
+    // is runtime-local metadata and is not part of the Sandbox API.
+    pub rootfs_device_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CheckpointSandboxRequest {
+    pub sandbox_id: String,
+    pub output_path: String,
+    pub tasks: Vec<SandboxCheckpointTask>,
+    pub options: HashMap<String, String>,
+    // Derived from the transport context. It is not a Sandbox API field.
+    pub operation_timeout: Option<Duration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxRestoreTask {
+    pub checkpoint_key: String,
+    pub task_id: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct RestoreSandboxRequest {
+    pub sandbox_config: SandboxConfig,
+    pub checkpoint_path: String,
+    pub options: HashMap<String, String>,
+    pub tasks: Vec<SandboxRestoreTask>,
+    // Derived from the transport context. It is not a Sandbox API field.
+    pub operation_timeout: Option<Duration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RestoredSandboxTask {
+    pub checkpoint_key: String,
+    pub task_id: String,
+    pub rootfs_device_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RestoreSandboxInfo {
+    pub tasks: Vec<RestoredSandboxTask>,
 }
 
 #[derive(Clone, Debug)]

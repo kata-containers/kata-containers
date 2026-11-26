@@ -22,6 +22,14 @@ pub enum Error {
     AgentConnectionClosed,
     #[error("process already terminated")]
     ProcessAlreadyTerminated,
+    #[error("invalid sandbox checkpoint/restore request: {0}")]
+    InvalidSandboxOperation(String),
+    #[error("sandbox checkpoint/restore precondition failed: {0}")]
+    SandboxOperationPrecondition(String),
+    #[error("sandbox checkpoint/restore is unsupported: {0}")]
+    SandboxOperationUnsupported(String),
+    #[error("sandbox checkpoint/restore deadline exceeded: {0}")]
+    SandboxOperationDeadline(String),
 }
 
 /// Common error messages indicating normal OOM shutdowns due to network issues.
@@ -88,4 +96,18 @@ pub fn is_no_such_process_error(err: &anyhow::Error) -> bool {
     NO_SUCH_PROCESS_MESSAGES
         .iter()
         .any(|pattern| error_string.contains(&pattern.to_lowercase()))
+}
+
+pub fn map_runtime_error(err: anyhow::Error) -> ttrpc::Error {
+    let code = match err.downcast_ref::<Error>() {
+        Some(Error::InvalidSandboxOperation(_)) => ttrpc::Code::INVALID_ARGUMENT,
+        Some(Error::SandboxOperationPrecondition(_)) => ttrpc::Code::FAILED_PRECONDITION,
+        Some(Error::SandboxOperationUnsupported(_)) => ttrpc::Code::UNIMPLEMENTED,
+        Some(Error::SandboxOperationDeadline(_)) => ttrpc::Code::DEADLINE_EXCEEDED,
+        _ => ttrpc::Code::INTERNAL,
+    };
+    ttrpc::Error::RpcStatus(ttrpc::get_status(
+        code,
+        format!("failed to handle sandbox message: {err:#}"),
+    ))
 }

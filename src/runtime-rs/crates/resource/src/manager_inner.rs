@@ -19,7 +19,7 @@ use hypervisor::{
     },
     utils::uses_native_ccw_bus,
     vfio_device::{is_iommufd_devices_cdev_path, is_vfio_ap_device, VfioDeviceBase},
-    BlockConfigModern, BlockDeviceAio, Hypervisor,
+    BlockConfigModern, BlockDeviceAio, Hypervisor, VmResourceTopology,
 };
 use kata_types::mount::{kata_guest_sandbox_dir, Mount, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR};
 use kata_types::{
@@ -44,7 +44,8 @@ use crate::{
     cdi_devices::{sort_options_by_pcipath, ContainerDevice, DeviceInfo},
     cgroups::{CgroupArgs, CgroupsResource},
     cpu_mem::{
-        cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource, swap::SwapResource,
+        adopt_cpu_mem_accounting, cpu::CpuResource, initial_size::InitialSizeManager,
+        mem::MemResource, swap::SwapResource,
     },
     manager::ManagerArgs,
     network::{self, dan_config_path, Network, NetworkConfig, NetworkWithNetNsConfig},
@@ -75,6 +76,7 @@ pub(crate) struct ResourceManagerInner {
     pub cpu_resource: CpuResource,
     pub mem_resource: MemResource,
     pub swap_resource: Option<SwapResource>,
+    restored_vm_topology: RwLock<Option<VmResourceTopology>>,
     cleanup_steps: Mutex<ResourceCleanupSteps>,
     /// Whether cleanup has started. The network is created by a task that
     /// outlives a cancelled caller, so a late creation could otherwise
@@ -184,6 +186,7 @@ impl ResourceManagerInner {
             cpu_resource,
             mem_resource,
             swap_resource,
+            restored_vm_topology: RwLock::new(None),
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
             cleaned: std::sync::atomic::AtomicBool::new(false),
         })
@@ -242,6 +245,14 @@ impl ResourceManagerInner {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
                         .await
                         .context("do handle device failed.")?;
+                }
+                ResourceConfig::RestoredBlock(block) => {
+                    self.device_manager
+                        .write()
+                        .await
+                        .restore_block_device(block)
+                        .await
+                        .context("restore workload block device")?;
                 }
                 ResourceConfig::GuestExtensionImage(r) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
@@ -377,7 +388,12 @@ impl ResourceManagerInner {
     }
 
     async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
-        for i in network.interfaces().await.context("get interfaces")? {
+        for i in network
+            .interfaces()
+            .await
+            .context("get interfaces")?
+            .into_iter()
+        {
             info!(sl!(), "update interface {:?}", i);
 
             // After hotplugging a network device, the guest kernel needs time
@@ -1312,6 +1328,58 @@ impl ResourceManagerInner {
 
         Ok(Some(resources))
     }
+
+    /// Seed resource accounting from topology verified by a restored VMM.
+    pub async fn adopt_restored_vm(&self, topology: VmResourceTopology) -> Result<()> {
+        if topology.vcpus == 0 || topology.memory_mb == 0 {
+            return Err(anyhow!(
+                "restored VM resource topology is invalid: vcpus={}, memory_mb={}",
+                topology.vcpus,
+                topology.memory_mb
+            ));
+        }
+
+        self.cpu_resource.update_current_vcpu(topology.vcpus).await;
+        *self.restored_vm_topology.write().await = Some(topology);
+
+        Ok(())
+    }
+
+    pub async fn adopt_restored_rootfs(&self, device_ids: &[String]) -> Result<Arc<dyn Rootfs>> {
+        self.rootfs_resource
+            .adopt_restored_block_rootfs(self.device_manager.as_ref(), device_ids)
+            .await
+    }
+
+    /// Rebuild host accounting without resizing the checkpointed guest.
+    pub async fn adopt_restored_container(
+        &self,
+        cid: &str,
+        resources: Option<&LinuxResources>,
+    ) -> Result<()> {
+        let topology = self
+            .restored_vm_topology
+            .read()
+            .await
+            .as_ref()
+            .copied()
+            .context("restored VM topology is not initialized")?;
+
+        adopt_cpu_mem_accounting(
+            &self.cpu_resource,
+            &self.mem_resource,
+            cid,
+            resources,
+            topology.vcpus,
+            self.cgroups_resource.update(
+                cid,
+                resources,
+                ResourceUpdateOp::Add,
+                self.hypervisor.as_ref(),
+            ),
+        )
+        .await
+    }
 }
 
 #[async_trait]
@@ -1402,6 +1470,7 @@ impl Persist for ResourceManagerInner {
             toml_config,
             cpu_resource: CpuResource::default(),
             mem_resource,
+            restored_vm_topology: RwLock::new(None),
             swap_resource,
             cleanup_steps: Mutex::new(ResourceCleanupSteps::default()),
             cleaned: std::sync::atomic::AtomicBool::new(false),
@@ -1703,5 +1772,81 @@ mod tests {
             MAJOR,
             MINOR
         ));
+    }
+
+    #[tokio::test]
+    async fn failed_host_adoption_does_not_change_cpu_mem_accounting() {
+        use super::{adopt_cpu_mem_accounting, CpuResource, MemResource};
+        use oci_spec::runtime::{LinuxCpuBuilder, LinuxMemoryBuilder};
+
+        let cpu = CpuResource::default();
+        let mem = MemResource::default();
+        let resources = LinuxResourcesBuilder::default()
+            .cpu(
+                LinuxCpuBuilder::default()
+                    .period(100_000u64)
+                    .quota(100_000i64)
+                    .build()
+                    .unwrap(),
+            )
+            .memory(
+                LinuxMemoryBuilder::default()
+                    .limit(256 * 1024 * 1024i64)
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+        adopt_cpu_mem_accounting(&cpu, &mem, "existing", Some(&resources), 1, async {
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let err = adopt_cpu_mem_accounting(&cpu, &mem, "failed", Some(&resources), 2, async {
+            anyhow::bail!("injected host cgroup failure")
+        })
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("injected host cgroup failure"));
+        assert_eq!(cpu.container_cpu_resources.read().await.len(), 1);
+        assert!(!cpu
+            .container_cpu_resources
+            .read()
+            .await
+            .contains_key("failed"));
+        assert_eq!(mem.container_mem_resources.read().await.len(), 1);
+        assert!(!mem
+            .container_mem_resources
+            .read()
+            .await
+            .contains_key("failed"));
+        assert_eq!(cpu.current_vcpu().await, 1.0);
+
+        // Cancellation while the host update is pending must not publish maps either.
+        assert!(tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            adopt_cpu_mem_accounting(
+                &cpu,
+                &mem,
+                "cancelled",
+                Some(&resources),
+                2,
+                std::future::pending::<anyhow::Result<()>>()
+            )
+        )
+        .await
+        .is_err());
+        assert_eq!(cpu.container_cpu_resources.read().await.len(), 1);
+        assert_eq!(mem.container_mem_resources.read().await.len(), 1);
+        assert_eq!(cpu.current_vcpu().await, 1.0);
+
+        adopt_cpu_mem_accounting(&cpu, &mem, "restored", Some(&resources), 2, async {
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(cpu.container_cpu_resources.read().await.len(), 2);
+        assert_eq!(mem.container_mem_resources.read().await.len(), 2);
+        assert_eq!(cpu.current_vcpu().await, 2.0);
     }
 }
