@@ -1548,7 +1548,15 @@ impl Sandbox for VirtSandbox {
 
         // start vm
         inner.vmm_start_attempted = true;
-        let started = self.hypervisor.start_vm(10_000).await.context("start vm");
+        let started = self
+            .hypervisor
+            .start_vm(hypervisor::VmStartOptions {
+                timeout: 10_000,
+                restore: None,
+            })
+            .await
+            .context("start vm");
+
         // A start that fails after spawning the VMM gets no exit watcher.
         // stop() then needs the identity to confirm the exit, or cleanup
         // never runs.
@@ -1807,7 +1815,10 @@ impl Sandbox for VirtSandbox {
         inner.vmm_start_attempted = true;
         let started = self
             .hypervisor
-            .start_vm(10_000)
+            .start_vm(hypervisor::VmStartOptions {
+                timeout: 10_000,
+                restore: None,
+            })
             .await
             .context("start template vm");
         self.remember_vmm_process().await;

@@ -6,7 +6,9 @@
 
 use std::sync::Arc;
 
-use crate::{message::Message, types::SandboxConfig, ContainerManager, Sandbox};
+use crate::{
+    message::Message, types::SandboxConfig, CheckpointRestoreRuntime, ContainerManager, Sandbox,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use kata_types::config::TomlConfig;
@@ -17,6 +19,7 @@ use tokio::sync::mpsc::Sender;
 pub struct RuntimeInstance {
     pub sandbox: Arc<dyn Sandbox>,
     pub container_manager: Arc<dyn ContainerManager>,
+    pub checkpoint_restore: Option<CheckpointRestoreRuntime>,
 }
 
 #[async_trait]

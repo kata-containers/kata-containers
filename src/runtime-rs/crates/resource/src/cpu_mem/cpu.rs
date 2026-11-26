@@ -75,7 +75,7 @@ impl CpuResource {
         *current_vcpu
     }
 
-    async fn update_current_vcpu(&self, new_vcpus: u32) {
+    pub(crate) async fn update_current_vcpu(&self, new_vcpus: u32) {
         let mut current_vcpu = self.current_vcpu.write().await;
         *current_vcpu = new_vcpus as f32;
     }

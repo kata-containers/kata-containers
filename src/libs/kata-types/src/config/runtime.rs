@@ -27,6 +27,17 @@ pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
 /// EmptyDir mode: plug a block device to be mounted directly in the guest.
 pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
 
+/// Destination for runtime shim logs.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum RuntimeLogDestination {
+    /// Send logs to the system journal (default).
+    #[default]
+    Journald,
+    /// Append logs to the shim bundle log file.
+    File,
+}
+
 /// Kata runtime configuration information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -56,6 +67,10 @@ pub struct Runtime {
     /// - critical
     #[serde(default = "default_runtime_log_level")]
     pub log_level: String,
+
+    /// Shim log destination. File writes to the sandbox bundle's log file.
+    #[serde(default)]
+    pub log_destination: RuntimeLogDestination,
 
     /// Enabled experimental feature list, format: ["a", "b"].
     ///
@@ -378,6 +393,26 @@ fn adopt_deprecated_key(
             sl!(),
             "`{}` is deprecated and ignored because `{}` is set", old_key, new_key
         );
+    }
+}
+
+#[cfg(test)]
+mod log_destination_tests {
+    use super::*;
+
+    #[test]
+    fn log_destination_defaults_and_validation() {
+        assert_eq!(
+            toml::from_str::<Runtime>("").unwrap().log_destination,
+            RuntimeLogDestination::Journald
+        );
+        assert_eq!(
+            toml::from_str::<Runtime>("log_destination = \"file\"")
+                .unwrap()
+                .log_destination,
+            RuntimeLogDestination::File
+        );
+        assert!(toml::from_str::<Runtime>("log_destination = \"invalid\"").is_err());
     }
 }
 

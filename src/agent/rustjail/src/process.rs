@@ -23,9 +23,9 @@ use crate::pipestream::PipeStream;
 use awaitgroup::WaitGroup;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::io::{split, ReadHalf, WriteHalf};
-use tokio::sync::Mutex;
+use tokio::io::{split, AsyncReadExt, ReadHalf, WriteHalf};
 use tokio::sync::Notify;
+use tokio::sync::{watch, Mutex};
 
 macro_rules! close_process_stream {
     ($self: ident, $stream:ident, $stream_type: ident) => {
@@ -47,7 +47,106 @@ pub enum StreamType {
     ParentStderr,
 }
 
-type Reader = Arc<Mutex<ReadHalf<PipeStream>>>;
+#[derive(Debug)]
+struct OutputReplay {
+    last_session_id: String,
+    last_request_id: u64,
+    last_response: Vec<u8>,
+}
+
+impl OutputReplay {
+    fn response(&self, session_id: &str, request_id: u64) -> Option<Vec<u8>> {
+        (!session_id.is_empty()
+            && self.last_session_id == session_id
+            && self.last_request_id == request_id)
+            .then(|| self.last_response.clone())
+    }
+
+    fn store(&mut self, session_id: &str, request_id: u64, response: &[u8]) {
+        if session_id.is_empty() {
+            return;
+        }
+
+        self.last_session_id = session_id.to_string();
+        self.last_request_id = request_id;
+        self.last_response.clear();
+        self.last_response.extend_from_slice(response);
+    }
+}
+
+#[derive(Debug)]
+pub struct ProcessOutputReader {
+    reader: ReadHalf<PipeStream>,
+    replay: OutputReplay,
+}
+
+impl ProcessOutputReader {
+    fn new(reader: ReadHalf<PipeStream>) -> Self {
+        Self {
+            reader,
+            replay: OutputReplay {
+                last_session_id: String::new(),
+                last_request_id: 0,
+                last_response: Vec::new(),
+            },
+        }
+    }
+
+    pub async fn read_replayable(
+        &mut self,
+        len: usize,
+        session_id: &str,
+        request_id: u64,
+    ) -> std::io::Result<Vec<u8>> {
+        if let Some(response) = self.replay.response(session_id, request_id) {
+            return Ok(response);
+        }
+
+        let mut response = vec![0_u8; len];
+        let count = self.reader.read(&mut response).await?;
+        response.truncate(count);
+
+        self.replay.store(session_id, request_id, &response);
+
+        Ok(response)
+    }
+}
+
+#[cfg(test)]
+mod output_replay_tests {
+    use super::OutputReplay;
+
+    #[test]
+    fn replay_matches_only_the_same_session_and_request() {
+        let mut replay = OutputReplay {
+            last_session_id: String::new(),
+            last_request_id: 0,
+            last_response: Vec::new(),
+        };
+
+        replay.store("session-a", 1, b"first");
+
+        assert_eq!(replay.response("session-a", 1), Some(b"first".to_vec()));
+        assert_eq!(replay.response("session-a", 2), None);
+        assert_eq!(replay.response("session-b", 1), None);
+    }
+
+    #[test]
+    fn empty_session_disables_replay() {
+        let mut replay = OutputReplay {
+            last_session_id: String::new(),
+            last_request_id: 0,
+            last_response: Vec::new(),
+        };
+
+        replay.store("", 1, b"legacy");
+
+        assert_eq!(replay.response("", 1), None);
+        assert!(replay.last_response.is_empty());
+    }
+}
+
+pub type Reader = Arc<Mutex<ProcessOutputReader>>;
 type Writer = Arc<Mutex<WriteHalf<PipeStream>>>;
 
 #[derive(Debug)]
@@ -104,6 +203,12 @@ pub struct Process {
     writers: HashMap<StreamType, Writer>,
 
     pub proc_io: Option<ProcessIo>,
+
+    // A whole-VM restore also restores agent RPC tasks that were blocked while
+    // reading this process's output. Advancing this generation makes those
+    // stale readers stop before the restored process is resumed; the new shim
+    // subscribes to the new generation when it reconnects output.
+    output_generation_tx: watch::Sender<u64>,
 }
 
 pub trait ProcessOperations {
@@ -139,6 +244,7 @@ impl Process {
     ) -> Result<Self> {
         let logger = logger.new(o!("subsystem" => "process"));
         let (exit_tx, exit_rx) = tokio::sync::watch::channel(false);
+        let (output_generation_tx, _) = watch::channel(0);
 
         let mut p = Process {
             exec_id: String::from(id),
@@ -160,6 +266,7 @@ impl Process {
             oci: ocip.clone(),
             logger: logger.clone(),
             term_exit_notifier: Arc::new(Notify::new()),
+            output_generation_tx,
             readers: HashMap::new(),
             writers: HashMap::new(),
             proc_io,
@@ -197,6 +304,15 @@ impl Process {
     pub fn notify_term_close(&mut self) {
         let notify = self.term_exit_notifier.clone();
         notify.notify_waiters();
+    }
+
+    pub fn subscribe_output_generation(&self) -> watch::Receiver<u64> {
+        self.output_generation_tx.subscribe()
+    }
+
+    pub fn invalidate_output_readers(&self) {
+        self.output_generation_tx
+            .send_modify(|generation| *generation = generation.wrapping_add(1));
     }
 
     pub async fn close_stdin(&mut self) {
@@ -237,7 +353,7 @@ impl Process {
         let stream = PipeStream::from_fd(fd);
 
         let (reader, writer) = split(stream);
-        let reader = Arc::new(Mutex::new(reader));
+        let reader = Arc::new(Mutex::new(ProcessOutputReader::new(reader)));
         let writer = Arc::new(Mutex::new(writer));
 
         self.readers.insert(stream_type.clone(), reader.clone());

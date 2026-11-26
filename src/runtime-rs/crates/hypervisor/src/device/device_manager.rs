@@ -20,9 +20,9 @@ use tokio::sync::{Mutex, RwLock};
 use crate::{
     vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
-    BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor, NetworkDevice,
-    PCIePortDevice, ProtectionDevice, ShareFsDevice, VhostUserConfig, VhostUserNetDevice,
-    VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    BlockConfigModern, BlockDeviceModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor,
+    NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VhostUserConfig,
+    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
     KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
     VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
@@ -691,6 +691,70 @@ pub async fn find_cold_plugged_vfio_ap(
     None
 }
 
+/// Checkpoint and Restore
+impl DeviceManager {
+    pub async fn checkpoint_block_devices(&self) -> Vec<BlockDeviceModern> {
+        let boot_image = self.hypervisor.hypervisor_config().await.boot_info.image;
+        let mut blocks = Vec::new();
+
+        for device in self.devices.values() {
+            if let DeviceType::BlockModern(block) = device.lock().await.get_device_info().await {
+                let block = block.lock().await.clone();
+                // The immutable VM boot image is covered by the runtime fingerprint,
+                // not by the workload volume inventory.
+                if !boot_image.is_empty()
+                    && block.config.is_readonly
+                    && block.config.path_on_host == boot_image
+                {
+                    continue;
+                }
+                blocks.push(block);
+            }
+        }
+
+        blocks.sort_by_key(|block| block.config.index);
+
+        blocks
+    }
+
+    pub async fn restore_block_device(&mut self, block: BlockDeviceModern) -> Result<()> {
+        if self.devices.contains_key(&block.device_id) {
+            return Err(anyhow!(
+                "restored block device {} already exists",
+                block.device_id
+            ));
+        }
+
+        let device_id = block.device_id.clone();
+        self.shared_info.block_index = self
+            .shared_info
+            .block_index
+            .max(block.config.index.saturating_add(1));
+
+        let device: ArcMutexDevice = Arc::new(Mutex::new(BlockDeviceModernHandle::new(
+            device_id.clone(),
+            block.config,
+        )));
+        self.devices.insert(device_id.clone(), device);
+
+        self.try_add_device(&device_id).await
+    }
+
+    pub async fn checkpoint_network_macs(&self) -> Vec<[u8; 6]> {
+        let mut networks = Vec::new();
+        for device in self.devices.values() {
+            if let DeviceType::Network(network) = device.lock().await.get_device_info().await {
+                if let Some(mac) = network.config.guest_mac {
+                    networks.push((network.config.index, mac.0));
+                }
+            }
+        }
+
+        networks.sort_by_key(|(index, _)| *index);
+        networks.into_iter().map(|(_, mac)| mac).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{do_handle_device, Device, DeviceManager, PCIeTopology};
@@ -863,6 +927,50 @@ mod tests {
         ));
 
         Ok(dm)
+    }
+
+    #[tokio::test]
+    async fn network_mac_survives_registration_and_rescan() {
+        let checkpoint_mac = [2, 0, 0, 0, 0, 1];
+        let current_mac = [2, 0, 0, 0, 0, 2];
+        let manager = RwLock::new(
+            DeviceManager::new(Arc::new(Qemu::new()), None)
+                .await
+                .unwrap(),
+        );
+        let mut config = crate::device::driver::NetworkConfig {
+            host_dev_name: "tap-restore".into(),
+            guest_mac: Some(crate::Address(checkpoint_mac)),
+            queue_num: 1,
+            ..Default::default()
+        };
+        let registered = do_handle_device(&manager, &DeviceConfig::NetworkCfg(config.clone()))
+            .await
+            .unwrap();
+        let DeviceType::Network(registered) = registered else {
+            panic!("expected network device");
+        };
+        assert_eq!(registered.config.guest_mac.unwrap().0, checkpoint_mac);
+        assert_eq!(
+            manager.read().await.checkpoint_network_macs().await,
+            vec![checkpoint_mac]
+        );
+
+        // A rescan of the same host device reuses its registered identity.
+        config.guest_mac = Some(crate::Address(current_mac));
+        let rescanned = do_handle_device(&manager, &DeviceConfig::NetworkCfg(config))
+            .await
+            .unwrap();
+        let DeviceType::Network(rescanned) = rescanned else {
+            panic!("expected network device");
+        };
+        assert_eq!(rescanned.device_id, registered.device_id);
+        assert_eq!(rescanned.config.guest_mac.unwrap().0, checkpoint_mac);
+        assert_eq!(
+            manager.read().await.checkpoint_network_macs().await,
+            vec![checkpoint_mac]
+        );
+        assert_eq!(manager.read().await.devices.len(), 1);
     }
 
     #[actix_rt::test]

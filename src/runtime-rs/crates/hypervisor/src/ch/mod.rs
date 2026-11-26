@@ -5,7 +5,7 @@
 
 use super::HypervisorState;
 use crate::device::DeviceType;
-use crate::{Hypervisor, MemoryConfig, VcpuThreadIds};
+use crate::{Hypervisor, MemoryConfig, VcpuThreadIds, VmSaveOptions, VmStartOptions};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -71,7 +71,9 @@ impl Hypervisor for CloudHypervisor {
         inner.prepare_vm(id, netns, selinux_label).await
     }
 
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
+        let timeout = options.regular_timeout()?;
+
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await
     }
@@ -101,9 +103,13 @@ impl Hypervisor for CloudHypervisor {
         inner.resume_vm().await
     }
 
-    async fn save_vm(&self) -> Result<()> {
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<crate::VmSaveResult> {
+        options.require_template()?;
+
         let inner = self.inner.write().await;
-        inner.save_vm().await
+        inner.save_vm().await?;
+
+        Ok(crate::VmSaveResult::default())
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {

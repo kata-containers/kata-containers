@@ -26,6 +26,8 @@ use super::{
     Exec,
 };
 
+mod checkpoint_restore;
+
 pub struct ContainerInner {
     agent: Arc<dyn Agent>,
     logger: slog::Logger,
@@ -36,6 +38,7 @@ pub struct ContainerInner {
     pub(crate) devices: Vec<String>, // device ids of devices hotplugged to the container
     pub(crate) linux_resources: Option<LinuxResources>,
     removed_from_agent: bool,
+    pub(crate) restored_paused: bool,
 }
 
 impl ContainerInner {
@@ -55,6 +58,7 @@ impl ContainerInner {
             devices: vec![],
             linux_resources,
             removed_from_agent: false,
+            restored_paused: false,
         }
     }
 
@@ -151,12 +155,22 @@ impl ContainerInner {
             .await
             .context("check state")?;
 
-        self.agent
-            .start_container(agent::ContainerID {
-                container_id: cid.container_id.clone(),
-            })
-            .await
-            .context("start container")?;
+        let id = agent::ContainerID {
+            container_id: cid.container_id.clone(),
+        };
+
+        if self.restored_paused {
+            self.agent
+                .resume_container(id)
+                .await
+                .context("resume restored container")?;
+            self.restored_paused = false;
+        } else {
+            self.agent
+                .start_container(id)
+                .await
+                .context("start container")?;
+        }
 
         self.set_state(ProcessStatus::Running).await;
 
@@ -447,7 +461,7 @@ impl ContainerInner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent::types::SetPolicyRequest;
+    use agent::{types::SetPolicyRequest, RebindSandboxRequest};
     use async_trait::async_trait;
     use hypervisor::qemu::Qemu;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -641,6 +655,9 @@ mod tests {
             &self,
             _: agent::GetDiagnosticDataRequest,
         ) -> Result<agent::GetDiagnosticDataResponse> {
+            unimplemented!()
+        }
+        async fn rebind_sandbox(&self, _req: RebindSandboxRequest) -> Result<agent::Empty> {
             unimplemented!()
         }
     }
