@@ -34,13 +34,15 @@ use kata_types::{
 use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::convert::{TryFrom, TryInto};
-use std::fs;
-use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::fs::{self, File};
+use std::io::{self, Read};
+use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use tokio::time::sleep;
@@ -63,6 +65,134 @@ fn open_qemu_pidfd(pid: u32) -> Result<Arc<OwnedFd>> {
         return Err(io::Error::last_os_error()).context("open QEMU pidfd");
     }
     Ok(Arc::new(unsafe { OwnedFd::from_raw_fd(fd as i32) }))
+}
+
+const QEMU_STDERR_TAIL_LINES: usize = 16;
+const QEMU_STDERR_MAX_LINE: usize = 4096;
+const EARLY_STDERR_INTERVAL: Duration = Duration::from_millis(50);
+const NO_STDERR_OUTPUT: &str = "no output on stderr";
+
+// The task that logs QEMU's stderr may not run while Qmp::new() keeps the
+// thread busy, and a pipe nobody reads fills up and blocks QEMU before it
+// gets to QMP. A QMP attempt can itself wait for seconds, so the reading
+// cannot be left to the time between attempts either.
+struct EarlyStderr {
+    pipe: File,
+    unfinished_line: Vec<u8>,
+    tail: VecDeque<String>,
+}
+
+impl EarlyStderr {
+    fn new(pipe: File) -> Self {
+        Self {
+            pipe,
+            unfinished_line: Vec::new(),
+            tail: VecDeque::new(),
+        }
+    }
+
+    fn read(&mut self, at_end: bool) {
+        let mut chunk = [0; 4096];
+        while let Ok(len @ 1..) = self.pipe.read(&mut chunk) {
+            self.unfinished_line.extend_from_slice(&chunk[..len]);
+            while let Some(end) = self.unfinished_line.iter().position(|byte| *byte == b'\n') {
+                let line: Vec<u8> = self.unfinished_line.drain(..=end).collect();
+                self.keep(&line[..end]);
+            }
+            if self.unfinished_line.len() > QEMU_STDERR_MAX_LINE {
+                let line = std::mem::take(&mut self.unfinished_line);
+                self.keep(&line);
+            }
+        }
+        if at_end && !self.unfinished_line.is_empty() {
+            let line = std::mem::take(&mut self.unfinished_line);
+            self.keep(&line);
+        }
+    }
+
+    fn keep(&mut self, line: &[u8]) {
+        let line = String::from_utf8_lossy(line).into_owned();
+        info!(sl!(), "qemu stderr: {:?}", line);
+        if self.tail.len() == QEMU_STDERR_TAIL_LINES {
+            self.tail.pop_front();
+        }
+        self.tail.push_back(line);
+    }
+}
+
+// Reaping QEMU here would take its PID away, and the sandbox needs that to
+// confirm the VMM is gone before it cleans up.
+fn qemu_exit_reason(
+    pidfd: Option<&OwnedFd>,
+    stderr: Option<&StdMutex<EarlyStderr>>,
+) -> Option<String> {
+    if !pidfd.is_some_and(|pidfd| qemu_is_gone(false, true, Some(pidfd))) {
+        return None;
+    }
+    let mut reason = String::new();
+    if let Some(mut stderr) = stderr.and_then(|stderr| stderr.lock().ok()) {
+        stderr.read(true);
+        reason = stderr.tail.make_contiguous().join("; ");
+    }
+    // A QEMU that was killed says nothing, and the error would end at its
+    // colon.
+    if reason.is_empty() {
+        reason = NO_STDERR_OUTPUT.to_string();
+    }
+    Some(reason)
+}
+
+struct EarlyStderrReader {
+    stop: std::sync::mpsc::Sender<()>,
+    thread: std::thread::JoinHandle<()>,
+}
+
+impl EarlyStderrReader {
+    fn start(stderr: Arc<StdMutex<EarlyStderr>>) -> Self {
+        let (stop, stopped) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            while let Err(RecvTimeoutError::Timeout) = stopped.recv_timeout(EARLY_STDERR_INTERVAL) {
+                if let Ok(mut stderr) = stderr.lock() {
+                    stderr.read(false);
+                }
+            }
+            if let Ok(mut stderr) = stderr.lock() {
+                stderr.read(true);
+            }
+        });
+        Self { stop, thread }
+    }
+
+    // Two readers of one pipe would mix up QEMU's lines, so the thread has
+    // to be gone before the logging task starts.
+    fn finish(self) {
+        drop(self.stop);
+        let _ = self.thread.join();
+    }
+}
+
+// The reader thread is gone when this returns, so the logging task can take
+// over the pipe.
+fn connect_qmp(
+    qmp_socket_path: &str,
+    pidfd: Option<&OwnedFd>,
+    stderr: &ChildStderr,
+) -> Result<Qmp> {
+    let early_stderr = stderr
+        .as_fd()
+        .try_clone_to_owned()
+        .ok()
+        .map(|pipe| Arc::new(StdMutex::new(EarlyStderr::new(File::from(pipe)))));
+    let reader = early_stderr.clone().map(EarlyStderrReader::start);
+
+    let qmp = Qmp::new(qmp_socket_path, || {
+        qemu_exit_reason(pidfd, early_stderr.as_deref())
+    });
+
+    if let Some(reader) = reader {
+        reader.finish();
+    }
+    qmp
 }
 
 fn qemu_is_gone(exit_reaped: bool, qmp_connected: bool, pidfd: Option<&OwnedFd>) -> bool {
@@ -475,8 +605,6 @@ impl QemuInner {
             .take()
             .ok_or_else(|| anyhow!("no exit notify"))?;
 
-        tokio::spawn(log_qemu_stderr(stderr, exit_notify));
-
         // When hypervisor debug is enabled, output the kernel boot messages for debugging.
         if self.config.debug_info.enable_debug {
             tokio::spawn(async move {
@@ -491,7 +619,10 @@ impl QemuInner {
 
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
-        match Qmp::new(&qmp_socket_path) {
+        let qmp = connect_qmp(&qmp_socket_path, self.qemu_pidfd.as_deref(), &stderr);
+        tokio::spawn(log_qemu_stderr(stderr, exit_notify));
+
+        match qmp {
             Ok(mut qmp) => {
                 if let Some(subchannel) = ccw_subchannel {
                     qmp.set_ccw_subchannel(subchannel);
@@ -1159,15 +1290,25 @@ async fn log_qemu_console(console: UnixStream) -> Result<()> {
 async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Result<()> {
     info!(sl!(), "starting reading qemu stderr");
 
-    let stderr_reader = BufReader::new(stderr);
-    let mut stderr_lines = stderr_reader.lines();
+    let mut stderr_reader = BufReader::new(stderr);
+    let mut line = Vec::new();
 
-    while let Some(buffer) = stderr_lines
-        .next_line()
+    // Giving up on bytes that are not UTF-8 would close the pipe under a
+    // QEMU that is still running, and the reading before this task may have
+    // stopped in the middle of a character.
+    while stderr_reader
+        .read_until(b'\n', &mut line)
         .await
-        .context("next_line() failed on qemu stderr")?
+        .context("read_until() failed on qemu stderr")?
+        > 0
     {
-        info!(sl!(), "qemu stderr: {:?}", buffer);
+        let text = String::from_utf8_lossy(&line);
+        info!(
+            sl!(),
+            "qemu stderr: {:?}",
+            text.trim_end_matches(['\n', '\r'])
+        );
+        line.clear();
     }
 
     // Notfiy the waiter the process exit.
@@ -1538,6 +1679,54 @@ mod tests {
     use crate::qemu::Qemu;
     use crate::Hypervisor;
     use rstest::rstest;
+
+    #[tokio::test]
+    async fn a_qemu_that_exits_before_qmp_is_ready_is_reported_at_once() {
+        let mut qemu = Command::new("sh")
+            .args([
+                "-c",
+                "sleep 5 & head -c 200000 /dev/zero >&2; echo; echo no such device >&2; exit 3",
+            ])
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let pidfd = open_qemu_pidfd(qemu.id().unwrap()).unwrap();
+        let stderr = qemu.stderr.take().unwrap();
+
+        let started = std::time::Instant::now();
+        let err = connect_qmp("/nonexistent/qmp.sock", Some(&pidfd), &stderr).unwrap_err();
+
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert!(format!("{err:#}").contains("no such device"), "{}", err);
+        assert!(qemu.id().is_some(), "QEMU was reaped");
+    }
+
+    #[tokio::test]
+    async fn a_qemu_that_exits_without_a_word_still_gets_a_reason() {
+        let mut qemu = Command::new("true").stderr(Stdio::piped()).spawn().unwrap();
+        let pidfd = open_qemu_pidfd(qemu.id().unwrap()).unwrap();
+        let stderr = qemu.stderr.take().unwrap();
+
+        let err = connect_qmp("/nonexistent/qmp.sock", Some(&pidfd), &stderr).unwrap_err();
+
+        assert!(format!("{err:#}").ends_with(NO_STDERR_OUTPUT), "{}", err);
+    }
+
+    #[tokio::test]
+    async fn stderr_that_is_not_utf8_does_not_stop_the_logger() {
+        let mut qemu = Command::new("sh")
+            .args(["-c", r"printf '\251\n' >&2; echo still running >&2"])
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let (exit_notify, mut exited) = mpsc::channel(1);
+
+        log_qemu_stderr(qemu.stderr.take().unwrap(), exit_notify)
+            .await
+            .unwrap();
+
+        assert!(exited.try_recv().is_ok());
+    }
 
     #[rstest]
     #[case::success("exit 0", 0)]

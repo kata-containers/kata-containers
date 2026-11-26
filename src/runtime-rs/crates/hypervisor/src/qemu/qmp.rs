@@ -198,7 +198,12 @@ impl Debug for Qmp {
 }
 
 impl Qmp {
-    pub fn new(qmp_sock_path: &str) -> Result<Self> {
+    // A VMM that is gone will never listen on the socket, and waiting out the
+    // deadline only delays the error and hides its cause.
+    pub fn new(
+        qmp_sock_path: &str,
+        mut vmm_exited: impl FnMut() -> Option<String>,
+    ) -> Result<Self> {
         let try_new_once_fn = || -> Result<Qmp> {
             let stream = UnixStream::connect(qmp_sock_path)?;
 
@@ -238,6 +243,9 @@ impl Qmp {
             match try_new_once_fn() {
                 Ok(qmp) => return Ok(qmp),
                 Err(e) => {
+                    if let Some(reason) = vmm_exited() {
+                        return Err(anyhow!("QEMU exited before QMP was ready: {reason}"));
+                    }
                     debug!(sl!(), "QMP not ready yet: {}", e);
                     last_err = Some(e);
                     thread::sleep(Duration::from_millis(DEFAULT_QMP_RETRY_SLEEP_MS));
@@ -2080,7 +2088,7 @@ mod tests {
         let listener = UnixListener::bind(&path).unwrap();
         thread::spawn(move || slow_to_stop_qemu(listener, Duration::from_millis(300), 0));
 
-        let mut qmp = Qmp::new(path.to_str().unwrap()).unwrap();
+        let mut qmp = Qmp::new(path.to_str().unwrap(), || None).unwrap();
         qmp.qmp
             .inner_mut()
             .get_mut_write()
@@ -2099,7 +2107,7 @@ mod tests {
         let listener = UnixListener::bind(&path).unwrap();
         thread::spawn(move || slow_to_stop_qemu(listener, Duration::from_millis(300), 5));
 
-        let mut qmp = Qmp::new(path.to_str().unwrap()).unwrap();
+        let mut qmp = Qmp::new(path.to_str().unwrap(), || None).unwrap();
         qmp.qmp
             .inner_mut()
             .get_mut_write()
