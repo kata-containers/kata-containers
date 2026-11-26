@@ -23,10 +23,12 @@ const (
 	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
 	BlockVolumeCreateFsDriverKey   = "create_filesystem"
 
-	// ImageFormatMetadataKey and DiscardMetadataKey describe a qcow2 volume
-	// and its discard handling. Only runtime-rs implements them.
-	ImageFormatMetadataKey = "io.katacontainers.volume.format"
-	DiscardMetadataKey     = "io.katacontainers.volume.discard"
+	// ImageFormatMetadataKey, BackingChainMetadataKey and DiscardMetadataKey
+	// describe a qcow2 volume, its backing chain and its discard handling.
+	// Only runtime-rs implements them.
+	ImageFormatMetadataKey  = "io.katacontainers.volume.format"
+	BackingChainMetadataKey = "io.katacontainers.volume.backing-chain"
+	DiscardMetadataKey      = "io.katacontainers.volume.discard"
 )
 
 // FSGroupChangePolicy holds policies that will be used for applying fsGroup to a volume.
@@ -122,8 +124,10 @@ func CheckRawImageFormat(mountInfo *MountInfo) error {
 	if format, ok := mountInfo.Metadata[ImageFormatMetadataKey]; ok && format != "raw" {
 		return fmt.Errorf("direct volume %s has image format %q, which is only supported by runtime-rs", mountInfo.Device, format)
 	}
-	if _, ok := mountInfo.Metadata[DiscardMetadataKey]; ok {
-		return fmt.Errorf("direct volume %s sets qcow2 metadata %s, which is only supported by runtime-rs", mountInfo.Device, DiscardMetadataKey)
+	for _, key := range []string{BackingChainMetadataKey, DiscardMetadataKey} {
+		if _, ok := mountInfo.Metadata[key]; ok {
+			return fmt.Errorf("direct volume %s sets qcow2 metadata %s, which is only supported by runtime-rs", mountInfo.Device, key)
+		}
 	}
 	return nil
 }
