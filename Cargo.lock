@@ -611,15 +611,19 @@ dependencies = [
 
 [[package]]
 name = "bit-vec"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
-
-[[package]]
-name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
+name = "bit-vec"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72503af1e72be411d74ca45cd6b309878fcb35354e252fc2a3a8bda3a97082a0"
+dependencies = [
+ "borsh",
+ "serde",
+]
 
 [[package]]
 name = "bitflags"
@@ -720,9 +724,9 @@ checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 
 [[package]]
 name = "borsh"
-version = "1.6.1"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfd1e3f8955a5d7de9fab72fc8373fade9fb8a703968cb200ae3dc6cf08e185a"
+checksum = "553c5d846a6ba5150c65e3b1b8ec073bcf1abc20f9b7220de384a4443ea4e20a"
 dependencies = [
  "borsh-derive",
  "bytes 1.11.1",
@@ -731,15 +735,15 @@ dependencies = [
 
 [[package]]
 name = "borsh-derive"
-version = "1.6.1"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfcfdc083699101d5a7965e49925975f2f55060f94f9a05e7187be95d530ca59"
+checksum = "12cdfe656708a01f89b451a7d36466e6fe6c414de0aa18fc54f864f6f9ca9f56"
 dependencies = [
  "once_cell",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -892,10 +896,10 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "cgroups-rs"
 version = "0.5.1"
-source = "git+https://github.com/kata-containers/cgroups-rs?rev=4eb91bc293ec27b0ca33c2c796c1a675d5bf1f0a#4eb91bc293ec27b0ca33c2c796c1a675d5bf1f0a"
+source = "git+https://github.com/kata-containers/cgroups-rs?rev=a830f86e33acec2f2fba2b8edb17cdc059d33cd2#a830f86e33acec2f2fba2b8edb17cdc059d33cd2"
 dependencies = [
  "async-io",
- "bit-vec 0.6.3",
+ "bit-vec 0.10.2",
  "futures-lite",
  "libc",
  "log",
@@ -6411,7 +6415,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "awaitgroup",
- "bit-vec 0.8.0",
+ "bit-vec 0.10.2",
  "capctl",
  "caps",
  "cfg-if 1.0.4",
