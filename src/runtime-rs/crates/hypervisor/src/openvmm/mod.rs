@@ -38,7 +38,7 @@ use tokio::sync::{watch, RwLock};
 use tracing::instrument;
 
 use super::HypervisorState;
-use crate::{DeviceType, Hypervisor, MemoryConfig, VcpuThreadIds};
+use crate::{DeviceType, Hypervisor, MemoryConfig, VcpuThreadIds, VmSaveOptions, VmStartOptions};
 
 // PCIe topology layout on the single root complex (bus 0). Every Kata device is
 // a virtio (or vhost-user) function behind its own root port at function 0 of a
@@ -104,7 +104,8 @@ impl Hypervisor for OpenVmm {
     }
 
     #[instrument]
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
+        let timeout = options.regular_timeout()?;
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await
     }
@@ -137,9 +138,11 @@ impl Hypervisor for OpenVmm {
         inner.resume_vm().await
     }
 
-    async fn save_vm(&self) -> Result<()> {
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<crate::VmSaveResult> {
+        options.require_template()?;
         let inner = self.inner.read().await;
-        inner.save_vm().await
+        inner.save_vm().await?;
+        Ok(crate::VmSaveResult::default())
     }
 
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {

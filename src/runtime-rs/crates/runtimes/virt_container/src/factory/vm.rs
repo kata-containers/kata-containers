@@ -229,6 +229,7 @@ impl TemplateVm {
             resource_manager.clone(),
             sandbox_config,
             factory,
+            None,
         )
         .await
         .context("build sandbox")?;
@@ -328,7 +329,13 @@ impl TemplateVm {
 
     /// Save a VM to persistent disk.
     pub async fn save(&self) -> Result<()> {
-        self.hypervisor.save_vm().await.context("save vm")
+        let result = self
+            .hypervisor
+            .save_vm(hypervisor::VmSaveOptions::Template)
+            .await
+            .context("save vm")?;
+
+        result.validate_template()
     }
 
     /// Resume resumes a paused VM.

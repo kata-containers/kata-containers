@@ -5,6 +5,8 @@
 //
 
 use std::collections::HashMap;
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::sync::Arc;
 
 use agent::Agent;
@@ -27,7 +29,8 @@ use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{
-    cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
+    cdi_devices::container_device::annotate_container_devices, rootfs::Rootfs, ResourceManager,
+    ResourceUpdateOp,
 };
 use tokio::sync::RwLock;
 
@@ -36,6 +39,8 @@ use super::{
     ContainerInner,
 };
 use crate::container_manager::{is_termination_signal, logger_with_process};
+
+mod checkpoint_restore;
 
 pub struct Exec {
     pub(crate) process: Process,
@@ -51,6 +56,7 @@ pub struct Container {
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
+    use_guest_resolv_conf: bool,
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
 }
 
@@ -67,6 +73,30 @@ fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) ->
     }
 }
 
+fn ensure_resolv_mount(mounts: &mut Vec<oci::Mount>, use_guest_resolv_conf: bool) {
+    const RESOLV_CONF: &str = "/etc/resolv.conf";
+    if !use_guest_resolv_conf {
+        return;
+    }
+
+    if mounts
+        .iter()
+        .any(|mount| mount.destination() == std::path::Path::new(RESOLV_CONF))
+    {
+        return;
+    }
+
+    // A shim sandboxer can delegate DNS setup to Kata and omit the host-side
+    // sandbox resolv.conf mount. The agent has already installed the sandbox
+    // DNS at the guest's /etc/resolv.conf, so expose that file in the container.
+    let mut mount = oci::Mount::default();
+    mount.set_destination(std::path::PathBuf::from(RESOLV_CONF));
+    mount.set_typ(Some("bind".to_string()));
+    mount.set_source(Some(std::path::PathBuf::from(RESOLV_CONF)));
+    mount.set_options(Some(vec!["rbind".to_string(), "ro".to_string()]));
+    mounts.push(mount);
+}
+
 impl Container {
     pub async fn new(
         pid: u32,
@@ -74,6 +104,7 @@ impl Container {
         spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
+        use_guest_resolv_conf: bool,
         passfd_listener_addr: Option<(String, u32)>,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
@@ -107,6 +138,7 @@ impl Container {
             agent,
             resource_manager,
             logger,
+            use_guest_resolv_conf,
             passfd_listener_addr,
         })
     }
@@ -197,6 +229,7 @@ impl Container {
             }
             inner.volumes.push(v);
         }
+        ensure_resolv_mount(&mut oci_mounts, self.use_guest_resolv_conf);
         spec.set_mounts(Some(oci_mounts));
 
         let linux = spec
@@ -324,6 +357,7 @@ impl Container {
         let mut inner = self.inner.write().await;
         match process.process_type {
             ProcessType::Container => {
+                let restored_start = inner.restored_paused;
                 let res: Result<()> = async {
                     inner.start_container(&process.container_id).await?;
 
@@ -345,7 +379,22 @@ impl Container {
 
                 if let Err(err) = res {
                     let device_manager = self.resource_manager.get_device_manager().await;
-                    let _ = inner.stop_process(process, true, &device_manager).await;
+                    if restored_start {
+                        if let Err(cleanup_err) = inner
+                            .discard_unstarted_container(
+                                &process.container_id.container_id,
+                                &device_manager,
+                            )
+                            .await
+                        {
+                            return Err(err.context(format!(
+                                "failed to discard restored container after Resume failure: {cleanup_err:#}"
+                            )));
+                        }
+                        inner.restored_paused = false;
+                    } else {
+                        let _ = inner.stop_process(process, true, &device_manager).await;
+                    }
 
                     if let Err(e) = self
                         .resource_manager
@@ -674,7 +723,14 @@ impl Container {
 
         match self.agent.get_diagnostic_data(req).await {
             Ok(resp) if !resp.data.is_empty() => {
-                if let Err(e) = tokio::fs::write(&host_path, resp.data.as_bytes()).await {
+                let write_result = std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .custom_flags(libc::O_NOFOLLOW)
+                    .open(&host_path)
+                    .and_then(|mut file| file.write_all(resp.data.as_bytes()));
+
+                if let Err(e) = write_result {
                     warn!(self.logger, "Failed to write termination message: {}", e);
                 }
             }

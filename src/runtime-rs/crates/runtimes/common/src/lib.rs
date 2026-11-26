@@ -6,7 +6,11 @@
 
 mod container_manager;
 pub use container_manager::ContainerManager;
+mod checkpoint_restore;
 pub mod config;
+pub use checkpoint_restore::{
+    CheckpointRestoreRuntime, ContainerCheckpointRestore, SandboxCheckpointRestore,
+};
 pub mod error;
 pub mod message;
 mod runtime_handler;

@@ -11,8 +11,9 @@ use crate::qemu::cmdline_generator::{VfioDeviceConfig, VfioDeviceFdConfig};
 use crate::qemu::qmp::get_qmp_socket_path;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, selinux,
-    HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU, KATA_BLK_DEV_TYPE,
-    KATA_CCW_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
+    HypervisorConfig, MemoryConfig, VcpuThreadIds, VmCheckpointTimeout, VmResourceTopology,
+    VmRestoreOptions, VsockDevice, HYPERVISOR_QEMU, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE,
+    KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
 };
 
 use crate::utils::{
@@ -36,6 +37,7 @@ use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
 use std::fs;
+use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
@@ -56,6 +58,40 @@ use tokio::{
 
 const VSOCK_SCHEME: &str = "vsock";
 const MEMLOCK_HEADROOM_DIVISOR: u64 = 10;
+const MIGRATION_WAIT_TIMEOUT: Duration = Duration::from_secs(120);
+const MIGRATION_POLL_INTERVAL: Duration = Duration::from_millis(20);
+const WORKLOAD_MIGRATION_BANDWIDTH: u64 = 1024 * 1024 * 1024;
+const WORKLOAD_STATE_FILE: &str = "state";
+
+fn migration_file_uri(path: &Path) -> String {
+    format!("file:{}", path.display())
+}
+
+fn migration_partial_path(path: &Path) -> Result<PathBuf> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| anyhow!("migration state path has no file name: {}", path.display()))?;
+    let mut partial_name = file_name.to_os_string();
+    partial_name.push(format!(".partial-{}", std::process::id()));
+
+    Ok(path.with_file_name(partial_name))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IncomingStateKind {
+    Template,
+    WorkloadFull,
+}
+
+impl IncomingStateKind {
+    fn ignores_shared_memory(self) -> bool {
+        matches!(self, Self::Template)
+    }
+
+    fn uses_cpr_reboot_mode(self) -> bool {
+        matches!(self, Self::Template)
+    }
+}
 
 fn open_qemu_pidfd(pid: u32) -> Result<Arc<OwnedFd>> {
     let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -102,6 +138,7 @@ pub struct QemuInner {
     config: HypervisorConfig,
     devices: Vec<DeviceType>,
     netns: Option<String>,
+    restore: Option<VmRestoreOptions>,
 
     exit_notify: Option<mpsc::Sender<()>>,
 }
@@ -117,6 +154,7 @@ impl QemuInner {
             config: Default::default(),
             devices: Vec::new(),
             netns: None,
+            restore: None,
 
             exit_notify: Some(exit_notify),
         }
@@ -158,6 +196,14 @@ impl QemuInner {
         // 'cmdline' has to live at least until spawn() is called
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
+        let restoring = self.restore.is_some();
+        let from_template = restoring && self.config.vm_template.boot_from_template;
+        // A full-state checkpoint made without a VM template contains a NIC
+        // that was present on the source QEMU command line.
+        if restoring && !from_template {
+            cmdline.add_template();
+        }
+
         for device in &mut self.devices {
             match device {
                 DeviceType::ShareFs(share_fs_dev) => {
@@ -180,6 +226,12 @@ impl QemuInner {
                     cmdline.add_vsock(fd, vsock_dev.config.guest_cid)?;
                 }
                 DeviceType::BlockModern(ref block_device) => {
+                    if restoring {
+                        // Workload rootfs devices were hotplugged after the source
+                        // VM booted. Recreate them through QMP below so their PCI
+                        // bridge topology matches the migration stream.
+                        continue;
+                    }
                     info!(sl!(), "Starting QMP hotplug for BlockModern device");
 
                     // First, snapshot parameters within the lock.
@@ -187,7 +239,7 @@ impl QemuInner {
                     let (
                         device_id,
                         path_on_host,
-                        vmdk,
+                        source,
                         is_direct,
                         is_readonly,
                         discard_unmap,
@@ -226,7 +278,7 @@ impl QemuInner {
                             cmdline.add_block_device(
                                 device_id.as_str(),
                                 &path_on_host,
-                                &vmdk,
+                                &source,
                                 is_direct,
                                 is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
@@ -240,12 +292,25 @@ impl QemuInner {
                     }
                 }
                 DeviceType::Network(network) => {
+                    if from_template {
+                        // The source template VM hotplugged its NIC after the
+                        // template was loaded. Recreate the same PCI/ROM
+                        // topology through QMP before workload incoming.
+                        continue;
+                    }
+
                     // we need ensure add_network_device happens in netns.
                     let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
 
+                    let guest_mac = network
+                        .config
+                        .guest_mac
+                        .clone()
+                        .context("network device has no guest MAC")?;
+
                     cmdline.add_network_device(
                         &network.config.host_dev_name,
-                        network.config.guest_mac.clone().unwrap(),
+                        guest_mac,
                         network.config.queue_num.max(1) as u32,
                     )?;
                 }
@@ -433,9 +498,11 @@ impl QemuInner {
         selinux::apply_exec_label(&mut command, self.config.effective_selinux_label(), "QEMU")?;
 
         // Move the QEMU child into its network namespace and set credentials.
+        let qemu_netns = netns.clone();
         unsafe {
             let _pre_exec = command.pre_exec(move || {
-                let _ = enter_netns(&netns);
+                let _ = enter_netns(&qemu_netns);
+
                 if let Some(user) = &user {
                     if let Some(limit) = memlock_limit {
                         set_memlock_rlimit(limit)
@@ -462,6 +529,12 @@ impl QemuInner {
                     None
                 }
             });
+
+        // FIXME: Try to make it
+        let qemu_pid = qemu_process
+            .id()
+            .ok_or_else(|| anyhow!("QEMU process has no pid after spawn"))?;
+
         // QEMU inherited its startup descriptors during spawn. Drop the
         // privileged shim's copies immediately; QEMU owns the fdsets from here.
         drop(cmdline);
@@ -475,7 +548,7 @@ impl QemuInner {
             .take()
             .ok_or_else(|| anyhow!("no exit notify"))?;
 
-        tokio::spawn(log_qemu_stderr(stderr, exit_notify));
+        tokio::spawn(log_qemu_stderr(stderr, qemu_pid, exit_notify));
 
         // When hypervisor debug is enabled, output the kernel boot messages for debugging.
         if self.config.debug_info.enable_debug {
@@ -534,11 +607,81 @@ impl QemuInner {
             }
         }
 
-        // Start the virtual machine by restoring it from a VM template if enabled.
-        if self.config.vm_template.boot_from_template {
+        if restoring {
+            if from_template {
+                let networks = self
+                    .devices
+                    .iter()
+                    .filter(|device| matches!(device, DeviceType::Network(_)))
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                // The target TAP is created in the Pod CNI namespace. Open its
+                // queue there before passing the fd to the QEMU process, which
+                // already runs in that namespace.
+                let _netns_guard =
+                    NetnsGuard::new(&netns).context("enter restore network namespace")?;
+                for network in networks {
+                    self.hotplug_device(network)
+                        .await
+                        .context("recreate restored workload network device")?;
+                }
+            }
+
+            let blocks = self
+                .devices
+                .iter()
+                .filter(|device| matches!(device, DeviceType::BlockModern(_)))
+                .cloned()
+                .collect::<Vec<_>>();
+
+            for block in blocks {
+                self.hotplug_device(block)
+                    .await
+                    .context("recreate restored workload block device")?;
+            }
+
+            let restore = self.restore.as_ref().context("missing restore state")?;
+
+            let vcpus = restore.resource_topology.vcpus;
+            let memory_mb = restore.resource_topology.memory_mb;
+            let state_dir = restore
+                .state_path
+                .parent()
+                .context("missing restore state directory")?
+                .to_path_buf();
+
+            let current_vcpus = self.config.cpu_info.default_vcpus.ceil() as u32;
+            self.resize_vcpu(current_vcpus, vcpus)
+                .await
+                .context("recreate restored workload vCPU topology")?;
+
+            self.qmp
+                .as_mut()
+                .context("QMP is not initialized")?
+                .restore_memory_topology(&state_dir.join("memory-topology.json"))
+                .context("recreate checkpoint DIMM layout")?;
+
+            self.resize_memory(memory_mb)
+                .context("recreate restored workload memory topology")?;
+        }
+
+        // Restore workload state, otherwise boot from the configured template.
+        if let Some(state_path) = self
+            .restore
+            .as_ref()
+            .map(|restore| restore.state_path.clone())
+        {
+            self.boot_from_state(&state_path, IncomingStateKind::WorkloadFull)
+                .await
+                .context("restore VM checkpoint state")?;
+
+            self.resume_vm().context("resume restored VM")?;
+        } else if self.config.vm_template.boot_from_template {
             self.boot_from_template()
                 .await
                 .context("boot from template")?;
+
             self.resume_vm().context("resume vm")?;
         }
 
@@ -546,15 +689,32 @@ impl QemuInner {
     }
 
     async fn boot_from_template(&mut self) -> Result<()> {
+        let state_path = PathBuf::from(&self.config.vm_template.device_state_path);
+        self.boot_from_state(&state_path, IncomingStateKind::Template)
+            .await
+    }
+
+    async fn boot_from_state(&mut self, state_path: &Path, kind: IncomingStateKind) -> Result<()> {
+        if !state_path.is_file() {
+            return Err(anyhow!(
+                "VM state file is missing: {}",
+                state_path.display()
+            ));
+        }
+
         let qmp = self
             .qmp
             .as_mut()
             .context("failed to get QMP connection for boot from template")?;
 
-        qmp.set_ignore_shared_memory_capability()
+        if kind.uses_cpr_reboot_mode() {
+            qmp.set_cpr_reboot_mode()
+                .context("failed to set CPR reboot migration mode")?;
+        }
+        qmp.set_ignore_shared_memory_capability(kind.ignores_shared_memory())
             .context("failed to set ignore shared memory capability")?;
 
-        let uri = format!("exec:cat {}", self.config.vm_template.device_state_path);
+        let uri = migration_file_uri(state_path);
 
         qmp.execute_migration_incoming(&uri)
             .context("failed to execute migration incoming")?;
@@ -569,6 +729,11 @@ impl QemuInner {
     }
 
     pub async fn wait_for_migration(&mut self) -> Result<()> {
+        self.wait_migration_with_timeout(MIGRATION_WAIT_TIMEOUT)
+            .await
+    }
+
+    async fn wait_migration_with_timeout(&mut self, timeout: Duration) -> Result<()> {
         // Ensure QMP is connected.
         if self.qmp.is_none() {
             return Err(anyhow!("QMP is not connected"));
@@ -600,14 +765,6 @@ impl QemuInner {
             Err(e) => return Err(e),
         }
 
-        // Overall timeout for migration.
-        // Regarding why the timeout is set to 280ms and whether it should be adjusted, we need more empirical data.
-        // For now, we will keep using the previous configuration.
-        let timeout = Duration::from_millis(280);
-
-        // Polling interval: start small, then back off to reduce load.
-        let poll_interval = Duration::from_millis(20);
-
         // Deadline with a timeout.
         let deadline = Instant::now()
             .checked_add(timeout)
@@ -627,11 +784,11 @@ impl QemuInner {
             // Stop waiting once we hit the timeout.
             let now = Instant::now();
             if now >= deadline {
-                return Err(anyhow!("wait_for_migration timeout after {:?}", timeout));
+                return Err(VmCheckpointTimeout(timeout).into());
             }
 
             // Sleep until next tick, but never beyond deadline
-            sleep(poll_interval.min(deadline - now)).await;
+            sleep(MIGRATION_POLL_INTERVAL.min(deadline - now)).await;
         }
     }
 
@@ -664,7 +821,7 @@ impl QemuInner {
         }
 
         let mut qemu_process = self.qemu_process.lock().await;
-        if let Some(qemu_process) = qemu_process.as_mut() {
+        let stop_result = if let Some(qemu_process) = qemu_process.as_mut() {
             let is_qemu_running = qemu_process.id().is_some();
             if is_qemu_running {
                 info!(sl!(), "QemuInner::stop_vm(): kill()'ing qemu");
@@ -680,7 +837,28 @@ impl QemuInner {
             }
         } else {
             Err(anyhow!("qemu process has not been started yet"))
+        };
+
+        if stop_result.is_ok() {
+            let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
+            match std::fs::remove_file(&qmp_socket_path) {
+                Ok(()) => info!(sl!(), "removed QMP socket {}", qmp_socket_path),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("failed to remove QMP socket {}", qmp_socket_path)
+                    });
+                }
+            }
         }
+
+        let (tx, _rx) = mpsc::channel::<()>(1);
+        self.exit_notify = Some(tx);
+        self.restore = None;
+        self.devices.clear();
+        self.qmp = None;
+
+        stop_result
     }
 
     pub(crate) fn mark_exited(&self) {
@@ -717,23 +895,121 @@ impl QemuInner {
     }
 
     pub(crate) async fn save_vm(&mut self) -> Result<()> {
+        let state_path = PathBuf::from(&self.config.vm_template.device_state_path);
+        self.save_vm_to(&state_path, MIGRATION_WAIT_TIMEOUT).await
+    }
+
+    pub(crate) async fn save_vm_to(&mut self, state_path: &Path, timeout: Duration) -> Result<()> {
+        if state_path.as_os_str().is_empty() {
+            return Err(anyhow!("VM state path is empty"));
+        }
+
+        let parent = state_path
+            .parent()
+            .ok_or_else(|| anyhow!("VM state path has no parent: {}", state_path.display()))?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create VM state directory {}", parent.display()))?;
+
+        let partial_path = migration_partial_path(state_path)?;
+        if partial_path.exists() {
+            std::fs::remove_file(&partial_path).with_context(|| {
+                format!("remove stale migration file {}", partial_path.display())
+            })?;
+        }
+
         let qmp = self.qmp.as_mut().ok_or(anyhow!("QMP not initialized"))?;
 
         if self.config.vm_template.boot_to_be_template {
-            qmp.set_ignore_shared_memory_capability()
+            qmp.set_cpr_reboot_mode()
+                .context("failed to set CPR reboot migration mode")?;
+            qmp.set_ignore_shared_memory_capability(true)
                 .context("failed to set ignore shared memory capability")?;
+        } else {
+            // Template incoming leaves QEMU in CPR reboot mode. Workload
+            // checkpoints use normal migration so the source keeps running.
+            qmp.set_normal_migration_mode()
+                .context("failed to set normal workload migration mode")?;
+            // A template clone inherits x-ignore-shared from the template
+            // incoming operation. Workload checkpoints contain full VM RAM,
+            // so reset the capability explicitly instead of depending on that
+            // inherited migration state.
+            qmp.set_ignore_shared_memory_capability(false)
+                .context("disable ignore shared memory for workload checkpoint")?;
+            qmp.set_migration_bandwidth(WORKLOAD_MIGRATION_BANDWIDTH)
+                .context("raise local workload checkpoint migration bandwidth")?;
         }
 
-        let uri = format!("exec:cat >{}", self.config.vm_template.device_state_path);
+        let uri = migration_file_uri(&partial_path);
 
         qmp.execute_migration(&uri)
             .context("failed to execute migration")?;
 
-        self.wait_for_migration()
+        if let Err(err) = self
+            .wait_migration_with_timeout(timeout)
             .await
-            .context("failed to wait for migration")?;
+            .context("failed to wait for migration")
+        {
+            if let Some(qmp) = self.qmp.as_mut() {
+                let _ = qmp.cancel_migration();
+            }
+            let _ = std::fs::remove_file(&partial_path);
+            return Err(err);
+        }
+
+        File::open(&partial_path)
+            .with_context(|| format!("open migration file {}", partial_path.display()))?
+            .sync_all()
+            .with_context(|| format!("sync migration file {}", partial_path.display()))?;
+        fs::rename(&partial_path, state_path).with_context(|| {
+            format!(
+                "commit migration file {} to {}",
+                partial_path.display(),
+                state_path.display()
+            )
+        })?;
+        File::open(parent)
+            .with_context(|| format!("open migration directory {}", parent.display()))?
+            .sync_all()
+            .with_context(|| format!("sync migration directory {}", parent.display()))?;
 
         info!(sl!(), "migration finished successfully");
+
+        Ok(())
+    }
+
+    pub(crate) async fn save_vm_state_to(
+        &mut self,
+        state_path: &Path,
+        timeout: Option<Duration>,
+    ) -> Result<VmResourceTopology> {
+        let topology = self.current_resource_topology().await?;
+
+        self.save_vm_to(
+            &state_path.join(WORKLOAD_STATE_FILE),
+            timeout.unwrap_or(MIGRATION_WAIT_TIMEOUT),
+        )
+        .await?;
+
+        self.qmp
+            .as_mut()
+            .context("QMP is not initialized")?
+            .save_memory_topology(&state_path.join("memory-topology.json"))?;
+
+        Ok(topology)
+    }
+
+    pub(crate) fn configure_restore(&mut self, restore: Option<VmRestoreOptions>) -> Result<()> {
+        let Some(mut restore) = restore else {
+            self.restore = None;
+            return Ok(());
+        };
+
+        if self.qmp.is_some() {
+            return Err(anyhow!("VM restore must be configured before QEMU starts"));
+        }
+
+        restore.state_path = restore.state_path.join(WORKLOAD_STATE_FILE);
+        self.restore = Some(restore);
 
         Ok(())
     }
@@ -761,6 +1037,22 @@ impl QemuInner {
             .as_mut()
             .and_then(|qmp| qmp.get_vcpu_thread_ids().ok())
             .unwrap_or_default())
+    }
+
+    pub(crate) async fn current_resource_topology(&mut self) -> Result<VmResourceTopology> {
+        let qmp = self.qmp.as_mut().context("QMP is not initialized")?;
+
+        let vcpus = u32::try_from(qmp.get_vcpu_thread_ids()?.vcpus.len())
+            .context("too many vCPUs in checkpoint topology")?;
+        let hotplugged_memory_mb = bytes_to_megs(qmp.hotplugged_memory_size()?);
+        let memory_mb = self
+            .config
+            .memory_info
+            .default_memory
+            .checked_add(hotplugged_memory_mb)
+            .context("checkpoint memory topology overflow")?;
+
+        Ok(VmResourceTopology { vcpus, memory_mb })
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
@@ -1156,7 +1448,11 @@ async fn log_qemu_console(console: UnixStream) -> Result<()> {
     Ok(())
 }
 
-async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Result<()> {
+async fn log_qemu_stderr(
+    stderr: ChildStderr,
+    qemu_pid: u32,
+    exit_notify: mpsc::Sender<()>,
+) -> Result<()> {
     info!(sl!(), "starting reading qemu stderr");
 
     let stderr_reader = BufReader::new(stderr);
@@ -1170,11 +1466,30 @@ async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> 
         info!(sl!(), "qemu stderr: {:?}", buffer);
     }
 
-    // Notfiy the waiter the process exit.
+    // QEMU may close stderr while the VM process remains alive.  Treating EOF
+    // as process exit makes wait_vm reap a still-running child and causes the
+    // shim server to terminate, leaving a live orphaned VM behind.  Wait until
+    // procfs confirms that the child is gone or is a waitable zombie.
+    while !process_has_exited(qemu_pid) {
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    // Notify the waiter that the process can now be reaped.
     let _ = exit_notify.try_send(());
 
     info!(sl!(), "finished reading qemu stderr");
     Ok(())
+}
+
+fn process_has_exited(pid: u32) -> bool {
+    let stat = match fs::read_to_string(format!("/proc/{pid}/stat")) {
+        Ok(stat) => stat,
+        Err(err) => return err.kind() == io::ErrorKind::NotFound,
+    };
+
+    stat.rsplit_once(") ")
+        .and_then(|(_, fields)| fields.chars().next())
+        .is_some_and(|state| matches!(state, 'Z' | 'X'))
 }
 
 use crate::device::DeviceType;
@@ -1188,6 +1503,7 @@ impl QemuInner {
         if is_qemu_ready_to_hotplug {
             // hypervisor is running already
             device = self.hotplug_device(device).await?;
+            self.devices.push(device.clone());
         } else {
             // store the device to coldplug it later, on hypervisor launch
             self.devices.push(device.clone());
@@ -1262,6 +1578,7 @@ impl QemuInner {
     }
 
     async fn hotplug_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+        let defer_pci_path_lookup = self.restore.is_some();
         let qmp = match self.qmp {
             Some(ref mut qmp) => qmp,
             None => return Err(anyhow!("QMP not initialized")),
@@ -1283,7 +1600,7 @@ impl QemuInner {
                 // below does not apply.  The agent matches the CCW interface via
                 // its uevent instead; forcing a PCI-path resolution here would
                 // fail and abort the whole NIC attach (breaking guest networking).
-                if !uses_native_ccw_bus() {
+                if !uses_native_ccw_bus() && !defer_pci_path_lookup {
                     let frontend_id = format!("frontend-{}", virtio_net_device.get_netdev_id());
                     let pci_path = qmp
                         .get_device_by_qdev_id(&frontend_id)
@@ -1361,6 +1678,7 @@ impl QemuInner {
                         physical_sector_size,
                         &source,
                         iothread,
+                        defer_pci_path_lookup,
                     )
                     .context("hotplug block device")?;
 
@@ -1523,7 +1841,7 @@ impl Persist for QemuInner {
             config: hypervisor_state.config,
             devices: Vec::new(),
             netns: None,
-
+            restore: None,
             exit_notify: Some(exit_notify),
         })
     }

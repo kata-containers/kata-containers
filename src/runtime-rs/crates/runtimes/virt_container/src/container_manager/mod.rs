@@ -53,3 +53,13 @@ pub fn convert_agent_error(err: anyhow::Error) -> anyhow::Error {
     // Return original error if no known patterns matched
     err
 }
+
+pub fn restoring_container_error(container_id: &str, pending_restored: bool) -> Error {
+    if pending_restored {
+        Error::SandboxOperationPrecondition(format!(
+            "VM-restored task {container_id} is still pending; remove the restored sandbox"
+        ))
+    } else {
+        Error::ContainerNotFound(container_id.to_string())
+    }
+}

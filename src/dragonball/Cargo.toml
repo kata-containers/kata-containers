@@ -40,6 +40,7 @@ log = { workspace = true }
 nix = { features = ["mman"], workspace = true }
 procfs = { workspace = true }
 prometheus = { features = ["process"], workspace = true }
+ring = { workspace = true }
 seccompiler = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
@@ -61,6 +62,7 @@ tdx = { workspace = true }
 serial_test = { workspace = true }
 slog-async = { workspace = true }
 slog-term = { workspace = true }
+tempfile = { workspace = true }
 test-utils = { workspace = true }
 
 [features]
