@@ -155,7 +155,7 @@ jobs:
       - name: Limit cargo build jobs for runtime-rs tests
         if: ${{ matrix.component.name == 'runtime-rs' && contains(matrix.command, 'make test') && inputs.instance == 'ubuntu-26.04-s390x' }}
         run: |
-          echo "CARGO_BUILD_JOBS=4" >> "$GITHUB_ENV"
+          echo "CARGO_BUILD_JOBS=1" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
           cd "${COMPONENT_PATH}"
