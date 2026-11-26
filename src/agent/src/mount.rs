@@ -72,6 +72,24 @@ pub fn baremount(
     options: &str,
     logger: &Logger,
 ) -> Result<()> {
+    baremount_with_result(source, destination, fs_type, flags, options, logger).map(|_| ())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum MountResult {
+    Mounted,
+    AlreadyMounted,
+}
+
+#[instrument]
+pub(crate) fn baremount_with_result(
+    source: &Path,
+    destination: &Path,
+    fs_type: &str,
+    flags: MsFlags,
+    options: &str,
+    logger: &Logger,
+) -> Result<MountResult> {
     let logger = logger.new(o!("subsystem" => "baremount"));
 
     if source.as_os_str().is_empty() {
@@ -90,7 +108,7 @@ pub fn baremount(
     if let Ok(m) = get_linux_mount_info(destination_str.deref()) {
         if m.fs_type == fs_type && !flags.contains(MsFlags::MS_REMOUNT) {
             slog::info!(logger, "{source:?} is already mounted at {destination:?}");
-            return Ok(());
+            return Ok(MountResult::AlreadyMounted);
         }
     }
 
@@ -118,7 +136,8 @@ pub fn baremount(
             destination.display(),
             e
         )
-    })
+    })?;
+    Ok(MountResult::Mounted)
 }
 
 /// Looks for `mount_point` entry in the /proc/mounts.
