@@ -10,8 +10,11 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	cronjob_name="cron-job-pi-test"
+	job_name=""
+	pod_name=""
+
 	setup_common || die "setup_common failed"
-	job_name="cron-job-pi-test"
 	yaml_file="${pod_config_dir}/cron-job.yaml"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -20,41 +23,38 @@ setup() {
 }
 
 @test "Run a cron job to completion" {
+	local cronjob_uid
+	local cmd
+	local pi_number="3.14"
+
 	# Create cron job
 	kubectl apply -f "${yaml_file}"
+	cronjob_uid=$(kubectl get cronjob "${cronjob_name}" -o jsonpath='{.metadata.uid}')
 
-	# Verify job
-	waitForProcess "$wait_time" "$sleep_time" "kubectl describe cronjobs.batch $job_name | grep SuccessfulCreate"
+	# Capture one owned Job while polling. The subshell isolates waitForProcess's timeout changes.
+	cmd="kubectl get jobs -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].uid==\"${cronjob_uid}\")]}{.metadata.name}{\"\\n\"}{end}' | head -n 1 | grep ."
+	job_name=$(waitForProcess "${wait_time}" "${sleep_time}" "${cmd}")
 
-	# List pods that belong to the cron-job
-	pod_name=$(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep '^cron-job-pi-test' | head -n 1)
-
-	# Verify that the job is completed
-	cmd="kubectl get pods -o jsonpath='{.items[*].status.phase}' | grep Succeeded"
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
+	kubectl wait --for=condition=complete "job/${job_name}" --timeout="${timeout}"
+	pod_name=$(kubectl get pods --selector="job-name=${job_name}" \
+		--field-selector=status.phase=Succeeded -o jsonpath='{.items[0].metadata.name}')
+	[[ -n "${pod_name}" ]]
 
 	# Verify the output of the pod
-	pi_number="3.14"
-	kubectl logs "$pod_name" | grep "$pi_number"
+	kubectl logs "${pod_name}" | grep -F "${pi_number}"
 }
 
 teardown() {
 	# Debugging information
-	kubectl describe pod "$pod_name"
-	kubectl describe cronjobs.batch/"$job_name"
+	if [[ -n "${job_name}" ]]; then
+		kubectl describe "job/${job_name}"
+		kubectl describe pods --selector="job-name=${job_name}"
+	fi
+	kubectl describe "cronjob/${cronjob_name}"
 
-	# Clean-up
-
-	kubectl delete cronjobs.batch/"$job_name"
-	# Verify that the job is not running
-	run kubectl get cronjobs.batch
-	echo "$output"
-	[[ "$output" =~ "No resources found" ]]
-
-    # Verify that pod is not running
-	run kubectl get pods
-	echo "$output"
-	[[ "$output" =~ "No resources found" ]]
+	# Foreground deletion waits for the dependent Jobs and Pods as well.
+	kubectl delete "cronjob/${cronjob_name}" --ignore-not-found \
+		--cascade=foreground --wait=true --timeout="${timeout}"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 	teardown_common "${node}" "${node_start_time:-}"
