@@ -166,7 +166,9 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use kata_types::mount::DirectVolumeMountInfo;
-    use kata_types::qcow2::{DIRECT_VOLUME_DISCARD_KEY, DIRECT_VOLUME_FORMAT_KEY};
+    use kata_types::qcow2::{
+        DIRECT_VOLUME_BACKING_CHAIN_KEY, DIRECT_VOLUME_DISCARD_KEY, DIRECT_VOLUME_FORMAT_KEY,
+    };
     use rstest::{fixture, rstest};
     use serial_test::serial;
     use std::{collections::HashMap, fs};
@@ -300,6 +302,10 @@ mod tests {
         let volume_path = String::from(base_dir.path().join("qcow2").to_str().unwrap());
         let mount_info = qcow2_mount_info(&[
             (DIRECT_VOLUME_FORMAT_KEY, "qcow2"),
+            (
+                DIRECT_VOLUME_BACKING_CHAIN_KEY,
+                r#"[{"path":"/dev/mapper/base","format":"raw"},{"path":"/csi/l1.qcow2","format":"qcow2"}]"#,
+            ),
             (DIRECT_VOLUME_DISCARD_KEY, "ignore"),
         ]);
 
@@ -317,6 +323,21 @@ mod tests {
     #[case::unknown_format(
         &[(DIRECT_VOLUME_FORMAT_KEY, "vhd")],
         r#"unsupported volume format "vhd""#,
+    )]
+    #[case::chain_without_qcow2(
+        &[(DIRECT_VOLUME_BACKING_CHAIN_KEY, "[]")],
+        r#"metadata "io.katacontainers.volume.backing-chain" requires "io.katacontainers.volume.format" to be "qcow2""#,
+    )]
+    #[case::malformed_chain(
+        &[(DIRECT_VOLUME_FORMAT_KEY, "qcow2"), (DIRECT_VOLUME_BACKING_CHAIN_KEY, "nope")],
+        "parse backing-chain metadata",
+    )]
+    #[case::raw_above_base(
+        &[
+            (DIRECT_VOLUME_FORMAT_KEY, "qcow2"),
+            (DIRECT_VOLUME_BACKING_CHAIN_KEY, r#"[{"path":"/a","format":"raw"},{"path":"/b","format":"raw"}]"#),
+        ],
+        r#"backing image "/b" sits above the base and must be qcow2"#,
     )]
     #[case::unknown_discard(
         &[(DIRECT_VOLUME_FORMAT_KEY, "qcow2"), (DIRECT_VOLUME_DISCARD_KEY, "on")],
