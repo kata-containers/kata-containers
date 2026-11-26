@@ -328,7 +328,19 @@ impl TemplateVm {
 
     /// Save a VM to persistent disk.
     pub async fn save(&self) -> Result<()> {
-        self.hypervisor.save_vm().await.context("save vm")
+        let result = self
+            .hypervisor
+            .save_vm(hypervisor::VmSaveOptions::Template)
+            .await
+            .context("save vm")?;
+
+        if result.transient_memory.is_some() {
+            return Err(anyhow::anyhow!(
+                "template save unexpectedly returned transient memory"
+            ));
+        }
+
+        Ok(())
     }
 
     /// Resume resumes a paused VM.

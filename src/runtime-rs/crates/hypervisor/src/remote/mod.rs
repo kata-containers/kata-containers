@@ -4,7 +4,10 @@
 //
 
 use super::HypervisorState;
-use crate::{device::DeviceType, Hypervisor, HypervisorConfig, MemoryConfig, VcpuThreadIds};
+use crate::{
+    device::DeviceType, Hypervisor, HypervisorConfig, MemoryConfig, VcpuThreadIds, VmSaveOptions,
+    VmStartOptions,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use inner::RemoteInner;
@@ -60,7 +63,9 @@ impl Hypervisor for Remote {
             .await
     }
 
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
+        let timeout = options.regular_timeout()?;
+
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await
     }
@@ -89,9 +94,13 @@ impl Hypervisor for Remote {
         inner.resume_vm().await
     }
 
-    async fn save_vm(&self) -> Result<()> {
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<crate::VmSaveResult> {
+        options.require_template()?;
+
         let inner = self.inner.read().await;
-        inner.save_vm().await
+        inner.save_vm().await?;
+
+        Ok(crate::VmSaveResult::default())
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {

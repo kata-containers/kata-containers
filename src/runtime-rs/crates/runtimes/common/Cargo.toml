@@ -24,6 +24,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { features = ["fs", "process", "rt-multi-thread"], workspace = true }
 tracing = { workspace = true }
+ttrpc = { workspace = true }
 
 # Local dependencies
 agent = { workspace = true }

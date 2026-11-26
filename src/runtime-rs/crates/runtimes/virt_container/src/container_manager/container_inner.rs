@@ -447,7 +447,7 @@ impl ContainerInner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent::types::SetPolicyRequest;
+    use agent::{types::SetPolicyRequest, RebindSandboxRequest};
     use async_trait::async_trait;
     use hypervisor::qemu::Qemu;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -641,6 +641,9 @@ mod tests {
             &self,
             _: agent::GetDiagnosticDataRequest,
         ) -> Result<agent::GetDiagnosticDataResponse> {
+            unimplemented!()
+        }
+        async fn rebind_sandbox(&self, _req: RebindSandboxRequest) -> Result<agent::Empty> {
             unimplemented!()
         }
     }

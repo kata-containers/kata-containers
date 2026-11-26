@@ -3176,7 +3176,7 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(rtc));
     }
 
-    fn add_template(&mut self) {
+    pub(crate) fn add_template(&mut self) {
         let template = Template::new();
         self.devices.push(Box::new(template));
     }
