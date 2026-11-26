@@ -866,18 +866,19 @@ impl VirtSandbox {
             if d.typ() != oci::LinuxDeviceType::C {
                 continue;
             }
-            let host_path = match get_host_path(DEVICE_TYPE_CHAR, d.major(), d.minor()) {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(
-                        sl!(),
-                        "failed to resolve host path for {:?}: {:?}",
-                        d.path(),
-                        e
-                    );
-                    continue;
-                }
-            };
+            let host_path =
+                match get_host_path(DEVICE_TYPE_CHAR, d.major(), d.minor(), Some(d.path())) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        warn!(
+                            sl!(),
+                            "failed to resolve host path for {:?}: {:?}",
+                            d.path(),
+                            e
+                        );
+                        continue;
+                    }
+                };
             // Only process VFIO passthrough devices under /dev/vfio/*.
             // Skip non-VFIO devices and the legacy VFIO control node (/dev/vfio/vfio).
             if !host_path.starts_with("/dev/vfio/") || host_path == "/dev/vfio/vfio" {
