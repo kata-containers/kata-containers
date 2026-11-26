@@ -30,6 +30,13 @@ spec:
     spec:
       containers:
       - name: kata-monitor
+        # On enforcing nodes, first load the kata-deploy SELinux module from
+        # tools/packaging/kata-deploy/selinux/kata-deploy.cil, then enable:
+        # securityContext:
+        #   privileged: false
+        #   seLinuxOptions:
+        #     type: kata_monitor_t
+        #     level: s0
         # The `kata-monitor` image is published as part of every Kata
         # Containers release starting with 3.32.0. Pinning to a specific
         # release tag (e.g. `3.32.0`) is strongly recommended for

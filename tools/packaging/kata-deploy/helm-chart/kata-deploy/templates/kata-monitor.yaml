@@ -1,4 +1,8 @@
 {{- if .Values.monitor.enabled }}
+{{- $securityContext := deepCopy (.Values.monitor.securityContext | default dict) }}
+{{- if include "kata-deploy.selinuxEnabled" . | trim }}
+{{- $securityContext = mergeOverwrite (dict "seLinuxOptions" (dict "type" "kata_monitor_t" "level" "s0")) $securityContext }}
+{{- end }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -42,7 +46,7 @@ spec:
         image: {{ include "kata-deploy.monitorImage" . }}
         imagePullPolicy: {{ .Values.imagePullPolicy }}
         securityContext:
-{{- toYaml .Values.monitor.securityContext | nindent 10 }}
+{{- toYaml $securityContext | nindent 10 }}
         args:
           - -listen-address={{ .Values.monitor.listenAddress }}
           - -log-level={{ include "monitorLogLevel" . }}
