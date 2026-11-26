@@ -46,6 +46,30 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let cfg = n.cfg;
 
+        let vm_template = cfg.vm_template.clone();
+        let template_enabled = vm_template.boot_to_be_template || vm_template.boot_from_template;
+        if vm_template.boot_to_be_template && vm_template.boot_from_template {
+            return Err(VmConfigError::InvalidTemplateConfig(
+                "boot_to_be_template and boot_from_template cannot both be enabled".to_string(),
+            ));
+        }
+        if template_enabled && vm_template.memory_path.is_empty() {
+            return Err(VmConfigError::InvalidTemplateConfig(
+                "memory_path is empty".to_string(),
+            ));
+        }
+        if template_enabled && !matches!(cfg.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+            return Err(VmConfigError::InvalidTemplateConfig(
+                "Cloud Hypervisor VM templates are incompatible with filesystem sharing"
+                    .to_string(),
+            ));
+        }
+        if template_enabled && cfg.security_info.confidential_guest {
+            return Err(VmConfigError::InvalidTemplateConfig(
+                "Cloud Hypervisor VM templates do not support confidential guests".to_string(),
+            ));
+        }
+
         let debug = cfg.debug_info.enable_debug;
 
         let vsock_socket_path = n.vsock_socket_path;

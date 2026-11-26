@@ -357,7 +357,7 @@ pub(crate) async fn netns_has_interfaces(netns_path: &str) -> Result<bool> {
     while let Some(msg) = links.try_next().await? {
         let link = link::get_link_from_message(msg);
         let attrs = link.attrs();
-        if (attrs.flags & libc::IFF_LOOPBACK as u32) != 0 {
+        if !should_scan_link(attrs.flags, link.r#type()) {
             continue;
         }
         let addrs = handle_addresses(&handle, attrs)
@@ -411,7 +411,10 @@ async fn get_entity_from_netns(
         let link = link::get_link_from_message(link);
         let attrs = link.attrs();
 
-        if (attrs.flags & libc::IFF_LOOPBACK as u32) != 0 {
+        if !should_scan_link(attrs.flags, link.r#type()) {
+            if link.r#type() == "tuntap" {
+                info!(sl!(), "skipping TUN/TAP backend {}", attrs.name);
+            }
             continue;
         }
 
@@ -552,6 +555,13 @@ fn is_physical_iface(name: &str) -> Result<bool> {
         return Ok(false);
     }
     Ok(true)
+}
+
+fn should_scan_link(flags: u32, link_type: &str) -> bool {
+    // TUN/TAP links are virtualization backends, not workload interfaces to
+    // turn into another endpoint. In particular, a previous network setup may
+    // leave Kata's TAP visible while the netns is rescanned during restore.
+    flags & libc::IFF_LOOPBACK as u32 == 0 && link_type != "tuntap"
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@
 
 use super::HypervisorState;
 use crate::device::DeviceType;
-use crate::VmmState;
+use crate::{VmRestoreOptions, VmmState};
 use anyhow::Result;
 use async_trait::async_trait;
 use ch_config::ch_api::ApiSocket;
@@ -46,6 +46,10 @@ pub struct CloudHypervisorInner {
 
     /// List of devices that will be added to the VM once it boots
     pub(crate) pending_devices: Vec<DeviceType>,
+
+    /// Private workload checkpoint directory and source network identity used
+    /// by the next VM start.
+    pub(crate) restore: Option<VmRestoreOptions>,
 
     pub(crate) _capabilities: Capabilities,
 
@@ -97,6 +101,7 @@ impl CloudHypervisorInner {
             run_dir: String::default(),
             netns: None,
             pending_devices: vec![],
+            restore: None,
             device_ids: HashMap::<String, String>::new(),
             _capabilities: capabilities,
             shutdown_tx: Some(tx),

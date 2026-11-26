@@ -5,7 +5,10 @@
 
 use super::HypervisorState;
 use crate::device::DeviceType;
-use crate::{Hypervisor, MemoryConfig, VcpuThreadIds};
+use crate::{
+    Hypervisor, MemoryConfig, VcpuThreadIds, VmResourceTopology, VmSaveOptions, VmSaveResult,
+    VmStartOptions,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -71,9 +74,15 @@ impl Hypervisor for CloudHypervisor {
         inner.prepare_vm(id, netns, selinux_label).await
     }
 
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.start_vm(timeout).await
+        let expected_topology = options.restore.as_ref().map(VmResourceTopology::from);
+        inner.configure_restore(options.restore)?;
+        inner.start_vm(options.timeout).await?;
+        if let Some(expected) = expected_topology {
+            expected.validate_restored(inner.current_resource_topology().await?)?;
+        }
+        Ok(())
     }
 
     async fn stop_vm(&self) -> Result<()> {
@@ -101,9 +110,24 @@ impl Hypervisor for CloudHypervisor {
         inner.resume_vm().await
     }
 
-    async fn save_vm(&self) -> Result<()> {
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<VmSaveResult> {
         let inner = self.inner.write().await;
-        inner.save_vm().await
+        match options {
+            VmSaveOptions::Template => {
+                inner.save_vm().await?;
+                Ok(VmSaveResult::default())
+            }
+            VmSaveOptions::Workload {
+                state_path,
+                timeout,
+            } => {
+                let resource_topology = inner.checkpoint_vm_state_to(&state_path, timeout).await?;
+                Ok(VmSaveResult {
+                    resource_topology: Some(resource_topology),
+                    ..Default::default()
+                })
+            }
+        }
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
