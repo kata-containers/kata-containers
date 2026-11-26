@@ -11,7 +11,7 @@
 //! - a *state file* (JSON, produced from [`MicrovmState`]) holding vCPU,
 //!   device and VM metadata state, and
 //! - a *memory file* holding the guest RAM contents (managed by the address
-//!   space manager, not this module).
+//!   space manager, with file encoding provided by [`memory`]).
 //!
 //! # Compatibility policy
 //!
@@ -22,6 +22,9 @@
 //! (deprecate-don't-delete). [`FORMAT_EPOCH`] is bumped only on a genuinely
 //! incompatible change, causing old snapshots to be refused loudly instead of
 //! being misinterpreted.
+
+/// Native flat and overlay memory formats and file algorithms.
+pub mod memory;
 
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};

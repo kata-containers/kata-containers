@@ -143,7 +143,19 @@ where
 
     /// Removes device.
     pub fn remove(&self) {
-        self.state().get_inner_device_mut().remove();
+        let mut state = self.state();
+        state.get_inner_device_mut().prepare_remove();
+        state.get_inner_device_mut().finish_remove();
+    }
+
+    /// Signals the backend to stop without waiting for its workers.
+    pub fn prepare_remove(&self) {
+        self.state().get_inner_device_mut().prepare_remove();
+    }
+
+    /// Waits for backend workers after removal has been signalled.
+    pub fn finish_remove(&self) {
+        self.state().get_inner_device_mut().finish_remove();
     }
 
     /// Returns the Resource.

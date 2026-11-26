@@ -30,6 +30,7 @@ const ENV_TOKIO_RUNTIME_WORKER_THREADS: &str = "TOKIO_RUNTIME_WORKER_THREADS";
 // types should not be handled by the mount manager.
 // To include prepare mount types, use "/*" suffix, such as "format/*"
 pub const RUNTIME_ALLOW_MOUNTS: &str = "containerd.io/runtime-allow-mounts";
+const RUNTIME_STAGED_RESTORE: &str = "io.containerd.pod-restore.staged";
 
 #[derive(Debug)]
 enum Action {
@@ -39,6 +40,9 @@ enum Action {
     Help,
     Version,
     Info,
+    FactoryInit,
+    FactoryDestroy,
+    FactoryStatus,
 }
 
 fn parse_args(args: &[OsString]) -> Result<Action> {
@@ -73,6 +77,12 @@ fn parse_args(args: &[OsString]) -> Result<Action> {
         Ok(Action::Start(shim_args))
     } else if rest_args[0] == "delete" {
         Ok(Action::Delete(shim_args))
+    } else if rest_args.as_slice() == ["factory", "init"] {
+        Ok(Action::FactoryInit)
+    } else if rest_args.as_slice() == ["factory", "destroy"] {
+        Ok(Action::FactoryDestroy)
+    } else if rest_args.as_slice() == ["factory", "status"] {
+        Ok(Action::FactoryStatus)
     } else {
         Err(anyhow!(Error::InvalidArgument))
     }
@@ -105,6 +115,12 @@ fn show_help(cmd: &OsStr) {
         path to publish binary (used for publishing events) (default "containerd")
   --version
         show the runtime version detail and exit
+  factory init
+        create a VM factory template
+  factory status
+        validate the configured VM factory template
+  factory destroy
+        unmount and remove the configured VM factory template
 "#
     );
 }
@@ -142,6 +158,8 @@ fn show_info() -> Result<()> {
         RUNTIME_ALLOW_MOUNTS.to_string(),
         "mkdir/*,format/*,erofs".to_string(),
     );
+    info.annotations
+        .insert(RUNTIME_STAGED_RESTORE.to_string(), "true".to_string());
 
     let data = info
         .write_to_bytes()
@@ -165,6 +183,14 @@ fn get_tokio_runtime() -> Result<tokio::runtime::Runtime> {
         .build()
         .context("prepare tokio runtime")?;
     Ok(rt)
+}
+
+fn init_factory_runtime() -> Result<kata_types::config::TomlConfig> {
+    <runtimes::virt_container::VirtContainer as common::RuntimeHandler>::init()
+        .context("initialize VM factory runtime")?;
+    common::config::load_runtime_config(&std::collections::HashMap::new(), None)
+        .map(|(config, _)| config)
+        .context("load factory configuration")
 }
 
 fn real_main() -> Result<()> {
@@ -195,6 +221,27 @@ fn real_main() -> Result<()> {
         Action::Help => show_help(&args[0]),
         Action::Version => show_version(None),
         Action::Info => show_info().context("show info")?,
+        Action::FactoryInit => {
+            let config = init_factory_runtime()?;
+            let rt = get_tokio_runtime().context("get tokio runtime")?;
+            rt.block_on(runtimes::virt_container::factory::init_factory_command(
+                config,
+            ))?;
+        }
+        Action::FactoryDestroy => {
+            let config = init_factory_runtime()?;
+            let rt = get_tokio_runtime().context("get tokio runtime")?;
+            rt.block_on(runtimes::virt_container::factory::destroy_factory_command(
+                config,
+            ))?;
+        }
+        Action::FactoryStatus => {
+            let config = init_factory_runtime()?;
+            let rt = get_tokio_runtime().context("get tokio runtime")?;
+            rt.block_on(runtimes::virt_container::factory::status_factory_command(
+                config,
+            ))?;
+        }
     }
     Ok(())
 }

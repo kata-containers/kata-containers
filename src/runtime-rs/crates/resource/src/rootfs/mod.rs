@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use kata_types::mount::Mount;
 mod block_rootfs;
 mod erofs_rootfs;
+mod restore_blk_rootfs;
 pub mod virtual_volume;
 
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
@@ -22,7 +23,7 @@ use tokio::sync::RwLock;
 
 use self::{
     block_rootfs::is_block_rootfs, erofs_rootfs::ErofsMultiLayerRootfs,
-    nydus_rootfs::NYDUS_ROOTFS_TYPE,
+    nydus_rootfs::NYDUS_ROOTFS_TYPE, restore_blk_rootfs::RestoredBlockRootfs,
 };
 use crate::rootfs::erofs_rootfs::is_erofs_multi_layer;
 use crate::share_fs::{NydusShareFs, ShareFs};
@@ -191,6 +192,37 @@ impl RootFsResource {
                 Arc::strong_count(r)
             );
         }
+    }
+
+    pub async fn adopt_restored_block_rootfs(
+        &self,
+        device_manager: &RwLock<DeviceManager>,
+        device_ids: &[String],
+    ) -> Result<Arc<dyn Rootfs>> {
+        if device_ids.is_empty() || device_ids.iter().any(String::is_empty) {
+            return Err(anyhow!("restored block rootfs device ID is empty"));
+        }
+
+        let registered = device_manager
+            .read()
+            .await
+            .checkpoint_block_devices()
+            .await
+            .into_iter()
+            .map(|block| block.device_id)
+            .collect::<std::collections::HashSet<_>>();
+
+        if let Some(device_id) = device_ids.iter().find(|id| !registered.contains(*id)) {
+            return Err(anyhow!(
+                "restored block rootfs device {} is not registered",
+                device_id
+            ));
+        }
+
+        let rootfs: Arc<dyn Rootfs> = Arc::new(RestoredBlockRootfs::new(device_ids.to_vec()));
+        self.inner.write().await.rootfs.push(rootfs.clone());
+
+        Ok(rootfs)
     }
 }
 

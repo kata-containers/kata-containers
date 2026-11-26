@@ -4,9 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{anyhow, Context};
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{Error, Result};
+use std::os::unix::fs::FileExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::Command;
@@ -171,6 +173,103 @@ fn do_reflink_copy(src: File, dst: File) -> Result<()> {
     unsafe { ficlone(dst.as_raw_fd(), src.as_raw_fd() as u64) }
         .map(|_| ())
         .map_err(|e| Error::from_raw_os_error(e as i32))
+}
+
+/// Read the complete buffer at a file offset.
+pub fn read_exact_at(source: &fs::File, offset: u64, buffer: &mut [u8]) -> anyhow::Result<()> {
+    use std::os::unix::fs::FileExt;
+
+    let mut read = 0;
+    while read < buffer.len() {
+        let count = source.read_at(&mut buffer[read..], offset + read as u64)?;
+        if count == 0 {
+            return Err(anyhow!("unexpected EOF reading sparse artifact source"));
+        }
+
+        read += count;
+    }
+
+    Ok(())
+}
+
+/// Write all bytes at a file offset.
+pub fn write_all_at(file: &fs::File, mut bytes: &[u8], mut offset: u64) -> anyhow::Result<()> {
+    while !bytes.is_empty() {
+        let written = file.write_at(bytes, offset)?;
+        if written == 0 {
+            return Err(anyhow!("failed to make progress writing sparse artifact"));
+        }
+
+        bytes = &bytes[written..];
+        offset = offset
+            .checked_add(written as u64)
+            .ok_or_else(|| anyhow!("canonical sparse artifact write offset overflow"))?;
+    }
+
+    Ok(())
+}
+
+/// Return chunks intersecting allocated data extents, or None when unsupported.
+pub fn sparse_file_chunks(
+    source: &fs::File,
+    logical_size: u64,
+    chunk_size: usize,
+) -> anyhow::Result<Option<Vec<u64>>> {
+    if chunk_size == 0 {
+        return Err(anyhow!("sparse file chunk size must be nonzero"));
+    }
+    let mut chunks = Vec::new();
+    let mut offset = 0_u64;
+    let mut last = None;
+    while offset < logical_size {
+        let data =
+            unsafe { libc::lseek(source.as_raw_fd(), offset as libc::off_t, libc::SEEK_DATA) };
+        if data < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::ENXIO) {
+                break;
+            }
+
+            if error.raw_os_error() == Some(libc::EINVAL) {
+                return Ok(None);
+            }
+
+            return Err(error).context("find sparse artifact data extent");
+        }
+
+        let data = data as u64;
+        if data >= logical_size {
+            break;
+        }
+
+        let hole = unsafe { libc::lseek(source.as_raw_fd(), data as libc::off_t, libc::SEEK_HOLE) };
+        if hole < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::EINVAL) {
+                return Ok(None);
+            }
+
+            return Err(error).context("find sparse artifact hole");
+        }
+
+        let hole = (hole as u64).min(logical_size);
+        let first = data / chunk_size as u64;
+        let end = hole.saturating_sub(1) / chunk_size as u64;
+        for chunk in first..=end {
+            if last != Some(chunk) {
+                chunks.push(chunk);
+                last = Some(chunk);
+            }
+        }
+
+        if hole <= offset {
+            return Err(anyhow!("non-progressing sparse artifact extent"));
+        }
+
+        offset = hole;
+    }
+
+    Ok(Some(chunks))
 }
 
 #[cfg(test)]

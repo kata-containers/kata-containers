@@ -615,11 +615,23 @@ impl BlockDeviceMgr {
 
     /// Removes all virtio-blk devices
     pub fn remove_devices(&mut self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
+        let mut prepared = Vec::new();
         while let Some(mut info) = self.info_list.pop_back() {
             info!(ctx.logger(), "remove drive {}", info.config.drive_id);
             if let Some(device) = info.device.take() {
-                DeviceManager::destroy_virtio_device(device, ctx)?;
+                if let Err(err) = DeviceManager::prepare_destroy_virtio_device(device.clone(), ctx)
+                {
+                    for prepared_device in prepared {
+                        let _ = DeviceManager::finish_destroy_virtio_device(prepared_device);
+                    }
+                    return Err(err);
+                }
+                prepared.push(device);
             }
+        }
+
+        for device in prepared {
+            DeviceManager::finish_destroy_virtio_device(device)?;
         }
 
         Ok(())

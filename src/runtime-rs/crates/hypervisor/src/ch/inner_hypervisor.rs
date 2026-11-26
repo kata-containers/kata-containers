@@ -15,7 +15,7 @@ use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
 use crate::VM_ROOTFS_DRIVER_BLK;
-use crate::{VcpuThreadIds, VmmState};
+use crate::{VcpuThreadIds, VmResourceTopology, VmRestoreOptions, VmmState};
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_netdev_add_with_fds;
 use ch_config::{
@@ -38,6 +38,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs;
+use std::os::fd::AsRawFd;
+use std::os::fd::FromRawFd;
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -49,6 +52,30 @@ use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
+
+fn checkpoint_memory_mb(memory: &ch_config::MemoryConfig) -> Result<u32> {
+    const MIB: u64 = 1 << 20;
+
+    let mut bytes = memory
+        .size
+        .checked_add(memory.hotplugged_size.unwrap_or_default())
+        .context("checkpoint memory topology overflow")?;
+    for zone in memory.zones.as_deref().unwrap_or_default() {
+        bytes = bytes
+            .checked_add(zone.size)
+            .and_then(|size| size.checked_add(zone.hotplugged_size.unwrap_or_default()))
+            .context("checkpoint memory topology overflow")?;
+    }
+    if bytes == 0 {
+        return Err(anyhow!("checkpoint memory topology is empty"));
+    }
+    if bytes % MIB != 0 {
+        return Err(anyhow!(
+            "checkpoint memory topology is not MiB-aligned: {bytes} bytes"
+        ));
+    }
+    u32::try_from(bytes / MIB).context("checkpoint memory topology exceeds u32 MiB")
+}
 
 const CH_NAME: &str = "clh";
 
@@ -174,6 +201,18 @@ impl CloudHypervisorInner {
             .collect();
         let (shared_fs_devices, network_devices, host_devices, protection_device, boot_disks) =
             self.get_shared_devices().await?;
+        let network_devices = network_devices.unwrap_or_default();
+        let network_fds: Vec<Vec<OwnedFd>> = network_devices
+            .iter()
+            .map(|net| {
+                net.fds
+                    .as_ref()
+                    .into_iter()
+                    .flatten()
+                    .map(|fd| unsafe { OwnedFd::from_raw_fd(*fd) })
+                    .collect()
+            })
+            .collect();
 
         let sandbox_path = get_sandbox_path(&self.id);
 
@@ -217,22 +256,14 @@ impl CloudHypervisorInner {
             debug!(sl!(), "vm boot response: {:?}", detail);
         }
 
-        if let Some(network_devices) = network_devices {
-            for net in network_devices {
-                let vm_fds = net.fds.clone().unwrap_or_default();
-                let response =
-                    cloud_hypervisor_vm_netdev_add_with_fds(&self.api_socket, net, vm_fds.clone())
-                        .await
-                        .context("failed to add vm netdev with fds")?;
+        for (net, owned_fds) in network_devices.into_iter().zip(network_fds.iter()) {
+            let vm_fds: Vec<_> = owned_fds.iter().map(AsRawFd::as_raw_fd).collect();
+            let response = cloud_hypervisor_vm_netdev_add_with_fds(&self.api_socket, net, vm_fds)
+                .await
+                .context("failed to add vm netdev with fds")?;
 
-                if let Some(detail) = response {
-                    debug!(sl!(), "vm netdev add response: {:?}", detail);
-                }
-
-                for fd in vm_fds {
-                    // Explicitly close the fd now that it has been sent to CLH.
-                    nix::unistd::close(fd).context("failed to close netdev fd")?;
-                }
+            if let Some(detail) = response {
+                debug!(sl!(), "vm netdev add response: {:?}", detail);
             }
         }
 
@@ -266,30 +297,6 @@ impl CloudHypervisorInner {
         let memory_path = Path::new(&self.config.vm_template.memory_path);
 
         memory_path.parent().map(Path::to_path_buf)
-    }
-
-    fn should_restore_from_template(&self) -> bool {
-        let Some(template_dir) = self.template_dir() else {
-            debug!(sl!(), "template memory path has no parent directory"; "memory-path" => self.config.vm_template.memory_path.clone());
-            return false;
-        };
-
-        let required_files = [
-            PathBuf::from(&self.config.vm_template.memory_path),
-            template_dir.join(CLH_TEMPLATE_STATE_FILE),
-            template_dir.join(CLH_TEMPLATE_CONFIG_FILE),
-        ];
-
-        for path in required_files {
-            if let Err(err) = fs::metadata(&path) {
-                debug!(sl!(), "template artifact not accessible"; "path" => path.display().to_string(), "error" => err.to_string());
-                return false;
-            }
-        }
-
-        info!(sl!(), "Template files found, can restore VM from template");
-
-        true
     }
 
     /// Copy a CLH template artifact while preserving the source file permissions.
@@ -354,6 +361,12 @@ impl CloudHypervisorInner {
         let template_dir = self
             .template_dir()
             .ok_or_else(|| anyhow!("template memory path has no parent directory"))?;
+        fs::metadata(&self.config.vm_template.memory_path).with_context(|| {
+            format!(
+                "access template memory {}",
+                self.config.vm_template.memory_path
+            )
+        })?;
         let vm_path = PathBuf::from(&self.vm_path);
 
         create_dir_all_with_inherit_owner(&vm_path, 0o750)
@@ -372,17 +385,16 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn restore_vm(&self) -> Result<()> {
-        let vm_path = PathBuf::from(&self.vm_path);
-        let state_file = vm_path.join(CLH_TEMPLATE_STATE_FILE);
-        let config_file = vm_path.join(CLH_TEMPLATE_CONFIG_FILE);
+    async fn restore_vm_from(&self, state_dir: &Path) -> Result<()> {
+        let state_file = state_dir.join(CLH_TEMPLATE_STATE_FILE);
+        let config_file = state_dir.join(CLH_TEMPLATE_CONFIG_FILE);
 
         fs::metadata(&state_file)
             .with_context(|| format!("access state file {}", state_file.display()))?;
         fs::metadata(&config_file)
             .with_context(|| format!("access config file {}", config_file.display()))?;
 
-        let source_url = format!("file://{}", vm_path.display());
+        let source_url = format!("file://{}", state_dir.display());
         let response = cloud_hypervisor_vm_restore(
             &self.api_socket,
             RestoreConfig {
@@ -399,8 +411,116 @@ impl CloudHypervisorInner {
             warn!(sl!(), "restored VM is not paused"; "state" => format!("{:?}", info.state));
         }
 
-        info!(sl!(), "Successfully restored VM from template");
+        info!(sl!(), "Successfully restored VM from snapshot");
 
+        Ok(())
+    }
+
+    async fn prepare_restore_state(
+        &mut self,
+        state_dir: &Path,
+        network_macs: &[[u8; 6]],
+    ) -> Result<()> {
+        let config_path = state_dir.join(CLH_TEMPLATE_CONFIG_FILE);
+        let data =
+            fs::read(&config_path).with_context(|| format!("read {}", config_path.display()))?;
+        let mut config: VmConfig = serde_json::from_slice(&data)
+            .with_context(|| format!("parse {}", config_path.display()))?;
+
+        let mut networks = Vec::new();
+        let mut blocks = Vec::new();
+        for device in std::mem::take(&mut self.pending_devices) {
+            match device {
+                crate::DeviceType::Network(network) => networks.push(network),
+                crate::DeviceType::BlockModern(block) => {
+                    let block = block.lock().await;
+                    blocks.push((
+                        block.config.index,
+                        block.device_id.clone(),
+                        PathBuf::from(&block.config.path_on_host),
+                    ));
+                }
+                other => {
+                    return Err(anyhow!(
+                        "Cloud Hypervisor workload restore does not support pending device {other}"
+                    ));
+                }
+            }
+        }
+        networks.sort_by_key(|network| network.config.index);
+        blocks.sort_by_key(|(index, _, _)| *index);
+
+        let snapshot_networks = config.net.as_deref_mut().unwrap_or_default();
+        if snapshot_networks.len() != networks.len() || networks.len() != network_macs.len() {
+            return Err(anyhow!(
+                "restored network inventory has {} devices, snapshot has {}, checkpoint has {}",
+                networks.len(),
+                snapshot_networks.len(),
+                network_macs.len()
+            ));
+        }
+        for ((snapshot, network), mac) in snapshot_networks
+            .iter_mut()
+            .zip(networks.iter())
+            .zip(network_macs)
+        {
+            snapshot.tap = Some(network.config.host_dev_name.clone());
+            snapshot.fds = None;
+            snapshot.mac = ch_config::net_util::MacAddr { bytes: *mac };
+        }
+
+        let boot_image = Path::new(&self.config.boot_info.image);
+        let snapshot_disks = config.disks.as_deref_mut().unwrap_or_default();
+        let mut workload_disks = snapshot_disks
+            .iter_mut()
+            .filter(|disk| disk.path.as_deref() != Some(boot_image))
+            .collect::<Vec<_>>();
+        if workload_disks.len() != blocks.len() {
+            return Err(anyhow!(
+                "restored block inventory has {} devices, snapshot has {} workload disks",
+                blocks.len(),
+                workload_disks.len()
+            ));
+        }
+        let mut restored_ids = HashMap::with_capacity(blocks.len());
+        for (disk, (_, device_id, path)) in workload_disks.iter_mut().zip(blocks) {
+            let native_id = disk
+                .id
+                .clone()
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| anyhow!("restored block device {device_id} has no native id"))?;
+            if self.device_ids.contains_key(&device_id)
+                || restored_ids.insert(device_id.clone(), native_id).is_some()
+            {
+                return Err(anyhow!(
+                    "restored block device id is duplicated: {device_id}"
+                ));
+            }
+            disk.path = Some(path);
+        }
+
+        if let Some(vsock) = config.vsock.as_mut() {
+            vsock.socket = PathBuf::from(get_vsock_path(&self.id)?);
+        }
+        if let Some(zones) = config.memory.zones.as_mut() {
+            for zone in zones {
+                if let Some(source) = zone.file.as_ref() {
+                    let name = source.file_name().ok_or_else(|| {
+                        anyhow!(
+                            "snapshot memory path has no file name: {}",
+                            source.display()
+                        )
+                    })?;
+                    let private = state_dir.join(name);
+                    fs::metadata(&private).with_context(|| {
+                        format!("access private snapshot memory {}", private.display())
+                    })?;
+                    zone.file = Some(private);
+                }
+            }
+        }
+        Self::write_json_file(&config_path, &serde_json::to_value(config)?)?;
+        self.device_ids.extend(restored_ids);
         Ok(())
     }
 
@@ -582,45 +702,62 @@ impl CloudHypervisorInner {
     }
 
     async fn cloud_hypervisor_shutdown(&mut self) -> Result<()> {
-        let response = cloud_hypervisor_vmm_shutdown(&self.api_socket)
+        let api_result = cloud_hypervisor_vmm_shutdown(&self.api_socket)
             .await
-            .context("shutdown failed")?;
-
-        if let Some(detail) = response {
+            .context("Cloud Hypervisor API shutdown failed");
+        if let Ok(Some(detail)) = &api_result {
             debug!(sl!(), "shutdown response: {:?}", detail);
         }
 
-        // Trigger a controlled shutdown. Without a receiver, the output task
-        // already saw CH exit and reported it.
-        let _ = self
+        // Always kill and reap the child locally. In particular, an API I/O
+        // timeout leaves the HTTP connection unusable, so cleanup must not
+        // depend on another successful API exchange.
+        let cleanup_result = self.cleanup_process().await;
+        match (api_result, cleanup_result) {
+            (Ok(_), Ok(())) => Ok(()),
+            (Err(api_err), Ok(())) => Err(api_err),
+            (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
+            (Err(api_err), Err(cleanup_err)) => Err(api_err.context(format!(
+                "also failed to clean up Cloud Hypervisor process: {cleanup_err:#}"
+            ))),
+        }
+    }
+
+    async fn cleanup_process(&mut self) -> Result<()> {
+        // Trigger the output task to kill and reap the child. This path does
+        // not depend on the API socket and is therefore safe after API errors.
+        if let Err(err) = self
             .shutdown_tx
             .as_mut()
             .ok_or("no shutdown channel")
             .map_err(|e| anyhow!(e))?
-            .send(true);
+            .send(true)
+        {
+            debug!(sl!(), "Cloud Hypervisor output task already stopped: {err}");
+        }
 
-        let tasks = self
-            .tasks
-            .take()
-            .ok_or("no tasks")
-            .map_err(|e| anyhow!(e))?;
+        let Some(tasks) = self.tasks.take() else {
+            self.state = VmmState::NotReady;
+            return Ok(());
+        };
 
         let results = join_all(tasks).await;
 
-        let mut wait_errors: Vec<tokio::task::JoinError> = vec![];
+        let mut wait_errors = vec![];
 
         for result in results {
-            if let Err(e) = result {
-                eprintln!("wait task error: {e:#?}");
-
-                wait_errors.push(e);
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => wait_errors.push(format!("{err:#}")),
+                Err(err) => wait_errors.push(format!("{err:#}")),
             }
         }
 
+        self.state = VmmState::NotReady;
         if wait_errors.is_empty() {
             Ok(())
         } else {
-            Err(anyhow!("wait all tasks failed: {:#?}", wait_errors))
+            Err(anyhow!("wait all tasks failed: {wait_errors:#?}"))
         }
     }
 
@@ -715,14 +852,16 @@ impl CloudHypervisorInner {
 
         self.state = VmmState::VmmServerReady;
 
-        if self.config.vm_template.boot_from_template && self.should_restore_from_template() {
+        if let Some(restore) = self.restore.take() {
+            self.prepare_restore_state(&restore.state_path, &restore.network_macs)
+                .await?;
+            self.restore_vm_from(&restore.state_path).await?;
+            self.resume_vm().await?;
+        } else if self.config.vm_template.boot_from_template {
             self.prepare_restore_files()?;
-            self.restore_vm().await?;
+            self.restore_vm_from(Path::new(&self.vm_path)).await?;
             self.resume_vm().await?;
         } else {
-            if self.config.vm_template.boot_from_template {
-                self.config.vm_template.boot_from_template = false;
-            }
             self.boot_vm().await?;
         }
 
@@ -786,6 +925,49 @@ impl CloudHypervisorInner {
                 .context("patch snapshot memory sharing")?;
         }
 
+        Ok(())
+    }
+
+    pub(crate) async fn checkpoint_vm_state_to(
+        &self,
+        state_dir: &Path,
+        _timeout: Option<Duration>,
+    ) -> Result<VmResourceTopology> {
+        let topology = self.current_resource_topology().await?;
+        let destination_url = format!("file://{}", state_dir.display());
+        cloud_hypervisor_vm_snapshot(&self.api_socket, VmSnapshotConfig { destination_url })
+            .await
+            .context("snapshot workload VM")?;
+        fs::metadata(state_dir.join(CLH_TEMPLATE_CONFIG_FILE))
+            .context("Cloud Hypervisor snapshot did not produce config.json")?;
+        fs::metadata(state_dir.join(CLH_TEMPLATE_STATE_FILE))
+            .context("Cloud Hypervisor snapshot did not produce state.json")?;
+        Ok(topology)
+    }
+
+    pub(crate) async fn current_resource_topology(&self) -> Result<VmResourceTopology> {
+        let info = cloud_hypervisor_vm_info(&self.api_socket)
+            .await
+            .context("query checkpoint VM resource topology")?;
+        let vcpus = info.config.cpus.boot_vcpus;
+        if vcpus == 0 {
+            return Err(anyhow!("checkpoint CPU topology is empty"));
+        }
+        let memory_mb = checkpoint_memory_mb(&info.config.memory)?;
+        Ok(VmResourceTopology { vcpus, memory_mb })
+    }
+
+    pub(crate) fn configure_restore(&mut self, options: Option<VmRestoreOptions>) -> Result<()> {
+        let Some(options) = options else {
+            self.restore = None;
+            return Ok(());
+        };
+        if self.process.is_some() {
+            return Err(anyhow!(
+                "VM restore must be configured before Cloud Hypervisor starts"
+            ));
+        }
+        self.restore = Some(options);
         Ok(())
     }
 
@@ -1134,10 +1316,217 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 mod tests {
     use super::*;
 
+    use crate::{BlockConfigModern, BlockDeviceModern, DeviceType, VIRTIO_BLOCK_PCI};
     use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, SecurityInfo};
 
     use std::fs::{self, File};
+    use std::sync::Arc;
     use tempfile::Builder;
+    use tokio::sync::Mutex;
+
+    #[test]
+    fn regular_start_clears_restore_config() {
+        let mut inner = CloudHypervisorInner::new(None);
+        inner.config.shared_fs.shared_fs = None;
+        inner.config.blockdev_info.block_device_driver = VIRTIO_BLOCK_PCI.into();
+        inner
+            .configure_restore(Some(VmRestoreOptions {
+                state_path: PathBuf::from("checkpoint"),
+                network_macs: vec![],
+                resource_topology: VmResourceTopology {
+                    vcpus: 1,
+                    memory_mb: 512,
+                },
+            }))
+            .unwrap();
+        assert!(inner.restore.is_some());
+        // An ordinary start must not require the workload C/R profile.
+        inner.config.shared_fs.shared_fs = Some("virtio-fs".into());
+        inner.configure_restore(None).unwrap();
+        assert!(inner.restore.is_none());
+    }
+
+    fn snapshot_config(boot: &Path, disks: Vec<ch_config::DiskConfig>) -> VmConfig {
+        VmConfig {
+            cpus: ch_config::CpusConfig {
+                max_phys_bits: 46,
+                ..Default::default()
+            },
+            disks: Some(
+                std::iter::once(ch_config::DiskConfig {
+                    path: Some(boot.to_path_buf()),
+                    id: Some("boot-native".into()),
+                    ..Default::default()
+                })
+                .chain(disks)
+                .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    fn push_restore_block(ch: &mut CloudHypervisorInner, id: &str, index: u64, path: &Path) {
+        ch.pending_devices
+            .push(DeviceType::BlockModern(Arc::new(Mutex::new(
+                BlockDeviceModern {
+                    device_id: id.into(),
+                    config: BlockConfigModern {
+                        index,
+                        path_on_host: path.to_string_lossy().into_owned(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ))));
+    }
+
+    #[actix_rt::test]
+    async fn test_prepare_restore_maps_block_ids() {
+        let state = Builder::new().prefix("clh-restore").tempdir().unwrap();
+        let config_path = state.path().join(CLH_TEMPLATE_CONFIG_FILE);
+        let boot = state.path().join("boot.img");
+        let restored = state.path().join("restored.img");
+        let config = snapshot_config(
+            &boot,
+            vec![ch_config::DiskConfig {
+                path: Some(state.path().join("checkpoint.img")),
+                id: Some("native-disk".into()),
+                ..Default::default()
+            }],
+        );
+        fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+
+        let mut ch = CloudHypervisorInner::default();
+        ch.config.boot_info.image = boot.to_string_lossy().into_owned();
+        ch.device_ids
+            .insert("existing-device".into(), "existing-native".into());
+        push_restore_block(&mut ch, "runtime-disk", 0, &restored);
+
+        ch.prepare_restore_state(state.path(), &[]).await.unwrap();
+
+        assert_eq!(
+            ch.device_ids.get("runtime-disk").map(String::as_str),
+            Some("native-disk")
+        );
+        assert_eq!(
+            ch.device_ids.get("existing-device").map(String::as_str),
+            Some("existing-native")
+        );
+        let config: Value = serde_json::from_slice(&fs::read(config_path).unwrap()).unwrap();
+        assert_eq!(config["disks"][1]["path"].as_str(), restored.to_str());
+        assert_eq!(config["disks"][1]["id"], "native-disk");
+    }
+
+    #[actix_rt::test]
+    async fn test_prepare_restore_rejects_missing_block_id() {
+        for invalid_id in [None, Some(String::new())] {
+            let state = Builder::new().prefix("clh-restore").tempdir().unwrap();
+            let config_path = state.path().join(CLH_TEMPLATE_CONFIG_FILE);
+            let boot = state.path().join("boot.img");
+            let config = snapshot_config(
+                &boot,
+                vec![
+                    ch_config::DiskConfig {
+                        path: Some(state.path().join("checkpoint-0.img")),
+                        id: Some("native-0".into()),
+                        ..Default::default()
+                    },
+                    ch_config::DiskConfig {
+                        path: Some(state.path().join("checkpoint-1.img")),
+                        id: invalid_id,
+                        ..Default::default()
+                    },
+                ],
+            );
+            let original = serde_json::to_vec(&config).unwrap();
+            fs::write(&config_path, &original).unwrap();
+
+            let mut ch = CloudHypervisorInner::default();
+            ch.config.boot_info.image = boot.to_string_lossy().into_owned();
+            ch.device_ids
+                .insert("existing-device".into(), "existing-native".into());
+            push_restore_block(&mut ch, "runtime-0", 0, &state.path().join("new-0.img"));
+            push_restore_block(&mut ch, "runtime-1", 1, &state.path().join("new-1.img"));
+
+            assert!(ch.prepare_restore_state(state.path(), &[]).await.is_err());
+            assert_eq!(
+                ch.device_ids,
+                HashMap::from([("existing-device".into(), "existing-native".into())])
+            );
+            assert_eq!(fs::read(config_path).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn test_checkpoint_memory_mb() {
+        const MIB: u64 = 1 << 20;
+
+        let plain = ch_config::MemoryConfig {
+            size: 256 * MIB,
+            hotplug_size: Some(1024 * MIB),
+            ..Default::default()
+        };
+        assert_eq!(checkpoint_memory_mb(&plain).unwrap(), 256);
+
+        let hotplugged = ch_config::MemoryConfig {
+            size: 256 * MIB,
+            hotplugged_size: Some(128 * MIB),
+            ..Default::default()
+        };
+        assert_eq!(checkpoint_memory_mb(&hotplugged).unwrap(), 384);
+
+        let zoned = ch_config::MemoryConfig {
+            zones: Some(vec![
+                ch_config::MemoryZoneConfig {
+                    id: "mem0".to_string(),
+                    size: 256 * MIB,
+                    hotplug_size: Some(1024 * MIB),
+                    ..Default::default()
+                },
+                ch_config::MemoryZoneConfig {
+                    id: "mem1".to_string(),
+                    size: 128 * MIB,
+                    hotplugged_size: Some(64 * MIB),
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        };
+        assert_eq!(checkpoint_memory_mb(&zoned).unwrap(), 448);
+    }
+
+    #[test]
+    fn test_checkpoint_memory_mb_rejects_invalid_sizes() {
+        const MIB: u64 = 1 << 20;
+
+        assert!(checkpoint_memory_mb(&ch_config::MemoryConfig::default()).is_err());
+        assert!(checkpoint_memory_mb(&ch_config::MemoryConfig {
+            size: MIB + 1,
+            ..Default::default()
+        })
+        .is_err());
+        assert!(checkpoint_memory_mb(&ch_config::MemoryConfig {
+            size: (u64::from(u32::MAX) + 1) * MIB,
+            ..Default::default()
+        })
+        .is_err());
+        assert!(checkpoint_memory_mb(&ch_config::MemoryConfig {
+            size: u64::MAX,
+            hotplugged_size: Some(1),
+            ..Default::default()
+        })
+        .is_err());
+        assert!(checkpoint_memory_mb(&ch_config::MemoryConfig {
+            zones: Some(vec![ch_config::MemoryZoneConfig {
+                id: "mem0".to_string(),
+                size: u64::MAX,
+                hotplugged_size: Some(1),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        })
+        .is_err());
+    }
 
     fn output_test_child(script: &str) -> Child {
         Command::new("/bin/sh")

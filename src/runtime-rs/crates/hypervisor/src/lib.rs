@@ -36,7 +36,7 @@ pub mod remote;
 pub mod selinux;
 pub use kernel_param::Param;
 pub mod utils;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 #[cfg(all(
     feature = "cloud-hypervisor",
@@ -133,6 +133,112 @@ pub struct MemoryConfig {
     pub probe: bool,
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("VM checkpoint timed out after {0:?}")]
+pub struct VmCheckpointTimeout(pub Duration);
+
+#[derive(Debug)]
+pub enum VmSaveOptions {
+    Template,
+    Workload {
+        /// Private directory in which the VMM stores its native checkpoint
+        /// files. The directory exists and is empty when `save_vm` is called.
+        state_path: PathBuf,
+        timeout: Option<Duration>,
+    },
+}
+
+#[derive(Debug, Default)]
+pub struct VmSaveResult {
+    pub transient_memory: Option<std::fs::File>,
+    pub delta_ranges: Option<Vec<VmMemoryRange>>,
+    /// Actual mapping backing for a delta, including template-backed VMs.
+    pub memory_base: Option<std::sync::Arc<std::fs::File>>,
+    /// Actual VM CPU and memory topology captured with a workload snapshot.
+    pub resource_topology: Option<VmResourceTopology>,
+}
+
+impl VmSaveResult {
+    /// A template save must publish persistent files instead of a memory capture.
+    pub fn validate_template(&self) -> Result<()> {
+        if self.transient_memory.is_some() {
+            return Err(anyhow::anyhow!(
+                "template save unexpectedly returned transient memory"
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmResourceTopology {
+    /// Total online vCPUs present in the checkpointed VM.
+    pub vcpus: u32,
+    /// Total guest memory, including hotplugged memory, in MiB.
+    pub memory_mb: u32,
+}
+
+/// A memory-file range shared with native snapshot codecs.
+pub use dbs_snapshot::MemoryRange as VmMemoryRange;
+
+#[derive(Clone, Debug)]
+pub struct VmRestoreOptions {
+    /// Private directory containing the verified native VMM checkpoint files.
+    pub state_path: PathBuf,
+    /// Guest-visible MAC addresses in stable virtual network-device order. The
+    /// current workload checkpoint/restore profile supports one network device.
+    pub network_macs: Vec<[u8; 6]>,
+    /// Resource topology including VM memory and vcpus.
+    pub resource_topology: VmResourceTopology,
+}
+
+impl From<&VmRestoreOptions> for VmResourceTopology {
+    fn from(options: &VmRestoreOptions) -> Self {
+        options.resource_topology
+    }
+}
+
+impl VmResourceTopology {
+    pub fn validate_restored(self, actual: Self) -> Result<()> {
+        if self != actual {
+            return Err(anyhow::anyhow!(
+                "restored VM resource topology mismatch: expected {:?}, actual {:?}",
+                self,
+                actual
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct VmStartOptions {
+    pub timeout: i32,
+    pub restore: Option<VmRestoreOptions>,
+}
+
+impl VmStartOptions {
+    pub fn regular_timeout(self) -> Result<i32> {
+        if self.restore.is_some() {
+            return Err(anyhow::anyhow!(
+                "VM checkpoint/restore is unsupported by this hypervisor"
+            ));
+        }
+        Ok(self.timeout)
+    }
+}
+
+impl VmSaveOptions {
+    pub fn require_template(&self) -> Result<()> {
+        match self {
+            Self::Template => Ok(()),
+            Self::Workload { .. } => Err(anyhow::anyhow!(
+                "VM checkpoint/restore is unsupported by this hypervisor"
+            )),
+        }
+    }
+}
+
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
@@ -143,11 +249,12 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
         annotations: &HashMap<String, String>,
         selinux_label: Option<String>,
     ) -> Result<()>;
-    async fn start_vm(&self, timeout: i32) -> Result<()>;
+    async fn start_vm(&self, options: VmStartOptions) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
     async fn wait_vm(&self) -> Result<i32>;
     async fn pause_vm(&self) -> Result<()>;
-    async fn save_vm(&self) -> Result<()>;
+    async fn save_vm(&self, options: VmSaveOptions) -> Result<VmSaveResult>;
+
     async fn resume_vm(&self) -> Result<()>;
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)>; // returns (old_vcpus, new_vcpus)
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)>;

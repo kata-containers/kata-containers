@@ -1323,13 +1323,6 @@ impl DeviceManager {
             .free_device_resources(&resources)
             .map_err(DeviceMgrError::ResourceError)?;
 
-        let mmio_dev = device
-            .as_any()
-            .downcast_ref::<DbsMmioV2Device>()
-            .ok_or(DeviceMgrError::InvalidOperation)?;
-
-        mmio_dev.remove();
-
         Ok(())
     }
 
@@ -1630,9 +1623,19 @@ impl DeviceManager {
         device: Arc<dyn DeviceIo>,
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), DeviceMgrError> {
+        Self::prepare_destroy_virtio_device(device.clone(), ctx)?;
+        Self::finish_destroy_virtio_device(device)
+    }
+
+    #[cfg(feature = "dbs-virtio-devices")]
+    /// Detaches the transport and signals its backend workers to stop.
+    pub fn prepare_destroy_virtio_device(
+        device: Arc<dyn DeviceIo>,
+        ctx: &mut DeviceOpContext,
+    ) -> std::result::Result<(), DeviceMgrError> {
         if let Some(mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
             Self::destroy_mmio_device(device.clone(), ctx)?;
-            mmio_dev.remove();
+            mmio_dev.prepare_remove();
         }
         #[cfg(feature = "host-device")]
         {
@@ -1647,6 +1650,17 @@ impl DeviceManager {
             }
         }
 
+        Ok(())
+    }
+
+    #[cfg(feature = "dbs-virtio-devices")]
+    /// Waits for backend workers after the transport has been detached.
+    pub fn finish_destroy_virtio_device(
+        device: Arc<dyn DeviceIo>,
+    ) -> std::result::Result<(), DeviceMgrError> {
+        if let Some(mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
+            mmio_dev.finish_remove();
+        }
         Ok(())
     }
 }

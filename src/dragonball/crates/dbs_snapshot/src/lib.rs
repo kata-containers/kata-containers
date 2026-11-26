@@ -90,3 +90,12 @@ pub fn check_epoch(found: u64, supported: u16) -> Result<(), PersistError> {
     }
     Ok(())
 }
+
+/// A Guest memory range expressed as an offset in a snapshot memory file.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct MemoryRange {
+    /// Byte offset within the snapshot memory file, not a Guest physical address.
+    pub file_offset: u64,
+    /// Number of bytes, including any bytes overwritten with zeros.
+    pub length: u64,
+}

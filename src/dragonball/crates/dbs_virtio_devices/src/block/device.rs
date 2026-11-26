@@ -373,6 +373,11 @@ where
     }
 
     fn remove(&mut self) {
+        <Self as VirtioDevice<AS, Q, R>>::prepare_remove(self);
+        <Self as VirtioDevice<AS, Q, R>>::finish_remove(self);
+    }
+
+    fn prepare_remove(&mut self) {
         // if the subsriber_id is invalid, it has not been activated yet.
         if let Some(subscriber_id) = self.subscriber_id {
             // Remove BlockEpollHandler from event manager, so it could be dropped and the resources
@@ -397,7 +402,9 @@ where
                 error!("virtio-blk: failed to write kill event {e:?}");
             }
         }
+    }
 
+    fn finish_remove(&mut self) {
         while let Some(thread) = self.epoll_threads.pop() {
             if let Err(e) = thread.join() {
                 error!("virtio-blk: failed to reap the io threads: {e:?}");

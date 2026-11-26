@@ -16,10 +16,12 @@ oci-spec = { workspace = true }
 protobuf = { workspace = true }
 sendfd = { features = ["tokio"], version = "0.4.3" }
 serde = { features = ["derive"], workspace = true }
+ring = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 strum = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
@@ -38,6 +40,9 @@ pod-resources-rs = { workspace = true }
 resource = { workspace = true }
 runtime-spec = { workspace = true }
 
+[target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
+dragonball = { optional = true, workspace = true }
+
 [dev-dependencies]
 rstest = { workspace = true }
 tempfile = { workspace = true }
@@ -49,7 +54,7 @@ default = ["cloud-hypervisor"]
 cloud-hypervisor = ["hypervisor/cloud-hypervisor"]
 
 # Enable the build-in VMM Dragtonball
-dragonball = ["hypervisor/dragonball"]
+dragonball = ["hypervisor/dragonball", "dep:dragonball"]
 
 # Enable the OpenVMM driver
 openvmm = ["hypervisor/openvmm"]
