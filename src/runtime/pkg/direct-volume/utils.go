@@ -55,7 +55,7 @@ type MountInfo struct {
 	Device string `json:"device"`
 	// The filesystem type to be mounted on the volume.
 	FsType string `json:"fstype"`
-	// Additional metadata to pass to the agent regarding this volume.
+	// Additional metadata about this volume, read by the Kata runtime.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Additional mount options.
 	Options []string `json:"options,omitempty"`
