@@ -18,9 +18,16 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
+# exec_host succeeds even when du fails, and bash would read the empty output
+# as 0 in the size comparisons, so reject anything that is not a number.
 host_allocated_bytes() {
 	local path="$1"
-	exec_host "${node}" "du -s -B1 '${path}' | awk 'NR == 1 {print \$1}'"
+	local bytes
+
+	bytes="$(exec_host "${node}" "du -s -B1 '${path}' | awk 'NR == 1 {print \$1}'")"
+	[[ "${bytes}" =~ ^[0-9]+$ ]] || \
+		die "Cannot measure the allocated bytes of ${path} on ${node}: '${bytes}'"
+	echo "${bytes}"
 }
 
 prepare_direct_volume() {
@@ -59,6 +66,51 @@ assert_guest_direct_volume() {
 	fi
 }
 
+require_qcow2_support() {
+	# The other hypervisors reject qcow2 direct volumes by design.
+	[[ "${KATA_HYPERVISOR}" == qemu*runtime-rs ]] || \
+		skip "qcow2 direct volumes are supported only by runtime-rs with QEMU"
+	exec_host "${node}" "command -v qemu-img >/dev/null" || \
+		die "Direct-volume qcow2 tool qemu-img is not installed on ${node}"
+}
+
+# Register a thin qcow2 direct volume whose filesystem holds the given marker.
+# The filesystem is built in a raw image, which is then converted to qcow2.
+# With "unmap" as the discard mode, QEMU frees the clusters the guest discards,
+# and the guest mounts the filesystem with "discard" so that it sends them.
+prepare_qcow2_volume() {
+	local marker="$1"
+	local discard="${2:-}"
+	local info
+	local metadata='{"io.katacontainers.volume.format": "qcow2"}'
+	local options='[]'
+
+	if [[ -n "${discard}" ]]; then
+		metadata="$(jq -cn --arg discard "${discard}" \
+			'{"io.katacontainers.volume.format": "qcow2", "io.katacontainers.volume.discard": $discard}')"
+		options='["discard"]'
+	fi
+
+	exec_host "${node}" "set -e; \
+		rm -rf '${volume_path}' '${disk_path}' '${base_path}' '${seed_path}'; \
+		mkdir -p '${volume_path}' '${seed_path}'; \
+		printf '%s\n' '${marker}' > '${seed_path}/dav-backing-marker'; \
+		truncate -s 64M '${base_path}'; \
+		mkfs.ext4 -F -q -d '${seed_path}' '${base_path}'; \
+		rm -rf '${seed_path}'; \
+		qemu-img convert -q -f raw -O qcow2 '${base_path}' '${disk_path}'; \
+		rm -f '${base_path}'; \
+		echo qcow2-ready" | grep -qx qcow2-ready
+
+	info="$(jq -cn --arg device "${disk_path}" --argjson metadata "${metadata}" \
+		--argjson options "${options}" \
+		'{device: $device, "volume-type": "directvol", fstype: "ext4", metadata: $metadata, options: $options}')"
+
+	exec_host "${node}" \
+		"/opt/kata/bin/kata-ctl direct-volume add '${volume_path}' '${info}' && echo direct-volume-ready" | \
+		grep -qx direct-volume-ready
+}
+
 setup() {
 	is_runtime_rs || skip "DAV interface is tested only with runtime-rs"
 	auto_generate_policy_enabled && \
@@ -82,6 +134,7 @@ setup() {
 	volume_id="$(printf '%s' "${BATS_TEST_TMPDIR}" | sha256sum | cut -c1-12)"
 	volume_path="/tmp/kata-direct-volume-${volume_id}"
 	disk_path="${volume_path}.img"
+	base_path="${volume_path}.base.img"
 	seed_path="${volume_path}.seed"
 	mount_info="{\"device\":\"${disk_path}\",\"volume-type\":\"directvol\",\"fstype\":\"ext4\",\"metadata\":{},\"options\":[]}"
 
@@ -131,6 +184,77 @@ setup() {
 		die "Direct-volume backing file was preallocated during attach"
 }
 
+@test "DAV mounts a thin qcow2 volume" {
+	local backing_marker="dav-qcow2-thin-${volume_id}"
+	local allocated_after
+	local allocated_before
+	local virtual_size=$((64 * 1024 * 1024))
+
+	require_qcow2_support
+	prepare_qcow2_volume "${backing_marker}"
+	allocated_before="$(host_allocated_bytes "${disk_path}")"
+	info "thin qcow2 allocated bytes before attach: ${allocated_before} of ${virtual_size}"
+	(( allocated_before < virtual_size / 2 )) || die "Test qcow2 image is not thin before attach"
+
+	kubectl apply -f "${yaml_file}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	assert_guest_direct_volume "${backing_marker}"
+	pod_exec "${pod_name}" sh -c \
+		"printf '%s\n' direct-volume-ready > '${mountpoint}/probe' && sync && \
+		grep -qx direct-volume-ready '${mountpoint}/probe'"
+
+	exec_host "${node}" sync
+	allocated_after="$(host_allocated_bytes "${disk_path}")"
+	info "thin qcow2 allocated bytes after attach: ${allocated_after}"
+	info "thin qcow2 allocation growth after attach: $((allocated_after - allocated_before))"
+	# Allow filesystem metadata growth while rejecting full-image preallocation.
+	(( allocated_after < virtual_size / 2 )) || \
+		die "qcow2 direct volume was preallocated during attach"
+}
+
+@test "DAV qcow2 volume with discard unmap returns deleted space to the host" {
+	local backing_marker="dav-qcow2-unmap-${volume_id}"
+	local allocated_empty
+	local allocated_freed
+	local allocated_full
+	local data_bytes=$((32 * 1024 * 1024))
+	local deadline
+
+	require_qcow2_support
+	prepare_qcow2_volume "${backing_marker}" unmap
+
+	kubectl apply -f "${yaml_file}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	assert_guest_direct_volume "${backing_marker}"
+
+	exec_host "${node}" sync
+	allocated_empty="$(host_allocated_bytes "${disk_path}")"
+	info "qcow2 allocated bytes before the guest writes: ${allocated_empty}"
+
+	pod_exec "${pod_name}" sh -c \
+		"dd if=/dev/urandom of='${mountpoint}/fill' bs=1M count=$((data_bytes / 1024 / 1024)) 2>/dev/null && sync"
+	exec_host "${node}" sync
+	allocated_full="$(host_allocated_bytes "${disk_path}")"
+	info "qcow2 allocated bytes after the guest wrote ${data_bytes}: ${allocated_full}"
+	(( allocated_full - allocated_empty >= data_bytes / 2 )) || \
+		die "Guest writes did not grow the qcow2 image"
+
+	# The filesystem is mounted with "discard", so the guest discards the
+	# file's blocks once the deletion is committed, which sync forces.
+	pod_exec "${pod_name}" sh -c "rm -f '${mountpoint}/fill' && sync"
+
+	deadline=$((SECONDS + 60))
+	while :; do
+		exec_host "${node}" sync
+		allocated_freed="$(host_allocated_bytes "${disk_path}")"
+		(( allocated_full - allocated_freed >= data_bytes / 2 )) && break
+		(( SECONDS < deadline )) || \
+			die "Deleted guest data still allocated in the qcow2 image: ${allocated_freed} bytes"
+		sleep 5
+	done
+	info "qcow2 allocated bytes after the guest deleted the data: ${allocated_freed}"
+}
+
 teardown() {
 	if [[ -n "${node:-}" ]]; then
 		teardown_common "${node}" "${node_start_time:-}" || true
@@ -139,7 +263,7 @@ teardown() {
 	if [[ -n "${node:-}" && -n "${volume_path:-}" ]]; then
 		exec_host "${node}" \
 			"/opt/kata/bin/kata-ctl direct-volume remove '${volume_path}' >/dev/null 2>&1 || true; \
-			rm -rf '${volume_path}' '${disk_path}' '${seed_path}'"
+			rm -rf '${volume_path}' '${disk_path}' '${base_path}' '${seed_path}'"
 	fi
 
 	rm -f "${yaml_file:-}"
