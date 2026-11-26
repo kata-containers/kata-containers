@@ -16,8 +16,10 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -300,4 +302,71 @@ func TestContainerRootfsPath(t *testing.T) {
 
 	container.hotplugDrive(sandbox.ctx)
 	assert.Equal(t, container.rootfsSuffix, "rootfs")
+}
+
+type blockDeviceAgent struct {
+	mockAgent
+}
+
+func (a *blockDeviceAgent) capabilities() types.Capabilities {
+	var caps types.Capabilities
+	caps.SetBlockDeviceSupport()
+	return caps
+}
+
+type blockDeviceHypervisor struct {
+	mockHypervisor
+}
+
+func (h *blockDeviceHypervisor) Capabilities(ctx context.Context) types.Capabilities {
+	caps := h.mockHypervisor.Capabilities(ctx)
+	caps.SetBlockDeviceHotplugSupport()
+	return caps
+}
+
+func TestCreateBlockDevicesRejectedVolumeLeavesNoDevice(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
+
+	assert := assert.New(t)
+	dir := t.TempDir()
+
+	// A raw direct volume, registered first, then a qcow2 one that the Go
+	// runtime refuses.
+	var mounts []Mount
+	for _, format := range []string{"raw", "qcow2"} {
+		disk := filepath.Join(dir, format+".img")
+		assert.NoError(os.WriteFile(disk, make([]byte, 4096), 0600))
+
+		volumePath := filepath.Join(dir, format)
+		mountInfo := `{"volume-type":"directvol","device":"` + disk +
+			`","fstype":"ext4","metadata":{"io.katacontainers.volume.format":"` + format + `"}}`
+		assert.NoError(volume.Add(volumePath, mountInfo))
+		t.Cleanup(func() { _ = volume.Remove(volumePath) })
+
+		mounts = append(mounts, Mount{
+			Source:      volumePath,
+			Destination: "/mnt/" + format,
+			Type:        "bind",
+		})
+	}
+
+	sandbox := &Sandbox{
+		ctx:        context.Background(),
+		id:         "sandbox",
+		devManager: manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil),
+		config:     &SandboxConfig{},
+		agent:      &blockDeviceAgent{},
+		hypervisor: &blockDeviceHypervisor{},
+	}
+	container := Container{
+		sandbox: sandbox,
+		id:      "testContainer",
+		mounts:  mounts,
+	}
+
+	err := container.createBlockDevices(sandbox.ctx)
+	assert.ErrorContains(err, `has image format "qcow2", which is only supported by runtime-rs`)
+	assert.Empty(sandbox.devManager.GetAllDevices(), "the raw volume's device was left registered")
 }

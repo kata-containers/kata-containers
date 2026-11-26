@@ -615,10 +615,32 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 	return
 }
 
+// checkDirectVolumeFormats fails if a direct volume of the container declares
+// an image format other than raw, rather than attach a qcow2 image as a raw
+// disk. It checks every volume before createBlockDevices registers any
+// device, so a rejected container leaves no device behind.
+func (c *Container) checkDirectVolumeFormats() error {
+	for _, m := range c.mounts {
+		mntInfo, err := volume.VolumeMountInfo(m.Source)
+		if err != nil {
+			// Not a direct volume, or createBlockDevices reports the error.
+			continue
+		}
+		if err := volume.CheckRawImageFormat(mntInfo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Add any mount based block devices to the device manager and Save the
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
 func (c *Container) createBlockDevices(ctx context.Context) error {
+	if err := c.checkDirectVolumeFormats(); err != nil {
+		return err
+	}
+
 	// iterate all mounts and create block device if it's block based.
 	for i := range c.mounts {
 		// If block devices are disabled, we selectively only hotplug if
@@ -699,6 +721,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 						continue
 					}
 					c.mounts[i].FSGroupChangePolicy = volume.FSGroupChangePolicy(value)
+				case volume.ImageFormatMetadataKey:
+					// Checked by checkDirectVolumeFormats; only "raw" gets here.
 				default:
 					c.Logger().Warnf("Ignoring unsupported direct-assignd volume metadata key: %s, value: %s", key, value)
 				}

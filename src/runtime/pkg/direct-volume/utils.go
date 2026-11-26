@@ -22,6 +22,11 @@ const (
 	FSGroupMetadataKey             = "fsGroup"
 	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
 	BlockVolumeCreateFsDriverKey   = "create_filesystem"
+
+	// ImageFormatMetadataKey and DiscardMetadataKey describe a qcow2 volume
+	// and its discard handling. Only runtime-rs implements them.
+	ImageFormatMetadataKey = "io.katacontainers.volume.format"
+	DiscardMetadataKey     = "io.katacontainers.volume.discard"
 )
 
 // FSGroupChangePolicy holds policies that will be used for applying fsGroup to a volume.
@@ -108,6 +113,19 @@ func VolumeMountInfo(volumePath string) (*MountInfo, error) {
 		return nil, err
 	}
 	return &mountInfo, nil
+}
+
+// CheckRawImageFormat returns an error unless the volume is a plain raw image.
+// The Go runtime does not support qcow2 volumes. Without this check it would
+// ignore their metadata and attach the qcow2 file to the guest as a raw disk.
+func CheckRawImageFormat(mountInfo *MountInfo) error {
+	if format, ok := mountInfo.Metadata[ImageFormatMetadataKey]; ok && format != "raw" {
+		return fmt.Errorf("direct volume %s has image format %q, which is only supported by runtime-rs", mountInfo.Device, format)
+	}
+	if _, ok := mountInfo.Metadata[DiscardMetadataKey]; ok {
+		return fmt.Errorf("direct volume %s sets qcow2 metadata %s, which is only supported by runtime-rs", mountInfo.Device, DiscardMetadataKey)
+	}
+	return nil
 }
 
 // IsVolumeMounted returns whether the direct volume mount is present.
