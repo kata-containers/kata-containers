@@ -45,6 +45,7 @@ pub struct VirtContainerManager {
     vmm_master_tid: OnceCell<u32>,
     oom_notifier: Arc<CrioOomNotifier>,
     sandbox_annotations: HashMap<String, String>,
+    sandbox_files: Vec<&'static str>,
 }
 
 impl std::fmt::Debug for VirtContainerManager {
@@ -83,7 +84,13 @@ impl VirtContainerManager {
             vmm_master_tid: OnceCell::new(),
             oom_notifier,
             sandbox_annotations,
+            sandbox_files: Vec::new(),
         }
+    }
+
+    pub fn with_sandbox_files(mut self, sandbox_files: Vec<&'static str>) -> Self {
+        self.sandbox_files = sandbox_files;
+        self
     }
 
     async fn get_vmm_master_tid(&self) -> Result<u32> {
@@ -145,7 +152,7 @@ impl ContainerManager for VirtContainerManager {
             .get(KATA_ANNO_CFG_RUNTIME_ENVD)
             .map(String::as_str);
         crate::envd::inject_if_enabled(&mut spec, envd_request);
-        if let Err(e) = container.create(spec).await {
+        if let Err(e) = container.create(spec, &self.sandbox_files).await {
             if let Err(inner_e) = container.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }
