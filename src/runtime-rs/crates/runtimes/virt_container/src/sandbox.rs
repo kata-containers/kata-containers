@@ -1677,6 +1677,9 @@ impl Sandbox for VirtSandbox {
                 .security_info
                 .guest_hook_path,
             kernel_modules,
+            sandbox_memory_max_bytes: crate::container_manager::sandbox_memory_max_bytes(
+                self.resource_manager.config().await.as_ref(),
+            ),
         };
 
         self.agent

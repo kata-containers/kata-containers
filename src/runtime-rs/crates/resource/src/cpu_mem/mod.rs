@@ -5,6 +5,7 @@
 //
 
 pub mod cpu;
+pub mod hugepage_sizing;
 pub mod initial_size;
 pub mod mem;
 pub mod swap;

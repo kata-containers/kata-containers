@@ -16,4 +16,6 @@ pub struct CreateOpts {
     pub rootless_euid: bool,
     pub rootless_cgroup: bool,
     pub container_name: String,
+    /// Aggregate container memory limit in bytes. Zero skips setting the limit.
+    pub pod_memory_max_bytes: u64,
 }

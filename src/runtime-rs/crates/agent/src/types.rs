@@ -489,6 +489,7 @@ pub struct CreateSandboxRequest {
     pub sandbox_id: String,
     pub guest_hook_path: String,
     pub kernel_modules: Vec<KernelModule>,
+    pub sandbox_memory_max_bytes: u64,
 }
 
 #[derive(PartialEq, Clone, Default)]
