@@ -57,6 +57,15 @@ pub(crate) fn is_pod_sized(toml_config: &TomlConfig) -> bool {
         })
 }
 
+/// A container with neither a reservation nor a memory limit has no ceiling of
+/// its own, so the agent also bounds the pod's containers together.
+pub(crate) fn sandbox_memory_max_bytes(toml_config: &TomlConfig) -> u64 {
+    if !is_pod_sized(toml_config) {
+        return 0;
+    }
+    static_guest(toml_config).holdable()
+}
+
 // A dynamic guest has no fixed memory budget for admission checks.
 fn static_guest(toml_config: &TomlConfig) -> Guest {
     if !toml_config.runtime.static_sandbox_resource_mgmt {
@@ -448,6 +457,31 @@ mod tests {
         assert!(refuse_other_page_size(Some(&res(8 * GIB, 0)), "1GB", "x").is_ok());
         assert_eq!(resource_name("1GB"), "hugepages-1Gi");
         assert_eq!(resource_name("2MB"), "hugepages-2Mi");
+    }
+
+    #[test]
+    fn test_sandbox_memory_max_bytes() {
+        let mut toml = TomlConfig::default();
+        toml.runtime.hypervisor_name = "qemu".to_string();
+        toml.runtime.static_sandbox_resource_mgmt = true;
+        let mut hv = kata_types::config::hypervisor::Hypervisor::default();
+        hv.memory_info.default_memory = 18 * 1024;
+        hv.cpu_info.default_vcpus = 4.0;
+        hv.memory_info.enable_hugepages = true;
+        hv.memory_info.hugepage_type = HugePageType::Hugetlbfs;
+        toml.hypervisor.insert("qemu".to_string(), hv.clone());
+        assert_eq!(
+            sandbox_memory_max_bytes(&toml),
+            0,
+            "a guest not sized from its pod"
+        );
+
+        hv.memory_info.enable_hugepages_pod_sizing = true;
+        toml.hypervisor.insert("qemu".to_string(), hv);
+        assert_eq!(
+            sandbox_memory_max_bytes(&toml),
+            holdable_guest_bytes(18 * 1024, 4)
+        );
     }
 
     #[test]

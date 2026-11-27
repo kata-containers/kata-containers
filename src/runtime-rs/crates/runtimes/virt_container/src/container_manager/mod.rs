@@ -8,6 +8,7 @@ mod container;
 use container::{Container, Exec};
 mod container_inner;
 mod hugepages;
+pub(crate) use hugepages::sandbox_memory_max_bytes;
 mod io;
 use container_inner::ContainerInner;
 mod manager;
