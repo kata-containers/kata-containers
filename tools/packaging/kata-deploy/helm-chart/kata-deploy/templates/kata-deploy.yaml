@@ -53,6 +53,9 @@ spec:
 {{- toYaml . | nindent 6 }}
 {{- end }}
       serviceAccountName: {{ include "kata-deploy.serviceAccountName" . }}
+{{- if .Values.hostNetwork }}
+      hostNetwork: true
+{{- end }}
 {{- with .Values.nodeSelector }}
       nodeSelector:
 {{- toYaml . | nindent 8 }}
