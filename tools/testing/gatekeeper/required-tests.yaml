@@ -2,7 +2,6 @@ required_tests:
   # Always required tests
   - Commit Message Check / Commit Message Check
   - Pull request WIP checks / WIP Check
-  - Darwin tests / test
   - Shellcheck required / shellcheck-required
   - GHA security analysis / zizmor
   - Lint GHA workflows / run-actionlint
@@ -46,8 +45,9 @@ mapping:
   #       (eg. "build" is required for "test")
   # TODO: Add support for "ignore:" to remove individual tests from regexps
   build:
-    # Gates the CI build stage (skip_build) and has no required names
-    {}
+    # Gates the CI build stage (skip_build) and the Darwin build checks
+    names:
+      - Darwin tests / test
   test:
     # Checks the basic functional tests work
     names:
