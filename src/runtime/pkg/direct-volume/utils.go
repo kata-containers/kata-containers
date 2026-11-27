@@ -22,6 +22,13 @@ const (
 	FSGroupMetadataKey             = "fsGroup"
 	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
 	BlockVolumeCreateFsDriverKey   = "create_filesystem"
+
+	// ImageFormatMetadataKey, BackingChainMetadataKey and DiscardMetadataKey
+	// describe a qcow2 volume, its backing chain and its discard handling.
+	// Only runtime-rs implements them.
+	ImageFormatMetadataKey  = "io.katacontainers.volume.format"
+	BackingChainMetadataKey = "io.katacontainers.volume.backing-chain"
+	DiscardMetadataKey      = "io.katacontainers.volume.discard"
 )
 
 // FSGroupChangePolicy holds policies that will be used for applying fsGroup to a volume.
@@ -50,7 +57,7 @@ type MountInfo struct {
 	Device string `json:"device"`
 	// The filesystem type to be mounted on the volume.
 	FsType string `json:"fstype"`
-	// Additional metadata to pass to the agent regarding this volume.
+	// Additional metadata about this volume, read by the Kata runtime.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Additional mount options.
 	Options []string `json:"options,omitempty"`
@@ -108,6 +115,21 @@ func VolumeMountInfo(volumePath string) (*MountInfo, error) {
 		return nil, err
 	}
 	return &mountInfo, nil
+}
+
+// CheckRawImageFormat returns an error unless the volume is a plain raw image.
+// The Go runtime does not support qcow2 volumes. Without this check it would
+// ignore their metadata and attach the qcow2 file to the guest as a raw disk.
+func CheckRawImageFormat(mountInfo *MountInfo) error {
+	if format, ok := mountInfo.Metadata[ImageFormatMetadataKey]; ok && format != "raw" {
+		return fmt.Errorf("direct volume %s has image format %q, which is only supported by runtime-rs", mountInfo.Device, format)
+	}
+	for _, key := range []string{BackingChainMetadataKey, DiscardMetadataKey} {
+		if _, ok := mountInfo.Metadata[key]; ok {
+			return fmt.Errorf("direct volume %s sets qcow2 metadata %s, which is only supported by runtime-rs", mountInfo.Device, key)
+		}
+	}
+	return nil
 }
 
 // IsVolumeMounted returns whether the direct volume mount is present.

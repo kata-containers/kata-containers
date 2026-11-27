@@ -130,7 +130,7 @@ pub struct DirectVolumeMountInfo {
     /// The filesystem type to be mounted on the volume.
     #[serde(rename = "fstype")]
     pub fs_type: String,
-    /// Additional metadata to pass to the agent regarding this volume.
+    /// Additional metadata about this volume, read by the Kata runtime.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, String>,
     /// Additional mount options.

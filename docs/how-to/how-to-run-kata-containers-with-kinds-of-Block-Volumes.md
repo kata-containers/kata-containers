@@ -1,7 +1,10 @@
 # A new way for Kata Containers to use Kinds of Block Volumes
 
-> **Note:** This guide is only available for runtime-rs with default Hypervisor Dragonball.
-> Now, other hypervisors are still ongoing, and it'll be updated when they're ready.
+!!! note
+    This guide applies to `runtime-rs` only. Raw direct volumes work with the
+    QEMU, Cloud Hypervisor and Dragonball hypervisors. SPDK volumes need QEMU
+    or Dragonball, and qcow2 volumes need QEMU, see
+    [qcow2 volumes, thin provisioning and read-only backing images](#qcow2-volumes-thin-provisioning-and-read-only-backing-images).
 
 
 ## Background
@@ -67,6 +70,84 @@ $ cat W1lMa2F0ZXQva2F0YS10a2F0DAxvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
 $ # type=disrectvol,src=/kubelet/kata-direct-vol-002/directvol002,dst=/disk002,options=rbind:rw
 $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=directvol,src=/kubelet/kata-direct-vol-002/directvol002,dst=/disk002,options=rbind:rw "$image" kata-direct-vol-xx05302045 /bin/bash
 ```
+
+
+#### qcow2 volumes, thin provisioning and read-only backing images
+
+!!! note
+    qcow2 volumes are only supported by `runtime-rs` with the QEMU hypervisor.
+    The other `runtime-rs` hypervisors and the Go runtime reject them.
+
+A direct volume can be a qcow2 image instead of a raw one. The qcow2 image can
+be thin provisioned, and it can sit on top of one or more **read-only backing
+images**, for example a shared base image with a per-pod overlay.
+
+Kata never creates, resizes or commits images. Creating the overlay and its
+backing chain is up to the CSI driver (for example with `qemu-img create -b`);
+Kata only validates and attaches what it is given.
+
+The volume is described in `mountInfo.json`. `device` is the top (writable)
+image, and the format and the backing chain are given in `metadata`:
+
+```json
+{
+  "device": "/var/lib/csi/vol1/disk.qcow2",
+  "volume-type": "directvol",
+  "fstype": "ext4",
+  "metadata": {
+    "io.katacontainers.volume.format": "qcow2",
+    "io.katacontainers.volume.backing-chain": "[{\"path\":\"/dev/mapper/base\",\"format\":\"raw\"},{\"path\":\"/var/lib/csi/l1.qcow2\",\"format\":\"qcow2\"}]"
+  },
+  "options": []
+}
+```
+
+| `metadata` key | Meaning |
+| --- | --- |
+| `io.katacontainers.volume.format` | `qcow2` or `raw` (the default). The format is never auto-detected from the image contents. |
+| `io.katacontainers.volume.backing-chain` | Optional JSON array, **base first**. Each entry has an absolute `path` and a `format`. |
+| `io.katacontainers.volume.discard` | Optional. `ignore` (the default) or `unmap`, see [Reclaiming space](#reclaiming-space). |
+
+`kata-ctl direct-volume add` validates these keys and refuses a malformed
+description before writing anything.
+
+Rules for the chain:
+
+- The base can be `raw` (a regular file or a block device) or `qcow2`. Every
+  image above the base must be `qcow2`.
+- At most 4 backing images are accepted, and an image must not appear twice,
+  not even under another path (a symlink or a second device node).
+- Only the top image is ever opened writable, and only if the mount is
+  read-write. Every backing image is opened read-only and can be shared
+  between pods.
+- Each image header must agree with the declared chain (a backing file is
+  named exactly when an image sits below it), and qcow2 external data files
+  are rejected. The backing file names stored in the image headers are
+  ignored: Kata hands QEMU exactly the images listed in `metadata`.
+- The top image must be a regular file.
+- Direct volumes with the same `device` share one disk in the guest, so they
+  must declare the same format, backing chain and discard mode.
+
+The `backing-chain` and `discard` keys are only valid on a qcow2 volume.
+
+##### Reclaiming space
+
+A thin qcow2 image only shrinks again if the guest tells QEMU which blocks it
+no longer uses. Two settings decide whether that happens:
+
+- **QEMU (host)**: by default (`ignore`, as in QEMU itself), QEMU accepts
+  discards but keeps the space allocated. Set `discard` to `unmap` for a thin
+  image: QEMU then frees discarded clusters of the top image by punching holes
+  in the host file. `du` shows the space returned, while the file size
+  reported by `ls` does not change. Keep `ignore` for an image that was
+  preallocated to guarantee its space, since anything in the guest that can
+  run `fstrim` would otherwise undo the preallocation. Read-only volumes and
+  backing images are never discarded.
+- **Guest**: the guest only sends discards if the filesystem is mounted with
+  the `discard` option, for example `"options": ["discard"]` in
+  `mountInfo.json`, or if something runs `fstrim` periodically.
+
+Raw direct volumes do not pass discards to the host.
 
 
 ### VFIO Device Based Block Volume

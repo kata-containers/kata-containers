@@ -527,6 +527,11 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
         let (image_type, backing_files) = match blkcfg.source {
             BlockSourceFormat::Raw => (ImageType::Raw, false),
             BlockSourceFormat::Vmdk(_) => (ImageType::FlatVmdk, true),
+            BlockSourceFormat::Qcow2(_) => {
+                return Err(anyhow!(
+                    "qcow2 block sources are not supported by Cloud Hypervisor"
+                ))
+            }
         };
 
         let disk_config: DiskConfig = DiskConfig {
@@ -732,6 +737,21 @@ mod tests {
         let contents = std::fs::read_to_string(&descriptor).unwrap();
         assert!(contents.contains(&format!("RW 1 FLAT \"{}\" 0", first.display())));
         assert!(contents.contains(&format!("RW 2 FLAT \"{}\" 0", second.display())));
+    }
+
+    #[test]
+    fn test_qcow2_disk_config_is_rejected() {
+        // Attaching a qcow2 image as raw would hand the guest the qcow2
+        // metadata instead of the disk contents.
+        let result = DiskConfig::try_from(BlockConfigModern {
+            path_on_host: "/csi/disk.qcow2".into(),
+            source: BlockSourceFormat::Qcow2(Default::default()),
+            ..Default::default()
+        });
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "qcow2 block sources are not supported by Cloud Hypervisor"
+        );
     }
 
     #[test]

@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::block_source::open_block_source;
+use kata_types::qcow2::{ImageFormat, Qcow2Volume};
 use kata_types::vmdk::validate_vmdk_layout;
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
@@ -10,7 +12,7 @@ use std::ffi::CString;
 use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use crate::virtio_blk_modern::BlockSourceFormat;
@@ -33,41 +35,53 @@ pub(super) fn block_fd_node_name(opaque: &str) -> Option<&str> {
 pub(super) struct PreparedBlockSource {
     pub filename: String,
     pub is_regular_file: bool,
+    /// Read-only images below the top image, base first. Empty unless the
+    /// source is a qcow2 chain.
+    pub backing: Vec<PreparedBackingImage>,
 }
 
-fn open_block_source(
+#[derive(Debug, Clone)]
+pub(super) struct PreparedBackingImage {
+    pub filename: String,
+    pub format: ImageFormat,
+    pub is_regular_file: bool,
+}
+
+/// Register the opened images of a qcow2 volume with QEMU.
+///
+/// `Qcow2Volume::open` opens and checks every image before QEMU sees any of
+/// them, so a rejected volume leaves nothing behind in QEMU.
+fn prepare_qcow2_source<F>(
     path: &str,
+    chain: &Qcow2Volume,
     is_readonly: bool,
     is_direct: bool,
-    regular_file_only: bool,
-) -> Result<(File, std::fs::Metadata)> {
-    let mut options = OpenOptions::new();
-    let direct_flag = if is_direct { libc::O_DIRECT } else { 0 };
-    options
-        .read(true)
-        .write(!is_readonly)
-        // Rust opens files close-on-exec by default; specify it here as part of
-        // this security boundary and clear it only for descriptors intentionally
-        // inherited by QEMU at startup.
-        .custom_flags(direct_flag | libc::O_CLOEXEC);
+    register: &mut F,
+) -> Result<PreparedBlockSource>
+where
+    F: FnMut(File, &str) -> Result<String>,
+{
+    let volume = chain.open(path, is_readonly, is_direct)?;
 
-    let file = options
-        .open(path)
-        .with_context(|| format!("open QEMU block source {path}"))?;
-    let metadata = file
-        .metadata()
-        .with_context(|| format!("stat opened QEMU block source {path}"))?;
-    let file_type = metadata.file_type();
-    if regular_file_only && !file_type.is_file() {
-        return Err(anyhow!("QEMU block source {path} is not a regular file"));
-    }
-    if !regular_file_only && !file_type.is_file() && !file_type.is_block_device() {
-        return Err(anyhow!(
-            "QEMU block source {path} is neither an allowed regular file nor block device"
-        ));
+    // The label tells the files of one volume apart, so they can be found and
+    // removed again, also after a shim restart (see `block_fd_opaque`). The
+    // QEMU node tree is built from the returned names, base first like the
+    // chain.
+    let filename = register(volume.top.file, "block-source")?;
+    let mut backing = Vec::with_capacity(volume.backing.len());
+    for (i, image) in volume.backing.into_iter().enumerate() {
+        backing.push(PreparedBackingImage {
+            filename: register(image.file, &format!("backing-{i}"))?,
+            format: image.format,
+            is_regular_file: image.metadata.is_file(),
+        });
     }
 
-    Ok((file, metadata))
+    Ok(PreparedBlockSource {
+        filename,
+        is_regular_file: true,
+        backing,
+    })
 }
 
 fn create_vmdk_descriptor_file(
@@ -123,6 +137,10 @@ pub(super) fn prepare_block_source<F>(
 where
     F: FnMut(File, &str) -> Result<String>,
 {
+    if let BlockSourceFormat::Qcow2(chain) = source {
+        return prepare_qcow2_source(path, chain, is_readonly, is_direct, &mut register);
+    }
+
     let BlockSourceFormat::Vmdk(vmdk) = source else {
         let (file, metadata) = open_block_source(path, is_readonly, is_direct, false)?;
         let is_regular_file = metadata.is_file();
@@ -130,6 +148,7 @@ where
         return Ok(PreparedBlockSource {
             filename,
             is_regular_file,
+            backing: Vec::new(),
         });
     };
 
@@ -172,12 +191,14 @@ where
     Ok(PreparedBlockSource {
         filename,
         is_regular_file: true,
+        backing: Vec::new(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_types::qcow2::QCOW2_MAGIC;
     use kata_types::vmdk::VmdkConfig;
     use nix::fcntl::{fcntl, FcntlArg, OFlag};
     use std::cell::RefCell;
@@ -426,5 +447,154 @@ mod tests {
         assert_eq!(block_fd_node_name(&opaque), Some("drive-3"));
         assert_eq!(block_fd_node_name("unrelated"), None);
         assert_eq!(block_fd_node_name("kata-block::source"), None);
+    }
+
+    fn qcow2_image(dir: &Path, name: &str, backing: bool) -> String {
+        let mut header = vec![0_u8; 104];
+        header[0..4].copy_from_slice(&QCOW2_MAGIC);
+        header[4..8].copy_from_slice(&3_u32.to_be_bytes());
+        if backing {
+            header[8..16].copy_from_slice(&512_u64.to_be_bytes());
+        }
+        let path = dir.join(name);
+        std::fs::write(&path, header).unwrap();
+        path.to_str().unwrap().to_string()
+    }
+
+    fn chain(layers: &[(&str, ImageFormat)]) -> Qcow2Volume {
+        Qcow2Volume {
+            backing: layers
+                .iter()
+                .map(|(path, format)| kata_types::qcow2::BackingImage {
+                    path: path.to_string(),
+                    format: *format,
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn qcow2_chain_registers_every_layer() {
+        let dir = tempdir().unwrap();
+        let base = dir.path().join("base.raw");
+        std::fs::write(&base, vec![0_u8; 4096]).unwrap();
+        let base = base.to_str().unwrap().to_string();
+        let mid = qcow2_image(dir.path(), "mid.qcow2", true);
+        let top = qcow2_image(dir.path(), "top.qcow2", true);
+
+        let labels = RefCell::new(Vec::new());
+        let prepared = prepare_block_source(
+            &top,
+            &BlockSourceFormat::Qcow2(chain(&[
+                (&base, ImageFormat::Raw),
+                (&mid, ImageFormat::Qcow2),
+            ])),
+            false,
+            false,
+            |file, label| {
+                let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
+                let writable = flags.contains(OFlag::O_RDWR) || flags.contains(OFlag::O_WRONLY);
+                // Only the top image may be writable.
+                assert_eq!(writable, label == "block-source", "label {label}");
+                labels.borrow_mut().push(label.to_string());
+                Ok(format!("/dev/fdset/{}", labels.borrow().len()))
+            },
+        )
+        .unwrap();
+
+        assert_eq!(*labels.borrow(), ["block-source", "backing-0", "backing-1"]);
+        assert_eq!(prepared.filename, "/dev/fdset/1");
+        assert!(prepared.is_regular_file);
+        let backing: Vec<_> = prepared
+            .backing
+            .iter()
+            .map(|b| (b.filename.as_str(), b.format))
+            .collect();
+        assert_eq!(
+            backing,
+            [
+                ("/dev/fdset/2", ImageFormat::Raw),
+                ("/dev/fdset/3", ImageFormat::Qcow2)
+            ]
+        );
+    }
+
+    #[test]
+    fn thin_qcow2_registers_only_the_top_image() {
+        let dir = tempdir().unwrap();
+        let top = qcow2_image(dir.path(), "top.qcow2", false);
+
+        // (is_readonly, expect a writable descriptor)
+        let tests = [(false, true), (true, false)];
+
+        for (i, (is_readonly, expect_writable)) in tests.iter().enumerate() {
+            let labels = RefCell::new(Vec::new());
+            let prepared = prepare_block_source(
+                &top,
+                &BlockSourceFormat::Qcow2(Qcow2Volume::default()),
+                *is_readonly,
+                false,
+                |file, label| {
+                    let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
+                    let writable = flags.contains(OFlag::O_RDWR);
+                    assert_eq!(writable, *expect_writable, "test[{}]", i);
+                    labels.borrow_mut().push(label.to_string());
+                    Ok("/dev/fdset/1".to_string())
+                },
+            );
+            let msg = format!("test[{}] read-only {}: {:?}", i, is_readonly, prepared);
+            let prepared = prepared.unwrap_or_else(|_| panic!("{}", msg));
+
+            assert_eq!(*labels.borrow(), ["block-source"], "{}", msg);
+            assert_eq!(prepared.filename, "/dev/fdset/1", "{}", msg);
+            assert!(prepared.is_regular_file, "{}", msg);
+            assert!(prepared.backing.is_empty(), "{}", msg);
+        }
+    }
+
+    #[test]
+    fn rejected_qcow2_chain_registers_nothing() {
+        let dir = tempdir().unwrap();
+        let top = qcow2_image(dir.path(), "top.qcow2", true);
+        let top_symlink = dir.path().join("top-symlink.qcow2");
+        symlink(&top, &top_symlink).unwrap();
+        let top_symlink = top_symlink.to_str().unwrap();
+
+        // (name, backing images, expected error)
+        let tests = [
+            (
+                "header names a backing file, none declared",
+                vec![],
+                format!("check qcow2 header of {top}"),
+            ),
+            (
+                "writable top as a backing image",
+                vec![(top_symlink, ImageFormat::Qcow2)],
+                format!("{top} is the same file as {top_symlink}"),
+            ),
+        ];
+
+        for (i, (name, layers, expected)) in tests.iter().enumerate() {
+            let registered = RefCell::new(0);
+            let result = prepare_block_source(
+                &top,
+                &BlockSourceFormat::Qcow2(chain(layers)),
+                false,
+                false,
+                |_, _| {
+                    *registered.borrow_mut() += 1;
+                    Ok("/dev/fdset/1".to_string())
+                },
+            );
+            let msg = format!("test[{}] {}: result: {:?}", i, name, result);
+            assert!(
+                format!("{:#}", result.unwrap_err()).contains(expected.as_str()),
+                "{}",
+                msg
+            );
+            // A rejected chain hands QEMU nothing, not even the top.
+            assert_eq!(*registered.borrow(), 0, "{}", msg);
+        }
     }
 }

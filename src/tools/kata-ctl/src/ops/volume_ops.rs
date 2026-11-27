@@ -12,6 +12,7 @@ use kata_types::mount::{
     get_volume_mount_info, join_path, DirectVolumeMountInfo, KATA_DIRECT_VOLUME_ROOT_PATH,
     KATA_MOUNT_INFO_FILE_NAME,
 };
+use kata_types::qcow2::parse_qcow2_volume;
 use nix;
 use slog::{info, o};
 use std::fs;
@@ -100,16 +101,22 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
 
 // add writes the mount info (json string) of a direct volume into a filesystem path known to Kata Containers.
 pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
+    // This behavior of deserializing and serializing comes from
+    // https://github.com/kata-containers/kata-containers/blob/cd27ad144e1a111cb606015c5c9671431535e644/src/runtime/pkg/direct-volume/utils.go#L57-L79
+    // Assuming that this is for the purpose of validating the json schema.
+    let unserialized_mount_info: DirectVolumeMountInfo = serde_json::from_str(mount_info)?;
+    // Reject a malformed qcow2 description now rather than at pod start. This
+    // runs before anything is written, so a rejected volume leaves no trace.
+    parse_qcow2_volume(
+        &unserialized_mount_info.metadata,
+        &unserialized_mount_info.device,
+    )?;
+
     fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)?;
     let mount_info_dir_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
 
     // create directory if missing
     fs::create_dir_all(&mount_info_dir_path)?;
-
-    // This behavior of deserializing and serializing comes from
-    // https://github.com/kata-containers/kata-containers/blob/cd27ad144e1a111cb606015c5c9671431535e644/src/runtime/pkg/direct-volume/utils.go#L57-L79
-    // Assuming that this is for the purpose of validating the json schema.
-    let unserialized_mount_info: DirectVolumeMountInfo = serde_json::from_str(mount_info)?;
 
     let mount_info_file_path = mount_info_dir_path.join(KATA_MOUNT_INFO_FILE_NAME);
     let serialized_mount_info = serde_json::to_string(&unserialized_mount_info)?;
@@ -159,6 +166,9 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use kata_types::mount::DirectVolumeMountInfo;
+    use kata_types::qcow2::{
+        DIRECT_VOLUME_BACKING_CHAIN_KEY, DIRECT_VOLUME_DISCARD_KEY, DIRECT_VOLUME_FORMAT_KEY,
+    };
     use rstest::{fixture, rstest};
     use serial_test::serial;
     use std::{collections::HashMap, fs};
@@ -263,5 +273,98 @@ mod tests {
         assert_eq!(actual.metadata, expected.metadata);
         assert_eq!(actual.options, expected.options);
         assert_eq!(actual.volume_type, expected.volume_type);
+    }
+
+    fn qcow2_mount_info(metadata: &[(&str, &str)]) -> String {
+        let info = DirectVolumeMountInfo {
+            volume_type: String::from("directvol"),
+            device: String::from("/csi/top.qcow2"),
+            fs_type: String::from("ext4"),
+            metadata: metadata
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            options: vec![String::from("discard")],
+        };
+        serde_json::to_string(&info).unwrap()
+    }
+
+    #[test]
+    #[serial]
+    fn test_add_remove_qcow2() {
+        skip_if_not_root!();
+        // Like test_add_remove: the volume path is b64 encoded under the real
+        // direct volume root, so this needs root and cleans up with remove().
+        fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)
+            .expect("create kata direct volume root path failed");
+
+        let base_dir = tempdir().expect("failed to create tmpdir");
+        let volume_path = String::from(base_dir.path().join("qcow2").to_str().unwrap());
+        let mount_info = qcow2_mount_info(&[
+            (DIRECT_VOLUME_FORMAT_KEY, "qcow2"),
+            (
+                DIRECT_VOLUME_BACKING_CHAIN_KEY,
+                r#"[{"path":"/dev/mapper/base","format":"raw"},{"path":"/csi/l1.qcow2","format":"qcow2"}]"#,
+            ),
+            (DIRECT_VOLUME_DISCARD_KEY, "ignore"),
+        ]);
+
+        add(&volume_path, &mount_info).expect("add failed");
+        let stored = get_volume_mount_info(&volume_path).unwrap();
+        remove(&volume_path).expect("remove failed");
+
+        let expected: DirectVolumeMountInfo = serde_json::from_str(&mount_info).unwrap();
+        assert_eq!(stored.metadata, expected.metadata);
+        assert_eq!(stored.device, expected.device);
+        assert_eq!(stored.options, expected.options);
+    }
+
+    #[rstest]
+    #[case::unknown_format(
+        &[(DIRECT_VOLUME_FORMAT_KEY, "vhd")],
+        r#"unsupported volume format "vhd""#,
+    )]
+    #[case::chain_without_qcow2(
+        &[(DIRECT_VOLUME_BACKING_CHAIN_KEY, "[]")],
+        r#"metadata "io.katacontainers.volume.backing-chain" requires "io.katacontainers.volume.format" to be "qcow2""#,
+    )]
+    #[case::malformed_chain(
+        &[(DIRECT_VOLUME_FORMAT_KEY, "qcow2"), (DIRECT_VOLUME_BACKING_CHAIN_KEY, "nope")],
+        "parse backing-chain metadata",
+    )]
+    #[case::raw_above_base(
+        &[
+            (DIRECT_VOLUME_FORMAT_KEY, "qcow2"),
+            (DIRECT_VOLUME_BACKING_CHAIN_KEY, r#"[{"path":"/a","format":"raw"},{"path":"/b","format":"raw"}]"#),
+        ],
+        r#"backing image "/b" sits above the base and must be qcow2"#,
+    )]
+    #[case::unknown_discard(
+        &[(DIRECT_VOLUME_FORMAT_KEY, "qcow2"), (DIRECT_VOLUME_DISCARD_KEY, "on")],
+        r#"must be "unmap" or "ignore", not "on""#,
+    )]
+    #[case::discard_without_qcow2(
+        &[(DIRECT_VOLUME_DISCARD_KEY, "unmap")],
+        r#"metadata "io.katacontainers.volume.discard" requires "io.katacontainers.volume.format" to be "qcow2""#,
+    )]
+    fn test_add_rejects_invalid_qcow2_metadata(
+        #[case] metadata: &[(&str, &str)],
+        #[case] expected: &str,
+    ) {
+        // Validation runs before anything is written, so no root is needed.
+        let base_dir = tempdir().expect("failed to create tmpdir");
+        let volume_path = String::from(base_dir.path().join("rejected").to_str().unwrap());
+
+        let err = add(&volume_path, &qcow2_mount_info(metadata)).expect_err("add must fail");
+
+        let actual = format!("{:#}", err);
+        assert!(actual.contains(expected), "error: {}", actual);
+        // Nothing was written for the rejected volume. add() creates the root
+        // before anything else, so a missing root means nothing was written.
+        let root = KATA_DIRECT_VOLUME_ROOT_PATH;
+        if std::path::Path::new(root).exists() {
+            let dir = join_path(root, &volume_path).unwrap();
+            assert!(!dir.exists(), "{} was created", dir.display());
+        }
     }
 }
