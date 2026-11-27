@@ -373,34 +373,10 @@ function report_tests() {
 	report_bats_tests "${kubernetes_dir}"
 }
 
-# Collect artifacts for later archiving.
-#
-# Clear the artifacts directory first if it exists.
-# When the test start time is not defined, this prevents
-# later archiving from possibly archiving stale information.
 function collect_artifacts() {
-	local artifacts_dir
-	artifacts_dir="/tmp/artifacts"
-	if [[ -d "${artifacts_dir}" ]]; then
-		rm -rf "${artifacts_dir}"
-	fi
-
-	if [[ -z "${start_time:-}" ]]; then
-		warn "tests start time is not defined. Cannot gather journal information"
-		return
-	fi
-
-	mkdir -p "${artifacts_dir}"
-	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
-	local journalctl_log_filename
-	local journalctl_log_path
-
-	journalctl_log_filename="journalctl-${RANDOM}.log"
-	journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
-
-	# As we want to call journalctl with sudo, we're safe to ignore SC2024 here
-	# shellcheck disable=SC2024
-	sudo journalctl --since="${start_time}" > "${journalctl_log_path}"
+	local artifacts_dir="/tmp/artifacts"
+	collect_journal_artifacts "${artifacts_dir}" "${start_time:-}"
+	[[ -n "${start_time:-}" ]] || return 0
 
 	local k3s_dir
 	k3s_dir='/var/lib/rancher/k3s/agent'
