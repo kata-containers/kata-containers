@@ -169,6 +169,20 @@ exec_host() {
 	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
 }
 
+get_cri_runtime_endpoint() {
+	if [[ "${CONTAINER_RUNTIME:-containerd}" == "crio" ]]; then
+		echo "unix:///run/crio/crio.sock"
+		return
+	fi
+
+	case "${KUBERNETES:-}" in
+		k3s|rke2) echo "unix:///run/k3s/containerd/containerd.sock" ;;
+		k0s) echo "unix:///run/k0s/containerd.sock" ;;
+		microk8s) echo "unix:///var/snap/microk8s/common/run/containerd.sock" ;;
+		*) echo "unix:///run/containerd/containerd.sock" ;;
+	esac
+}
+
 # Return the sandbox id of a pod, as the container runtime knows it. For Kata
 # that is also the id the shim, the guest and kata-ctl go by.
 #
@@ -180,23 +194,22 @@ exec_host() {
 get_pod_sandbox_id() {
 	local pod_name="$1"
 	local node
-	local runtime
+	local namespace
 	local runtime_endpoint
 
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
 	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
+	namespace="$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.namespace}')" || return 1
+	[[ -n "${namespace}" ]] || die "No namespace found for pod ${pod_name}"
 	exec_host "${node}" "command -v crictl >/dev/null" || \
 		die "crictl is required on Kubernetes node ${node}"
 
-	runtime="$(exec_host "${node}" "crictl version | grep 'RuntimeName:' | awk '{print  \$2}'")"
-	if [[ "${runtime}" == "cri-o" ]]; then
-		runtime_endpoint="unix:///run/crio/crio.sock"
-	else
-		runtime_endpoint="unix:///run/containerd/containerd.sock"
-	fi
+	# A pod of the same name in another namespace must not be picked up, and
+	# crictl takes both filters as unanchored regular expressions.
+	runtime_endpoint="$(get_cri_runtime_endpoint)"
 	exec_host "${node}" \
 		"crictl --runtime-endpoint ${runtime_endpoint} \
-		pods --name \"${pod_name}\" --state ready -q | head -1"
+		pods --name \"^${pod_name}\$\" --namespace \"^${namespace}\$\" --state ready -q | head -1"
 }
 
 # Return the VMM PID for a running pod.
