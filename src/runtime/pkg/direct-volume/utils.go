@@ -6,6 +6,7 @@
 package volume
 
 import (
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -56,9 +57,21 @@ type MountInfo struct {
 	Options []string `json:"options,omitempty"`
 }
 
+// volumeDir returns the metadata directory for volumePath. Volume paths
+// whose base64url encoding would exceed NAME_MAX (255) are named after
+// "sha256-" + the base64url-encoded SHA-256 digest of the path instead.
+func volumeDir(volumePath string) string {
+	name := b64.URLEncoding.EncodeToString([]byte(volumePath))
+	if len(name) > 255 {
+		sum := sha256.Sum256([]byte(volumePath))
+		name = "sha256-" + b64.URLEncoding.EncodeToString(sum[:])
+	}
+	return filepath.Join(kataDirectVolumeRootPath, name)
+}
+
 // Add writes the mount info of a direct volume into a filesystem path known to Kata Container.
 func Add(volumePath string, mountInfo string) error {
-	volumeDir := filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath)))
+	volumeDir := volumeDir(volumePath)
 	stat, err := os.Stat(volumeDir)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -90,12 +103,12 @@ func AddMountInfo(volumePath string, mountInfo MountInfo) error {
 
 // Remove deletes the direct volume path including all the files inside it.
 func Remove(volumePath string) error {
-	return os.RemoveAll(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	return os.RemoveAll(volumeDir(volumePath))
 }
 
 // VolumeMountInfo retrieves the mount info of a direct volume.
 func VolumeMountInfo(volumePath string) (*MountInfo, error) {
-	mountInfoFilePath := filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath)), mountInfoFileName)
+	mountInfoFilePath := filepath.Join(volumeDir(volumePath), mountInfoFileName)
 	if _, err := os.Stat(mountInfoFilePath); err != nil {
 		return nil, err
 	}
@@ -123,17 +136,16 @@ func IsVolumeMounted(volumePath string) (bool, error) {
 
 // RecordSandboxId associates a sandbox id with a direct volume.
 func RecordSandboxID(sandboxID string, volumePath string) error {
-	encodedPath := b64.URLEncoding.EncodeToString([]byte(volumePath))
-	mountInfoFilePath := filepath.Join(kataDirectVolumeRootPath, encodedPath, mountInfoFileName)
+	mountInfoFilePath := filepath.Join(volumeDir(volumePath), mountInfoFileName)
 	if _, err := os.Stat(mountInfoFilePath); err != nil {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(kataDirectVolumeRootPath, encodedPath, sandboxID), []byte(""), 0600)
+	return os.WriteFile(filepath.Join(volumeDir(volumePath), sandboxID), []byte(""), 0600)
 }
 
 func GetSandboxIDForVolume(volumePath string) (string, error) {
-	files, err := os.ReadDir(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	files, err := os.ReadDir(volumeDir(volumePath))
 	if err != nil {
 		return "", err
 	}
