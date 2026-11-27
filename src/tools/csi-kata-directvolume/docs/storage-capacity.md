@@ -252,7 +252,7 @@ selects its RBAC rules.
 | Test | Command | Needs |
 | --- | --- | --- |
 | Unit, gRPC and manifest tests | `go test ./...` | Go |
-| CSI sanity | `test/sanity/run-csi-sanity.sh` | root, `csi-sanity` |
+| CSI sanity | `test/sanity/run-csi-sanity.sh` | root, Go, `csi-sanity` |
 | Two-node end-to-end test | `test/e2e/run-capacity-e2e.sh` | Docker, `kind`, `kubectl`, `helm`, `jq`, `yq`, `/dev/kvm` |
 
 The end-to-end test creates a `kind` cluster with two worker nodes, installs
@@ -263,4 +263,8 @@ while the first one exists and gets provisioned once it is deleted, and that a
 restart of the driver keeps all reservations. It writes a report with the
 versions, the published capacity of every phase and the logs to the
 `ARTIFACTS` directory. To run it on an existing cluster with Kata Containers,
-set `USE_EXISTING_CLUSTER=true`, `NODE_A` and `NODE_B`.
+set `USE_EXISTING_CLUSTER=true`, `NODE_A` and `NODE_B`. Use a dedicated test
+cluster, since the test replaces the capacity ConfigMap of the driver. The
+script only loads the driver image into kind nodes: push the image to a
+registry which the nodes can reach and set `CSI_IMAGE_REGISTRY` and
+`CSI_IMAGE_TAG`, with `BUILD_IMAGE=false` if the image was built elsewhere.

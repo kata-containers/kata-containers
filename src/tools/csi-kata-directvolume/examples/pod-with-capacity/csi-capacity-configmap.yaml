@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2026 Kata Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # Capacity pools of each node. Every key is the name of a node, every value
 # lists the pools of that node as <pool>=<size> entries, one per line or
 # separated by commas. The driver reads the entry of its node when it starts:

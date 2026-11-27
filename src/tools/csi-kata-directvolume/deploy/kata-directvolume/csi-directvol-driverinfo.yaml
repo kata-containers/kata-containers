@@ -16,8 +16,11 @@ spec:
   # No attacher needed.
   attachRequired: false
   # The csi-provisioner sidecars publish the capacity of every node as
-  # CSIStorageCapacity objects, and the scheduler only places pods with
-  # unbound WaitForFirstConsumer volumes on nodes which have enough of it.
+  # CSIStorageCapacity objects. For each unbound WaitForFirstConsumer volume
+  # of a pod, the scheduler then skips nodes which do not report enough of
+  # it. The capacity is not reserved: when two volumes race for the same
+  # space, CreateVolume rejects one with RESOURCE_EXHAUSTED and the pod is
+  # scheduled again.
   # directvol-deploy.sh removes this line if the cluster has no
   # CSIStorageCapacity v1 API (Kubernetes < 1.24).
   storageCapacity: true

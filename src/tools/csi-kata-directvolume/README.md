@@ -16,7 +16,7 @@ This repository houses the `Direct Volume CSI driver`, along with all build and 
 
 The driver can provision volumes based on direct block devices, eliminating the need for loop devices and relying solely on single files stored on the host.
 
-On Kubernetes 1.24 or later, the driver publishes the storage capacity of every node, from per-node capacity pools and the free space of the backing filesystem, so that the scheduler only places pods on nodes which can store their volumes.
+On Kubernetes 1.24 or later, the driver publishes the storage capacity of every node, from per-node capacity pools and the free space of the backing filesystem. For a volume of a `WaitForFirstConsumer` StorageClass which is not provisioned yet, the scheduler then only considers nodes which report enough capacity for it. The capacity is checked for each volume, it is not reserved.
 
 ## Deployment
 
