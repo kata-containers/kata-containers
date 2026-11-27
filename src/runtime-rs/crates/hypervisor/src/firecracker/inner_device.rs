@@ -10,6 +10,7 @@ use crate::firecracker::{
     inner_hypervisor::{FC_AGENT_SOCKET_NAME, ROOT},
     sl,
 };
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VmmState;
 use crate::{device::DeviceType, HybridVsockConfig, VsockConfig};
 use anyhow::{anyhow, Context, Result};
@@ -31,6 +32,13 @@ impl FcInner {
             DeviceType::BlockModern(block_mod) => {
                 let (path, slot, virt_path, index, is_readonly) = {
                     let mut block = block_mod.lock().await;
+                    // Firecracker attaches `path_on_host` as raw bytes; a qcow2
+                    // image would reach the guest uninterpreted.
+                    if matches!(block.config.source, BlockSourceFormat::Qcow2(_)) {
+                        return Err(anyhow!(
+                            "qcow2 block sources are not supported by Firecracker"
+                        ));
+                    }
                     let index = block.config.index;
                     let is_readonly = block.config.is_readonly;
                     let slot = self.drive_slot_for_block_device(index, is_readonly)?;

@@ -288,6 +288,28 @@ function uninstall_kbs_client() {
 	kbs_uninstall_cli
 }
 
+# k8s-direct-volume.bats creates qcow2 images on the node, and fails rather
+# than skips where qcow2 is supported but qemu-img is missing. Every job that
+# runs it with runtime-rs and QEMU runs the tests on the node itself.
+function ensure_qemu_img() {
+	[[ "${KATA_HYPERVISOR:-}" == qemu*runtime-rs ]] || return 0
+	case "$(uname -m)" in
+		x86_64 | aarch64) ;;
+		*) return 0 ;;
+	esac
+	command -v qemu-img &>/dev/null && return 0
+
+	source /etc/os-release
+	case "${ID}" in
+		ubuntu | debian)
+			sudo apt-get update
+			sudo apt-get -y install --no-install-recommends qemu-utils
+			;;
+		centos | fedora | rhel) sudo dnf -y install qemu-img ;;
+		*) >&2 echo "Cannot install qemu-img on ${ID}, qcow2 direct volume tests will fail" ;;
+	esac
+}
+
 function run_tests() {
 	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal"* ]]; then
 		# Baremetal self-hosted runners end up accumulating way too much log
@@ -301,6 +323,7 @@ function run_tests() {
 	fi
 
 	ensure_yq
+	ensure_qemu_img
 	platform="${1:-}"
 
 	[[ "${platform}" = "kcli" ]] && \

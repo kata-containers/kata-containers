@@ -64,6 +64,17 @@ pub mod dmverity;
 /// VMDK (Virtual Machine Disk) types and utilities
 pub mod vmdk;
 
+/// Opening the host files behind a block device
+///
+/// Linux only: block sources are opened by the shim on a Linux host, and
+/// O_DIRECT does not exist on other platforms that build kata-types.
+#[cfg(target_os = "linux")]
+pub mod block_source;
+
+/// qcow2 description for direct-assigned volumes
+#[cfg(target_os = "linux")]
+pub mod qcow2;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};

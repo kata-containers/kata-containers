@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
 use crate::vfio_device::{DeviceAddress, VfioDeviceModern, VfioDeviceType};
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VhostUserConfig;
 use crate::{device::pci_path::PciPath, KATA_BLK_DEV_TYPE};
 use crate::{
@@ -66,6 +67,16 @@ impl DragonballInner {
                 Ok(DeviceType::VfioModern(hostdev))
             }
             DeviceType::BlockModern(block_device) => {
+                // Dragonball attaches `path_on_host` as raw bytes; a qcow2 image
+                // would reach the guest uninterpreted.
+                if matches!(
+                    block_device.lock().await.config.source,
+                    BlockSourceFormat::Qcow2(_)
+                ) {
+                    return Err(anyhow!(
+                        "qcow2 block sources are not supported by Dragonball"
+                    ));
+                }
                 let (
                     device_id,
                     path_on_host,
