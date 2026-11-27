@@ -34,6 +34,7 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
+use hypervisor::VmmNotSpawned;
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -1550,6 +1551,11 @@ impl Sandbox for VirtSandbox {
         // start vm
         inner.vmm_start_attempted = true;
         let started = self.hypervisor.start_vm(10_000).await.context("start vm");
+        // Cleanup waits for a VMM's exit to be confirmed, and one that was
+        // never spawned has none.
+        if started.as_ref().is_err_and(|err| err.is::<VmmNotSpawned>()) {
+            inner.vmm_start_attempted = false;
+        }
         // A start that fails after spawning the VMM gets no exit watcher.
         // stop() then needs the identity to confirm the exit, or cleanup
         // never runs.
@@ -1811,6 +1817,11 @@ impl Sandbox for VirtSandbox {
             .start_vm(10_000)
             .await
             .context("start template vm");
+        // Cleanup waits for a VMM's exit to be confirmed, and one that was
+        // never spawned has none.
+        if started.as_ref().is_err_and(|err| err.is::<VmmNotSpawned>()) {
+            inner.vmm_start_attempted = false;
+        }
         self.remember_vmm_process().await;
         started?;
         info!(sl!(), "vm started from template");
@@ -2882,6 +2893,17 @@ mod tests {
     use std::time::Duration;
 
     const NOTIFY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    #[test]
+    fn a_start_that_spawned_no_vmm_is_told_apart_under_its_context() {
+        let not_spawned = Err::<(), _>(anyhow::Error::new(VmmNotSpawned(anyhow!("held"))))
+            .context("start vm")
+            .unwrap_err();
+        let failed = anyhow!("held").context("start vm");
+
+        assert!(not_spawned.is::<VmmNotSpawned>());
+        assert!(!failed.is::<VmmNotSpawned>());
+    }
 
     #[tokio::test]
     async fn test_sandbox_exit_reaches_a_waiter_that_subscribes_afterwards() {
