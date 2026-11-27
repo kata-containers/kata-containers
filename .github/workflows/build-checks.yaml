@@ -76,6 +76,10 @@ jobs:
             path: src/tools/trace-forwarder
             needs:
               - rust
+          - name: csi-kata-directvolume
+            path: src/tools/csi-kata-directvolume
+            needs:
+              - golang
           - name: genpolicy
             path: src/tools/genpolicy
             needs:

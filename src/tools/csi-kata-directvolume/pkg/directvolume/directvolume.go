@@ -22,7 +22,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 	utilexec "k8s.io/utils/exec"
 )
@@ -41,15 +40,16 @@ type directVolume struct {
 }
 
 type Config struct {
-	DriverName     string
-	Endpoint       string
-	NodeID         string
-	VendorVersion  string
-	MaxVolumeSize  int64
-	Capacity       utils.Capacity
-	ShowVersion    bool
-	EnableAttach   bool
-	EnableTopology bool
+	DriverName        string
+	Endpoint          string
+	NodeID            string
+	VendorVersion     string
+	MaxVolumeSize     int64
+	Capacity          utils.Capacity
+	CapacityConfigDir string
+	ShowVersion       bool
+	EnableAttach      bool
+	EnableTopology    bool
 
 	StateDir       string
 	VolumeDevices  map[string]string
@@ -63,6 +63,15 @@ type Config struct {
 }
 
 func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
+	if cfg.MaxVolumeSize < 0 {
+		return nil, errors.New("maximum volume size must be non-negative")
+	}
+	if err := cfg.Capacity.LoadNode(cfg.CapacityConfigDir, cfg.NodeID); err != nil {
+		return nil, fmt.Errorf("load node capacity: %w", err)
+	}
+	if err := cfg.Capacity.Validate(); err != nil {
+		return nil, err
+	}
 	if cfg.DriverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -138,31 +147,15 @@ func (dv *directVolume) getVolumePath(volID string) string {
 // adds the volume to the list.
 // It returns the volume path or err if one occurs. That error is suitable as result of a gRPC call.
 func (dv *directVolume) createVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
-	// Check for maximum available capacity
-	if cap > dv.config.MaxVolumeSize {
-		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
+	if err := dv.checkQuota(cap, kind); err != nil {
+		return nil, err
 	}
-	if dv.config.Capacity.Enabled() {
-		if kind == "" {
-			// Pick some kind with sufficient remaining capacity.
-			for k, c := range dv.config.Capacity {
-				if dv.sumVolumeSizes(k)+cap <= c.Value() {
-					kind = k
-					break
-				}
-			}
-		}
+	return dv.recordDirectVolume(volID, name, cap, kind)
+}
 
-		used := dv.sumVolumeSizes(kind)
-		available := dv.config.Capacity[kind]
-		if used+cap > available.Value() {
-			return nil, status.Errorf(codes.ResourceExhausted, "requested capacity %d exceeds remaining capacity for %q, %s out of %s already used",
-				cap, kind, resource.NewQuantity(used, resource.BinarySI).String(), available.String())
-		}
-	} else if kind != "" {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("capacity tracking disabled, specifying kind %q is invalid", kind))
-	}
-
+// recordDirectVolume also restores legacy volumes which have no pool assignment.
+// Those volumes remain usable after enabling capacity tracking.
+func (dv *directVolume) recordDirectVolume(volID, name string, cap int64, kind string) (*state.Volume, error) {
 	path := dv.getVolumePath(volID)
 
 	if err := os.MkdirAll(path, utils.PERM); err != nil {
@@ -180,6 +173,9 @@ func (dv *directVolume) createVolume(volID, name string, cap int64, kind string)
 
 	klog.Infof("adding direct volume: %s = %+v", volID, volume)
 	if err := dv.state.UpdateVolume(volume); err != nil {
+		if cleanupErr := os.RemoveAll(path); cleanupErr != nil {
+			klog.Errorf("remove unrecorded volume directory: %v", cleanupErr)
+		}
 		return nil, err
 	}
 
@@ -201,6 +197,9 @@ func (dv *directVolume) deleteVolume(volID string) error {
 	if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	if err := os.RemoveAll(filepath.Join(dv.config.StoragePath, volID)); err != nil {
+		return err
+	}
 	if err := dv.state.DeleteVolume(volID); err != nil {
 		return err
 	}
@@ -211,21 +210,36 @@ func (dv *directVolume) deleteVolume(volID string) error {
 
 // createSPDKVolume allocates backing file, creates the SPDK bdev, and adds the volume to the list.
 // It returns the created volume or an error if one occurs.
-func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int64, kind string) (*state.Volume, error) {
+func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int64, kind string) (_ *state.Volume, finalErr error) {
+	if err := dv.checkQuota(capacity, kind); err != nil {
+		return nil, err
+	}
 	backingFile := filepath.Join(utils.SpdkRawDiskDir, fmt.Sprintf("%s.raw", volName))
 
 	if err := os.MkdirAll(utils.SpdkRawDiskDir, 0750); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create dir %s: %v", utils.SpdkRawDiskDir, err)
 	}
 
+	created := false
+	defer func() {
+		if finalErr != nil && created {
+			if err := os.Remove(backingFile); err != nil {
+				klog.Errorf("remove unrecorded SPDK backing file: %v", err)
+			}
+		}
+	}()
 	fi, err := os.Stat(backingFile)
 	if err == nil {
+		if fi.Size() != capacity {
+			return nil, status.Error(codes.AlreadyExists, "existing SPDK backing file has a different size")
+		}
 		klog.Infof("[SPDK] reuse existing backing file %s (size=%d)", backingFile, fi.Size())
 	} else if os.IsNotExist(err) {
 		f, err := os.Create(backingFile)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create backing file %s: %v", backingFile, err)
 		}
+		created = true
 		defer f.Close()
 
 		if err := f.Truncate(capacity); err != nil {
@@ -260,20 +274,16 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 		},
 	}
 	if err := dv.state.UpdateVolume(*vol); err != nil {
+		if _, cleanupErr := spdkrpc.Call("bdev_aio_delete", map[string]any{"name": bdevName}); cleanupErr != nil {
+			// Keep a backing file that SPDK may still be using.
+			created = false
+			klog.Errorf("remove unrecorded SPDK bdev %s: %v", bdevName, cleanupErr)
+		}
 		return nil, err
 	}
 
 	klog.Infof("[SPDK] volume %s registered bdev=%s backing=%s", volumeID, bdevName, backingFile)
 	return vol, nil
-}
-
-func (dv *directVolume) sumVolumeSizes(kind string) (sum int64) {
-	for _, volume := range dv.state.GetVolumes() {
-		if volume.Kind == kind {
-			sum += volume.VolSize
-		}
-	}
-	return
 }
 
 // loadFromVolume populates the given destPath with data from the srcVolumeID
