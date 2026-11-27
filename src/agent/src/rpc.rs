@@ -29,7 +29,7 @@ use ttrpc::{
     r#async::{Server as TtrpcServer, TtrpcContext},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cgroups::FreezerState;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
@@ -2666,7 +2666,9 @@ pub(crate) async fn cdh_secure_mount(
     mkfs_opts: &str,
 ) -> Result<()> {
     if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
+        bail!(
+            "cannot securely mount device {device_id} at {mount_point}: CDH client not initialized"
+        );
     }
 
     let integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
