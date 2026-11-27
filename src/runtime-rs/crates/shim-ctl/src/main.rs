@@ -14,9 +14,9 @@ use tokio::sync::mpsc::channel;
 const MESSAGE_BUFFER_SIZE: usize = 8;
 const WORKER_THREADS: usize = 2;
 
-async fn real_main() {
+async fn real_main() -> Result<()> {
     let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
-    let manager = RuntimeHandlerManager::new("xxx", sender).unwrap();
+    let manager = RuntimeHandlerManager::new("xxx", sender)?;
 
     let req = TaskRequest::CreateContainer(ContainerConfig {
         container_id: "xxx".to_owned(),
@@ -29,7 +29,8 @@ async fn real_main() {
         stderr: None,
     });
 
-    manager.handler_task_message(req).await.ok();
+    manager.handler_task_message(req).await?;
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +40,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .context("prepare tokio runtime")?;
 
-    runtime.block_on(real_main());
+    if let Err(e) = runtime.block_on(real_main()) {
+        drop(runtime);
+        eprintln!("ERROR: {e:#?}");
+        std::process::exit(1);
+    }
 
     Ok(())
 }
