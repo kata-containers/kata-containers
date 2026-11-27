@@ -17,9 +17,9 @@ pub enum Error {
 pub fn verify_id(id: &str) -> Result<(), Error> {
     let mut chars = id.chars();
 
-    let valid = matches!(chars.next(), Some(first) if first.is_alphanumeric()
+    let valid = matches!(chars.next(), Some(first) if first.is_ascii_alphanumeric()
                 && id.len() > 1
-                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
+                && chars.all(|c| c.is_ascii_alphanumeric() || ['.', '-', '_'].contains(&c)));
 
     match valid {
         true => Ok(()),
@@ -261,6 +261,30 @@ mod tests {
             TestData {
                 id: "/etc/passwd",
                 expect_error: true,
+            },
+            TestData {
+                // Non-ASCII letters are not allowed by the regex
+                id: "\u{e9}\u{e9}",
+                expect_error: true,
+            },
+            TestData {
+                // Non-ASCII letters are not allowed by the regex
+                id: "ab\u{e9}",
+                expect_error: true,
+            },
+            TestData {
+                // Non-ASCII digits are not allowed by the regex
+                id: "a\u{0663}",
+                expect_error: true,
+            },
+            TestData {
+                // Non-ASCII letters are not allowed by the regex
+                id: "\u{65e5}\u{672c}\u{8a9e}",
+                expect_error: true,
+            },
+            TestData {
+                id: "aB0._-",
+                expect_error: false,
             },
         ];
 
