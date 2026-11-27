@@ -1,0 +1,10 @@
+{
+  "cases": [
+    {
+      "description": "Sandbox API policy has no pause container entry",
+      "base": "create-container",
+      "allowed": false,
+      "patch": []
+    }
+  ]
+}
