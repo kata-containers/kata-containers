@@ -79,6 +79,33 @@ function info() {
 	echo -e "[$(basename "$0"):${BASH_LINENO[0]}] INFO: ${msg}"
 }
 
+# Clear stale artifacts even if the tests never started.
+function collect_journal_artifacts() {
+	local artifacts_dir="$1"
+	local test_start_time="$2"
+
+	if [[ -d "${artifacts_dir}" ]]; then
+		rm -rf "${artifacts_dir}"
+	fi
+
+	if [[ -z "${test_start_time}" ]]; then
+		warn "tests start time is not defined. Cannot gather journal information"
+		return
+	fi
+
+	mkdir -p "${artifacts_dir}"
+	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
+	local journalctl_log_path="${artifacts_dir}/journalctl-${RANDOM}.log"
+
+	if [[ "${3:-}" == "--sudo-tee" ]]; then
+		sudo journalctl --since="${test_start_time}" | sudo tee "${journalctl_log_path}" > /dev/null
+	else
+		# The current user writes the log file.
+		# shellcheck disable=SC2024
+		sudo journalctl --since="${test_start_time}" > "${journalctl_log_path}"
+	fi
+}
+
 function bats_unbuffered_info() {
 	local msg="$*"
 	# Ask bats to print this text immediately rather than buffering until the end of a test case.
