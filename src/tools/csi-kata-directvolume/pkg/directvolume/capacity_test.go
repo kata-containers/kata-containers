@@ -8,6 +8,7 @@ package directvolume
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,6 +46,8 @@ type fakeStorage struct {
 	// beforeStatfs, if set, runs once before the free space is read.
 	beforeStatfs func()
 	err          error
+	// createErr, if set, is returned by CreateRawDisk.
+	createErr error
 }
 
 func newFakeStorage() *fakeStorage {
@@ -87,6 +90,9 @@ func (f *fakeStorage) AllocatedBytes(path string) (int64, error) {
 func (f *fakeStorage) CreateRawDisk(storagePath, volID string, size int64) (string, error) {
 	if f.err != nil {
 		return "", f.err
+	}
+	if f.createErr != nil {
+		return "", f.createErr
 	}
 	path := filepath.Join(storagePath, volID, "directvol-rawdisk")
 	if _, exists := f.allocated[path]; !exists {
@@ -1207,4 +1213,87 @@ func TestSPDKCapacityAlignment(t *testing.T) {
 	_, err := d.CreateVolume(context.Background(), req)
 	requireCode(t, err, codes.OutOfRange)
 	d.requireNoBackend(t, "vol-2")
+}
+
+// TestCreateVolumeNoSpace checks that a raw disk which runs out of space,
+// because another writer took it after the admission check, makes the
+// external-provisioner reschedule the volume.
+func TestCreateVolumeNoSpace(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{})
+	d.storage.createErr = fmt.Errorf("%w: fallocate failed", utils.ErrNoSpace)
+	_, err := d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, ""))
+	requireCode(t, err, codes.ResourceExhausted)
+	d.requireNoBackend(t, "vol-1")
+
+	d.storage.createErr = errors.New("permission denied")
+	_, err = d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, ""))
+	requireCode(t, err, codes.Internal)
+}
+
+// TestSPDKCreateUnknownResult checks that a backing file is kept while SPDK
+// may still use it: the answer to bdev_aio_create is lost and the bdev
+// cannot be deleted either.
+func TestSPDKCreateUnknownResult(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{capacity: []string{"fast=8Gi"}})
+	d.spdk.err["bdev_aio_create"] = errors.New("read timeout")
+	d.spdk.err["bdev_aio_delete"] = errors.New("read timeout")
+
+	_, err := d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.SpdkVolumeTypeName, "fast"))
+	requireCode(t, err, codes.Internal)
+	require.FileExists(t, filepath.Join(utils.SpdkRawDiskDir, "vol-1.raw"), "the backing file must be kept while the bdev may exist")
+	require.Empty(t, d.state.GetVolumes())
+}
+
+// TestSPDKCreateRejected checks that the backing file is removed when SPDK
+// rejects the bdev, without deleting a bdev which does not exist.
+func TestSPDKCreateRejected(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{capacity: []string{"fast=8Gi"}})
+	d.spdk.err["bdev_aio_create"] = &spdkrpc.SpdkError{Code: -22, Message: "Invalid parameters"}
+
+	_, err := d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.SpdkVolumeTypeName, "fast"))
+	requireCode(t, err, codes.Internal)
+	d.requireNoFile(t, filepath.Join(utils.SpdkRawDiskDir, "vol-1.raw"))
+	require.False(t, d.spdk.called("bdev_aio_delete", "bdev-vol-1"))
+}
+
+// TestSPDKStateFailureKeepsBusyFile checks the rollback of a volume whose
+// state cannot be saved and whose bdev cannot be deleted.
+func TestSPDKStateFailureKeepsBusyFile(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{capacity: []string{"fast=8Gi"}})
+	d.spdk.err["bdev_aio_delete"] = errors.New("read timeout")
+	stateFile := filepath.Join(d.config.StateDir, "state.json")
+	require.NoError(t, os.RemoveAll(stateFile))
+	require.NoError(t, os.Mkdir(stateFile, 0750))
+
+	_, err := d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.SpdkVolumeTypeName, "fast"))
+	requireCode(t, err, codes.Internal)
+	require.FileExists(t, filepath.Join(utils.SpdkRawDiskDir, "vol-1.raw"), "the backing file must be kept while the bdev exists")
+}
+
+// TestCreateVolumeContentSourceRollback checks that a volume whose content
+// cannot be copied releases its backend.
+func TestCreateVolumeContentSourceRollback(t *testing.T) {
+	for _, volumeType := range volumeTypes {
+		t.Run(volumeType, func(t *testing.T) {
+			d := newTestDriver(t, testDriverOptions{capacity: []string{"fast=8Gi"}})
+			req := createRequest("vol-1", utils.GiB, volumeType, "fast")
+			req.VolumeContentSource = &csi.VolumeContentSource{Type: &csi.VolumeContentSource_Volume{
+				Volume: &csi.VolumeContentSource_VolumeSource{VolumeId: "missing"},
+			}}
+			_, err := d.CreateVolume(context.Background(), req)
+			require.Error(t, err)
+			require.Empty(t, d.state.GetVolumes())
+			d.requireAvailable(t, volumeType, "fast", 8*utils.GiB)
+			if volumeType == utils.SpdkVolumeTypeName {
+				require.True(t, d.spdk.called("bdev_aio_delete", "bdev-vol-1"), "the bdev must be deleted")
+				d.requireNoFile(t, filepath.Join(utils.SpdkRawDiskDir, "vol-1.raw"))
+			}
+		})
+	}
+}
+
+func (d *testDriver) requireNoFile(t *testing.T, path string) {
+	t.Helper()
+	_, err := os.Stat(path)
+	require.True(t, os.IsNotExist(err), "%s must not exist", path)
 }

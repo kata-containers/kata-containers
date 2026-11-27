@@ -131,6 +131,10 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 		}
 		if err != nil {
 			klog.V(4).Infof("VolumeSource error: %v", err)
+			// deleteVolume only drops the record, release the backend first.
+			if relErr := dv.releaseBackend(*vol); relErr != nil {
+				klog.Warningf("failed to release the backend of volume %s: %v", volumeID, relErr)
+			}
 			if delErr := dv.deleteVolume(volumeID); delErr != nil {
 				klog.Infof("deleting direct volume %v failed: %v", volumeID, delErr)
 			}
@@ -296,6 +300,11 @@ func (dv *directVolume) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeR
 // and records its path in the volume state. It is idempotent.
 func (dv *directVolume) ensureDirectBackingDevice(vol *state.Volume) error {
 	devicePath, err := dv.storage.CreateRawDisk(dv.config.StoragePath, vol.VolID, vol.VolSize)
+	if errors.Is(err, utils.ErrNoSpace) {
+		// Another writer took the space after the admission check: let the
+		// external-provisioner reschedule the volume.
+		return status.Errorf(codes.ResourceExhausted, "no space for the backing device of volume %s: %v", vol.VolID, err)
+	}
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to allocate backing device for volume %s: %v", vol.VolID, err)
 	}

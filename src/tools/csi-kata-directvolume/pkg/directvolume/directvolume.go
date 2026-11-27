@@ -261,7 +261,13 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 		"block_size": spdkBlockSize,
 	}
 	if _, err := spdkrpc.Call("bdev_aio_create", bdevParams); err != nil {
-		removeCreatedFile()
+		// An SPDK error means that the bdev was not created. Without an
+		// answer, for example after a timeout, SPDK may have created it and
+		// use the file, so only remove the file once the bdev is gone.
+		var rejected *spdkrpc.SpdkError
+		if errors.As(err, &rejected) || deleteBdev(bdevName) {
+			removeCreatedFile()
+		}
 		return nil, status.Errorf(codes.Internal, "bdev_aio_create failed: %v", err)
 	}
 
@@ -278,15 +284,44 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 		},
 	}
 	if err := dv.state.UpdateVolume(*vol); err != nil {
-		if _, delErr := spdkrpc.Call("bdev_aio_delete", map[string]any{"name": bdevName}); delErr != nil {
-			klog.Warningf("[SPDK] failed to delete bdev %s after a failed state update: %v", bdevName, delErr)
+		// Keep the file while the bdev may still use it.
+		if deleteBdev(bdevName) {
+			removeCreatedFile()
 		}
-		removeCreatedFile()
 		return nil, err
 	}
 
 	klog.Infof("[SPDK] volume %s registered bdev=%s backing=%s", volumeID, bdevName, backingFile)
 	return vol, nil
+}
+
+// deleteBdev deletes an SPDK bdev and reports whether it is gone.
+func deleteBdev(name string) bool {
+	_, err := spdkrpc.Call("bdev_aio_delete", map[string]any{"name": name})
+	var spdkErr *spdkrpc.SpdkError
+	if err == nil || (errors.As(err, &spdkErr) && spdkErr.Code == spdkrpc.SpdkErrNoDevice) {
+		return true
+	}
+	klog.Warningf("[SPDK] failed to delete bdev %s, its backing file is kept: %v", name, err)
+	return false
+}
+
+// releaseBackend removes the backend of a volume which is rolled back: the
+// raw disk of a directvol volume, or the bdev and the backing file of an
+// SPDK volume. The backing file is only removed once the bdev is gone.
+func (dv *directVolume) releaseBackend(vol state.Volume) error {
+	if vol.Metadata["type"] != utils.SpdkVolumeTypeName {
+		return utils.RemoveDirectBlockDevice(vol.VolID, dv.config.StoragePath)
+	}
+	if name := vol.Metadata["bdevName"]; name != "" && !deleteBdev(name) {
+		return fmt.Errorf("SPDK bdev %s of volume %s could not be deleted", name, vol.VolID)
+	}
+	if file := vol.Metadata["backingFile"]; file != "" {
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 // createSparseFile creates a sparse file of the given size.
