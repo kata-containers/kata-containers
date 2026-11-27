@@ -216,6 +216,10 @@ impl Hypervisor for Dragonball {
         inner.capabilities().await
     }
 
+    fn supports_flat_pci_root(&self) -> bool {
+        true
+    }
+
     async fn get_hypervisor_metrics(&self) -> Result<String> {
         let inner = self.inner.read().await;
         inner.get_hypervisor_metrics().await

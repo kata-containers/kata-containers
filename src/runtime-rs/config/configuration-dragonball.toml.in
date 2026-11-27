@@ -107,6 +107,12 @@ default_maxvcpus = @DEFMAXVCPUS_DB@
 # As Dragonball VMM does not support PCI hotplug options, it should be set 0.
 default_bridges = @DEF_DGB_BRIDGES@
 
+# Enable cold-plugging of VFIO devices (e.g. GPUs) before VM boot.
+# Accepted values: "no-port" (default, disabled), "root-port".
+# Dragonball attaches cold-plugged VFIO devices directly to the flat PCI root
+# bus, so devices are visible in the guest without hot-plug support.
+cold_plug_vfio = @DEFCOLPLUGVFIO_DB@
+
 # Reclaim guest freed memory.
 # Enabling this will result in the VM balloon device having f_reporting=on set.
 # Then the hypervisor will use it to reclaim guest freed memory.
@@ -618,6 +624,11 @@ sandbox_bind_mounts = @DEFBINDMOUNTS@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# pod_resource_api_sock specifies the unix socket for the Kubelet's PodResource API endpoint.
+# When set (together with a non-"no-port" cold_plug_vfio), the runtime can cold-plug
+# devices discovered via the Pod Resources API. Path is typically under kubelet root-dir.
+pod_resource_api_sock = ""
 
 # If enabled, the runtime will attempt to use fd passthrough feature for process io.
 # Note: this feature is only supported by the Dragonball hypervisor.

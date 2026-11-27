@@ -5,6 +5,7 @@
 //
 
 use super::vmm_instance::VmmInstance;
+use crate::{device::pci_path::PciPath, vfio_device::VfioDeviceModern};
 use crate::{
     device::DeviceType, firecracker::sl, hypervisor_persist::HypervisorState,
     kernel_param::KernelParams, MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM,
@@ -32,9 +33,12 @@ use kata_types::{
 };
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
+use std::convert::TryFrom;
+use std::sync::Arc;
 use std::{cmp::Ordering, time::Duration};
 use std::{collections::HashSet, fs::create_dir_all};
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_INITRD: &str = "initrd";
@@ -180,13 +184,30 @@ impl DragonballInner {
         }
 
         // add pending devices
+        let mut cold_vfio_devices: Vec<Arc<Mutex<VfioDeviceModern>>> = Vec::new();
         while let Some(dev) = self.pending_devices.pop() {
-            self.add_device(dev).await.context("add_device")?;
+            let added = self.add_device(dev).await.context("add_device")?;
+            if let DeviceType::VfioModern(vfio) = added {
+                cold_vfio_devices.push(vfio);
+            }
         }
 
         // start vmm and wait ready
         self.start_vmm_instance().context("start vmm instance")?;
         self.wait_vmm_ready(timeout).context("wait vmm")?;
+
+        // Cold-plugged VFIO slots are only assigned at boot; read them back so
+        // the container path can build the agent device options.
+        for vfio in cold_vfio_devices {
+            let hostdev_id = vfio.lock().await.device_id.clone();
+            if let Some(slot) = self
+                .vmm_instance
+                .get_host_device_guest_id(&hostdev_id)
+                .context("get host device guest id")?
+            {
+                vfio.lock().await.config.guest_pci_path = Some(PciPath::try_from(slot as u32)?);
+            }
+        }
 
         Ok(())
     }

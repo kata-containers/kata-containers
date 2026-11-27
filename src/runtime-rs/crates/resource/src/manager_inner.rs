@@ -665,6 +665,17 @@ impl ResourceManagerInner {
             }
         }
 
+        // Sandbox-level cold-plugged VFIO PCI devices (e.g. GPUs passed via
+        // cold plug) are already present in the guest and have their slot read
+        // back after boot. Add their BDFs so a container's matching /dev/vfio/*
+        // node skips the hot-plug path below.
+        for (bdf, guest_pci_path) in
+            hypervisor::device::device_manager::list_cold_plugged_vfio_bdfs(&self.device_manager)
+                .await
+        {
+            cold_plug_bdfs.entry(bdf).or_insert(guest_pci_path);
+        }
+
         let linux_devices = linux.devices().clone().unwrap_or_default();
         for d in linux_devices.iter() {
             match d.typ() {

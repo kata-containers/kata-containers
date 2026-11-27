@@ -167,6 +167,16 @@ impl ConfigPlugin for DragonballConfig {
                     "dragonball hypervisor does not support PCI hotplug options",
                 ));
             }
+            // Cold-plugged VFIO devices attach directly to the flat PCI root
+            // bus, so only "no-port" is supported (no PCIe port topology).
+            if !db.device_info.cold_plug_vfio.is_empty()
+                && db.device_info.cold_plug_vfio != "no-port"
+            {
+                return Err(std::io::Error::other(format!(
+                    "dragonball hypervisor only supports cold_plug_vfio \"no-port\", got \"{}\"",
+                    db.device_info.cold_plug_vfio,
+                )));
+            }
 
             if !db.machine_info.machine_type.is_empty() {
                 return Err(std::io::Error::other(
@@ -228,5 +238,36 @@ mod tests {
                 .template_path,
             default::DEFAULT_TEMPLATE_PATH
         );
+    }
+
+    fn dragonball_config() -> Hypervisor {
+        let mut hv = Hypervisor::default();
+        // Fill in the minimal required fields so validation gets past boot checks.
+        hv.boot_info.kernel = "vmlinux".to_string();
+        hv.boot_info.initrd = "initrd".to_string();
+        hv.memory_info.default_memory = MIN_DRAGONBALL_MEMORY_SIZE_MB;
+        hv.blockdev_info.block_device_driver = VIRTIO_BLK_PCI.to_string();
+        hv
+    }
+
+    fn validate_with_cold_plug(cold_plug_vfio: &str) -> std::io::Result<()> {
+        let mut config = TomlConfig::default();
+        let mut hv = dragonball_config();
+        hv.device_info.cold_plug_vfio = cold_plug_vfio.to_string();
+        config
+            .hypervisor
+            .insert(HYPERVISOR_NAME_DRAGONBALL.to_string(), hv);
+        DragonballConfig::new().validate(&config)
+    }
+
+    #[test]
+    fn test_validate_accepts_no_port_cold_plug_vfio() {
+        validate_with_cold_plug("").unwrap();
+        validate_with_cold_plug("no-port").unwrap();
+    }
+
+    #[test]
+    fn test_validate_rejects_root_port_cold_plug_vfio() {
+        assert!(validate_with_cold_plug("root-port").is_err());
     }
 }

@@ -722,24 +722,42 @@ impl VirtSandbox {
         }
     }
 
+    /// Resolve the PCIe port to cold-plug VFIO devices onto, or `None` when
+    /// cold-plug is disabled by configuration.
+    ///
+    /// `cold_plug_vfio = "root-port"` always enables cold-plug onto a root
+    /// port. `"no-port"` disables cold-plug for hypervisors that require a
+    /// root/switch port (QEMU/CH), but enables it for hypervisors exposing a
+    /// flat PCI root bus (Dragonball), attaching devices directly to the bus.
+    async fn cold_plug_vfio_port(&self) -> Result<Option<PCIePort>> {
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        let cold_plug_vfio = &hypervisor_config.device_info.cold_plug_vfio;
+        if cold_plug_vfio.is_empty() {
+            return Ok(None);
+        }
+        match cold_plug_vfio.as_str() {
+            "root-port" => Ok(Some(PCIePort::RootPort)),
+            "no-port" => {
+                if self.hypervisor.supports_flat_pci_root() {
+                    Ok(Some(PCIePort::NoPort))
+                } else {
+                    Ok(None)
+                }
+            }
+            other => Err(anyhow!(
+                "unsupported cold_plug_vfio value {:?}; only \"root-port\" and \"no-port\" are supported",
+                other
+            )),
+        }
+    }
+
     async fn prepare_coldplug_cdi_devices(
         &self,
         sandbox_config: &SandboxConfig,
     ) -> Result<Vec<ResourceConfig>> {
-        let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        let cold_plug_vfio = &hypervisor_config.device_info.cold_plug_vfio;
-        if cold_plug_vfio.is_empty() || cold_plug_vfio == "no-port" {
-            return Ok(Vec::new());
-        }
-
-        let port = match cold_plug_vfio.as_str() {
-            "root-port" => PCIePort::RootPort,
-            other => {
-                return Err(anyhow!(
-                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" is supported",
-                    other
-                ))
-            }
+        let port = match self.cold_plug_vfio_port().await? {
+            Some(p) => p,
+            None => return Ok(Vec::new()),
         };
 
         let config = self.resource_manager.config().await;
@@ -821,20 +839,9 @@ impl VirtSandbox {
         &self,
         sandbox_config: &SandboxConfig,
     ) -> Result<Vec<ResourceConfig>> {
-        let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        let cold_plug_vfio = &hypervisor_config.device_info.cold_plug_vfio;
-        if cold_plug_vfio.is_empty() || cold_plug_vfio == "no-port" {
-            return Ok(Vec::new());
-        }
-
-        let port = match cold_plug_vfio.as_str() {
-            "root-port" => PCIePort::RootPort,
-            other => {
-                return Err(anyhow!(
-                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" is supported",
-                    other
-                ))
-            }
+        let port = match self.cold_plug_vfio_port().await? {
+            Some(p) => p,
+            None => return Ok(Vec::new()),
         };
 
         let bundle = &sandbox_config.state.bundle;

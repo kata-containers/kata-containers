@@ -424,8 +424,11 @@ impl VfioDeviceMgr {
         idx: usize,
     ) -> Result<Arc<dyn DeviceIo>> {
         let sysfs_path = Self::build_sysfs_path(cfg)?;
-        let device = self.attach_pci_vfio_device(ctx, sysfs_path, &cfg.dev_config)?;
+        let (device, slot) = self.attach_pci_vfio_device(ctx, sysfs_path, &cfg.dev_config)?;
         self.info_list[idx].device = Some(device.clone());
+        // Record the guest PCI slot assigned during boot so the runtime can
+        // read it back (cold-plug: the slot is only known after attach).
+        self.info_list[idx].config.dev_config.guest_dev_id = Some(slot);
         Ok(device)
     }
 
@@ -458,6 +461,16 @@ impl VfioDeviceMgr {
         self.info_list
             .iter()
             .position(|info| info.config.id().eq(id))
+    }
+
+    /// Returns the guest PCI slot assigned to the device with `hostdev_id`.
+    ///
+    /// For cold-plugged devices the slot is only allocated during boot
+    /// (see [`Self::attach_devices`]), so this must be queried after the VM
+    /// has started.
+    pub fn get_device_guest_id(&self, hostdev_id: &str) -> Option<u8> {
+        let idx = self.get_index_of_hostdev_id(hostdev_id)?;
+        self.info_list[idx].config.dev_config.guest_dev_id
     }
 
     /// Register guest memory to the VFIO container.
@@ -563,7 +576,7 @@ impl VfioDeviceMgr {
         ctx: &mut DeviceOpContext,
         sysfs_path: String,
         cfg: &VfioPciDeviceConfig,
-    ) -> Result<Arc<dyn DeviceIo>> {
+    ) -> Result<(Arc<dyn DeviceIo>, u8)> {
         slog::info!(
             ctx.logger(),
             "attach vfio pci device";
@@ -640,7 +653,8 @@ impl VfioDeviceMgr {
         pci_bus
             .register_device(vfio_pci_device.clone())
             .map_err(VfioDeviceError::PciError)?;
-        Ok(vfio_pci_device)
+        let slot = vfio_pci_device.device_id();
+        Ok((vfio_pci_device, slot))
     }
 
     fn remove_pci_vfio_device(
