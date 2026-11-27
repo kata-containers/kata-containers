@@ -242,6 +242,8 @@ EOF
 > pinning. The large `limits.cpu` value tells Kata to create a VM with
 > that many vCPUs distributed across NUMA nodes.
 
+For huge page backed guests sized from the pod, see [How to size a huge page backed guest from its pod](how-to-size-hugepage-backed-guest.md).
+
 ### 4.2 GPU passthrough pod with NUMA
 
 For GPU workloads, use the NVIDIA GPU runtime class. NUMA must be enabled

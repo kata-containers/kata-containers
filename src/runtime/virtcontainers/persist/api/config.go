@@ -184,6 +184,14 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
+	// HugePagesPodSizing is persisted so a restored sandbox bounds its containers
+	// the way it did when it was created.
+	HugePagesPodSizing bool
+
+	// PodSizedHugePageSize preserves the backing page size in bytes
+	// across shim restarts.
+	PodSizedHugePageSize uint64
+
 	// VirtioMem is used to enable/disable virtio-mem
 	VirtioMem bool
 
@@ -249,8 +257,10 @@ type ContainerConfig struct {
 	Annotations map[string]string
 	// Resources for recoding update
 	Resources specs.LinuxResources
-	ID        string
-	RootFs    string
+	// GuestMemoryCeiling preserves the limit for later admission checks.
+	GuestMemoryCeiling *uint64 `json:",omitempty"`
+	ID                 string
+	RootFs             string
 }
 
 // SandboxConfig is a sandbox configuration.

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -264,6 +265,10 @@ type ContainerConfig struct {
 
 	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
 	ReadonlyRootfs bool
+
+	// GuestMemoryCeiling records the applied limit for admission checks.
+	// Nil means no limit has been recorded.
+	GuestMemoryCeiling *uint64
 }
 
 // valid checks that the container configuration is valid.
@@ -353,6 +358,10 @@ type Container struct {
 	devices []ContainerDevice
 
 	state types.ContainerState
+
+	// Admission must not wait for teardown, which can outlast the kubelet's
+	// next create. A pointer, because Container is copied.
+	killed *atomic.Bool
 
 	process Process
 
@@ -735,7 +744,8 @@ func (c *Container) initConfigResourcesMemory() {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
+func newContainer(ctx context.Context, sandbox *Sandbox, config ContainerConfig) (*Container, error) {
+	contConfig := &config
 	span, ctx := katatrace.Trace(ctx, nil, "newContainer", containerTracingTags, map[string]string{"container_id": contConfig.ID, "sandbox_id": sandbox.id})
 	defer span.End()
 
@@ -752,6 +762,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		containerPath: filepath.Join(sandbox.id, contConfig.ID),
 		rootfsSuffix:  "rootfs",
 		state:         types.ContainerState{},
+		killed:        &atomic.Bool{},
 		process:       Process{},
 		mounts:        contConfig.Mounts,
 		ctx:           sandbox.ctx,
@@ -1638,7 +1649,9 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	// Force the container to be killed. For most of the cases, this
 	// should not matter and it should return an error that will be
 	// ignored.
-	c.kill(ctx, syscall.SIGKILL, true)
+	if err := c.kill(ctx, syscall.SIGKILL, true); err == nil {
+		c.killed.Store(true)
+	}
 
 	// Since the agent has supported the MultiWaitProcess, it's better to
 	// wait the process here to make sure the process has exited before to
@@ -1811,6 +1824,17 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 
 	if state := c.state.State; state != types.StateRunning && state != types.StateReady {
 		return fmt.Errorf("container(%s) not running or ready, impossible to update", state)
+	}
+
+	if hugePagePodSized(&c.sandbox.config.HypervisorConfig) {
+		// Kubernetes cannot change huge page limits, and the kubelet rebuilds
+		// them for a resize, from the pod level value when there is one.
+		if len(resources.HugepageLimits) > 0 {
+			resources.HugepageLimits = c.config.Resources.HugepageLimits
+		}
+		if err := refusePodSizedUpdate(c, resources.Memory); err != nil {
+			return err
+		}
 	}
 
 	if c.config.Resources.CPU == nil {

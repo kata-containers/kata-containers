@@ -23,6 +23,12 @@ pub trait SystemdInterface {
     fn add_process(&self, pid: i32, subcgroup: &str) -> Result<()>;
     fn get_version(&self) -> Result<String>;
     fn unit_exists(&self) -> Result<bool>;
+    fn set_slice_memory_max(
+        &self,
+        slice: &str,
+        bytes: u64,
+        cg_hierarchy: &CgroupHierarchy,
+    ) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -83,6 +89,28 @@ impl SystemdInterface for DBusClient {
         proxy
             .set_unit_properties(&self.unit_name, true, properties)
             .context(format!("failed to set unit {} properties", self.unit_name))?;
+
+        Ok(())
+    }
+
+    // The pod-wide limit belongs on the parent slice.
+    fn set_slice_memory_max(
+        &self,
+        slice: &str,
+        bytes: u64,
+        cg_hierarchy: &CgroupHierarchy,
+    ) -> Result<()> {
+        let proxy = self.build_proxy()?;
+        let property = match *cg_hierarchy {
+            CgroupHierarchy::Legacy => "MemoryLimit",
+            CgroupHierarchy::Unified => "MemoryMax",
+        };
+
+        proxy
+            .set_unit_properties(slice, true, &[(property, Value::U64(bytes))])
+            .context(format!(
+                "failed to set {property} of slice {slice} to {bytes}"
+            ))?;
 
         Ok(())
     }

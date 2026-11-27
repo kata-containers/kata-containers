@@ -628,6 +628,15 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	return q.buildNUMATopologyForVFIOHostSet(vfioHostSet)
 }
 
+// A preallocated guest takes all its huge pages at start, which is when a VM
+// past the pod's hugetlb limit fails.
+func qemuGuestMemoryPreallocated(hc *HypervisorConfig) bool {
+	if hc.MemPrealloc {
+		return true
+	}
+	return hc.HugePages && (hc.SharedFS == config.VirtioFS || hc.SharedFS == config.VirtioFSNydus)
+}
+
 // defaultHugepagesMountpoint is the standard mount point of the hugetlbfs
 // filesystem used to back guest memory with huge pages.
 const defaultHugepagesMountpoint = "/dev/hugepages"
@@ -637,6 +646,20 @@ const defaultHugepagesMountpoint = "/dev/hugepages"
 // filesystem block size, so we can discover the actual page size (e.g. 2 MiB
 // or 1 GiB) via statfs without assuming a fixed value.
 func hugepageSizeBytes(path string) (uint64, error) {
+	hpSize, err := hugetlbfsPageSize(path)
+	if err != nil {
+		return 0, err
+	}
+	mib := uint64(1) << utils.MibToBytesShift
+	if hpSize < mib || hpSize%mib != 0 {
+		return 0, fmt.Errorf("hugepage mount %q reported unexpected block size %d", path, hpSize)
+	}
+	return hpSize, nil
+}
+
+// Pod sizing accepts any huge page size, such as 64 KiB on arm64. Only NUMA
+// alignment needs whole MiB.
+func hugetlbfsPageSize(path string) (uint64, error) {
 	var fs unix.Statfs_t
 	if err := unix.Statfs(path, &fs); err != nil {
 		return 0, fmt.Errorf("statfs %q: %w", path, err)
@@ -644,13 +667,7 @@ func hugepageSizeBytes(path string) (uint64, error) {
 	if fs.Bsize <= 0 {
 		return 0, fmt.Errorf("hugepage mount %q reported invalid block size %d", path, fs.Bsize)
 	}
-
-	hpSize := uint64(fs.Bsize)
-	mib := uint64(1) << utils.MibToBytesShift
-	if hpSize < mib || hpSize%mib != 0 {
-		return 0, fmt.Errorf("hugepage mount %q reported unexpected block size %d", path, fs.Bsize)
-	}
-	return hpSize, nil
+	return uint64(fs.Bsize), nil
 }
 
 func (q *qemu) buildNUMATopologyForVFIOHostSet(vfioHostSet map[int]struct{}) ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, error) {
@@ -1180,7 +1197,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		NoDefaults:    true,
 		NoGraphic:     true,
 		NoReboot:      true,
-		MemPrealloc:   q.config.MemPrealloc,
+		MemPrealloc:   qemuGuestMemoryPreallocated(&q.config),
 		HugePages:     q.config.HugePages,
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
@@ -1197,9 +1214,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
 			return errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
-		}
-		if q.config.HugePages {
-			knobs.MemPrealloc = true
 		}
 	}
 
