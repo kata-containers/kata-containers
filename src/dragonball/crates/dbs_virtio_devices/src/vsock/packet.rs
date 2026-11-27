@@ -15,16 +15,12 @@
 /// stored in guest memory. This is done to avoid unnecessarily copying data
 /// from guest memory to temporary buffers, before passing it on to the vsock
 /// backend.
-use std::ops::{Deref, DerefMut};
-
 use virtio_queue::{desc::split::Descriptor, DescriptorChain};
 use vm_memory::{Address, GuestMemory};
 
 use super::defs;
 use super::{Result, VsockError};
 
-/// The vsock packet header.
-//
 // The vsock packet header is defined by the C struct:
 //
 // ```C
@@ -42,69 +38,33 @@ use super::{Result, VsockError};
 // } __attribute__((packed));
 // ```
 //
-// NOTE: this needs to be marked as repr(C), so we can predict its exact layout
-// in memory, since we'll be using guest-provided pointers for access. The Linux
-// UAPI headers define this struct as packed, but, in this particular case,
-// packing only eliminates 4 trailing padding bytes. Declaring this struct as
-// packed would also reduce its alignment to 1, which gets the Rust compiler all
-// fidgety. Little does it know, the guest driver already aligned the structure
-// properly, so we don't need to worry about alignment. That said, we'll be
-// going with only repr(C) (no packing), and hard-coding the struct size as
-// `VSOCK_PKT_HDR_SIZE`, since, given this particular layout, the first
-// `VSOCK_PKT_HDR_SIZE` bytes are the same in both the packed and unpacked
-// layouts.
-//
-// All fields use the little-endian byte order. Since we're only thinly wrapping
-// a pointer to where the guest driver stored the packet header, let's restrict
-// this to little-endian targets.
-#[cfg(target_endian = "little")]
-#[derive(Clone, Copy, Debug, Default)]
-#[repr(C)]
-pub struct VsockPacketHdr {
-    /// Source CID.
-    pub src_cid: u64,
-    /// Destination CID.
-    pub dst_cid: u64,
-    /// Source port.
-    pub src_port: u32,
-    /// Destination port.
-    pub dst_port: u32,
-    /// Data length (in bytes) - may be 0, if there is now data buffer.
-    pub len: u32,
-    /// Socket type. Currently, only connection-oriented streams are defined by
-    /// the vsock protocol.
-    pub type_: u16,
-    /// Operation ID - one of the VSOCK_OP_* values; e.g.
-    /// - VSOCK_OP_RW: a data packet;
-    /// - VSOCK_OP_REQUEST: connection request;
-    /// - VSOCK_OP_RST: forcefull connection termination;
-    /// - etc (see `super::defs::uapi` for the full list).
-    pub op: u16,
-    /// Additional options (flags) associated with the current operation (`op`).
-    /// Currently, only used with shutdown requests (VSOCK_OP_SHUTDOWN).
-    pub flags: u32,
-    /// Size (in bytes) of the packet sender receive buffer (for the connection
-    /// to which this packet belongs).
-    pub buf_alloc: u32,
-    /// Number of bytes the sender has received and consumed (for the connection
-    /// to which this packet belongs). For instance, for our Unix backend, this
-    /// counter would be the total number of bytes we have successfully written
-    /// to a backing Unix socket.
-    pub fwd_cnt: u32,
-}
+// The header lives in guest memory and is only guaranteed to be valid for its
+// 44 wire bytes, at whatever address the guest driver chose. A `repr(C)` Rust
+// struct with the same fields is 48 bytes long and 8-byte aligned, so it must
+// not be used to reference the header. Fields are accessed at their wire
+// offsets instead, in little-endian byte order.
 
-/// The size (in bytes) of the above packet header struct, as present in a
-/// virtio queue buffer. See the explanation above on why we are hard-coding
-/// this value here.
+/// The size (in bytes) of the vsock packet header, as present in a virtio
+/// queue buffer.
 pub const VSOCK_PKT_HDR_SIZE: usize = 44;
+const VSOCK_PKT_HDR_SRC_CID_OFFSET: usize = 0;
+const VSOCK_PKT_HDR_DST_CID_OFFSET: usize = 8;
+const VSOCK_PKT_HDR_SRC_PORT_OFFSET: usize = 16;
+const VSOCK_PKT_HDR_DST_PORT_OFFSET: usize = 20;
+const VSOCK_PKT_HDR_LEN_OFFSET: usize = 24;
+const VSOCK_PKT_HDR_TYPE_OFFSET: usize = 28;
+const VSOCK_PKT_HDR_OP_OFFSET: usize = 30;
+const VSOCK_PKT_HDR_FLAGS_OFFSET: usize = 32;
+const VSOCK_PKT_HDR_BUF_ALLOC_OFFSET: usize = 36;
+const VSOCK_PKT_HDR_FWD_CNT_OFFSET: usize = 40;
 
-/// A thin wrapper over a `VsockPacketHdr` pointer. This is useful because
-/// packet headers are provided by the guest via virtio descriptors (so,
-/// basically, pointers). We never need to create header structs - only access
-/// them. Access to specific members of the wrapped struct is provided via
-/// `Deref` and `DerefMut` impls.
+/// A thin wrapper over the 44-byte packed vsock wire header provided through a
+/// virtio descriptor.
+///
+/// The guest-provided header has no alignment guarantee, so fields are read
+/// and written individually with unaligned scalar operations.
 pub struct HdrWrapper {
-    ptr: *mut VsockPacketHdr,
+    ptr: *mut u8,
 }
 
 impl HdrWrapper {
@@ -114,7 +74,6 @@ impl HdrWrapper {
         if desc.len() < VSOCK_PKT_HDR_SIZE as u32 {
             return Err(VsockError::HdrDescTooSmall(desc.len()));
         }
-        // TODO: check buffer alignment
 
         // Validate the ENTIRE [desc.addr(), desc.addr() + VSOCK_PKT_HDR_SIZE) range is a
         // single contiguous guest-memory mapping before building the raw header pointer.
@@ -126,62 +85,76 @@ impl HdrWrapper {
             .get_slice(desc.addr(), VSOCK_PKT_HDR_SIZE)
             .map_err(VsockError::GuestMemory)?;
 
-        // It's safe to create the wrapper from this pointer, as:
-        // - the guest driver aligned the data; and
-        // - `GuestMemory` is page-aligned; and
-        // - the full header range was validated above.
         Ok(Self::from_ptr_unchecked(slice.ptr_guard().as_ptr()))
     }
 
     /// Create the wrapper from a raw pointer.
     ///
-    /// Warning: the pointer needs to follow proper alignment for
-    /// `VsockPacketHdr`. This is not a problem for virtq buffers, since the
-    /// guest driver already handled alignment, and `GuestMemory` is
-    /// page-aligned.
+    /// The caller must ensure that the pointer remains valid for all 44 header
+    /// bytes and that mutable operations are permitted when setters are used.
     fn from_ptr_unchecked(ptr: *const u8) -> Self {
-        #[allow(clippy::cast_ptr_alignment)]
         Self {
-            ptr: ptr as *mut VsockPacketHdr,
+            ptr: ptr as *mut u8,
+        }
+    }
+
+    #[inline]
+    fn read_u16(&self, offset: usize) -> u16 {
+        // SAFETY: the constructor validated the complete 44-byte mapping. All
+        // offsets are compile-time wire-layout constants within that mapping.
+        u16::from_le(unsafe { (self.ptr.add(offset) as *const u16).read_unaligned() })
+    }
+
+    #[inline]
+    fn read_u32(&self, offset: usize) -> u32 {
+        // SAFETY: see `read_u16`.
+        u32::from_le(unsafe { (self.ptr.add(offset) as *const u32).read_unaligned() })
+    }
+
+    #[inline]
+    fn read_u64(&self, offset: usize) -> u64 {
+        // SAFETY: see `read_u16`.
+        u64::from_le(unsafe { (self.ptr.add(offset) as *const u64).read_unaligned() })
+    }
+
+    #[inline]
+    fn write_u16(&mut self, offset: usize, value: u16) {
+        // SAFETY: the constructor validated the complete 44-byte mapping and
+        // callers only use this through a mutable packet.
+        unsafe {
+            (self.ptr.add(offset) as *mut u16).write_unaligned(value.to_le());
+        }
+    }
+
+    #[inline]
+    fn write_u32(&mut self, offset: usize, value: u32) {
+        // SAFETY: see `write_u16`.
+        unsafe {
+            (self.ptr.add(offset) as *mut u32).write_unaligned(value.to_le());
+        }
+    }
+
+    #[inline]
+    fn write_u64(&mut self, offset: usize, value: u64) {
+        // SAFETY: see `write_u16`.
+        unsafe {
+            (self.ptr.add(offset) as *mut u64).write_unaligned(value.to_le());
         }
     }
 
     /// Provide byte-wise access to the data stored inside the header, via a
     /// slice / fat-pointer.
     pub fn as_slice(&self) -> &[u8] {
-        // This is safe, since `Self::from_virtq_head()` already performed all the bound checks.
-        //
-        unsafe { std::slice::from_raw_parts(self.ptr as *const u8, VSOCK_PKT_HDR_SIZE) }
+        // SAFETY: the constructor validated the complete 44-byte mapping.
+        unsafe { std::slice::from_raw_parts(self.ptr, VSOCK_PKT_HDR_SIZE) }
     }
 
     /// Provide byte-wise mutable access to the data stored inside the header,
     /// via a slice / fat-pointer.
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        // This is safe, since `Self::from_virtq_head()` already performed all
-        // the bound checks.
-        unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut u8, VSOCK_PKT_HDR_SIZE) }
-    }
-}
-
-/// `Deref` implementation for `HdrWrapper`, allowing access to `VsockPacketHdr`
-/// individual members.
-impl Deref for HdrWrapper {
-    type Target = VsockPacketHdr;
-
-    fn deref(&self) -> &VsockPacketHdr {
-        // Dereferencing this pointer is safe, because it was already validated
-        // by the `HdrWrapper` constructor.
-        unsafe { &*self.ptr }
-    }
-}
-
-/// `DerefMut` implementation for `HdrWrapper`, allowing mutable access to
-/// `VsockPacketHdr` individual members.
-impl DerefMut for HdrWrapper {
-    fn deref_mut(&mut self) -> &mut VsockPacketHdr {
-        // Dereferencing this pointer is safe, because it was already validated
-        // by the `HdrWrapper` constructor.
-        unsafe { &mut *self.ptr }
+        // SAFETY: the constructor validated the complete 44-byte mapping and
+        // the mutable borrow prevents concurrent access through this wrapper.
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, VSOCK_PKT_HDR_SIZE) }
     }
 }
 
@@ -272,15 +245,16 @@ impl VsockPacket {
         }
 
         let hdr = HdrWrapper::from_virtq_desc(&desc, desc_chain.memory())?;
+        let len = hdr.read_u32(VSOCK_PKT_HDR_LEN_OFFSET);
 
         // Reject weirdly-sized packets.
-        if hdr.len > defs::MAX_PKT_BUF_SIZE as u32 {
-            return Err(VsockError::InvalidPktLen(hdr.len));
+        if len > defs::MAX_PKT_BUF_SIZE as u32 {
+            return Err(VsockError::InvalidPktLen(len));
         }
 
         // Don't bother to look for the data descriptor, if the header says
         // there's no data.
-        if hdr.len == 0 {
+        if len == 0 {
             return Ok(Self { hdr, buf: None });
         }
 
@@ -294,7 +268,7 @@ impl VsockPacket {
 
             // The data descriptor should be large enough to hold the data length
             // indicated by the header.
-            if buf_desc.len() < hdr.len {
+            if buf_desc.len() < len {
                 return Err(VsockError::BufDescTooSmall);
             }
 
@@ -312,7 +286,7 @@ impl VsockPacket {
 
             // The data descriptor should be large enough to hold the data length
             // indicated by the header.
-            if buf_size < hdr.len as usize {
+            if buf_size < len as usize {
                 return Err(VsockError::BufDescTooSmall);
             }
 
@@ -412,74 +386,74 @@ impl VsockPacket {
     }
 
     pub fn src_cid(&self) -> u64 {
-        self.hdr.src_cid
+        self.hdr.read_u64(VSOCK_PKT_HDR_SRC_CID_OFFSET)
     }
 
     pub fn set_src_cid(&mut self, cid: u64) -> &mut Self {
-        self.hdr.src_cid = cid;
+        self.hdr.write_u64(VSOCK_PKT_HDR_SRC_CID_OFFSET, cid);
         self
     }
 
     pub fn dst_cid(&self) -> u64 {
-        self.hdr.dst_cid
+        self.hdr.read_u64(VSOCK_PKT_HDR_DST_CID_OFFSET)
     }
 
     pub fn set_dst_cid(&mut self, cid: u64) -> &mut Self {
-        self.hdr.dst_cid = cid;
+        self.hdr.write_u64(VSOCK_PKT_HDR_DST_CID_OFFSET, cid);
         self
     }
 
     pub fn src_port(&self) -> u32 {
-        self.hdr.src_port
+        self.hdr.read_u32(VSOCK_PKT_HDR_SRC_PORT_OFFSET)
     }
 
     pub fn set_src_port(&mut self, port: u32) -> &mut Self {
-        self.hdr.src_port = port;
+        self.hdr.write_u32(VSOCK_PKT_HDR_SRC_PORT_OFFSET, port);
         self
     }
 
     pub fn dst_port(&self) -> u32 {
-        self.hdr.dst_port
+        self.hdr.read_u32(VSOCK_PKT_HDR_DST_PORT_OFFSET)
     }
 
     pub fn set_dst_port(&mut self, port: u32) -> &mut Self {
-        self.hdr.dst_port = port;
+        self.hdr.write_u32(VSOCK_PKT_HDR_DST_PORT_OFFSET, port);
         self
     }
 
     pub fn len(&self) -> u32 {
-        self.hdr.len
+        self.hdr.read_u32(VSOCK_PKT_HDR_LEN_OFFSET)
     }
 
     pub fn set_len(&mut self, len: u32) -> &mut Self {
-        self.hdr.len = len;
+        self.hdr.write_u32(VSOCK_PKT_HDR_LEN_OFFSET, len);
         self
     }
 
     pub fn type_(&self) -> u16 {
-        self.hdr.type_
+        self.hdr.read_u16(VSOCK_PKT_HDR_TYPE_OFFSET)
     }
 
     pub fn set_type(&mut self, type_: u16) -> &mut Self {
-        self.hdr.type_ = type_;
+        self.hdr.write_u16(VSOCK_PKT_HDR_TYPE_OFFSET, type_);
         self
     }
 
     pub fn op(&self) -> u16 {
-        self.hdr.op
+        self.hdr.read_u16(VSOCK_PKT_HDR_OP_OFFSET)
     }
 
     pub fn set_op(&mut self, op: u16) -> &mut Self {
-        self.hdr.op = op;
+        self.hdr.write_u16(VSOCK_PKT_HDR_OP_OFFSET, op);
         self
     }
 
     pub fn flags(&self) -> u32 {
-        self.hdr.flags
+        self.hdr.read_u32(VSOCK_PKT_HDR_FLAGS_OFFSET)
     }
 
     pub fn set_flags(&mut self, flags: u32) -> &mut Self {
-        self.hdr.flags = flags;
+        self.hdr.write_u32(VSOCK_PKT_HDR_FLAGS_OFFSET, flags);
         self
     }
 
@@ -489,20 +463,21 @@ impl VsockPacket {
     }
 
     pub fn buf_alloc(&self) -> u32 {
-        self.hdr.buf_alloc
+        self.hdr.read_u32(VSOCK_PKT_HDR_BUF_ALLOC_OFFSET)
     }
 
     pub fn set_buf_alloc(&mut self, buf_alloc: u32) -> &mut Self {
-        self.hdr.buf_alloc = buf_alloc;
+        self.hdr
+            .write_u32(VSOCK_PKT_HDR_BUF_ALLOC_OFFSET, buf_alloc);
         self
     }
 
     pub fn fwd_cnt(&self) -> u32 {
-        self.hdr.fwd_cnt
+        self.hdr.read_u32(VSOCK_PKT_HDR_FWD_CNT_OFFSET)
     }
 
     pub fn set_fwd_cnt(&mut self, fwd_cnt: u32) -> &mut Self {
-        self.hdr.fwd_cnt = fwd_cnt;
+        self.hdr.write_u32(VSOCK_PKT_HDR_FWD_CNT_OFFSET, fwd_cnt);
         self
     }
 }
@@ -805,6 +780,60 @@ mod tests {
         assert_eq!(pkt.flags(), 0);
         assert_eq!(pkt.buf_alloc(), 0);
         assert_eq!(pkt.fwd_cnt(), 0);
+    }
+
+    #[repr(align(8))]
+    struct AlignedHeaderBytes<const N: usize>([u8; N]);
+
+    fn assert_header_round_trip(ptr: *mut u8) {
+        let mut packet = VsockPacket {
+            hdr: HdrWrapper::from_ptr_unchecked(ptr),
+            buf: None,
+        };
+
+        packet
+            .set_src_cid(1)
+            .set_dst_cid(2)
+            .set_src_port(3)
+            .set_dst_port(4)
+            .set_len(5)
+            .set_type(6)
+            .set_op(7)
+            .set_flags(8)
+            .set_buf_alloc(9)
+            .set_fwd_cnt(10);
+
+        assert_eq!(packet.src_cid(), 1);
+        assert_eq!(packet.dst_cid(), 2);
+        assert_eq!(packet.src_port(), 3);
+        assert_eq!(packet.dst_port(), 4);
+        assert_eq!(packet.len(), 5);
+        assert_eq!(packet.type_(), 6);
+        assert_eq!(packet.op(), 7);
+        assert_eq!(packet.flags(), 8);
+        assert_eq!(packet.buf_alloc(), 9);
+        assert_eq!(packet.fwd_cnt(), 10);
+        assert_eq!(packet.hdr().len(), VSOCK_PKT_HDR_SIZE);
+    }
+
+    #[test]
+    fn test_hdr_wrapper_exact_wire_allocation() {
+        let layout =
+            std::alloc::Layout::from_size_align(VSOCK_PKT_HDR_SIZE, std::mem::align_of::<u64>())
+                .unwrap();
+        let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
+        assert!(!ptr.is_null());
+
+        assert_header_round_trip(ptr);
+        unsafe { std::alloc::dealloc(ptr, layout) };
+    }
+
+    #[test]
+    fn test_hdr_wrapper_unaligned_wire_address() {
+        let mut bytes = AlignedHeaderBytes([0u8; VSOCK_PKT_HDR_SIZE + 1]);
+        let ptr = unsafe { bytes.0.as_mut_ptr().add(1) };
+
+        assert_header_round_trip(ptr);
     }
 
     #[test]
