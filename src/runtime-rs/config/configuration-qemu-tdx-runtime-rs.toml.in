@@ -304,6 +304,12 @@ indep_iothreads = @DEFINDEPIOTHREADS@
 # Default false
 enable_mem_prealloc = false
 
+# Back the guest memory that is shared with virtiofsd with a memfd instead
+# of a file on /dev/shm. A memfd is not limited by the size of the /dev/shm
+# mount. Only used with shared_fs = "virtio-fs", and hugepages are not used.
+# Default false
+enable_memfd = false
+
 # Reclaim guest freed memory.
 # Enabling this will result in the VM balloon device having f_reporting=on set.
 # Then the hypervisor will use it to reclaim guest freed memory.

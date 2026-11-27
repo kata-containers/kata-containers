@@ -92,6 +92,7 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.enable_iommu` | `boolean` | enable `iommu` on Q35 (QEMU x86_64) |
 | `io.katacontainers.config.hypervisor.enable_iothreads` | `boolean`| enable IO to be processed in a separate thread. Supported currently for virtio-`scsi` driver |
 | `io.katacontainers.config.hypervisor.enable_mem_prealloc` | `boolean` | the memory space used for `nvdimm` device by the hypervisor |
+| `io.katacontainers.config.hypervisor.enable_memfd` | `boolean` | back shared guest memory with a `memfd` instead of a file on `/dev/shm` (QEMU, runtime-rs only) |
 | `io.katacontainers.config.hypervisor.enable_vhost_user_store` | `boolean` | enable vhost-user storage device (QEMU) |
 | `io.katacontainers.config.hypervisor.vhost_user_reconnect_timeout_sec` | `string`| the timeout for reconnecting vhost user socket (QEMU)
 | `io.katacontainers.config.hypervisor.enable_virtio_mem` | `boolean` | enable virtio-mem (QEMU) |

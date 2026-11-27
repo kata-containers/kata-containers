@@ -133,6 +133,7 @@ configuration-file option** in the Go runtime.
 | `ctlpath` / `valid_ctlpaths` | Path (and validation list) for the hypervisor control binary. |
 | `prefetch_list_path` | Host path to a `prefetch_files.list` for image lazy-loading. |
 | `hugepage_type` | Huge page backend type (`hugetlbfs` or `thp`). |
+| `enable_memfd` | Back the guest memory shared with `virtiofsd` with a `memfd` instead of a file on `/dev/shm`. |
 | `virtio_fs_is_dax` | Explicit toggle for the `virtio-fs` DAX window. The Go runtime infers DAX usage from `virtio_fs_cache_size`. |
 | `guest_swap_path` | Path of the guest swap device file. |
 | `guest_swap_size_percent` | Swap size as a percentage of total guest memory. |

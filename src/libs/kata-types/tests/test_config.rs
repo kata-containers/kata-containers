@@ -13,13 +13,14 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_CPU_MODEL,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES,
-        KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS, KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS, KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC,
-        KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS, KATA_ANNO_CFG_HYPERVISOR_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON,
-        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM,
-        KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
+        KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_MEMFD,
+        KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS,
+        KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH, KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS,
+        KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES,
+        KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -131,6 +132,10 @@ mod tests {
             "false".to_string(),
         );
         anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_MEMFD.to_string(),
+            "true".to_string(),
+        );
+        anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH.to_string(),
             "./test_jailer_path".to_string(),
         );
@@ -190,6 +195,7 @@ mod tests {
             assert!(!hv.enable_iothreads);
             assert_eq!(hv.indep_iothreads, 3);
             assert!(!hv.memory_info.enable_hugepages);
+            assert!(hv.memory_info.enable_memfd);
             assert_eq!(hv.jailer_path, "./test_jailer_path".to_string());
             assert_eq!(hv.boot_info.kernel, "./test_kernel_path");
             assert_eq!(hv.memory_info.memory_slots, 100);
