@@ -8,17 +8,25 @@ package containerdshim
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -271,4 +279,168 @@ func TestServeMetricsCapabilityStateIsPerSandbox(t *testing.T) {
 	assert.Equal(t, http.StatusOK, supportedResult.Code)
 	assert.Contains(t, supportedResult.Body.String(), "kata_agent_go_threads 23\n")
 	assert.EqualValues(t, 1, supportedCalls.Load())
+}
+
+func TestIsAuthorizedPeer(t *testing.T) {
+	type testData struct {
+		peerUID    uint32
+		selfEUID   uint32
+		authorized bool
+	}
+
+	data := []testData{
+		{peerUID: 0, selfEUID: 0, authorized: true},
+		{peerUID: 1000, selfEUID: 0, authorized: false},
+		{peerUID: 1000, selfEUID: 1000, authorized: true},
+		{peerUID: 0, selfEUID: 1000, authorized: true},
+		{peerUID: 1001, selfEUID: 1000, authorized: false},
+	}
+
+	for i, d := range data {
+		msg := fmt.Sprintf("test[%d]: %+v", i, d)
+		assert.Equal(t, d.authorized, isAuthorizedPeer(d.peerUID, d.selfEUID), msg)
+	}
+}
+
+// listenPeerCredTest listens on a Unix socket in dir and serves a handler that
+// always answers "ok" through the listener returned by wrap.
+func listenPeerCredTest(t *testing.T, dir string, wrap func(net.Listener) net.Listener) string {
+	sockPath := filepath.Join(dir, "shim-monitor.sock")
+	l, err := net.Listen("unix", sockPath)
+	require.NoError(t, err)
+
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("ok"))
+	})}
+	go srv.Serve(wrap(l))
+	t.Cleanup(func() { srv.Close() })
+
+	return sockPath
+}
+
+// getOverSocket sends one request over a new connection to sockPath.
+func getOverSocket(sockPath string) (string, error) {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", sockPath)
+			},
+		},
+	}
+
+	resp, err := client.Get("http://shim/")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	return string(body), err
+}
+
+// assertClosedWithoutResponse checks that the server closes conn without
+// answering a request sent over it.
+func assertClosedWithoutResponse(t *testing.T, conn net.Conn) {
+	defer conn.Close()
+	require.NoError(t, conn.SetDeadline(time.Now().Add(5*time.Second)))
+
+	// The write may fail if the server has already closed the connection.
+	conn.Write([]byte("GET / HTTP/1.0\r\n\r\n"))
+	resp, err := io.ReadAll(conn)
+
+	assert.Empty(t, string(resp), "rejected connection must not be served")
+	assert.NotErrorIs(t, err, os.ErrDeadlineExceeded, "server must close a rejected connection")
+}
+
+func TestPeerCredListenerAcceptsSameUser(t *testing.T) {
+	sockPath := listenPeerCredTest(t, t.TempDir(), func(l net.Listener) net.Listener {
+		return newPeerCredListener(l)
+	})
+
+	// The client runs as the same user as the server, whether that is root or
+	// not, so the real policy lets it in.
+	body, err := getOverSocket(sockPath)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", body)
+}
+
+func TestPeerCredListenerRejectsAndKeepsServing(t *testing.T) {
+	var allow atomic.Bool
+	var seenUID atomic.Uint32
+	sockPath := listenPeerCredTest(t, t.TempDir(), func(l net.Listener) net.Listener {
+		return &peerCredListener{
+			Listener: l,
+			authorized: func(uid uint32) bool {
+				seenUID.Store(uid)
+				return allow.Load()
+			},
+		}
+	})
+
+	conn, err := net.Dial("unix", sockPath)
+	require.NoError(t, err)
+	assertClosedWithoutResponse(t, conn)
+	assert.EqualValues(t, os.Geteuid(), seenUID.Load(), "policy must see the peer's effective UID")
+
+	allow.Store(true)
+	body, err := getOverSocket(sockPath)
+	require.NoError(t, err, "server must keep serving after rejecting a connection")
+	assert.Equal(t, "ok", body)
+}
+
+// dialAsUser connects to sockPath with the effective UID set to uid. Only the
+// calling thread's UID is changed, through the raw syscall, so the rest of the
+// test process keeps running as root.
+func dialAsUser(sockPath string, uid int) (net.Conn, error) {
+	type result struct {
+		conn net.Conn
+		err  error
+	}
+	ch := make(chan result, 1)
+
+	go func() {
+		// Never unlocked: the runtime discards the thread when this goroutine
+		// exits, instead of reusing it with the changed UID.
+		runtime.LockOSThread()
+
+		if _, _, errno := unix.RawSyscall(unix.SYS_SETRESUID, ^uintptr(0), uintptr(uid), ^uintptr(0)); errno != 0 {
+			ch <- result{err: fmt.Errorf("setresuid: %w", errno)}
+			return
+		}
+		conn, err := net.Dial("unix", sockPath)
+		ch <- result{conn: conn, err: err}
+	}()
+
+	r := <-ch
+	return r.conn, r.err
+}
+
+func TestPeerCredListenerRejectsOtherUser(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
+
+	// Make the socket reachable by every user, as if its permissions had
+	// drifted, so that only the credential check stands in the way.
+	dir, err := os.MkdirTemp("", "kata-shim-mgmt-")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	require.NoError(t, os.Chmod(dir, 0755))
+
+	sockPath := listenPeerCredTest(t, dir, func(l net.Listener) net.Listener {
+		return newPeerCredListener(l)
+	})
+	require.NoError(t, os.Chmod(sockPath, 0777))
+
+	const nobody = 65534
+	conn, err := dialAsUser(sockPath, nobody)
+	require.NoError(t, err)
+	assertClosedWithoutResponse(t, conn)
+
+	body, err := getOverSocket(sockPath)
+	require.NoError(t, err, "root must still be served")
+	assert.Equal(t, "ok", body)
 }

@@ -11,6 +11,7 @@ protobuf = { workspace = true }
 protocols = { workspace = true }
 rstest = { workspace = true }
 tempfile = { workspace = true }
+test-utils = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
