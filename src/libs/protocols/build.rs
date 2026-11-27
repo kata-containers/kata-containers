@@ -192,6 +192,7 @@ fn real_main() -> Result<(), std::io::Error> {
             "protos/types.proto",
             "protos/csi.proto",
             "protos/runtimeoptions.proto",
+            "protos/bootstrap.proto",
         ],
         false,
     )?;
