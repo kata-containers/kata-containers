@@ -1,3 +1,8 @@
+#
+# Copyright (c) 2026 Kata Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # Runs the csi-sanity suite of kubernetes-csi/csi-test against the
 # csi-kata-directvolume CSI driver. Its unit tests run in the build checks.
 name: csi-kata-directvolume
@@ -7,6 +12,8 @@ on:
     paths:
       - src/tools/csi-kata-directvolume/**
       - .github/workflows/csi-kata-directvolume.yaml
+      # The job reads the Go and csi-test versions from it.
+      - versions.yaml
   workflow_dispatch:
 
 permissions: {}
