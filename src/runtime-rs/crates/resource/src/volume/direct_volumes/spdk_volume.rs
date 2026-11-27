@@ -192,3 +192,94 @@ impl Volume for SPDKVolume {
         Ok(Some(self.device_id.clone()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hypervisor::device::device_manager::DeviceManager;
+    use hypervisor::qemu::Qemu;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    async fn new_device_manager() -> Arc<RwLock<DeviceManager>> {
+        Arc::new(RwLock::new(
+            DeviceManager::new(Arc::new(Qemu::new()), None)
+                .await
+                .unwrap(),
+        ))
+    }
+
+    fn new_mount_info(volume_type: &str, device: &str) -> DirectVolumeMountInfo {
+        DirectVolumeMountInfo {
+            volume_type: volume_type.to_string(),
+            device: device.to_string(),
+            fs_type: "ext4".to_string(),
+            ..Default::default()
+        }
+    }
+
+    // SPDKVolume is not Debug, so unwrap_err() is not available here.
+    async fn volume_creation_error(
+        d: &RwLock<DeviceManager>,
+        mount_info: &DirectVolumeMountInfo,
+    ) -> anyhow::Error {
+        match SPDKVolume::new(d, &oci::Mount::default(), mount_info, false, "sid").await {
+            Ok(_) => panic!("creating the SPDK volume should fail"),
+            Err(e) => e,
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_spdk_volume_rejects_unknown_volume_type() {
+        let d = new_device_manager().await;
+        let mount_info = new_mount_info("directvol", "/dev/vdb");
+        let err = volume_creation_error(&d, &mount_info).await;
+        assert!(
+            format!("{err:#}").contains("mountinfo.json is invalid"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    #[actix_rt::test]
+    async fn test_spdk_volume_missing_socket_returns_error() {
+        let d = new_device_manager().await;
+
+        for volume_type in [KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE] {
+            // The SPDK backend is not running, so its vhost-user socket does
+            // not exist. The volume must be rejected with an error instead of
+            // leaving the caller waiting for a backend that will never answer.
+            let mount_info = new_mount_info(volume_type, "/run/vhu/does-not-exist.sock");
+            let err = volume_creation_error(&d, &mount_info).await;
+            assert!(
+                format!("{err:#}").contains("stat socket failed"),
+                "unexpected error for {volume_type}: {err:#}"
+            );
+
+            // A device that already carries the type prefix must be handled
+            // the same way, the prefix is not part of the socket path.
+            let prefixed = format!("{volume_type}:///run/vhu/does-not-exist.sock");
+            let mount_info = new_mount_info(volume_type, &prefixed);
+            let err = volume_creation_error(&d, &mount_info).await;
+            assert!(
+                format!("{err:#}").contains("stat socket failed"),
+                "unexpected error for prefixed {volume_type}: {err:#}"
+            );
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_spdk_volume_rejects_non_socket_device() {
+        let d = new_device_manager().await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("not-a-socket");
+
+        // A regular file is not a vhost-user backend socket.
+        std::fs::write(&path, b"not a socket").unwrap();
+        let mount_info = new_mount_info(KATA_SPDK_VOLUME_TYPE, path.to_str().unwrap());
+        let err = volume_creation_error(&d, &mount_info).await;
+        assert!(
+            format!("{err:#}").contains("is not valid"),
+            "unexpected error: {err:#}"
+        );
+    }
+}
