@@ -373,6 +373,15 @@
                 "^TERM=xterm$"
             ]
         },
+        "CreateSandboxRequest": {
+            "hostname_regex": "[a-zA-Z0-9]([a-zA-Z0-9\\-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]*[a-zA-Z0-9])?)*",
+            "allow_dns_regex": [
+                "^$",
+                "^nameserver ($(ipv4_a)|[0-9a-fA-F:\\.]*:[0-9a-fA-F:\\.]*(%[a-zA-Z0-9_\\.\\-]+)?)$",
+                "^search( $(dns_label))+$",
+                "^options( [a-zA-Z0-9_\\-]+(:[0-9]+)?)+$"
+            ]
+        },
         "UpdateInterfaceRequest": {
             "allow_raw_flags": 128,
             "forbidden_names": [

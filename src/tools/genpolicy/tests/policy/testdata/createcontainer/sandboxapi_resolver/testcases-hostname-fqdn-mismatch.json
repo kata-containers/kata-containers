@@ -1,0 +1,25 @@
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "hostname": "attacker.db.default.svc.cluster.local",
+        "sandbox_pidns": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "pod name is unknown yet, so any valid FQDN is accepted",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "workload is rejected when the FQDN does not start with the pod name",
+      "base": "sandbox-rw",
+      "allowed": false,
+      "patch": []
+    }
+  ]
+}

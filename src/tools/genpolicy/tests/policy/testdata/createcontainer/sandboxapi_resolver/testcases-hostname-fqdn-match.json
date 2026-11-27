@@ -1,0 +1,25 @@
+{
+  "bases": {
+    "create-sandbox": {
+      "kind": "CreateSandboxRequest",
+      "request": {
+        "hostname": "gid-experiment.db.default.svc.cluster.local",
+        "sandbox_pidns": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "description": "FQDN starting with the pod name",
+      "base": "create-sandbox",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "workload of the pod named in the FQDN",
+      "base": "sandbox-rw",
+      "allowed": true,
+      "patch": []
+    }
+  ]
+}

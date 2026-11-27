@@ -164,6 +164,17 @@ impl yaml::K8sResource for StatefulSet {
         &self.spec.template.spec.containers
     }
 
+    fn get_pod_spec(&self) -> &pod::PodSpec {
+        &self.spec.template.spec
+    }
+
+    // The StatefulSet controller overwrites both fields when it creates a pod.
+    fn get_controller_hostname(&self) -> pod::ControllerHostname {
+        pod::ControllerHostname::PodName {
+            subdomain: self.spec.serviceName.clone(),
+        }
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         if let Some(metadata) = &self.spec.template.metadata {
             return &metadata.annotations;
