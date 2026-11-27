@@ -475,6 +475,17 @@ type service struct {
 	// across the teardown.
 	teardownOnce sync.Once
 
+	// teardownMu serializes per-container cleanup with whole-sandbox cleanup.
+	// It is independent of s.mu so State, Stats, and Kill RPCs remain
+	// responsive while teardown performs potentially slow guest or QMP work.
+	// Lock order: container.teardownMu, then teardownMu, then mu.
+	teardownMu sync.Mutex
+
+	// tearingDown is set under mu before the sandbox is stopped and deleted.
+	// That teardown runs without mu, and the virtcontainers sandbox is not
+	// safe for concurrent use, so RPCs that call into it check this first.
+	tearingDown bool
+
 	// hypervisor pid, Since this shimv2 cannot get the container processes pid from VM,
 	// thus for the returned values needed pid, just return the hypervisor's
 	// pid directly.
@@ -662,6 +673,10 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 		return nil, err
 	}
 
+	if err := s.checkSandboxLive(); err != nil {
+		return nil, err
+	}
+
 	type Result struct {
 		container *container
 		err       error
@@ -725,6 +740,10 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 		return nil, err
 	}
 
+	if err = s.checkSandboxLive(); err != nil {
+		return nil, err
+	}
+
 	// hold the send lock so that the start events are sent before any exit events in the error case
 	s.eventSendMu.Lock()
 	defer s.eventSendMu.Unlock()
@@ -770,12 +789,37 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 		rpcDurationsHistogram.WithLabelValues("delete").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 
+	// TaskExit can cause containerd to issue Delete while wait() is still
+	// finishing container or sandbox teardown. The container's own lock waits
+	// for that, and teardownMu serializes this cleanup with any other one,
+	// both without holding s.mu so State, Stats, and Kill remain responsive.
+	var locked *container
+	if r.ExecID == "" {
+		s.mu.Lock()
+		c, err := s.getContainer(r.ID)
+		s.mu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+
+		locked = c
+		c.teardownMu.Lock()
+		defer c.teardownMu.Unlock()
+		s.teardownMu.Lock()
+		defer s.teardownMu.Unlock()
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Looked up again: while this waited for the locks, another Delete may
+	// have removed the container, and a Create may have reused its ID.
 	c, err := s.getContainer(r.ID)
 	if err != nil {
 		return nil, err
+	}
+	if locked != nil && c != locked {
+		return nil, errgrpc.ToGRPCf(errdefs.ErrNotFound, "container %s was deleted while waiting for its teardown", r.ID)
 	}
 
 	if r.ExecID == "" {
@@ -869,6 +913,10 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = s.checkSandboxLive(); err != nil {
 		return nil, err
 	}
 
@@ -969,6 +1017,10 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *emptyp
 		return nil, err
 	}
 
+	if err = s.checkSandboxLive(); err != nil {
+		return nil, err
+	}
+
 	c.status = task.Status_PAUSING
 
 	err = s.sandbox.PauseContainer(spanCtx, r.ID)
@@ -1007,6 +1059,10 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *empt
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = s.checkSandboxLive(); err != nil {
 		return nil, err
 	}
 
@@ -1085,6 +1141,17 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *emptypb.
 			"container": c.id,
 			"exec-id":   r.ExecID,
 		}).Debug("process has already stopped")
+		return empty, nil
+	}
+
+	// The teardown stops every process anyway, and StopPodSandbox expects
+	// Kill to succeed while it runs.
+	if s.tearingDown {
+		shimLog.WithFields(logrus.Fields{
+			"sandbox":   s.sandbox.ID(),
+			"container": c.id,
+			"exec-id":   r.ExecID,
+		}).Debug("sandbox is being torn down, not signalling the process")
 		return empty, nil
 	}
 
@@ -1280,6 +1347,10 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 		return nil, err
 	}
 
+	if err = s.checkSandboxLive(); err != nil {
+		return nil, err
+	}
+
 	data, err := marshalMetrics(spanCtx, s, c.id)
 	if err != nil {
 		return nil, err
@@ -1314,6 +1385,10 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 	resources, ok := v.(*specs.LinuxResources)
 	if !ok {
 		return nil, errgrpc.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
+	}
+
+	if err = s.checkSandboxLive(); err != nil {
+		return nil, err
 	}
 
 	err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)
@@ -1394,6 +1469,15 @@ func (s *service) checkProcesses(e exit) {
 		ExitStatus:  uint32(e.status),
 		ExitedAt:    timestamppb.New(e.timestamp),
 	})
+}
+
+// checkSandboxLive returns an error once sandbox teardown has begun. The
+// caller must hold s.mu.
+func (s *service) checkSandboxLive() error {
+	if s.tearingDown {
+		return errgrpc.ToGRPCf(errdefs.ErrFailedPrecondition, "sandbox %s is being torn down", s.id)
+	}
+	return nil
 }
 
 func (s *service) getContainer(id string) (*container, error) {

@@ -13,6 +13,7 @@ test:
 
 kubernetes:
   - k8s-block-volume
+  - k8s-dead-agent-block-teardown
   - k8s-confidential-attestation
   - k8s-confidential
   - k8s-cpu-ns

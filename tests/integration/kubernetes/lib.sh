@@ -180,22 +180,30 @@ exec_host() {
 get_pod_sandbox_id() {
 	local pod_name="$1"
 	local node
+	local crictl
 	local runtime
 	local runtime_endpoint
 
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
 	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
-	exec_host "${node}" "command -v crictl >/dev/null" || \
-		die "crictl is required on Kubernetes node ${node}"
+	# k3s carries crictl in its own binary, which is all a node has when k3s
+	# was installed without its symlinks.
+	crictl="$(exec_host "${node}" "if command -v crictl >/dev/null; then echo crictl; \
+		elif command -v k3s >/dev/null; then echo 'k3s crictl'; fi")"
+	[[ -n "${crictl}" ]] || die "crictl is required on Kubernetes node ${node}"
 
-	runtime="$(exec_host "${node}" "crictl version | grep 'RuntimeName:' | awk '{print  \$2}'")"
+	runtime="$(exec_host "${node}" "${crictl} version | grep 'RuntimeName:' | awk '{print  \$2}'")"
 	if [[ "${runtime}" == "cri-o" ]]; then
 		runtime_endpoint="unix:///run/crio/crio.sock"
+	elif [[ "$(exec_host "${node}" "test -S /run/k3s/containerd/containerd.sock && echo k3s")" == "k3s" ]]; then
+		# k3s and rke2 run a containerd of their own, next to any other one
+		# the node may have.
+		runtime_endpoint="unix:///run/k3s/containerd/containerd.sock"
 	else
 		runtime_endpoint="unix:///run/containerd/containerd.sock"
 	fi
 	exec_host "${node}" \
-		"crictl --runtime-endpoint ${runtime_endpoint} \
+		"${crictl} --runtime-endpoint ${runtime_endpoint} \
 		pods --name \"${pod_name}\" --state ready -q | head -1"
 }
 
