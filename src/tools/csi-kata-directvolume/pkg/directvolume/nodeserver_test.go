@@ -259,3 +259,32 @@ func TestStageDirectVolumeMissingBackingDevice(t *testing.T) {
 	_, err = dv.NodeStageVolume(context.TODO(), req)
 	require.Equal(t, codes.NotFound, status.Code(err))
 }
+
+func TestPublishDevicePathAfterRestart(t *testing.T) {
+	dv, err := NewDirectVolumeDriver(testConfig(t.TempDir()))
+	require.NoError(t, err)
+
+	resp, err := dv.CreateVolume(context.TODO(), &csi.CreateVolumeRequest{
+		Name:               "vol-direct",
+		CapacityRange:      &csi.CapacityRange{RequiredBytes: 8 << 20},
+		Parameters:         map[string]string{utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName},
+		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
+	})
+	require.NoError(t, err)
+	volumeCtx := resp.GetVolume().GetVolumeContext()
+	vol, err := dv.state.GetVolumeByID(resp.GetVolume().GetVolumeId())
+	require.NoError(t, err)
+
+	// A restarted driver has an empty device map.
+	require.Empty(t, dv.config.VolumeDevices[vol.VolID])
+	devicePath, err := dv.publishDevicePath(vol, volumeCtx)
+	require.NoError(t, err)
+	require.Equal(t, vol.Metadata["backingFile"], devicePath)
+	require.Equal(t, devicePath, dv.config.VolumeDevices[vol.VolID])
+
+	// A missing raw disk must not be registered with Kata.
+	delete(dv.config.VolumeDevices, vol.VolID)
+	require.NoError(t, os.RemoveAll(filepath.Dir(devicePath)))
+	_, err = dv.publishDevicePath(vol, volumeCtx)
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
