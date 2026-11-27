@@ -203,14 +203,23 @@ impl SwapTask {
         if let DeviceType::BlockModern(device_mod) = device_info {
             let device = device_mod.lock().await.clone();
 
+            // A PCI path that AddSwap cannot express must also go through the
+            // device removal below.
             let ret = if let Some(pci_path) = device.config.pci_path.clone() {
-                self.agent.add_swap(agent::types::AddSwapRequest {
-                    pci_path: pci_path.slots.iter().map(|slot| slot.0 as u32).collect(),
-                })
+                match pci_path.to_device_numbers() {
+                    Ok(pci_path) => {
+                        self.agent
+                            .add_swap(agent::types::AddSwapRequest { pci_path })
+                            .await
+                    }
+                    Err(e) => Err(e),
+                }
             } else if !device.config.virt_path.is_empty() {
-                self.agent.add_swap_path(agent::types::AddSwapPathRequest {
-                    path: device.config.virt_path.clone(),
-                })
+                self.agent
+                    .add_swap_path(agent::types::AddSwapPathRequest {
+                        path: device.config.virt_path.clone(),
+                    })
+                    .await
             } else {
                 return Err(anyhow!(
                     "swap_task: device_info {} pci_path is None",
@@ -218,7 +227,7 @@ impl SwapTask {
                 ));
             };
 
-            if let Err(e) = ret.await {
+            if let Err(e) = ret {
                 if let Err(e1) = self
                     .device_manager
                     .write()
