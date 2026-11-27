@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -124,11 +125,26 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	// bind-mount: kata-agent's parse_mount_options() turns it into
 	// MS_BIND, and mount(2) with MS_BIND on a block device is rejected
 	// by the kernel (see #11296).
+	//
+	// Forward the pod's fsGroup (sent by kubelet because we advertise
+	// VOLUME_MOUNT_GROUP in NodeGetCapabilities) into MountInfo.json
+	// under the "fsGroup" key. kata-runtime parses it and forwards it
+	// to kata-agent as Storage.fs_group, which chowns the filesystem
+	// root after the in-guest mount.
+	kataMetadata := attrib
+	if mv := req.GetVolumeCapability().GetMount(); mv != nil && mv.GetVolumeMountGroup() != "" {
+		kataMetadata = maps.Clone(attrib)
+		if kataMetadata == nil {
+			kataMetadata = make(map[string]string, 1)
+		}
+		kataMetadata["fsGroup"] = mv.GetVolumeMountGroup()
+	}
+
 	mountInfo := utils.MountInfo{
 		VolumeType: volType,
 		Device:     devicePath,
 		FsType:     fsType,
-		Metadata:   attrib,
+		Metadata:   kataMetadata,
 		Options:    []string{accessMode},
 	}
 	if err := utils.AddDirectVolume(targetPath, mountInfo); err != nil {
@@ -330,6 +346,22 @@ func (dv *directVolume) NodeGetCapabilities(ctx context.Context, req *csi.NodeGe
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+				},
+			},
+		},
+		{
+			// Tells kubelet that NodePublishVolume should be called
+			// with VolumeMountGroup set to the pod's fsGroup. We
+			// write the value into MountInfo.json under the
+			// "fsGroup" key; kata-runtime parses it and forwards
+			// it to kata-agent as Storage.fs_group, so kata-agent
+			// chowns the fresh fs root to that gid after mount
+			// (otherwise the freshly formatted ext4 root is owned
+			// by uid:gid 0:0 and non-root containers fail with
+			// EACCES on first write).
+			Type: &csi.NodeServiceCapability_Rpc{
+				Rpc: &csi.NodeServiceCapability_RPC{
+					Type: csi.NodeServiceCapability_RPC_VOLUME_MOUNT_GROUP,
 				},
 			},
 		},
