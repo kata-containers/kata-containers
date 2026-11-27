@@ -19,6 +19,12 @@ default_kubelet_data_dir=/var/lib/kubelet
 # namespace kata-directvolume
 DIRECTVOL_NAMESPACE="kata-directvolume"
 
+# How often the csi-provisioner refreshes the published capacity.
+# The default in the manifest (1m) is fine for production; tests set
+# this lower, e.g. CAPACITY_POLL_INTERVAL=10s for the e2e checks in
+# #14151, which verify changes are visible within 30 seconds.
+: "${CAPACITY_POLL_INTERVAL:=}"
+
 # Some images are not affected by *_REGISTRY/*_TAG and IMAGE_* variables.
 # The default is to update unless explicitly excluded.
 update_image () {
@@ -75,9 +81,11 @@ for i in $(find "${BASE_DIR}/kata-directvolume" -name 'csi-directvol-*.yaml' | s
             fi
             echo "kata-directvolume plugin        using ${line}" >&2
         fi
-        # shellcheck disable=SC2154
-        if ! ${have_csistoragecapacity}; then
-            line="$(echo "${line}" | grep -v -e 'storageCapacity: true' -e '--enable-capacity')"
+        # CAPACITY_POLL_INTERVAL overrides how often the csi-provisioner
+        # refreshes the published capacity. The default (1m in the
+        # manifest) is fine for production; tests set it lower, e.g. 10s.
+        if [[ -n "${CAPACITY_POLL_INTERVAL}" ]]; then
+            line="${line/--capacity-poll-interval=*/--capacity-poll-interval=${CAPACITY_POLL_INTERVAL}}"
         fi
         echo "${line}"
     done)"

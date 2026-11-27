@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # Mounted by the csi-kata-directvol-plugin DaemonSet (optional: the
+  # deployment works without it, bounded only by --capacity and the
+  # backing filesystem). The driver reads it once at startup, so a
+  # change of values needs a rollout restart to take effect:
+  #   kubectl -n kata-directvolume rollout restart daemonset/csi-kata-directvol-plugin
+  name: csi-kata-directvol-capacity
+  namespace: kata-directvolume
+immutable: false
+data:
+  # One key per node, named after the node (kubectl get nodes), value
+  # = that node's pools as <pool>=<quantity> entries. Replace the node
+  # names below with the names of your cluster's nodes.
+  #
+  # This example makes an asymmetric cluster: only worker-1 has enough
+  # of the "gold" pool for the 4Gi PVC in csi-pvc.yaml, so the pod of
+  # csi-app.yaml can only land on worker-1.
+  worker-1: |
+    gold=8Gi
+  worker-2: |
+    gold=2Gi
