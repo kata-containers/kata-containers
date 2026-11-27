@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod containerd;
 pub mod containerd_config_version;
 mod dbus;
 pub mod logging;

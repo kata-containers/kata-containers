@@ -3597,6 +3597,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "containerd-client",
  "env_logger 0.10.2",
  "flate2",
  "humantime",
@@ -3615,6 +3616,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml_edit 0.22.27",
+ "tonic 0.9.2",
  "walkdir",
  "zbus 6.2.1",
  "zstd 0.13.4",

@@ -26,7 +26,7 @@ struct ContainerdRuntimeParams {
     container_annotations: String,
     /// Optional snapshotter to configure
     snapshotter: Option<String>,
-    /// Effective SandboxAPI selection for this handler.
+    /// Effective SandboxAPI selection after capability probing.
     sandbox_api: SandboxApiConfig,
 }
 
@@ -51,6 +51,11 @@ fn runtime_supports_sandbox_api(base: &str, version: Option<&str>) -> bool {
     } else {
         true
     }
+}
+
+fn sandboxer_socket_path(value: &str) -> Option<PathBuf> {
+    let path = Path::new(value.strip_prefix("unix://").unwrap_or(value));
+    path.is_absolute().then(|| path.to_path_buf())
 }
 
 async fn effective_sandbox_api(
@@ -83,7 +88,24 @@ async fn effective_sandbox_api(
     if !runtime_supports_sandbox_api(base, version) {
         return Ok(SandboxApiConfig::default());
     }
-    Ok(SandboxApiConfig { enabled: true })
+    let socket = std::env::var("CONTAINERD_SANDBOXER_SOCKET")
+        .ok()
+        .and_then(|value| sandboxer_socket_path(&value));
+    let Some(socket) = socket else {
+        log::warn!("Using sandboxer=podsandbox for {base}: no local containerd availability socket was provided");
+        return Ok(SandboxApiConfig::default());
+    };
+    match utils::containerd::sandbox_api_available(&socket).await {
+        Ok(true) => Ok(SandboxApiConfig { enabled: true }),
+        Ok(false) => {
+            log::warn!("Using sandboxer=podsandbox for {base}: the shim sandbox controller is missing, disabled, or failed initialization");
+            Ok(SandboxApiConfig::default())
+        }
+        Err(error) => {
+            log::warn!("Using sandboxer=podsandbox for {base}: containerd availability probe failed: {error:#}");
+            Ok(SandboxApiConfig::default())
+        }
+    }
 }
 
 fn format_toml_string_array(values: &[String]) -> String {
@@ -1222,17 +1244,27 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn sandbox_api_effective_selection_follows_request_runtime_and_version() {
+    #[serial_test::serial]
+    async fn sandbox_api_effective_selection_falls_back_on_unreachable_probe() {
         let base = "qemu-runtime-rs";
         let mut config = test_config(base, "/opt/kata");
         config.sandboxer_handler_mapping_for_arch = Some(format!("{base}:shim"));
-        config.container_runtime_version = Some("containerd://2.3.3".into());
-        assert!(
-            effective_sandbox_api(&config, base, None)
-                .await
-                .unwrap()
-                .enabled
+        let original_socket = std::env::var_os("CONTAINERD_SANDBOXER_SOCKET");
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var(
+            "CONTAINERD_SANDBOXER_SOCKET",
+            dir.path().join("missing.sock"),
         );
+        for version in ["containerd://2.3.3", "containerd://2.4.0"] {
+            config.container_runtime_version = Some(version.into());
+            let unavailable = effective_sandbox_api(&config, base, None).await.unwrap();
+            assert!(!unavailable.enabled);
+        }
+        if let Some(original) = original_socket {
+            std::env::set_var("CONTAINERD_SANDBOXER_SOCKET", original);
+        } else {
+            std::env::remove_var("CONTAINERD_SANDBOXER_SOCKET");
+        }
         assert!(
             !effective_sandbox_api(&config, base, Some("podsandbox"))
                 .await
@@ -1260,6 +1292,20 @@ mod tests {
                 .unwrap()
                 .enabled
         );
+    }
+
+    #[test]
+    fn sandboxer_socket_accepts_only_absolute_local_paths() {
+        assert_eq!(
+            sandboxer_socket_path("unix:///custom/run/runtime.sock"),
+            Some(PathBuf::from("/custom/run/runtime.sock"))
+        );
+        assert_eq!(
+            sandboxer_socket_path("/run/containerd/containerd.sock"),
+            Some(PathBuf::from("/run/containerd/containerd.sock"))
+        );
+        assert!(sandboxer_socket_path("tcp://localhost:1234").is_none());
+        assert!(sandboxer_socket_path("").is_none());
     }
 
     #[test]
