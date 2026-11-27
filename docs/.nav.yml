@@ -26,6 +26,7 @@ nav:
       - Run envd inside a container: how-to/how-to-use-kata-envd.md
     - Contributing:
       - Documentation: doc-contributing.md
+      - Deprecation Process: deprecation.md
   - Releases:
     - "4.4.0": releases/4.4.0.md
     - "4.3.1": releases/4.3.1.md
