@@ -323,6 +323,11 @@ jobs:
           path: kata-artifacts
           merge-multiple: true
 
+      - name: Limit cargo build jobs for shim-v2-rust
+        if: ${{ matrix.asset == 'shim-v2-rust' }}
+        run: |
+          echo "CARGO_BUILD_JOBS=4" >> "$GITHUB_ENV"
+
       - name: Build ${{ matrix.asset }}
         id: build
         run: |

@@ -117,6 +117,7 @@ case "${RUNTIME_CHOICE}" in
 	"rust"|"both")
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			--env ARCH="${ARCH}" \
+			${CARGO_BUILD_JOBS:+--env "CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}"} \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
