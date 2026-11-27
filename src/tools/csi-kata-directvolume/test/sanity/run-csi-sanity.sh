@@ -46,11 +46,18 @@ cleanup() {
 		echo "driver log:" >&2
 		tail -n 200 "${work_dir}/driver.log" >&2 || true
 	fi
-	# Unmount whatever a failed test left behind before removing it.
+	# Unmount whatever a failed test left behind before removing it. If a
+	# mount stays, removing the directory could delete files through it.
 	grep -F " ${work_dir}/" /proc/self/mounts | awk '{print $2}' | sort -r | while read -r mnt; do
 		umount "${mnt}" || true
 	done
-	rm -rf "${work_dir}"
+	if grep -qF " ${work_dir}/" /proc/self/mounts; then
+		echo "mounts are left below ${work_dir}, which is kept:" >&2
+		grep -F " ${work_dir}/" /proc/self/mounts >&2
+		[[ "${rc}" -ne 0 ]] || rc=1
+	else
+		rm -rf "${work_dir}"
+	fi
 	exit "${rc}"
 }
 trap cleanup EXIT
