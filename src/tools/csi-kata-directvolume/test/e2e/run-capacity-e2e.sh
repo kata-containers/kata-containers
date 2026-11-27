@@ -16,7 +16,10 @@
 # By default the script creates a kind cluster with two worker nodes and
 # installs Kata Containers with kata-deploy, which needs /dev/kvm on the host.
 # Set USE_EXISTING_CLUSTER=true, NODE_A and NODE_B to use an existing cluster
-# instead; Kata Containers must then already be installed.
+# instead; Kata Containers must then already be installed. Use a dedicated
+# test cluster: the test replaces the capacity ConfigMap of the driver and
+# uses its own namespace, and the nodes must be able to pull the driver
+# image (CSI_IMAGE_REGISTRY, CSI_IMAGE_TAG), which only kind nodes get loaded.
 #
 # Usage: run-capacity-e2e.sh [all|setup|test|report|teardown]
 
@@ -47,6 +50,9 @@ driver_dir=$(cd "${script_dir}/../.." && pwd)
 : "${RECOVERY_TIMEOUT_SECONDS:=30}"
 : "${POD_TIMEOUT:=600s}"
 : "${ARTIFACTS:=${PWD}/csi-capacity-e2e-artifacts}"
+# kubectl, helm and the deploy scripts use this kubeconfig of the kind
+# cluster, not the current context of the caller.
+: "${KIND_KUBECONFIG:=${TMPDIR:-/tmp}/${KIND_CLUSTER_NAME}-kubeconfig}"
 # Host directories which back the storage pools of the kind nodes.
 : "${NODE_STORAGE_DIR:=/var/tmp/${KIND_CLUSTER_NAME}-storage}"
 : "${NODE_A:=}"
@@ -65,6 +71,8 @@ readonly topology_key="topology.directvolume.csi/node"
 readonly storage_class="csi-capacity-e2e"
 readonly test_namespace="csi-capacity-e2e"
 readonly storage_pool_path="/tmp/kata-directvol-storages"
+# Marks a NODE_STORAGE_DIR which this test created and may remove.
+readonly storage_marker=".csi-capacity-e2e-owned"
 readonly csi_image="${CSI_IMAGE_REGISTRY}/kata-directvolume:${CSI_IMAGE_TAG}"
 runtime_class="kata-${KATA_SHIM}"
 readonly runtime_class
@@ -162,6 +170,16 @@ wait_until() {
 # Cluster and component setup
 ################################################################################
 
+# use_kind_kubeconfig makes kubectl, helm and the deploy scripts work on the
+# kind cluster of the test, also when it existed already, and never on the
+# current context of the caller.
+use_kind_kubeconfig() {
+	[[ "${USE_EXISTING_CLUSTER}" == "true" ]] && return
+	kind get clusters 2>/dev/null | grep -qx "${KIND_CLUSTER_NAME}" || return 0
+	kind get kubeconfig --name "${KIND_CLUSTER_NAME}" >"${KIND_KUBECONFIG}"
+	export KUBECONFIG="${KIND_KUBECONFIG}"
+}
+
 create_cluster() {
 	if kind get clusters 2>/dev/null | grep -qx "${KIND_CLUSTER_NAME}"; then
 		info "kind cluster ${KIND_CLUSTER_NAME} exists already"
@@ -177,9 +195,14 @@ create_cluster() {
 	done
 
 	# Back the storage pool of each node with its own host directory: /tmp
-	# is a tmpfs in kind nodes.
+	# is a tmpfs in kind nodes. teardown removes it, so it must be new or
+	# one which an earlier run of this test created.
 	local storage_root="${NODE_STORAGE_DIR}"
+	if [[ -d "${storage_root}" && ! -e "${storage_root}/${storage_marker}" && -n "$(ls -A "${storage_root}")" ]]; then
+		die "${storage_root} is not empty and was not created by this test, set NODE_STORAGE_DIR to a new directory"
+	fi
 	mkdir -p "${storage_root}/worker" "${storage_root}/worker2"
+	touch "${storage_root}/${storage_marker}"
 
 	local config="${ARTIFACTS}/kind-config.yaml"
 	cat >"${config}" <<EOF
@@ -333,10 +356,11 @@ deploy_driver() {
 	"${driver_dir}/deploy/rbac-deploy.sh" >"${ARTIFACTS}/rbac-deploy.log" 2>&1
 
 	# The per-node capacity configuration: one key per node.
-	kubectl create configmap "${capacity_configmap}" -n "${driver_namespace}" \
+	local configmap
+	configmap=$(kubectl create configmap "${capacity_configmap}" -n "${driver_namespace}" \
 		--from-literal="${NODE_A}=${CAPACITY_POOL}=${NODE_A_CAPACITY}" \
 		--from-literal="${NODE_B}=${CAPACITY_POOL}=${NODE_B_CAPACITY}" \
-		--dry-run=client -o yaml | kubectl apply -f - >/dev/null
+		--dry-run=client -o yaml | kubectl apply -f -)
 
 	CAPACITY_POLL_INTERVAL="${POLL_INTERVAL_SECONDS}s" \
 		KATA_DIRECTVOLUME_REGISTRY="${CSI_IMAGE_REGISTRY}" \
@@ -346,6 +370,11 @@ deploy_driver() {
 			cat "${ARTIFACTS}/directvol-deploy.log" >&2
 			die "directvol-deploy.sh failed"
 		}
+	# The driver reads its pools when it starts: when only the ConfigMap
+	# changed, the pods must be replaced to see the new pools.
+	if [[ "${configmap}" == *" configured" ]]; then
+		kubectl rollout restart -n "${driver_namespace}" "daemonset/${daemonset}" >/dev/null
+	fi
 	kubectl rollout status -n "${driver_namespace}" "daemonset/${daemonset}" --timeout=300s
 }
 
@@ -353,6 +382,7 @@ setup() {
 	mkdir -p "${ARTIFACTS}"
 	if [[ "${USE_EXISTING_CLUSTER}" != "true" ]]; then
 		create_cluster
+		use_kind_kubeconfig
 	fi
 	select_nodes
 	[[ "${USE_EXISTING_CLUSTER}" == "true" ]] || prepare_kind_nodes
@@ -952,9 +982,13 @@ teardown() {
 		return
 	fi
 	kind delete cluster --name "${KIND_CLUSTER_NAME}"
-	# The raw disks were written by the kind nodes, as root.
-	if [[ -d "${NODE_STORAGE_DIR}" ]]; then
-		rm -rf "${NODE_STORAGE_DIR}" 2>/dev/null || sudo rm -rf "${NODE_STORAGE_DIR}"
+	rm -f "${KIND_KUBECONFIG}"
+	# Remove only what create_cluster made. The raw disks were written by
+	# the kind nodes, as root.
+	if [[ -e "${NODE_STORAGE_DIR}/${storage_marker}" ]]; then
+		local owned=("${NODE_STORAGE_DIR}/worker" "${NODE_STORAGE_DIR}/worker2" "${NODE_STORAGE_DIR}/${storage_marker}")
+		rm -rf "${owned[@]}" 2>/dev/null || sudo rm -rf "${owned[@]}"
+		rmdir "${NODE_STORAGE_DIR}" 2>/dev/null || true
 	fi
 }
 
@@ -963,6 +997,8 @@ main() {
 	mkdir -p "${ARTIFACTS}"
 	# The results of setup and test, the report reads them.
 	[[ "${action}" == "report" || "${action}" == "teardown" ]] || : >"${results}"
+	# setup creates the cluster first, the other actions work on it.
+	[[ "${action}" == "all" || "${action}" == "setup" ]] || use_kind_kubeconfig
 	case "${action}" in
 	all)
 		setup
