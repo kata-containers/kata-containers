@@ -511,7 +511,7 @@ impl Qmp {
         if has_virtio_mem {
             self.hotplug_virtio_mem(size, memory_devices)
         } else {
-            self.hotplug_pc_dimm(size, memory_devices)
+            self.hotplug_pc_dimm(size)
         }
     }
 
@@ -549,24 +549,25 @@ impl Qmp {
         self.resize_virtio_mem(new_total_mb)
     }
 
+    fn next_memdev_index_from_qmp(&mut self) -> Result<u64> {
+        // Derive the next memdev index from the list of backends as opposed to
+        // frontends which might seem the obvious choice.  The reason is that
+        // when hotunplugging fails the result can be that the corresponding
+        // backend still exists while its frontend is gone.  The frontend list
+        // is thus not guaranteed to have all the information necessary to
+        // compute the next memory device index.
+        let mem_backends = self.qmp.execute(&qapi_qmp::query_memdev {})?;
+        Ok(next_memdev_index(
+            mem_backends
+                .iter()
+                .filter_map(|memdev| memdev.id.as_deref()),
+        ))
+    }
+
     /// Hotplug memory using pc-dimm device.
-    fn hotplug_pc_dimm(
-        &mut self,
-        size: u64,
-        memory_devices: Vec<qapi_qmp::MemoryDeviceInfo>,
-    ) -> Result<()> {
+    fn hotplug_pc_dimm(&mut self, size: u64) -> Result<()> {
         info!(sl!(), "No virtio-mem detected, using pc-dimm hotplug");
-
-        let memdev_idx = memory_devices
-            .into_iter()
-            .filter(|memdev| {
-                if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
-                    return dimm_info.data.hotpluggable && dimm_info.data.hotplugged;
-                }
-                false
-            })
-            .count();
-
+        let memdev_idx = self.next_memdev_index_from_qmp()?;
         let memory_backend_id = format!("hotplugged-{memdev_idx}");
 
         let memory_backend = qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
@@ -903,7 +904,34 @@ impl Qmp {
                     }
                 };
 
-                self.qmp.execute(&qmp::device_del { id: frontend_id })?;
+                self.qmp.execute(&qmp::device_del {
+                    id: frontend_id.clone(),
+                })?;
+
+                if let Err(wait_err) =
+                    self.wait_for_device_deleted(&frontend_id, DEVICE_DELETED_TIMEOUT)
+                {
+                    match self.device_exists(&frontend_id) {
+                        // The device is gone, the error from wait_for_device_deleted()
+                        // was either a timeout and the device was removed in the
+                        // meantime between the timeout and now, or DEVICE_DELETED event
+                        // was missed for whatever reason.  Fall through to reap the backend.
+                        Ok(false) => {}
+                        Ok(true) => return Err(wait_err).context(
+                            format!(
+                                "hotunplug_pc_dimm(): waiting for memory device hotunplug {}",
+                                frontend_id
+                            )
+                        ),
+                        Err(query_err) => return Err(anyhow!(
+                            "waiting for memory device {} hotunplug failed: {:#}; state reconciliation failed: {:#}",
+                            frontend_id,
+                            wait_err,
+                            query_err
+                        )),
+                    };
+                }
+
                 self.qmp.execute(&qmp::object_del { id: backend_id })?;
             } else {
                 // This shouldn't happen as it was checked by find() above already.
@@ -1312,16 +1340,35 @@ impl Qmp {
                 warn!(sl!(), "The QMP nop() failed for {}: {:?}", device_id, e);
             }
 
-            let found = self.qmp.events().any(|event| {
-                matches!(event, qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
-                    if data.device.as_deref() == Some(device_id))
+            // Wait for device removal can end with the guest signaling either
+            // completion with DEVICE_DELETED, or a detectable guest-side
+            // failure with DEVICE_UNPLUG_GUEST_ERROR. Some guest-side failures
+            // cannot be detected at all and only show up as a timeout.
+            let outcome = self.qmp.events().find_map(|event| match event {
+                qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
+                    if data.device.as_deref() == Some(device_id) =>
+                {
+                    Some(Ok(()))
+                }
+                qapi_qmp::Event::DEVICE_UNPLUG_GUEST_ERROR { ref data, .. }
+                    if data.device.as_deref() == Some(device_id) =>
+                {
+                    Some(Err(anyhow!(
+                        "guest reported an error unplugging {}, it will not be removed",
+                        device_id
+                    )))
+                }
+                _ => None,
             });
-            if found {
-                info!(
-                    sl!(),
-                    "The QMP received DEVICE_DELETED event for {}", device_id
-                );
-                break Ok(());
+            if let Some(outcome) = outcome {
+                match &outcome {
+                    Ok(()) => info!(
+                        sl!(),
+                        "The QMP received DEVICE_DELETED event for {}", device_id
+                    ),
+                    Err(e) => warn!(sl!(), "{}", e),
+                }
+                break outcome;
             }
 
             let now = Instant::now();
@@ -2002,6 +2049,17 @@ fn find_free_slot_in_pci_devices(devices: &[PciDeviceInfo]) -> Option<(String, i
     None
 }
 
+/// Compute index of the next memory device as the highest allocated so far
+/// plus one.  Parse existing indices from ids of memory backend objects.
+/// Make sure not to use count of existing objects as hotunplugging punches
+/// holes into the index sequence.
+fn next_memdev_index<'a>(ids: impl IntoIterator<Item = &'a str>) -> u64 {
+    ids.into_iter()
+        .filter_map(|id| id.strip_prefix("hotplugged-")?.parse::<u64>().ok())
+        .max()
+        .map_or(0, |max| max + 1)
+}
+
 // The get_pci_path_by_qdev_id function searches a device list for a device matching a given qdev_id,
 // tracking the device's path. It recursively explores bridge devices and returns the found device along
 // with its updated path.
@@ -2154,6 +2212,21 @@ mod tests {
         assert_eq!(
             collect_block_fdsets(fdsets),
             HashMap::from([("drive-2".to_string(), vec![7, 8])])
+        );
+    }
+
+    #[test]
+    fn memdev_index_allocation() {
+        assert_eq!(next_memdev_index([]), 0);
+        assert_eq!(
+            next_memdev_index(["hotplugged-0", "hotplugged-1", "hotplugged-2"]),
+            3
+        );
+        assert_eq!(next_memdev_index(["hotplugged-0", "hotplugged-2"]), 3);
+        assert_eq!(next_memdev_index(["hotplugged-2", "hotplugged-0"]), 3);
+        assert_eq!(
+            next_memdev_index(["hotplugged-", "hotplugged-abc", "hotplugged-1"]),
+            2
         );
     }
 }
