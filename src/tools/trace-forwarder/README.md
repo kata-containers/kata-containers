@@ -12,15 +12,12 @@ The trace forwarder, which must be started before the container, listens over
 trace spans are exported using the OpenTelemetry Protocol (OTLP) to an
 [OpenTelemetry][opentelemetry]-compatible collector running by default on the host.
 
-> **Notes:**
->
-> - If agent tracing is enabled but the forwarder is not running,
->   the agent will log an error (signalling that it cannot generate trace
->   spans), but continue to work as normal.
->
-> - The trace forwarder requires an OTLP-compatible trace collector to be
->   running before it is started. If a collector is not running, the trace
->   forwarder will exit with an error.
+!!! note
+    If agent tracing is enabled but the forwarder is not running, the agent
+    logs an error but continues to work as normal.
+
+    Forwarding requires an OTLP-compatible collector. Export failures are
+    reported on standard error; a failed connection does not stop the listener.
 
 ## Quick start
 
@@ -44,6 +41,31 @@ Common OTLP endpoints:
 - Jaeger (v1.35+): `http://localhost:4317` (gRPC) or `http://localhost:4318` (HTTP)
 - OpenTelemetry Collector: `http://localhost:4317` (gRPC) or `http://localhost:4318` (HTTP)
 - Grafana Tempo: Depends on configuration
+
+## Inspect trace data without a collector
+
+Use `--dump-only` to write each received JSON span on a separate line to
+standard output without creating an exporter or contacting a collector:
+
+```bash
+kata-trace-forwarder --dump-only
+```
+
+In this mode, diagnostic messages go to standard error so that standard output
+can be redirected or processed as JSON. Full-width numeric trace IDs retain
+their exact digits.
+
+The forwarder reads the agent's existing length-prefixed JSON protocol. When
+forwarding, it converts the agent's span data to the collector SDK's model
+without generating new trace or span IDs. Parent IDs, timestamps, attributes,
+events, links, status and dropped item counts are retained. Pending spans are
+flushed when the agent closes its connection. Invalid records and export
+failures are reported as errors, and the listener continues serving subsequent
+connections. OpenTelemetry background export errors also go to standard error.
+
+In forwarding mode, `SIGINT` and `SIGTERM` stop the listeners and interrupt
+incomplete records before shutting down the batch processor. Completed spans
+that are still queued are flushed before the forwarder exits.
 
 ## Run
 

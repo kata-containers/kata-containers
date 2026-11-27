@@ -6,7 +6,7 @@
 
 #![warn(unused_extern_crates)]
 use anyhow::{anyhow, Result};
-use clap::{crate_name, crate_version, Arg, Command};
+use clap::{crate_name, crate_version, Arg, ArgAction, Command};
 use slog::{error, info, Logger};
 use std::env;
 use std::io;
@@ -29,6 +29,7 @@ const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";
 
 mod handler;
 mod server;
+mod span_data;
 mod tracer;
 mod utils;
 
@@ -133,11 +134,11 @@ fn handle_standard_vsock(cid: Option<&str>, port: Option<&str>) -> Result<VsockT
     Ok(vsock)
 }
 
-fn real_main() -> Result<()> {
+fn build_command() -> Command {
     let version = crate_version!();
     let name = crate_name!();
 
-    let args = Command::new(name)
+    Command::new(name)
         .version(version)
         .about(ABOUT_TEXT)
         .long_about(make_description_text())
@@ -145,6 +146,7 @@ fn real_main() -> Result<()> {
         .arg(
             Arg::new("dump-only")
                 .long("dump-only")
+                .action(ArgAction::SetTrue)
                 .help("Disable forwarding of spans and write to stdout (for testing)"),
         )
         .arg(
@@ -190,7 +192,12 @@ fn real_main() -> Result<()> {
                 .help("VSOCK port number (QEMU hypervisor only)")
                 .default_value(DEFAULT_KATA_VSOCK_TRACING_PORT),
         )
-        .get_matches();
+}
+
+fn real_main() -> Result<()> {
+    let version = crate_version!();
+    let name = crate_name!();
+    let args = build_command().get_matches();
 
     // Cannot fail as a default has been specified
     let log_level_name = args
@@ -201,10 +208,14 @@ fn real_main() -> Result<()> {
     let log_level = logging::level_name_to_slog_level(log_level_name).map_err(|e| anyhow!(e))?;
 
     // Setup logger
-    let writer = io::stdout();
+    let dump_only = args.get_flag("dump-only");
+    let writer: Box<dyn io::Write + Send + Sync> = if dump_only {
+        Box::new(io::stderr())
+    } else {
+        Box::new(io::stdout())
+    };
     let (logger, _logger_guard) = logging::create_logger(name, name, log_level, writer);
-
-    let dump_only = args.contains_id("dump-only");
+    tracer::init_sdk_diagnostics(io::stderr)?;
 
     announce(&logger, version, dump_only);
 
@@ -250,20 +261,19 @@ fn real_main() -> Result<()> {
 
     // OTLP gRPC exporter uses hyper/tonic and requires a Tokio reactor context.
     let tokio_rt = Runtime::new().map_err(|e| anyhow!("failed to create tokio runtime: {e}"))?;
-    let _tokio_enter_guard = tokio_rt.enter();
 
     let server =
         server::VsockTraceServer::new(&logger, vsock, otlp_endpoint, trace_name, dump_only);
 
-    let result = server.start();
+    let result = tokio_rt.block_on(server.start());
 
-    if result.is_err() {
-        error!(logger, "failed"; "error" => format!("{:?}", result.err()));
+    if let Err(error) = &result {
+        error!(logger, "failed"; "error" => format!("{error:#}"));
     } else {
         info!(logger, "success");
     }
 
-    Ok(())
+    result
 }
 
 fn main() {
@@ -282,6 +292,18 @@ mod tests {
         ERR_HVSOCK_SOC_PATH_EMPTY, ERR_VSOCK_CID_EMPTY, ERR_VSOCK_CID_NOT_NUMERIC,
         ERR_VSOCK_PORT_EMPTY, ERR_VSOCK_PORT_NOT_NUMERIC, ERR_VSOCK_PORT_ZERO, VSOCK_CID_ANY,
     };
+
+    #[test]
+    fn dump_only_is_an_optional_flag_without_a_value() {
+        let normal = build_command()
+            .try_get_matches_from(["kata-trace-forwarder"])
+            .unwrap();
+        assert!(!normal.get_flag("dump-only"));
+        let dump = build_command()
+            .try_get_matches_from(["kata-trace-forwarder", "--dump-only"])
+            .unwrap();
+        assert!(dump.get_flag("dump-only"));
+    }
 
     #[test]
     fn test_handle_hybrid_vsock() {
