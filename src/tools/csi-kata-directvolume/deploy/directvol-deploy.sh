@@ -25,7 +25,14 @@ DIRECTVOL_NAMESPACE="kata-directvolume"
 : "${CAPACITY_TRACKING:=auto}"
 case "${CAPACITY_TRACKING}" in
     auto)
-        if kubectl get csistoragecapacities.v1.storage.k8s.io --all-namespaces >/dev/null 2>&1; then
+        # API discovery tells whether the API exists without the permission
+        # to list CSIStorageCapacity objects, which a deploy identity may lack.
+        if ! discovery=$(kubectl get --raw /apis/storage.k8s.io/v1 2>&1); then
+            echo "cannot discover the storage.k8s.io/v1 API: ${discovery}" >&2
+            echo "set CAPACITY_TRACKING=true or false to skip the discovery" >&2
+            exit 1
+        fi
+        if grep -q '"name": *"csistoragecapacities"' <<<"${discovery}"; then
             have_csistoragecapacity=true
         else
             echo "CSIStorageCapacity v1 is not available, deploying without storage capacity tracking" >&2

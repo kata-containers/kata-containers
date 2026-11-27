@@ -290,12 +290,27 @@ func TestCapacityExample(t *testing.T) {
 // directvol-deploy.sh applies.
 const fakeKubectl = `#!/usr/bin/env bash
 case "$1 $2" in
-"get csistoragecapacities.v1.storage.k8s.io") exit "${FAKE_CAPACITY_API_RC}" ;;
+"get --raw")
+	case "${FAKE_CAPACITY_API}" in
+	present) echo '{"kind":"APIResourceList","groupVersion":"storage.k8s.io/v1","resources":[{"name":"csidrivers"},{"name":"csistoragecapacities"}]}' ;;
+	absent) echo '{"kind":"APIResourceList","groupVersion":"storage.k8s.io/v1","resources":[{"name":"csidrivers"}]}' ;;
+	*) echo "Unable to connect to the server" >&2; exit 1 ;;
+	esac ;;
 "apply -f") { cat; echo "---"; } >>"${FAKE_APPLIED}" ;;
 "get -n") echo 1 ;;
 esac
 exit 0
 `
+
+// deployDefaults resets the settings of directvol-deploy.sh which the tests
+// rely on, so that the environment of the test run cannot change them.
+var deployDefaults = []string{
+	"CAPACITY_TRACKING=auto",
+	"CAPACITY_POLL_INTERVAL=",
+	"KATA_DIRECTVOLUME_REGISTRY=",
+	"KATA_DIRECTVOLUME_TAG=",
+	"IMAGE_TAG=",
+}
 
 func runDeployScript(t *testing.T, env ...string) []map[string]any {
 	t.Helper()
@@ -311,8 +326,9 @@ func runDeployScript(t *testing.T, env ...string) []map[string]any {
 	cmd.Env = append(os.Environ(),
 		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"FAKE_APPLIED="+applied,
-		"FAKE_CAPACITY_API_RC=0",
+		"FAKE_CAPACITY_API=present",
 	)
+	cmd.Env = append(cmd.Env, deployDefaults...)
 	cmd.Env = append(cmd.Env, env...)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "directvol-deploy.sh failed:\n%s", out)
@@ -380,9 +396,9 @@ func TestDeployScriptCapacityTracking(t *testing.T) {
 		driverImage string
 	}{
 		{name: "API available", enabled: true},
-		{name: "API missing", env: []string{"FAKE_CAPACITY_API_RC=1"}},
-		{name: "forced off", env: []string{"CAPACITY_TRACKING=false"}},
-		{name: "forced on", env: []string{"CAPACITY_TRACKING=true", "FAKE_CAPACITY_API_RC=1"}, enabled: true},
+		{name: "API missing", env: []string{"FAKE_CAPACITY_API=absent"}},
+		{name: "forced off", env: []string{"CAPACITY_TRACKING=false", "FAKE_CAPACITY_API=error"}},
+		{name: "forced on", env: []string{"CAPACITY_TRACKING=true", "FAKE_CAPACITY_API=error"}, enabled: true},
 		{
 			name:     "poll interval",
 			env:      []string{"CAPACITY_POLL_INTERVAL=10s"},
@@ -447,4 +463,25 @@ func TestDeployScriptRejectsInvalidSetting(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err)
 	require.Contains(t, string(out), "CAPACITY_TRACKING must be auto, true or false")
+}
+
+// TestDeployScriptDiscoveryFailure checks that a failed API discovery stops
+// the deployment instead of silently disabling capacity tracking.
+func TestDeployScriptDiscoveryFailure(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not installed")
+	}
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "kubectl"), []byte(fakeKubectl), 0700))
+
+	cmd := exec.Command("bash", "directvol-deploy.sh")
+	cmd.Env = append(os.Environ(),
+		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"FAKE_APPLIED="+filepath.Join(bin, "applied.yaml"),
+		"FAKE_CAPACITY_API=error",
+	)
+	cmd.Env = append(cmd.Env, deployDefaults...)
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err)
+	require.Contains(t, string(out), "cannot discover the storage.k8s.io/v1 API")
 }
