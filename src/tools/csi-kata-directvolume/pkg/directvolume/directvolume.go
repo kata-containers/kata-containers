@@ -258,7 +258,7 @@ func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int6
 	bdevParams := map[string]interface{}{
 		"name":       bdevName,
 		"filename":   backingFile,
-		"block_size": 512,
+		"block_size": spdkBlockSize,
 	}
 	if _, err := spdkrpc.Call("bdev_aio_create", bdevParams); err != nil {
 		removeCreatedFile()

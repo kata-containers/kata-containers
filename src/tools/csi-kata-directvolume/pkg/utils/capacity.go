@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -120,6 +121,12 @@ func parseCapacityEntry(entry string) (string, resource.Quantity, error) {
 	}
 	if quantity.Sign() < 0 {
 		return "", resource.Quantity{}, fmt.Errorf("size of capacity pool %q must not be negative, got %s", pool, size)
+	}
+	// ParseQuantity caps SI quantities at the largest int64, but not
+	// exponent forms such as 1e19.
+	if quantity.Cmp(*resource.NewQuantity(math.MaxInt64, resource.BinarySI)) > 0 {
+		return "", resource.Quantity{}, fmt.Errorf("size of capacity pool %q must not exceed %d bytes, got %s",
+			pool, int64(math.MaxInt64), size)
 	}
 
 	return pool, quantity, nil

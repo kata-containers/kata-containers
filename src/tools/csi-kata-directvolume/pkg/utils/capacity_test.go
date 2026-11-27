@@ -196,3 +196,13 @@ func TestLoadNodeCapacity(t *testing.T) {
 		})
 	}
 }
+
+func TestCapacityPoolSizeLimit(t *testing.T) {
+	// ParseQuantity caps SI quantities at the largest int64, but not
+	// exponent forms, whose Value would overflow.
+	_, err := ParseCapacityConfig("fast=1e19")
+	require.ErrorContains(t, err, "must not exceed")
+	capacity, err := ParseCapacityConfig("fast=7Ei")
+	require.NoError(t, err)
+	require.Equal(t, "fast=7Ei", capacity.String())
+}

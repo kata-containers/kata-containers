@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -39,7 +40,7 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	if len(caps) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume Capabilities missing in request")
 	}
-	if err := validateVolumeCapabilities(caps); err != nil {
+	if err := validateVolumeCapabilities(caps, true); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	params, err := parseVolumeParameters(req.GetParameters())
@@ -54,6 +55,11 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	capacity, err := requiredCapacity(req.GetCapacityRange())
 	if err != nil {
 		return nil, err
+	}
+	if params.volumeType == utils.SpdkVolumeTypeName {
+		if capacity, err = alignSPDKCapacity(capacity, req.GetCapacityRange().GetLimitBytes()); err != nil {
+			return nil, err
+		}
 	}
 	klog.Infof("createVolume with request: %+v", req)
 
@@ -165,6 +171,10 @@ func (dv *directVolume) repeatedCreateVolume(req *csi.CreateVolumeRequest, exVol
 	}
 
 	contentSrc := req.GetVolumeContentSource()
+	if contentSrc == nil && exVol.ParentVolID != "" {
+		return nil, status.Errorf(codes.AlreadyExists, "Volume with the same name: %s already exists as a copy of volume %s",
+			req.GetName(), exVol.ParentVolID)
+	}
 	if contentSrc != nil {
 		switch contentSrc.Type.(type) {
 		case *csi.VolumeContentSource_Volume:
@@ -321,7 +331,7 @@ func (dv *directVolume) ValidateVolumeCapabilities(ctx context.Context, req *csi
 		return nil, err
 	}
 
-	if err := validateVolumeCapabilities(req.GetVolumeCapabilities()); err != nil {
+	if err := validateVolumeCapabilities(req.GetVolumeCapabilities(), true); err != nil {
 		return &csi.ValidateVolumeCapabilitiesResponse{Message: err.Error()}, nil
 	}
 
@@ -351,7 +361,7 @@ func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityReq
 		return capacityResponse(0, 0), nil
 	}
 
-	if err := validateVolumeCapabilities(req.GetVolumeCapabilities()); err != nil {
+	if err := validateVolumeCapabilities(req.GetVolumeCapabilities(), false); err != nil {
 		klog.V(4).Infof("GetCapacity: no capacity for the requested volume capabilities: %v", err)
 		return capacityResponse(0, 0), nil
 	}
@@ -373,7 +383,12 @@ func (dv *directVolume) GetCapacity(ctx context.Context, req *csi.GetCapacityReq
 		return nil, err
 	}
 
-	return capacityResponse(available, min(available, dv.config.MaxVolumeSize)), nil
+	maximum := min(available, dv.config.MaxVolumeSize)
+	if params.volumeType == utils.SpdkVolumeTypeName {
+		// SPDK volumes need a whole number of blocks.
+		maximum -= maximum % spdkBlockSize
+	}
+	return capacityResponse(available, maximum), nil
 }
 
 // capacityResponse builds a GetCapacity response. Both values must be
@@ -398,6 +413,22 @@ func requiredCapacity(capacityRange *csi.CapacityRange) (int64, error) {
 		return 0, status.Errorf(codes.InvalidArgument, "required bytes %d exceed the limit of %d bytes", required, limit)
 	}
 	return required, nil
+}
+
+// alignSPDKCapacity rounds the size of an SPDK volume up to a whole number
+// of blocks, within the limit of the capacity range.
+func alignSPDKCapacity(capacity, limit int64) (int64, error) {
+	if rest := capacity % spdkBlockSize; rest != 0 {
+		if capacity > math.MaxInt64-spdkBlockSize {
+			return 0, status.Errorf(codes.OutOfRange, "capacity %d is too large", capacity)
+		}
+		capacity += spdkBlockSize - rest
+	}
+	if limit > 0 && capacity > limit {
+		return 0, status.Errorf(codes.OutOfRange, "an SPDK volume needs a multiple of %d bytes, which the limit of %d bytes does not allow",
+			spdkBlockSize, limit)
+	}
+	return capacity, nil
 }
 
 func (dv *directVolume) validateControllerServiceRequest(c csi.ControllerServiceCapability_RPC_Type) error {

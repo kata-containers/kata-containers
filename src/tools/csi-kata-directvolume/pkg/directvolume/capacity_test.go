@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -41,7 +42,9 @@ type fakeStorage struct {
 	// beforeAllocated, if set, runs once before an allocation is read. It
 	// simulates a guest which writes at that moment.
 	beforeAllocated func()
-	err             error
+	// beforeStatfs, if set, runs once before the free space is read.
+	beforeStatfs func()
+	err          error
 }
 
 func newFakeStorage() *fakeStorage {
@@ -53,6 +56,10 @@ func newFakeStorage() *fakeStorage {
 }
 
 func (f *fakeStorage) Statfs(dir string) (filesystemStat, error) {
+	if hook := f.beforeStatfs; hook != nil {
+		f.beforeStatfs = nil
+		hook()
+	}
 	if f.err != nil {
 		return filesystemStat{}, f.err
 	}
@@ -929,9 +936,11 @@ func TestFilesystemCapacityAdmission(t *testing.T) {
 			d.mustCreate(t, createRequest("vol-1", 6*utils.GiB, volumeType, ""))
 			d.requireAvailable(t, volumeType, "", 4*utils.GiB)
 
+			disks := len(d.storage.allocated)
 			_, err := d.CreateVolume(context.Background(), createRequest("vol-2", 6*utils.GiB, volumeType, ""))
 			requireCode(t, err, codes.ResourceExhausted)
 			d.requireNoBackend(t, "vol-2")
+			require.Len(t, d.storage.allocated, disks, "a rejected volume must not allocate a raw disk")
 		})
 	}
 }
@@ -1081,4 +1090,121 @@ func TestNodeCapacityConfig(t *testing.T) {
 		})
 		require.ErrorContains(t, err, "must not be negative")
 	})
+}
+
+// TestFilesystemCapacityWriteAfterAllocationRead checks the other order of a
+// guest write: after the allocation of its file is read and before the free
+// space is read again, the write counts twice, which understates the result.
+func TestFilesystemCapacityWriteAfterAllocationRead(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{})
+	d.storage.free[d.config.SpdkRawPath] = 10 * utils.GiB
+	sparse := state.Volume{
+		VolID:    "sparse",
+		VolName:  "sparse",
+		VolSize:  4 * utils.GiB,
+		Metadata: map[string]string{"type": utils.SpdkVolumeTypeName, "backingFile": "/spdk/sparse.raw"},
+	}
+	require.NoError(t, d.state.UpdateVolume(sparse))
+	d.requireAvailable(t, utils.SpdkVolumeTypeName, "", 6*utils.GiB)
+
+	d.storage.beforeAllocated = func() {
+		d.storage.beforeStatfs = func() {
+			d.storage.allocated["/spdk/sparse.raw"] += utils.GiB
+			d.storage.free[d.config.SpdkRawPath] -= utils.GiB
+		}
+	}
+	d.requireAvailable(t, utils.SpdkVolumeTypeName, "", 5*utils.GiB)
+	d.requireAvailable(t, utils.SpdkVolumeTypeName, "", 6*utils.GiB)
+}
+
+// TestConflictingParameterSpellings checks that two spellings of a
+// parameter must not disagree.
+func TestConflictingParameterSpellings(t *testing.T) {
+	_, err := parseVolumeParameters(map[string]string{
+		utils.KataContainersDirectVolumeType:                  utils.DirectVolumeTypeName,
+		strings.ToUpper(utils.KataContainersDirectVolumeType): utils.SpdkVolumeTypeName,
+	})
+	requireCode(t, err, codes.InvalidArgument)
+
+	p, err := parseVolumeParameters(map[string]string{
+		utils.KataContainersDirectFsType:                  "ext4",
+		strings.ToUpper(utils.KataContainersDirectFsType): "ext4",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "ext4", p.fsType)
+}
+
+// TestCreateVolumeIdempotencyLegacyImplicitPool checks a repeated request
+// without a pool for a volume to which an older driver assigned a pool by
+// itself.
+func TestCreateVolumeIdempotencyLegacyImplicitPool(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{capacity: []string{"fast=8Gi"}})
+	require.NoError(t, d.state.UpdateVolume(state.Volume{VolID: "legacy-id", VolName: "vol-1", VolSize: utils.GiB, Kind: "fast"}))
+
+	vol := d.mustCreate(t, createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, ""))
+	require.Equal(t, "legacy-id", vol.GetVolumeId())
+	vol = d.mustCreate(t, createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, "fast"))
+	require.Equal(t, "legacy-id", vol.GetVolumeId())
+
+	_, err := d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, "slow"))
+	requireCode(t, err, codes.AlreadyExists)
+}
+
+// TestCreateVolumeIdempotencyCopy checks that a request without a content
+// source does not match a volume which was created as a copy.
+func TestCreateVolumeIdempotencyCopy(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{})
+	vol := d.mustCreate(t, createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, ""))
+	recorded, err := d.state.GetVolumeByID(vol.GetVolumeId())
+	require.NoError(t, err)
+	recorded.ParentVolID = "source-id"
+	require.NoError(t, d.state.UpdateVolume(recorded))
+
+	_, err = d.CreateVolume(context.Background(), createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, ""))
+	requireCode(t, err, codes.AlreadyExists)
+}
+
+// TestCreateVolumeRequiresMount checks that creating and confirming a volume
+// need the mount access type, which GetCapacity does not.
+func TestCreateVolumeRequiresMount(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{})
+	noAccessType := []*csi.VolumeCapability{{
+		AccessMode: &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER},
+	}}
+	req := createRequest("vol-1", utils.GiB, utils.DirectVolumeTypeName, "")
+	req.VolumeCapabilities = noAccessType
+	disks := len(d.storage.allocated)
+	_, err := d.CreateVolume(context.Background(), req)
+	requireCode(t, err, codes.InvalidArgument)
+	d.requireNoBackend(t, "vol-1")
+	require.Len(t, d.storage.allocated, disks, "a rejected volume must not allocate a raw disk")
+
+	vol := d.mustCreate(t, createRequest("vol-2", utils.GiB, utils.DirectVolumeTypeName, ""))
+	resp, err := d.ValidateVolumeCapabilities(context.Background(), &csi.ValidateVolumeCapabilitiesRequest{
+		VolumeId:           vol.GetVolumeId(),
+		VolumeCapabilities: noAccessType,
+	})
+	require.NoError(t, err)
+	require.Nil(t, resp.GetConfirmed())
+
+	capReq := capacityRequest(utils.DirectVolumeTypeName, "")
+	capReq.VolumeCapabilities = noAccessType
+	available, _ := d.getCapacity(t, capReq)
+	require.Positive(t, available)
+}
+
+// TestSPDKCapacityAlignment checks that SPDK volumes get whole blocks.
+func TestSPDKCapacityAlignment(t *testing.T) {
+	d := newTestDriver(t, testDriverOptions{capacity: []string{"fast=1025"}})
+	_, maximum := d.getCapacity(t, capacityRequest(utils.SpdkVolumeTypeName, "fast"))
+	require.Equal(t, int64(1024), maximum)
+
+	vol := d.mustCreate(t, createRequest("vol-1", 1000, utils.SpdkVolumeTypeName, "fast"))
+	require.Equal(t, int64(1024), vol.GetCapacityBytes())
+
+	req := createRequest("vol-2", 1, utils.SpdkVolumeTypeName, "fast")
+	req.CapacityRange.LimitBytes = 100
+	_, err := d.CreateVolume(context.Background(), req)
+	requireCode(t, err, codes.OutOfRange)
+	d.requireNoBackend(t, "vol-2")
 }

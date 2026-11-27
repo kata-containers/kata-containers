@@ -32,6 +32,10 @@ const (
 
 	// statBlockSize is the unit of unix.Stat_t.Blocks.
 	statBlockSize = 512
+
+	// spdkBlockSize is the block size of the SPDK AIO bdevs. The size of an
+	// SPDK volume must be a multiple of it.
+	spdkBlockSize = 512
 )
 
 // errNoCapacity is wrapped by the errors which mean that this node cannot
@@ -55,22 +59,32 @@ type volumeParameters struct {
 }
 
 // parseVolumeParameters extracts the parameters understood by the driver.
-// Parameter names are case insensitive. A malformed capacity pool
-// parameter is an error: it is wrong on every node.
+// Parameter names are case insensitive, and spellings of the same name must
+// not disagree. A malformed capacity pool parameter is an error: it is wrong
+// on every node.
 func parseVolumeParameters(params map[string]string) (volumeParameters, error) {
 	var p volumeParameters
-	var poolKeys []string
-	for key, value := range params {
+	var typeKeys, fsTypeKeys, poolKeys []string
+	for key := range params {
 		switch strings.ToLower(key) {
 		case utils.KataContainersDirectVolumeType:
-			if value == utils.DirectVolumeTypeName || value == utils.SpdkVolumeTypeName {
-				p.volumeType = value
-			}
+			typeKeys = append(typeKeys, key)
 		case utils.KataContainersDirectFsType:
-			p.fsType = value
+			fsTypeKeys = append(fsTypeKeys, key)
 		case utils.KataContainersDirectCapacityPool, legacyCapacityPoolParameter:
 			poolKeys = append(poolKeys, key)
 		}
+	}
+
+	volumeType, err := singleParameterValue(params, typeKeys)
+	if err != nil {
+		return volumeParameters{}, err
+	}
+	if volumeType == utils.DirectVolumeTypeName || volumeType == utils.SpdkVolumeTypeName {
+		p.volumeType = volumeType
+	}
+	if p.fsType, err = singleParameterValue(params, fsTypeKeys); err != nil {
+		return volumeParameters{}, err
 	}
 
 	sort.Strings(poolKeys)
@@ -87,6 +101,20 @@ func parseVolumeParameters(params map[string]string) (volumeParameters, error) {
 	}
 
 	return p, nil
+}
+
+// singleParameterValue returns the value of a parameter which may be spelled
+// in several ways, or an error if the spellings have different values.
+func singleParameterValue(params map[string]string, keys []string) (string, error) {
+	sort.Strings(keys)
+	value := ""
+	for i, key := range keys {
+		if i > 0 && params[key] != value {
+			return "", status.Errorf(codes.InvalidArgument, "parameters %q have different values", keys)
+		}
+		value = params[key]
+	}
+	return value, nil
 }
 
 // volumeContext builds the volume context of a new volume.
@@ -112,30 +140,37 @@ func (p volumeParameters) volumeContext(name string, capacity int64) map[string]
 // compatibleWith reports whether an existing volume could have been
 // created with the parameters p.
 func (p volumeParameters) compatibleWith(vol state.Volume) bool {
-	if vol.Kind != p.pool {
-		return false
-	}
 	if vol.VolumeContext == nil {
-		// Created by an older driver which did not record the volume
-		// context, only the pool can be compared.
-		return true
+		// Created by an older driver, which did not record the volume
+		// context and picked a pool by itself for a request without one:
+		// only a pool which the request selects can be compared.
+		return p.pool == "" || p.pool == vol.Kind
 	}
-	return vol.VolumeContext[utils.KataContainersDirectVolumeType] == p.volumeType &&
+	return vol.Kind == p.pool &&
+		vol.VolumeContext[utils.KataContainersDirectVolumeType] == p.volumeType &&
 		vol.VolumeContext[utils.KataContainersDirectFsType] == p.fsType
 }
 
 // validateVolumeCapabilities checks that the driver can provide a volume
 // which has all of the given capabilities: a filesystem volume that is
-// published on a single node.
-func validateVolumeCapabilities(caps []*csi.VolumeCapability) error {
+// published on a single node. A volume which is created or confirmed must
+// ask for the mount access type; GetCapacity also accepts a capability
+// without an access type.
+func validateVolumeCapabilities(caps []*csi.VolumeCapability, requireMount bool) error {
 	for _, c := range caps {
 		if c == nil {
 			return errors.New("volume capability must not be empty")
 		}
 		// The external-provisioner calls GetCapacity with a Mount access
 		// type whose MountVolume is nil, so the type is what matters.
-		if _, isBlock := c.GetAccessType().(*csi.VolumeCapability_Block); isBlock {
+		switch c.GetAccessType().(type) {
+		case *csi.VolumeCapability_Mount:
+		case *csi.VolumeCapability_Block:
 			return errors.New("block access type is not supported")
+		default:
+			if requireMount {
+				return errors.New("the mount access type is required")
+			}
 		}
 		switch mode := c.GetAccessMode().GetMode(); mode {
 		case csi.VolumeCapability_AccessMode_UNKNOWN,
