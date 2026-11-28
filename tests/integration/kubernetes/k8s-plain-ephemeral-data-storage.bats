@@ -12,9 +12,52 @@ load "${BATS_TEST_DIRNAME}/emptydir_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
+# Run a shell snippet in the pod and return its stdout.
+#
+# The snippet's output is framed with sentinels and its exit status is echoed
+# after it so that the test log distinguishes the ways a read of
+# /proc/self/mountinfo can produce no result (see issue #14321):
+#
+#   * the snippet failed, e.g. awk could not read /proc/self/mountinfo,
+#   * the snippet succeeded but matched nothing: the mount entry is gone,
+#   * the exec exited but its output was lost or truncated on the way back.
+#
+# Only the first case is reported as a kubectl exec failure; the others return
+# the (empty) payload so that the caller's assertions still fail as before.
+pod_exec_checked() {
+	local what="$1"
+	local snippet="$2"
+	local begin="__kata_exec_begin__"
+	local end_prefix="__kata_exec_end__"
+	local raw status payload
+
+	if ! raw="$(pod_exec "${pod_name}" sh -c \
+		"echo ${begin}; ${snippet}; echo \"${end_prefix}:\$?\"")"; then
+		info "kubectl exec failed while reading ${what}"
+		return 1
+	fi
+
+	if ! printf '%s\n' "${raw}" | grep -qx "${begin}" || \
+	   ! printf '%s\n' "${raw}" | grep -q "^${end_prefix}:"; then
+		info "kubectl exec lost or truncated its output while reading ${what}: [${raw}]"
+		return 0
+	fi
+
+	status="$(printf '%s\n' "${raw}" | sed -n "s/^${end_prefix}://p" | tail -n 1)"
+	payload="$(printf '%s\n' "${raw}" | sed -e "/^${begin}\$/d" -e "/^${end_prefix}:/d")"
+
+	if [[ "${status}" != "0" ]]; then
+		info "command reading ${what} exited with status ${status}, possibly an I/O error reading /proc/self/mountinfo: [${raw}]"
+	elif [[ -z "${payload}" ]]; then
+		info "${what}: exec output was intact but the awk pattern matched nothing, so the mount entry is absent"
+	fi
+
+	printf '%s\n' "${payload}"
+}
+
 # Return the full mountinfo row whose field 5 is the tested mount point.
 mountinfo_for_mountpoint() {
-	pod_exec "${pod_name}" sh -c \
+	pod_exec_checked "the mountinfo row for ${mountpoint}" \
 		"awk -v mp='${mountpoint}' '\$5 == mp {print; exit}' /proc/self/mountinfo"
 }
 
@@ -22,13 +65,13 @@ mountinfo_for_mountpoint() {
 mountinfo_after_separator_field() {
 	local field_offset="$1"
 
-	pod_exec "${pod_name}" sh -c \
+	pod_exec_checked "mountinfo field ${field_offset} after the separator for ${mountpoint}" \
 		"awk -v mp='${mountpoint}' '\$5 == mp {for (i = 1; i <= NF; i++) if (\$i == \"-\") {print \$(i + ${field_offset}); exit}}' /proc/self/mountinfo"
 }
 
 # Return field 6 mount options plus super options, which are three fields after "-".
 mount_options() {
-	pod_exec "${pod_name}" sh -c \
+	pod_exec_checked "mount options for ${mountpoint}" \
 		"awk -v mp='${mountpoint}' '\$5 == mp {for (i = 1; i <= NF; i++) if (\$i == \"-\") {print \$6 \",\" \$(i + 3); exit}}' /proc/self/mountinfo"
 }
 
