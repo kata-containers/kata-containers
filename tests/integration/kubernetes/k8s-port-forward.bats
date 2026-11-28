@@ -25,7 +25,7 @@ setup() {
 
 	# Check deployment
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/"$deployment_name"
-	kubectl expose deployment/"$deployment_name"
+	kubectl expose "deployment/${deployment_name}" --labels=katacontainers.io/test-resource=true
 
 	# Get pod name
 	pod_name=$(kubectl get pods --output=jsonpath={.items..metadata.name})
