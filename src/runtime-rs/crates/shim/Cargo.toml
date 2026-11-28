@@ -22,7 +22,7 @@ containerd-shim-protos = { workspace = true }
 go-flag = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
-nix = { workspace = true }
+nix = { features = ["resource"], workspace = true }
 oci-spec = { workspace = true }
 protobuf = { workspace = true }
 sha2 = { workspace = true }
