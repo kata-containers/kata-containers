@@ -43,6 +43,38 @@ The `factory destroy` command removes the VM template by remove the `tmpfs` file
 sudo kata-ctl factory destroy
 ```
 
+### Choose how guest memory is restored (Cloud Hypervisor only)
+
+When Cloud Hypervisor is used, the `memory_restore_mode` option controls how
+guest memory is populated from the template snapshot:
+
+| Value | Description |
+| --- | --- |
+| `copy` | Copy the snapshot memory into the guest (default) |
+| `ondemand` | Populate guest memory on demand using `userfaultfd` |
+| `copyonwrite` | Map the snapshot memory copy-on-write |
+
+`ondemand` avoids copying the whole snapshot, so VMs start faster and memory is
+only allocated when the guest actually touches a page.
+
+Add the option to the Cloud Hypervisor section of the configuration file:
+
+```toml
+[hypervisor.clh]
+memory_restore_mode = "ondemand"
+```
+
+Values are case-insensitive, so `Copy`, `OnDemand` and `COPYONWRITE` are all
+accepted. The `-` and `_` separators are not supported: only `copy`, `ondemand`
+and `copyonwrite` are valid. An empty or missing value keeps Cloud Hypervisor's
+default (`copy`). Invalid values are rejected when the configuration is loaded.
+
+> **Note**
+> `ondemand` requires host kernel support for `userfaultfd`. The Cloud
+> Hypervisor process must either run as root or be allowed to use
+> `userfaultfd`, for example by enabling the `vm.unprivileged_userfaultfd`
+> sysctl when the runtime is used in rootless mode.
+
 ## How to Create a New VM from VM Template
 In the Go version of Kata Containers, the VM templating mechanism is implemented using virtio-9p (9pfs). However, 9pfs is not supported in runtime-rs due to its poor performance, limited cache coherence, and security risks. Instead, runtime-rs adopts `VirtioFS` as the default mechanism to provide rootfs for containers and VMs.
 
