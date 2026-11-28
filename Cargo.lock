@@ -3602,6 +3602,7 @@ dependencies = [
  "humantime",
  "json-patch",
  "k8s-openapi",
+ "kata-types",
  "kube",
  "libc",
  "log",

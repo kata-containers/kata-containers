@@ -27,6 +27,7 @@ k8s-openapi = { default-features = false, features = [
 # must stay enabled — without it, rustls panics at runtime with
 # "Could not automatically determine the process-level CryptoProvider".
 json-patch = "4"
+kata-types.workspace = true
 kube = { default-features = false, features = [
   "client",
   "jsonpatch",

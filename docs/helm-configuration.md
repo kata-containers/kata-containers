@@ -105,10 +105,11 @@ default (non-custom) runtime. kata-deploy writes it as
 
 ### Containerd pod annotations
 
-kata-deploy builds each containerd runtime's `pod_annotations` allowlist from
-that runtime's effective Kata configuration. Only
-`io.katacontainers.config.hypervisor.*` annotations whose names occur in the
-runtime's `enable_annotations` list are forwarded. This includes entries
+kata-deploy builds each containerd runtime's `pod_annotations` allowlist by
+matching the regular expressions in that runtime's effective
+`enable_annotations` list against the known hypervisor annotation names.
+Matching names are written as exact, full annotation keys; the regular
+expressions are not passed to containerd as glob patterns. This includes entries
 enabled with `shims.<shim>.allowedHypervisorAnnotations` or a Kata
 configuration drop-in. Agent, runtime, and container-resource annotations are
 not forwarded unless listed below.
