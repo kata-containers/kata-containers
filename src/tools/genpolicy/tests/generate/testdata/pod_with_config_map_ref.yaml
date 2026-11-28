@@ -51,11 +51,6 @@ spec:
           value: serviceaclient
         - name: ISTIO_META_CLUSTER_ID
           value: Kubernetes
-        - name: ISTIO_META_NODE_NAME
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: spec.nodeName
       securityContext:
         privileged: true
       command:
