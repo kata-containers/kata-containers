@@ -6413,6 +6413,7 @@ name = "rustjail"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-io 1.13.0",
  "async-trait",
  "awaitgroup",
  "bit-vec 0.10.2",
