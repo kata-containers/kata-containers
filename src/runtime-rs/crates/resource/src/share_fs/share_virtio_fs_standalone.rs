@@ -5,7 +5,12 @@
 //
 
 use std::time::Duration;
-use std::{collections::HashMap, path::Path, process::Stdio, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::Path,
+    process::{ExitStatus, Stdio},
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -40,6 +45,15 @@ use crate::share_fs::{
 
 const VIRTIOFSD_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// How the task watching a virtiofsd process finished.
+#[derive(Debug)]
+enum VirtiofsdExit {
+    /// The process exited after shutdown was requested.
+    Shutdown,
+    /// The process exited without a shutdown request.
+    Unexpected(ExitStatus),
+}
+
 #[derive(Debug, Clone)]
 pub struct ShareVirtioFsStandaloneConfig {
     id: String,
@@ -55,7 +69,7 @@ pub struct ShareVirtioFsStandaloneConfig {
 #[derive(Default, Debug)]
 struct ShareVirtioFsStandaloneInner {
     stop_tx: Option<watch::Sender<bool>>,
-    watcher: Option<JoinHandle<Result<()>>>,
+    watcher: Option<JoinHandle<Result<VirtiofsdExit>>>,
 }
 
 pub(crate) struct ShareVirtioFsStandalone {
@@ -203,10 +217,18 @@ impl ShareVirtioFsStandalone {
             let _ = stop_tx.send(true);
         }
         if let Some(watcher) = inner.watcher.as_mut() {
-            timeout(VIRTIOFSD_STOP_TIMEOUT, watcher)
+            let exit = timeout(VIRTIOFSD_STOP_TIMEOUT, watcher)
                 .await
                 .context("timed out waiting for virtiofsd to exit")?
                 .context("virtiofsd watcher failed")??;
+            // The exit is reported where it happens; this only records that
+            // cleanup found the daemon already gone.
+            if let VirtiofsdExit::Unexpected(status) = exit {
+                debug!(
+                    sl!(),
+                    "virtiofsd had already exited before shutdown: {status}"
+                );
+            }
         }
         inner.stop_tx = None;
         inner.watcher = None;
@@ -219,7 +241,7 @@ async fn run_virtiofsd(
     mut child: Child,
     tx: Sender<Result<()>>,
     mut stop_rx: watch::Receiver<bool>,
-) -> Result<()> {
+) -> Result<VirtiofsdExit> {
     let stderr = child.stderr.take().context("capture virtiofsd stderr")?;
     let reader = tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
@@ -235,18 +257,32 @@ async fn run_virtiofsd(
         Ok::<(), anyhow::Error>(())
     });
 
-    let status = tokio::select! {
-        status = child.wait() => status.context("wait for virtiofsd").map(|_| ()),
+    let exit = tokio::select! {
+        status = child.wait() => status.context("wait for virtiofsd").map(|status| {
+            if *stop_rx.borrow() {
+                VirtiofsdExit::Shutdown
+            } else {
+                // Nothing looks at this task while the sandbox runs, so an
+                // exit that was not requested is reported here instead of
+                // being noticed only during shutdown.
+                error!(sl!(), "virtiofsd exited unexpectedly: {status}");
+                VirtiofsdExit::Unexpected(status)
+            }
+        }),
         _ = async {
             while !*stop_rx.borrow_and_update() {
                 if stop_rx.changed().await.is_err() {
                     break;
                 }
             }
-        } => child.kill().await.context("kill virtiofsd"),
+        } => child
+            .kill()
+            .await
+            .context("kill virtiofsd")
+            .map(|_| VirtiofsdExit::Shutdown),
     };
     reader.abort();
-    status
+    exit
 }
 
 #[async_trait]
@@ -341,7 +377,7 @@ mod tests {
         let (tx, rx) = oneshot::channel::<()>();
         share.inner.write().await.watcher = Some(tokio::spawn(async move {
             rx.await.context("wait for test release")?;
-            Ok(())
+            Ok(VirtiofsdExit::Shutdown)
         }));
 
         assert!(
@@ -353,5 +389,40 @@ mod tests {
         tx.send(()).unwrap();
         share.shutdown_virtiofsd().await.unwrap();
         assert!(share.inner.read().await.watcher.is_none());
+    }
+
+    #[tokio::test]
+    async fn unexpected_exit_is_reported_with_its_status() {
+        let child = Command::new("sh")
+            .args(["-c", "exit 7"])
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let (tx, _rx) = channel(1);
+        let (_stop_tx, stop_rx) = watch::channel(false);
+
+        match run_virtiofsd(child, tx, stop_rx).await.unwrap() {
+            VirtiofsdExit::Unexpected(status) => assert_eq!(status.code(), Some(7)),
+            VirtiofsdExit::Shutdown => panic!("the exit was not requested"),
+        }
+    }
+
+    #[tokio::test]
+    async fn requested_stop_is_not_reported_as_unexpected() {
+        let child = Command::new("sleep")
+            .arg("30")
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let (tx, _rx) = channel(1);
+        let (stop_tx, stop_rx) = watch::channel(false);
+
+        let watcher = tokio::spawn(run_virtiofsd(child, tx, stop_rx));
+        stop_tx.send(true).unwrap();
+
+        assert!(matches!(
+            watcher.await.unwrap().unwrap(),
+            VirtiofsdExit::Shutdown
+        ));
     }
 }
