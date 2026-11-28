@@ -480,6 +480,35 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[tokio::test]
+    async fn test_permissive_policies_allow_volume_stats() {
+        for (rego, allow_exec) in [
+            (include_str!("../../../kata-opa/allow-all.rego"), true),
+            (
+                include_str!("../../../kata-opa/allow-all-except-exec-process.rego"),
+                false,
+            ),
+        ] {
+            let mut policy = AgentPolicy::new();
+            policy.set_policy(rego).await.unwrap();
+            assert!(
+                policy
+                    .allow_request("VolumeStatsRequest", "{}")
+                    .await
+                    .unwrap()
+                    .0
+            );
+            assert_eq!(
+                policy
+                    .allow_request("ExecProcessRequest", "{}")
+                    .await
+                    .unwrap()
+                    .0,
+                allow_exec
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn test_policy_state_changes_can_be_deferred() {
         let mut policy = AgentPolicy::new();
         policy

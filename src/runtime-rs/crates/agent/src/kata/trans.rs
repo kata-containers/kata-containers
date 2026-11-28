@@ -886,12 +886,31 @@ impl From<VolumeStatsRequest> for agent::VolumeStatsRequest {
 
 impl From<csi::VolumeStatsResponse> for VolumeStatsResponse {
     fn from(from: csi::VolumeStatsResponse) -> Self {
-        let result: String = format!(
-            "Usage: {:?} Volume Condition: {:?}",
-            from.usage(),
-            from.volume_condition()
-        );
-        Self { data: result }
+        let usage: Vec<_> = from
+            .usage
+            .into_iter()
+            .map(|usage| {
+                serde_json::json!({
+                    "available": usage.available,
+                    "total": usage.total,
+                    "used": usage.used,
+                    "unit": usage.unit.value(),
+                })
+            })
+            .collect();
+        let condition = from.volume_condition.as_ref().map(|condition| {
+            serde_json::json!({
+                "abnormal": condition.abnormal,
+                "message": condition.message,
+            })
+        });
+        Self {
+            data: serde_json::json!({
+                "usage": usage,
+                "volume_condition": condition,
+            })
+            .to_string(),
+        }
     }
 }
 
@@ -920,5 +939,59 @@ impl From<AddSwapPathRequest> for agent::AddSwapPathRequest {
             path: from.path,
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use csi::{volume_usage::Unit, VolumeCondition, VolumeUsage};
+    use serde_json::json;
+
+    #[test]
+    fn test_volume_stats_json() {
+        let response = csi::VolumeStatsResponse {
+            usage: vec![
+                VolumeUsage {
+                    available: u64::MAX - 1,
+                    total: u64::MAX,
+                    used: 1,
+                    unit: Unit::BYTES.into(),
+                    ..Default::default()
+                },
+                VolumeUsage {
+                    available: 8,
+                    total: 10,
+                    used: 2,
+                    unit: Unit::INODES.into(),
+                    ..Default::default()
+                },
+            ],
+            volume_condition: protobuf::MessageField::some(VolumeCondition {
+                abnormal: false,
+                message: "OK".to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let response = VolumeStatsResponse::from(response);
+        let actual: serde_json::Value = serde_json::from_str(&response.data).unwrap();
+        assert_eq!(
+            actual,
+            json!({
+                "usage": [
+                    {"available": u64::MAX - 1, "total": u64::MAX, "used": 1, "unit": 1},
+                    {"available": 8, "total": 10, "used": 2, "unit": 2},
+                ],
+                "volume_condition": {"abnormal": false, "message": "OK"},
+            })
+        );
+    }
+
+    #[test]
+    fn test_missing_volume_condition_is_not_reported_healthy() {
+        let response = VolumeStatsResponse::from(csi::VolumeStatsResponse::default());
+        let actual: serde_json::Value = serde_json::from_str(&response.data).unwrap();
+        assert_eq!(actual, json!({"usage": [], "volume_condition": null}));
     }
 }

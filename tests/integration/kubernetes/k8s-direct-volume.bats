@@ -105,6 +105,47 @@ setup() {
 		grep -qx direct-volume-ready '${mountpoint}/probe'"
 }
 
+@test "DAV stats reports the registered guest filesystem" {
+	local block_size blocks inodes
+	local stats
+
+	prepare_direct_volume 64M
+	kubectl apply -f "${yaml_file}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	assert_guest_direct_volume
+
+	# Get data from filesystem attached to container
+	read -r block_size blocks inodes < <(
+		pod_exec "${pod_name}" stat -f -c '%S %b %c' "${mountpoint}"
+	)
+
+	# Get stats from outside the guest
+	run --separate-stderr exec_host "${node}" \
+		"/opt/kata/bin/kata-ctl direct-volume stats '${volume_path}'"
+	info "direct-volume stats (exit ${status}): ${output}"
+	if [[ -n "${stderr}" ]]; then
+		info "direct-volume stats stderr: ${stderr}"
+	fi
+	[[ "${status}" -eq 0 ]]
+	stats="${output}"
+
+	# Rationale:
+	# - block_size * blocks = expected capacity; inodes = expected inode count.
+	# - ".volume_condition.abnormal == false" requires a healthy volume.
+	# - the rest of the condition checks that the reported by capacity and inode
+	#   count match the filesystem measured inside the container and that usage
+	#   entries show consistent values.
+	jq -e --argjson bytes "$((block_size * blocks))" --argjson inodes "${inodes}" '
+		.volume_condition.abnormal == false and
+		(.usage | length == 2) and
+		all(.usage[];
+			.total > 0 and .available >= 0 and .used >= 0 and
+			.available + .used == .total) and
+		any(.usage[]; .unit == 1 and .total == $bytes) and
+		any(.usage[]; .unit == 2 and .total == $inodes)
+	' <<< "${stats}"
+}
+
 @test "Direct volume backing file remains sparse" {
 	local allocated_after
 	local allocated_before
