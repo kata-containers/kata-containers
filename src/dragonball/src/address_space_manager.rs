@@ -15,9 +15,11 @@
 //! In other words, AddressSpace is the resource owner, and GuestMemory is an accessor for guest
 //! virtual memory.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::convert::TryInto;
 use std::fs::File;
-use std::io::{Seek, SeekFrom};
+use std::io::{Seek, SeekFrom, Write};
+use std::os::unix::fs::FileExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -78,6 +80,71 @@ const MAX_NODE: u32 = 64;
 // We will split the memory region if it conflicts with the MMIO hole.
 // But if the space below the MMIO hole is smaller than the MINIMAL_SPLIT_SPACE, we won't split the memory region in order to enhance performance.
 const MINIMAL_SPLIT_SPACE: u64 = 128 << 20;
+
+// Size of each chunk used to scan guest memory when creating a sparse snapshot.
+//
+// Guest memory is scanned in 1 MiB chunks. All-zero chunks remain sparse
+// holes; the chunk size is a performance choice, not part of the snapshot
+// format or restore contract.
+const SNAPSHOT_CHUNK_SIZE: usize = 1024 * 1024;
+const PAGEMAP_PRESENT: u64 = 1 << 63;
+const PAGEMAP_SWAPPED: u64 = 1 << 62;
+
+fn pagemap_entry_materialized(entry: u64) -> bool {
+    entry & (PAGEMAP_PRESENT | PAGEMAP_SWAPPED) != 0
+}
+
+fn contains_non_zero(bytes: &[u8]) -> bool {
+    let mut words = bytes.chunks_exact(std::mem::size_of::<u64>());
+    words
+        .by_ref()
+        .any(|word| u64::from_ne_bytes(word.try_into().unwrap()) != 0)
+        || words.remainder().iter().any(|byte| *byte != 0)
+}
+
+fn backing_data_chunks(file: &File, start: u64, length: u64) -> std::io::Result<Option<Vec<u64>>> {
+    let end = start
+        .checked_add(length)
+        .ok_or_else(|| std::io::Error::other("guest-memory backing range overflows"))?;
+    let mut chunks = BTreeSet::new();
+    let mut offset = start;
+    while offset < end {
+        let data = unsafe { libc::lseek(file.as_raw_fd(), offset as libc::off_t, libc::SEEK_DATA) };
+        if data < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.raw_os_error() == Some(libc::ENXIO) {
+                break;
+            }
+            if err.raw_os_error() == Some(libc::EINVAL) {
+                return Ok(None);
+            }
+            return Err(err);
+        }
+        let data = (data as u64).max(start);
+        if data >= end {
+            break;
+        }
+        let hole = unsafe { libc::lseek(file.as_raw_fd(), data as libc::off_t, libc::SEEK_HOLE) };
+        if hole < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.raw_os_error() == Some(libc::EINVAL) {
+                return Ok(None);
+            }
+            return Err(err);
+        }
+        let hole = (hole as u64).min(end);
+        if hole <= data {
+            return Err(std::io::Error::other(
+                "guest-memory backing extent did not advance",
+            ));
+        }
+        let first = (data - start) / SNAPSHOT_CHUNK_SIZE as u64;
+        let last = (hole - 1 - start) / SNAPSHOT_CHUNK_SIZE as u64;
+        chunks.extend(first..=last);
+        offset = hole;
+    }
+    Ok(Some(chunks.into_iter().collect()))
+}
 
 /// Errors associated with virtual machine address space management.
 #[derive(Debug, thiserror::Error)]
@@ -312,9 +379,147 @@ pub struct AddressSpaceMgr {
     prealloc_handlers: Vec<thread::JoinHandle<()>>,
     prealloc_exit: Arc<AtomicBool>,
     numa_nodes: BTreeMap<u32, NumaNode>,
+    cold_extent_eligible: bool,
+    restore_pagemap: Option<File>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+/// One exact byte range written to a restored VM's memory delta.
+pub struct GuestMemoryDeltaRange {
+    /// Offset in the flat guest-memory snapshot file.
+    pub file_offset: u64,
+    /// Length in bytes.
+    pub length: u64,
 }
 
 impl AddressSpaceMgr {
+    /// Capture materialized pages only when restored-memory delta support is available.
+    /// Returns None before modifying the output when pagemap is unavailable.
+    pub(crate) fn save_delta(
+        &mut self,
+        file: &mut File,
+    ) -> Result<Option<(GuestMemoryState, Vec<GuestMemoryDeltaRange>)>> {
+        let Some(pagemap) = self.restore_pagemap.as_ref() else {
+            return Ok(None);
+        };
+        let vm_as = self
+            .get_vm_as()
+            .ok_or(AddressManagerError::GuestMemoryNotInitialized)?;
+        let guard = vm_as.memory();
+        file.seek(SeekFrom::Start(0))
+            .map_err(AddressManagerError::SnapshotFile)?;
+        file.set_len(0).map_err(AddressManagerError::SnapshotFile)?;
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if page_size <= 0 {
+            return Err(AddressManagerError::InvalidOperation);
+        }
+        let page_size = page_size as u64;
+        let mut regions = Vec::new();
+        let mut delta_ranges = Vec::new();
+        let mut file_offset = 0u64;
+        let mut buffer = vec![0u8; SNAPSHOT_CHUNK_SIZE];
+        let mut written_bytes = 0u64;
+
+        for region in guard.iter() {
+            let size = region.len();
+            let host_addr = region
+                .get_host_address(MemoryRegionAddress(0))
+                .map_err(|e| {
+                    AddressManagerError::AccessGuestMemory(region.start_addr().raw_value(), e)
+                })? as u64;
+            if !host_addr.is_multiple_of(page_size) || size % page_size != 0 {
+                return Err(AddressManagerError::InvalidOperation);
+            }
+            let pages = size / page_size;
+            let mut entries = vec![0u8; pages as usize * std::mem::size_of::<u64>()];
+            let pagemap_offset = (host_addr / page_size)
+                .checked_mul(std::mem::size_of::<u64>() as u64)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+            let mut read = 0usize;
+            while read < entries.len() {
+                let count = pagemap
+                    .read_at(&mut entries[read..], pagemap_offset + read as u64)
+                    .map_err(AddressManagerError::SnapshotFile)?;
+                if count == 0 {
+                    return Err(AddressManagerError::SnapshotFile(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "short read from /proc/self/pagemap",
+                    )));
+                }
+                read += count;
+            }
+
+            let materialized = |page: u64| {
+                let start = page as usize * std::mem::size_of::<u64>();
+                let entry = u64::from_le_bytes(
+                    entries[start..start + std::mem::size_of::<u64>()]
+                        .try_into()
+                        .unwrap(),
+                );
+                pagemap_entry_materialized(entry)
+            };
+            let mut page = 0u64;
+            while page < pages {
+                if !materialized(page) {
+                    page += 1;
+                    continue;
+                }
+                let first = page;
+                while page < pages && materialized(page) {
+                    page += 1;
+                }
+                let range_offset = first * page_size;
+                let range_length = (page - first) * page_size;
+                let mut done = 0u64;
+                while done < range_length {
+                    let length = (range_length - done).min(buffer.len() as u64) as usize;
+                    let guest_addr = region
+                        .start_addr()
+                        .raw_value()
+                        .checked_add(range_offset + done)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                    region
+                        .read_slice(
+                            &mut buffer[..length],
+                            MemoryRegionAddress(range_offset + done),
+                        )
+                        .map_err(|e| AddressManagerError::AccessGuestMemory(guest_addr, e))?;
+                    file.seek(SeekFrom::Start(file_offset + range_offset + done))
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    file.write_all(&buffer[..length])
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    done += length as u64;
+                }
+                delta_ranges.push(GuestMemoryDeltaRange {
+                    file_offset: file_offset + range_offset,
+                    length: range_length,
+                });
+                written_bytes = written_bytes
+                    .checked_add(range_length)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+            }
+
+            regions.push(GuestMemoryRegionState {
+                guest_addr: region.start_addr().raw_value(),
+                size,
+                file_offset,
+            });
+            file_offset = file_offset
+                .checked_add(size)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+        }
+        file.set_len(file_offset)
+            .map_err(AddressManagerError::SnapshotFile)?;
+        info!(
+            "Dragonball guest memory delta completed: ranges={} logical_bytes={} written_bytes={}",
+            delta_ranges.len(),
+            file_offset,
+            written_bytes,
+        );
+
+        Ok(Some((GuestMemoryState { regions }, delta_ranges)))
+    }
+
     /// Query address space manager is initialized or not
     pub fn is_initialized(&self) -> bool {
         self.address_space.is_some()
@@ -340,6 +545,7 @@ impl AddressSpaceMgr {
         numa_region_infos: &[NumaRegionInfo],
         mut param: AddressSpaceMgrBuilder,
     ) -> Result<()> {
+        self.cold_extent_eligible = param.mem_type == "shmem" && !param.mem_prealloc;
         let mut regions = Vec::new();
         let mut start_addr = dbs_boot::layout::GUEST_MEM_START;
 
@@ -858,22 +1064,111 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             .map_err(AddressManagerError::SnapshotFile)?;
         file.set_len(0).map_err(AddressManagerError::SnapshotFile)?;
 
+        let extent_chunks = if self.cold_extent_eligible {
+            let discovered = (|| -> std::io::Result<Option<Vec<Vec<u64>>>> {
+                let mut all = Vec::new();
+                for region in guard.iter() {
+                    let Some(file_offset) = region.file_offset() else {
+                        return Ok(None);
+                    };
+                    let Some(chunks) =
+                        backing_data_chunks(file_offset.file(), file_offset.start(), region.len())?
+                    else {
+                        return Ok(None);
+                    };
+                    all.push(chunks);
+                }
+                Ok(Some(all))
+            })();
+            match discovered {
+                Ok(chunks) => chunks,
+                Err(err) => {
+                    warn!("cannot inspect guest-memory backing extents, using full scan: {err}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let mut regions = Vec::new();
         let mut file_offset = 0u64;
-        for region in guard.iter() {
+        let mut buffer = vec![0u8; SNAPSHOT_CHUNK_SIZE];
+        let mut logical_chunks = 0u64;
+        let mut scanned_chunks = 0u64;
+        let mut non_zero_chunks = 0u64;
+        let mut written_bytes = 0u64;
+
+        for (region_index, region) in guard.iter().enumerate() {
             let size = region.len();
-            region
-                .write_all_volatile_to(MemoryRegionAddress(0), file, size as usize)
-                .map_err(|e| {
-                    AddressManagerError::AccessGuestMemory(region.start_addr().raw_value(), e)
-                })?;
+            let region_chunks = size.div_ceil(SNAPSHOT_CHUNK_SIZE as u64);
+            logical_chunks = logical_chunks
+                .checked_add(region_chunks)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+            let chunks = extent_chunks
+                .as_ref()
+                .map(|all| all[region_index].clone())
+                .unwrap_or_else(|| (0..region_chunks).collect());
+            for chunk in chunks {
+                let region_offset = chunk
+                    .checked_mul(SNAPSHOT_CHUNK_SIZE as u64)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+                let length = (size - region_offset).min(SNAPSHOT_CHUNK_SIZE as u64) as usize;
+                let guest_addr = region
+                    .start_addr()
+                    .raw_value()
+                    .checked_add(region_offset)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+                region
+                    .read_slice(&mut buffer[..length], MemoryRegionAddress(region_offset))
+                    .map_err(|e| AddressManagerError::AccessGuestMemory(guest_addr, e))?;
+                scanned_chunks = scanned_chunks
+                    .checked_add(1)
+                    .ok_or(AddressManagerError::InvalidOperation)?;
+
+                let non_zero = contains_non_zero(&buffer[..length]);
+                if non_zero {
+                    let snapshot_offset = file_offset
+                        .checked_add(region_offset)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                    file.seek(SeekFrom::Start(snapshot_offset))
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    file.write_all(&buffer[..length])
+                        .map_err(AddressManagerError::SnapshotFile)?;
+                    non_zero_chunks = non_zero_chunks
+                        .checked_add(1)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                    written_bytes = written_bytes
+                        .checked_add(length as u64)
+                        .ok_or(AddressManagerError::InvalidOperation)?;
+                }
+            }
+
             regions.push(GuestMemoryRegionState {
                 guest_addr: region.start_addr().raw_value(),
                 size,
                 file_offset,
             });
-            file_offset += size;
+
+            file_offset = file_offset
+                .checked_add(size)
+                .ok_or(AddressManagerError::InvalidOperation)?;
         }
+
+        file.set_len(file_offset)
+            .map_err(AddressManagerError::SnapshotFile)?;
+
+        info!(
+            "Dragonball guest memory snapshot completed: guest_regions={} logical_bytes={} logical_chunks={} scanned_chunks={} skipped_chunks={} non_zero_chunks={} written_bytes={} chunk_bytes={}",
+            regions.len(),
+            file_offset,
+            logical_chunks,
+            scanned_chunks,
+            logical_chunks.saturating_sub(scanned_chunks),
+            non_zero_chunks,
+            written_bytes,
+            SNAPSHOT_CHUNK_SIZE,
+        );
 
         Ok(GuestMemoryState { regions })
     }
@@ -935,6 +1230,44 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             }
         }
 
+        let pagemap = (|| -> Result<File> {
+            let pagemap =
+                File::open("/proc/self/pagemap").map_err(AddressManagerError::SnapshotFile)?;
+            let first_region = guard
+                .iter()
+                .next()
+                .ok_or(AddressManagerError::GuestMemoryNotInitialized)?;
+            let first_host_addr = first_region
+                .get_host_address(MemoryRegionAddress(0))
+                .map_err(|e| {
+                    AddressManagerError::AccessGuestMemory(first_region.start_addr().raw_value(), e)
+                })? as u64;
+            let mut probe = [0u8; std::mem::size_of::<u64>()];
+            let probe_offset = (first_host_addr / page_size)
+                .checked_mul(probe.len() as u64)
+                .ok_or(AddressManagerError::InvalidOperation)?;
+            let count = pagemap
+                .read_at(&mut probe, probe_offset)
+                .map_err(AddressManagerError::SnapshotFile)?;
+            if count != probe.len() {
+                return Err(AddressManagerError::SnapshotFile(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "cannot read /proc/self/pagemap",
+                )));
+            }
+
+            Ok(pagemap)
+        })();
+        let pagemap = match pagemap {
+            Ok(file) => Some(file),
+            Err(err) => {
+                warn!("restored-memory delta unavailable, using full snapshots: {err}");
+                None
+            }
+        };
+        // Restored MAP_PRIVATE mappings no longer match the original backing extents.
+        self.cold_extent_eligible = false;
+
         for (region, region_state) in guard.iter().zip(&state.regions) {
             // Back this region with a copy-on-write mapping of the template
             // file instead of copying it in: pages fault in lazily from the
@@ -968,6 +1301,8 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             }
         }
 
+        self.restore_pagemap = pagemap;
+
         Ok(())
     }
 }
@@ -982,6 +1317,8 @@ impl Default for AddressSpaceMgr {
             prealloc_handlers: Vec::new(),
             prealloc_exit: Arc::new(AtomicBool::new(false)),
             numa_nodes: BTreeMap::new(),
+            cold_extent_eligible: false,
+            restore_pagemap: None,
         }
     }
 }
@@ -991,11 +1328,34 @@ mod tests {
     use dbs_boot::layout::GUEST_MEM_START;
     use std::ops::Deref;
     use std::os::fd::AsRawFd;
+    use std::os::unix::fs::MetadataExt;
 
     use vm_memory::{Bytes, GuestAddressSpace, GuestMemory, GuestMemoryRegion};
     use vmm_sys_util::tempfile::TempFile;
 
     use super::*;
+
+    #[test]
+    fn pagemap_present_or_swapped_is_materialized() {
+        assert!(pagemap_entry_materialized(PAGEMAP_PRESENT));
+        assert!(pagemap_entry_materialized(PAGEMAP_SWAPPED));
+        assert!(pagemap_entry_materialized(
+            PAGEMAP_PRESENT | PAGEMAP_SWAPPED
+        ));
+        assert!(!pagemap_entry_materialized(0));
+    }
+
+    #[test]
+    fn backing_extents_skip_holes() {
+        let file = TempFile::new().unwrap().into_file();
+        file.set_len((4 * SNAPSHOT_CHUNK_SIZE) as u64).unwrap();
+        file.write_all_at(&[0xa5], SNAPSHOT_CHUNK_SIZE as u64)
+            .unwrap();
+        let chunks = backing_data_chunks(&file, 0, file.metadata().unwrap().len())
+            .unwrap()
+            .expect("temporary filesystem must support SEEK_DATA/SEEK_HOLE");
+        assert_eq!(chunks, vec![1]);
+    }
 
     #[test]
     fn test_memory_save_restore_roundtrip() {
@@ -1023,6 +1383,7 @@ mod tests {
 
         // Plant recognizable values in the source guest memory.
         let mut src_mgr = create_mgr();
+        assert!(src_mgr.cold_extent_eligible);
         {
             let vm_as = src_mgr.get_vm_as().unwrap();
             let guard = vm_as.memory();
@@ -1036,6 +1397,9 @@ mod tests {
 
         let mut file = TempFile::new().unwrap().into_file();
         let state = dbs_snapshot::Persist::save_state(&mut src_mgr, &mut file).unwrap();
+        let snapshot_metadata = file.metadata().unwrap();
+        assert_eq!(snapshot_metadata.len(), 16 << 20);
+        assert!(snapshot_metadata.blocks() * 512 < snapshot_metadata.len());
         assert_eq!(state.regions.len(), 2);
         assert_eq!(state.regions[0].guest_addr, GUEST_MEM_START);
         assert_eq!(state.regions[0].size, 8 << 20);
@@ -1279,6 +1643,7 @@ mod tests {
         let mut builder = AddressSpaceMgrBuilder::new("hugeshmem", "").unwrap();
         builder.toggle_prealloc(true);
         let mut as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
+        assert!(!as_mgr.cold_extent_eligible);
         as_mgr.wait_prealloc(false).unwrap();
     }
 
@@ -1325,5 +1690,150 @@ mod tests {
         let mmap_reg = MmapRegion::new(8).unwrap();
 
         assert!(as_mgr.configure_numa(&mmap_reg, u32::MAX).is_err());
+    }
+
+    #[test]
+    fn test_contains_non_zero() {
+        assert!(!contains_non_zero(&[]));
+        assert!(!contains_non_zero(&[0; 17]));
+
+        for offset in 0..17 {
+            let mut bytes = [0_u8; 17];
+            bytes[offset] = 1;
+            assert!(contains_non_zero(&bytes), "offset {}", offset);
+        }
+    }
+
+    #[test]
+    fn restored_full_snapshot_preserves_base_and_cow_pages() {
+        use dbs_snapshot::Persist;
+        let create = || {
+            AddressSpaceMgrBuilder::new("shmem", "")
+                .unwrap()
+                .build(
+                    &ResourceManager::new(None),
+                    &[NumaRegionInfo {
+                        size: 8,
+                        host_numa_node_id: None,
+                        guest_numa_node_id: Some(0),
+                        vcpu_ids: vec![0],
+                    }],
+                )
+                .unwrap()
+        };
+        let mut source = create();
+        source
+            .vm_memory()
+            .unwrap()
+            .write_obj(0xabu8, GuestAddress(GUEST_MEM_START))
+            .unwrap();
+        let mut base = TempFile::new().unwrap().into_file();
+        let state = source.save_state(&mut base).unwrap();
+        // Exercise full saves both with pagemap available and with it disabled.
+        for disable_pagemap in [false, true] {
+            let mut restored = create();
+            restored.restore_state(&state, &mut base).unwrap();
+            assert!(!restored.cold_extent_eligible);
+            if disable_pagemap {
+                restored.restore_pagemap = None;
+                let mut untouched = TempFile::new().unwrap().into_file();
+                untouched.write_all(b"unchanged").unwrap();
+                assert!(restored.save_delta(&mut untouched).unwrap().is_none());
+                assert_eq!(untouched.metadata().unwrap().len(), 9);
+            }
+            // Do not read the nonzero base page before saving. Write into a base hole.
+            restored
+                .vm_memory()
+                .unwrap()
+                .write_obj(0xcdu8, GuestAddress(GUEST_MEM_START + (4 << 20)))
+                .unwrap();
+            let mut full = TempFile::new().unwrap().into_file();
+            let saved = restored.save_state(&mut full).unwrap();
+            let mut target = create();
+            target.restore_state(&saved, &mut full).unwrap();
+            assert_eq!(
+                target
+                    .vm_memory()
+                    .unwrap()
+                    .read_obj::<u8>(GuestAddress(GUEST_MEM_START))
+                    .unwrap(),
+                0xab
+            );
+            assert_eq!(
+                target
+                    .vm_memory()
+                    .unwrap()
+                    .read_obj::<u8>(GuestAddress(GUEST_MEM_START + (4 << 20)))
+                    .unwrap(),
+                0xcd
+            );
+        }
+    }
+
+    #[test]
+    fn restored_delta_reconstructs_full_memory() {
+        use dbs_snapshot::Persist;
+        let create = || {
+            AddressSpaceMgrBuilder::new("shmem", "")
+                .unwrap()
+                .build(
+                    &ResourceManager::new(None),
+                    &[NumaRegionInfo {
+                        size: 8,
+                        host_numa_node_id: None,
+                        guest_numa_node_id: Some(0),
+                        vcpu_ids: vec![0],
+                    }],
+                )
+                .unwrap()
+        };
+        let mut source = create();
+        for offset in [0, 2 << 20] {
+            source
+                .vm_memory()
+                .unwrap()
+                .write_obj(0xabu8, GuestAddress(GUEST_MEM_START + offset))
+                .unwrap();
+        }
+        let mut base = TempFile::new().unwrap().into_file();
+        let state = source.save_state(&mut base).unwrap();
+        let mut restored = create();
+        restored.restore_state(&state, &mut base).unwrap();
+        assert!(
+            restored.restore_pagemap.is_some(),
+            "delta test requires readable pagemap"
+        );
+        restored
+            .vm_memory()
+            .unwrap()
+            .write_obj(0u8, GuestAddress(GUEST_MEM_START))
+            .unwrap();
+        restored
+            .vm_memory()
+            .unwrap()
+            .write_obj(0xcdu8, GuestAddress(GUEST_MEM_START + (4 << 20)))
+            .unwrap();
+        let mut delta = TempFile::new().unwrap().into_file();
+        let (_, ranges) = restored.save_delta(&mut delta).unwrap().unwrap();
+        let size = base.metadata().unwrap().len() as usize;
+        let mut rebuilt = vec![0; size];
+        base.read_exact_at(&mut rebuilt, 0).unwrap();
+        for range in ranges {
+            let start = range.file_offset as usize;
+            delta
+                .read_exact_at(
+                    &mut rebuilt[start..start + range.length as usize],
+                    range.file_offset,
+                )
+                .unwrap();
+        }
+        // Read the full mapping only after capturing the delta.
+        let mut expected = vec![0; size];
+        restored
+            .vm_memory()
+            .unwrap()
+            .read_slice(&mut expected, GuestAddress(GUEST_MEM_START))
+            .unwrap();
+        assert_eq!(rebuilt, expected);
     }
 }
