@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
 
 use anyhow::{Context, Result};
@@ -57,20 +56,24 @@ impl NetworkModel for L3ForwardingModel {
         let pod_ipv4 = pod_addrs.first().copied();
 
         // Enable proxy arp so we can respond to ARP requests using the tap and virt interfaces.
-        fs::write(
+        tokio::fs::write(
             format!(
                 "/proc/sys/net/ipv4/conf/{}/proxy_arp",
                 pair.tap.tap_iface.name
             ),
             "1",
         )
+        .await
         .context(format!("enable proxy arp on {}", pair.tap.tap_iface.name))?;
-        fs::write(
+        tokio::fs::write(
             format!("/proc/sys/net/ipv4/conf/{}/proxy_arp", pair.virt_iface.name),
             "1",
         )
+        .await
         .context(format!("enable proxy arp on {}", pair.virt_iface.name))?;
-        fs::write("/proc/sys/net/ipv4/ip_forward", "1").context("enable ip forward")?;
+        tokio::fs::write("/proc/sys/net/ipv4/ip_forward", "1")
+            .await
+            .context("enable ip forward")?;
 
         // We need the tap interface to have an address different from the pod ip for arp proxying
         // to work. If this didn't have an ip, when the host-side netns gets an arp request it will
