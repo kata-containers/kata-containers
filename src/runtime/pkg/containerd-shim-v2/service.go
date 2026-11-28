@@ -779,6 +779,9 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 	}
 
 	if r.ExecID == "" {
+		if err := waitForContainerTeardown(ctx, c.teardownDone); err != nil {
+			shimLog.WithError(err).WithField("container", c.id).Warn("Continuing container deletion before teardown finished")
+		}
 		if err = deleteContainer(spanCtx, s, c); err != nil {
 			return nil, err
 		}
