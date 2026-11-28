@@ -1176,7 +1176,7 @@ kernel_params = "console=hvc0"
                         "/opt/kata/share/kata-containers/kata-containers.img",
                     )
                     .replace("@DEFROOTFSTYPE@", "\"erofs\"")
-                    .replace("@VMROOTFSDRIVER_CLH@", "virtio-blk")
+                    .replace("@VMROOTFSDRIVER_CLH@", "virtio-pmem")
                     .replace("@FIRMWAREPATH@", "")
                     .replace("@DEFENABLEANNOTATIONS@", "[]")
                     .replace("@CLHVALIDHYPERVISORPATHS@", "[]")
@@ -1434,7 +1434,7 @@ kernel_params = "console=hvc0"
                         "/opt/kata/share/kata-containers/kata-containers.img",
                     )
                     .replace("@DEFROOTFSTYPE@", "\"erofs\"")
-                    .replace("@VMROOTFSDRIVER_CLH@", "virtio-blk")
+                    .replace("@VMROOTFSDRIVER_CLH@", "virtio-pmem")
                     .replace("@FIRMWAREPATH@", "")
                     .replace("@DEFENABLEANNOTATIONS@", "[]")
                     .replace("@CLHVALIDHYPERVISORPATHS@", "[]")
