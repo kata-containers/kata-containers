@@ -78,6 +78,11 @@ pgpu
 PPCIE
 Quadro
 RCAR
+NVLSM
+fmclient
+kmsg
+persistenced
+precheck
 
 # Storage & Filesystems
 AUFS
