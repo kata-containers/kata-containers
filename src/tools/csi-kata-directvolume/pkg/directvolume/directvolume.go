@@ -30,7 +30,7 @@ import (
 const (
 	// storageKind is the special parameter which requests
 	// storage of a certain kind (only affects capacity checks).
-	storageKind = "kind"
+	storageKind = utils.StorageKind
 )
 
 type directVolume struct {
@@ -143,16 +143,14 @@ func (dv *directVolume) createVolume(volID, name string, cap int64, kind string)
 		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", cap, dv.config.MaxVolumeSize)
 	}
 	if dv.config.Capacity.Enabled() {
-		if kind == "" {
-			// Pick some kind with sufficient remaining capacity.
-			for k, c := range dv.config.Capacity {
-				if dv.sumVolumeSizes(k)+cap <= c.Value() {
-					kind = k
-					break
-				}
-			}
-		}
-
+		// The kind was validated by CreateVolume: it is non-empty and
+		// known. There is deliberately no fallback to picking "some
+		// pool with room": Go map iteration order is random, so a
+		// fallback could charge the volume to an arbitrary pool,
+		// inconsistent with the pool its StorageClass named and the
+		// pool GetCapacity advertises (#14151, gap 3). Upfront
+		// validation with no fallback makes pool selection
+		// deterministic by construction.
 		used := dv.sumVolumeSizes(kind)
 		available := dv.config.Capacity[kind]
 		if used+cap > available.Value() {
