@@ -40,7 +40,7 @@ use tracing::instrument;
 
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, TYPE_ROOTFS};
-use crate::namespace::Namespace;
+use crate::namespace::{Namespace, PidNamespaceKeeper};
 use crate::netlink::Handle;
 use crate::network::Network;
 use crate::pci;
@@ -129,6 +129,7 @@ pub struct Sandbox {
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
+    pidns_keeper: Option<PidNamespaceKeeper>,
     pub storages: HashMap<String, StorageState>,
     pub running: bool,
     pub no_pivot_root: bool,
@@ -164,6 +165,7 @@ impl Sandbox {
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
             sandbox_pidns: None,
+            pidns_keeper: None,
             storages: HashMap::new(),
             running: false,
             no_pivot_root: fs_type.eq(TYPE_ROOTFS),
@@ -271,6 +273,23 @@ impl Sandbox {
     }
 
     #[instrument]
+    pub async fn ensure_shared_pidns(&mut self) -> Result<()> {
+        // The task API supplies an infra container. Sandbox API does not, so
+        // its first shared-PID workload must not become the namespace owner:
+        // that workload may be a short-lived init container.
+        if self.sandbox_pidns.is_none() && self.containers.is_empty() {
+            let keeper = PidNamespaceKeeper::start()
+                .await
+                .context("start shared PID namespace keeper")?;
+            let mut namespace = Namespace::new(&self.logger).get_pid();
+            namespace.path = keeper.path();
+            self.sandbox_pidns = Some(namespace);
+            self.pidns_keeper = Some(keeper);
+        }
+        Ok(())
+    }
+
+    #[instrument]
     pub fn update_shared_pidns(&mut self, c: &LinuxContainer) -> Result<()> {
         // Populate the shared pid path only if this is an infra container and
         // sandbox_pidns has not been passed in the create_sandbox request.
@@ -344,10 +363,22 @@ impl Sandbox {
 
     #[instrument]
     pub async fn destroy(&mut self) -> Result<()> {
+        let mut result = Ok(());
         for ctr in self.containers.values_mut() {
-            ctr.destroy().await?;
+            if let Err(error) = ctr.destroy().await {
+                warn!(self.logger, "failed to destroy container"; "container" => &ctr.id, "error" => %error);
+                if result.is_ok() {
+                    result = Err(error);
+                }
+            }
         }
-        Ok(())
+        if let Some(mut keeper) = self.pidns_keeper.take() {
+            if let Err(error) = keeper.stop() {
+                warn!(self.logger, "failed to stop shared PID namespace keeper"; "error" => %error);
+            }
+            self.sandbox_pidns = None;
+        }
+        result
     }
 
     #[instrument]
@@ -1070,6 +1101,32 @@ mod tests {
         let mut s = Sandbox::new(&logger).unwrap();
         let ret = s.destroy().await;
         assert!(ret.is_ok());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn destroy_stops_keeper_after_container_cleanup_error() {
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let (keeper, pid) = PidNamespaceKeeper::test_keeper_with_pid();
+        let mut namespace = Namespace::new(&logger).get_pid();
+        namespace.path = keeper.path();
+        sandbox.sandbox_pidns = Some(namespace);
+        sandbox.pidns_keeper = Some(keeper);
+        let (mut container, _root) = create_linuxcontainer();
+        // Fail before destroy attempts any cgroup or filesystem cleanup.
+        container.config.spec.as_mut().unwrap().set_root(None);
+        sandbox.containers.insert(container.id.clone(), container);
+
+        let error = sandbox.destroy().await.unwrap_err();
+        assert!(error.to_string().contains("oci.root is none"));
+        assert!(sandbox.pidns_keeper.is_none());
+        assert!(sandbox.sandbox_pidns.is_none());
+        assert!(matches!(
+            nix::sys::wait::waitpid(pid, None).unwrap(),
+            nix::sys::wait::WaitStatus::Signaled(_, nix::sys::signal::Signal::SIGKILL, _)
+        ));
     }
 
     #[tokio::test]

@@ -142,6 +142,8 @@ struct AgentOpts {
 #[derive(Parser)]
 enum SubCommand {
     Init {},
+    #[clap(hide = true)]
+    Pause {},
 }
 
 #[instrument]
@@ -341,6 +343,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         reset_sigpipe();
         rustjail::container::init_child();
         exit(0);
+    }
+
+    if let Some(SubCommand::Pause {}) = args.subcmd {
+        namespace::run_pidns_keeper()?;
+        return Ok(());
     }
 
     let rt = tokio::runtime::Builder::new_multi_thread()
