@@ -200,6 +200,31 @@ func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
 	}
 }
 
+// Check addNet offers checksum and segmentation offload to the guest
+func TestCloudHypervisorAddNetEnablesOffloads(t *testing.T) {
+	assert := assert.New(t)
+
+	file, err := os.CreateTemp("", "netFd")
+	assert.NoError(err)
+	defer os.Remove(file.Name())
+
+	clh := cloudHypervisor{}
+	clh.netDevicesFiles = make(map[string][]*os.File)
+
+	e := &VethEndpoint{}
+	e.NetPair.TAPIface.HardAddr = "00:00:00:00:00"
+	e.NetPair.VMFds = []*os.File{file}
+
+	err = clh.addNet(e)
+	assert.NoError(err)
+	assert.Len(*clh.netDevices, 1)
+
+	net := (*clh.netDevices)[0]
+	assert.True(net.GetOffloadTso())
+	assert.True(net.GetOffloadUfo())
+	assert.True(net.GetOffloadCsum())
+}
+
 // Check addNet with valid values, and fail with invalid values
 // For Cloud Hypervisor only tap is be required
 func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
