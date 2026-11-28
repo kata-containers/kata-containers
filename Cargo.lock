@@ -2923,6 +2923,7 @@ dependencies = [
  "ttrpc-codegen",
  "virtio-bindings",
  "vmm-sys-util",
+ "xattr 1.6.1",
 ]
 
 [[package]]

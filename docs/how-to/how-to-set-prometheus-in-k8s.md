@@ -57,6 +57,14 @@ part of every Kata Containers release. Two flavours are available:
 | `quay.io/kata-containers/kata-monitor:<release-version>` (also mirrored to `ghcr.io/kata-containers/kata-monitor`) | Released image, built and pushed by the Kata Containers release workflow. A `latest` tag tracks the most recent release. |
 | `quay.io/kata-containers/kata-monitor-ci:latest` (also mirrored to `ghcr.io/kata-containers/kata-monitor-ci`) | Testing image, rebuilt and pushed from every commit landing on `main`. Use this only for evaluation against unreleased changes. |
 
+> **SELinux upgrade note**: On enforcing nodes, `runtime-rs` assigns each
+> sandbox's MCS categories to its runtime directory. A `kata-monitor` container
+> running as `container_t` with different categories can lose metrics for those
+> sandboxes. For the standalone DaemonSet or a deployment managed by an operator,
+> install the [Kata SELinux policy](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/selinux/README.md#installing-it-by-hand)
+> on each enforcing node and set the monitor container's
+> `securityContext.seLinuxOptions` to `type: kata_monitor_t` and `level: s0`.
+
 `kata-monitor` can be started on the cluster as follows:
 
 > **Note**: The manifest below runs kata-monitor over plain HTTP by default.

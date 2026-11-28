@@ -6,9 +6,10 @@
 use crate::device::topology::{TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
 use crate::qemu::block_source::{block_fd_opaque, prepare_block_source};
 use crate::qemu::qmp::get_qmp_socket_path;
+use crate::selinux;
 use crate::utils::{
-    chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, uses_native_ccw_bus,
-    SocketAddress,
+    chown_to_parent, clear_cloexec, create_vhost_net_fds, get_jailer_root, open_named_tuntap,
+    uses_native_ccw_bus, SocketAddress,
 };
 
 use crate::virtio_blk_modern::BlockSourceFormat;
@@ -19,14 +20,17 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::{VIRTIO_BLK_PCI, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
+use nix::sys::socket::{
+    bind, listen, socket, AddressFamily, Backlog, SockFlag, SockType, UnixAddr,
+};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 use std::fmt::{Display, Write};
-use std::fs::{read_to_string, File, OpenOptions};
-use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
+use std::fs::{read_to_string, remove_file, File, OpenOptions};
+use std::io::ErrorKind;
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
-use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::str;
 use tokio;
@@ -1994,18 +1998,52 @@ pub struct QmpSocket {
 }
 
 impl QmpSocket {
-    fn new(sid: &str, proto: MonitorProtocol) -> Result<Self> {
+    fn bind_listener(sock_path: &Path, prepare: impl FnOnce() -> Result<()>) -> Result<File> {
+        let fd = socket(
+            AddressFamily::Unix,
+            SockType::Stream,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )
+        .context("create qmp socket failed")?;
+        let addr = UnixAddr::new(sock_path).context("qmp socket address")?;
+        bind(fd.as_raw_fd(), &addr).context("unix listener bind failed")?;
+
+        let setup = prepare()
+            .and_then(|()| listen(&fd, Backlog::MAXCONN).context("unix listener listen failed"))
+            .and_then(|()| {
+                clear_cloexec(fd.as_raw_fd()).context("clearing qmp socket CLOEXEC failed")
+            });
+        if let Err(err) = setup {
+            match remove_file(sock_path) {
+                Err(cleanup_err) if cleanup_err.kind() != ErrorKind::NotFound => warn!(
+                    sl!(),
+                    "remove qmp socket {}: {cleanup_err}",
+                    sock_path.display()
+                ),
+                _ => (),
+            }
+            return Err(err);
+        }
+        Ok(File::from(fd))
+    }
+
+    fn new(sid: &str, proto: MonitorProtocol, config: &HypervisorConfig) -> Result<Self> {
         let qmp_socket = match proto {
             MonitorProtocol::Qmp | MonitorProtocol::QmpPretty => {
                 let sock_path = PathBuf::from(get_qmp_socket_path(sid));
-                let listener =
-                    UnixListener::bind(&sock_path).context("unix listener bind failed.")?;
-                if is_rootless() {
-                    chown_to_parent(sock_path.as_path()).context("chown qmp socket failed")?;
-                }
-                let raw_fd = listener.into_raw_fd();
-                clear_cloexec(raw_fd).context("clearing unix listenser O_CLOEXEC failed")?;
-                let sock_file = unsafe { File::from_raw_fd(raw_fd) };
+                // The QMP socket lives in the bundle directory, outside the
+                // sandbox's MCS-labeled runtime directory, so it is labeled
+                // itself. That happens before listen(): no peer may connect
+                // while it still lacks the sandbox's MCS level.
+                let sock_file = Self::bind_listener(&sock_path, || {
+                    selinux::apply_sandbox_mcs_level(config, &[&sock_path])
+                        .context("label qmp socket failed")?;
+                    if is_rootless() {
+                        chown_to_parent(&sock_path).context("chown qmp socket failed")?;
+                    }
+                    Ok(())
+                })?;
                 // The default QMP socket or called base socket is qmp.sock.
                 QmpSocket {
                     protocol: MonitorProtocol::new("qmp"),
@@ -2016,9 +2054,18 @@ impl QmpSocket {
             }
             MonitorProtocol::Hmp => {
                 // If extra monitor needed, HMP socket with qmp-extra.sock will be added.
+                // Rootful: inside the sandbox's MCS-labeled runtime directory.
+                // Rootless: relative to QEMU's working directory, as the
+                // absolute rootless path can exceed the unix socket path
+                // length limit.
+                let sock_path = if is_rootless() {
+                    PathBuf::from(DEBUG_MONITOR_SOCKET)
+                } else {
+                    Path::new(&get_jailer_root(sid)).join(DEBUG_MONITOR_SOCKET)
+                };
                 QmpSocket {
                     protocol: MonitorProtocol::new("hmp"),
-                    address: QmpSockType::Path(PathBuf::from(DEBUG_MONITOR_SOCKET)),
+                    address: QmpSockType::Path(sock_path),
                     server: true,
                     nowait: true,
                 }
@@ -3067,7 +3114,7 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
-            qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp)?,
+            qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp, config)?,
             knobs: Knobs::new(config),
             bios: None,
             explicit_pcie_root_ports: Vec::new(),
@@ -3165,7 +3212,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
-        let monitor = QmpSocket::new(self.id.as_str(), MonitorProtocol::new(proto))?;
+        let monitor = QmpSocket::new(self.id.as_str(), MonitorProtocol::new(proto), self.config)?;
         self.devices.push(Box::new(monitor));
 
         Ok(())
@@ -4133,6 +4180,19 @@ mod tests {
 
     use crate::kernel_param::tests::rootfs_image;
 
+    #[test]
+    fn test_qmp_listener_can_retry_after_setup_failure() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(QMP_SOCKET_FILE);
+        let err = QmpSocket::bind_listener(&path, || Err(anyhow!("relabel failed"))).unwrap_err();
+        assert_eq!(err.to_string(), "relabel failed");
+        assert!(!path.exists());
+
+        let _listener = QmpSocket::bind_listener(&path, || Ok(())).unwrap();
+        assert!(QmpSocket::bind_listener(&path, || Ok(())).is_err());
+        std::os::unix::net::UnixStream::connect(&path).unwrap();
+    }
+
     #[rstest]
     #[case(crate::VM_ROOTFS_DRIVER_BLK)]
     #[case(crate::VM_ROOTFS_DRIVER_BLK_CCW)]
@@ -4345,6 +4405,26 @@ mod tests {
         assert_eq!(block_indices.len(), 4);
         assert!(block_indices.iter().all(|index| root_port_index < *index));
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_debug_monitor_lives_in_sandbox_runtime_dir() {
+        let mut config = test_qemu_config(Some("none"), false);
+        config.debug_info.enable_debug = true;
+        config.debug_info.extra_monitor_socket = "hmp".to_string();
+        let params = build_test_cmdline("debug-monitor-path", &config).await;
+
+        let expected = format!(
+            "unix:path={}/{}",
+            get_jailer_root("debug-monitor-path"),
+            DEBUG_MONITOR_SOCKET
+        );
+        let monitor = params
+            .windows(2)
+            .find(|args| args[0] == "-monitor")
+            .expect("missing debug monitor");
+        assert!(contains_param(&monitor[1..2], &expected), "{:?}", monitor);
     }
 
     #[actix_rt::test]

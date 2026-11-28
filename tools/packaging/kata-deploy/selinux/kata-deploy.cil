@@ -2,8 +2,8 @@
 ;
 ; SPDX-License-Identifier: Apache-2.0
 ;
-; SELinux policy for the kata-deploy installer, whose containers run
-; unprivileged and are otherwise denied their host work as container_t
+; SELinux policy for kata-monitor and the unprivileged kata-deploy installer.
+; Ordinary container_t lacks the host permissions these containers need
 ; (kata-containers/kata-containers#13751).
 ;
 ; Nothing is relabelled: with no filecon rules /opt/kata keeps the labels it has
@@ -18,7 +18,33 @@
 ; module is: it becomes the semodule priority, and the node keeps the highest.
 ; Bump it in the same commit as any change here, or an older image will happily
 ; overwrite this on a node a newer release already set up.
-; policy-revision: 3
+; policy-revision: 4
+
+; The monitor must reach every sandbox's shim socket, regardless of its MCS
+; categories. Give it the ordinary container baseline, except for
+; mcs_constrained_type: type enforcement still applies, with additional host
+; permissions only for the runtime directories and sockets below. Do not add it to
+; kata_deploy_domain, whose members perform host installation work.
+(type kata_monitor_t)
+(roletype system_r kata_monitor_t)
+(typeattributeset can_dump_kernel (kata_monitor_t))
+(typeattributeset can_receive_kernel_messages (kata_monitor_t))
+(typeattributeset container_domain (kata_monitor_t))
+(typeattributeset container_net_domain (kata_monitor_t))
+(typeattributeset corenet_unconfined_type (kata_monitor_t))
+(typeattributeset corenet_unlabeled_type (kata_monitor_t))
+(typeattributeset domain (kata_monitor_t))
+(typeattributeset kernel_system_state_reader (kata_monitor_t))
+(typeattributeset process_user_target (kata_monitor_t))
+(typeattributeset sandbox_net_domain (kata_monitor_t))
+(typeattributeset svirt_sandbox_domain (kata_monitor_t))
+(typeattributeset syslog_client_type (kata_monitor_t))
+
+; /run/kata (Rust), /run/vc/sbs (Go), and the CRI socket directory. Connecting
+; needs sock_file write permission even when the hostPath mount is read-only.
+(allow kata_monitor_t container_var_run_t (dir (getattr search open read watch)))
+(allow kata_monitor_t container_var_run_t (sock_file (getattr write)))
+(allow kata_monitor_t container_runtime_t (unix_stream_socket (connectto)))
 
 ; Job mode runs each stage in a container of its own; daemonset mode runs them
 ; all in one, so kata_deploy_t is the union.

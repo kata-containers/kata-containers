@@ -1,8 +1,9 @@
-# kata-deploy SELinux policy
+# kata-deploy and kata-monitor SELinux policy
 
 `kata-deploy.cil` gives each kata-deploy installer stage its own least-privilege
 SELinux domain, so the installer can do its host work on an SELinux-enforcing
-node without running as `spc_t`.
+node without running as `spc_t`. It also provides `kata_monitor_t` for the
+monitor to reach shim management sockets across sandbox MCS categories.
 
 ## Why it exists
 
@@ -11,7 +12,7 @@ The installer's containers run with `privileged: false`, which means they run as
 writing the CRI drop-in, and driving systemd. See
 [issue #13751](https://github.com/kata-containers/kata-containers/issues/13751).
 
-Scope is the **installer only**. The module defines no `filecon` rules and
+Scope is the **installer and monitor**. The module defines no `filecon` rules and
 relabels nothing, so `/opt/kata` keeps the labels it has today (`usr_t`,
 inherited from `/opt`) and the Kata runtime sees exactly what it saw before.
 
@@ -24,6 +25,7 @@ inherited from `/opt`) and the Kata runtime sees exactly what it saw before.
 | `kata_deploy_cri_t` | `cri`, `revert-cri` | Write the CRI config, manage the nydus unit, restart the CRI |
 | `kata_deploy_node_binaries_t` | `node-binaries-install`, `node-binaries-remove` | Write `/usr/local/bin` |
 | `kata_deploy_t` | the `daemonset` mode's single container | All of the above except `/usr/local/bin` |
+| `kata_monitor_t` | `kata-monitor` | Watch runtime directories and connect to shim management and CRI sockets across sandbox MCS categories |
 
 Every domain but `kata_deploy_check_t` also takes the node mutation lock at
 `/run/lock/kata-deploy.lock`.
@@ -55,6 +57,41 @@ All five domains join the same `container_domain` attributes as `container_t`,
 inheriting container-selinux's baseline; the rules here are only the *delta* that
 `container_t` lacked.
 
+### Monitor access across sandbox categories
+
+With both `selinux.enabled` and `monitor.enabled`, the Helm chart defaults the
+monitor to `kata_monitor_t:s0`, keeping `privileged: false`. Explicit settings in
+`monitor.securityContext.seLinuxOptions` override these defaults. With
+`selinux.enabled: false`, the chart leaves the monitor's SELinux settings alone;
+an enforcing deployment then needs an administrator-provided policy and domain.
+
+The monitor inherits the container baseline but deliberately does not join
+`mcs_constrained_type`: a single monitor must reach sandboxes with different
+categories. Its additional type permissions allow reading and watching
+`container_var_run_t` directories, writing socket files of that type to connect,
+and connecting to `container_runtime_t` Unix stream sockets. SELinux permissions
+are granted by type, so these cover other runtime endpoints with the same labels;
+they do not distinguish a shim management socket from the CRI API socket.
+The chart limits the mounted host paths and mounts them read-only. Read-only
+mounts do not prevent socket API operations.
+
+The monitor does not join the installer domains and receives none of their host
+installation permissions. Sandbox directory labels and VMM MCS confinement stay
+in place. Host administration from an unconfined domain continues to work.
+
+For the standalone monitor manifest, load this module on each enforcing node and
+set the monitor container's `securityContext.seLinuxOptions` to
+`type: kata_monitor_t`, `level: s0`.
+
+Validate on an enforcing host with two sandboxes using different MCS category
+pairs. Confirm their directory and VMM labels with `ls -Zd /run/kata/*` and
+`ps -eZ`. Request `/metrics?sandbox=<sandbox-id>` from the monitor for each
+sandbox and check for guest or agent metrics, rather than only the monitor's
+own metrics. Confirm it discovers both directories without watch denials, and
+inspect `ausearch -m AVC,USER_AVC -ts recent -i` for monitor denials. A monitor
+in ordinary `container_t` with unrelated categories provides a negative control;
+host `kata-ctl monitor` provides an administrative control.
+
 ## Directories the chart can move
 
 `env.installationPrefix` and `containerd.configDir` put the install directory and
@@ -78,8 +115,11 @@ other's away.
 
 ## Installing it by hand
 
+Use `400 + policy-revision` as the priority, taking the revision from the header
+of the CIL file you are installing. For revision 4, run:
+
 ```bash
-semodule -i kata-deploy.cil
+semodule -X 404 -i kata-deploy.cil
 ```
 
 It is CIL rather than a compiled `.pp` so the host's own `secilc` compiles it at
@@ -99,7 +139,7 @@ semodule -X <priority> -r kata-deploy
 
 ## Changing it
 
-Every rule was derived from a permissive harvest of a full install *and*
+The installer rules were derived from a permissive harvest of a full install *and*
 uninstall cycle, in *both* deployment modes. If you add host operations to the
 installer, re-harvest rather than guessing:
 

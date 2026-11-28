@@ -922,6 +922,7 @@ fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
 const SELINUX_POLICY_PATH: &str = "/opt/kata-artifacts/selinux/kata-deploy.cil";
 const SELINUX_POLICY_MODULE: &str = "kata-deploy";
 const SELINUX_POLICY_DOMAINS: &[&str] = &[
+    "kata_monitor_t",
     "kata_deploy_check_t",
     "kata_deploy_artifacts_t",
     "kata_deploy_cri_t",

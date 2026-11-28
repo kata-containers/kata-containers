@@ -684,14 +684,60 @@ EOF
 	chart_domains=$( {
 		per_node_jobs --set selinux.enabled=true "${NODE_BINARIES_VALUES[@]}"
 		render_daemonset_mode --set selinux.enabled=true
-	} | grep -oE 'type: kata_deploy[a-z_]*' | awk '{print $2}' | sort -u)
+		helm template kata-deploy "${CHART_PATH}" --set monitor.enabled=true \
+			--set selinux.enabled=true --show-only templates/kata-monitor.yaml
+	} | grep -oE 'type: kata_(deploy|monitor)[a-z_]*' | awk '{print $2}' | sort -u)
 
-	policy_domains=$(grep -oE '^\(type kata_deploy[a-z_]*' "${policy}" |
+	policy_domains=$(grep -oE '^\(type kata_(deploy|monitor)[a-z_]*' "${policy}" |
 		awk '{print $2}' | sort -u)
 
 	[[ -n "${chart_domains}" ]]
-	# Equality, not containment: a domain no stage uses is dead privilege.
+	# Equality, not containment: an unused domain is dead privilege.
 	[[ "${chart_domains}" == "${policy_domains}" ]]
+}
+
+@test "Helm template: SELinux gives the monitor its own unprivileged domain in both modes" {
+	local mode monitor
+	for mode in job daemonset; do
+		monitor=$(helm template kata-deploy "${CHART_PATH}" \
+			--set "deploymentMode=${mode}" --set monitor.enabled=true \
+			--set selinux.enabled=true --show-only templates/kata-monitor.yaml)
+		echo "${monitor}" | grep -q 'type: kata_monitor_t'
+		echo "${monitor}" | grep -q 'level: s0'
+		echo "${monitor}" | grep -q 'privileged: false'
+		refute_match "${monitor}" 'type: kata_deploy'
+	done
+}
+
+@test "Helm template: monitor SELinux settings remain administrator controlled" {
+	local monitor
+	monitor=$(helm template kata-deploy "${CHART_PATH}" --set monitor.enabled=true \
+		--show-only templates/kata-monitor.yaml)
+	refute_match "${monitor}" 'seLinuxOptions:'
+
+	monitor=$(helm template kata-deploy "${CHART_PATH}" --set monitor.enabled=true \
+		--set selinux.enabled=true \
+		--set monitor.securityContext.seLinuxOptions.type=custom_monitor_t \
+		--show-only templates/kata-monitor.yaml)
+	echo "${monitor}" | grep -q 'type: custom_monitor_t'
+	echo "${monitor}" | grep -q 'level: s0'
+
+	# A custom type overrides the default without losing the default level or
+	# other securityContext fields, and is also usable with policy loading off.
+	local enabled
+	for enabled in true false; do
+		monitor=$(helm template kata-deploy "${CHART_PATH}" --set monitor.enabled=true \
+			--set "selinux.enabled=${enabled}" \
+			--set monitor.securityContext.seLinuxOptions.type=custom_monitor_t \
+			--set monitor.securityContext.seLinuxOptions.level=s0:c123 \
+			--set monitor.securityContext.readOnlyRootFilesystem=true \
+			--show-only templates/kata-monitor.yaml)
+		echo "${monitor}" | grep -q 'type: custom_monitor_t'
+		echo "${monitor}" | grep -q 'level: s0:c123'
+		echo "${monitor}" | grep -q 'readOnlyRootFilesystem: true'
+		echo "${monitor}" | grep -q 'privileged: false'
+		refute_match "${monitor}" 'type: kata_monitor_t'
+	done
 }
 
 @test "Helm template: neither mode grants the cluster-scoped rights the install shed" {

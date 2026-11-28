@@ -214,10 +214,12 @@ job:
   # failed. One node failing never aborts the others.
   backoffLimit: 3
 
-# SELinux confinement for the installer's own containers. On an enforcing node
-# the unprivileged install stages are otherwise denied the host work they exist
+# SELinux confinement for the installer and kata-monitor containers. On an
+# enforcing node the install stages are otherwise denied the host work they exist
 # to do; this loads a Kata-owned policy module and gives each stage a
-# least-privilege domain instead, so they can stay unprivileged.
+# least-privilege domain instead, so they can stay unprivileged. The monitor uses
+# kata_monitor_t, which can watch runtime directories and reach shim sockets
+# across sandbox MCS categories without the host installation permissions.
 #
 # Needs policycoreutils (for semodule) on the SELinux-enabled nodes, unless their
 # policy already defines the domains. Nodes with SELinux off are unaffected, so it
@@ -269,6 +271,8 @@ monitor:
     privileged: false
     runAsUser: 0
     runAsGroup: 0
+    # With selinux.enabled, seLinuxOptions defaults to type: kata_monitor_t,
+    # level: s0. Explicit seLinuxOptions here override those defaults.
   resources:
     limits:
       cpu: 200m

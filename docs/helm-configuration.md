@@ -1220,6 +1220,7 @@ least-privilege domain of its own. It works in both deployment modes.
 | `kata_deploy_cri_t` | `cri`, `revert-cri` | write the CRI configuration, manage the snapshotter unit, restart the CRI |
 | `kata_deploy_node_binaries_t` | `node-binaries-install`, `node-binaries-remove` | write `/usr/local/bin` |
 | `kata_deploy_t` | the DaemonSet's single container | all of the above except `/usr/local/bin` |
+| `kata_monitor_t` | `kata-monitor`, when enabled | watch runtime directories and connect to shim management and CRI sockets across sandbox MCS categories |
 
 `job` mode runs each stage in its own container, so each gets the narrowest domain
 its own work needs: `artifacts` cannot reach the CRI configuration, and neither it
@@ -1238,6 +1239,29 @@ and the right blast radius.
     Nodes with SELinux disabled are unaffected: the policy stage exits without
     doing anything, and the runtime ignores the requested domains. So the value is
     safe to set once for a mixed cluster rather than per node pool.
+
+### Monitor access
+
+Enable both `monitor.enabled` and `selinux.enabled` on an enforcing cluster to
+run the monitor as `kata_monitor_t:s0`, with `privileged: false`. This domain can
+watch runtime directories and connect to shim management sockets across sandbox
+MCS categories. It inherits the container baseline, is exempt from MCS category
+checks, and has none of the installer's additional host installation permissions.
+The sandbox directory labels and VMM confinement remain in place.
+
+```yaml title="values.yaml"
+selinux:
+  enabled: true
+monitor:
+  enabled: true
+```
+
+Explicit `monitor.securityContext.seLinuxOptions` fields override the chart's
+defaults, allowing an administrator-managed monitor domain. With
+`selinux.enabled: false`, no monitor domain is selected automatically; the
+deployment needs its own SELinux policy and settings on an enforcing node.
+The policy grants access by runtime object type, including the CRI socket, and
+read-only mounts do not restrict which socket API operations can be requested.
 
 ### What it needs, and what it changes on the node
 
@@ -1259,7 +1283,7 @@ across `selinux-policy` versions and distributions.
 
 Nothing is relabelled. The module defines no `filecon` rules, so `/opt/kata` keeps
 the labels it has today (`usr_t`, inherited from `/opt`) and the Kata *runtime* sees
-exactly what it saw before. The scope is the installer only.
+exactly what it saw before. The policy applies to the installer and monitor.
 
 !!! note "Moving the install directory or the CRI configuration"
     `env.installationPrefix` and `containerd.configDir` can put either directory
