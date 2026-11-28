@@ -2555,6 +2555,27 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         )?;
     }
 
+    // Diagnostics for intermittent empty-rootfs reports (#14306): a cheap
+    // top-level entry count for the guest view of the host share and for the
+    // agent bind target, so a later exec failure can be correlated with what
+    // the agent actually saw at create time.
+    let entry_count = |path: &Path| -> i64 {
+        match fs::read_dir(path) {
+            Ok(entries) => entries.count() as i64,
+            Err(_) => -1,
+        }
+    };
+    info!(
+        sl(),
+        "rootfs-audit";
+        "cid" => cid,
+        "rootfs_exists" => rootfs_exists,
+        "source" => spec_root_path.display().to_string(),
+        "source_entries" => entry_count(spec_root_path),
+        "target" => rootfs_path.display().to_string(),
+        "target_entries" => entry_count(&rootfs_path),
+    );
+
     let mut oci_root = oci::Root::default();
     oci_root.set_path(rootfs_path);
     oci_root.set_readonly(spec_root.readonly());
