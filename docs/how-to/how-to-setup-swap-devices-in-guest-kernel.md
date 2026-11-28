@@ -16,7 +16,7 @@ Install and setup Kata Containers as shown [here](../install/README.md).
 
 Enable setup swap device in guest kernel as follows:
 ```
-$ sudo sed -i -e 's/^#enable_guest_swap.*$/enable_guest_swap = true/g' /etc/kata-containers/configuration.toml
+$ sudo sed -i -e 's/^#\?enable_guest_swap.*$/enable_guest_swap = true/g' /etc/kata-containers/configuration.toml
 ```
 
 ## Run a Kata Containers utilizing swap device
@@ -60,4 +60,4 @@ The following table shows the swap size how to decide if `io.katacontainers.cont
 |set|set| `io.katacontainers.container.resource.swap_in_bytes` - `memory_limit_in_bytes`|
 |not set|set| `memory_limit_in_bytes`|
 |not set|not set| `io.katacontainers.config.hypervisor.default_memory`|
-|set|not set|cgroup doesn't support this usage|
+|set|not set| `io.katacontainers.container.resource.swap_in_bytes`|
