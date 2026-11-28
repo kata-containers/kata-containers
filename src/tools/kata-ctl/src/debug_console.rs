@@ -152,7 +152,7 @@ impl SockHandler for HvsockConfig {
     }
 }
 
-fn setup_client(server_url: String, dbg_console_port: u32) -> Result<UnixStream> {
+pub fn setup_client(server_url: String, dbg_console_port: u32) -> Result<UnixStream> {
     // server address format: scheme://[cid|/x/domain.sock]:port
     let url_fields: Vec<&str> = server_url.split("://").collect();
     if url_fields.len() != 2 {
@@ -161,9 +161,6 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> Result<UnixStream>
 
     let scheme = url_fields[0].to_uppercase();
     let sock_addr: Vec<&str> = url_fields[1].split(':').collect();
-    if sock_addr.len() != 2 {
-        return Err(anyhow!("invalid VSOCK server address URI"));
-    }
 
     match scheme.as_str() {
         // Hybrid Vsock: hvsock://<path>:<port>.
