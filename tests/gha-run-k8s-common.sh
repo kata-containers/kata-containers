@@ -314,7 +314,11 @@ function delete_cluster_kcli() {
 }
 
 function get_nodes_and_pods_info() {
-	kubectl debug "$(kubectl get nodes -o name)" -it --image=quay.io/kata-containers/kata-debug:latest || true
+	# quay.io/kata-containers/kata-debug is amd64 only, so run its script
+	# from a multi-arch image instead.
+	local debug_script
+	debug_script="$(< "${repo_root_dir}/tools/packaging/kata-debug/debug.sh")"
+	kubectl debug "$(kubectl get nodes -o name)" -it --image=quay.io/bedrock/ubuntu:latest -- bash -c "${debug_script}" || true
 	kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
