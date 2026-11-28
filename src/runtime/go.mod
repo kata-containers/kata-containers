@@ -45,10 +45,10 @@ require (
 	github.com/opencontainers/selinux v1.13.1
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/client_model v0.6.2
-	github.com/prometheus/common v0.67.5
-	github.com/prometheus/procfs v0.19.2
+	github.com/prometheus/client_golang v1.25.0
+	github.com/prometheus/client_model v0.6.3
+	github.com/prometheus/common v0.72.0
+	github.com/prometheus/procfs v0.22.0
 	github.com/safchain/ethtool v0.6.2
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.12.1
@@ -59,10 +59,10 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.0.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sys v0.50.0
 	google.golang.org/grpc v1.83.2
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	google.golang.org/protobuf v1.36.12
 	k8s.io/apimachinery v0.36.3
 	k8s.io/cri-api v0.36.3
 	k8s.io/kubelet v0.33.0
@@ -71,7 +71,7 @@ require (
 
 require (
 	github.com/moby/sys/capability v0.4.0 // indirect
-	go.yaml.in/yaml/v2 v2.4.3 // indirect
+	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 )
 
