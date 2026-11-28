@@ -28,7 +28,7 @@ use kata_types::{config::hypervisor::SharedFsInfo, rootless::is_rootless};
 
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
-    virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount,
+    virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount, SharedVolumeKey,
 };
 use crate::share_fs::{
     kata_guest_share_dir,
@@ -62,7 +62,7 @@ pub(crate) struct ShareVirtioFsStandalone {
     inner: Arc<RwLock<ShareVirtioFsStandaloneInner>>,
     config: ShareVirtioFsStandaloneConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
-    mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
+    mounted_info_set: Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>>,
 }
 
 impl ShareVirtioFsStandalone {
@@ -294,7 +294,7 @@ impl ShareFs for ShareVirtioFsStandalone {
         Ok(storages)
     }
 
-    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
+    fn mounted_info_set(&self) -> Arc<Mutex<HashMap<SharedVolumeKey, MountedInfo>>> {
         self.mounted_info_set.clone()
     }
 
