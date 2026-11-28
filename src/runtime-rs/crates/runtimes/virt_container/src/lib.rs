@@ -178,6 +178,7 @@ impl RuntimeHandler for VirtContainer {
                 config,
                 init_size_manager,
                 true,
+                sandbox_config.cgroup_parent.as_deref(),
             )
             .await?,
         );
