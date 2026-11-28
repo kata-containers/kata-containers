@@ -1114,25 +1114,19 @@ function uninstall_tomlq() {
 
 function ensure_helm() {
 	ensure_yq
-	# The get-helm-3 script will take care of downloaading and installing Helm
-	# properly on the system respecting ARCH, OS and other configurations.
 	DESIRED_VERSION=$(get_from_kata_deps ".externals.helm.version")
 	export DESIRED_VERSION
 
-	# Check if helm is available in the system's PATH
-	if ! command -v helm &> /dev/null; then
-		echo "Helm is not installed. Installing Helm..."
-		curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-		# Verify the installation
-		if command -v helm &> /dev/null; then
-			echo "Helm installed successfully."
-		else
-			echo "Failed to install Helm."
-			exit 1
-		fi
-	else
-		echo "Helm is already installed."
+	local installed_version
+	installed_version=$(helm version --template '{{.Version}}' 2>/dev/null || true)
+	if [[ "${installed_version}" == "${DESIRED_VERSION}" && -n "${DESIRED_VERSION}" ]]; then
+		return
 	fi
+
+	[[ -n "${DESIRED_VERSION}" ]] || die "Helm version missing from versions.yaml"
+	curl -fsSL "https://raw.githubusercontent.com/helm/helm/${DESIRED_VERSION}/scripts/get-helm-4" | bash
+	[[ "$(helm version --template '{{.Version}}')" == "${DESIRED_VERSION}" ]] || \
+		die "Expected Helm ${DESIRED_VERSION} in PATH"
 }
 
 # dependency: What we want to get the version from the versions.yaml file
@@ -1267,7 +1261,12 @@ function install_runc() {
 	project="opencontainers/runc"
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
 
-	if [[ -f /usr/local/sbin/runc ]]; then
+	local installed_version=""
+	if [[ -x /usr/local/sbin/runc ]]; then
+		installed_version=$(/usr/local/sbin/runc --version 2>/dev/null |
+			awk 'NR == 1 && $1 == "runc" && $2 == "version" { print $3 }' || true)
+	fi
+	if [[ "${installed_version}" == "${version#v}" ]]; then
 		return
 	fi
 
