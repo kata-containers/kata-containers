@@ -1712,6 +1712,10 @@ pub struct Factory {
     #[serde(default, rename = "enable_template")]
     pub enable_template: bool,
 
+    /// Preconfigure one Dragonball virtio-net interface in the template.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub preplug_network: bool,
+
     /// Specifies the path of template.
     /// Example: "/run/vc/vm/template"
     #[serde(default)]

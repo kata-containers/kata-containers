@@ -11,6 +11,7 @@ use super::HypervisorState;
 use inner::DragonballInner;
 use persist::sandbox_persist::Persist;
 mod seccomp;
+mod template_network;
 pub mod vmm_instance;
 
 use std::collections::HashMap;

@@ -366,7 +366,7 @@ impl DragonballInner {
         Ok(())
     }
 
-    fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
+    pub(super) fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
         let net_cfg = build_dragonball_network_config(&self.config, config);
         self.vmm_instance
             .insert_network_device(net_cfg)

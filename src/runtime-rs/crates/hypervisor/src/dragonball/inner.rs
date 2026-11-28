@@ -179,6 +179,8 @@ impl DragonballInner {
             warn!(sl!(), "skip host-backed virtio-rng for confidential guest");
         }
 
+        self.prepare_template_network()?;
+
         // add pending devices
         while let Some(dev) = self.pending_devices.pop() {
             self.add_device(dev).await.context("add_device")?;
