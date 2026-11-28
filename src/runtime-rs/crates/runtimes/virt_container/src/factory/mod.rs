@@ -13,6 +13,7 @@ use kata_sys_util::mount::umount_all;
 use kata_types::config::TomlConfig;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use slog::{error, info, warn};
 
 use crate::factory::{template::Template, vm::VmConfig};
@@ -34,7 +35,7 @@ pub(crate) fn template_device_state_path(hypervisor_name: &str, template_path: &
 pub struct FactoryConfig {
     /// Path to the directory where VM templates are stored.
     #[serde(default)]
-    pub template_path: String,
+    pub template_path: PathBuf,
 
     /// Full configuration of the virtual machine to be used.
     #[serde(default)]
@@ -46,31 +47,54 @@ pub struct FactoryConfig {
 }
 
 impl FactoryConfig {
-    pub fn new(toml_config: &TomlConfig) -> Self {
-        Self {
-            template: toml_config.get_factory().enable_template,
-            template_path: toml_config.get_factory().template_path,
-            vm_config: VmConfig::new(toml_config),
-        }
+    fn new(toml_config: &TomlConfig) -> Result<Self> {
+        let vm_config = VmConfig::new(toml_config);
+        let template = vm_config.hypervisor_config.factory.enable_template;
+        Ok(Self {
+            template,
+            template_path: template_path(&vm_config)?,
+            vm_config,
+        })
     }
 }
 
-/// Returns an error if a sandbox VM with `config` cannot be restored from the template.
-pub(crate) fn check_template_vm_config(config: &TomlConfig) -> Result<()> {
-    let template_path = PathBuf::from(config.get_factory().template_path);
-    let template_config = Template::load_vm_config(&template_path)?;
+fn template_path(config: &VmConfig) -> Result<PathBuf> {
+    let factory = &config.hypervisor_config.factory;
+    let Some(pool) = &factory.template_pool else {
+        return Ok(PathBuf::from(&factory.template_path));
+    };
+    let pool = Path::new(pool);
+    if !pool.is_absolute() {
+        return Err(anyhow!("template_pool must be an absolute directory"));
+    }
 
-    if template_config != vm_config_value(&VmConfig::new(config))? {
+    let mut config = vm_config_value(config)?;
+    config.sort_all_objects();
+    let digest = Sha256::digest(serde_json::to_vec(&config)?);
+    Ok(pool.join(format!("vm-{}", hex::encode(digest))))
+}
+
+/// Use a template only when its snapshot files and saved configuration match.
+pub(crate) fn matching_template_path(config: &TomlConfig) -> Result<PathBuf> {
+    let vm_config = VmConfig::new(config);
+    let path = template_path(&vm_config)?;
+    let expected = vm_config_value(&vm_config)?;
+    let template = Template::fetch(vm_config, path)?;
+    if Template::load_vm_config(&template.state_path)? != expected {
         return Err(anyhow!("sandbox VM config does not match the template"));
     }
 
-    Ok(())
+    Ok(template.state_path)
 }
 
 /// The config used to match templates, ignoring the template paths and flags.
 pub(crate) fn vm_config_value(config: &VmConfig) -> Result<serde_json::Value> {
     let mut config = config.clone();
     config.hypervisor_config.vm_template = Default::default();
+    if config.hypervisor_config.factory.template_pool.is_some() {
+        // Where snapshots are stored does not affect the guest configuration.
+        config.hypervisor_config.factory = Default::default();
+    }
 
     Ok(serde_json::to_value(config)?)
 }
@@ -81,7 +105,7 @@ fn validate_factory_config(mut toml_config: TomlConfig) -> Result<(TomlConfig, F
         .setup_config(&mut toml_config)
         .context("setup template vm size")?;
 
-    let factory_config = FactoryConfig::new(&toml_config);
+    let factory_config = FactoryConfig::new(&toml_config)?;
 
     if !factory_config.template {
         return Err(anyhow!("vm factory is not enabled"));
@@ -138,7 +162,7 @@ pub async fn new_factory(
     if !config.template {
         anyhow::bail!("template must be enabled");
     } else {
-        let path: PathBuf = config.template_path.clone().into();
+        let path = config.template_path.clone();
         if fetch_only {
             Template::fetch(config.vm_config.clone(), path).context("fetch VM template")?;
         } else {
@@ -152,7 +176,7 @@ pub async fn new_factory(
 }
 
 pub fn close_factory(config: &mut FactoryConfig) -> Result<()> {
-    let state_path = Path::new(&config.template_path);
+    let state_path = &config.template_path;
 
     // Check if the path exists
     if !state_path.exists() {
@@ -222,21 +246,72 @@ static_sandbox_resource_mgmt = true
         config
     }
 
+    fn save_fixture(config: &FactoryConfig) {
+        fs::create_dir_all(&config.template_path).unwrap();
+        fs::write(config.template_path.join("memory"), b"memory").unwrap();
+        fs::write(config.template_path.join("state"), b"state").unwrap();
+        Template::new(config.vm_config.clone(), config.template_path.clone())
+            .save_vm_config()
+            .unwrap();
+    }
+
     #[test]
     fn template_is_used_only_when_its_saved_vm_config_matches() {
         let dir = tempfile::tempdir().unwrap();
         let config = qemu_static_config(dir.path());
         let (_, factory_config) = validate_factory_config(config.clone()).unwrap();
         let unlimited = sandbox_config(&config, HashMap::new());
-        assert!(check_template_vm_config(&unlimited).is_err());
+        assert!(matching_template_path(&unlimited).is_err());
 
-        Template::new(factory_config.vm_config, dir.path().to_path_buf())
-            .save_vm_config()
-            .unwrap();
-        assert!(check_template_vm_config(&unlimited).is_ok());
+        save_fixture(&factory_config);
+        assert_eq!(matching_template_path(&unlimited).unwrap(), dir.path());
 
         let limits = HashMap::from([(SANDBOX_MEM_KEY.to_string(), (512u64 << 20).to_string())]);
         let limited = sandbox_config(&config, limits);
-        assert!(check_template_vm_config(&limited).is_err());
+        assert!(matching_template_path(&limited).is_err());
+    }
+
+    #[test]
+    fn template_pool_selects_the_effective_sandbox_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = qemu_static_config(&dir.path().join("legacy"));
+        let hypervisor = config.hypervisor.get_mut("qemu").unwrap();
+        hypervisor.factory.template_pool = Some(dir.path().join("pool").display().to_string());
+        let (_, default) = validate_factory_config(config.clone()).unwrap();
+        save_fixture(&default);
+
+        let limits =
+            |mib: u64| HashMap::from([(SANDBOX_MEM_KEY.to_string(), (mib << 20).to_string())]);
+        let large = sandbox_config(&config, limits(768));
+        let unavailable = sandbox_config(&config, limits(1024));
+        assert!(matching_template_path(&large).is_err());
+
+        // Factory init for the larger spec uses effective defaults rather than
+        // the annotations that a real sandbox receives from the caller.
+        let mut profile = large.clone();
+        profile
+            .hypervisor
+            .get_mut("qemu")
+            .unwrap()
+            .factory
+            .template_path = "/unused".into();
+        let (_, large_template) = validate_factory_config(profile).unwrap();
+        save_fixture(&large_template);
+
+        let default_vm = sandbox_config(&config, HashMap::new());
+        assert_ne!(default.template_path, large_template.template_path);
+        assert_eq!(
+            matching_template_path(&default_vm).unwrap(),
+            default.template_path
+        );
+        assert_eq!(
+            matching_template_path(&large).unwrap(),
+            large_template.template_path
+        );
+        assert!(matching_template_path(&unavailable).is_err());
+
+        fs::remove_file(large_template.template_path.join("state")).unwrap();
+        assert!(matching_template_path(&large).is_err());
+        assert!(matching_template_path(&default_vm).is_ok());
     }
 }

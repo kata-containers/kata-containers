@@ -64,3 +64,24 @@ $ sudo kata-runtime factory destroy
 
 If you do not want to call `kata-runtime factory init` by hand,
 the very first Kata container you create will automatically create a VM templating.
+
+### Prepare multiple templates with runtime-rs
+
+In the runtime configuration, set `enable_template = true` and set
+`template_pool` to an absolute directory under the hypervisor's `factory`
+table. For each size, make a copy of the runtime configuration with the same
+pool and set the hypervisor's default CPU and memory to the effective VM
+values, including any overhead. Initialize each template on the node.
+
+```sh
+sudo kata-ctl factory init --config /etc/kata-containers/small.toml
+sudo kata-ctl factory init --config /etc/kata-containers/large.toml
+```
+
+A sandbox uses the snapshot that matches its effective hypervisor and agent
+configuration after resource sizing. It boots normally if that snapshot is
+missing, incomplete, or incompatible. Run `factory status` or `factory destroy`
+with the same configuration file to inspect or remove a single template.
+Each snapshot has its own tmpfs and consumes memory until destroyed.
+Configurations without `template_pool` continue to use the single
+`template_path` directory and its existing snapshots.
