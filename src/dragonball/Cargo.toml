@@ -87,6 +87,11 @@ virtio-mem = [
   "dbs-virtio-devices/virtio-mem",
   "virtio-queue",
 ]
+virtio-pmem = [
+  "atomic-guest-memory",
+  "dbs-virtio-devices/virtio-pmem",
+  "virtio-queue",
+]
 virtio-rng = ["dbs-virtio-devices/virtio-rng", "virtio-queue"]
 
 [lints.rust]
