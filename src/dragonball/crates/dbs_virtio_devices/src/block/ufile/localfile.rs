@@ -60,8 +60,11 @@ impl<E> Write for LocalFile<E> {
         self.file.write(buf)
     }
 
+    /// A guest's virtio flush: the file's data on stable storage, with the
+    /// metadata that reading it back needs (fdatasync). `File::flush` does
+    /// nothing (Nova Kata).
     fn flush(&mut self) -> io::Result<()> {
-        self.file.flush()
+        self.file.sync_data()
     }
 }
 

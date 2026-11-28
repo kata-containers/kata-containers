@@ -105,6 +105,12 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1;
         avail_features |= 1u64 << VIRTIO_BLK_F_SIZE_MAX;
         avail_features |= 1u64 << VIRTIO_BLK_F_SEG_MAX;
+        // A volatile write cache the guest flushes, as libvirt's cache=none
+        // gives a disk: with the backend opened O_DIRECT, a write is not
+        // made durable on its own, and a guest flush is a host fdatasync
+        // (LocalFile::flush). Without it the guest takes the disk for
+        // write-through and never flushes (Nova Kata).
+        avail_features |= 1u64 << VIRTIO_BLK_F_FLUSH;
 
         if f_access_platform {
             avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
@@ -1255,6 +1261,11 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2),
             dev.device_info.get_avail_features(2)
         );
+        // The guest is offered a write cache to flush (Nova Kata).
+        assert_ne!(
+            dev.device_info.get_avail_features(0) & (1u32 << VIRTIO_BLK_F_FLUSH),
+            0
+        );
         let mut config: [u8; 1] = [0];
         VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
             &mut dev,
@@ -1608,6 +1619,36 @@ mod tests {
             assert!(handler.process_queue());
             let err_info: u32 = handler.vm_as.read_obj(GuestAddress(0x3000)).unwrap();
             assert_eq!(err_info, VIRTIO_BLK_S_OK);
+        }
+
+        // A flush as a Linux guest sends it, a header and a status and no
+        // data descriptor, reaches the file: its error is the guest's
+        // (Nova Kata).
+        for (flush_error, status) in [(false, VIRTIO_BLK_S_OK), (true, VIRTIO_BLK_S_IOERR)] {
+            let mut file = DummyFile::new();
+            file.capacity = 0x100000;
+            file.flush_error = flush_error;
+            let mut handler = get_block_epoll_handler_with_file(file);
+            let m = &handler.vm_as.clone();
+            let vq = VirtQueue::new(GuestAddress(0), m, 16);
+            vq.avail.ring(0).store(0);
+            vq.avail.idx().store(1);
+            let q = vq.create_queue();
+            vq.dtable(0).set(0x1000, 0x1000, VIRTQ_DESC_F_NEXT, 1);
+            vq.dtable(1).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 0);
+            m.write_obj::<u32>(VIRTIO_BLK_T_FLUSH, GuestAddress(0x1000))
+                .unwrap();
+            m.write_obj::<u8>(0xff, GuestAddress(0x3000)).unwrap();
+
+            handler.queue = VirtioQueueConfig::new(
+                q,
+                Arc::new(EventFd::new(0).unwrap()),
+                Arc::new(NoopNotifier::new()),
+                0,
+            );
+            assert!(handler.process_queue());
+            let got: u8 = handler.vm_as.read_obj(GuestAddress(0x3000)).unwrap();
+            assert_eq!(got as u32, status);
         }
 
         {
