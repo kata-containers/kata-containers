@@ -460,7 +460,7 @@ type service struct {
 	// state local to this sandbox.
 	agentMetrics agentMetricsState
 
-	// teardownWg tracks in-flight sandbox teardown started from wait().
+	// teardownWg tracks in-flight container and sandbox cleanup from wait().
 	// Shutdown() waits on it so the sandbox run directory (watched by
 	// kata-monitor) is removed before the shim exits, without having to
 	// hold s.mu across the slow guest shutdown (which would block the
@@ -468,11 +468,8 @@ type service struct {
 	// binary).
 	teardownWg sync.WaitGroup
 
-	// teardownOnce guarantees the sandbox Stop/Delete runs exactly once even
-	// when both wait() (normal/early exit) and watchSandbox() (killed-VMM)
-	// try to tear the sandbox down.  Sandbox.Stop/Delete are not internally
-	// synchronized, so this serializes the two paths without holding s.mu
-	// across the teardown.
+	// teardownOnce serializes sandbox Stop/Delete across wait(), Shutdown(),
+	// and watchSandbox(), and makes concurrent callers wait for completion.
 	teardownOnce sync.Once
 
 	// hypervisor pid, Since this shimv2 cannot get the container processes pid from VM,
@@ -761,8 +758,9 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *taskAPI.DeleteResponse, err error) {
 	shimLog.WithField("container", r.ID).Debug("Delete() start")
 	defer shimLog.WithField("container", r.ID).Debug("Delete() end")
-	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Delete", shimTracingTags)
+	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Delete", shimTracingTags)
 	defer span.End()
+	spanCtx := otelTrace.ContextWithSpan(ctx, span)
 
 	start := time.Now()
 	defer func() {
@@ -771,12 +769,37 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 	}()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
+
+	if r.ExecID == "" && !c.cType.IsSandbox() && c.cleanupDone != nil {
+		cleanupDone := c.cleanupDone
+		s.mu.Unlock()
+		select {
+		case <-cleanupDone:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		s.mu.Lock()
+		current, lookupErr := s.getContainer(r.ID)
+		if lookupErr != nil {
+			s.mu.Unlock()
+			return nil, lookupErr
+		}
+		if current != c {
+			s.mu.Unlock()
+			return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "container changed during cleanup %s", r.ID)
+		}
+		if err := ctx.Err(); err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+	}
+	defer s.mu.Unlock()
 
 	if r.ExecID == "" {
 		if err = deleteContainer(spanCtx, s, c); err != nil {
@@ -1236,6 +1259,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	// with it.  Blocking here guarantees the sandbox run directory (watched
 	// by kata-monitor) and the CRI state are gone before the shim exits.
 	s.teardownWg.Wait()
+	s.teardownSandbox(ctx)
 
 	span.End()
 	katatrace.StopTracing(s.rootCtx)

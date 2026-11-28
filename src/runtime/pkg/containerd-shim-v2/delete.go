@@ -20,6 +20,13 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 			if _, err := s.sandbox.StopContainer(ctx, c.id, false); err != nil && !isNotFound(err) {
 				return err
 			}
+		} else if c.cleanupDone != nil {
+			if c.cleanupErr != nil && !isNotFound(c.cleanupErr) {
+				if _, err := s.sandbox.StopContainer(ctx, c.id, true); err != nil && !isNotFound(err) {
+					return err
+				}
+				c.cleanupErr = nil
+			}
 		}
 
 		if _, err := s.sandbox.DeleteContainer(ctx, c.id); err != nil && !isNotFound(err) {
