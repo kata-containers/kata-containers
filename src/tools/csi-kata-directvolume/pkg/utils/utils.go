@@ -15,6 +15,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"syscall"
 
 	diskfs "github.com/diskfs/go-diskfs"
 	"github.com/pborman/uuid"
@@ -27,9 +29,13 @@ import (
 const (
 	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
 	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
-	DirectVolumeTypeName           = "directvol"
-	SpdkVolumeTypeName             = "spdkvol"
-	IsDirectVolume                 = "is_directvolume"
+	// KataContainersDirectCapacityPool is the StorageClass parameter that
+	// selects the capacity pool a volume is reserved from. The driver also
+	// stores it in the volume context.
+	KataContainersDirectCapacityPool = "katacontainers.direct.volume/capacity-pool"
+	DirectVolumeTypeName             = "directvol"
+	SpdkVolumeTypeName               = "spdkvol"
+	IsDirectVolume                   = "is_directvolume"
 )
 
 const (
@@ -226,6 +232,9 @@ func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*st
 
 	// create raw disk
 	if _, err = diskfs.Create(devicePath, capacityInBytes, diskfs.Raw, diskfs.SectorSizeDefault); err != nil {
+		if errors.Is(err, syscall.ENOSPC) {
+			return nil, fmt.Errorf("%w: create %s: %v", ErrNoSpace, devicePath, err)
+		}
 		errMsg := fmt.Errorf("diskfs create disk failed: %v", err)
 		klog.Error(errMsg.Error())
 
@@ -242,8 +251,11 @@ func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*st
 	fallocateCmd := "fallocate"
 	// TODO: "-z" to be added
 	args := []string{"-l", diskSize, devicePath}
-	if _, err := doSafeCommand(fallocateCmd, args...); err != nil {
-		klog.Infof("do fallocate %v failed with error(%v)", args, err)
+	if out, err := doSafeCommand(fallocateCmd, args...); err != nil {
+		klog.Infof("do fallocate %v failed with error(%v): %s", args, err, out)
+		if strings.Contains(strings.ToLower(string(out)), "no space left on device") {
+			return nil, fmt.Errorf("%w: fallocate %s: %s", ErrNoSpace, devicePath, strings.TrimSpace(string(out)))
+		}
 		return nil, err
 	}
 
@@ -251,3 +263,7 @@ func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*st
 
 	return &devicePath, nil
 }
+
+// ErrNoSpace is wrapped by the errors of CreateDirectBlockDevice when the
+// filesystem has no space left for a raw disk.
+var ErrNoSpace = errors.New("no space left on device")

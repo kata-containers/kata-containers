@@ -12,7 +12,10 @@ package state
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
+	"path/filepath"
+	"slices"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,9 +27,11 @@ type Volume struct {
 	VolSize int64
 	VolPath string
 	// VolAccessType  AccessType
-	ParentVolID    string
-	ParentSnapID   string
-	NodeID         string
+	ParentVolID  string
+	ParentSnapID string
+	NodeID       string
+	// Kind is the capacity pool the volume is reserved from, empty if the
+	// volume does not belong to a pool.
 	Kind           string
 	ReadOnlyAttach bool
 	Attached       bool
@@ -38,12 +43,29 @@ type Volume struct {
 	// was published.
 	Published Strings
 
+	// VolumeContext is the volume context returned by CreateVolume. It
+	// is kept so that a repeated CreateVolume returns the same response.
+	VolumeContext map[string]string
+
 	Metadata map[string]string
+}
+
+// clone returns a copy of the volume which shares no slice or map with it.
+// The state hands out and keeps only such copies: a caller which changes a
+// volume cannot change the state behind its back, and a change which cannot
+// be saved can be undone completely.
+func (v Volume) clone() Volume {
+	v.Staged = slices.Clone(v.Staged)
+	v.Published = slices.Clone(v.Published)
+	v.VolumeContext = maps.Clone(v.VolumeContext)
+	v.Metadata = maps.Clone(v.Metadata)
+	return v
 }
 
 // State is the interface that the rest of the code has to use to
 // access and change state. All error messages contain gRPC
-// status codes and can be returned without wrapping.
+// status codes and can be returned without wrapping. A change
+// which cannot be saved is not applied.
 type State interface {
 	// GetVolumeByID retrieves a volume by its unique ID or returns
 	// an error including that ID when not found.
@@ -95,8 +117,45 @@ func (s *state) dump() error {
 	if err != nil {
 		return status.Errorf(codes.Internal, "error encoding volumes: %v", err)
 	}
-	if err := os.WriteFile(s.statefilePath, data, 0600); err != nil {
+	if err := writeFileAtomically(s.statefilePath, data); err != nil {
 		return status.Errorf(codes.Internal, "error writing state file: %v", err)
+	}
+	return nil
+}
+
+// writeFileAtomically replaces the file at path with data. It writes a
+// temporary file in the same directory and renames it over path, so that a
+// write which fails, for example on a full filesystem, leaves the previous
+// file intact instead of a truncated one.
+func writeFileAtomically(path string, data []byte) (err error) {
+	dir := filepath.Dir(path)
+	// CreateTemp creates the file with mode 0600, like the state file.
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+	if _, err = tmp.Write(data); err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err = os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	// Persist the rename too. Some filesystems cannot sync a directory,
+	// which only weakens the guarantee after a crash.
+	if d, dirErr := os.Open(dir); dirErr == nil {
+		_ = d.Sync()
+		_ = d.Close()
 	}
 	return nil
 }
@@ -120,7 +179,7 @@ func (s *state) restore() error {
 func (s *state) GetVolumeByID(volID string) (Volume, error) {
 	for _, volume := range s.Volumes {
 		if volume.VolID == volID {
-			return volume, nil
+			return volume.clone(), nil
 		}
 	}
 	return Volume{}, status.Errorf(codes.NotFound, "volume id %s does not exist in the volumes list", volID)
@@ -129,7 +188,7 @@ func (s *state) GetVolumeByID(volID string) (Volume, error) {
 func (s *state) GetVolumeByName(volName string) (Volume, error) {
 	for _, volume := range s.Volumes {
 		if volume.VolName == volName {
-			return volume, nil
+			return volume.clone(), nil
 		}
 	}
 	return Volume{}, status.Errorf(codes.NotFound, "volume name %s does not exist in the volumes list", volName)
@@ -137,26 +196,42 @@ func (s *state) GetVolumeByName(volName string) (Volume, error) {
 
 func (s *state) GetVolumes() []Volume {
 	volumes := make([]Volume, len(s.Volumes))
-	copy(volumes, s.Volumes)
+	for i, volume := range s.Volumes {
+		volumes[i] = volume.clone()
+	}
 	return volumes
 }
 
+// save replaces the list of volumes and writes it to the state file. If that
+// fails, the list stays as it was: callers treat the change as failed and may
+// roll back what depends on it, so a later request must not find it.
+func (s *state) save(volumes []Volume) error {
+	previous := s.Volumes
+	s.Volumes = volumes
+	if err := s.dump(); err != nil {
+		s.Volumes = previous
+		return err
+	}
+	return nil
+}
+
 func (s *state) UpdateVolume(update Volume) error {
-	for i, volume := range s.Volumes {
+	// Keep a copy: the caller may change update afterwards.
+	update = update.clone()
+	volumes := slices.Clone(s.Volumes)
+	for i, volume := range volumes {
 		if volume.VolID == update.VolID {
-			s.Volumes[i] = update
-			return s.dump()
+			volumes[i] = update
+			return s.save(volumes)
 		}
 	}
-	s.Volumes = append(s.Volumes, update)
-	return s.dump()
+	return s.save(append(volumes, update))
 }
 
 func (s *state) DeleteVolume(volID string) error {
 	for i, volume := range s.Volumes {
 		if volume.VolID == volID {
-			s.Volumes = append(s.Volumes[:i], s.Volumes[i+1:]...)
-			return s.dump()
+			return s.save(slices.Concat(s.Volumes[:i], s.Volumes[i+1:]))
 		}
 	}
 	return nil

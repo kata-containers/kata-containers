@@ -19,6 +19,38 @@ default_kubelet_data_dir=/var/lib/kubelet
 # namespace kata-directvolume
 DIRECTVOL_NAMESPACE="kata-directvolume"
 
+# Storage capacity tracking needs the CSIStorageCapacity v1 API, which
+# Kubernetes provides since 1.24. CAPACITY_TRACKING=auto (default) enables it
+# when the cluster has that API, true or false force the decision.
+: "${CAPACITY_TRACKING:=auto}"
+case "${CAPACITY_TRACKING}" in
+    auto)
+        # API discovery tells whether the API exists without the permission
+        # to list CSIStorageCapacity objects, which a deploy identity may lack.
+        if ! discovery=$(kubectl get --raw /apis/storage.k8s.io/v1 2>&1); then
+            echo "cannot discover the storage.k8s.io/v1 API: ${discovery}" >&2
+            echo "set CAPACITY_TRACKING=true or false to skip the discovery" >&2
+            exit 1
+        fi
+        if grep -q '"name": *"csistoragecapacities"' <<<"${discovery}"; then
+            have_csistoragecapacity=true
+        else
+            echo "CSIStorageCapacity v1 is not available, deploying without storage capacity tracking" >&2
+            have_csistoragecapacity=false
+        fi
+        ;;
+    true) have_csistoragecapacity=true ;;
+    false) have_csistoragecapacity=false ;;
+    *)
+        echo "CAPACITY_TRACKING must be auto, true or false, got '${CAPACITY_TRACKING}'" >&2
+        exit 1
+        ;;
+esac
+
+# CAPACITY_POLL_INTERVAL overrides how often the csi-provisioner refreshes the
+# published capacity, for example 10s in tests.
+: "${CAPACITY_POLL_INTERVAL:=}"
+
 # Some images are not affected by *_REGISTRY/*_TAG and IMAGE_* variables.
 # The default is to update unless explicitly excluded.
 update_image () {
@@ -75,9 +107,15 @@ for i in $(find "${BASE_DIR}/kata-directvolume" -name 'csi-directvol-*.yaml' | s
             fi
             echo "kata-directvolume plugin        using ${line}" >&2
         fi
-        # shellcheck disable=SC2154
         if ! ${have_csistoragecapacity}; then
-            line="$(echo "${line}" | grep -v -e 'storageCapacity: true' -e '--enable-capacity')"
+            case "${line}" in
+                *"storageCapacity: true"* | *"--enable-capacity"* | *"--capacity-ownerref-level"* | *"--capacity-poll-interval"*)
+                    continue
+                    ;;
+            esac
+        fi
+        if [[ -n "${CAPACITY_POLL_INTERVAL}" ]]; then
+            line="${line/--capacity-poll-interval=*/--capacity-poll-interval=${CAPACITY_POLL_INTERVAL}}"
         fi
         echo "${line}"
     done)"
