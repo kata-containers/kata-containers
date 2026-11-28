@@ -37,11 +37,13 @@ pub(crate) struct NetworkInfoFromLink {
 }
 
 impl NetworkInfoFromLink {
+    /// `with_neighbours` says whether to hand the guest the neighbour entries of the pod netns.
     pub async fn new(
         handle: &rtnetlink::Handle,
         link: &dyn link::Link,
         addrs: Vec<IPAddress>,
         hw_addr: &str,
+        with_neighbours: bool,
     ) -> Result<Self> {
         let attrs = link.attrs();
         let name = &attrs.name;
@@ -58,9 +60,13 @@ impl NetworkInfoFromLink {
                 raw_flags: attrs.flags & libc::IFF_NOARP as u32,
             },
             device_path: Arc::new(RwLock::new(String::new())),
-            neighs: handle_neighbors(handle, attrs)
-                .await
-                .context("handle neighbours")?,
+            neighs: if with_neighbours {
+                handle_neighbors(handle, attrs)
+                    .await
+                    .context("handle neighbours")?
+            } else {
+                Vec::new()
+            },
             routes: handle_routes(handle, attrs)
                 .await
                 .context("handle routes")?,

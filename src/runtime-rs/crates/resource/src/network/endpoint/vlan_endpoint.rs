@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 
 use super::endpoint_persist::EndpointState;
 use super::{attach_network_device, Endpoint};
-use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
+use crate::network::network_model::{NetworkModelType, TC_FILTER_NET_MODEL_STR};
 use crate::network::{utils, NetworkPair};
 
 #[derive(Debug)]
@@ -116,5 +116,9 @@ impl Endpoint for VlanEndpoint {
         // The TAP is removed by its Kata name suffix after a shim death;
         // nothing else of this endpoint lives on the host for recovery.
         None
+    }
+
+    async fn network_model_type(&self) -> Option<NetworkModelType> {
+        Some(self.net_pair.model.model_type())
     }
 }

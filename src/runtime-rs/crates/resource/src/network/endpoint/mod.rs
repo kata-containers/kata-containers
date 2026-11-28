@@ -31,6 +31,7 @@ use hypervisor::Hypervisor;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use super::network_model::NetworkModelType;
 use super::EndpointState;
 
 pub(crate) async fn attach_network_device(
@@ -58,6 +59,11 @@ pub trait Endpoint: std::fmt::Debug + Send + Sync {
         Ok(())
     }
     async fn save(&self) -> Option<EndpointState>;
+    /// The network model the endpoint actually uses, which need not be the configured one:
+    /// VLAN and IPVLAN always use tcfilter. `None` for endpoints without a network pair.
+    async fn network_model_type(&self) -> Option<NetworkModelType> {
+        None
+    }
     /// Returns the guest PCI path for this endpoint if it is a cold-plugged
     /// physical (VFIO) device, e.g. `"05/00"`. Used to populate
     /// `Interface.device_path` in `update_interface` so the agent can do
