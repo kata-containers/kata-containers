@@ -224,7 +224,7 @@ procfs = "0.12.0"
 prometheus = { features = ["process"], version = "0.14.0" }
 protobuf = "3.7.2"
 rand = "0.10.1"
-regex = "1.10.5"
+regex = "1.12.4"
 rlimit = "0.7.0"
 rstest = "0.26.1"
 rtnetlink = "0.23.0"
