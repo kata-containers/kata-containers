@@ -138,3 +138,108 @@ pub fn do_get_host_path(
     };
     path.to_str().unwrap().to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[test]
+    fn test_mkdir_with_permissions_creates_nested_dir_and_sets_mode() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("nested").join("share_dir");
+
+        mkdir_with_permissions(target.clone(), 0o750).unwrap();
+
+        assert!(target.is_dir());
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o750);
+    }
+
+    #[test]
+    fn test_ensure_dir_exist_creates_and_is_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("a").join("b");
+
+        assert!(!target.exists());
+        ensure_dir_exist(&target).unwrap();
+        assert!(target.is_dir());
+
+        // Calling again on an already-existing directory should succeed.
+        ensure_dir_exist(&target).unwrap();
+        assert!(target.is_dir());
+    }
+
+    #[test]
+    fn test_get_host_shared_paths() {
+        let base = Path::new(kata_host_shared_dir().as_str()).to_path_buf();
+        assert_eq!(get_host_shared_path("sbx1"), base.join("sbx1"));
+        assert_eq!(
+            get_host_ro_shared_path("sbx1"),
+            base.join("sbx1").join("ro")
+        );
+        assert_eq!(
+            get_host_rw_shared_path("sbx1"),
+            base.join("sbx1").join("rw")
+        );
+    }
+
+    #[rstest]
+    #[case::passthrough_container(false, false, PASSTHROUGH_FS_DIR, true)]
+    #[case::passthrough_volume(true, false, PASSTHROUGH_FS_DIR, false)]
+    #[case::rafs_container(false, true, RAFS_DIR, true)]
+    #[case::rafs_volume(true, true, RAFS_DIR, false)]
+    fn test_do_get_guest_path(
+        #[case] is_volume: bool,
+        #[case] is_rafs: bool,
+        #[case] fs_dir: &str,
+        #[case] includes_cid: bool,
+    ) {
+        let expected_base = Path::new(kata_guest_share_dir().as_str()).join(fs_dir);
+        let expected = if includes_cid {
+            expected_base.join("cid1").join("rootfs")
+        } else {
+            expected_base.join("rootfs")
+        };
+
+        assert_eq!(
+            do_get_guest_path("rootfs", "cid1", is_volume, is_rafs),
+            expected.to_str().unwrap()
+        );
+    }
+
+    #[rstest]
+    #[case::passthrough(false, PASSTHROUGH_FS_DIR)]
+    #[case::rafs(true, RAFS_DIR)]
+    fn test_do_get_guest_share_path(#[case] is_rafs: bool, #[case] fs_dir: &str) {
+        let expected = format!("/{fs_dir}/cid1/rootfs");
+        assert_eq!(do_get_guest_share_path("rootfs", "cid1", is_rafs), expected);
+    }
+
+    #[rstest]
+    #[case::rw_container(false, false, "rw", true)]
+    #[case::ro_container(false, true, "ro", true)]
+    #[case::rw_volume(true, false, "rw", false)]
+    #[case::ro_volume(true, true, "ro", false)]
+    fn test_do_get_host_path(
+        #[case] is_volume: bool,
+        #[case] read_only: bool,
+        #[case] rw_or_ro: &str,
+        #[case] includes_cid: bool,
+    ) {
+        let base = Path::new(kata_host_shared_dir().as_str())
+            .join("sid1")
+            .join(rw_or_ro)
+            .join(PASSTHROUGH_FS_DIR);
+        let expected = if includes_cid {
+            base.join("cid1").join("rootfs")
+        } else {
+            base.join("rootfs")
+        };
+
+        assert_eq!(
+            do_get_host_path("rootfs", "sid1", "cid1", is_volume, read_only),
+            expected.to_str().unwrap()
+        );
+    }
+}
