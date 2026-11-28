@@ -122,3 +122,30 @@ pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
         Err(_) => Ok(false),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_volume_type() {
+        // spdkvol and spoolvol are served by a vhost-user-blk back-end,
+        // directvol is a plain block device or image file.
+        assert!(matches!(
+            to_volume_type(KATA_SPDK_VOLUME_TYPE),
+            DirectVolumeType::Spdk
+        ));
+        assert!(matches!(
+            to_volume_type(KATA_SPOOL_VOLUME_TYPE),
+            DirectVolumeType::Spdk
+        ));
+        assert!(matches!(
+            to_volume_type(KATA_DIRECT_VOLUME_TYPE),
+            DirectVolumeType::RawBlock
+        ));
+        assert!(matches!(
+            to_volume_type(KATA_VFIO_VOLUME_TYPE),
+            DirectVolumeType::Vfio
+        ));
+    }
+}
