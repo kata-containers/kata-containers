@@ -25,6 +25,12 @@ use std::os::unix::io::{FromRawFd, RawFd};
 // vsock-exporter.
 const HEADER_SIZE_BYTES: u64 = std::mem::size_of::<u64>() as u64;
 
+// The payload length is chosen by the guest, so it cannot be trusted. Each
+// payload is a single serialised span, so this limit is far larger than any
+// legitimate payload while still stopping the guest from forcing an arbitrarily
+// large allocation on the host.
+const MAX_PAYLOAD_SIZE_BYTES: u64 = 1024 * 1024;
+
 fn mk_io_err(msg: &str) -> std::io::Error {
     std::io::Error::other(msg.to_string())
 }
@@ -66,6 +72,14 @@ async fn handle_trace_data(logger: Logger, reader: &mut dyn Read, dump_only: boo
         };
 
         let payload_len: u64 = NetworkEndian::read_u64(&header);
+
+        if payload_len > MAX_PAYLOAD_SIZE_BYTES {
+            return Err(anyhow!(
+                "payload size {} exceeds maximum of {} bytes",
+                payload_len,
+                MAX_PAYLOAD_SIZE_BYTES
+            ));
+        }
 
         let mut encoded_payload = vec![0; payload_len as usize];
 
@@ -110,4 +124,77 @@ pub fn handle_connection(
     block_on(conn)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slog::Discard;
+    use std::io::Cursor;
+
+    fn make_packet(payload_len: u64, payload: &[u8]) -> Vec<u8> {
+        let mut packet = vec![0; HEADER_SIZE_BYTES as usize];
+        NetworkEndian::write_u64(&mut packet, payload_len);
+        packet.extend_from_slice(payload);
+        packet
+    }
+
+    #[test]
+    fn test_handle_trace_data_payload_size() {
+        let logger = Logger::root(Discard, o!());
+
+        let max_payload = vec![0; MAX_PAYLOAD_SIZE_BYTES as usize];
+
+        #[derive(Debug)]
+        struct TestData {
+            packet: Vec<u8>,
+            result: Result<()>,
+        }
+
+        let tests = &[
+            TestData {
+                packet: make_packet(4, b"span"),
+                result: Ok(()),
+            },
+            TestData {
+                packet: make_packet(MAX_PAYLOAD_SIZE_BYTES, &max_payload),
+                result: Ok(()),
+            },
+            TestData {
+                packet: make_packet(MAX_PAYLOAD_SIZE_BYTES + 1, &[]),
+                result: Err(anyhow!(
+                    "payload size {} exceeds maximum of {} bytes",
+                    MAX_PAYLOAD_SIZE_BYTES + 1,
+                    MAX_PAYLOAD_SIZE_BYTES
+                )),
+            },
+            TestData {
+                packet: make_packet(u64::MAX, &[]),
+                result: Err(anyhow!(
+                    "payload size {} exceeds maximum of {} bytes",
+                    u64::MAX,
+                    MAX_PAYLOAD_SIZE_BYTES
+                )),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{i}]: {d:?}");
+
+            let mut reader = Cursor::new(d.packet.clone());
+
+            let result = block_on(handle_trace_data(logger.clone(), &mut reader, true));
+
+            let msg = format!("{msg}, result: {result:?}");
+
+            if d.result.is_ok() {
+                assert!(result.is_ok(), "{}", msg);
+                continue;
+            }
+
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, "{}", msg);
+        }
+    }
 }
