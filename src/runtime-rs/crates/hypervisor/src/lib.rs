@@ -94,11 +94,15 @@ const DEV_HUGEPAGES: &str = "/dev/hugepages";
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 const SHMEM: &str = "shmem";
+// Dragonball memory type for guest memory backed by transparent huge pages.
 #[cfg(all(
     feature = "dragonball",
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
-const HUGE_SHMEM: &str = "hugeshmem";
+const MEM_TYPE_HUGE_SHMEM: &str = "hugeshmem";
+// TDX rejects named mem files, so confidential guests use anonymous memory.
+#[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
+const MEM_TYPE_ANON: &str = "anon";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";

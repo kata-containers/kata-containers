@@ -5,13 +5,17 @@
 //
 
 use super::vmm_instance::VmmInstance;
+#[cfg(target_arch = "x86_64")]
+use crate::MEM_TYPE_ANON;
 use crate::{
     device::DeviceType, firecracker::sl, hypervisor_persist::HypervisorState,
-    kernel_param::KernelParams, MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM,
-    HYPERVISOR_DRAGONBALL, SHMEM,
+    kernel_param::KernelParams, MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS,
+    HYPERVISOR_DRAGONBALL, MEM_TYPE_HUGE_SHMEM, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+#[cfg(target_arch = "x86_64")]
+use dragonball::api::v1::ConfidentialVmType;
 use dragonball::{
     api::v1::{BootSourceConfig, VcpuResizeInfo},
     device_manager::{
@@ -100,6 +104,13 @@ pub struct DragonballInner {
 
 impl DragonballInner {
     pub fn new(exit_notify: mpsc::Sender<i32>) -> DragonballInner {
+        Self::new_with_hypervisor_config(exit_notify, HypervisorConfig::default())
+    }
+
+    pub fn new_with_hypervisor_config(
+        exit_notify: mpsc::Sender<i32>,
+        config: HypervisorConfig,
+    ) -> DragonballInner {
         let mut capabilities = Capabilities::new();
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
@@ -110,16 +121,28 @@ impl DragonballInner {
                 | CapabilityBits::GuestMemoryProbe
                 | CapabilityBits::NetworkDeviceHotplugSupport,
         );
+
+        #[cfg(target_arch = "x86_64")]
+        let confidential_vm_type = config
+            .security_info
+            .confidential_guest
+            .then_some(ConfidentialVmType::TDX);
+
         DragonballInner {
             id: "".to_string(),
             vm_path: "".to_string(),
             jailer_root: "".to_string(),
             netns: None,
-            config: Default::default(),
+            config,
             pending_devices: vec![],
             state: VmmState::NotReady,
             jailed: false,
-            vmm_instance: VmmInstance::new("", exit_notify),
+            vmm_instance: VmmInstance::new(
+                "",
+                exit_notify,
+                #[cfg(target_arch = "x86_64")]
+                confidential_vm_type,
+            ),
             run_dir: "".to_string(),
             cached_block_devices: Default::default(),
             capabilities,
@@ -280,10 +303,18 @@ impl DragonballInner {
         let serial_path = [&self.run_dir, "console.sock"].join("/");
         let (mem_type, mem_file_path) = if self.config.memory_info.enable_hugepages {
             match self.config.memory_info.hugepage_type {
-                HugePageType::THP => (String::from(HUGE_SHMEM), String::from("")),
+                HugePageType::THP => (String::from(MEM_TYPE_HUGE_SHMEM), String::from("")),
                 HugePageType::Hugetlbfs => (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES)),
             }
         } else {
+            #[cfg(target_arch = "x86_64")]
+            if self.config.security_info.confidential_guest {
+                (String::from(MEM_TYPE_ANON), String::from(""))
+            } else {
+                (String::from(SHMEM), String::from(""))
+            }
+
+            #[cfg(not(target_arch = "x86_64"))]
             (String::from(SHMEM), String::from(""))
         };
         let vm_config = VmConfigInfo {
@@ -340,6 +371,8 @@ impl DragonballInner {
         // set boot source
         let kernel_path = self.config.boot_info.kernel.as_str();
         let initrd_path = self.config.boot_info.initrd.as_str();
+        #[cfg(target_arch = "x86_64")]
+        let firmware_path = self.config.boot_info.firmware.as_str();
 
         info!(
             sl!(),
@@ -358,11 +391,22 @@ impl DragonballInner {
             );
         }
 
+        #[cfg(target_arch = "x86_64")]
+        let firmware = if self.config.security_info.confidential_guest && !firmware_path.is_empty()
+        {
+            Some(firmware_path.to_string())
+        } else {
+            None
+        };
+        #[cfg(not(target_arch = "x86_64"))]
+        let firmware = None;
+
         let mut boot_cfg = BootSourceConfig {
             kernel_path: self
                 .get_resource(kernel_path, DRAGONBALL_KERNEL)
                 .context("get kernel resource")?,
             initrd_path: initrd,
+            firmware_path: firmware,
             ..Default::default()
         };
 
@@ -640,7 +684,12 @@ impl Persist for DragonballInner {
             netns: None,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
-            vmm_instance: VmmInstance::new("", hypervisor_args),
+            vmm_instance: VmmInstance::new(
+                "",
+                hypervisor_args,
+                #[cfg(target_arch = "x86_64")]
+                None,
+            ),
             run_dir: String::new(),
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
