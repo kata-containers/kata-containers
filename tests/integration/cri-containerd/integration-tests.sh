@@ -477,7 +477,9 @@ function DoContainerMemoryUpdate() {
 	fi
 
 	sudo crictl update --memory $((2*1024*1024*1024)) "${cid}"
-	sleep 1
+	# Give the guest kernel enough time to finish onlining all hotplugged
+	# memory blocks before reading /proc/meminfo.
+	sleep 3
 
 	vm_size=$(($(sudo crictl exec "${cid}" cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
 	if [[ "${vm_size}" -gt $((4*1024*1024*1024)) ]] || [[ "${vm_size}" -lt $((4*1024*1024*1024-128*1024*1024)) ]]; then
@@ -486,8 +488,34 @@ function DoContainerMemoryUpdate() {
 	fi
 
 	if [[ "${descrease_memory}" -eq 1 ]]; then
+		# On s390x with virtio-mem-ccw the agent must online hotplugged memory
+		# blocks in the MOVABLE zone so the kernel can migrate pages out and
+		# offline them during hot-unplug.  The agent reads valid_zones and
+		# writes "online_movable" when Movable is listed (online_device() in
+		# src/agent/src/device/mod.rs).  Without that fix the agent writes "1"
+		# and blocks land in NORMAL zone, which the kernel refuses to offline.
+		#
+		# Verify the zone directly inside the guest: every hotplugged block
+		# must report "Movable" (or contain "movable") in its mmzone sysfs
+		# entry.  This check fails without the agent patch and passes with it,
+		# making it a direct regression test for that fix.
+		if [[ "${ARCH}" == "s390x" ]]; then
+			normal_blocks=$(sudo crictl exec "${cid}" sh -c \
+				'for f in /sys/devices/system/memory/memory*/valid_zones; do cat "$f"; done' \
+				| grep -c "^Normal$" || true)
+			if [[ "${normal_blocks}" -gt 0 ]]; then
+				testContainerStop
+				die "${normal_blocks} hotplugged memory block(s) are in the Normal zone." \
+					"They must be in the Movable zone for hot-unplug to work." \
+					"Check that online_device() in src/agent/src/device/mod.rs" \
+					"writes 'online_movable' when valid_zones lists Movable."
+			fi
+		fi
+
 		sudo crictl update --memory $((1*1024*1024*1024)) "${cid}"
-		sleep 1
+		# Give the guest kernel enough time to migrate pages out of the
+		# MOVABLE blocks and offline them before reading /proc/meminfo.
+		sleep 5
 
 		vm_size=$(($(sudo crictl exec "${cid}" cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
 		if [[ "${vm_size}" -gt $((3*1024*1024*1024)) ]] || [[ "${vm_size}" -lt $((3*1024*1024*1024-128*1024*1024)) ]]; then
