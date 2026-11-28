@@ -346,9 +346,12 @@ pub fn bind_remount<P: AsRef<Path>>(dst: P, readonly: bool) -> Result<()> {
 /// Bind mount `src` to `dst` with a custom propagation type, optionally in readonly mode if
 /// `readonly` is true.
 ///
-/// Propagation type: MsFlags::MS_SHARED or MsFlags::MS_SLAVE
+/// Propagation type: MsFlags::MS_SHARED, MsFlags::MS_SLAVE or MsFlags::MS_PRIVATE.
 /// MsFlags::MS_SHARED is used to bind mount the sandbox path to enable `exec` (in case of FC
 /// jailer).
+/// MsFlags::MS_PRIVATE is used for volume bind mounts into the shared directory, matching the
+/// Go runtime's `bindMount(..., "private")`, so later events on the source mount (e.g. a CSI
+/// unstage) do not propagate into the sandbox shared directory.
 /// MsFlags::MS_SLAVE is used on all other cases.
 ///
 /// # Safety
@@ -392,7 +395,10 @@ pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
     .map_err(|e| Error::BindMount(abs_src, dst.to_path_buf(), e))?;
 
     // Change into the chosen propagation mode.
-    if !(pgflag == MsFlags::MS_SHARED || pgflag == MsFlags::MS_SLAVE) {
+    if !(pgflag == MsFlags::MS_SHARED
+        || pgflag == MsFlags::MS_SLAVE
+        || pgflag == MsFlags::MS_PRIVATE)
+    {
         return Err(Error::InvalidPgMountFlag);
     }
     mount(Some(""), dst, Some(""), pgflag, Some(""))
