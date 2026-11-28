@@ -7,7 +7,6 @@
 use crate::linux_abi::pcipath_from_dev_tree_path;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
@@ -26,7 +25,7 @@ use crate::ccw;
 #[cfg(target_arch = "s390x")]
 use crate::device::block_device_handler::get_virtio_blk_ccw_device_name;
 use crate::device::block_device_handler::{
-    get_virtio_blk_mmio_device_name, get_virtio_blk_pci_device_name,
+    get_virtio_blk_pci_device_name, wait_for_virtio_blk_mmio_device,
 };
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
@@ -247,11 +246,9 @@ impl StorageHandler for VirtioBlkMmioHandler {
         storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
-        if !Path::new(&storage.source).exists() {
-            get_virtio_blk_mmio_device_name(ctx.sandbox, &storage.source)
-                .await
-                .context("failed to get mmio device name")?;
-        }
+        wait_for_virtio_blk_mmio_device(ctx.sandbox, &storage.source)
+            .await
+            .context("failed to wait for virtio-mmio block device")?;
         let dev_num = get_device_number(&storage.source, None)?;
         handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
@@ -273,23 +270,25 @@ impl StorageHandler for VirtioBlkPciHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
+        let dev_num: String;
+
         // If hot-plugged, get the device node path based on the PCI path
         // otherwise use the virt path provided in Storage Source
-        let dev_num: String = if storage.source.starts_with("/dev") {
+        if storage.source.starts_with("/dev") {
             let metadata = fs::metadata(&storage.source)
                 .context(format!("get metadata on file {:?}", storage.source))?;
             let mode = metadata.permissions().mode();
             if mode & libc::S_IFBLK == 0 {
                 return Err(anyhow!("Invalid device {}", storage.source));
             }
-            get_device_number(&storage.source, Some(&metadata))?
+            dev_num = get_device_number(&storage.source, Some(&metadata))?;
         } else {
             let (root_complex, pcipath) = pcipath_from_dev_tree_path(&storage.source)?;
             let dev_path =
                 get_virtio_blk_pci_device_name(ctx.sandbox, root_complex, &pcipath).await?;
             storage.source = dev_path;
-            get_device_number(&storage.source, None)?
-        };
+            dev_num = get_device_number(&storage.source, None)?;
+        }
 
         handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
