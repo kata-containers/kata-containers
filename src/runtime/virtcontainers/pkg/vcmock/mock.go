@@ -56,3 +56,11 @@ func (m *VCMock) CleanupContainer(ctx context.Context, sandboxID, containerID st
 	}
 	return fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
+
+// FetchSandbox implements the VC function of the same name.
+func (m *VCMock) FetchSandbox(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+	if m.FetchSandboxFunc != nil {
+		return m.FetchSandboxFunc(ctx, sandboxID)
+	}
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
+}
