@@ -33,6 +33,26 @@ A comprehensive documentation of the configuration file can be found [here](http
 >$ sudo systemctl restart crio
 >````
 
+> **Warning:** `kata-deploy` configures CRI-O with
+> `overlay.skip_mount_home=true`. If CRI-O was already running before
+> `kata-deploy` installed Kata, restart the node before starting Kata workloads.
+> Restarting CRI-O and kubelet alone leaves an existing private
+> `/var/lib/containers/storage/overlay` mount unchanged, and Kata containers
+> can fail with an error such as `the file sh was not found`.
+>
+> Check the mount propagation with:
+>
+> ```bash
+> $ findmnt -o TARGET,PROPAGATION --mountpoint /var/lib/containers/storage/overlay
+> ```
+>
+> Rebooting the node is the preferred recovery. If rebooting is not possible,
+> make the mount shared before creating new Kata containers:
+>
+> ```bash
+> $ sudo mount --make-shared /var/lib/containers/storage/overlay
+> ```
+
 #### Kubernetes Runtime Class (CRI-O v1.12+)
 
 The [Kubernetes Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)

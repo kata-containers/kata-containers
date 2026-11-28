@@ -138,6 +138,27 @@ helm install kata-deploy "${CHART}" --version "${VERSION}"
 
 This installs Kata via short-lived, staged per-node Jobs (the default `job`
 deployment mode) and the default Kata `RuntimeClass` resources on your cluster.
+
+> **Warning:** When installing with `kata-deploy` on a node where CRI-O ran
+> before the installation, reboot the node before starting Kata workloads.
+> `kata-deploy` configures CRI-O with `overlay.skip_mount_home=true`, but
+> restarting CRI-O and kubelet does not change an existing private
+> `/var/lib/containers/storage/overlay` mount. Without a reboot, Kata pods can
+> fail to start with an error such as `the file sh was not found`.
+>
+> To confirm the condition, run:
+>
+> ```bash
+> $ findmnt -o TARGET,PROPAGATION --mountpoint /var/lib/containers/storage/overlay
+> ```
+>
+> The preferred recovery is to reboot the node. As an alternative, make the
+> mount shared before creating new Kata containers:
+>
+> ```bash
+> $ sudo mount --make-shared /var/lib/containers/storage/overlay
+> ```
+
 To see everything you can configure:
 
 ```sh
