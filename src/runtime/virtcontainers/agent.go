@@ -131,7 +131,7 @@ type agent interface {
 	memHotplugByProbe(ctx context.Context, addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error
 
 	// statsContainer will tell the agent to get stats from a container related to a Sandbox
-	statsContainer(ctx context.Context, sandbox *Sandbox, c Container) (*ContainerStats, error)
+	statsContainer(ctx context.Context, containerID string) (*ContainerStats, error)
 
 	// pauseContainer will pause a container
 	pauseContainer(ctx context.Context, sandbox *Sandbox, c Container) error
