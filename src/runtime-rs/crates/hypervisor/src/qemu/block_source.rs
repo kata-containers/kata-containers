@@ -4,6 +4,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::vmdk::validate_vmdk_layout;
+use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::memfd::{memfd_create, MFdFlags};
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -49,7 +50,11 @@ fn open_block_source(
         // Rust opens files close-on-exec by default; specify it here as part of
         // this security boundary and clear it only for descriptors intentionally
         // inherited by QEMU at startup.
-        .custom_flags(direct_flag | libc::O_CLOEXEC);
+        //
+        // Opening a FIFO read-only blocks until a writer appears, so the type
+        // check below would never be reached. O_NONBLOCK makes the open return
+        // at once; it is cleared again once the type is known to be allowed.
+        .custom_flags(direct_flag | libc::O_CLOEXEC | libc::O_NONBLOCK);
 
     let file = options
         .open(path)
@@ -66,6 +71,13 @@ fn open_block_source(
             "QEMU block source {path} is neither an allowed regular file nor block device"
         ));
     }
+
+    // Hand QEMU the descriptor with the flags it asked for.
+    let flags = OFlag::from_bits_truncate(
+        fcntl(&file, FcntlArg::F_GETFL).with_context(|| format!("get flags of {path}"))?,
+    );
+    fcntl(&file, FcntlArg::F_SETFL(flags - OFlag::O_NONBLOCK))
+        .with_context(|| format!("clear O_NONBLOCK on {path}"))?;
 
     Ok((file, metadata))
 }
@@ -179,7 +191,8 @@ where
 mod tests {
     use super::*;
     use kata_types::vmdk::VmdkConfig;
-    use nix::fcntl::{fcntl, FcntlArg, OFlag};
+    use nix::sys::stat::Mode;
+    use nix::unistd::mkfifo;
     use std::cell::RefCell;
     use std::io::{Read, Seek, SeekFrom};
     use std::os::unix::fs::symlink;
@@ -198,6 +211,8 @@ mod tests {
             false,
             |file, _| {
                 assert_eq!(file.metadata()?.len(), 4);
+                let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
+                assert!(!flags.contains(OFlag::O_NONBLOCK));
                 Ok("/dev/fdset/7".to_string())
             },
         )
@@ -364,6 +379,39 @@ mod tests {
 
         assert_eq!(prepared.filename, "/dev/fdset/1");
         assert!(prepared.is_regular_file);
+    }
+
+    #[test]
+    fn rejects_fifo_without_blocking() {
+        let dir = tempdir().unwrap();
+        let fifo = dir.path().join("fifo");
+        mkfifo(&fifo, Mode::S_IRUSR | Mode::S_IWUSR).unwrap();
+        let fifo = fifo.to_str().unwrap();
+
+        // Without O_NONBLOCK, opening the FIFO read-only would block forever.
+        let error = prepare_block_source(fifo, &BlockSourceFormat::Raw, true, false, |_, _| {
+            Ok("/dev/fdset/1".to_string())
+        })
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("QEMU block source {fifo} is neither an allowed regular file nor block device")
+        );
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(fifo, 1, 0);
+        let error = prepare_block_source(
+            "disk.vmdk",
+            &BlockSourceFormat::Vmdk(vmdk),
+            true,
+            false,
+            |_, _| Ok("/dev/fdset/1".to_string()),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("QEMU block source {fifo} is not a regular file")
+        );
     }
 
     #[test]
