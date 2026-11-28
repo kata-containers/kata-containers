@@ -308,7 +308,7 @@ externals:
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
-    version: "v1.2.0"
+    version: "v1.9.1"
 
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
