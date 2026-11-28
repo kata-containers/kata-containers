@@ -31,6 +31,18 @@ pub(crate) async fn configure_port_forwarding(
 
 async fn configure_ipv4(tap_name: &str, pod_ip: Ipv4Addr, tap_ip: Ipv4Addr) -> Result<()> {
     let iptables = detect_iptables_binary().await?;
+    // The NAT is set up once per pod netns: with several l3forwarding interfaces, the first one
+    // to get here sets it up for its pod address and the others leave it alone. The jump from
+    // OUTPUT is the last rule added below, so it is only there if a setup completed.
+    if run_iptables(
+        iptables,
+        &["-t", "nat", "-C", "OUTPUT", "-j", KATA_OUTPUT_CHAIN],
+    )
+    .await
+    .is_ok()
+    {
+        return Ok(());
+    }
     let pod_cidr = format!("{pod_ip}/32");
     let tap_ip = tap_ip.to_string();
     let pod_ip = pod_ip.to_string();
@@ -172,5 +184,97 @@ async fn probe_binary(binary: &'static str) -> Option<String> {
             Some(String::from_utf8_lossy(&output.stdout).into_owned())
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_utils::skip_if_not_root;
+
+    /// Runs `body` with the calling thread in a throwaway network namespace, whose iptables
+    /// rules are its own.
+    async fn in_netns<F: std::future::Future<Output = ()>>(tag: &str, body: F) {
+        let name = format!("kata-portfw-{}-{}", tag, std::process::id());
+        let netns = scopeguard::guard(
+            netns_rs::NetNs::new(&name).expect("create netns"),
+            |netns| {
+                let _ = netns.remove();
+            },
+        );
+        let _guard = kata_sys_util::netns::NetnsGuard::new(netns.path().to_str().unwrap())
+            .expect("enter netns");
+        body.await;
+    }
+
+    /// The iptables binary the NAT setup would use in the current network namespace, or `None`
+    /// if there is none, in which case the test has nothing to check: port forwarding is skipped
+    /// the same way. The choice depends on the rules in the namespace, so call it from inside
+    /// the test's namespace.
+    async fn iptables_backend() -> Option<&'static str> {
+        let backend = detect_iptables_binary().await.ok();
+        if backend.is_none() {
+            eprintln!("skipping: no usable iptables binary");
+        }
+        backend
+    }
+
+    async fn nat_rules(iptables: &str) -> String {
+        let output = Command::new(iptables)
+            .args(["-t", "nat", "-S"])
+            .output()
+            .await
+            .expect("list nat rules");
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    /// Requires root: creating a netns needs CAP_SYS_ADMIN.
+    #[actix_rt::test]
+    async fn nat_is_set_up_once_per_netns() {
+        skip_if_not_root!();
+        in_netns("once", async {
+            let Some(iptables) = iptables_backend().await else {
+                return;
+            };
+            configure_ipv4("tap0_kata", Ipv4Addr::new(10, 0, 1, 5), TAP_IPV4_ADDR)
+                .await
+                .expect("set up the NAT for the first interface");
+            configure_ipv4("tap1_kata", Ipv4Addr::new(10, 0, 2, 5), TAP_IPV4_ADDR)
+                .await
+                .expect("a second interface leaves the NAT alone");
+
+            let rules = nat_rules(iptables).await;
+            assert_eq!(
+                rules.matches("-A OUTPUT -j KATA_PORTFW_OUTPUT").count(),
+                1,
+                "{}",
+                rules
+            );
+            assert!(!rules.contains("tap1_kata"), "{}", rules);
+        })
+        .await;
+    }
+
+    /// A setup that stopped after creating its first chain is not taken as done.
+    ///
+    /// Requires root: creating a netns needs CAP_SYS_ADMIN.
+    #[actix_rt::test]
+    async fn partial_nat_setup_is_not_taken_as_done() {
+        skip_if_not_root!();
+        in_netns("partial", async {
+            let Some(iptables) = iptables_backend().await else {
+                return;
+            };
+            run_iptables(iptables, &["-t", "nat", "-N", KATA_POSTROUTING_CHAIN])
+                .await
+                .expect("create the first chain");
+            assert!(
+                configure_ipv4("tap0_kata", Ipv4Addr::new(10, 0, 1, 5), TAP_IPV4_ADDR)
+                    .await
+                    .is_err(),
+                "a partial setup was taken as done"
+            );
+        })
+        .await;
     }
 }
