@@ -66,6 +66,10 @@ fn task_error_to_ttrpc(err: anyhow::Error) -> ttrpc::Error {
             ttrpc::Code::NOT_FOUND,
             format!("{err:#}"),
         )),
+        Some(RuntimeError::FailedPrecondition(_)) => ttrpc::Error::RpcStatus(ttrpc::get_status(
+            ttrpc::Code::FAILED_PRECONDITION,
+            format!("{err:#}"),
+        )),
         _ => ttrpc::Error::Others(format!("failed to handle message {err:?}")),
     }
 }
@@ -105,6 +109,25 @@ mod tests {
     use common::types::ContainerProcess;
 
     use super::*;
+
+    #[test]
+    fn rejected_starts_keep_failed_precondition_status() {
+        for reason in [
+            "cannot start process in state Running",
+            "cannot start process after exit wait has begun",
+        ] {
+            let err = anyhow::Error::new(RuntimeError::FailedPrecondition(reason.to_owned()))
+                .context("start")
+                .context("start process");
+            match task_error_to_ttrpc(err) {
+                ttrpc::Error::RpcStatus(status) => {
+                    assert_eq!(status.code(), ttrpc::Code::FAILED_PRECONDITION);
+                    assert_eq!(status.message(), format!("start process: start: {reason}"));
+                }
+                err => panic!("expected FAILED_PRECONDITION, got {:?}", err),
+            }
+        }
+    }
 
     #[test]
     fn missing_tasks_keep_not_found_status() {

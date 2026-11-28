@@ -22,6 +22,8 @@ pub enum Error {
     AgentConnectionClosed,
     #[error("process already terminated")]
     ProcessAlreadyTerminated,
+    #[error("{0}")]
+    FailedPrecondition(String),
 }
 
 /// Common error messages indicating normal OOM shutdowns due to network issues.
