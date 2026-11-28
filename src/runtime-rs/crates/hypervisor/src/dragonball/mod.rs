@@ -245,6 +245,10 @@ impl Hypervisor for Dragonball {
         let inner = self.inner.read().await;
         inner.get_passfd_listener_addr().await
     }
+
+    async fn supports_fd_passthrough(&self) -> bool {
+        true
+    }
 }
 
 #[async_trait]

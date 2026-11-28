@@ -64,6 +64,10 @@ pub struct CloudHypervisorInner {
     pub(crate) guest_memory_block_size_mb: u32,
 
     pub(crate) exit_notify: Option<mpsc::Sender<i32>>,
+
+    /// guest-side fd passthrough io listener port, used to initialize
+    /// connections for io
+    pub(crate) passfd_listener_port: Option<u32>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -105,6 +109,7 @@ impl CloudHypervisorInner {
             guest_memory_block_size_mb: 0,
 
             exit_notify,
+            passfd_listener_port: None,
         }
     }
 
@@ -125,6 +130,10 @@ impl CloudHypervisorInner {
         // CLH revalidates existing NICs on every device hotplug. Use boot vCPUs,
         // since CPUs added later can be removed while the NIC remains attached.
         (self.config.cpu_info.default_vcpus.ceil() as usize).clamp(1, MAX_NETWORK_QUEUES as usize)
+    }
+
+    pub fn set_passfd_listener_port(&mut self, port: u32) {
+        self.passfd_listener_port = Some(port);
     }
 }
 
