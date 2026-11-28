@@ -352,10 +352,11 @@ enable_debug = false
 #
 #   - l3forwarding
 #     Uses L3 routing and proxy ARP to forward traffic between the network
-#     interface provided by the plugin and a tap interface connected to the
-#     VM.
+#     interfaces provided by the plugin and tap interfaces connected to the
+#     VM, one tap interface per network interface. VLAN and IPVLAN
+#     interfaces always use tcfilter.
 #     Useful for Istio Ambient-style service mesh integration with node
-#     proxies. Supports a single network interface per network namespace.
+#     proxies.
 #     Experimental feature, IPv4 only.
 #
 internetworking_model = "@DEFNETWORKMODEL_FC@"

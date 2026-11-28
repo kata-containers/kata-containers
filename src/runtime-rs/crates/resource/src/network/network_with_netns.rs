@@ -446,17 +446,6 @@ async fn get_entity_from_netns(
         }
     }
 
-    // Currently, l3forwarding configures the host netns for a single pod interface.
-    if failure.is_none()
-        && config.network_model == crate::network::network_model::L3_FORWARDING_NET_MODEL_STR
-        && entity_list.len() > 1
-    {
-        failure = Some(anyhow!(
-            "l3forwarding supports only a single interface per network namespace, found {}",
-            entity_list.len()
-        ));
-    }
-
     Ok((entity_list, failure))
 }
 
@@ -767,5 +756,231 @@ mod cleanup_tests {
         // A retry does not undo the construction twice.
         network.remove(&Qemu::new()).await.unwrap();
         assert_eq!(unattempted.undone.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[cfg(test)]
+mod multi_interface_tests {
+    use super::*;
+    use crate::network::{network_model::L3_FORWARDING_NET_MODEL_STR, NetworkPair};
+    use netlink_packet_route::{
+        address::AddressAttribute,
+        route::{RouteAddress, RouteAttribute},
+    };
+    use rtnetlink::RouteMessageBuilder;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    const TAP_IPV4: Ipv4Addr = Ipv4Addr::new(169, 254, 0, 1);
+    const ROUTE_TABLE_MAIN: u8 = 254;
+    const ROUTE_TABLE_LOCAL: u8 = 255;
+
+    /// Two pod interfaces, shaped like the AWS VPC CNI on an IPv6 cluster minus the IPv6: the
+    /// primary interface with a /32, and the IPv4 egress interface with a /22.
+    const POD_INTERFACES: [(&str, &str, Ipv4Addr, u8); 2] = [
+        (
+            "kata-m-eth0",
+            "kata-m-peer0",
+            Ipv4Addr::new(10, 0, 1, 5),
+            32,
+        ),
+        (
+            "kata-m-v4if0",
+            "kata-m-peer1",
+            Ipv4Addr::new(169, 254, 172, 2),
+            22,
+        ),
+    ];
+
+    struct PodNetns {
+        path: String,
+        netns: Option<netns_rs::NetNs>,
+    }
+
+    impl Drop for PodNetns {
+        fn drop(&mut self) {
+            if let Some(netns) = self.netns.take() {
+                let _ = netns.remove();
+            }
+        }
+    }
+
+    async fn link_index(handle: &rtnetlink::Handle, name: &str) -> u32 {
+        handle
+            .link()
+            .get()
+            .match_name(name.to_string())
+            .execute()
+            .try_next()
+            .await
+            .expect("look up link")
+            .expect("link exists")
+            .header
+            .index
+    }
+
+    /// Creates the pod interfaces in a throwaway netns. Each one is up, with its own address;
+    /// the peers stay down, so the pod interfaces have no carrier, no IPv6 link-local address,
+    /// and discovery sees exactly these two.
+    async fn pod_netns(tag: &str) -> PodNetns {
+        let name = format!("kata-multi-{}-{}", tag, std::process::id());
+        let netns = netns_rs::NetNs::new(&name).expect("create netns");
+        let path = netns.path().to_str().unwrap().to_string();
+        // Built first, so that the netns is removed even if the setup below panics.
+        let pod_netns = PodNetns {
+            path: path.clone(),
+            netns: Some(netns),
+        };
+
+        let _guard = netns::NetnsGuard::new(&path).expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let connection = tokio::spawn(connection);
+        defer!({
+            connection.abort();
+        });
+        for (pod_if, peer_if, addr, prefix) in POD_INTERFACES {
+            handle
+                .link()
+                .add(rtnetlink::LinkVeth::new(pod_if, peer_if).build())
+                .execute()
+                .await
+                .expect("create veth pair");
+            let index = link_index(&handle, pod_if).await;
+            handle
+                .link()
+                .set(rtnetlink::LinkUnspec::new_with_index(index).up().build())
+                .execute()
+                .await
+                .expect("set pod interface up");
+            handle
+                .address()
+                .add(index, IpAddr::V4(addr), prefix)
+                .execute()
+                .await
+                .expect("assign pod address");
+        }
+
+        pod_netns
+    }
+
+    async fn ipv4_routes(handle: &rtnetlink::Handle) -> Vec<(u8, Ipv4Addr, u8, u32)> {
+        let query = RouteMessageBuilder::<Ipv4Addr>::new().build();
+        let mut dump = handle.route().get(query).execute();
+        let mut routes = Vec::new();
+        while let Some(route) = dump.try_next().await.expect("list routes") {
+            let dst = route.attributes.iter().find_map(|a| match a {
+                RouteAttribute::Destination(RouteAddress::Inet(v4)) => Some(*v4),
+                _ => None,
+            });
+            let oif = route.attributes.iter().find_map(|a| match a {
+                RouteAttribute::Oif(index) => Some(*index),
+                _ => None,
+            });
+            if let (Some(dst), Some(oif)) = (dst, oif) {
+                routes.push((
+                    route.header.table,
+                    dst,
+                    route.header.destination_prefix_length,
+                    oif,
+                ));
+            }
+        }
+        routes
+    }
+
+    async fn ipv4_addresses(handle: &rtnetlink::Handle, index: u32) -> Vec<Ipv4Addr> {
+        let mut dump = handle
+            .address()
+            .get()
+            .set_link_index_filter(index)
+            .execute();
+        let mut addresses = Vec::new();
+        while let Some(msg) = dump.try_next().await.expect("list addresses") {
+            for attr in &msg.attributes {
+                if let AddressAttribute::Local(IpAddr::V4(v4)) = attr {
+                    addresses.push(*v4);
+                }
+            }
+        }
+        addresses
+    }
+
+    // Requires root: creating a netns, veth pairs and TAPs needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn l3forwarding_discovers_every_pod_interface() {
+        test_utils::skip_if_not_root!();
+        let pod = pod_netns("discover").await;
+
+        let config = NetworkWithNetNsConfig {
+            network_model: L3_FORWARDING_NET_MODEL_STR.to_string(),
+            netns_path: pod.path.clone(),
+            queues: 1,
+            network_created: false,
+        };
+        let d = Arc::new(crate::test_utils::device_manager().await);
+        let (entities, failure) = get_entity_from_netns(&config, d)
+            .await
+            .expect("discover entities");
+
+        assert!(failure.is_none(), "discovery failed: {:?}", failure);
+        let mut names = Vec::new();
+        for entity in &entities {
+            names.push(entity.endpoint.name().await);
+        }
+        names.sort();
+        assert_eq!(names, vec!["kata-m-eth0", "kata-m-v4if0"]);
+    }
+
+    // Requires root: creating a netns, veth pairs and TAPs needs CAP_NET_ADMIN.
+    #[tokio::test]
+    async fn l3forwarding_configures_each_pair_on_its_own_tap() {
+        test_utils::skip_if_not_root!();
+        let pod = pod_netns("pairs").await;
+
+        let _guard = netns::NetnsGuard::new(&pod.path).expect("enter netns");
+        let (connection, handle, _) = rtnetlink::new_connection().expect("new connection");
+        let connection = tokio::spawn(connection);
+        defer!({
+            connection.abort();
+        });
+
+        let mut pairs = Vec::new();
+        for (idx, (pod_if, _, _, _)) in POD_INTERFACES.iter().enumerate() {
+            let pair =
+                NetworkPair::new(&handle, idx as u32, pod_if, L3_FORWARDING_NET_MODEL_STR, 1)
+                    .await
+                    .expect("new network pair");
+            pair.add_network_model().await.expect("add network model");
+            pairs.push(pair);
+        }
+
+        let routes = ipv4_routes(&handle).await;
+        for (pair, (pod_if, _, pod_addr, _)) in pairs.iter().zip(POD_INTERFACES) {
+            let tap = pair.tap.tap_iface.name.as_str();
+            let tap_index = link_index(&handle, tap).await;
+            let virt_index = link_index(&handle, pod_if).await;
+
+            for iface in [tap, pod_if] {
+                let proxy_arp =
+                    std::fs::read_to_string(format!("/proc/sys/net/ipv4/conf/{}/proxy_arp", iface))
+                        .expect("read proxy_arp");
+                assert_eq!(proxy_arp.trim(), "1", "proxy_arp not enabled on {}", iface);
+            }
+            // Every tap carries the same address; it only has to differ from the pod address.
+            assert_eq!(ipv4_addresses(&handle, tap_index).await, vec![TAP_IPV4]);
+            assert!(
+                routes.contains(&(ROUTE_TABLE_MAIN, pod_addr, 32, tap_index)),
+                "no /32 for {} via {}: {:?}",
+                pod_addr,
+                tap,
+                routes
+            );
+            assert!(
+                !routes.contains(&(ROUTE_TABLE_LOCAL, pod_addr, 32, virt_index)),
+                "the local route for {} on {} is still there: {:?}",
+                pod_addr,
+                pod_if,
+                routes
+            );
+        }
     }
 }
