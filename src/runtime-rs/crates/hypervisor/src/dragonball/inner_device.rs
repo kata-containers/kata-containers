@@ -259,6 +259,8 @@ impl DragonballInner {
         } else if self.state == VmmState::VmRunning {
             return Err(anyhow!("VFIO hotplug returned no guest PCI slot"));
         }
+        // Cold-plug (VM not running): the slot is only assigned at boot and is
+        // read back in `cold_start_vm()` after the VM has started.
 
         Ok(())
     }

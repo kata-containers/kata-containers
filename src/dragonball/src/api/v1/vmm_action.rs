@@ -337,6 +337,13 @@ pub enum VmmAction {
     #[cfg(feature = "host-device")]
     /// Add a VFIO assignment host device or update that already exists
     RemoveHostDevice(String),
+
+    #[cfg(feature = "host-device")]
+    /// Query the guest PCI slot assigned to a VFIO host device.
+    ///
+    /// Cold-plugged devices only get a slot at boot, so this must be queried
+    /// after the microVM has started to read the slot back.
+    GetHostDeviceGuestId(String),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -520,6 +527,10 @@ impl VmmService {
             }
             #[cfg(feature = "host-device")]
             VmmAction::RemoveHostDevice(hostdev_cfg) => self.remove_vfio_device(vmm, &hostdev_cfg),
+            #[cfg(feature = "host-device")]
+            VmmAction::GetHostDeviceGuestId(hostdev_id) => {
+                self.get_host_device_guest_id(vmm, &hostdev_id)
+            }
         };
 
         debug!("send vmm response: {response:?}");
@@ -1133,6 +1144,19 @@ impl VmmService {
         // host kernel will clear iommu table in this scenario.
 
         Ok(VmmData::Empty)
+    }
+
+    #[cfg(feature = "host-device")]
+    fn get_host_device_guest_id(&self, vmm: &mut Vmm, hostdev_id: &str) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
+            VfioDeviceError::InvalidVMID,
+        ))?;
+
+        // It is safe because we don't expect poison lock.
+        let vfio_manager = vm.device_manager.vfio_manager.lock().unwrap();
+        Ok(VmmData::VfioDeviceData(
+            vfio_manager.get_device_guest_id(hostdev_id),
+        ))
     }
 
     #[cfg(feature = "hotplug")]

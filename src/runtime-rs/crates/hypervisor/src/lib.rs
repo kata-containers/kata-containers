@@ -210,4 +210,15 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
             hostdev_id
         ))
     }
+
+    /// Whether cold-plugged VFIO PCI devices can be attached directly to the
+    /// PCI root bus without a pre-allocated PCIe root/switch port topology.
+    ///
+    /// Lightweight VMMs (e.g. Dragonball) expose a flat PCI bus and register
+    /// pass-through devices straight on the root bus, so they do not need a
+    /// `PCIeTopology` to reserve a root port before boot. Hypervisors that
+    /// rely on root ports for cold-plug (QEMU/CH) keep the default `false`.
+    fn supports_flat_pci_root(&self) -> bool {
+        false
+    }
 }

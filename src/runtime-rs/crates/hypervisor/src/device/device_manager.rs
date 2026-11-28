@@ -691,6 +691,40 @@ pub async fn find_cold_plugged_vfio_ap(
     None
 }
 
+/// Returns `(host_bdf, Option<guest_pci_path>)` for every sandbox-level
+/// cold-plugged VFIO PCI device that has already been assigned a guest PCI
+/// slot.
+///
+/// These devices are injected before VM boot (so they are already present in
+/// the guest) and their slot is read back after boot. `handler_devices` uses
+/// this to skip `do_handle_device` for a container's `/dev/vfio/*` node that
+/// belongs to such a device, mirroring the network-endpoint cold-plug skip.
+/// Only devices with a resolved guest PCI path are returned: a device without
+/// one cannot yield a valid agent device option and is left to the caller.
+pub async fn list_cold_plugged_vfio_bdfs(
+    d: &RwLock<DeviceManager>,
+) -> Vec<(String, Option<String>)> {
+    // Avoid holding the DeviceManager read-lock across .await points.
+    let devices: Vec<ArcMutexDevice> = {
+        let dm = d.read().await;
+        dm.devices.values().cloned().collect()
+    };
+    let mut result = Vec::new();
+    for dev in devices {
+        if let DeviceType::VfioModern(inner) = dev.lock().await.get_device_info().await {
+            let guard = inner.lock().await;
+            if guard.device.device_type != VfioDeviceType::Normal {
+                continue;
+            }
+            let guest_pci_path = guard.config.guest_pci_path.as_ref().map(|p| p.to_string());
+            for bdf in &guard.config.host_bdfs {
+                result.push((bdf.clone(), guest_pci_path.clone()));
+            }
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::{do_handle_device, Device, DeviceManager, PCIeTopology};

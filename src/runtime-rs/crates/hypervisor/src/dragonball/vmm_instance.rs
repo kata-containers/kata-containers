@@ -244,6 +244,23 @@ impl VmmInstance {
         }
     }
 
+    /// Query the guest PCI slot assigned to a cold-plugged host device.
+    ///
+    /// Only meaningful after the VM has started: cold-plugged devices get
+    /// their slot during boot.
+    pub fn get_host_device_guest_id(&self, id: &str) -> Result<Option<u8>> {
+        if let VmmData::VfioDeviceData(guest_dev_id) = self.handle_request(Request::Sync(
+            VmmAction::GetHostDeviceGuestId(id.to_string()),
+        ))? {
+            Ok(guest_dev_id)
+        } else {
+            Err(anyhow!(format!(
+                "Failed to get guest device id of host device {}",
+                id
+            )))
+        }
+    }
+
     pub fn prepare_remove_host_device(&self, id: &str) -> Result<()> {
         info!(sl!(), "prepare to remove host device {}", id);
         self.handle_request(Request::Sync(VmmAction::PrepareRemoveHostDevice(

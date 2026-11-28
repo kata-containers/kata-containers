@@ -231,10 +231,32 @@ impl Device for VfioDeviceModernHandle {
             .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
             .await;
 
+        // Attach directly to the flat PCI root bus (no root/switch port) when
+        // the hypervisor exposes one and the selected topology is NoPort.
+        // QEMU/CH rely on root/switch ports and keep the default capability.
+        let flat_root = !is_ap
+            && h.supports_flat_pci_root()
+            && pcie_topo
+                .as_deref()
+                .and_then(|t| t.get_pcie_port())
+                .map(|(p, _)| p == PCIePort::NoPort)
+                .unwrap_or(true);
+
         if is_ap {
             // AP devices have no PCIe topology; call the hypervisor directly.
             if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
                 error!(sl!(), "failed to attach vfio-ap device: {:?}", e);
+                self.decrease_attach_count().await?;
+                return Err(e);
+            }
+        } else if flat_root {
+            // The hypervisor exposes a flat PCI root bus (e.g. Dragonball) and
+            // registers pass-through devices directly on it. No root/switch
+            // port needs to be reserved, so skip topology registration. The
+            // guest PCI slot is assigned by the VMM at boot (cold-plug) and
+            // read back afterwards.
+            if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
+                error!(sl!(), "failed to attach vfio device: {:?}", e);
                 self.decrease_attach_count().await?;
                 return Err(e);
             }
