@@ -150,7 +150,12 @@ impl TomlConfig {
     /// Configuration file is probed according to the default configuration file list
     /// default::DEFAULT_RUNTIME_CONFIGURATIONS.
     pub fn load_from_default() -> Result<(TomlConfig, PathBuf)> {
-        Self::load_raw_from_file("")
+        let mut result = Self::load_raw_from_file("");
+        if let Ok((ref mut config, _)) = result {
+            config.adjust_config()?;
+        }
+
+        result
     }
 
     /// Load raw Kata configuration information from configuration files.

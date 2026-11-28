@@ -55,6 +55,7 @@ pub(crate) async fn new_event_publisher(namespace: &str) -> Result<Box<dyn Forwa
 struct ContainerdForwarder {
     namespace: String,
     publisher: RemotePublisher,
+    context: TtrpcContext,
 }
 
 impl ContainerdForwarder {
@@ -65,6 +66,7 @@ impl ContainerdForwarder {
         Ok(Self {
             namespace: namespace.to_string(),
             publisher,
+            context: default_ttrpc_context(),
         })
     }
 
@@ -98,7 +100,7 @@ impl Forwarder for ContainerdForwarder {
             .build_forward_request(&event)
             .context("build forward request")?;
         self.publisher
-            .forward(&default_ttrpc_context(), req)
+            .forward(&self.context, req)
             .await
             .context("forward")?;
         Ok(())
@@ -141,5 +143,6 @@ fn default_ttrpc_context() -> TtrpcContext {
         mh: MessageHeader::default(),
         metadata: HashMap::default(),
         timeout_nano: 0,
+        connection_data: Default::default(),
     }
 }
