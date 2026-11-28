@@ -15,6 +15,8 @@ use url::Url;
 
 use kata_types::config::default::DEFAULT_AGENT_VSOCK_PORT;
 
+use crate::zram::{ZramConfig, MAX_ZRAM_SWAPPINESS};
+
 const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const TRACE_MODE_OPTION: &str = "agent.trace";
 const LOG_LEVEL_OPTION: &str = "agent.log";
@@ -61,6 +63,11 @@ const MEM_AGENT_COMPACT_SEC_MAX: &str = "agent.mem_agent_compact_sec_max";
 const MEM_AGENT_COMPACT_ORDER: &str = "agent.mem_agent_compact_order";
 const MEM_AGENT_COMPACT_THRESHOLD: &str = "agent.mem_agent_compact_threshold";
 const MEM_AGENT_COMPACT_FORCE_TIMES: &str = "agent.mem_agent_compact_force_times";
+
+const ZRAM_ENABLE: &str = "agent.zram_enable";
+const ZRAM_SIZE_PERCENT: &str = "agent.zram_size_percent";
+const ZRAM_COMP_ALGORITHM: &str = "agent.zram_comp_algorithm";
+const ZRAM_SWAPPINESS: &str = "agent.zram_swappiness";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -149,6 +156,7 @@ pub struct AgentConfig {
     #[cfg(feature = "agent-policy")]
     pub policy_file: String,
     pub mem_agent: Option<MemAgentConfig>,
+    pub zram: Option<ZramConfig>,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -197,6 +205,10 @@ pub struct AgentConfigBuilder {
     pub mem_agent_compact_order: Option<u8>,
     pub mem_agent_compact_threshold: Option<u64>,
     pub mem_agent_compact_force_times: Option<u64>,
+    pub zram_enable: Option<bool>,
+    pub zram_size_percent: Option<u64>,
+    pub zram_comp_algorithm: Option<String>,
+    pub zram_swappiness: Option<u8>,
 }
 
 macro_rules! config_override {
@@ -278,6 +290,7 @@ impl Default for AgentConfig {
             #[cfg(feature = "agent-policy")]
             policy_file: String::from(""),
             mem_agent: None,
+            zram: None,
         }
     }
 }
@@ -392,6 +405,14 @@ impl FromStr for AgentConfig {
             agent_config.mem_agent = Some(mac);
         }
 
+        if agent_config_builder.zram_enable.unwrap_or(false) {
+            let mut zc = ZramConfig::default();
+            mem_agent_config_override!(agent_config_builder.zram_size_percent, zc.size_percent);
+            mem_agent_config_override!(agent_config_builder.zram_comp_algorithm, zc.comp_algorithm);
+            mem_agent_config_override!(agent_config_builder.zram_swappiness, zc.swappiness);
+            agent_config.zram = Some(zc);
+        }
+
         Ok(agent_config)
     }
 }
@@ -418,6 +439,8 @@ impl AgentConfig {
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         let mut mem_agent_enable = false;
         let mut mac = MemAgentConfig::default();
+        let mut zram_enable = false;
+        let mut zc = ZramConfig::default();
         for param in params.iter() {
             // If we get a configuration file path from the command line, we
             // generate our config from it.
@@ -657,10 +680,36 @@ impl AgentConfig {
                     get_number_value
                 );
             }
+
+            parse_cmdline_param!(param, ZRAM_ENABLE, zram_enable, get_bool_value);
+            parse_cmdline_param!(
+                param,
+                ZRAM_SIZE_PERCENT,
+                zc.size_percent,
+                get_number_value,
+                |v: &u64| *v > 0
+            );
+            parse_cmdline_param!(
+                param,
+                ZRAM_COMP_ALGORITHM,
+                zc.comp_algorithm,
+                get_string_value
+            );
+            parse_cmdline_param!(
+                param,
+                ZRAM_SWAPPINESS,
+                zc.swappiness,
+                get_number_value,
+                |v: &u8| *v <= MAX_ZRAM_SWAPPINESS
+            );
         }
 
         if mem_agent_enable {
             config.mem_agent = Some(mac);
+        }
+
+        if zram_enable {
+            config.zram = Some(zc);
         }
 
         config.override_config_from_envs();
@@ -910,6 +959,7 @@ mod tests {
             #[cfg(feature = "agent-policy")]
             policy_file: &'a str,
             mem_agent: Option<MemAgentConfig>,
+            zram: Option<ZramConfig>,
         }
 
         impl Default for TestData<'_> {
@@ -933,6 +983,7 @@ mod tests {
                     #[cfg(feature = "agent-policy")]
                     policy_file: "",
                     mem_agent: None,
+                    zram: None,
                 }
             }
         }
@@ -1396,6 +1447,20 @@ mod tests {
                 }),
                 ..Default::default()
             },
+            TestData {
+                contents: "agent.zram_enable=true",
+                zram: Some(ZramConfig::default()),
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.zram_enable=1 agent.zram_size_percent=50 agent.zram_comp_algorithm=zstd agent.zram_swappiness=180",
+                zram: Some(ZramConfig {
+                    size_percent: 50,
+                    comp_algorithm: String::from("zstd"),
+                    swappiness: 180,
+                }),
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1460,6 +1525,7 @@ mod tests {
             assert_eq!(d.policy_file, config.policy_file, "{msg}");
 
             assert_eq!(d.mem_agent, config.mem_agent, "{msg}");
+            assert_eq!(d.zram, config.zram, "{msg}");
 
             for v in vars_to_unset {
                 env::remove_var(v);
@@ -1705,6 +1771,8 @@ Caused by:
                guest_components_procs = "api-server-rest"
                guest_components_rest_api = "all"
                mem_agent_enable = true
+               zram_enable = true
+               zram_size_percent = 75
               "#,
         )
         .unwrap();
@@ -1724,5 +1792,12 @@ Caused by:
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
 
         assert_eq!(config.mem_agent, Some(MemAgentConfig::default()),);
+        assert_eq!(
+            config.zram,
+            Some(ZramConfig {
+                size_percent: 75,
+                ..Default::default()
+            }),
+        );
     }
 }
