@@ -7,6 +7,10 @@ mod fc_api;
 mod inner;
 mod inner_device;
 mod inner_hypervisor;
+mod process;
+
+#[cfg(test)]
+mod tests;
 
 use super::HypervisorState;
 use crate::MemoryConfig;
