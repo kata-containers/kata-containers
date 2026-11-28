@@ -9,56 +9,18 @@ Gets changes of the current git to env variable TARGET_BRANCH
 and reports feature skips in form of "skip_$feature=yes|no"
 or list of required tests (based on argv[1])
 """
-
-from collections import OrderedDict
 import os
-import re
-import subprocess
 import sys
 
-import yaml
-
-
-def changed_files(target_branch):
-    """
-    Get the files changed in HEAD since it diverged from `target_branch`
-
-    Diffing against the merge base, rather than the tip of the target branch,
-    means that changes merged upstream after the branch was created are not
-    counted as part of this change. Uncommitted edits are ignored as well.
-
-    :param target_branch: branch to compare to
-    :returns: List of changed file paths
-    """
-    base = subprocess.check_output(
-        ["git", "merge-base", "HEAD", f"origin/{target_branch}"]).decode().strip()
-    # Disabling rename detection reports both sides of a move
-    cmd = ["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"]
-    return [os.fsdecode(_) for _ in subprocess.check_output(cmd).split(b'\0')
-            if _]
+import selection
 
 
 class Checks:
     def __init__(self):
-        config_path = os.path.join(os.path.dirname(__file__), "required-tests.yaml")
-        with open(config_path, "r", encoding="utf8") as config_fd:
-            config = yaml.load(config_fd, Loader=yaml.SafeLoader)
-        if config.get('required_tests'):
-            self.required_tests = config['required_tests']
-        else:
-            self.required_tests = []
-        if config.get('required_regexps'):
-            self.required_regexps = config['required_regexps']
-        else:
-            self.required_regexps = []
-        if config.get('paths'):
-            self.paths = OrderedDict((re.compile(key), value)
-                                       for items in config['paths']
-                                       for key, value in items.items())
-        if config.get('mapping'):
-            self.mapping = config['mapping']
-        else:
-            self.mapping = {}
+        self.config = selection.load_config()
+        self.required_tests = self.config.get('required_tests') or []
+        self.required_regexps = self.config.get('required_regexps') or []
+        self.mapping = self.config['mapping']
         self.all_set_of_tests = set(self.mapping.keys())
 
     def run(self, tests, target_branch):
@@ -70,7 +32,7 @@ class Checks:
         """
         enabled_features = self.get_features(target_branch)
         if not tests:
-            for feature in self.all_set_of_tests:
+            for feature in sorted(self.all_set_of_tests):
                 # Print all features status in "$key=$value" format to allow
                 # usage with $GITHUB_OUTPUT
                 print(f"skip_{feature}=" +
@@ -84,8 +46,8 @@ class Checks:
                 required_tests.update(values["names"])
             if values.get("regexps"):
                 required_regexps.add(values["regexps"])
-        print(';'.join(required_tests))
-        print(';'.join(required_regexps))
+        print(';'.join(sorted(required_tests)))
+        print(';'.join(sorted(required_regexps)))
         return 0
 
     def get_features(self, target_branch):
@@ -96,21 +58,9 @@ class Checks:
         :param target_branch: branch/commit to compare to
         :returns: List of set-of-tests
         """
-        changed = changed_files(target_branch)
+        changed = selection.changed_files(target_branch)
         print('\n'.join(changed), file=sys.stderr)
-        enabled_features = set()
-        # Go through lines and find what features should be covered
-        for changed_file in changed:
-            for regexp, features in self.paths.items():
-                if regexp.search(changed_file):
-                    for feature in features:
-                        enabled_features.add(feature)
-                    # this changed_file was treated, ignore other regexps
-                    break
-            else:
-                # Untreated changed_file, run all tests
-                return self.all_set_of_tests
-        return enabled_features
+        return selection.get_features(changed, self.config)
 
 
 if __name__ == "__main__":

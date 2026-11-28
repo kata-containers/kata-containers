@@ -12,24 +12,45 @@ required_regexps:
   # Always required regexps
 
 paths:
-  # Mapping of path (python) regexps to set-of-tests (sort by order of importance)
+  # Mapping of path patterns to set-of-tests. The first rule with a matching
+  # pattern decides, so sort by order of importance. A path matching no rule
+  # selects every set-of-tests.
+  #
+  # Format is:
+  # - paths: ["{fnmatch-pattern}", "{another-fnmatch-pattern}"]
+  #   features: ["{set-of-tests-label}", "{another-set-of-tests-label}"]
+  #
+  # Patterns are matched against the whole repository relative path, and "*"
+  # also matches "/". Every feature must be a key of "mapping".
   # CI
-  - "^ci/openshift-ci/": []
-  - "^\\.github/workflows/static-checks": ["static"]
-  - "^\\.github/workflows/": ["build"]
+  - paths: ["ci/openshift-ci/*"]
+    features: []
+  - paths: [".github/workflows/static-checks*"]
+    features: ["static"]
+  - paths: [".github/workflows/*"]
+    features: ["build"]
   # Docs: only prose counts, so docs-only changes skip the static matrix.
   # Everything else under docs/ (scripts, data, Dockerfile, ...) is code or
   # data that the static checks do act on, so it falls through to "static".
-  - "^docs/.*\\.(md|png|jpg|jpeg|svg|gif)$": ["docs"]
-  - "^docs/\\.nav\\.yml$": ["docs"]
-  - "^mkdocs\\.yaml$": ["docs"]
-  - "\\.md$": ["docs"]
-  - "^tests/spellcheck/kata-dictionary.txt": ["docs"]
-  - "^docs/": ["static"]
-  - "^\\.claude/": []
+  - paths:
+      - "*.md"
+      - "docs/*.png"
+      - "docs/*.jpg"
+      - "docs/*.jpeg"
+      - "docs/*.svg"
+      - "docs/*.gif"
+      - "docs/.nav.yml"
+      - "mkdocs.yaml"
+      - "tests/spellcheck/kata-dictionary.txt"
+    features: ["docs"]
+  - paths: ["docs/*"]
+    features: ["static"]
+  - paths: [".claude/*"]
+    features: []
   # TODO: Expand filters
   # Sources
-  #- "^src/": ["static", "build", "test"]
+  #- paths: ["src/*"]
+  #  features: ["static", "build", "test"]
 
 mapping:
   # Mapping of set-of-tests to required test names and/or test name regexps
