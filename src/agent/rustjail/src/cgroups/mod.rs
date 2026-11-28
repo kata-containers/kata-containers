@@ -14,6 +14,7 @@ use cgroups::freezer::FreezerState;
 
 pub mod fs;
 pub mod mock;
+pub mod nested;
 pub mod notifier;
 pub mod systemd;
 
@@ -27,7 +28,7 @@ pub struct DevicesCgroupInfo {
 }
 
 pub trait Manager {
-    fn apply(&self, _pid: i32) -> Result<()> {
+    fn apply(&self, _pid: i32, _init_pid: i32) -> Result<()> {
         Err(anyhow!("not supported!".to_string()))
     }
 
