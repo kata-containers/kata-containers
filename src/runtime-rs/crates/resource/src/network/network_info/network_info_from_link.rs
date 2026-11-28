@@ -17,7 +17,7 @@ use futures::stream::TryStreamExt;
 use netlink_packet_route::{
     self,
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
-    route::{RouteAddress, RouteAttribute, RouteMessage, RouteMetric},
+    route::{RouteAddress, RouteAttribute, RouteMessage, RouteMetric, RouteType},
 };
 use rtnetlink::{IpVersion, RouteMessageBuilder};
 use tokio::sync::RwLock;
@@ -171,8 +171,51 @@ async fn handle_neighbors(
     Ok(neighs)
 }
 
+fn route_mtu(route_msg: &RouteMessage) -> u32 {
+    route_msg
+        .attributes
+        .iter()
+        .find_map(|nla| match nla {
+            RouteAttribute::Metrics(metrics) => metrics.iter().find_map(|m| match m {
+                RouteMetric::Mtu(mtu) => Some(*mtu),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .unwrap_or(0)
+}
+
+// The guest kernel recreates kernel routes when the agent adds the interface addresses,
+// so they are normally skipped. Forward one only when a CNI attached an MTU to it and the
+// agent will put it back in place: the agent installs main-table unicast routes with the
+// default priority and replaces the guest route with the same prefix and priority.
+fn forward_kernel_route(route_msg: &RouteMessage) -> bool {
+    let table = route_msg
+        .attributes
+        .iter()
+        .find_map(|nla| match nla {
+            RouteAttribute::Table(table) => Some(*table),
+            _ => None,
+        })
+        .unwrap_or(route_msg.header.table as u32);
+    let priority = route_msg
+        .attributes
+        .iter()
+        .find_map(|nla| match nla {
+            RouteAttribute::Priority(priority) => Some(*priority),
+            _ => None,
+        })
+        .unwrap_or(0);
+
+    table == libc::RT_TABLE_MAIN as u32
+        && route_msg.header.kind == RouteType::Unicast
+        && priority == 0
+        && route_mtu(route_msg) != 0
+}
+
 fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>> {
-    if u8::from(route_msg.header.protocol) == libc::RTPROT_KERNEL {
+    let is_kernel_route = u8::from(route_msg.header.protocol) == libc::RTPROT_KERNEL;
+    if is_kernel_route && !forward_kernel_route(route_msg) {
         return Ok(None);
     }
 
@@ -205,6 +248,11 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
                 let dest = parse_route_addr(s)?;
 
                 route.source = dest.to_string();
+            }
+            // Keep the preferred source of a forwarded kernel route; the agent installs
+            // a source with a /0 prefix as the preferred source address.
+            RouteAttribute::PrefSource(s) if is_kernel_route => {
+                route.source = format!("{}/0", parse_route_addr(s)?);
             }
             RouteAttribute::Metrics(metrics) => {
                 for m in metrics {
@@ -296,6 +344,7 @@ fn parse_route_addr(ra: &RouteAddress) -> Result<IpAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use netlink_packet_route::route::{RouteProtocol, RouteScope};
 
     #[test]
     fn generate_route_preserves_destination_prefix_length() {
@@ -308,5 +357,84 @@ mod tests {
             .expect("route should not be filtered");
 
         assert_eq!(route.dest, "10.244.0.0/16");
+    }
+
+    fn kernel_link_route(mtu: Option<u32>) -> RouteMessage {
+        let mut route_msg = RouteMessageBuilder::<Ipv4Addr>::new()
+            .destination_prefix(Ipv4Addr::new(10, 0, 0, 0), 23)
+            .protocol(RouteProtocol::Kernel)
+            .scope(RouteScope::Link)
+            .build();
+        route_msg
+            .attributes
+            .push(RouteAttribute::PrefSource(RouteAddress::Inet(
+                Ipv4Addr::new(10, 0, 0, 20),
+            )));
+        if let Some(mtu) = mtu {
+            route_msg
+                .attributes
+                .push(RouteAttribute::Metrics(vec![RouteMetric::Mtu(mtu)]));
+        }
+        route_msg
+    }
+
+    fn is_skipped(route_msg: &RouteMessage) -> bool {
+        generate_route("eth0", route_msg)
+            .expect("route should be valid")
+            .is_none()
+    }
+
+    #[test]
+    fn generate_route_skips_kernel_route_without_mtu() {
+        assert!(is_skipped(&kernel_link_route(None)));
+    }
+
+    #[test]
+    fn generate_route_keeps_kernel_route_with_mtu() {
+        let route = generate_route("eth0", &kernel_link_route(Some(8700)))
+            .expect("route should be valid")
+            .expect("kernel route with an MTU should not be filtered");
+
+        assert_eq!(route.dest, "10.0.0.0/23");
+        assert_eq!(route.mtu, 8700);
+        assert_eq!(route.scope, libc::RT_SCOPE_LINK as u32);
+        assert_eq!(route.source, "10.0.0.20/0");
+    }
+
+    #[test]
+    fn generate_route_skips_kernel_route_outside_main_table() {
+        let mut route_msg = kernel_link_route(Some(8700));
+        route_msg.header.table = libc::RT_TABLE_LOCAL;
+        assert!(is_skipped(&route_msg));
+
+        let mut route_msg = kernel_link_route(Some(8700));
+        route_msg.attributes.push(RouteAttribute::Table(1000));
+        assert!(is_skipped(&route_msg));
+    }
+
+    #[test]
+    fn generate_route_skips_non_unicast_kernel_route() {
+        let mut route_msg = kernel_link_route(Some(8700));
+        route_msg.header.kind = RouteType::Local;
+        assert!(is_skipped(&route_msg));
+    }
+
+    #[test]
+    fn generate_route_skips_kernel_route_with_priority() {
+        let mut route_msg = kernel_link_route(Some(8700));
+        route_msg.attributes.push(RouteAttribute::Priority(256));
+        assert!(is_skipped(&route_msg));
+    }
+
+    #[test]
+    fn generate_route_ignores_preferred_source_of_other_routes() {
+        let mut route_msg = kernel_link_route(Some(8700));
+        route_msg.header.protocol = RouteProtocol::Boot;
+
+        let route = generate_route("eth0", &route_msg)
+            .expect("route should be valid")
+            .expect("route should not be filtered");
+
+        assert!(route.source.is_empty());
     }
 }
