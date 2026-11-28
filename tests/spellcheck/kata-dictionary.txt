@@ -147,6 +147,7 @@ unbootable
 userspace
 eBPF
 dwarves
+openvmm
 passthroughfd
 passfd
 sendfd
