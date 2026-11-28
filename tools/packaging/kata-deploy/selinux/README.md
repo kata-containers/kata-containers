@@ -11,9 +11,26 @@ The installer's containers run with `privileged: false`, which means they run as
 writing the CRI drop-in, and driving systemd. See
 [issue #13751](https://github.com/kata-containers/kata-containers/issues/13751).
 
-Scope is the **installer only**. The module defines no `filecon` rules and
-relabels nothing, so `/opt/kata` keeps the labels it has today (`usr_t`,
-inherited from `/opt`) and the Kata runtime sees exactly what it saw before.
+The module also carries temporary compatibility rules for older host policy
+packages: QEMU access to `/dev/iommu` and VFIO character devices, their labels, and a
+writable `/run/cdi` registry for confined device plugins. The policy stage
+creates that registry and uses the host's `restorecon` to apply these labels.
+The temporary `kata_cdi_compat_t` type allows device plugins to publish regular
+spec files, with read/watch permissions for runtimes and the VMM. These rules
+grant consumers no writes; host domains that are already unconfined retain
+their existing authority. Ordinary containers receive no access to it. The host
+configuration for `systemd-tmpfiles` at
+`/etc/tmpfiles.d/kata-cdi.conf` recreates and labels the registry after reboot.
+Existing labels are forcibly restored so a previous `container_file_t` override
+does not survive migration. No io_uring permissions are added.
+
+These compatibility rules can be removed once supported distributions ship the
+corresponding `container-selinux` and `selinux-policy` fixes. Remove the managed
+configuration file as part of that change. The temporary type has a separate name
+from upstream `container_cdi_t`, and declares no competing named transition,
+so a distro policy upgrade can coexist with this module. `/opt/kata` keeps
+its existing labels. Nodes managing policy outside kata-deploy must provide
+equivalent rules and labels themselves.
 
 ## Domains
 
